@@ -369,6 +369,62 @@ describe('LocationHandler', () => {
       expect(emittedData.timestamp).toBeInstanceOf(Date);
       expect(emittedData.timestamp.getTime()).toBeGreaterThanOrEqual(before);
     });
+
+    // ── Boundary: the four optional telemetry fields travel À CÔTÉ of the two
+    // guarded coordinates. They are broadcast verbatim to every peer's map, so
+    // a forged non-finite / non-numeric value must be REFUSED at the boundary,
+    // never relayed (cycle 107 "douzième famille" + itération 280 emoji bound).
+    it.each([
+      ['speed', Number.POSITIVE_INFINITY],
+      ['altitude', Number.NaN],
+      ['accuracy', Number.NEGATIVE_INFINITY],
+    ])('drops an update whose %s is non-finite (never relays it to peers)', async (field, value) => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID, [field]: value,
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('drops an update whose heading is not a number', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID, heading: 'north',
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('drops an update whose latitude is non-finite (NaN)', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        latitude: Number.NaN, longitude: 0, conversationId: CONV_ID,
+      } as any);
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('still relays valid finite telemetry', async () => {
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, {
+        ...VALID_COORDINATES, conversationId: CONV_ID,
+        altitude: 12.5, accuracy: 3, speed: 0, heading: 359.9,
+      });
+
+      expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.LOCATION_LIVE_UPDATED,
+        expect.objectContaining({ altitude: 12.5, accuracy: 3, speed: 0, heading: 359.9 }),
+      );
+    });
   });
 
   // ── handleLiveLocationStop ─────────────────────────────────────────────────

@@ -260,7 +260,7 @@ struct EditPostSheet: View {
                         .focused($isFocused)
                         .font(MeeshyFont.relative(17))
                         .foregroundColor(theme.textPrimary)
-                        .accessibilityLabel(String(localized: "feed.post.edit.body.a11y", defaultValue: "Contenu du post", bundle: .main))
+                        .accessibilityLabel(String(localized: "feed.post.edit.body.a11y", defaultValue: "Contenu de la publication", bundle: .main))
                         .scrollContentBackground(.hidden)
                         .padding(12)
                         .background(
@@ -476,7 +476,7 @@ struct EditPostSheet: View {
 
             if showTypePicker {
                 Picker(String(localized: "feed.post.edit.type", defaultValue: "Type", bundle: .main), selection: $selectedType) {
-                    Text(String(localized: "feed.post.edit.type.post", defaultValue: "Post", bundle: .main)).tag("POST")
+                    Text(String(localized: "feed.post.edit.type.post", defaultValue: "Publier", bundle: .main)).tag("POST")
                     // L'option Réel n'est offerte que si la composition
                     // restante qualifie — `toggleRemove` a déjà rebasculé la
                     // sélection sur POST quand un retrait dé-qualifie, donc la

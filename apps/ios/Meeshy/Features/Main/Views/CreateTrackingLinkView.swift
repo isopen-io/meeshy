@@ -59,7 +59,7 @@ struct CreateTrackingLinkView: View {
                 hint: String(localized: "a11y.tracking.field.required", defaultValue: "Champ obligatoire", bundle: .main)
             )
                 .keyboardType(.URL).textInputAutocapitalization(.never)
-            formField(String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main), placeholder: String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex: Campagne Instagram", bundle: .main), text: $name)
+            formField(String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main), placeholder: String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex. : Campagne Instagram", bundle: .main), text: $name)
         }
         .padding(.horizontal, 20)
     }
@@ -88,9 +88,9 @@ struct CreateTrackingLinkView: View {
 
             if showUtmFields {
                 VStack(spacing: 10) {
-                    formField(String(localized: "tracking.link.create.utm.campaign", defaultValue: "Campaign", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.campaign.placeholder", defaultValue: "ex: summer_sale", bundle: .main), text: $campaign)
-                    formField(String(localized: "tracking.link.create.utm.source", defaultValue: "Source", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.source.placeholder", defaultValue: "ex: instagram, email", bundle: .main), text: $source)
-                    formField(String(localized: "tracking.link.create.utm.medium", defaultValue: "Medium", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.medium.placeholder", defaultValue: "ex: social, cpc, email", bundle: .main), text: $medium)
+                    formField(String(localized: "tracking.link.create.utm.campaign", defaultValue: "Campagne", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.campaign.placeholder", defaultValue: "ex. : summer_sale", bundle: .main), text: $campaign)
+                    formField(String(localized: "tracking.link.create.utm.source", defaultValue: "Source", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.source.placeholder", defaultValue: "ex. : instagram, email", bundle: .main), text: $source)
+                    formField(String(localized: "tracking.link.create.utm.medium", defaultValue: "Moyen", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.medium.placeholder", defaultValue: "ex. : social, cpc, email", bundle: .main), text: $medium)
                 }
                 .padding(.horizontal, 20)
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -102,7 +102,7 @@ struct CreateTrackingLinkView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "tracking.link.create.token.title", defaultValue: "Token personnalisé (optionnel)", bundle: .main))
                 .font(.footnote.weight(.medium)).foregroundColor(theme.textSecondary)
-            TextField(String(localized: "tracking.link.create.token.placeholder", defaultValue: "ex: summer24 (6 chars min)", bundle: .main), text: $customToken)
+            TextField(String(localized: "tracking.link.create.token.placeholder", defaultValue: "ex. : summer24 (6 caractères min.)", bundle: .main), text: $customToken)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))

@@ -30,7 +30,7 @@ struct CallsTab: View {
     private var filterChips: some View {
         HStack(spacing: 8) {
             chip(.all, label: String(localized: "calls.filter.all", defaultValue: "Tous", bundle: .main))
-            chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manques", bundle: .main))
+            chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manqués", bundle: .main))
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -189,9 +189,9 @@ private struct CallJournalRow: View, Equatable {
 
     private var accessibilityDirection: String {
         switch record.directionKind {
-        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel emis", bundle: .main)
-        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel recu", bundle: .main)
-        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manque", bundle: .main)
+        case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
+        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
         }
     }
 

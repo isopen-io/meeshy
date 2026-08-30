@@ -24,6 +24,7 @@ import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { buildTranslationRecord } from '@/utils/translation-record';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
 /**
@@ -38,30 +39,6 @@ const sameLanguage = (a?: string, b?: string): boolean =>
 type PrismMessageShape = {
   readonly originalLanguage?: string;
   readonly translations?: unknown;
-};
-
-/**
- * Dépouille la carte des traductions d'un message (`{ language|targetLanguage,
- * content|translatedContent }[]`) en `Record<langue → texte>` keyé par la langue
- * STOCKÉE — la forme qu'attend `resolvePrismTranslation`. La clé rendue plus tard
- * est comparée par `sameLanguage` (normalisée), donc verbatim suffit ici.
- */
-const buildTranslationRecord = (translations: unknown): Record<string, string> => {
-  const record: Record<string, string> = {};
-  if (!Array.isArray(translations)) return record;
-  for (const entry of translations as ReadonlyArray<{
-    language?: string;
-    targetLanguage?: string;
-    content?: string;
-    translatedContent?: string;
-  }>) {
-    const key = entry?.language || entry?.targetLanguage;
-    const text = entry?.content ?? entry?.translatedContent;
-    if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
-      record[key] = text;
-    }
-  }
-  return record;
 };
 
 interface MessagesDisplayProps {

@@ -49,7 +49,7 @@ struct CommunityLinkDetailView: View {
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
-            communityActionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+            communityActionButton(String(localized: "common.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                   color: copiedFeedback ? MeeshyColors.success : MeeshyColors.communityAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
@@ -57,7 +57,7 @@ struct CommunityLinkDetailView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
             shareActionButton
-            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identify", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
+            communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identifier", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
                 UIPasteboard.general.string = link.identifier
                 HapticFeedback.light()
             }
@@ -69,7 +69,7 @@ struct CommunityLinkDetailView: View {
     // window-hierarchy traversal (doctrine: prefer first-party SwiftUI over UIKit).
     @ViewBuilder
     private var shareActionButton: some View {
-        let shareLabel = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        let shareLabel = String(localized: "common.share", defaultValue: "Partager", bundle: .main)
         if let url = URL(string: link.joinUrl) {
             ShareLink(item: url) {
                 communityActionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.communityAccent)

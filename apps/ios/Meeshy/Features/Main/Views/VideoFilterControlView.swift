@@ -28,7 +28,7 @@ struct VideoFilterControlView: View {
                 .foregroundStyle(MeeshyColors.brandGradient)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
+            Text(String(localized: "video.filter.title", defaultValue: "Filtres vidéo", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 .accessibilityAddTraits(.isHeader)
@@ -38,7 +38,7 @@ struct VideoFilterControlView: View {
             Toggle("", isOn: $config.isEnabled)
                 .labelsHidden()
                 .tint(MeeshyColors.indigo500)
-                .accessibilityLabel(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
+                .accessibilityLabel(String(localized: "video.filter.title", defaultValue: "Filtres vidéo", bundle: .main))
         }
     }
 
@@ -48,7 +48,7 @@ struct VideoFilterControlView: View {
         VStack(spacing: 12) {
             filterSlider(
                 icon: "thermometer.medium",
-                label: String(localized: "video.filter.temperature", defaultValue: "Temperature", bundle: .main),
+                label: String(localized: "video.filter.temperature", defaultValue: "Température", bundle: .main),
                 value: temperatureBinding,
                 range: 0...1,
                 neutral: 0.5
@@ -56,7 +56,7 @@ struct VideoFilterControlView: View {
 
             filterSlider(
                 icon: "sun.max",
-                label: String(localized: "video.filter.brightness", defaultValue: "Luminosite", bundle: .main),
+                label: String(localized: "video.filter.brightness", defaultValue: "Luminosité", bundle: .main),
                 value: $config.brightness,
                 range: -0.5...0.5,
                 neutral: 0
@@ -138,7 +138,7 @@ struct VideoFilterControlView: View {
                 Image(systemName: "arrow.counterclockwise")
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .accessibilityHidden(true)
-                Text(String(localized: "video.filter.reinit", defaultValue: "Reinitialiser", bundle: .main))
+                Text(String(localized: "video.filter.reinit", defaultValue: "Réinitialiser", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
             }
             .foregroundColor(MeeshyColors.indigo500)

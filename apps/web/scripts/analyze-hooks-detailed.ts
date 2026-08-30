@@ -48,7 +48,6 @@ const hookFiles = [
   'use-font-preference.ts',
   'use-language.ts',
   'use-message-loader.ts',
-  'use-message-translations.ts',
   'use-messaging.ts',
   'use-notifications.ts',
   'use-socketio-messaging.ts',

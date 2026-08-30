@@ -167,7 +167,7 @@ struct iPadLeftColumnHeader: View {
                     HStack(spacing: 6) {
                         Image(systemName: "square.stack.fill")
                             .font(MeeshyFont.relative(14, weight: .semibold))
-                        Text(String(localized: "root.ipad.feed", defaultValue: "Feed", bundle: .main))
+                        Text(String(localized: "root.ipad.feed", defaultValue: "Flux", bundle: .main))
                             .font(MeeshyFont.relative(14, weight: .semibold))
                     }
                     .foregroundStyle(
@@ -285,7 +285,7 @@ struct iPadResizableHandle: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "root.ipad.resizable_handle.label", defaultValue: "Séparateur de colonnes", bundle: .main))
         .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_format", defaultValue: "%d pour cent", bundle: .main), Int(ratio * 100)))
-        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche de 30 à 50 pour cent", bundle: .main))
+        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche entre 30% et 50%", bundle: .main))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment:

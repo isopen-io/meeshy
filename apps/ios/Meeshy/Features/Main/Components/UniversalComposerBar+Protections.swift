@@ -87,7 +87,7 @@ extension UniversalComposerBar {
                         showEphemeralPicker = false
                     }
                 } label: {
-                    Text(String(localized: "composer.ephemeral.off", defaultValue: "Off", bundle: .main))
+                    Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
                         .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
                         .padding(.horizontal, 14)

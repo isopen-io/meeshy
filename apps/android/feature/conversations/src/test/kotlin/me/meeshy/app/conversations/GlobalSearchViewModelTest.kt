@@ -3,20 +3,27 @@ package me.meeshy.app.conversations
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
+import me.meeshy.sdk.model.search.SearchQueryCache
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.search.GlobalSearchRepository
 import me.meeshy.sdk.search.InMemoryRecentSearchesStore
 import me.meeshy.sdk.search.GlobalSearchResults
+import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -26,6 +33,19 @@ class GlobalSearchViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private val repository = mockk<GlobalSearchRepository>()
+
+    private val conversationUpdated = MutableSharedFlow<ConversationUpdatedSocketEvent>()
+    private val conversationDeleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
+    private val socket = mockk<MessageSocketManager> {
+        every { this@mockk.conversationUpdated } returns this@GlobalSearchViewModelTest.conversationUpdated
+        every { this@mockk.conversationDeleted } returns this@GlobalSearchViewModelTest.conversationDeleted
+    }
+
+    // Horloge controlable : le TTL du cache de requetes se teste sans dormir.
+    private var clockNow = 0L
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = clockNow
+    }
 
     @Before
     fun setUp() {
@@ -39,7 +59,7 @@ class GlobalSearchViewModelTest {
 
     private val recentSearches = InMemoryRecentSearchesStore()
 
-    private fun viewModel() = GlobalSearchViewModel(repository, recentSearches)
+    private fun viewModel() = GlobalSearchViewModel(repository, recentSearches, socket, clock)
 
     // Une frappe sous le seuil ne part JAMAIS en reseau : la recherche a 1
     // caractere renverrait la moitie de la base et l'UI clignoterait a chaque
@@ -124,5 +144,106 @@ class GlobalSearchViewModelTest {
         vm.removeRecentSearch("belva")
         advanceUntilIdle()
         assertThat(vm.state.value.recentSearches).isEmpty()
+    }
+
+    // Cache-first : re-chercher un terme deja vu dans la fenetre TTL ressert le
+    // resultat SANS repartir en reseau — parite iOS `messageQueryCache` (le
+    // spinner ne reapparait pas, dimension 2 Performance).
+    @Test
+    fun `re-searching a cached query within the TTL skips the network`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.results.users).hasSize(1)
+
+        vm.setQuery("b") // sous le seuil : vide, aucun reseau
+        advanceUntilIdle()
+        vm.setQuery("belva") // re-commise, mais TTL non ecoule
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.search("belva", any(), any(), any()) }
+        assertThat(vm.state.value.results.users).hasSize(1)
+        assertThat(vm.state.value.hasSearched).isTrue()
+        assertThat(vm.state.value.isSearching).isFalse()
+    }
+
+    // Une entree du cache expire au TTL : la MEME requete repart alors en reseau.
+    @Test
+    fun `a query re-searched after the TTL expires hits the network again`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        clockNow = 0L
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        vm.setQuery("b")
+        advanceUntilIdle()
+        clockNow = SearchQueryCache.DEFAULT_TTL_MILLIS // pile au TTL : perime
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
+    }
+
+    // invalidateSearchCache vide le cache : la prochaine recherche identique
+    // repart en reseau (le chemin qu'empruntent les evenements socket).
+    @Test
+    fun `invalidateSearchCache forces the next identical query back to the network`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults()
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        vm.setQuery("b")
+        advanceUntilIdle()
+        vm.invalidateSearchCache()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
+    }
+
+    // Un `conversation:updated` recu par socket invalide le cache : les resultats
+    // gardes pourraient etre perimes (parite iOS `setupSocketInvalidation`).
+    @Test
+    fun `a conversation-updated socket event invalidates the query cache`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults()
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        conversationUpdated.emit(ConversationUpdatedSocketEvent(conversationId = "c1"))
+        advanceUntilIdle()
+
+        vm.setQuery("b")
+        advanceUntilIdle()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
+    }
+
+    // Un `conversation:deleted` recu par socket invalide aussi le cache.
+    @Test
+    fun `a conversation-deleted socket event invalidates the query cache`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults()
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        conversationDeleted.emit(ConversationDeletedSocketEvent(conversationId = "c1"))
+        advanceUntilIdle()
+
+        vm.setQuery("b")
+        advanceUntilIdle()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
     }
 }

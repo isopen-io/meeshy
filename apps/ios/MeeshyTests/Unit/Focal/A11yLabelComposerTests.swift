@@ -116,14 +116,22 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }
 
+    /// The literal « lu » these two asserted on until 270i was doubly wrong. It only
+    /// ever matched because `a11y.delivery.read` was ABSENT from the catalog, so every
+    /// locale fell back to the French `defaultValue` — and the positive assertion passed
+    /// for the wrong reason on top of that: its own fixture text, « Salut », CONTAINS
+    /// « lu », so it would have held even if the delivery segment were dropped entirely.
+    /// Asking the catalog, as every neighbouring test here already does, fixes both.
     func test_compose_ownMessage_includesDeliveryStatusSegment() {
+        let expected = String(localized: "a11y.delivery.read", bundle: .main)
         let content = makeContent(isMe: true, text: "Salut", deliveryStatus: .read)
-        XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains("lu"))
+        XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }
 
     func test_compose_receivedMessage_omitsDeliveryStatusSegment() {
+        let unexpected = String(localized: "a11y.delivery.read", bundle: .main)
         let content = makeContent(isMe: false, senderName: "Ali", text: "Bonjour", deliveryStatus: nil)
-        XCTAssertFalse(MessageAccessibilityLabelComposer.compose(content).contains("lu"))
+        XCTAssertFalse(MessageAccessibilityLabelComposer.compose(content).contains(unexpected))
     }
 
     func test_compose_locationMessage_includesLocationLabel() {

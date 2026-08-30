@@ -34,8 +34,8 @@ struct StoryRepostEmbedCell: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(String(localized: "story.repost.by", defaultValue: "Story by", bundle: .main)) \(repost.author)")
-            .accessibilityHint(String(localized: "story.repost.open.hint", defaultValue: "Double tap to open in fullscreen", bundle: .main))
+            .accessibilityLabel("\(String(localized: "story.repost.by", defaultValue: "Story de", bundle: .main)) \(repost.author)")
+            .accessibilityHint(String(localized: "story.repost.open.hint", defaultValue: "Appuyez deux fois pour ouvrir en plein écran", bundle: .main))
             .accessibilityAddTraits(.isButton)
         }
     }

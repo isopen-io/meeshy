@@ -57,7 +57,7 @@ struct AffiliateCreateView: View {
                     .foregroundColor(theme.textPrimary)
                     .accessibilityHidden(true)
 
-                TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex: Invitation Twitter", bundle: .main), text: $name)
+                TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex. : Invitation Twitter", bundle: .main), text: $name)
                     .accessibilityLabel(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
                     .font(MeeshyFont.relative(14))
                     .padding(12)
@@ -77,7 +77,7 @@ struct AffiliateCreateView: View {
                     .foregroundColor(theme.textPrimary)
                     .accessibilityHidden(true)
 
-                TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimite", bundle: .main), text: $maxUses)
+                TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimité", bundle: .main), text: $maxUses)
                     .accessibilityLabel(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
                     .font(MeeshyFont.relative(14))
                     .keyboardType(.numberPad)

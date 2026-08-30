@@ -296,7 +296,7 @@ struct FocalGridCell: View {
                         .foregroundStyle(.white)
                     Text(isViewOnce
                         ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main)
-                        : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
+                        : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(.white)
                     Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
@@ -308,7 +308,7 @@ struct FocalGridCell: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
-                : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+                : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
             .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
             .onLongPressGesture(minimumDuration: 0.3) {
                 HapticFeedback.medium()

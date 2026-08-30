@@ -592,7 +592,7 @@ struct CallSummaryDetailSheet: View {
 
     private var callBackTitle: String {
         summary.callType == .video
-            ? String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main)
+            ? String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main)
             : String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main)
     }
 
@@ -604,7 +604,7 @@ struct CallSummaryDetailSheet: View {
                 icon: mediaGlyph,
                 label: String(localized: "calls.detail.type", defaultValue: "Type", bundle: .main),
                 value: summary.callType == .video
-                    ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
+                    ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
                     : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
             )
             detailRow(
@@ -622,7 +622,7 @@ struct CallSummaryDetailSheet: View {
             if let data = summary.dataSpentLabel {
                 detailRow(
                     icon: "arrow.up.arrow.down",
-                    label: String(localized: "calls.detail.data", defaultValue: "Données", bundle: .main),
+                    label: String(localized: "calls.detail.data", defaultValue: "Donnees", bundle: .main),
                     value: data
                 )
             }
@@ -708,7 +708,7 @@ struct CallSummaryDetailSheet: View {
 
     private func qualityWord(_ quality: CallSummaryMetadata.NetworkQuality) -> String {
         switch quality {
-        case .excellent: return String(localized: "bubble.call.quality.excellent", defaultValue: "Excellent", bundle: .main)
+        case .excellent: return String(localized: "bubble.call.quality.excellent", defaultValue: "Excellente", bundle: .main)
         case .good: return String(localized: "bubble.call.quality.good", defaultValue: "Bonne", bundle: .main)
         case .fair: return String(localized: "bubble.call.quality.fair", defaultValue: "Moyenne", bundle: .main)
         case .poor: return String(localized: "bubble.call.quality.poor", defaultValue: "Faible", bundle: .main)

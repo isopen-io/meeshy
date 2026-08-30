@@ -34,8 +34,8 @@ struct AffiliatesListView: View {
             EmptyStateView(
                 icon: "person.badge.shield.checkmark",
                 title: viewModel.isEmpty
-                    ? String(localized: "contacts.affiliates.empty", defaultValue: "Aucun affilie", bundle: .main)
-                    : String(localized: "contacts.affiliates.no-results", defaultValue: "Aucun resultat", bundle: .main),
+                    ? String(localized: "contacts.affiliates.empty", defaultValue: "Aucun affilié", bundle: .main)
+                    : String(localized: "contacts.affiliates.no-results", defaultValue: "Aucun résultat", bundle: .main),
                 subtitle: viewModel.isEmpty
                     ? String(localized: "contacts.affiliates.empty-hint", defaultValue: "Partage ton lien d'affiliation pour retrouver ici ceux qui te rejoignent", bundle: .main)
                     : ""

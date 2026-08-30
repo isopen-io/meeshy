@@ -107,7 +107,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     static var replyButtonTitle: String {
         String(
             localized: "comments.reply.button",
-            defaultValue: "Reply",
+            defaultValue: "Répondre",
             bundle: .main
         )
     }

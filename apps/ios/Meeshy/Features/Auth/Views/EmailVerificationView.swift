@@ -41,7 +41,7 @@ struct EmailVerificationView: View {
 
                 successOverlay
             }
-            .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Verification de l'email"))
+            .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -163,7 +163,7 @@ struct EmailVerificationView: View {
                         .controlSize(.small)
                         .tint(.white)
                 } else {
-                    Text(String(localized: "emailVerification.verifyButton", defaultValue: "Verifier"))
+                    Text(String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier"))
                 }
             }
             .font(.headline)
@@ -188,7 +188,7 @@ struct EmailVerificationView: View {
     private var verifyButtonAccessibilityLabel: String {
         viewModel.isVerifying
             ? String(localized: "emailVerification.verifying.a11y", defaultValue: "Vérification en cours")
-            : String(localized: "emailVerification.verifyButton", defaultValue: "Verifier")
+            : String(localized: "emailVerification.verifyButton", defaultValue: "Vérifier")
     }
 
     // MARK: - Resend Section
@@ -210,7 +210,7 @@ struct EmailVerificationView: View {
                     } else if viewModel.resendSuccess {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(MeeshyColors.success)
-                        Text(String(localized: "emailVerification.resendConfirmed", defaultValue: "Code renvoye !"))
+                        Text(String(localized: "emailVerification.resendConfirmed", defaultValue: "Code renvoyé !"))
                             .foregroundStyle(MeeshyColors.success)
                     } else {
                         Image(systemName: "arrow.clockwise")
@@ -233,7 +233,7 @@ struct EmailVerificationView: View {
             return String(localized: "emailVerification.resending.a11y", defaultValue: "Envoi du code en cours")
         }
         if viewModel.resendSuccess {
-            return String(localized: "emailVerification.resendConfirmed", defaultValue: "Code renvoye !")
+            return String(localized: "emailVerification.resendConfirmed", defaultValue: "Code renvoyé !")
         }
         return String(localized: "emailVerification.resendButton", defaultValue: "Renvoyer le code")
     }
@@ -253,7 +253,7 @@ struct EmailVerificationView: View {
                         .foregroundStyle(MeeshyColors.success)
                         .adaptiveSymbolBounce(value: viewModel.verificationSuccess)
 
-                    Text(String(localized: "emailVerification.success", defaultValue: "Email verifie !"))
+                    Text(String(localized: "emailVerification.success", defaultValue: "Email vérifié !"))
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                 }

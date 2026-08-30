@@ -136,9 +136,9 @@ struct CameraView: View {
 
     private var flashAccessibilityLabel: String {
         switch flashMode {
-        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash active", bundle: .main)
+        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash activé", bundle: .main)
         case .auto: return String(localized: "camera.flash.auto", defaultValue: "Flash automatique", bundle: .main)
-        default: return String(localized: "camera.flash.off", defaultValue: "Flash desactive", bundle: .main)
+        default: return String(localized: "camera.flash.off", defaultValue: "Flash désactivé", bundle: .main)
         }
     }
 
@@ -174,7 +174,7 @@ struct CameraView: View {
                         .frame(width: 50, height: 50)
                         .background(Circle().fill(.white.opacity(0.15)))
                 }
-                .accessibilityLabel(String(localized: "camera.switch", defaultValue: "Changer de camera", bundle: .main))
+                .accessibilityLabel(String(localized: "camera.switch", defaultValue: "Changer de caméra", bundle: .main))
 
                 Spacer()
             }

@@ -20197,3 +20197,160 @@ l'ÉCART entre ses deux verdicts.
 Voir la leçon 335 (le commentaire qui explique une absence) et la 336 (l'extraction qui perd une
 capacité) : trois formes du même angle mort, où ce qui est écrit à côté de la chose corrigée décide de
 la validité du correctif.
+## 268i — vérifier la contrainte qu'on HÉRITE avant de la transmettre
+
+- **Une contrainte plausible, écrite une fois, fige une tâche indéfiniment.**
+  #4308 disait : « mécanique, mais à faire avec un compilateur : 648 littéraux
+  Swift, dont beaucoup contiennent des apostrophes (`J'aime`) et des accents ;
+  une erreur d'échappement casse la compilation ». Je l'ai répétée telle quelle
+  dans deux itérations. **Ni l'apostrophe ni l'accent ne s'échappent dans un
+  littéral Swift** — seuls `"` et `\`. Mesuré : sur 504 divergences, **500 ne
+  demandent aucun échappement** et **zéro** contient un guillemet, un antislash
+  ou un saut de ligne. Le risque énoncé n'existait pas sur ce lot.
+  La question à poser à toute contrainte héritée : **quelle mesure la
+  soutient ?** — et si la réponse est « aucune », la mesurer coûte quelques
+  minutes contre des itérations de blocage.
+
+- **Un remplacement de masse se fait sur des BORNES vérifiées, pas sur une
+  expression régulière.** Les 498 littéraux ont été réécrits aux offsets absolus
+  extraits du segment d'appel à parenthèses équilibrées, chaque borne contrôlée
+  avant écriture (`src[start:end] == inline`), les éditions appliquées de DROITE
+  à GAUCHE pour que les décalages restent valides. Puis trois contrôles par
+  fichier : mêmes clés, mêmes lignes, mêmes appels. Sans le contrôle « mêmes
+  clés », une borne fausse aurait réécrit un identifiant de clé au lieu de son
+  libellé — un défaut que la compile n'attrape pas et que les deux règles ne
+  voient pas.
+
+- **Classer ce qui RESTE par sa NATURE, pas seulement le compter.** Les 34 sites
+  non réconciliables se sont révélés être deux familles distinctes : des clés
+  **absentes du catalogue** (leur `defaultValue` s'affiche partout — il manque une
+  entrée, pas un alignement) et des clés **PLURIELLES**. J'ai d'abord écrit
+  « plurielles » pour les quatre premières et j'allais l'étendre aux 34 : la
+  vérification a montré que la majorité était absente du catalogue. **Un
+  échantillon ne nomme pas une population.**
+
+- **Une garde peut contenir un cas qu'aucune correction ne satisfait.** La règle
+  B compare le littéral à `sourceValues[key]`, lu depuis le `stringUnit` PLAT ;
+  une clé plurielle n'en a pas, la valeur est `nil`, et la comparaison échoue
+  quoi qu'on écrive. Trois fichiers sont donc inépinglables **par construction**,
+  pas par dette. C'est la famille du correctif 226i — qui avait appris la
+  pluralité à `loadTranslations` et l'a oubliée pour `values`. **Quand un
+  correctif enseigne une notion à UN lecteur de catalogue, chercher les autres
+  lecteurs du même catalogue.**
+
+## 269i — un repli qui protège d'une panne peut MASQUER une autre
+
+- **Un `defaultValue` rend INVISIBLE l'absence de sa clé au catalogue.** La garde
+  qui traque les clés non résolues (`test_everyUsedIdentifierKeyResolvesInDevelopmentLanguage`)
+  ne regarde que les appels **sans** `defaultValue` — et c'est justifié : un repli
+  garantit qu'on n'affichera jamais l'identifiant brut à l'écran. Mais cette
+  garantie porte sur le CRASH VISUEL, pas sur la LANGUE. Une clé absente du
+  catalogue n'a aucune localisation : son `defaultValue` s'affiche **tel quel dans
+  les sept locales**. Mesuré : 29 chaînes, dont **sept libellés VoiceOver**, sont
+  servies en français à tous les lecteurs non francophones — et en français NON
+  ACCENTUÉ aux francophones, personne n'ayant relu ce littéral comme du texte
+  affiché. **Demander d'un repli : de quoi protège-t-il exactement, et qu'est-ce
+  que sa présence dispense de vérifier ?**
+
+- **Ne pas produire 102 chaînes de traduction de sa propre autorité.** Sur 26
+  clés absentes, 9 ont déjà leur traduction ailleurs dans le catalogue et se
+  réutilisent sans rien inventer ; les 17 autres demanderaient une traduction
+  neuve en six langues dont l'arabe. C'est du texte expédié à des utilisateurs,
+  invérifiable depuis cet environnement — et **une traduction arabe approximative
+  est un défaut pire que le repli français honnête qu'elle remplacerait**. C'est
+  le principe déjà écrit dans `untranslatableKeys` pour les CGU, appliqué au
+  VOLUME plutôt qu'à la nature du texte. Mesurer, tabuler ce qui se réutilise,
+  et remettre la décision — pas deviner.
+
+- **Un lot qui ne débloque rien peut valoir d'être fait, à condition de le dire.**
+  Les 186 dernières réconciliations ne rendent aucun écran épinglable : leurs 40
+  fichiers sont tous retenus par l'autre règle. Leur valeur est que le code cesse
+  de mentir, et qu'ils basculeront sans repasser par là le jour où leurs
+  traductions arrivent. **Annoncer « zéro gain sur la métrique visible » évite de
+  laisser croire à un gain qu'on n'a pas obtenu.**
+
+## 270i — une carte ne peut pas signaler l'entrée qu'elle n'a pas
+
+**Contexte** — 269i lègue « 29 clés absentes du catalogue ». Le remesurage en rend
+114, dont 22 appartiennent à `MeeshyWidgets`. Or `apps/ios/MeeshyWidgets/Localizable.xcstrings`
+existe depuis que la cible existe : 39 clés, les sept locales. C'est la GARDE qui
+lisait le mauvais catalogue — `catalogByTargetFragment` nommait deux des trois
+catalogues du dépôt.
+
+- **Une table de résolution incomplète ne produit pas d'échec, elle produit une
+  MESURE FAUSSE.** Une cible non mappée retombe silencieusement sur le catalogue
+  de l'app : ses clés y sont absentes, donc comptées non traduites alors qu'elles
+  sont traduites, et ses sources restent inépinglables bien qu'elles passent déjà
+  toutes les règles. Le cliquet portait 22 dettes inexistantes sur 114 et refusait
+  une protection déjà acquise. **Un chiffre qui ne bouge pas n'est pas un chiffre
+  qui est juste.**
+
+- **Un témoin écrit DEPUIS la carte ne peut pas voir ce qui n'y est pas.** Toutes
+  les gardes de la suite consommaient `catalogByTargetFragment` — aucune ne
+  pouvait donc constater son entrée manquante : une table ne se lit que pour les
+  entrées qu'elle a. Le témoin doit venir de la source qui connaît l'INVENTAIRE
+  COMPLET — ici le système de fichiers : « tout `.xcstrings` de l'arbre iOS est
+  soit le catalogue de l'app, soit mappé », plus la direction inverse (aucun
+  mappage mort) et un sondage par fragment (le mappage RÉSOUT vraiment). C'est la
+  forme, appliquée à une table de configuration, de la leçon 261 : une énumération
+  porte deux affirmations — « ces entrées sont justes » (vérifiable) et « ce sont
+  toutes les entrées » (presque jamais vérifiée).
+
+- **Les trous d'un catalogue ne sont pas dispersés : ce sont les VALEURS
+  MANQUANTES de familles par ailleurs traduites.** `DeliveryStatus` a six cas, le
+  compositeur émet une clé par cas, trois sont au catalogue et trois non : un
+  lecteur d'écran arabophone entendait trois états en arabe et trois en français
+  dans la même phrase. La pastille de synchronisation annonce ses 53 opérations en
+  sept langues et ses deux boutons en français. **Le code, lui, a l'air complet —
+  la complétude qu'on vérifie à l'œil est celle du `switch`, pas celle du
+  catalogue.** À une clé absente, demander non seulement « que voit
+  l'utilisateur ? » mais **« quelles sont ses SŒURS, et sont-elles là ? »**
+
+- **Compléter une famille attrape ce qu'un balayage par égalité de chaîne laisse
+  derrière.** Dix des onze clés remplies l'ont été en copiant verbatim une entrée
+  portant déjà le même français ; la onzième, `a11y.delivery.sending`, n'a pas de
+  jumelle textuelle (« en cours d'envoi » vs « Envoi en cours ») et n'aurait été
+  trouvée par aucune recherche d'égalité. Et sa CASSE se déduit sans rien inventer :
+  les trois sœurs déjà au catalogue portent la forme mi-phrase en minuscule dans
+  les six mêmes langues (`gesendet` là où la bulle dit `Gesendet`). **Une famille
+  à moitié traduite documente sa propre convention — c'est la ressource la moins
+  chère et la plus sûre pour remplir l'autre moitié.**
+
+- **Un témoin qui n'a jamais été exécuté est une hypothèse.** Le premier jet de
+  `test_everyPerTargetCatalogIsMapped` élisait les catalogues par leur EXTENSION
+  (`.xcstrings`) et rougissait : deux cibles expédient aussi un
+  `InfoPlist.xcstrings`, qui localise des valeurs d'`Info.plist` lues par le
+  système — pas une table adressable depuis `String(localized:)`. Le critère juste
+  est le NOM DE FICHIER (`Localizable.xcstrings`), la table par défaut. Sans chaîne
+  d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
+  l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
+  évité un cycle CI de cinquante.
+
+- **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+  n'est PAS localisée.** `FocalVoiceOverParityTests` cherchait le segment
+  d'accusé de livraison par le littéral `"lu"`, force-unwrappé. Il passait
+  uniquement parce que `a11y.delivery.read` était absente du catalogue : toutes
+  les locales retombaient sur le `defaultValue` français. La clé ajoutée, le
+  simulateur anglais de la CI rend « read », l'index vaut `nil`, `signal trap` —
+  1 échec sur 9 062. **Un tel test est un cliquet à l'envers : il ne rougit pas
+  quand la traduction manque, il rougit quand elle ARRIVE**, et le prix se paie
+  au moment exact où l'on répare le défaut. Corollaire mesuré sur le voisin :
+  `contains("lu")` passait sur un contenu texte « Sa**lu**t » — donc même si le
+  segment gardé avait disparu. Demander sa valeur au CATALOGUE, comme le
+  faisaient déjà tous les tests voisins.
+
+- **« Zéro ligne de production modifiée » n'est pas « zéro changement de
+  comportement ».** Entrer une clé au catalogue change ce que `String(localized:)`
+  rend dans les six autres locales — c'est l'objet même du lot. Avant de conclure
+  qu'un lot de catalogue est inerte, chercher qui COMPARE ces chaînes : tests
+  d'abord, code de production ensuite.
+
+- **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+  EXÉCUTÉ.** Le gate iOS de ce dépôt est un opt-in par mot-clé dans le SUJET du
+  commit de tête (« smoke test » / « run test » / « to test ») ; sans lui, le job
+  macOS compile et saute `Run iOS tests`. Le premier run de la PR 270i est sorti
+  vert sans exécuter un seul test — le workflow le dit dans le NOM du check
+  (« Build app (app + cibles de test) » vs « Build app + tests unitaires »), et
+  c'est la seule chose qui distingue les deux verts. **Lire les étapes du job, pas
+  sa conclusion.** `workflow_dispatch` force la suite complète sans pousser de
+  commit vide.

@@ -131,8 +131,8 @@ extension UniversalComposerBar {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
-            .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Cancel recording", bundle: .main))
-            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Deletes the current voice message", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Annuler l'enregistrement", bundle: .main))
+            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Supprime le message vocal en cours", bundle: .main))
 
             // Live waveform — fills available horizontal space.
             // Marked accessibilityHidden: purely decorative, timer conveys state.
@@ -162,7 +162,7 @@ extension UniversalComposerBar {
             }
             .frame(width: 54, alignment: .trailing)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Recording in progress", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Enregistrement en cours", bundle: .main))
             .accessibilityValue(LocalizedNumber.spokenDuration(seconds: effectiveDuration))
             .accessibilityAddTraits(.updatesFrequently)
 
@@ -192,8 +192,8 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Stop and add to attachments", bundle: .main))
-            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Adds the voice message to attachments to edit before sending", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Arrêter et ajouter aux pièces jointes", bundle: .main))
+            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Place le message vocal dans les pièces jointes pour l'éditer avant l'envoi", bundle: .main))
 
             // Send button — stops recording and sends the message immediately
             // (raw, no preview). Disabled below the minimum duration to prevent
@@ -229,7 +229,7 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel(String(localized: "composer.recording.send", defaultValue: "Send voice message", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.recording.send", defaultValue: "Envoyer le message vocal", bundle: .main))
             .accessibilityHint(canSend
                 ? "Termine et envoie l'enregistrement"
                 : "Maintenez encore pour atteindre la duree minimum")

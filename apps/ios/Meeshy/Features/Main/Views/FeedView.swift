@@ -332,7 +332,7 @@ struct FeedView: View {
                         postLikeDelta[postId, default: 0] -= 1
                     }
                     FeedbackToastManager.shared.showError(
-                        String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main)
+                        String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main)
                     )
                 }
             }
@@ -1511,7 +1511,7 @@ struct FeedView: View {
                                 Image(systemName: composerForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
                                     .font(.caption2)
                                 Text(composerForcePlainPost
-                                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                                    ? String(localized: "feed.composer.type.post", defaultValue: "Publier", bundle: .main)
                                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
                                     .font(.caption)
                             }

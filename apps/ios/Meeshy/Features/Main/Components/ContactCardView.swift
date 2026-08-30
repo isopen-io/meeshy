@@ -41,7 +41,7 @@ struct ContactCardView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "contact-card.shared", defaultValue: "Contact partage", bundle: .main))
+                        Text(String(localized: "contact-card.shared", defaultValue: "Contact partagé", bundle: .main))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(Color(hex: accentColor).opacity(0.8))
                             .textCase(.uppercase)
@@ -129,13 +129,13 @@ struct ContactCardView: View {
     /// so the shared phone/email values must be folded into the label explicitly.
     static func accessibilityLabel(for contact: SharedContact) -> String {
         var parts = [
-            String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName)
+            String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partagé : %@", bundle: .main), contact.fullName)
         ]
         if !contact.phoneNumbers.isEmpty {
-            parts.append(String(format: String(localized: "contact-card.a11y-phones", defaultValue: "Telephone: %@", bundle: .main), contact.phoneNumbers.joined(separator: ", ")))
+            parts.append(String(format: String(localized: "contact-card.a11y-phones", defaultValue: "Téléphone : %@", bundle: .main), contact.phoneNumbers.joined(separator: ", ")))
         }
         if !contact.emails.isEmpty {
-            parts.append(String(format: String(localized: "contact-card.a11y-emails", defaultValue: "E-mail: %@", bundle: .main), contact.emails.joined(separator: ", ")))
+            parts.append(String(format: String(localized: "contact-card.a11y-emails", defaultValue: "E-mail : %@", bundle: .main), contact.emails.joined(separator: ", ")))
         }
         return parts.joined(separator: ", ")
     }
