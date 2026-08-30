@@ -31,6 +31,14 @@ describe('le paquet apps/web-v3', () => {
     expect(at(manifest(), 'scripts', 'start')).toBe('next start -p 3300 -H 0.0.0.0');
   });
 
+  it('sert le développement en HTTPS sur le port 3300, comme les cibles tmux du Makefile le lancent', () => {
+    expect(at(manifest(), 'scripts', 'dev:https')).toBe('node scripts/dev-https.mjs -p 3300');
+  });
+
+  it("ne fabrique plus son propre certificat : il consomme celui que le dépôt génère (scripts/dev-https.mjs)", () => {
+    expect(at(manifest(), 'scripts', 'dev:https')).not.toContain('--experimental-https');
+  });
+
   it('expose un build, un type-check et des tests', () => {
     expect(at(manifest(), 'scripts', 'build')).toContain('next build');
     expect(at(manifest(), 'scripts', 'type-check')).toBe('tsc --noEmit');

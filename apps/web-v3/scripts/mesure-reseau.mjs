@@ -97,7 +97,23 @@ export const requetesAvantPremierPixel = (ressources, fcpMs) =>
 
 export const requetesPendantes = (emises, terminees) => Math.max(0, emises - terminees);
 
-export const composeMesure = ({
+// UN CODE D'ERREUR N'EST PAS UNE MESURE. `page.goto` RÉUSSIT sur un 404 : le
+// serveur a répondu, la page a peint, le CDP a compté des octets. Sans ce
+// verrou, un identifiant de contenu mort — ou deviné faux — rendait `statut:
+// 'mesuré'` sur une page d'erreur, et son poids devenait un chiffre commité
+// contre lequel la v3 se serait comparée. Une réponse absente (`http: 0`, quand
+// `page.goto` ne rend aucune réponse principale) tombe par la même porte.
+export const estCodeDeMesure = (http) => typeof http === 'number' && http >= 200 && http < 400;
+
+export const mesureIndisponible = ({ url, commande, raison }) => ({
+  url,
+  commande,
+  statut: 'à établir',
+  raison,
+  ...CHAMPS_NULS,
+});
+
+const mesureChiffree = ({
   url,
   commande,
   http,
@@ -127,13 +143,14 @@ export const composeMesure = ({
   duree_ms: dureeMs,
 });
 
-export const mesureIndisponible = ({ url, commande, raison }) => ({
-  url,
-  commande,
-  statut: 'à établir',
-  raison,
-  ...CHAMPS_NULS,
-});
+export const composeMesure = (args) =>
+  estCodeDeMesure(args.http)
+    ? mesureChiffree(args)
+    : mesureIndisponible({
+        url: args.url,
+        commande: args.commande,
+        raison: `HTTP ${args.http} — la page servie n'est pas le geste visé (identifiant mort, redirection perdue ou réponse absente) : un chiffre pris sur une page d'erreur est pire qu'un « à établir »`,
+      });
 
 const CHAMPS_AGREGES = [
   'octets_transferes',
@@ -334,10 +351,17 @@ export const mesureUrls = async (urls, commandePour, options) => {
   }
 };
 
-const lisBudgets = () => {
+// LE SITE UNIQUE DU PROFIL RÉSEAU. Le gate de la v3 et la ligne de base « AVANT »
+// (`baseline.mjs`) doivent s'exécuter dans les MÊMES conditions, sans quoi leurs
+// chiffres ne se comparent pas — § 9.2 : « la même mesure sert le gate de la v3
+// ET la ligne de base ». Partager le module ne suffisait pas : ses conditions se
+// lisent ici, une fois, et voyagent avec lui.
+export const budgetsReseau = () => {
   const chemin = join(RACINE, 'budgets.json');
   return existsSync(chemin) ? JSON.parse(readFileSync(chemin, 'utf8')).reseau : null;
 };
+
+export const profilReseau = () => budgetsReseau()?.profil ?? null;
 
 const entier = (args, drapeau, defaut) => {
   const i = args.indexOf(drapeau);
@@ -356,7 +380,7 @@ const main = async () => {
     return 1;
   }
 
-  const reseau = lisBudgets();
+  const reseau = budgetsReseau();
   const profil = args.includes('--sans-emulation') ? null : reseau?.profil ?? null;
   const repetitions = entier(args, '--repetitions', profil ? (reseau?.profil?.repetitions ?? 1) : 1);
   const rang = reseau?.profil?.percentile ?? 75;
