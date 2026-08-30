@@ -282,6 +282,12 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
   // module ; une entrée EN MOINS = un fichier réparé — retirer sa ligne fait
   // partie du correctif qui l'a réparé (patron `FROZEN_INVENTORY` du dépôt).
   const HORS_TERRITOIRE = [
+    // #4349 a fait de `POST /conversations/:id/mark-read` un ADAPTATEUR MINCE
+    // vers la collection unique d'accusés ; #4284 a ensuite sorti cette route de
+    // `conversations/messages.ts` (2945 lignes) vers ce fichier-ci. Son ANNONCE
+    // est le lot #4423, comme pour les cinq autres portes d'accusés — c'est
+    // pourquoi il est ici et non dans MON_TERRITOIRE.
+    'conversations/messages-read-status.ts',
     'auth/register.ts', // #4158/#4149 — vérification de pseudo/e-mail/téléphone
     'friends.ts', // #4162/#4150 — demandes d'amitié
     'users/contacts-directory.ts', // #4163

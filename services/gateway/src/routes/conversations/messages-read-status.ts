@@ -80,6 +80,16 @@ export function registerMarkReadRoute(
   participantAuth: any,
   receipts: ReceiptHandlers
 ) {
+  // ALIAS de `POST /conversations/:conversationId/receipts` (#4349) : ADAPTATEUR
+  // MINCE vers la collection unique — `receipts.markReadAlias` est la MÊME
+  // référence de gestionnaire, aucun corps dupliqué. Son ANNONCE de dépréciation
+  // relève de #4423.
+  //
+  // Cette déclaration est ADJACENTE à l'enregistrement, et non portée par le
+  // doc-comment du registrar : `alias-deprecation-guard` lit le commentaire qui
+  // précède l'appel `fastify.post`, jamais celui de la fonction qui l'enveloppe.
+  // Le découpage #4284 ayant mis cet appel dans un registrar, la déclaration
+  // devait descendre avec lui.
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:id/mark-read', {
