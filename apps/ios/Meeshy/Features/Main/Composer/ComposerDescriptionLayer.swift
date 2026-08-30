@@ -110,6 +110,25 @@ struct ComposerDescriptionLayer: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .onAppear { if opensEditingOnAppear { isEditing = true } }
+        // **Quand le clavier part, la zone part** (directive porteur
+        // 2026-08-30). Une seule loi pour les trois chemins — la coche, le
+        // glissement contrôlé, et toute dismission système — au lieu d'une
+        // fermeture recopiée à chaque site.
+        //
+        // L'ORDRE tombe alors tout seul, et c'est ce que la directive demande :
+        // le clavier s'en va d'abord (le geste le pousse, ou la coche le lâche),
+        // et la zone ne se retire qu'ensuite, parce qu'elle attend ce départ.
+        // L'inverse — fermer la zone puis laisser le clavier retomber dans le
+        // vide — est ce qu'on voyait avant.
+        .adaptiveOnChange(of: isFocused) { avant, apres in
+            guard avant, !apres, isEditing else { return }
+            isEditing = false
+            // La requête ne survit pas à la fermeture : rouvrir le calque sur
+            // une bande héritée d'une frappe précédente offrirait des
+            // suggestions pour un `@` que le curseur a quitté.
+            mentionBox.controller.clearSuggestions()
+            onValidate?()
+        }
     }
 
     // MARK: - Le repos : ce que le lecteur verra
@@ -216,13 +235,13 @@ struct ComposerDescriptionLayer: View {
                 .accessibilityLabel(Text(placeholder))
 
             Button {
+                // **La coche ne ferme pas : elle LÂCHE LE FOCUS.** C'est la
+                // perte de focus qui range la zone (voir plus bas), et lui
+                // laisser ce seul rôle donne au bouton et au glissement le même
+                // chemin — donc le même ordre : le clavier part, puis la zone.
+                // Fermer ici en plus ferait partir les deux ensemble par un
+                // geste et dans l'ordre par l'autre.
                 isFocused = false
-                isEditing = false
-                // La requête ne survit pas à la fermeture : rouvrir le calque
-                // sur une bande héritée d'une frappe précédente offrirait des
-                // suggestions pour un `@` que le curseur a quitté.
-                mentionBox.controller.clearSuggestions()
-                onValidate?()
             } label: {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(14).weight(.semibold))

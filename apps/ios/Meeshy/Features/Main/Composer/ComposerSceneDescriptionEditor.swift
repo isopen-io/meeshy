@@ -41,6 +41,46 @@ struct ComposerSceneDescriptionEditor: View {
     let onHeightChange: (CGFloat) -> Void
 
     var body: some View {
+        // **Le glissement est CONTRÔLÉ, pas déclenché** (directive porteur
+        // 2026-08-30, precision) :
+        //
+        // > « Le swipe vers le bas doit faire swiper le clavier vers le bas
+        // > aussi en même temps — c'est un swipe contrôlé, si on annule le
+        // > clavier reste et on peut écrire. Le swipe fait partir le clavier
+        // > d'abord, avant de faire partir la zone de saisie. »
+        //
+        // Un `DragGesture.onEnded` ne pouvait pas rendre ça : il DÉCIDE à la
+        // levée du doigt, sans rien montrer pendant, et rien n'y est annulable
+        // — le clavier partait d'un coup, après la zone, dans le désordre.
+        //
+        // `scrollDismissesKeyboard(.interactively)` est le mécanisme SYSTÈME de
+        // ce geste : le clavier suit le doigt, image par image, et remonte si on
+        // relâche avant d'avoir fini. C'est exactement « contrôlé », et le
+        // fabriquer à la main aurait donné une imitation qui diverge du reste de
+        // l'OS.
+        //
+        // Il exige un conteneur défilant — d'où le `ScrollView`. Il ne défile
+        // rien tant que le champ tient en six lignes ; sa seule raison d'être ici
+        // est de porter le geste.
+        ScrollView {
+            editeur
+        }
+        .scrollDismissesKeyboard(.interactively)
+        // Le conteneur ne doit pas prendre plus de place que son contenu : sans
+        // cela, la zone occuperait tout le bas de l'écran et la réserve remontée
+        // à l'atelier ferait fuir la scène vers le haut.
+        .frame(maxHeight: mesureHauteur)
+        .background(alignment: .top) { fond }
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// La hauteur mesurée du contenu, servie au `ScrollView` pour qu'il ne
+    /// s'étale pas. `nil` tant que rien n'est mesuré — le conteneur prend alors
+    /// sa taille naturelle, ce qui est le seul défaut sûr : une valeur devinée
+    /// ferait sauter la scène à la première image.
+    @State private var mesureHauteur: CGFloat?
+
+    private var editeur: some View {
         ComposerDescriptionLayer(
             text: $text,
             placeholder: placeholder,
@@ -57,43 +97,11 @@ struct ComposerSceneDescriptionEditor: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .background(alignment: .top) { fond }
         .background { mesure }
-        .onPreferenceChange(ComposerDescriptionEditorHeightKey.self, perform: onHeightChange)
-        // **Le schéma est ÉPINGLÉ sombre, et ce n'est pas un goût.**
-        //
-        // `ComposerDescriptionLayer` peint son champ avec
-        // `glassControlForeground()`, qui résout clair/sombre depuis
-        // l'ENVIRONNEMENT. L'environnement du meuble est celui de l'app — clair
-        // — alors que cette zone se pose sur la teinte du plateau, qui est
-        // sombre. Résultat mesuré à l'écran : « Ajoutez une description… » en
-        // gris sombre sur navy, et un champ qu'on ne sait pas lire est un champ
-        // qu'on n'ose pas remplir.
-        //
-        // C'est le même geste que l'atelier fait pour son propre chrome
-        // (`canvasChromeScheme`) : la vue ne devine pas son fond, on le lui dit.
-        .environment(\.colorScheme, .dark)
-        // **Le glissement vers le BAS valide et ferme** (directive porteur
-        // 2026-08-30). Il remplace le « Terminé » de la barre de clavier, qui
-        // faisait DOUBLON avec la coche que le champ porte déjà — deux commandes
-        // pour un même acte, dont l'une occupait une barre système.
-        //
-        // Le geste va dans le sens du RANGEMENT : on repousse la zone vers le
-        // bas d'où elle est venue, et c'est aussi celui que le clavier suit
-        // quand il se retire. Un glissement vers le haut aurait dit l'inverse.
-        //
-        // Seuil de 40 pt et dominance verticale : sans eux, un glissement
-        // horizontal dans le champ — pour placer le curseur — fermerait la
-        // saisie au premier tremblement du pouce.
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onEnded { valeur in
-                    guard valeur.translation.height > 40,
-                          valeur.translation.height > abs(valeur.translation.width)
-                    else { return }
-                    onDone()
-                }
-        )
+        .onPreferenceChange(ComposerDescriptionEditorHeightKey.self) { hauteur in
+            mesureHauteur = hauteur
+            onHeightChange(hauteur)
+        }
     }
 
     /// Le filet du haut dit où la scène s'arrête et où l'écriture commence, sans

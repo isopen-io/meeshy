@@ -177,7 +177,9 @@ Pour CHAQUE travail :
 - cherche d'abord une issue existante qui le couvre (mcp__github__search_issues) ; si elle existe,
   rends son numero avec deja_ouverte=true et n'en cree pas une seconde ;
 - sinon cree-la, en sous-issue de l'epopee #4371 (parametre parent_issue_number: 4371),
-  avec le label "web" ;
+  avec le label "web" ET le milestone 74 (parametre milestone: 74) — c'est
+  « La v3 web sert le role premier », l'unique milestone de cette epopee ;
+  une issue sans milestone n'est pas planifiee (CLAUDE.md) ;
 - titre : celui fourni, tel quel — il est SEMANTIQUE (il nomme le resultat attendu) ;
 - corps : Contexte (ce qui est casse ou absent aujourd'hui, avec une preuve fichier:ligne),
   Preuve attendue (la commande ou la mesure qui prouvera la fin), Critere de fin (celui fourni,

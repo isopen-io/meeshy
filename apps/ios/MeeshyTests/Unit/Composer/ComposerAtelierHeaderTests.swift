@@ -160,16 +160,49 @@ final class ComposerAtelierHeaderTests: XCTestCase {
             "La coche du champ doit RANGER la zone, pas seulement repasser en lecture : sinon "
                 + "elle laisse à l'écran un lecteur que personne n'a demandé."
         )
+        // **UNE loi de fermeture, trois chemins.** La coche, le glissement
+        // contrôlé et toute dismission système passent par la perte de FOCUS —
+        // et c'est d'elle que vient l'ordre demandé : le clavier s'en va
+        // d'abord, la zone attend son départ. Fermer la zone au site du bouton
+        // ferait partir les deux ensemble par un geste, et dans l'ordre par
+        // l'autre.
         XCTAssertTrue(
-            code.contains("DragGesture(minimumDistance:20)") && code.contains("onDone()"),
-            "… et le glissement vers le bas fait le même acte."
+            compact(AppSourceGuard.stripComments(try calqueSource()))
+                .contains("adaptiveOnChange(of:isFocused)"),
+            "La fermeture doit suivre le FOCUS : c'est ce qui donne l'ordre « clavier d'abord, "
+                + "zone ensuite » sans que chaque site ait à le réécrire."
         )
+        // **Le glissement est CONTRÔLÉ, et c'est le système qui le porte**
+        // (précision porteur 2026-08-30). Un `DragGesture.onEnded` DÉCIDAIT à la
+        // levée du doigt : rien ne bougeait pendant, rien n'était annulable, et
+        // le clavier partait après la zone au lieu d'avant.
+        //
+        // Garde NÉGATIVE sur le geste maison : c'est la reconstruction à la main
+        // qui est interdite, pas le glissement. Elle rougirait au premier
+        // « je refais ça moi-même », qui redonnerait une imitation divergeant du
+        // reste de l'OS.
         XCTAssertTrue(
-            code.contains("valeur.translation.height>40")
-                && code.contains("valeur.translation.height>abs(valeur.translation.width)"),
-            "Seuil et dominance verticale : sans eux, un glissement horizontal dans le champ — "
-                + "pour placer le curseur — fermerait la saisie au premier tremblement du pouce."
+            code.contains(".scrollDismissesKeyboard(.interactively)"),
+            "Le clavier doit suivre le doigt image par image, et remonter si on relâche avant la "
+                + "fin. C'est le mécanisme système ; le fabriquer donnerait une imitation."
         )
+        XCTAssertFalse(
+            code.contains("DragGesture("),
+            "Un geste maison redeviendrait un DÉCLENCHEUR : il décide à la levée du doigt, ne "
+                + "montre rien pendant, et n'annule rien."
+        )
+    }
+
+    private func calqueSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
+        return brut
     }
 
     private func editorSource() throws -> String {
