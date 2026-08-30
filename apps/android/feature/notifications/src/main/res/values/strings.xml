@@ -6,4 +6,16 @@
     <string name="notifications_system_sender">System</string>
     <string name="notifications_action_delete">Delete</string>
     <string name="notifications_action_mark_read">Mark read</string>
+    <string name="notifications_empty_category">No notifications here</string>
+    <string name="notifications_category_all">All</string>
+    <string name="notifications_category_unread">Unread</string>
+    <string name="notifications_category_messages">Messages</string>
+    <string name="notifications_category_reactions">Reactions</string>
+    <string name="notifications_category_mentions">Mentions</string>
+    <string name="notifications_category_social">Social</string>
+    <string name="notifications_category_contacts">Contacts</string>
+    <string name="notifications_category_groups">Groups</string>
+    <string name="notifications_category_calls">Calls</string>
+    <string name="notifications_category_translations">Translations</string>
+    <string name="notifications_category_system">System</string>
 </resources>
