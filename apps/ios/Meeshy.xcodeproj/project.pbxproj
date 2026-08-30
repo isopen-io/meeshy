@@ -737,6 +737,7 @@
 		87DF9FAA32316BB24F3BA534 /* MessageDayStickyOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDEFAE5B1206FE8BE50AAD3 /* MessageDayStickyOverlay.swift */; };
 		87F970C0B922B751C25AE871 /* ShareConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB04FED5D59B6F0B6FF8EE80 /* ShareConversationStore.swift */; };
 		881754CA2D2D70E82C6FC09A /* CallViewPiPButtonToggleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB314F289B16E5839AE871F6 /* CallViewPiPButtonToggleTests.swift */; };
+		8829BAC68A939451B7E311B7 /* MockFriendServiceCursorParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D7446516E85D6D2C73F9CE /* MockFriendServiceCursorParityTests.swift */; };
 		883BECB240EC6E20BA95EFA5 /* BlockedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E073DF0767D8B30C28394A /* BlockedViewModelTests.swift */; };
 		8858FB76EF5D9ACD1FC8C464 /* FeedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70EF3759F31A8BCA20963BE /* FeedStore.swift */; };
 		88C1D22C51CD4298C99DDF13 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B9985A8DB64798BA397DBF3 /* GlobalSearchView.swift */; };
@@ -1683,6 +1684,7 @@
 		2195714CB6B3FFDA0FF3D1F4 /* ConversationView+AttachmentHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+AttachmentHandlers.swift"; sourceTree = "<group>"; };
 		21A8F5F33D919F0669B3D549 /* PiPVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPVideoRenderer.swift; sourceTree = "<group>"; };
 		21D55320D700F505E4E982B9 /* PhonebookViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonebookViewModelTests.swift; sourceTree = "<group>"; };
+		21D7446516E85D6D2C73F9CE /* MockFriendServiceCursorParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockFriendServiceCursorParityTests.swift; sourceTree = "<group>"; };
 		21E73CA0469D1FCBA3E9F0A5 /* MessageReportDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReportDetailView.swift; sourceTree = "<group>"; };
 		21EF6B286F8A07F31C6FB323 /* PrismPreviewVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrismPreviewVectorTests.swift; sourceTree = "<group>"; };
 		222BEE0893F2139AC39A33FA /* MyStoryCardPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoryCardPresentation.swift; sourceTree = "<group>"; };
@@ -4101,6 +4103,7 @@
 				B347333BA664294DF2C9212F /* MainActorDeinitSourceGuardTests.swift */,
 				749CAB0464E40A4FF16DF600 /* MediaLabelSourceGuardTests.swift */,
 				0C74B77C178048801DF99AFA /* MetaSeparatorSourceGuardTests.swift */,
+				21D7446516E85D6D2C73F9CE /* MockFriendServiceCursorParityTests.swift */,
 				8C53F5538E90BB0F0B92E719 /* PerpetualMotionGuardTests.swift */,
 				AC04B8137BFE23D653DB2C5D /* ReadingDirectionGuardTests.swift */,
 				49E2C1EAF126C1930923572A /* SkeletonColdStartGuardTests.swift */,
@@ -6359,6 +6362,7 @@
 				CDC1F2F1E5B16559FE7244FA /* MockConversationSyncEngine.swift in Sources */,
 				115355B2D543ECCFE6AED48C /* MockEditProfileDoubles.swift in Sources */,
 				4C1AB2941A28A96D3C81520E /* MockFriendService.swift in Sources */,
+				8829BAC68A939451B7E311B7 /* MockFriendServiceCursorParityTests.swift in Sources */,
 				39E02D8605167674EA1C059B /* MockLanguageProvider.swift in Sources */,
 				A31DD9FFA25CB09DB6528F38 /* MockMentionService.swift in Sources */,
 				9535C82FAF0DC305F0F4C1A8 /* MockMessageService.swift in Sources */,
