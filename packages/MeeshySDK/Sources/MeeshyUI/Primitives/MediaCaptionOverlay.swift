@@ -69,16 +69,29 @@ public struct MediaCaptionOverlay: View {
 
     // MARK: - Corps
 
+    /// **Repliée, la couche est INTRINSÈQUE ; dépliée seulement, elle prend
+    /// l'écran.**
+    ///
+    /// La première version imposait `frame(maxWidth:.infinity, maxHeight:.infinity)`
+    /// et un `ignoresSafeArea` dans les DEUX états. Mesuré au simulateur : le
+    /// conteneur se retrouvait à un `x` NÉGATIF (−24,8), le texte rogné sur le
+    /// bord gauche, et le bouton « voir plus » hors d'atteinte — recouvert par
+    /// le geste plein écran du lecteur. Le contenu était juste et personne ne
+    /// pouvait s'en servir.
+    ///
+    /// La couche voisine qui marche depuis toujours — la transcription vocale,
+    /// dix lignes plus haut dans le même `ZStack` — ne fait rien de tout cela :
+    /// elle se laisse dimensionner par son contenu et c'est l'hôte qui la pousse
+    /// en bas. On l'imite.
+    @ViewBuilder
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            scrim
-            if isExpanded {
-                expandedCaption
-            } else {
-                collapsedCaption
-            }
+        if isExpanded {
+            expandedCaption
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .background(expandedScrim)
+        } else {
+            collapsedCaption
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     /// Repliée : la tête de légende et, si quelque chose suit, l'invite.
@@ -112,6 +125,8 @@ public struct MediaCaptionOverlay: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(collapsedScrim)
     }
 
     /// Dépliée : le texte entier, ancré au coin BAS-GAUCHE, qui défile s'il
@@ -150,23 +165,21 @@ public struct MediaCaptionOverlay: View {
         }
     }
 
-    /// Le voile. Repliée, il n'assombrit que le pied de la scène ; dépliée, il
-    /// remonte pour que le texte long reste lisible sur toute sa hauteur.
-    private var scrim: some View {
-        LinearGradient(
-            colors: isExpanded
-                ? [.black.opacity(0.15), .black.opacity(0.55), .black.opacity(0.8)]
-                : [.clear, .clear, .black.opacity(0.45)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-        // Dépliée, le voile REFERME au toucher — c'est le geste attendu d'un
-        // texte plein écran. Repliée, il est transparent aux gestes pour rendre
-        // au canvas sa navigation.
-        .contentShape(Rectangle())
-        .allowsHitTesting(isExpanded)
-        .onTapGesture { onToggle() }
+    /// Repliée : un voile qui n'assombrit que la bande du texte, et qui ne
+    /// prend JAMAIS le doigt — le canvas garde sa navigation dessous.
+    private var collapsedScrim: some View {
+        LinearGradient(colors: [.clear, .black.opacity(0.42)],
+                       startPoint: .top, endPoint: .bottom)
+            .allowsHitTesting(false)
+    }
+
+    /// Dépliée : le voile couvre l'écran et REFERME au toucher — c'est le geste
+    /// attendu d'un texte plein écran.
+    private var expandedScrim: some View {
+        LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.6), .black.opacity(0.82)],
+                       startPoint: .top, endPoint: .bottom)
+            .contentShape(Rectangle())
+            .onTapGesture { onToggle() }
     }
 
     // MARK: - Libellés

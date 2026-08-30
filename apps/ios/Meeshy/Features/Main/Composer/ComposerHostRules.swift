@@ -480,8 +480,28 @@ nonisolated enum ComposerMediaSourcePolicy {
 /// | étagère | `addBorrowedSound` → objet audio `isBackground` | allume le crédit et le 🔇 des surfaces de lecture |
 /// | micro | une note vocale | **n'est JAMAIS un fond audio** |
 ///
-/// Les fondre en un seul geste ferait d'une note vocale la bande-son de la
-/// publication — exactement ce que la doctrine interdit.
+/// ## Ce que cette doctrine confondait, et que le porteur a tranché (#4483)
+///
+/// Elle concluait « les fondre en un seul geste ferait d'une note vocale la
+/// bande-son de la publication ». La conclusion ne suivait pas de sa prémisse :
+/// elle mêlait deux champs ORTHOGONAUX de `StoryAudioPlayerObject`.
+///
+/// | ce qui est en jeu | le champ qui le porte | qui l'écrit |
+/// |---|---|---|
+/// | le CRÉDIT (« ♫ NUITS BLANCHES · @lume ») | `soundId` + `soundAuthorUsername` | `addBorrowedSound`, et lui seul |
+/// | le rôle de MIXAGE | `isBackground` | n'importe quel son |
+///
+/// Un vocal mis en fond porte donc `isBackground = true` et `soundId = nil` : le
+/// bon mixage, sans ligne de crédit mensongère. Ce que la doctrine protégeait
+/// vraiment — qu'un enregistrement personnel ne s'attribue pas le crédit d'une
+/// piste empruntée — reste protégé, et l'auteur gagne le choix que le porteur a
+/// demandé le 2026-08-30 : « les mettre en background ou en foreground ».
+///
+/// L'ORDRE change avec elle. La doctrine rangeait l'étagère en premier, au motif
+/// qu'emprunter est le geste nominal. Le porteur a demandé que la porte « ouvre
+/// directement l'enregistrement audio » : le micro passe donc devant, et les
+/// deux autres provenances deviennent des entrées SOUS lui, dans la même
+/// feuille — plus un choix préalable qui coûtait un geste pour rien.
 ///
 /// ## Aucun gate, et c'est mesuré
 ///
@@ -492,17 +512,44 @@ nonisolated enum ComposerMediaSourcePolicy {
 nonisolated enum ComposerSoundSource: Equatable, Hashable, CaseIterable {
     /// L'étagère — un son EMPRUNTÉ, qui devient le fond de la scène.
     case library
-    /// Le micro — une note vocale, qui ne le devient jamais.
+    /// Le micro — la surface PRINCIPALE de la feuille depuis #4483.
     case record
+    /// Un fichier audio du disque.
+    case files
+}
+
+/// Les mots du rôle de mixage (#4483).
+///
+/// « Fond » et « premier plan » sont les deux mots du DOMAINE — le modèle les
+/// porte déjà sous `isBackground`. On ne dit ni « musique » ni « voix » : le
+/// rôle ne dépend pas de ce qu'est le son, mais de la place qu'il occupe.
+nonisolated enum ComposerSoundRoleCopy {
+
+    static var title: String {
+        String(localized: "composer.sound.role.title",
+               defaultValue: "Place du son", bundle: .main)
+    }
+
+    static func label(_ role: ComposerAudioRole) -> String {
+        switch role {
+        case .background:
+            return String(localized: "composer.sound.role.background",
+                          defaultValue: "En fond", bundle: .main)
+        case .foreground:
+            return String(localized: "composer.sound.role.foreground",
+                          defaultValue: "Au premier plan", bundle: .main)
+        }
+    }
 }
 
 nonisolated enum ComposerSoundSourcePolicy {
 
-    /// L'ordre n'est pas décoratif : **emprunter d'abord**. C'est le geste
-    /// nominal d'une scène — on habille une composition avec un son qui existe
-    /// —, là où enregistrer est le geste rare. La vue `2c` les range dans cet
-    /// ordre pour la même raison.
-    static let offered: [ComposerSoundSource] = [.library, .record]
+    /// L'ordre n'est pas décoratif : **enregistrer d'abord** depuis #4483. La
+    /// porte ouvre directement le micro (directive porteur), et les deux autres
+    /// provenances sont des entrées offertes SOUS lui, dans la même feuille.
+    /// Auparavant l'étagère venait en tête, au motif qu'emprunter est le geste
+    /// nominal — c'était vrai d'un CHOIX préalable, qui n'existe plus.
+    static let offered: [ComposerSoundSource] = [.record, .library, .files]
 
     static func label(_ source: ComposerSoundSource) -> String {
         switch source {
@@ -512,6 +559,9 @@ nonisolated enum ComposerSoundSourcePolicy {
         case .record:
             return String(localized: "composer.rail.sound.record",
                           defaultValue: "Enregistrer un vocal", bundle: .main)
+        case .files:
+            return String(localized: "composer.rail.sound.files",
+                          defaultValue: "Importer un fichier audio", bundle: .main)
         }
     }
 

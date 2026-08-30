@@ -26,7 +26,7 @@ extension StoryComposerViewModel {
     /// de poser. Un son collé dont l'analyse échoue reste un son collé — refuser
     /// la pose pour un dessin d'onde inverserait la hiérarchie entre le contenu
     /// et sa représentation.
-    public func attachPastedAudio(url: URL) {
+    public func attachPastedAudio(url: URL, role: ComposerAudioRole? = nil) {
         Task { [weak self] in
             let samples: [Float]
             do {
@@ -41,7 +41,7 @@ extension StoryComposerViewModel {
                 if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
             }
             await MainActor.run {
-                guard let self, let obj = self.addAudioObject() else { return }
+                guard let self, let obj = self.addAudioObject(role: role) else { return }
                 self.loadedAudioURLs[obj.id] = url
                 var effects = self.currentEffects
                 if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {

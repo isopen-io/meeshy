@@ -516,10 +516,14 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
 /// crédit de son de fond.
 final class ComposerSoundSourcePolicyTests: XCTestCase {
 
-    /// **Le fusible** — et l'ordre, qui n'est pas décoratif : emprunter est le
-    /// geste nominal d'une scène, enregistrer le geste rare.
-    func test_lesDeuxProvenances_sontOffertesDansLOrdreDeLaDoctrine() {
-        XCTAssertEqual(ComposerSoundSourcePolicy.offered, [.library, .record])
+    /// **Le fusible** — et l'ordre, qui n'est pas décoratif. Il a CHANGÉ au
+    /// #4483 : le porteur a demandé que la porte « ouvre directement
+    /// l'enregistrement audio ». Le micro est donc la surface principale de la
+    /// feuille, et les deux autres provenances des entrées offertes SOUS lui.
+    /// L'ancien ordre (étagère d'abord) était juste d'un CHOIX préalable, qui
+    /// n'existe plus.
+    func test_lesTroisProvenances_sontOffertesDansLOrdreDeLaDoctrine() {
+        XCTAssertEqual(ComposerSoundSourcePolicy.offered, [.record, .library, .files])
     }
 
     /// Aucune provenance n'est laissée sans libellé — VoiceOver comme le
@@ -572,13 +576,16 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
                        "Ce raccourci rend l'étagère des sons inatteignable depuis le plateau.")
     }
 
-    /// Les deux portails ont leur lecteur AU-DESSUS de l'aiguillage (#4120), et
-    /// les boutons SORTENT de la règle.
+    /// **Une porte, UNE feuille (#4483).** Le choix préalable a disparu : il
+    /// coûtait un geste et, surtout, ses deux branches n'atterrissaient pas au
+    /// même endroit. Les deux portails restent montés au-dessus de
+    /// l'aiguillage (#4120) — c'est ce que ce témoin garde vraiment.
     func test_lesDeuxPortails_sontMontesEtLisentLaRegle() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("isPresented:$showsSoundSourceChooser"))
+        XCTAssertTrue(source.contains("case.sound:composerSoundSheet"))
         XCTAssertTrue(source.contains("case.soundLibrary:soundLibrarySheet"))
-        XCTAssertTrue(source.contains("ForEach(ComposerSoundSourcePolicy.offered,id:\\.self)"))
+        XCTAssertFalse(source.contains("isPresented:$showsSoundSourceChooser"),
+                       "le choix préalable coûtait un geste pour deux branches qui n'atterrissaient pas au même endroit")
     }
 
     /// **Un son emprunté passe par le VIEWMODEL** — c'est lui, et lui seul, qui
@@ -590,13 +597,42 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("SoundLibraryPicker("))
     }
 
-    /// **Les deux provenances ne se confondent pas.** Emprunter pose un fond,
-    /// enregistrer une note vocale qui n'en est jamais un (doctrine `2c`) :
-    /// leurs deux chemins doivent rester distincts dans l'aiguillage.
-    func test_lesDeuxProvenances_ontDesCheminsDistincts() throws {
+    /// **Le défaut que #4483 ferme : l'enregistrement atterrissait dans le
+    /// DOCUMENT.**
+    ///
+    /// `case .record: handleDocumentTool(.microphone)` menait à
+    /// `presentedPortal = .audio` → `AudioPostComposerView` →
+    /// `documentLocalMedia.append(…)`. Sur une scène, enregistrer un vocal ne
+    /// posait donc RIEN sur cette scène, pendant qu'emprunter y posait un objet.
+    /// Une porte, deux destinations.
+    ///
+    /// Ce témoin garde la destination — le vrai sujet — plutôt que la
+    /// distinction des chemins, qui n'était que le moyen.
+    func test_leSonEnregistre_atterritSurLaScene_jamaisDansLeDocument() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.library:presentedPortal=.soundLibrary"))
-        XCTAssertTrue(source.contains("case.record:handleDocumentTool(.microphone)"))
+        XCTAssertTrue(source.contains("viewModel.attachPastedAudio(url:url,role:chosenSoundRole)"),
+                      "le son enregistré doit rejoindre la SCÈNE, avec le rôle choisi par l'auteur")
+        XCTAssertFalse(source.contains("case.record:handleDocumentTool(.microphone)"),
+                       "ce chemin versait le vocal dans la liste média du DOCUMENT")
+    }
+
+    /// Le rôle de mixage est OFFERT, et il descend jusqu'à l'objet créé — un
+    /// sélecteur qui ne changerait rien serait un contrôle sans effet (loi 4).
+    func test_leRoleDeMixage_estOffertEtDescendJusquALObjet() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("chosenSoundRole=role"),
+                      "le sélecteur doit ÉCRIRE le choix")
+        XCTAssertTrue(source.contains("role:chosenSoundRole"),
+                      "et ce choix doit atteindre la création de l'objet audio")
+    }
+
+    /// La sélection affichée est ce que la règle ferait SANS choix — jamais un
+    /// défaut arbitraire qui la contredirait, et jamais une boucle recopiée.
+    func test_laSelectionAffichee_appelleLaRegleAutomatique() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("chosenSoundRole??automaticSoundRole"))
+        XCTAssertTrue(source.contains("ComposerAudioPlacement.isBackground("),
+                      "la règle automatique s'APPELLE, elle ne se recopie pas")
     }
 }
 

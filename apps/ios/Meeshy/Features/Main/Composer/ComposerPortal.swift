@@ -65,6 +65,12 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     /// La bibliothèque de stickers — elle POSE un objet sur la scène.
     case sticker
     /// L'étagère des sons : emprunter une piste.
+    /// **LA feuille du son (#4483).** Elle remplace un choix à deux options qui
+    /// n'atterrissait pas au même endroit selon la branche : emprunter posait un
+    /// son SUR LA SCÈNE, enregistrer le versait dans la liste média du DOCUMENT.
+    /// Une porte, une feuille, une destination.
+    case sound
+    /// L'étagère seule, ouverte DEPUIS la feuille du son.
     case soundLibrary
     /// Le sélecteur de personnes à nommer, avec son mode d'apparition.
     case reference
