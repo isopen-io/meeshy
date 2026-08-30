@@ -23,7 +23,6 @@ import {
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
-import { depreciee } from '../utils/deprecation';
 // #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
 // deleted-conversations) est réalignée sur le geste que la route CANONIQUE
 // (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit

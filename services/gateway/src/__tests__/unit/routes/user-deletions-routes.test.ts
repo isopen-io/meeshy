@@ -331,11 +331,21 @@ describe('DELETE /api/conversations/:conversationId/delete-for-me', () => {
       url: `/api/conversations/${CONV_ID}/delete-for-me`,
       headers: AUTH,
     });
-    expect(res.headers['deprecation']).toBe('@1787961600');
+    // 2026-08-30 en epoch. Deux lots ont converge sur cette route : le mien
+    // datait l'annonce du 29, le lot voisin du 30 -- c'est la sienne qui tient,
+    // l'annonce partant reellement ce jour-la. La valeur reste ECRITE en dur
+    // plutot que derivee de la constante : un temoin qui recalcule ce qu'il
+    // mesure ne mesure plus rien.
+    expect(res.headers['deprecation']).toBe('@1788048000');
     expect(res.headers['link']).toBe(
       `</api/v1/conversations/${CONV_ID}/delete-for-me>; rel="successor-version"`
     );
-    expect(res.headers['sunset']).toBeUndefined();
+    // Ce temoin exigeait l'ABSENCE de Sunset ; la version retenue en pose un, et
+    // c'est la bonne : sa date n'est pas une habitude mais une MESURE -- aucun
+    // des trois clients n'appelle cette adresse, verifie par grep. Affirmer la
+    // date exacte est de plus un temoin plus fort qu'affirmer une absence : une
+    // fenetre de retrait qui glisserait en silence ferait rougir celui-ci.
+    expect(res.headers['sunset']).toBe('Fri, 26 Feb 2027 00:00:00 GMT');
   });
 });
 
