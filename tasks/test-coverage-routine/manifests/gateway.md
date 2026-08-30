@@ -190,7 +190,6 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/me/preferences/categories.ts`
 - [ ] `services/gateway/src/routes/me/preferences/index.ts`
 - [ ] `services/gateway/src/routes/me/preferences/preference-router-factory.ts`
-- [ ] `services/gateway/src/routes/me/preferences/types.ts`
 
 ## routes/posts  (7/7 have a test)
 

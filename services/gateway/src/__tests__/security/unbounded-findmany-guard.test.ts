@@ -191,8 +191,12 @@ function compterParFichier(sites: ReadonlyArray<UnboundedFindManySite>): Record<
 // les dix siens.
 // =============================================================================
 const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
+  // #4284 a découpé admin/agent.ts en fichiers frères ; les huit sites
+  // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
+  // (4). Le compte total est inchangé.
+  'admin/agent-configs.ts': 4,
+  'admin/agent-observability.ts': 4,
   'admin/agent-topics.ts': 1,
-  'admin/agent.ts': 8,
   'admin/invitations.ts': 1,
   // 3 -> 2 : #4391 a RETIRE le `findMany` de `GET /admin/messages/stats`, qui
   // ramenait `select: { createdAt, content }` sur TOUTE la fenetre — une ligne
@@ -210,7 +214,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'communities/membership.ts': 1,
   'community-preferences.ts': 1,
   'conversations/ban.ts': 2,
-  'conversations/core.ts': 8,
+  // #4284 a découpé conversations/core.ts en fichiers frères ; les huit
+  // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2)
+  // et core-list.ts (3). Le compte total est inchangé.
+  'conversations/core-detail.ts': 3,
+  'conversations/core-lifecycle.ts': 2,
+  'conversations/core-list.ts': 3,
   'conversations/leave.ts': 1,
   // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
   // (currentUserReactions au niveau du message, currentUserConsumption par piece
@@ -219,10 +228,17 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // n'atteignaient AUCUN client. Deux d'entre elles etaient des findMany nus.
   // Un cliquet qui descend parce que le travail a disparu est la seule facon
   // agreable de le voir descendre.
-  'conversations/messages.ts': 3,
+  // #4284 a ensuite découpé conversations/messages.ts en fichiers frères :
+  // les trois sites vivent désormais dans messages-list-query.ts, seul
+  // compte inchangé.
+  'conversations/messages-list-query.ts': 3,
   // Cinq, et non sept : deux sites ont suivi le geste de retrait d'un
   // participant dans son propre fichier (#4176). Le compte total est inchangé.
-  'conversations/participants.ts': 5,
+  // #4284 a ensuite découpé conversations/participants.ts en fichiers
+  // frères ; les cinq sites vivent désormais dans participants-presence.ts
+  // (1) et participants-writes.ts (4). Le compte total reste inchangé.
+  'conversations/participants-presence.ts': 1,
+  'conversations/participants-writes.ts': 4,
   'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,
@@ -278,12 +294,19 @@ describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère
     // `admin/users.ts`) sont désormais ENTIÈREMENT propres — absents de
     // l'inventaire gelé — et le sont donc DEUX fois : ici, route par route, et
     // dans le compte GLOBAL du premier `it` ci-dessus.
-    const messagesAdvanced = readFileSync(join(ROUTES_DIR, 'conversations/messages-advanced.ts'), 'utf8');
-    const reactionsHandler = messagesAdvanced.slice(
-      messagesAdvanced.indexOf("'/conversations/:id/reactions'"),
-      messagesAdvanced.indexOf("'/conversations/:id/status'")
+    //
+    // #4284 a découpé conversations/messages-advanced.ts et admin/agent.ts en
+    // fichiers frères, et les deux slices ci-dessous suivent leurs routes :
+    // sans ce déplacement, `messagesAdvanced.indexOf(...)`/`agent.indexOf(...)`
+    // rendent -1 des deux côtés, la slice résultante est la chaîne VIDE, et
+    // `scanUnboundedFindMany('', …)` rend `[]` sans avoir rien lu — un témoin
+    // vert qui ne prouve plus rien (mesuré : c'était le cas avant ce correctif).
+    const messagesAdvancedReads = readFileSync(join(ROUTES_DIR, 'conversations/messages-advanced-reads.ts'), 'utf8');
+    const reactionsHandler = messagesAdvancedReads.slice(
+      messagesAdvancedReads.indexOf("'/conversations/:id/reactions'"),
+      messagesAdvancedReads.indexOf("'/conversations/:id/status'")
     );
-    expect(scanUnboundedFindMany(reactionsHandler, 'conversations/messages-advanced.ts#reactions')).toEqual([]);
+    expect(scanUnboundedFindMany(reactionsHandler, 'conversations/messages-advanced-reads.ts#reactions')).toEqual([]);
 
     const communitiesCore = readFileSync(join(ROUTES_DIR, 'communities/core.ts'), 'utf8');
     const conversationsHandler = communitiesCore.slice(
@@ -299,11 +322,16 @@ describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère
     const linkPreviewHandler = anonymous.slice(anonymous.indexOf("'/anonymous/link/:identifier'"));
     expect(scanUnboundedFindMany(linkPreviewHandler, 'anonymous.ts#link-preview')).toEqual([]);
 
-    const agent = readFileSync(join(ROUTES_DIR, 'admin/agent.ts'), 'utf8');
-    const configsHandler = agent.slice(agent.indexOf("'/configs'"), agent.indexOf("'/configs/:conversationId'"));
-    const rolesHandler = agent.slice(agent.indexOf("'/configs/:conversationId/roles'"), agent.indexOf("'/roles/:conversationId/:userId/assign'"));
-    expect(scanUnboundedFindMany(configsHandler, 'admin/agent.ts#configs')).toEqual([]);
-    expect(scanUnboundedFindMany(rolesHandler, 'admin/agent.ts#roles')).toEqual([]);
+    // `/configs` et `/configs/:conversationId/roles` vivent toutes deux
+    // désormais dans agent-configs.ts (#4284), dans le même ordre qu'avant le
+    // découpage ; la borne de fin de `rolesHandler` devient la route suivante
+    // DANS CE FICHIER (`/configs/:conversationId/summary`) puisque
+    // `/roles/:conversationId/:userId/assign` a migré vers agent-roles.ts.
+    const agentConfigs = readFileSync(join(ROUTES_DIR, 'admin/agent-configs.ts'), 'utf8');
+    const configsHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs'"), agentConfigs.indexOf("'/configs/:conversationId'"));
+    const rolesHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs/:conversationId/roles'"), agentConfigs.indexOf("'/configs/:conversationId/summary'"));
+    expect(scanUnboundedFindMany(configsHandler, 'admin/agent-configs.ts#configs')).toEqual([]);
+    expect(scanUnboundedFindMany(rolesHandler, 'admin/agent-configs.ts#roles')).toEqual([]);
 
     const users = readFileSync(join(ROUTES_DIR, 'admin/users.ts'), 'utf8');
     const reportedMessagesHandler = users.slice(

@@ -418,6 +418,29 @@ final class LocalizationConsistencyTests: XCTestCase {
         "onboarding.step.recap.terms.body",
     ]
 
+    /// La source d'un écran épinglé, résolue pour l'UNITÉ quand `path` désigne
+    /// `StoryViewModel.swift` (#4425).
+    ///
+    /// Ce fichier s'est scindé en plusieurs frères : un appel `String(localized:)`
+    /// épinglé « traduit dans les 6 locales » ou « defaultValue == catalogue »
+    /// peut migrer vers `StoryViewModel+Publication.swift` sans que son texte
+    /// change — mais une lecture bornée au seul fichier historique cesserait de
+    /// le voir, et les deux cliquets ci-dessous rétréciraient en silence : ils
+    /// ne verraient plus JAMAIS ces appels, ni pour les confirmer conformes ni
+    /// pour signaler une régression future. Tout autre écran épinglé continue
+    /// de se lire tel quel — un seul fichier, une lecture directe.
+    private func pinnedScreenSource(at url: URL, path: String) throws -> String {
+        guard path == "apps/ios/" + AppSourceGuard.storyViewModelPath else {
+            return try String(contentsOf: url, encoding: .utf8)
+        }
+        let unit = try AppSourceGuard.storyViewModelSource()
+        XCTAssertGreaterThan(
+            unit.count, 400,
+            "L'unité de StoryViewModel est introuvable ou vide — ce cliquet ne mesurerait plus rien pour cet écran."
+        )
+        return unit
+    }
+
     func test_fullyLocalizedScreensStayTranslatedInEveryShippedLocale() throws {
         let env = try makeEnvironment()
 
@@ -425,7 +448,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
-            let text = try String(contentsOf: url, encoding: .utf8)
+            let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key) else { continue }
@@ -457,7 +480,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
-            let text = try String(contentsOf: url, encoding: .utf8)
+            let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key),
