@@ -121,7 +121,6 @@
  * dynamique délibérément contournante.
  */
 
-import { describe, it, expect } from '@jest/globals';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -515,7 +514,9 @@ describe('Ce que le balayage sait discriminer', () => {
     expect(scanApiPathLiterals(source, 'x.ts', NO_LOCAL_PREFIXES)).toHaveLength(1);
   });
 
-  it.each(API_SERVICE_VERBS)('signale un littéral non préfixé passé à apiService.%s(', (verb) => {
+  it.each(API_SERVICE_VERBS)(
+    'signale un littéral non préfixé passé à apiService.%s(',
+    (verb: (typeof API_SERVICE_VERBS)[number]) => {
     const source = `await apiService.${verb}('/groups');`;
     expect(scanApiPathLiterals(source, 'x.ts', NO_LOCAL_PREFIXES)).toHaveLength(1);
   });

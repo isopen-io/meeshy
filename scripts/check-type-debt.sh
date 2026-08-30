@@ -158,7 +158,21 @@ NC='\033[0m'
 # est un `.max(5)` → `.max(6)` sur des schémas Zod, une borne de validation
 # RUNTIME dont `z.string()` infère le même type — delta de types nul, par
 # construction.
-readonly WEB_BASELINE=1185
+# 1185 → 1184 au lot 6 du 2026-08-30. Deux erreurs retirées de
+# `__tests__/security/api-path-literal-guard.test.ts`, la garde livrée par #4285
+# la veille : un `import … from '@jest/globals'` qui ne RÉSOUT PAS (TS2307) et
+# dont ce fichier était le seul porteur sur 686 suites du paquet, et un
+# paramètre de `it.each` implicitement `any` (TS7006). Le second était le +1 qui
+# a fait rougir la CI sur `3da57c01` ; le premier était déjà dans la baseline,
+# retiré au même geste parce qu'un import mort qui ne compile pas n'a pas à être
+# porté par un cliquet.
+#
+# Ancrage : contrairement au cas de 1194 documenté ci-dessus, la mesure LOCALE
+# et celle du RUNNER coïncidaient exactement sur cette révision — CI 1186
+# (run 33286745112, « RÉGRESSION : 1186 erreurs, baseline 1185 ») et local 1186
+# avant correctif. Le delta de −2 est donc lu sur un point où les deux mesures
+# s'accordent, pas transposé de l'une à l'autre.
+readonly WEB_BASELINE=1184
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
