@@ -5,6 +5,17 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — the local gate catches a missing test-file import that the core-only pre-run misses (slice `notification-center-category-filter`)
+A per-module test run (`:core:model:testDebugUnitTest --tests …`) green-lit the pure model, but the FULL
+`assembleDebug testDebugUnitTest` gate then failed on `:feature:notifications:compileDebugUnitTestKotlin` with
+`Unresolved reference 'NotificationFilterCategory'` — the new symbol was used in `NotificationsViewModelTest.kt`
+without its `import me.meeshy.sdk.model.NotificationFilterCategory`. **Lesson: when a slice adds a new `:core:model`
+type AND consumes it from a `:feature` test, a narrow single-module test run cannot prove the feature module; only
+the full multi-module gate compiles the feature test source.** Always run the full `meeshy.sh check` (or at least
+`:feature:<mod>:testDebugUnitTest`) before claiming green — and add the import at the same moment you first
+reference a cross-module symbol in a test, exactly as you would in production code. Cheap catch here (one line), but
+it would have been a red CI on the PR if pushed unverified.
+
 ## 2026-08-30 — the `android-37 → android-37.0` symlink DID resolve this run; keep bootstrapping before assuming it can't (slice `global-search-query-cache`)
 The immediately-prior note (below) reported AGP could not resolve `compileSdk = 37` even via the ROUTINE's
 documented `android-37 → android-37.0` symlink. **This run the symlink recipe worked**: install

@@ -2,6 +2,72 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
+> ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /
+> Contacts / Groups / Calls / Translations / System (or Unread)** (slice `notification-center-category-filter`,
+> feature-parity §M "Notification center with category filters" `[ ]`→`[x]`). iOS keeps the filter in a pure
+> `NotificationCategory` enum (`MeeshyUI/Notifications/NotificationListView.swift`) — 11 cases, each with a
+> `matchingTypes: Set<MeeshyNotificationType>` + `matches(_:)`, and `NotificationListViewModel.filteredNotifications`
+> projecting the loaded list. Android's `NotificationsViewModel` had NO category filter at all — the list showed
+> every type, every read state, with no way to narrow it (a dimension-13 Complétude gap vs iOS + a dimension-7
+> Facilité-d'usage gap: no fast path to "just my mentions").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4412/#4390/#4368/#4336/#4267 (all
+> jcnm: gateway/web), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`global-search-query-cache`) is on `main` (#4408, commit 64ad19c1). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` =
+> 0/0).
+>
+> **The change — one pure filter + ViewModel projection + Compose chip bar.** (1) New pure `:core:model`
+> `NotificationFilterCategory` (11 enum entries in iOS display order) + `NotificationTypeVocabulary`
+> (`me.meeshy.sdk.model`): each chip owns its accepted backend-`type` strings (both the lowercase wire form and
+> the legacy uppercase alias — `new_message`/`NEW_MESSAGE`) and `matches(type)`; `filter(list)` is a faithful port
+> of iOS `filteredNotifications` — `ALL` keeps every row, `UNREAD` keeps only unread rows of ANY type, every other
+> chip keeps rows whose type matches READ-OR-NOT. `NotificationTypeVocabulary.canonical(type)` reproduces iOS's
+> decode-then-fallback (`MeeshyNotificationType(rawValue:) ?? .system`): an UNKNOWN wire type collapses onto
+> `system` (→ matches SYSTEM), while the 9 KNOWN-but-uncategorised types (`comment_reaction`, `friend_new_post`, …)
+> keep their identity and surface only under ALL — exactly iOS. `KNOWN_TYPES` (81 raw values) is DERIVED from the
+> chip sets + the uncategorised set (no duplicated master list to drift). Each chip also carries iOS's per-category
+> `accentHex`. (2) `NotificationsViewModel` gains `selectedCategory` + a pure `filteredNotifications` projection on
+> the UiState + `selectCategory` intent (re-select is inert, no refetch — the chip is a client-side projection over
+> the single-source list; badge/pagination/socket-prepend all still read the full `notifications`). `loadMore` is
+> ALL-gated (iOS paginates only under ALL). (3) `NotificationsScreen` renders a horizontally-scrollable 11-`FilterChip`
+> bar (accent-coherent selected state) and the filtered rows, with a per-category empty state. **SOTA over iOS:** the
+> per-chip type sets are immutable statics built once (iOS rebuilds a `Set` on every `matchingTypes` access inside a
+> `switch`), and the unknown→system collapse is an explicit unit-tested step, not an implicit enum-decode side effect.
+> Blast radius: `NotificationFilterCategory` all-new; `NotificationsViewModel` +1 state field + 1 derived projection +
+> 1 intent + a loadMore guard; `NotificationsScreen` +chip bar; +12 strings ×4 locales. Deliberately EXCLUDED
+> (faithful boundary): the per-category SWR cache key (iOS loads `"all"` only, pagination is ALL-only — Android already
+> matches) and the collapsible-header scroll glue (a Compose-only cosmetic).
+>
+> **Tests: +25, RED-proven.** `NotificationFilterCategoryTest` +18 (KNOWN_TYPES size 81; canonical keeps known /
+> collapses unknown+blank→system; matches per chip incl. the China-region `"call"` alias, both case forms, and the
+> unknown→SYSTEM-only / known-uncategorised→no-chip distinctions; ALL/UNREAD match everything; filter ALL=identity,
+> UNREAD=unread-any-type, chip=matching-read-or-not + order-preserving + empty-safe; 11-chip order; accentHex parity;
+> every chip type ⊆ KNOWN_TYPES). `NotificationsViewModelTest` +7 (default ALL; a chip narrows by type only — a read
+> message still shows; UNREAD keeps unread of any type; the full list stays intact under a filter; re-select is the
+> same instance; loadMore suppressed under a non-ALL chip; loadMore resumes on returning to ALL). **RED:** flipping the
+> canonical fallback (unknown→itself instead of →"system") fails exactly the system-absorbs-unknown test; dropping the
+> loadMore ALL-gate fails exactly the suppression test.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) + `platforms;android-35`/
+> `android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` resolved via the `android-37 →
+> android-37.0` symlink. Kept `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 2 core files + 3 feature files + 4 locale strings +
+> tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block with no android.*, orchestration
+> in the `:feature` ViewModel, chip bar in the screen; SSOT — one `NotificationFilterCategory`, no re-implementation of
+> the type→category mapping; instant-app — filtering is a pure client-side projection, no refetch/spinner on chip
+> switch; UDF — immutable `StateFlow`, pure transitions; no tautological tests; no coverage floor lowered — new pure
+> logic with near-total branch coverage, RED-proven).
+>
+> **Next**: render `MessageTextParser.highlightRanges` in the global-search RESULT rows (iOS `highlightedText`) is
+> still open (§N Compose-glue); the notification TOAST (§M, iOS `NotificationCoordinator` dedup-window) and the
+> per-category SWR cache key are the next §M pieces. For a pure-core next slice, consider a Chat/Feed value type. Read
+> the chosen box's iOS audit part read-only before branching.
+
+
 > On 2026-08-30 **global search became cache-first — a repeated query in the TTL window serves from an
 > in-memory LRU with no network and no spinner, and a socket data-change invalidates it** (slice
 > `global-search-query-cache`, feature-parity §N "Global search … with recent searches"). iOS keeps a 5-entry /

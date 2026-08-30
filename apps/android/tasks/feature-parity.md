@@ -6709,8 +6709,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
-- [ ] Notification center with category filters (messages, reactions, mentions, social,
-      contacts, groups, calls, translations, system)
+- [x] Notification center with category filters (messages, reactions, mentions, social,
+      contacts, groups, calls, translations, system) — **shipped 2026-08-30** (slice
+      `notification-center-category-filter`): pure `:core:model` `NotificationFilterCategory`
+      (11 chips — ALL/UNREAD + 9 type chips) + `NotificationTypeVocabulary`, a faithful port of
+      iOS `NotificationCategory` (`MeeshyUI/Notifications/NotificationListView.swift`). Each chip
+      owns its backend-`type` set + `matches(type)`; `filter(list)` reproduces iOS
+      `filteredNotifications` exactly (ALL keeps all, UNREAD keeps unread of any type, a type chip
+      keeps matching rows read-or-not). Unknown wire type → `system` (iOS `rawValue ?? .system`),
+      known-but-uncategorised types surface only under ALL. Wired into `NotificationsViewModel`
+      (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
+      ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
+      empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
