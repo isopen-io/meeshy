@@ -24,7 +24,7 @@
  * @jest-environment node
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import Fastify, { FastifyInstance } from 'fastify';
@@ -216,29 +216,71 @@ describe('les DEUX gardes homonymes lisent la matrice, et aucune ne lit un rôle
   // `requireAgentAdmin` : deux fichiers, deux gardes du même nom, une seule
   // morte. Un nom identique fait croire à une loi identique — la divergence ne
   // se lit pas dans « qui appelle quoi » mais dans « qui appelle la MATRICE ».
+  //
+  // #4284 a depuis découpé `agent.ts` (1977 lignes) en six surfaces
+  // (`agent-configs.ts`, `agent-delivery-queue.ts`, `agent-llm.ts`,
+  // `agent-observability.ts`, `agent-reset.ts`, `agent-roles.ts`) plus un
+  // fichier partagé, `agent-shared.ts`, qui porte désormais le SEUL littéral
+  // `requirePermission('canManageAgent')` de cette famille — `agent.ts` n'est
+  // plus qu'un orchestrateur et ne contient plus la garde. Lire CE seul
+  // fichier ne montrerait donc plus rien. La forme robuste adresse l'UNITÉ —
+  // `agent.ts` et tous ses frères `agent-*.ts`, résolus par un GLOB plutôt
+  // qu'une liste écrite à la main (doctrine `AppSourceGuard.unit`, #4425) —
+  // pour survivre à un prochain découpage sans rougir à tort ni s'aveugler.
+  //
+  // `agent-topics.ts` matche lexicalement le même glob `agent-*.ts` sans être
+  // un fruit de CE découpage (non touché par le commit d6432e03 de #4284) :
+  // c'est la SECONDE garde homonyme que ce describe compare, pas un frère de
+  // la première. L'exclure de l'unité de `agent.ts` est donc nécessaire —
+  // sans elle, une régression dans les six surfaces se cacherait derrière la
+  // garde toujours correcte de `agent-topics.ts`, qui ne partage que le
+  // préfixe. L'exclusion se dérive de `ROUTES` lui-même (jamais d'une
+  // deuxième liste écrite à la main) : un frère qui est LUI-MÊME une autre
+  // unité nommée ci-dessous reste dans SA propre unité.
   const ROUTES = ['agent.ts', 'agent-topics.ts'] as const;
 
-  const sources = ROUTES.map((fichier) => ({
-    fichier,
-    contenu: readFileSync(join(__dirname, '../../../../routes/admin', fichier), 'utf-8'),
-  }));
+  function unite(fichier: (typeof ROUTES)[number]): { readonly fichier: string; readonly contenu: string }[] {
+    const dir = join(__dirname, '../../../../routes/admin');
+    const base = fichier.replace(/\.ts$/, '');
+    const autresUnites = new Set<string>(ROUTES.filter((r) => r !== fichier));
+    return readdirSync(dir)
+      .filter((nom) => nom === fichier || (nom.startsWith(`${base}-`) && nom.endsWith('.ts')))
+      .filter((nom) => !autresUnites.has(nom))
+      .sort()
+      .map((nom) => ({ fichier: nom, contenu: readFileSync(join(dir, nom), 'utf-8') }));
+  }
 
-  it('le balayage lit BIEN les deux fichiers', () => {
+  const unites = ROUTES.map((fichier) => ({ fichier, sources: unite(fichier) }));
+
+  it('le balayage lit BIEN les deux unités, sans qu\'aucune ne se soit vidée', () => {
     // Une garde NÉGATIVE dont le balayage rend du vide reste verte en perdant
-    // toute sa protection. Ce témoin-ci garde la garde.
-    expect(sources).toHaveLength(2);
-    for (const { contenu } of sources) expect(contenu.length).toBeGreaterThan(1000);
-  });
-
-  it('chacune NOMME la permission qu\'elle exige', () => {
-    for (const { fichier, contenu } of sources) {
-      expect(`${fichier}: ${contenu.includes("requirePermission('canManageAgent')")}`).toBe(`${fichier}: true`);
+    // toute sa protection. Ce témoin-ci garde la garde — et la BORNE porte
+    // maintenant sur le NOMBRE de fichiers résolus par le glob : `agent.ts`
+    // s'est découpé en six surfaces + `agent-shared.ts` (7 frères, 8 avec
+    // lui-même) ; `agent-topics.ts` reste seul. Des bornes BASSES, jamais une
+    // égalité — un futur découpage qui AJOUTE un frère doit rester vert, seul
+    // un glob qui s'est vidé ou dé-câblé doit rougir.
+    expect(unites).toHaveLength(2);
+    const parFichier = Object.fromEntries(unites.map((u) => [u.fichier, u.sources.length] as const));
+    expect(parFichier['agent.ts']).toBeGreaterThanOrEqual(8);
+    expect(parFichier['agent-topics.ts']).toBeGreaterThanOrEqual(1);
+    for (const { sources } of unites) {
+      const total = sources.reduce((n, s) => n + s.contenu.length, 0);
+      expect(total).toBeGreaterThan(1000);
     }
   });
 
-  it('aucune ne lit un rôle sur la requête', () => {
-    for (const { fichier, contenu } of sources) {
-      expect(`${fichier}: ${/user\??\.role/.test(contenu)}`).toBe(`${fichier}: false`);
+  it('chacune NOMME la permission qu\'elle exige, quelque part dans son unité', () => {
+    for (const { fichier, sources } of unites) {
+      const nomme = sources.some((s) => s.contenu.includes("requirePermission('canManageAgent')"));
+      expect(`${fichier}: ${nomme}`).toBe(`${fichier}: true`);
+    }
+  });
+
+  it('aucune ne lit un rôle sur la requête, nulle part dans son unité', () => {
+    for (const { fichier, sources } of unites) {
+      const litUnRole = sources.some((s) => /user\??\.role/.test(s.contenu));
+      expect(`${fichier}: ${litUnRole}`).toBe(`${fichier}: false`);
     }
   });
 });

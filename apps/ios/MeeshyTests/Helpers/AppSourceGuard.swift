@@ -154,4 +154,24 @@ enum AppSourceGuard {
     static func composerSurfaceSource() throws -> String {
         try unit(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
     }
+
+    /// L'unité de `StoryViewModel` (#4425) : le fichier historique, ses
+    /// extensions `StoryViewModel+*.swift` (attrapées par le glob de
+    /// `unitURLs`), et `StoryViewModelRules`, le compagnon de règles pures
+    /// sorti du même découpage. Ce dernier doit être nommé explicitement en
+    /// `alsoIncluding` — même raison que `ComposerHostRules` et les deux
+    /// compagnons de `composerSurfaceCompanions` avant lui : il ne porte PAS
+    /// le préfixe `StoryViewModel+…`, donc le glob ne l'attrape pas, et sans
+    /// lui toute garde négative dont l'interdit a suivi les règles pures
+    /// passerait au vert en lisant la moitié qui ne les contient plus.
+    static let storyViewModelPath = "Meeshy/Features/Main/ViewModels/StoryViewModel.swift"
+    static let storyViewModelCompanions = ["Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift"]
+
+    static func storyViewModelURLs() -> [URL] {
+        unitURLs(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
+
+    static func storyViewModelSource() throws -> String {
+        try unit(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
 }
