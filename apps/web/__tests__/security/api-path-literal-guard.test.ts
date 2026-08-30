@@ -453,31 +453,29 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 //       correctif.
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
-  // `/api/og-image-dynamic` — LA RAISON A CHANGÉ le 2026-08-30, le compte non.
+  // `/api/v1/og-image-dynamic` — SORTI de l'inventaire le 2026-08-30 (#4338),
+  // et la façon dont il en est sorti vaut d'être dite.
   //
   // Ces quatre sites comptaient ici parce que l'adresse était MORTE (aucune
   // route locale, `404` mesuré sur staging — famille de #4219/#4222). #4338 a
-  // livré `app/api/og-image-dynamic/route.tsx` : l'adresse est désormais
-  // SERVIE, et `nextLocalApiPrefixes` la dérive (l'assertion des routes
-  // locales, plus haut, a rougi le jour même — le signal a fonctionné).
+  // livré la route, et l'assertion des routes locales, plus haut, a rougi le
+  // jour même : le signal a fonctionné.
   //
-  // Ils restent comptés pour une raison ENTIÈREMENT différente, et il faut la
-  // dire plutôt que de faire baisser le chiffre : l'exemption locale de
-  // `scanApiPathLiterals` teste le PREMIER segment du gabarit, et ces quatre
-  // sites écrivent `` `${frontendUrl}/api/og-image-dynamic?…` `` — le chemin
-  // n'y est pas le premier segment, donc l'exemption ne joue pas. Ce n'est pas
-  // un défaut de ces sites : une balise `og:image` DOIT porter une URL
-  // ABSOLUE, les robots sociaux ne résolvant pas de façon fiable un chemin
-  // relatif. Élargir l'exemption à TOUS les segments exempterait du même coup
-  // un `` `${baseURL}/api/…` `` visant le GATEWAY, où le chemin serait bel et
-  // bien faux — c'est-à-dire exactement la classe que cette garde existe pour
-  // attraper. Une garde de sécurité ne s'élargit pas pour faire décroître un
-  // compteur. Angle mort NOMMÉ, suivi : #4422.
+  // Ils ne sont pas sortis pour autant : l'exemption locale teste le PREMIER
+  // segment du gabarit, et `` `${frontendUrl}/api/v1/og-image-dynamic?…` ``
+  // n'y met pas le chemin en premier. Ce n'était pas un défaut de ces sites —
+  // une balise `og:image` DOIT porter une URL ABSOLUE — et élargir l'exemption
+  // à tous les segments aurait exempté du même coup un `` `${baseURL}/api/…` ``
+  // visant le GATEWAY, la classe exacte que cette garde existe pour attraper.
+  // Une garde de sécurité ne s'élargit pas pour faire décroître un compteur :
+  // l'angle mort est nommé et suivi sous #4422.
+  //
+  // Ce qui les a fait sortir est le geste que la garde VISE depuis le début :
+  // le chemin est écrit UNE fois (`OG_IMAGE_PATH` / `ogImageUrl`, dans
+  // `lib/og-image-params.ts`), et les quatre pages l'appellent. Le littéral
+  // restant est nu — donc son premier segment EST le chemin, donc l'exemption
+  // joue. Quatre entrées de moins, aucune de plus.
   'app/api/metadata/route.ts': 2,
-  'app/chat/[id]/layout.tsx': 1,
-  'app/conversation/[conversationId]/page.tsx': 1,
-  'app/signup/affiliate/[token]/layout.tsx': 1,
-  'app/u/[id]/layout.tsx': 1,
   'lib/server-cache.ts': 1,
   'services/message-translation.service.ts': 2,
 };
@@ -501,9 +499,9 @@ describe('Le balayage LIT bien apps/web — sinon les gardes ci-dessous seraient
       '/api/client-error',
       '/api/health',
       '/api/metadata',
-      '/api/og-image-dynamic',
       '/api/upload/avatar',
       '/api/upload/banner',
+      '/api/v1/og-image-dynamic',
     ]);
   });
 });

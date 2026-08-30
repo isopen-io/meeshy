@@ -1,8 +1,10 @@
 /**
- * `GET /api/og-image-dynamic` — l'image d'aperçu que quatre pages ANNONCENT
+ * `GET /api/v1/og-image-dynamic` — l'image d'aperçu que quatre pages ANNONCENT
  * depuis toujours, et que rien ne servait (#4338).
  *
- * Mesuré sur staging le 2026-08-30 : `404`. Les quatre balises `og:image` du
+ * Mesuré sur staging le 2026-08-30 : `404`. L'adresse porte sa VERSION comme
+ * toute surface d'API du dépôt ; son chemin est écrit une seule fois, dans
+ * `lib/og-image-params.ts`, d'où les quatre pages le tirent. Les quatre balises `og:image` du
  * dépôt — invitation d'un lien de conversation, parrainage, profil public,
  * conversation partagée — pointaient donc vers rien, et tout lien Meeshy
  * collé dans une messagerie ou un réseau social s'y affichait **sans image**.

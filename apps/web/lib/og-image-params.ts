@@ -12,6 +12,32 @@
  * l'exercer sous jest atteste le rendu, jamais ce que la route ACCEPTE.
  */
 
+/**
+ * L'adresse de l'image d'aperçu, écrite UNE fois.
+ *
+ * **Versionnée**, comme toute adresse d'API du dépôt : une surface publique
+ * neuve porte sa version dès le premier jour, sans quoi la faire évoluer
+ * obligera un jour à casser les liens déjà partagés — et une vignette OG est
+ * précisément ce qu'un tiers met en cache et rejoue longtemps.
+ *
+ * Écrite ici plutôt que chez ses quatre appelants pour la raison qui gouverne
+ * tout le milestone « un chemin d'API s'écrit à un seul endroit » : quatre
+ * littéraux, c'est quatre chances de diverger au prochain renommage — et
+ * c'est exactement ce qui a produit #4338, où quatre pages annonçaient une
+ * adresse que rien ne servait.
+ */
+export const OG_IMAGE_PATH = '/api/v1/og-image-dynamic';
+
+/**
+ * L'URL ABSOLUE de la vignette, pour une balise `og:image`.
+ *
+ * Absolue, et pas relative : les robots sociaux ne résolvent pas de façon
+ * fiable un chemin relatif dans une balise Open Graph.
+ */
+export function ogImageUrl(frontendUrl: string, params: URLSearchParams): string {
+  return `${frontendUrl}${OG_IMAGE_PATH}?${params.toString()}`;
+}
+
 /** Les quatre gabarits, dérivés des quatre pages qui les composent. */
 export const OG_TYPES = ['invitation', 'affiliate', 'profile', 'conversation'] as const;
 
