@@ -34,6 +34,17 @@
  * Les deux formes s'appellent `mediaAttachmentIsProtected(attachment, message)` :
  * seul l'appelant décide qui est « l'attachment » et qui est « le message »
  * pour SA ligne.
+ *
+ * ## Le jumeau TEXTE (#4388)
+ *
+ * `messageContentIsProtected`, plus bas, répond à la MÊME question pour le
+ * CONTENU d'un message plutôt que pour une pièce jointe — vue unique / flou /
+ * effet masquant, expiration consommée, chiffrement. Il vivait jusqu'ici dans
+ * `routes/admin/conversation-messages-sovereign.ts`, un fichier de ROUTE, alors
+ * que `content.ts` l'importait déjà en second appelant (#4384) : un prédicat
+ * partagé défini dans une route est le même défaut qu'un prédicat recopié, il
+ * ne s'est simplement pas encore dupliqué. Il est déplacé ici, à côté de son
+ * jumeau média, pour la même raison que celui-ci y vit déjà.
  */
 import { maskedAttachment } from '../../services/notifications/NotificationService';
 
@@ -60,6 +71,26 @@ export const messageProtectionSelect = {
   deletedAt: true,
 } as const;
 
+/**
+ * Fragment de `select` Prisma pour les six colonnes que `messageContentIsProtected`
+ * (plus bas) exige de son appelant — les quatre partagées avec le contexte
+ * média ci-dessus (`isViewOnce`, `isBlurred`, `effectFlags`, `expiresAt`) plus
+ * les deux propres au TEXTE (`isEncrypted`, `encryptionMode`). PAS `deletedAt` :
+ * cette colonne ne gouverne que le contexte MÉDIA ; le prédicat texte ne la lit
+ * pas. #4388 — déplacé depuis `conversation-messages-sovereign.ts`, qui le
+ * composait jusque-là en colonnes individuelles à l'intérieur de son propre
+ * `select` littéral, sans nom réutilisable — c'est cette absence de nom qui
+ * a laissé `content.ts` reconstruire la même liste à la main (#4384).
+ */
+export const messageContentProtectionSelect = {
+  isViewOnce: true,
+  isBlurred: true,
+  effectFlags: true,
+  expiresAt: true,
+  isEncrypted: true,
+  encryptionMode: true,
+} as const;
+
 export interface AttachmentProtectionFlags {
   readonly isViewOnce?: boolean | null;
   readonly isBlurred?: boolean | null;
@@ -69,6 +100,23 @@ export interface AttachmentProtectionFlags {
 export interface MessageProtectionContext extends AttachmentProtectionFlags {
   readonly expiresAt?: Date | string | null;
   readonly deletedAt?: Date | string | null;
+}
+
+/**
+ * Le plancher structurel que `messageContentIsProtected` exige de son
+ * appelant — les six colonnes que `messageContentProtectionSelect` charge.
+ * Le reste de la ligne (Prisma-inféré depuis le `select` du site d'appel)
+ * n'a pas besoin d'un type nommé : laisser l'inférence porter le contrat
+ * évite un second endroit où la forme peut diverger de la requête qui la
+ * produit. #4388 — déplacé depuis `conversation-messages-sovereign.ts`.
+ */
+export interface MessageProtectionFields {
+  readonly isViewOnce: boolean;
+  readonly isBlurred: boolean;
+  readonly effectFlags: number;
+  readonly expiresAt: Date | null;
+  readonly isEncrypted: boolean;
+  readonly encryptionMode: string | null;
 }
 
 /**
@@ -87,4 +135,29 @@ export function mediaAttachmentIsProtected(
     if (message.expiresAt && new Date(message.expiresAt).getTime() <= Date.now()) return true;
   }
   return maskedAttachment(attachment);
+}
+
+/**
+ * `true` si le CONTENU d'un message ne doit pas voyager en clair : vue
+ * unique / flou / effet masquant (`maskedAttachment`, colonnes homonymes sur
+ * `Message`), expiration éphémère déjà consommée, ou message chiffré (le
+ * serveur ne détient de toute façon jamais son texte en clair — voir
+ * `MessageProcessor.getEncryptionContext`, qui écrit `content: ''` pour tout
+ * message chiffré : cette garde est un SIGNAL explicite pour l'admin, pas un
+ * retrait de fuite qui n'existait pas).
+ *
+ * Jumeau TEXTE de `mediaAttachmentIsProtected` ci-dessus — même question, un
+ * autre médium. #4384 l'avait fait réutiliser par `content.ts` sans le
+ * déplacer ; #4388 achève le geste en le posant à côté de son jumeau média.
+ * Ses deux SEULS appelants du dépôt — `content.ts` et
+ * `conversation-messages-sovereign.ts` — l'importent désormais d'un module
+ * partagé plutôt que l'un de l'autre. L'appelant reste seul juge de la FORME
+ * du masquage ; ce prédicat ne rend que le verdict.
+ */
+export function messageContentIsProtected(message: MessageProtectionFields): boolean {
+  if (maskedAttachment(message)) return true;
+  if (message.expiresAt && message.expiresAt.getTime() <= Date.now()) return true;
+  if (message.isEncrypted === true) return true;
+  if (message.encryptionMode) return true;
+  return false;
 }
