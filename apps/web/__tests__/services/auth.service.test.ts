@@ -51,12 +51,17 @@ describe('AuthService', () => {
       isOnline: true,
     };
 
+    // Forme RÉELLE de POST /auth/login (`services/gateway/src/routes/auth/login.ts`,
+    // branche hors-2FA) : `{ user, token, sessionToken, session, expiresIn }`.
+    // AUCUN champ `refreshToken` — mesuré, #4405. `sessionToken` est un jeton
+    // distinct de `expiresIn` (un nombre) : les confondre est exactement le
+    // défaut de #4404.
     const mockLoginResponse = {
       success: true,
       data: {
         user: mockUser,
         token: 'jwt-token-123',
-        refreshToken: 'refresh-token-123',
+        sessionToken: 'session-token-123',
         expiresIn: 3600,
       },
     };
@@ -78,10 +83,38 @@ describe('AuthService', () => {
       );
       expect(result.success).toBe(true);
       expect(result.data?.user).toEqual(mockUser);
+      // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
+      // — cinq créneaux. `refreshToken` est `undefined` : la route ne le rend
+      // jamais (#4405), et #4404 interdit de l'inventer. `sessionToken` DOIT
+      // atterrir dans SON propre créneau (le troisième), jamais dans celui
+      // d'`expiresIn` — c'est le défaut mesuré sur ce site précis.
+      expect(mockSetCredentials).toHaveBeenCalledWith(
+        mockUser,
+        'jwt-token-123',
+        undefined,
+        'session-token-123',
+        3600
+      );
+    });
+
+    // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
+    // arrivait un jour du serveur, il doit toujours atterrir dans SON créneau —
+    // jamais perdu, jamais glissé ailleurs.
+    it('threads a refreshToken through to its own slot when the server does send one', async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          success: true,
+          data: { ...mockLoginResponse.data, refreshToken: 'refresh-token-123' },
+        }),
+      });
+
+      await authService.login('testuser', 'password123');
+
       expect(mockSetCredentials).toHaveBeenCalledWith(
         mockUser,
         'jwt-token-123',
         'refresh-token-123',
+        'session-token-123',
         3600
       );
     });

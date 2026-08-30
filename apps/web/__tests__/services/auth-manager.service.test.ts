@@ -151,6 +151,25 @@ describe('AuthManager.setCredentials', () => {
     authManager.setCredentials(mockUser, 'tok');
     expect(document.cookie).toContain('meeshy_session=');
   });
+
+  // Témoin de contrat (#4404) : les cinq positions sont posées EN MÊME TEMPS,
+  // avec des valeurs distinctes deux à deux, et chaque clé de localStorage est
+  // relue individuellement — pas seulement les arguments reçus par un double.
+  // Une future réécriture interne qui permuterait deux créneaux (refreshToken
+  // et sessionToken sont tous deux `string | undefined`, indiscernables au
+  // typage) ferait tomber CE témoin, jamais les tests "un paramètre à la fois"
+  // ci-dessus qui ne peuvent pas voir une permutation.
+  it('lands each of the five arguments in its own localStorage key, none swapped', () => {
+    authManager.setCredentials(mockUser, 'access-tok', 'refresh-tok', 'sess-tok', 3600);
+
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('access-tok');
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBe('refresh-tok');
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('sess-tok');
+    // expiresIn n'a pas de clé dédiée dans AuthManager — il ne doit fuiter dans
+    // AUCUNE des trois clés string ci-dessus.
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).not.toBe('3600');
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).not.toBe('3600');
+  });
 });
 
 describe('AuthManager.updateUser', () => {
