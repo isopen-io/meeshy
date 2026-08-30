@@ -26,6 +26,14 @@ import {
   mediaAttachmentIsProtected,
   type MessageProtectionContext
 } from './media-protection';
+// #4384 — le prédicat de CONTENU, réutilisé et non recopié. Il vit chez la
+// lecture souveraine (`GET /admin/conversations/:id/messages`) parce que c'est
+// elle qui l'a écrit le premier ; la question qu'il tranche — « le texte de ce
+// message a-t-il le droit de voyager en clair ? » — est identique ici, sur la
+// même colonne du même modèle. Une seconde écriture ne pourrait que diverger,
+// et elle divergerait en silence : c'est exactement la classe de défaut que
+// `media-protection.ts` ferme pour les MÉDIAS.
+import { messageContentIsProtected } from './conversation-messages-sovereign';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -64,6 +72,13 @@ const adminMessageRowSchema = {
   properties: {
     id: { type: 'string' },
     content: { type: 'string', nullable: true },
+    // #4384 — le FAIT qu'une ligne soit amputée, jamais le MÉCANISME qui l'a
+    // décidé : les six drapeaux (`isViewOnce`, `isBlurred`, `effectFlags`,
+    // `expiresAt`, `isEncrypted`, `encryptionMode`) sont retirés à la SOURCE,
+    // dans le `map` du handler. Sans cette ligne, fast-json-stringify
+    // éjecterait `isProtected` et la liste rendrait un `content: null` que
+    // rien ne distingue d'un message vide.
+    isProtected: { type: 'boolean' },
     messageType: { type: 'string', nullable: true },
     originalLanguage: { type: 'string', nullable: true },
     isEdited: { type: 'boolean', nullable: true },
@@ -254,6 +269,16 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             isEdited: true,
             createdAt: true,
             ...messageProtectionSelect,
+            // #4384 — les DEUX dimensions qu'un TEXTE exige et qu'un média
+            // n'a pas. `messageProtectionSelect` est la forme du prédicat
+            // MÉDIA : elle s'arrête aux cinq colonnes que
+            // `mediaAttachmentIsProtected` lit. Un message CHIFFRÉ n'a pas de
+            // pendant côté pièce jointe dans ce prédicat-là, et sans ces deux
+            // colonnes chargées `messageContentIsProtected` ne peut rien
+            // trancher — « un champ de protection présent au modèle et absent
+            // de toute requête » ne garde rien.
+            isEncrypted: true,
+            encryptionMode: true,
             sender: {
               select: {
                 id: true,
@@ -304,10 +329,21 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       // `adminMessageRowSchema` : elles sont retirées ici, à la SOURCE,
       // plutôt que laissées à une omission de schéma pour les taire.
       const data = messages.map((message) => {
-        const { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt, attachments, ...rest } = message;
+        const {
+          isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt,
+          isEncrypted, encryptionMode,
+          attachments, ...rest
+        } = message;
         const messageContext: MessageProtectionContext = { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt };
+        // #4384 — le TEXTE, gardé par le prédicat que la lecture souveraine
+        // applique déjà à la même colonne. La ligne reste LISTÉE (auteur,
+        // dates, conversation, nombre de pièces jointes) : un modérateur doit
+        // pouvoir CONSTATER qu'un message existe. Seul son contenu tombe.
+        const contenuProtege = messageContentIsProtected(message);
         return {
           ...rest,
+          content: contenuProtege ? null : rest.content,
+          isProtected: contenuProtege,
           attachments: attachments.map((attachment) => {
             const protege = mediaAttachmentIsProtected(attachment, messageContext);
             // Comme #4157 c.4 : seul `isProtected` sort, jamais les trois
@@ -318,6 +354,23 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
               ...attachmentRest,
               fileUrl: protege ? null : attachment.fileUrl,
               thumbnailUrl: protege ? null : attachment.thumbnailUrl,
+              // #4384 — ce qui partait À CÔTÉ des deux URL que #4333 a coupées.
+              // `attachmentMediaSelect` porte le Prisme Linguistique et les
+              // variantes d'image, et la ligne sort sous
+              // `additionalProperties: true` : tout ce qui est chargé est
+              // SERVI. Sur un vocal à vue unique, `transcription.text` EST le
+              // message, et `translations[lang]` le redit dans toutes les
+              // langues AVEC l'URL de sa piste TTS ; `imageVariants` porte les
+              // URL WebP de la MÊME image en d'autres tailles — un contournement
+              // direct de `fileUrl: null` — et `thumbHash` en rend une version
+              // basse résolution sans réseau, soit la vignette que la ligne
+              // au-dessus vient de retirer. `metadata` est libre par contrat
+              // (EXIF, analyse IA) : on ferme, on ne parie pas.
+              transcription: protege ? null : attachment.transcription,
+              translations: protege ? null : attachment.translations,
+              imageVariants: protege ? null : attachment.imageVariants,
+              thumbHash: protege ? null : attachment.thumbHash,
+              metadata: protege ? null : attachment.metadata,
               isProtected: protege
             };
           })

@@ -387,21 +387,21 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 
 // =============================================================================
 // Inventaire GELÉ — photographie du 2026-08-29 (231 sites, 74 fichiers), migrée
-// par #4281 (2026-08-30) vers 14 sites, 10 fichiers. Voir header, « Ce qu'il
-// est, et comment il décroît » : décroître un compte ci-dessous FAIT PARTIE du
-// correctif qui migre le site vers `API_ENDPOINTS` (#4281) ou vers une route
-// existante. Les dix entrées restantes se répartissent en deux familles —
-// aucune n'est un défaut de #4281 :
+// par #4281 (2026-08-30) vers 14 sites, 10 fichiers, puis par #4337
+// (2026-08-30) vers 10 sites, 8 fichiers. Voir header, « Ce qu'il est, et
+// comment il décroît » : décroître un compte ci-dessous FAIT PARTIE du
+// correctif qui migre le site vers `API_ENDPOINTS` (#4281, #4337) ou vers une
+// route existante. Les huit entrées restantes se répartissent en deux
+// familles — aucune n'est un défaut de #4281 :
 //
-//   (a) SKIP délibéré, sur instruction de l'issue #4281 elle-même — trois
-//       adresses mortes déjà instruites, avec leurs propres issues (#4337 pour
-//       les quatre appels de souscription push, #4338 pour le rafraîchissement
-//       de session et les quatre sites d'image sociale) : migrer ces sites ici
-//       les aurait enterrés dans un lot de migration plutôt que dans le
-//       correctif de bug qui leur est dû. Comptes INCHANGÉS depuis le
-//       2026-08-29 : 'app/chat/[id]/layout.tsx', 'app/signup/affiliate/[token]/layout.tsx'
-//       (og-image-dynamic, #4338), 'hooks/use-push-notifications.ts',
-//       'services/push-token.service.ts' (#4337), 'stores/auth-store.ts' (#4338).
+//   (a) SKIP délibéré, sur instruction de l'issue #4281 elle-même — deux
+//       adresses mortes encore instruites sous leur propre issue (#4338, pour
+//       le rafraîchissement de session et les quatre sites d'image sociale) :
+//       migrer ces sites ici les aurait enterrés dans un lot de migration
+//       plutôt que dans le correctif de bug qui leur est dû. Comptes INCHANGÉS
+//       depuis le 2026-08-29 : 'app/chat/[id]/layout.tsx',
+//       'app/signup/affiliate/[token]/layout.tsx' (og-image-dynamic, #4338),
+//       'stores/auth-store.ts' (#4338).
 //
 //   (b) DÉCOUVERTES pendant la migration — une adresse fantôme (aucune route
 //       correspondante dans les 419 du catalogue #4280) qu'un chemin littéral
@@ -426,6 +426,16 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 //       `/messages/:id` vers le catalogue les a rendues visibles : c'est un
 //       GAIN de visibilité, pas une régression — deux sites nommés et
 //       commentés valent mieux qu'un hors de portée du balayage.
+//
+//   #4337 (2026-08-30) — SORTIS de l'inventaire, pas une famille en soi : les
+//       quatre appels de souscription push ont migré vers
+//       `API_ENDPOINTS.users.registerDeviceToken` (POST pour enregistrer,
+//       DELETE pour désenregistrer — la SEULE route de jetons push du
+//       manifeste ; aucune route dédiée à une souscription Web-Push brute
+//       n'existe côté gateway, les deux paires visaient donc la MÊME
+//       ressource). 'hooks/use-push-notifications.ts' (2→0) et
+//       'services/push-token.service.ts' (2→0) ont donc quitté l'objet — voir
+//       header, « Un fichier qui atteint zéro disparaît ENTIÈREMENT ».
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
   // `/api/og-image-dynamic` : AUCUNE route locale `app/api/og-image-dynamic/route.ts`
@@ -437,13 +447,8 @@ const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
   'app/conversation/[conversationId]/page.tsx': 1,
   'app/signup/affiliate/[token]/layout.tsx': 1,
   'app/u/[id]/layout.tsx': 1,
-  // Quatre appels de souscription push, intégralement muets — #4337. Ne pas
-  // migrer ici : #4281 l'exclut explicitement (« les traiter ici les
-  // enterrerait dans un lot de migration »).
-  'hooks/use-push-notifications.ts': 2,
   'lib/server-cache.ts': 1,
   'services/message-translation.service.ts': 2,
-  'services/push-token.service.ts': 2,
   // `/api/auth/refresh` (`fetch` direct, ni `buildApiUrl` ni `apiService`) :
   // AUCUNE route locale `app/api/auth/refresh/route.ts` — même famille que
   // `og-image-dynamic` ci-dessus. Suivi : #4338.

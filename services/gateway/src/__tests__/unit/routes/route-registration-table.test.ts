@@ -86,7 +86,7 @@ describe('ROUTE_TABLE (#4278)', () => {
     }
   });
 
-  it('a exactement 57 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
+  it('a exactement 58 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
     // Compte ancré au 2026-08-30 sur les 65 actes d'enregistrement de
     // `route-registration.ts` moins les 8 montages qui exigent PLUS qu'un
     // {module, prefix} (traduction, userDeletions, conversationRoutes,
@@ -95,7 +95,15 @@ describe('ROUTE_TABLE (#4278)', () => {
     // compte change, c'est qu'une route a rejoint ou quitté la table : la
     // prochaine étape est de vérifier `route-manifest-ratchet`, pas
     // d'ajuster ce chiffre en aveugle.
-    expect(ROUTE_TABLE.length).toBe(57);
+    //
+    // 57 → 58 le 2026-08-30 (#4350) : entrée `me-permissions`, l'adresse
+    // CANONIQUE `GET /api/v1/me/permissions`. Le chiffre n'a pas été ajusté
+    // en aveugle — la vérification prescrite ci-dessus a été faite, et le
+    // manifeste régénéré est passé de 533 à 534 routes, soit exactement la
+    // route ajoutée et aucune autre. L'alias `admin/me/permissions` garde son
+    // entrée `admin-me-permissions` : il reste SERVI, il n'est pas déplacé —
+    // c'est ce qui rend l'écart de +1 (et non 0) attendu.
+    expect(ROUTE_TABLE.length).toBe(58);
   });
 });
 

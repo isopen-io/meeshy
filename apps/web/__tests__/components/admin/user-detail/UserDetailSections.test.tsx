@@ -50,6 +50,17 @@ jest.mock('@/stores/language-store', () => ({
   useCurrentInterfaceLanguage: () => 'en',
 }));
 
+// `UserConversationsSection` reads the current admin's role through the same
+// `useUser()` the rest of the admin console already uses (`AdminLayout.tsx`)
+// to gate the sovereign "view messages" button (#4383). Defaults to BIGBOSS
+// so every pre-existing test in this file keeps seeing the button; tests that
+// care about another role override `mockCurrentUser` themselves.
+let mockCurrentUser: { id: string; role: string } | null = { id: 'admin-1', role: 'BIGBOSS' };
+
+jest.mock('@/stores', () => ({
+  useUser: () => mockCurrentUser,
+}));
+
 jest.mock('@/constants/countries', () => ({
   COUNTRY_CODES: [
     { code: 'FR', name: 'France', dial: '+33', flag: '🇫🇷' },
@@ -358,6 +369,7 @@ import { UserReportedMessagesSection } from '@/components/admin/user-detail/User
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCurrentUser = { id: 'admin-1', role: 'BIGBOSS' };
 });
 
 // =============================================================================
@@ -1419,6 +1431,33 @@ describe('UserConversationsSection', () => {
     expect(screen.getByText(/usersDetail.viewMembers/)).toBeInTheDocument();
   });
 
+  // Critère de fin #4383, point 1 — `GET /admin/conversations/:id/messages`
+  // est en régime souverain (`requireSovereign()`) : BIGBOSS et lui seul,
+  // 403 pour tout autre rôle. Un contrôle voué au 403 ne doit pas être
+  // proposé — le bouton n'est pas seulement disabled, il n'est pas rendu.
+  it.each(['ADMIN', 'MODERATOR', 'AUDIT', 'ANALYST', 'USER'])(
+    'does not render the view-messages button for a non-BIGBOSS role (%s)',
+    async (role) => {
+      mockCurrentUser = { id: 'admin-1', role };
+      const conv = makeConversation({ type: 'group' });
+      mockGet.mockResolvedValue(paginatedResponse([conv]));
+      render(<UserConversationsSection userId="user-1" />);
+      await waitFor(() => expect(screen.getByText('My Group')).toBeInTheDocument());
+      // The unrelated "view members" button is untouched by this gate.
+      expect(screen.getByText(/usersDetail.viewMembers/)).toBeInTheDocument();
+      expect(screen.queryByText(/usersDetail.viewMessages/)).not.toBeInTheDocument();
+    }
+  );
+
+  it('renders the view-messages button for BIGBOSS', async () => {
+    mockCurrentUser = { id: 'admin-1', role: 'BIGBOSS' };
+    const conv = makeConversation({ type: 'group' });
+    mockGet.mockResolvedValue(paginatedResponse([conv]));
+    render(<UserConversationsSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText('My Group')).toBeInTheDocument());
+    expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument();
+  });
+
   it('renders a direct conversation showing other participants', async () => {
     const participant = {
       id: 'p-1', userId: 'u-2', displayName: 'Bob', avatar: null, role: 'member',
@@ -1728,10 +1767,18 @@ describe('ConversationMessagesModal', () => {
     });
   };
 
+  // #4383 — the sovereign route (`requireSovereign()`, BIGBOSS only) refuses
+  // any `reason` under 10 chars at the schema level. This string mirrors
+  // `SOVEREIGN_REASON_MIN_LENGTH` in the component under test.
+  const VALID_REASON = 'Investigating a report about this conversation.';
+
   const openModal = async (conv: Record<string, unknown>) => {
     render(<UserConversationsSection userId="user-1" />);
     await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
     fireEvent.click(screen.getByText(/usersDetail.viewMessages/));
+    const textarea = await screen.findByPlaceholderText('usersDetail.sovereignReasonPlaceholder');
+    fireEvent.change(textarea, { target: { value: VALID_REASON } });
+    fireEvent.click(screen.getByText('usersDetail.sovereignReasonConfirm'));
   };
 
   it('shows a view messages button on group conversations', async () => {
@@ -1746,6 +1793,47 @@ describe('ConversationMessagesModal', () => {
     await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
   });
 
+  // Critère de fin #4383, point 4 — l'ABSENCE d'appel, jamais la gestion d'un
+  // 400 : un motif vide (ou trop court) ne doit jamais laisser partir la
+  // requête. Le bouton de confirmation reste désactivé, donc le clic est un
+  // no-op ; c'est exactement ce que cette assertion vérifie.
+  it('never calls the messages endpoint before a valid reason is confirmed', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet.mockResolvedValue(paginatedResponse([conv]));
+    render(<UserConversationsSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/usersDetail.viewMessages/));
+
+    // No reason typed at all — confirm is disabled, click is a no-op.
+    fireEvent.click(await screen.findByText('usersDetail.sovereignReasonConfirm'));
+    expect(mockGet).not.toHaveBeenCalledWith(
+      '/admin/conversations/conv-1/messages',
+      expect.anything()
+    );
+
+    // A reason shorter than SOVEREIGN_REASON_MIN_LENGTH is just as refused.
+    fireEvent.change(screen.getByPlaceholderText('usersDetail.sovereignReasonPlaceholder'), {
+      target: { value: 'too short' },
+    });
+    fireEvent.click(screen.getByText('usersDetail.sovereignReasonConfirm'));
+    expect(mockGet).not.toHaveBeenCalledWith(
+      '/admin/conversations/conv-1/messages',
+      expect.anything()
+    );
+  });
+
+  it('sends the confirmed reason in the reason query param', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([makeAdminMessage()]));
+    await openModal(conv);
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/admin/conversations/conv-1/messages',
+      expect.objectContaining({ offset: 0, limit: 30, reason: VALID_REASON })
+    ));
+  });
+
   it('opens the modal and renders the messages with their sender', async () => {
     const conv = makeConversation({ type: 'group' });
     mockGet
@@ -1757,7 +1845,7 @@ describe('ConversationMessagesModal', () => {
     expect(screen.getByText('@alice')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith(
       '/admin/conversations/conv-1/messages',
-      expect.objectContaining({ offset: 0 })
+      expect.objectContaining({ offset: 0, reason: VALID_REASON })
     );
   });
 
