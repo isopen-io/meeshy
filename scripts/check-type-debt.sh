@@ -172,7 +172,22 @@ NC='\033[0m'
 # (run 33286745112, « RÉGRESSION : 1186 erreurs, baseline 1185 ») et local 1186
 # avant correctif. Le delta de −2 est donc lu sur un point où les deux mesures
 # s'accordent, pas transposé de l'une à l'autre.
-readonly WEB_BASELINE=1184
+# 1184 -> 1183 le 2026-08-30, en integrant le lot 14. La baisse ne vient PAS de
+# ce lot : la dette a ete mesuree a 1184 sur l'arbre portant deja #4405
+# (« la dette n'a pas bouge »), et n'est passee a 1183 qu'apres la fusion des 42
+# commits amont. Elle est donc l'effet d'un train tiers, non attribue a un commit
+# precis ici — le nommer sans l'avoir bissecte serait une affirmation de plus a
+# verifier.
+#
+# Ancrage : le nombre est celui du RUNNER, pas une mesure locale reportee. Le job
+# « Quality (bun) » du run 33311527587 (tete 4e3a19677a) a lui-meme imprime
+# « AMELIORATION NON ENREGISTREE : 1183 erreurs, baseline 1184 (-1) » et dicte la
+# valeur a ecrire ; la mesure locale post-fusion rend le meme 1183. Les deux
+# s'accordent, comme au cas de 1184 ci-dessus et contrairement a celui de 1194.
+#
+# Ce cliquet a donc echoue en annoncant une BONNE nouvelle, et c'est sa raison
+# d'etre : sans lui, le point regagne redeviendrait silencieusement depensable.
+readonly WEB_BASELINE=1183
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
