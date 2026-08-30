@@ -720,7 +720,18 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         guard let corps = blockBody(startingAt: "var surface: some View", in: code) else {
             throw AncreIntrouvable(quoi: "var surface: some View")
         }
-        XCTAssertTrue(corps.contains("mountedSurface"), "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        // **La lecture unique a un NOM depuis le 2026-08-30.** Elle était en
+        // ligne dans l'aiguillage (`ComposerMountedView.mounted(surface:…)`) ;
+        // un second site en a eu besoin — l'historique — et a interrogé le KIND
+        // à la place, ce qui compilait sans jamais pouvoir rendre vrai. La
+        // résolution est désormais `mountedComposerView`, calculée à UN endroit.
+        //
+        // Ce que ce témoin dit reste le même : le corps CONSOMME une lecture,
+        // il n'en refait pas une seconde.
+        XCTAssertTrue(corps.contains("mountedComposerView"),
+                      "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        XCTAssertFalse(corps.contains("ComposerMountedView.mounted("),
+                       "La résolution vit dans `mountedComposerView`, pas dans le corps de l'aiguillage.")
         XCTAssertTrue(corps.contains("case .mood"), "Et la troisième issue est servie.")
         XCTAssertFalse(
             corps.contains("profile.initialFormat"),

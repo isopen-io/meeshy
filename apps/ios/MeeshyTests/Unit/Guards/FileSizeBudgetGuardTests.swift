@@ -48,7 +48,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationMediaGalleryView.swift",
         "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
-        "ConversationView+Composer.swift",
         "ConversationView.swift",
         "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
@@ -68,12 +67,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ProfileUserPostsList.swift",
         "ReelsPlayerView.swift",
         "RootView.swift",
-        "StoryViewModel.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
         "StoryViewerView+Sidebar.swift",
         "StoryViewerView.swift",
-        "UniversalComposerBar.swift",
         "WebRTCTypes.swift",
     ]
 
@@ -109,7 +106,35 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// Le cliquet a fait exactement son travail : il a refusé l'ajout, et
     /// l'extraction qui s'en est suivie nomme le concept au lieu de le cacher
     /// dans un `body`.
-    private static let legacyLineCeiling = 82_767
+    /// **76 402 après la fusion du 2026-08-30**, soit la somme MESURÉE des 37
+    /// fichiers qui restent en dette.
+    ///
+    /// Deux sessions ont allégé cette dette le même jour, chacune de son côté,
+    /// et le conflit qui en est né est instructif : chacune avait soustrait
+    /// CORRECTEMENT ce que SON découpage retirait — 80 004 d'un côté, 80 183 de
+    /// l'autre — et garder l'une ou l'autre aurait laissé la moitié du travail
+    /// non comptée.
+    ///
+    /// > **Un plafond cumulatif ne se résout pas en choisissant un côté du
+    /// > conflit : il se REMESURE.** C'est la seule valeur qui reste vraie quel
+    /// > que soit l'ordre dans lequel les deux découpages sont arrivés.
+    ///
+    /// Ce que les deux côtés retiraient, réuni :
+    /// - `StoryViewModel.swift` (3 584) → `+Publication` (960),
+    ///   `+PublicationUpload` (811), `+MediaPreload` (431), `+Viewing` (302),
+    ///   `StoryViewModelRules` (157) et le type lui-même (1 000) ;
+    /// - `ConversationView+Composer.swift` (399) et `UniversalComposerBar.swift`
+    ///   (379), redescendus sous le budget à leur propre découpage ;
+    /// - `ComposerDocumentSurface.swift` n'y a jamais figuré : il a franchi le
+    ///   plafond ce jour-là et a été découpé aussitôt — c'est le cliquet qui
+    ///   l'a exigé, et c'est ce qu'on lui demande.
+    ///
+    /// Le plafond se MESURE, il ne se calcule pas de tête : posé une première
+    /// fois à 80 233 en soustrayant un chiffre lu dans le commentaire d'un
+    /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
+    /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
+    /// le cran est trop haut ne rougit pas : il attend.
+    private static let legacyLineCeiling = 76_402
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

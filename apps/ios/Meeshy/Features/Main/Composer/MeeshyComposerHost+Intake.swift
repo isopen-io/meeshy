@@ -264,11 +264,11 @@ extension MeeshyComposerHost {
                 if let transcription {
                     documentLanguage = transcription.language
                 }
-                showsAudioComposer = false
+                presentedPortal = nil
                 HapticFeedback.light()
             },
             onPublishBorrowed: { _ in
-                showsAudioComposer = false
+                presentedPortal = nil
             }
         )
     }
@@ -305,7 +305,7 @@ extension MeeshyComposerHost {
 
     var documentLanguageCapsule: some View {
         Button {
-            showsDocumentLanguagePicker = true
+            presentedPortal = .language
             HapticFeedback.light()
         } label: {
             Text(ComposerLanguageFlag.label(for: documentLanguage))
@@ -423,7 +423,7 @@ extension MeeshyComposerHost {
             // précisément la chaîne que l'inventaire de
             // `ComposerIntakePortalsTests` tient.
             HapticFeedback.light()
-            showsStickerPicker = true
+            presentedPortal = .sticker
         }
     }
 
@@ -454,19 +454,19 @@ extension MeeshyComposerHost {
         switch tool.effect {
         case .insertsEmojiIntoText:
             HapticFeedback.light()
-            showsEmojiPicker = true
+            presentedPortal = .emoji
         case .opensReferencePicker:
             HapticFeedback.light()
-            showsReferencePicker = true
+            presentedPortal = .reference
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
             presentMediaIntake(intake)
         case .attachesLocation:
             HapticFeedback.light()
-            showsLocationPicker = true
+            presentedPortal = .location
         case .attachesTranscribedAudio:
             HapticFeedback.light()
-            showsAudioComposer = true
+            presentedPortal = .audio
         case .none:
             break
         }
@@ -571,7 +571,7 @@ extension MeeshyComposerHost {
 
     func presentSoundSource(_ source: ComposerSoundSource) {
         switch source {
-        case .library: showsSoundLibrary = true
+        case .library: presentedPortal = .soundLibrary
         case .record:  handleDocumentTool(.microphone)
         }
     }
@@ -584,10 +584,10 @@ extension MeeshyComposerHost {
         SoundLibraryPicker(
             onPick: { sound in
                 viewModel.addBorrowedSound(sound)
-                showsSoundLibrary = false
+                presentedPortal = nil
                 HapticFeedback.light()
             },
-            onCancel: { showsSoundLibrary = false }
+            onCancel: { presentedPortal = nil }
         )
     }
 
@@ -596,7 +596,7 @@ extension MeeshyComposerHost {
         case .photoLibrary:
             showsPhotoPicker = true
         case .camera:
-            showsCamera = true
+            presentedPortal = .camera
         case .files:
             showsFileImporter = true
         }
@@ -719,7 +719,7 @@ extension MeeshyComposerHost {
     var emojiPickerSheet: some View {
         EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
             documentText += emoji
-            showsEmojiPicker = false
+            presentedPortal = nil
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

@@ -14,8 +14,8 @@ import XCTest
 /// de l'utilisateur sans réintroduire le trou visuel du 2026-05-28.
 final class ComposerTransparentAndConditionalSendSourceGuardTests: XCTestCase {
 
-    private static let composerPath = "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift"
-    private static let conversationViewPath = "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift"
+    private static let composerPath = "Meeshy/Features/Main/Components/UniversalComposerBar.swift"
+    private static let conversationViewPath = "Meeshy/Features/Main/Views/ConversationView.swift"
 
     // MARK: - Bouton d'envoi : invisible à vide, pas seulement estompé
 
@@ -75,12 +75,14 @@ final class ComposerTransparentAndConditionalSendSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // repo root
     }
 
+    /// **L'UNITÉ, jamais le seul fichier-tête.** Le type a été découpé pour
+    /// rentrer dans le budget de taille, et les blocs que cette garde ancre ont
+    /// suivi dans ses extensions. Une garde de source qui nomme des FICHIERS se
+    /// périme au premier fichier ajouté ; une garde qui nomme une UNITÉ survit
+    /// au découpage — c'est ce que `AppSourceGuard.unit` fait, par glob sur
+    /// `Type+*.swift`.
     private static func strippedSource(at relativePath: String) throws -> String {
-        let file = repoRoot().appendingPathComponent(relativePath)
-        guard FileManager.default.fileExists(atPath: file.path) else {
-            throw XCTSkip("Source introuvable depuis \(repoRoot().path) — arbre source indisponible")
-        }
-        return AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
     }
 
     private static func actionButtonBlock() throws -> String {

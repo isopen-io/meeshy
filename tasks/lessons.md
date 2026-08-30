@@ -20419,7 +20419,7 @@ Même famille que le « double PARTIEL d'un module » du `CLAUDE.md` du gateway,
 là un double perdait ce que le module GAGNAIT, ici il perd ce que son COLLABORATEUR gagne. Dans les
 deux cas, le double est un inventaire, et un inventaire ne prévient jamais qu'il est en retard.
 
-## Leçon 340 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
+## Leçon 346 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
 
 **Le fait.** Trois passes de gate consécutives échouées sur `ConversationMediaDoorTests.swift`, un fichier que
 je n'ai pas touché, pour un défaut que je n'ai pas introduit : une session voisine venait de rendre
@@ -20453,3 +20453,216 @@ prise parce que les worktrees parallèles faisaient PERDRE du travail au merge. 
 contre celui-ci : des gates qui se gênent. C'est le bon échange — un gate bloqué se voit et se relance,
 un hunk perdu au merge ne se voit pas. Mais il faut le savoir, sans quoi on passe la journée à débuguer
 le travail des autres en croyant débuguer le sien.
+
+## Leçon 347 — un découpage de fichier n'est pas terminé quand le fichier passe sous le budget, mais quand les gardes qui le nommaient pointent l'UNITÉ
+
+**Le fait.** Quatre gardes de source du composer levaient `GuardIsBlind` — « Ancre « var sendButton:
+some View { » introuvable : la garde ne garde plus rien ». Aucune n'avait été touchée. Leur cause
+commune : `UniversalComposerBar` a été découpée en **huit** parties et `ConversationView` en **dix**
+pour rentrer dans le budget de 800–1100 lignes, et les blocs que ces gardes ancrent ont suivi dans les
+extensions. Les gardes, elles, lisaient toujours le fichier-tête.
+
+> **Une garde de source qui nomme des FICHIERS se périme au premier fichier ajouté ; une garde qui
+> nomme une UNITÉ survit au découpage.** `AppSourceGuard.unit(_:)` existe exactement pour ça — il globe
+> `Type+*.swift` — et son propre doc-comment le disait déjà : « une liste de parties se périme au
+> premier fichier ajouté, et se périme EN SILENCE puisque le résultat reste non vide ».
+
+**Ce qui a sauvé ce cas, et qu'il faut savoir reproduire.** Ces gardes levaient une erreur nommée
+(`GuardIsBlind`) au lieu de rendre une chaîne vide. Une garde qui lit un fichier introuvable et
+poursuit passe au VERT en n'ayant rien mesuré ; celle-ci rougit et dit pourquoi. **C'est la seule
+raison pour laquelle le défaut était trouvable** — cinq propriétés du bouton d'envoi auraient cessé
+d'être gardées sans que personne le sache.
+
+Le corollaire pratique : toute garde qui extrait un BLOC par ancre doit traiter l'ancre absente comme
+un ÉCHEC, jamais comme un bloc vide. Un `guard let … else { return "" }` y est une extinction déguisée.
+
+**La règle de fin de travail.** Un lot de découpage a trois étapes, pas deux :
+
+1. le fichier passe sous le budget ;
+2. le projet se régénère (`xcodegen`) et compile ;
+3. **les gardes qui nommaient l'ancien fichier pointent l'unité** — sans quoi on a échangé une dette de
+   taille contre une dette de protection, et la seconde ne se voit pas.
+
+L'étape 3 se cherche par `grep -rn "<NomDuType>.swift" MeeshyTests` : ce sont les gardes qui viennent
+de perdre leur objet. Elle n'a pas été faite au découpage d'origine — d'où quatre gardes aveugles
+retrouvées des semaines plus tard, par une session tierce qui faisait tourner la suite entière.
+
+Voir la leçon 344 (une garde négative posée sur un FICHIER attrape les jumelles innocentes de sa cible)
+et la 340 (dans un arbre partagé, le gate d'une session mesure aussi le WIP des autres) : trois façons
+dont la PORTÉE d'une garde décide de ce qu'elle vaut.
+
+## Leçon 348 — `private` au niveau FICHIER ne survit pas au déplacement du type qui s'en sert
+
+**Le fait.** Découper `ComposerDocumentSurface.swift` (1 101 lignes) par TYPE — la porte, la vignette,
+la vue — a compilé partout sauf en un point : `ComposerThumbnailDecoder`, un `private nonisolated enum`
+déclaré au niveau du fichier d'origine, que seule la vignette appelle. La vignette partie, l'appel ne
+voyait plus rien.
+
+> **En Swift, `private` au niveau FICHIER est une visibilité de VOISINAGE**, pas d'appartenance. Elle
+> lie deux déclarations par le hasard de leur cohabitation, et ce lien est invisible au lecteur qui
+> découpe : rien, dans le corps du type qu'on déplace, ne dit qu'il dépend d'un voisin privé.
+
+Le compilateur le signale — mais **au site d'APPEL, dans le fichier neuf**, jamais au site de
+déclaration resté derrière. Le message (« cannot find X in scope ») ressemble à un oubli d'import
+plutôt qu'à ce qu'il est : un compagnon laissé dans l'ancienne maison.
+
+**La règle de découpage qui en tombe.** Avant de déplacer un type, chercher ce qu'il consomme et qui
+est `private`/`fileprivate` dans le fichier d'origine :
+
+```bash
+grep -nE "^(private|fileprivate) " <fichier> # les candidats
+```
+
+Chacun se range dans l'un des trois cas, et le cas décide :
+- **un seul consommateur** → il DÉMÉNAGE avec lui, et perd son `private` (il change de maison, plus de voisinage à protéger) ;
+- **plusieurs consommateurs qui se séparent** → il sort dans un troisième fichier, à son propre nom ;
+- **aucun consommateur déplacé** → il reste, et garde son `private`.
+
+**Et `private(set)` tombe de la même façon, sur un découpage par EXTENSION.** Vérifié le même jour, sur
+le découpage voisin de `StoryViewModel` : `@Published private(set) var activeUploads` limite l'écriture
+au FICHIER de déclaration, et les trois sites qui mutent cette file étaient partis dans
+`+Publication` et `+PublicationUpload`. Le compilateur rend alors « setter is inaccessible » — un
+message qui ne nomme ni le découpage ni le fichier d'origine.
+
+C'est la nuance qui manquait ci-dessus : un découpage par extension ne casse pas `fileprivate` entre
+extensions du même type… mais il casse `private(set)`, parce que le `(set)` est une visibilité de
+FICHIER, pas de type. Le remède est `internal(set)` — et ce n'est pas un relâchement : la protection
+qui compte, « personne hors du module ne l'écrit », reste intacte.
+
+**Pourquoi ce piège est propre au découpage PAR TYPE.** Un découpage par TRANCHE (`Type+Partie.swift`)
+garde tout dans la même unité de compilation logique et ne casse que `private`, jamais `fileprivate`
+— et les extensions du même type continuent de se voir. Un découpage par TYPE change de maison, donc
+de voisinage. C'est le bon découpage, celui que la directive demande (« par responsabilité, pas par
+tranche ») ; il faut simplement savoir qu'il déplace aussi des liens qu'on ne voit pas.
+
+Voir la leçon 347 : le même découpage laisse trois dettes derrière lui — les gardes qui nomment le
+fichier, la dette de taille et la dette de police. Celle-ci est la quatrième, et la seule que le
+compilateur attrape.
+
+
+## Leçon 349 — Un champ qu'un émetteur SERT depuis toujours, et qu'aucun décodeur client ne DÉCLARE
+
+**Le porteur produit signale, 2026-08-30 : la bannière in-app ne dit pas de quel
+type de notification il s'agit — seulement l'auteur et le contenu.** Un
+commentaire sur un réel, une réaction à une story et la publication d'une humeur
+rendaient toutes trois « Alice » / « super ! ».
+
+Le diagnostic évident était « la phrase d'action n'atteint pas le client », et il
+menait vers la passerelle — d'autant que `NotificationService.createNotification`
+calcule un titre riche persisté (« Alice a commenté votre réel ») **puis
+l'écrase** sur le fil : `socketPayload = { ...formatted, title: pushTitle,
+subtitle: pushSubtitle }`. La première issue rédigée demandait de « cesser
+d'écraser le titre riche ». Elle était FAUSSE.
+
+`buildPushHeader` promeut l'ACTION en `subtitle` — justement parce qu'iOS réécrit
+le TITRE d'une Communication Notification avec le `displayName` de l'`INPerson`
+expéditeur (c'est écrit sur place, et onze témoins de
+`SocialNotificationPrecision.test.ts` l'attestent). Le fil portait donc
+« elvira ndjiki » ET « a commenté votre réel », côte à côte, depuis toujours.
+
+**Ce qui manquait n'était pas la donnée. C'était sa DÉCLARATION chez le lecteur :**
+
+| lecteur | ce qu'il faisait de `subtitle` |
+|---|---|
+| iOS (`SocketNotificationEvent`) | **ne le déclarait pas** — le décodeur le jetait, silencieusement |
+| web (`buildNotificationTitle`) | lisait `title` (l'acteur) et ne regardait jamais à côté |
+
+> **C'est l'exacte SYMÉTRIE de la leçon `_seq`** (« un champ que trois clients
+> LISENT et qu'aucun contrat ne déclare »). Ici : un champ que l'émetteur SERT et
+> qu'aucun décodeur ne déclare. Les deux formes ont le même mode de panne — rien
+> ne rougit, rien n'échoue, la valeur voyage bien formée jusqu'à un lecteur qui
+> ne la nomme pas — et elles se cherchent aux deux bouts du même fil.
+
+Trois règles de méthode en sortent :
+
+- **Devant « la donnée n'arrive pas », ouvrir le DÉCODEUR avant l'émetteur.** Un
+  champ absent du `struct Decodable` est indiscernable d'un champ absent du fil :
+  aucun des deux ne produit d'erreur. L'émetteur, lui, a des témoins ; le
+  décodeur n'en a que sur ce qu'il déclare — par construction, il n'en a aucun
+  sur ce qu'il ignore.
+- **Un `select`/`CodingKeys` incomplet est le seul défaut qu'un témoin de
+  l'émetteur ne peut PAS voir.** Le dépôt le dit déjà de la passerelle (« le
+  `select` est le seul des trois qu'aucun témoin de rang ne peut voir ») ; c'est
+  la même phrase, portée du serveur au client.
+- **Une issue rédigée avant l'instruction porte une hypothèse, pas un constat.**
+  Celle-ci a été corrigée dans son propre commentaire de clôture plutôt que
+  livrée telle quelle : le lot n'a finalement touché AUCUNE source de la
+  passerelle. Écrire le diagnostic qu'on a VÉRIFIÉ, et dire lequel on croyait
+  tenir — sinon le prochain lot reprend l'hypothèse pour un fait.
+
+Deux corollaires attrapés dans le même lot, tous deux déjà écrits ailleurs et non
+portés jusqu'ici :
+
+- **La seule pièce qui ne peut pas venir du serveur est celle qu'il ne connaît
+  pas.** Le nom du groupe d'un message est LOCAL (renommage + emoji favori, pas
+  forcément synchronisés) : « X dans <groupe> » se compose donc chez le client,
+  et lui seul. Tout le reste — la phrase d'action, dans les huit langues — reste
+  serveur (Prisme). Une frontière se trace sur ce que chaque côté SAIT, jamais
+  sur ce qui serait pratique.
+- **Un champ ajouté à un décodeur doit avoir un LECTEUR dans le même lot.**
+  `postPreview` et `excerpt` avaient été ajoutés au décodage du fil « pendant
+  qu'on y était » ; ils n'étaient lus par personne (le corps servi les contient
+  déjà). Retirés. Un champ décodé sans lecteur est le même angle mort que celui
+  qu'on vient de corriger, dans l'autre sens.
+
+### Corollaire, payé dans le même lot : le double PARTIEL, quatrième exemplaire
+
+Le correctif ci-dessus a fait tomber quatre témoins du web sur un `TypeError`
+qui ne disait rien du comportement testé — `getActorDisplayName is not a
+function`. Les deux suites de `use-notifications-manager-rq` mockaient
+`@/utils/notification-helpers` par une fabrique qui ÉNUMÉRAIT quatre exports à
+la main. La bannière s'est mise à en lire deux de plus ; ils sont sortis
+`undefined`.
+
+C'est le **quatrième** exemplaire d'une règle déjà écrite, datée et motivée dans
+`services/gateway/CLAUDE.md` (« un double PARTIEL d'un module perd en silence
+tout ce que le module GAGNE », cycles 91, 93, 104). Elle n'avait jamais été
+portée côté web — elle l'est maintenant, dans `apps/web/CLAUDE.md`. Même forme
+que la leçon 307 : **une règle ne se propage pas depuis son énoncé, elle vaut là
+où quelqu'un l'a récitée.**
+
+Et la faute de MÉTHODE, qui est la mienne : le lot avait fait tourner
+`__tests__/utils/` — ses propres témoins, verts — et pas la suite complète. **Un
+lot lance les suites qui EXERCENT le module changé, jamais seulement celles
+qu'il vient d'écrire** ; ici la suite entière met trois minutes et aurait nommé
+le défaut avant la CI. Un module nouvellement importé par un consommateur
+existant est exactement le cas où ses doubles ont un inventaire en retard.
+
+## Leçon 349 — un invariant écrit sur les ÉLÉMENTS d'une collection ne dit rien sur la collection
+
+**Le fait.** L'inventaire des portails du composer (#4120) posait une règle juste et la gardait : « tout
+état de présentation doit avoir son lecteur AU-DESSUS de l'aiguillage ». Elle a tenu — chaque porte
+ajoutée pendant des mois a reçu son `.sheet` au bon endroit, y compris les trois d'une seule journée.
+
+Le meuble en portait **huit**. SwiftUI n'en supporte qu'une par vue : deux booléens vrais dans la même
+transaction, et le process est **TERMINÉ** (`Currently, only presenting a single sheet is supported`).
+Trois terminaisons mesurées au simulateur, sur trois interactions différentes.
+
+> **Une règle de PLACEMENT ne dit rien du NOMBRE.** La garde vérifiait que chaque élément satisfait sa
+> condition ; la propriété qui manquait portait sur le CARDINAL de l'ensemble. Aucune quantité
+> d'éléments corrects ne fait une collection correcte quand la contrainte est « au plus un ».
+
+C'est la forme duale de la leçon 261 (« une énumération de sites porte deux affirmations, dont une
+presque jamais vérifiée ») : là, la liste prétendait être complète ; ici, chaque entrée est juste et
+c'est leur NOMBRE qui est faux. Les deux se ressemblent parce que dans les deux cas la garde regarde
+les éléments quand la vérité est dans l'ensemble.
+
+**Le remède structurel bat le remède disciplinaire.** On peut ajouter une garde de comptage — je l'ai
+faite — mais ce qui ferme réellement le défaut est le TYPE : un `enum Portal?` au lieu de huit `Bool`.
+Une variable ne porte qu'une valeur, donc deux portails ouverts ne sont plus *rares*, ils sont
+**irreprésentables**, et ouvrir le second ferme le premier au lieu de produire l'état invalide. Rien à
+retenir, rien à vérifier en revue.
+
+> Quand une contrainte de cardinalité est violable, chercher d'abord le type qui la rend impossible.
+> Une garde qui compte est un filet ; un type qui interdit est un sol.
+
+**Et la garde de comptage doit apprendre sa PORTÉE.** Écrite sur l'unité de fichiers du meuble, la
+mienne trouvait deux feuilles et rougissait sur un correctif juste : la seconde appartient au bouton
+d'audience du socle, une SOUS-VUE — et deux feuilles sur deux vues distinctes ne se disputent rien.
+Une garde de nombre compte dans la portée exacte de la règle qu'elle applique (ici : le corps d'UNE
+vue), jamais dans le fichier qui la contient. Voir la leçon 344, dont ceci est la version « nombre ».
+
+Dernier détail qui compte : elle exige `== 1`, pas `<= 1`. Une garde de cardinalité qui tolère zéro
+laisse passer le retrait accidentel du montage — c'est-à-dire l'autre moitié du défaut qu'elle existe
+pour empêcher.
+

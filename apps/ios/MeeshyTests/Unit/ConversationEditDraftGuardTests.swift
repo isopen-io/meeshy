@@ -19,15 +19,17 @@ import XCTest
 /// UIKit réel, R5/R15).
 final class ConversationEditDraftGuardTests: XCTestCase {
 
+    /// **L'UNITÉ, jamais le seul fichier-tête.** `ConversationView` a été
+    /// découpée en dix parties pour rentrer dans le budget de taille, et les
+    /// blocs que cette garde ancre — `beginEdit`, `cancelEdit` — ont suivi dans
+    /// ses extensions. Lisant le fichier-tête, la garde ne trouvait plus ses
+    /// ancres : deux témoins rouges pour un code parfaitement correct.
+    ///
+    /// Une garde de source qui nomme des FICHIERS se périme au premier fichier
+    /// ajouté ; `AppSourceGuard.unit` globe `Type+*.swift` et survit au
+    /// découpage (leçon 347).
     private func source(_ relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy")
-        return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
-        )
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/" + relativePath))
     }
 
     private func body(of anchor: String, in code: String) -> String? {
@@ -59,7 +61,7 @@ final class ConversationEditDraftGuardTests: XCTestCase {
     // MARK: - `beginEdit` sauvegarde le brouillon ET peuple les trois champs
 
     func test_beginEdit_savesTheDraftAndPopulatesAllThreeFields() throws {
-        let code = try source("Features/Main/Views/ConversationView+Composer.swift")
+        let code = try source("Features/Main/Views/ConversationView.swift")
         guard let fn = body(of: "func beginEdit(", in: code) else {
             return XCTFail("`beginEdit` introuvable — la garde ne mesurerait rien.")
         }
@@ -85,7 +87,7 @@ final class ConversationEditDraftGuardTests: XCTestCase {
     // MARK: - `cancelEdit` restitue le brouillon, ne le vide plus
 
     func test_cancelEdit_restoresTheSavedDraft_neverHardcodesEmpty() throws {
-        let code = try source("Features/Main/Views/ConversationView+Composer.swift")
+        let code = try source("Features/Main/Views/ConversationView.swift")
         guard let fn = body(of: "func cancelEdit(", in: code) else {
             return XCTFail("`cancelEdit` introuvable — la garde ne mesurerait rien.")
         }

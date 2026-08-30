@@ -70,7 +70,12 @@ const SITES: readonly string[] = [
   'packages/shared/types/api-schemas.ts',
   'packages/shared/types/validation/admin-user.ts',
   'services/gateway/src/routes/password-reset.ts',
-  'services/gateway/src/routes/users/profile.ts',
+  // #4284 — `users/profile.ts` (1093 lignes) a été découpé ; il n'est plus
+  // qu'une façade de ré-export, et la règle de longueur vit avec la route qui
+  // l'applique (`PATCH /users/me/password`). Recenser la façade faisait tomber
+  // la contre-épreuve « gouverné, pas muet » — exactement ce qu'elle existe
+  // pour attraper : un site qui devient conforme PAR DISPARITION.
+  'services/gateway/src/routes/users/profile-credentials.ts',
   'apps/web/components/auth/register-form-wizard.tsx',
   'apps/web/components/auth/wizard-steps/SecurityStep.tsx',
   'apps/web/components/auth/PasswordRequirementsChecklist.tsx',

@@ -9,7 +9,7 @@ import XCTest
 /// message-emoji.
 final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
 
-    private static let composerPath = "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift"
+    private static let composerPath = "Meeshy/Features/Main/Components/UniversalComposerBar.swift"
 
     // MARK: - `actionButton` bascule entre bouton d'envoi et emojis rapides
 
@@ -187,12 +187,14 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // repo root
     }
 
+    /// **L'UNITÉ, jamais le seul fichier-tête.** Le type a été découpé pour
+    /// rentrer dans le budget de taille, et les blocs que cette garde ancre ont
+    /// suivi dans ses extensions. Une garde de source qui nomme des FICHIERS se
+    /// périme au premier fichier ajouté ; une garde qui nomme une UNITÉ survit
+    /// au découpage — c'est ce que `AppSourceGuard.unit` fait, par glob sur
+    /// `Type+*.swift`.
     private static func strippedSource() throws -> String {
-        let file = repoRoot().appendingPathComponent(composerPath)
-        guard FileManager.default.fileExists(atPath: file.path) else {
-            throw XCTSkip("Source introuvable depuis \(repoRoot().path) — arbre source indisponible")
-        }
-        return AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(composerPath))
     }
 
     private static func actionButtonBlock() throws -> String {

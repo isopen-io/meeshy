@@ -51,13 +51,17 @@ public struct NotificationToastView: View {
         self.onTap = onTap
     }
 
-    // MARK: - Author display
+    // MARK: - Présentation
     //
-    // Title / subtitle / body / avatar are resolved by the SDK's
-    // `SocketNotificationEvent` toast helpers so the precision (sender =
-    // title, group = subtitle for messages ; precise action phrase for
-    // reactions / comments / replies / reposts) stays a single source of
-    // truth shared with the notification list & push layer.
+    // Headline, corps, vignette et réaction viennent d'UNE seule source :
+    // `NotificationToastManager.resolvedBannerPresentation(for:)`, qui compose
+    // la phrase d'action LOCALISÉE PAR LE SERVEUR et y injecte le nom LOCAL du
+    // groupe (renommage + emoji favori) que seul l'appareil connaît. La vue ne
+    // décide de rien — elle place.
+
+    private var presentation: NotificationBannerPresentation {
+        NotificationToastManager.shared.resolvedBannerPresentation(for: event)
+    }
 
     private var avatarColorHex: String {
         // Deterministic from the sender id (stable across re-renders + matches
@@ -66,17 +70,18 @@ public struct NotificationToastView: View {
         DynamicColorGenerator.colorForName(event.toastAvatarColorSeed)
     }
 
+    private static let thumbnailSide: CGFloat = 26
+
     // MARK: - Body
 
     public var body: some View {
-        Button { onTap?() } label: {
+        let banner = presentation
+        return Button { onTap?() } label: {
             HStack(spacing: 10) {
                 // Author avatar — uses the SDK's canonical MeeshyAvatar so
                 // we honour the uploaded photo when present (via
                 // CachedAvatarImage with disk caching) and fall back to
-                // the deterministic initials circle when not. The
-                // previous implementation hard-coded the initials path
-                // and ignored `event.senderAvatar` entirely.
+                // the deterministic initials circle when not.
                 MeeshyAvatar(
                     name: event.toastAvatarName,
                     context: .notification,
@@ -84,24 +89,22 @@ public struct NotificationToastView: View {
                     avatarURL: event.toastAvatarURL
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(event.toastTitle)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(banner.headline)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    if let subtitle = NotificationToastManager.shared.resolvedToastSubtitle(for: event) {
-                        Text(subtitle)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                            .lineLimit(1)
-                    }
-
-                    if let body = event.toastBody {
-                        Text(body)
-                            .font(.system(size: 12))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(1)
+                    if banner.body != nil || banner.thumbnailURL != nil || banner.reactionBadge != nil {
+                        HStack(spacing: 6) {
+                            contentPreview(banner)
+                            if let body = banner.body {
+                                Text(body)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(theme.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
                     }
                 }
 
@@ -127,5 +130,72 @@ public struct NotificationToastView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
+        // La bannière est UN élément pour VoiceOver : trois fragments lus
+        // séparément (« Alice a commenté votre réel », « super photo », l'image)
+        // font trois arrêts là où l'information est une.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(voiceOverLabel(banner))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// La vignette du contenu visé, ou son icône typée quand il n'y a pas
+    /// d'image — c'est la même case, jamais deux dispositions différentes.
+    @ViewBuilder
+    private func contentPreview(_ banner: NotificationBannerPresentation) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let thumbnail = banner.thumbnailURL {
+                    CachedAsyncImage(
+                        url: thumbnail,
+                        targetSize: CGSize(width: Self.thumbnailSide, height: Self.thumbnailSide),
+                        // Une bannière vit sept secondes : un spinner puis un
+                        // bouton « réessayer » dans 26 points de côté ne
+                        // seraient jamais ni lisibles ni actionnables.
+                        showsStatusOverlays: false,
+                        // 26 points de côté, une fois, pour dire QUEL contenu —
+                        // c'est le sens même de la vignette. La retenir derrière
+                        // la politique d'économie de données rendrait la case
+                        // vide dans le cas nominal.
+                        autoLoad: true
+                    ) {
+                        symbolTile(banner.contentSymbol)
+                    }
+                    .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    symbolTile(banner.contentSymbol)
+                }
+            }
+
+            if let badge = banner.reactionBadge {
+                Text(badge)
+                    .font(.system(size: 11))
+                    .padding(2)
+                    .background(
+                        Circle().fill(Self.backgroundColor(isDark: isDark))
+                    )
+                    .offset(x: 5, y: 4)
+            }
+        }
+        .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
+    }
+
+    private func symbolTile(_ symbol: String) -> some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(accentColor.opacity(isDark ? 0.22 : 0.12))
+            .overlay(
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(accentColor)
+            )
+            .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
+    }
+
+    /// Ce qu'un lecteur d'écran entend : la phrase, puis la charge. La vignette
+    /// n'est pas décrite — elle ILLUSTRE le corps, elle ne l'augmente pas.
+    private func voiceOverLabel(_ banner: NotificationBannerPresentation) -> String {
+        [banner.headline, banner.reactionBadge, banner.body]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 }

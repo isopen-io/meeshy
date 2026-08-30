@@ -368,6 +368,37 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
       .toBe('Quelqu’un a réagi ❤️ à votre publication');
   });
 
+  // ── Relations : la ligne n'est pas un groupe nominal, c'est une PHRASE ──
+  //
+  // `content` disait « Nouvelle demande de contact » — un titre de rubrique.
+  // Une bannière annonce ce que QUELQU'UN vient de faire : sans phrase
+  // d'action, aucun client ne peut composer « X veut se connecter » sans
+  // réécrire du français en dur, ce que le Prisme (i18n serveur) interdit.
+  it('rend une phrase d’action pour une demande de relation, sur les deux noms de type', () => {
+    for (const type of ['friend_request', 'contact_request']) {
+      expect(buildNotificationDisplay('fr', { type, actorName: 'Alice' }).title, type)
+        .toBe('Alice veut se connecter');
+      expect(buildNotificationDisplay('fr', { type, actorName: 'Alice' }).action, type)
+        .toBe('veut se connecter');
+    }
+    expect(buildNotificationDisplay('en', { type: 'friend_request', actorName: 'Alice' }).title)
+      .toBe('Alice wants to connect');
+  });
+
+  it('rend une phrase d’action pour une relation acceptée, sur les deux noms de type', () => {
+    for (const type of ['friend_accepted', 'contact_accepted']) {
+      expect(buildNotificationDisplay('fr', { type, actorName: 'Bob' }).title, type)
+        .toBe('Bob a accepté votre demande');
+    }
+    expect(buildNotificationDisplay('en', { type: 'contact_accepted', actorName: 'Bob' }).title)
+      .toBe('Bob accepted your request');
+  });
+
+  it('ne donne AUCUN sous-titre d’entité à une relation — il n’y a pas de contenu visé', () => {
+    expect(buildNotificationDisplay('fr', { type: 'friend_request', actorName: 'Alice' }).subtitle).toBeNull();
+    expect(buildNotificationDisplay('fr', { type: 'friend_accepted', actorName: 'Bob' }).subtitle).toBeNull();
+  });
+
   it('normalise les variantes de casse / valeurs nulles de postType', () => {
     expect(buildNotificationDisplay('fr', { type: 'post_comment', actorName: 'I', postType: 'story' }).title)
       .toBe('I a commenté votre story');

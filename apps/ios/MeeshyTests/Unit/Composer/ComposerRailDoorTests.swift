@@ -374,10 +374,10 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
     /// jamais d'une surface (#4120).
     func test_laPorteSticker_ouvreSonPortail() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.sticker:HapticFeedback.light()showsStickerPicker=true"),
-                      "La porte doit poser l'état de présentation du meuble.")
-        XCTAssertTrue(source.contains(".sheet(isPresented:$showsStickerPicker){stickerPickerSheet}"),
-                      "Sans lecteur au-dessus de l'aiguillage, le booléen part et personne ne le lit.")
+        XCTAssertTrue(source.contains("case.sticker:HapticFeedback.light()presentedPortal=.sticker"),
+                      "La porte doit poser le portail du meuble.")
+        XCTAssertTrue(source.contains("case.sticker:stickerPickerSheet"),
+                      "Sans cas dans le switch du portail unique, rien ne s'ouvre (#4467).")
     }
 
     /// La feuille POSE un objet — elle n'écrit pas dans le texte, ce que fait
@@ -573,7 +573,7 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     func test_lesDeuxPortails_sontMontesEtLisentLaRegle() throws {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("isPresented:$showsSoundSourceChooser"))
-        XCTAssertTrue(source.contains("isPresented:$showsSoundLibrary"))
+        XCTAssertTrue(source.contains("case.soundLibrary:soundLibrarySheet"))
         XCTAssertTrue(source.contains("ForEach(ComposerSoundSourcePolicy.offered,id:\\.self)"))
     }
 
@@ -591,7 +591,7 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     /// leurs deux chemins doivent rester distincts dans l'aiguillage.
     func test_lesDeuxProvenances_ontDesCheminsDistincts() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.library:showsSoundLibrary=true"))
+        XCTAssertTrue(source.contains("case.library:presentedPortal=.soundLibrary"))
         XCTAssertTrue(source.contains("case.record:handleDocumentTool(.microphone)"))
     }
 }

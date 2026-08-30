@@ -778,14 +778,13 @@ final class StoryUploadQueueTests: XCTestCase {
     /// gardes vérifient le CÂBLAGE — que la décision pure (testée dans
     /// `StoryStickerUploadTests`) a bien un appelant en production — et rien de
     /// plus.
+    ///
+    /// Lit l'UNITÉ (#4425), pas le seul fichier `StoryViewModel.swift` :
+    /// `runStoryUpload` et ses appels peuvent vivre dans un fichier frère
+    /// (`StoryViewModel+Publication.swift`) depuis le découpage — une lecture
+    /// bornée au seul fichier historique ne les y trouverait plus.
     private func storyViewModelSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/ViewModels
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
     }
 
     /// Rougit si la publication cesse de téléverser les images de stickers :
@@ -797,7 +796,13 @@ final class StoryUploadQueueTests: XCTestCase {
     /// jour où ce motif change simplement de nom.
     func test_publish_uploadsStickerImagesThroughTheCommonPath() throws {
         let code = try storyViewModelSource()
-        XCTAssertTrue(code.contains("private func runStoryUpload"),
+        // Pas "private func" : le découpage #4425 a promu `runStoryUpload` en
+        // internal (lu depuis `StoryViewModel+Publication.swift`, une
+        // extension d'un autre fichier) — même conséquence mécanique
+        // qu'anticipée par l'issue pour tout membre `private` traversant la
+        // frontière du découpage. La parenthèse exclut les sites d'appel :
+        // seule la DÉCLARATION porte le jeton "func runStoryUpload(".
+        XCTAssertTrue(code.contains("func runStoryUpload("),
                       "Pipeline de publication introuvable — la garde ne mesurerait rien.")
         XCTAssertTrue(code.contains("StoryStickerUpload.pendingUploadIds("),
                       "Le publish ne demande plus quelles images de stickers restent à téléverser.")
