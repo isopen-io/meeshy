@@ -612,7 +612,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
         offset: pageOffset,
         limit: pageLimit,
-        filter
+        filter,
+        // Le lecteur reste visible à lui-même même s'il a désactivé ses
+        // accusés — même convention que les cinq portes texte (#3907).
+        viewerUserId: userId
       });
 
       return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
