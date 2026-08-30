@@ -280,7 +280,12 @@ describe('useAuth', () => {
         result.current.login(mockUser as any, mockToken);
       });
 
-      expect(mockSetCredentials).toHaveBeenCalledWith(mockUser, mockToken, undefined, undefined, undefined);
+      expect(mockSetCredentials).toHaveBeenCalledWith({
+        user: mockUser,
+        authToken: mockToken,
+        sessionToken: undefined,
+        expiresIn: undefined,
+      });
     });
 
     it('should sync with global store on login', async () => {

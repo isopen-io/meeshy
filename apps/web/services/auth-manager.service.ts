@@ -16,6 +16,19 @@ interface AnonymousSession {
   expiresAt: number;
 }
 
+/**
+ * Options nommées de `AuthManager.setCredentials` (#4450). Remplace cinq
+ * paramètres positionnels — voir le doc-comment de la méthode pour le
+ * défaut que la forme précédente permettait.
+ */
+export type SetCredentialsOptions = {
+  readonly user: User;
+  readonly authToken: string;
+  readonly refreshToken?: string;
+  readonly sessionToken?: string;
+  readonly expiresIn?: number;
+};
+
 class AuthManager {
   private static instance: AuthManager;
   private onClearCallbacks: Array<() => void> = [];
@@ -77,32 +90,27 @@ class AuthManager {
    * Persiste les credentials d'un compte inscrit — seul point d'écriture pour
    * `AUTH_TOKEN` / `SESSION_TOKEN` / `USER_DATA` ensemble.
    *
-   * Cinq paramètres positionnels, dont trois `string | undefined`
-   * indiscernables au typage : le compilateur ne peut pas voir un
-   * `refreshToken` glissé dans le créneau `sessionToken`, ni un `expiresIn`
-   * (nombre) glissé dans un créneau `string | undefined` — trois des quatre
-   * appelants historiques s'y sont trompés, deux d'entre eux à deux crans
-   * (#4404). Passer explicitement `undefined` pour tout paramètre dont la
-   * source n'a pas de valeur ; ne JAMAIS décaler l'argument suivant dans le
-   * créneau resté vide. Modèle de référence : `hooks/use-auth.ts:173`.
+   * Objet nommé (#4450). La forme précédente avait cinq paramètres
+   * positionnels, dont trois `string | undefined` indiscernables au typage :
+   * le compilateur ne pouvait pas voir un `refreshToken` glissé dans le
+   * créneau `sessionToken`, ni un `expiresIn` (nombre) glissé dans un
+   * créneau `string | undefined`. Trois des quatre appelants historiques
+   * s'y sont trompés, deux d'entre eux à deux crans (#4404) — les valeurs
+   * ont été corrigées et gardées par des témoins qui assertent la
+   * persistance PAR CLÉ, mais rien n'empêchait un cinquième appelant de
+   * retomber dans la même classe. Un objet nommé la rend inexprimable :
+   * chaque valeur porte son propre nom au site d'appel, aucun ordre à tenir,
+   * et un appel positionnel ne compile plus.
    *
    * `refreshToken` n'a plus de créneau de stockage (#4405, étape 3) : aucune
    * route d'authentification du gateway ne rend jamais ce champ (mesuré), et
    * la clé de stockage qui lui était dédiée a été retirée — il n'y avait
-   * rien de réel à y conserver. Le paramètre reste néanmoins ACCEPTÉ, à sa
-   * position, et n'est plus lu : deux appelants hors du territoire de ce lot
-   * (`magic-link.service.ts`, `two-factor.service.ts`) le passent encore
-   * positionnellement, et `auth.service.test.ts` verrouille explicitement
-   * que ce créneau doit continuer d'exister si le serveur envoie un jour ce
-   * champ (« threads a refreshToken through to its own slot »).
+   * rien de réel à y conserver. Le champ reste néanmoins ACCEPTÉ et n'est
+   * plus lu : `auth.service.test.ts` verrouille explicitement qu'il doit
+   * continuer d'exister si le serveur envoie un jour cette valeur
+   * (« threads a refreshToken through to its own slot »).
    */
-  setCredentials(
-    user: User,
-    authToken: string,
-    refreshToken?: string,
-    sessionToken?: string,
-    expiresIn?: number
-  ): void {
+  setCredentials({ user, authToken, sessionToken }: SetCredentialsOptions): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
 

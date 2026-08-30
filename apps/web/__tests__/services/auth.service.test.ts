@@ -83,18 +83,16 @@ describe('AuthService', () => {
       );
       expect(result.success).toBe(true);
       expect(result.data?.user).toEqual(mockUser);
-      // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
-      // — cinq créneaux. `refreshToken` est `undefined` : la route ne le rend
-      // jamais (#4405), et #4404 interdit de l'inventer. `sessionToken` DOIT
-      // atterrir dans SON propre créneau (le troisième), jamais dans celui
-      // d'`expiresIn` — c'est le défaut mesuré sur ce site précis.
-      expect(mockSetCredentials).toHaveBeenCalledWith(
-        mockUser,
-        'jwt-token-123',
-        undefined,
-        'session-token-123',
-        3600
-      );
+      // Objet nommé (#4450) : `refreshToken` est `undefined` — la route ne le
+      // rend jamais (#4405), et #4404 interdit de l'inventer. Chaque valeur
+      // porte son propre champ ; il n'y a plus de créneau à confondre.
+      expect(mockSetCredentials).toHaveBeenCalledWith({
+        user: mockUser,
+        authToken: 'jwt-token-123',
+        refreshToken: undefined,
+        sessionToken: 'session-token-123',
+        expiresIn: 3600,
+      });
     });
 
     // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
@@ -110,13 +108,13 @@ describe('AuthService', () => {
 
       await authService.login('testuser', 'password123');
 
-      expect(mockSetCredentials).toHaveBeenCalledWith(
-        mockUser,
-        'jwt-token-123',
-        'refresh-token-123',
-        'session-token-123',
-        3600
-      );
+      expect(mockSetCredentials).toHaveBeenCalledWith({
+        user: mockUser,
+        authToken: 'jwt-token-123',
+        refreshToken: 'refresh-token-123',
+        sessionToken: 'session-token-123',
+        expiresIn: 3600,
+      });
     });
 
     it('should handle login failure and clear sessions', async () => {

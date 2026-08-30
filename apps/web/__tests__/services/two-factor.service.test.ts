@@ -164,16 +164,15 @@ describe('TwoFactorService.verify', () => {
 
     await twoFactorService.verify('temp', '123456');
 
-    // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
-    // — le défaut mesuré (#4404) décalait `sessionToken` dans le créneau
-    // `refreshToken`, et `expiresIn` dans celui de `sessionToken`.
-    expect(mockSetCredentials).toHaveBeenCalledWith(
-      mockData.user,
-      mockData.token,
-      undefined,
-      mockData.sessionToken,
-      mockData.expiresIn
-    );
+    // Objet nommé (#4450) : chaque valeur porte son propre champ, il n'y a
+    // plus de créneau à confondre.
+    expect(mockSetCredentials).toHaveBeenCalledWith({
+      user: mockData.user,
+      authToken: mockData.token,
+      refreshToken: undefined,
+      sessionToken: mockData.sessionToken,
+      expiresIn: mockData.expiresIn,
+    });
   });
 
   // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
@@ -190,13 +189,13 @@ describe('TwoFactorService.verify', () => {
 
     await twoFactorService.verify('temp', '123456');
 
-    expect(mockSetCredentials).toHaveBeenCalledWith(
-      mockData.user,
-      mockData.token,
-      mockData.refreshToken,
-      mockData.sessionToken,
-      mockData.expiresIn
-    );
+    expect(mockSetCredentials).toHaveBeenCalledWith({
+      user: mockData.user,
+      authToken: mockData.token,
+      refreshToken: mockData.refreshToken,
+      sessionToken: mockData.sessionToken,
+      expiresIn: mockData.expiresIn,
+    });
   });
 
   it('does not call setCredentials when verification fails', async () => {

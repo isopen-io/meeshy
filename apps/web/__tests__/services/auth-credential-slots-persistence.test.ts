@@ -2,15 +2,20 @@
  * Ce que `localStorage` contient RÉELLEMENT après login, lien magique ou 2FA —
  * pas ce qu'un double a reçu comme arguments (#4404).
  *
- * `AuthManager.setCredentials(user, authToken, refreshToken?, sessionToken?,
- * expiresIn?)` a cinq créneaux positionnels, trois `string | undefined`
- * indiscernables au typage. Un témoin qui mocke `authManager` et relit les
- * arguments passés au mock peut geler un appel dans le mauvais ordre sans
- * jamais le voir — c'est exactement ce qui s'est produit sur les trois sites
- * (`services/auth.service.ts`, `magic-link.service.ts`, `two-factor.service.ts`).
- * `authManager` n'est donc PAS mocké ici : ce fichier appelle le service réel,
- * qui appelle le vrai `AuthManager`, qui écrit dans le vrai `localStorage`
- * (jsdom) — puis relit la clé qui compte.
+ * `AuthManager.setCredentials` AVAIT cinq créneaux positionnels, dont trois
+ * `string | undefined` indiscernables au typage. Un témoin qui mocke
+ * `authManager` et relit les arguments passés au mock peut geler un appel dans
+ * le mauvais ordre sans jamais le voir — c'est exactement ce qui s'est produit
+ * sur les trois sites (`services/auth.service.ts`, `magic-link.service.ts`,
+ * `two-factor.service.ts`). `authManager` n'est donc PAS mocké ici : ce fichier
+ * appelle le service réel, qui appelle le vrai `AuthManager`, qui écrit dans le
+ * vrai `localStorage` (jsdom) — puis relit la clé qui compte.
+ *
+ * #4450 a depuis remplacé les cinq créneaux par un objet nommé, ce qui rend la
+ * confusion INEXPRIMABLE plutôt que corrigée. Ce fichier garde toute sa valeur :
+ * il est le seul à prouver ce qui est réellement PERSISTÉ, et c'est précisément
+ * parce qu'il n'asserte pas la forme de l'appel que la migration vers l'objet
+ * nommé n'a eu à toucher aucune de ses assertions.
  *
  * Sous le code fautif, `SESSION_TOKEN` finit par contenir soit `'3600'` (le
  * nombre `expiresIn` glissé dans le créneau sessionToken — login), soit rien

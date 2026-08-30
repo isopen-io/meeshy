@@ -210,20 +210,14 @@ class TwoFactorService {
       const data = await response.json();
 
       // Si la vérification réussit, configurer les credentials
-      //
-      // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
-      // — cinq créneaux (#4404). `refreshToken` n'est jamais rendu par cette
-      // route (son schéma ne le déclare pas) : le concept reste lu ici, pas
-      // inventé. `sessionToken` DOIT atterrir dans SON propre créneau, jamais
-      // dans celui de `refreshToken` — c'était le défaut sur ce site précis.
       if (data.success && data.data?.token) {
-        authManager.setCredentials(
-          data.data.user,
-          data.data.token,
-          data.data.refreshToken,
-          data.data.sessionToken,
-          data.data.expiresIn
-        );
+        authManager.setCredentials({
+          user: data.data.user,
+          authToken: data.data.token,
+          refreshToken: data.data.refreshToken,
+          sessionToken: data.data.sessionToken,
+          expiresIn: data.data.expiresIn,
+        });
       }
 
       return data;

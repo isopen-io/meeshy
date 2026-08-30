@@ -130,13 +130,12 @@ describe('magicLinkService.validateMagicLink', () => {
 
     await magicLinkService.validateMagicLink('tok-abc');
 
-    // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
-    // — le défaut mesuré (#4404) décalait `sessionToken` dans le créneau
-    // `refreshToken`, et `expiresIn` dans celui de `sessionToken` : un DOUBLE
-    // décalage. `refreshToken` est `undefined` (jamais rendu par cette route).
-    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith(
-      user, 'jwt-token', undefined, 'sess-token', 3600
-    );
+    // Objet nommé (#4450) : `refreshToken` est `undefined` (jamais rendu par
+    // cette route) — chaque valeur porte son propre champ, il n'y a plus de
+    // créneau à confondre.
+    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith({
+      user, authToken: 'jwt-token', refreshToken: undefined, sessionToken: 'sess-token', expiresIn: 3600
+    });
   });
 
   // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
@@ -158,9 +157,9 @@ describe('magicLinkService.validateMagicLink', () => {
 
     await magicLinkService.validateMagicLink('tok-abc');
 
-    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith(
-      user, 'jwt-token', 'refresh-token-xyz', 'sess-token', 3600
-    );
+    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith({
+      user, authToken: 'jwt-token', refreshToken: 'refresh-token-xyz', sessionToken: 'sess-token', expiresIn: 3600
+    });
   });
 
   it('does NOT call setCredentials when requires2FA is true', async () => {

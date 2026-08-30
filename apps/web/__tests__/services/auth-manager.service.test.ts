@@ -130,69 +130,74 @@ describe('AuthManager.registerOnTokensUpdated', () => {
 
 describe('AuthManager.setCredentials', () => {
   it('stores auth token in localStorage', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('access-tok');
   });
 
-  // Le 3e créneau (`refreshToken`) reste ACCEPTÉ positionnellement — deux
-  // appelants hors du territoire de ce lot le passent encore — mais n'a plus
+  // `refreshToken` reste un champ ACCEPTÉ par `setCredentials` mais n'a plus
   // de clé de stockage dédiée (#4405, étape 3) : aucune route
   // d'authentification du gateway ne rend jamais ce champ (mesuré). Ce
   // témoin prouve, par le CONTENU RÉEL du store, qu'une valeur qui y transite
   // n'atterrit NULLE PART — ni sous une clé qui n'existe plus, ni ailleurs.
-  it('no longer persists anything for the (now inert) third positional slot', () => {
-    authManager.setCredentials(mockUser, 'access-tok', 'legacy-value-that-must-be-dropped');
+  it('no longer persists anything for the (now inert) refreshToken field', () => {
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok', refreshToken: 'legacy-value-that-must-be-dropped' });
     expect(storedKeys().sort()).toEqual(
       [AUTH_STORAGE_KEYS.AUTH_TOKEN, AUTH_STORAGE_KEYS.USER_DATA].sort()
     );
   });
 
   it('stores session token when provided', () => {
-    authManager.setCredentials(mockUser, 'access-tok', undefined, 'sess-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok', sessionToken: 'sess-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('sess-tok');
   });
 
   it('stores user data as JSON', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     const stored = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA)!);
     expect(stored.id).toBe('user-42');
   });
 
   it('skips session token when undefined', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBeNull();
   });
 
   it('calls clearAllSessions before storing (clears previous session)', () => {
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'old-token');
-    authManager.setCredentials(mockUser, 'new-token');
+    authManager.setCredentials({ user: mockUser, authToken: 'new-token' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('new-token');
   });
 
   it('sets a meeshy_session cookie', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     expect(document.cookie).toContain('meeshy_session=');
   });
 
-  // Témoin de contrat (#4404, ajusté #4405) : les cinq positions sont posées
+  // Témoin de contrat (#4404, ajusté #4405/#4450) : les cinq champs sont posés
   // EN MÊME TEMPS, avec des valeurs distinctes deux à deux, et chaque clé de
   // localStorage est relue individuellement — pas seulement les arguments
   // reçus par un double. Une future réécriture interne qui permuterait
-  // sessionToken avec le 3e créneau (désormais inerte, mais toujours
+  // sessionToken avec refreshToken (désormais inerte, mais toujours
   // `string | undefined`, indiscernable au typage) ferait tomber CE témoin,
-  // jamais les tests "un paramètre à la fois" ci-dessus qui ne peuvent pas
-  // voir une permutation.
-  it('lands each remaining argument in its own localStorage key, none swapped with the inert third slot', () => {
-    authManager.setCredentials(mockUser, 'access-tok', 'legacy-value-that-must-be-dropped', 'sess-tok', 3600);
+  // jamais les tests "un champ à la fois" ci-dessus qui ne peuvent pas voir
+  // une permutation.
+  it('lands each remaining field in its own localStorage key, none swapped with the inert refreshToken field', () => {
+    authManager.setCredentials({
+      user: mockUser,
+      authToken: 'access-tok',
+      refreshToken: 'legacy-value-that-must-be-dropped',
+      sessionToken: 'sess-tok',
+      expiresIn: 3600,
+    });
 
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('access-tok');
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('sess-tok');
     // expiresIn n'a pas de clé dédiée dans AuthManager — il ne doit fuiter
     // dans AUCUNE clé string.
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).not.toBe('3600');
-    // Le 3e créneau positionnel (désormais inerte, #4405) ne doit fuiter
-    // NULLE PART — ni sous une clé nommée d'après lui (elle n'existe plus),
-    // ni sous aucune autre.
+    // Le champ refreshToken (désormais inerte, #4405) ne doit fuiter NULLE
+    // PART — ni sous une clé nommée d'après lui (elle n'existe plus), ni sous
+    // aucune autre.
     expect(storedKeys().sort()).toEqual(
       [AUTH_STORAGE_KEYS.AUTH_TOKEN, AUTH_STORAGE_KEYS.SESSION_TOKEN, AUTH_STORAGE_KEYS.USER_DATA].sort()
     );
@@ -201,7 +206,7 @@ describe('AuthManager.setCredentials', () => {
 
 describe('AuthManager.updateUser', () => {
   it('overwrites stored user data', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     const updated = { ...mockUser, username: 'bob' } as unknown as User;
     authManager.updateUser(updated);
     const stored = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA)!);
@@ -431,7 +436,7 @@ describe('AuthManager.clearAllSessions', () => {
 describe('AuthManager.setCredentials (admin role branches)', () => {
   it('sets canAccessAdmin=true for ADMIN role', () => {
     const adminUser = { ...mockUser, role: 'ADMIN' } as unknown as User;
-    authManager.setCredentials(adminUser, 'tok');
+    authManager.setCredentials({ user: adminUser, authToken: 'tok' });
     const cookie = document.cookie;
     expect(cookie).toContain('meeshy_session=');
     const match = cookie.match(/meeshy_session=([^;]+)/);
@@ -442,7 +447,7 @@ describe('AuthManager.setCredentials (admin role branches)', () => {
   });
 
   it('sets canAccessAdmin=false for USER role without explicit flag', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     const match = document.cookie.match(/meeshy_session=([^;]+)/);
     if (match) {
       const decoded = JSON.parse(atob(match[1]));

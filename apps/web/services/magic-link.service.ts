@@ -163,20 +163,14 @@ class MagicLinkService {
       const data = await response.json();
 
       // Si la validation réussit et ne nécessite pas de 2FA, configurer les credentials
-      //
-      // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
-      // — cinq créneaux (#4404). `refreshToken` n'est jamais rendu par cette
-      // route (#4405, mesuré) : le concept reste lu ici, pas inventé.
-      // `sessionToken` DOIT atterrir dans SON propre créneau, jamais dans
-      // celui de `refreshToken` — c'était le défaut sur ce site précis.
       if (data.success && data.data?.token && !data.data?.requires2FA) {
-        authManager.setCredentials(
-          data.data.user,
-          data.data.token,
-          data.data.refreshToken,
-          data.data.sessionToken,
-          data.data.expiresIn
-        );
+        authManager.setCredentials({
+          user: data.data.user,
+          authToken: data.data.token,
+          refreshToken: data.data.refreshToken,
+          sessionToken: data.data.sessionToken,
+          expiresIn: data.data.expiresIn,
+        });
       }
 
       return data;
