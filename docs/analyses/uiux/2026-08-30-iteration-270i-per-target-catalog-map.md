@@ -129,6 +129,34 @@ propre convention, vérifiable à l'œil sur les trois entrées voisines.
 déjà exactement le français retenu, donc la règle B est satisfaite sans toucher
 une vue.
 
+**Mais « zéro ligne modifiée » n'est pas « zéro changement de comportement », et
+la CI l'a prouvé.** Entrer une clé au catalogue CHANGE ce que
+`String(localized:)` rend dans les six autres locales — c'est précisément l'objet
+du lot. Or `FocalVoiceOverParityTests` cherchait le segment d'accusé de livraison
+par le littéral français `"lu"`, en le déréférençant de force :
+
+```swift
+let deliveryIndex = parts.firstIndex(of: "lu")!   // avant 270i
+```
+
+Ce test ne passait **que parce que la chaîne n'était pas localisée** : la clé
+absente, toutes les locales retombaient sur le `defaultValue` français. Le
+simulateur de la CI tourne en **anglais** ; l'entrée ajoutée, le composeur rend
+« read », l'index vaut `nil`, et le force-unwrap fait tomber le test avec un
+`signal trap`. **1 échec sur 9 062 tests, et il est à moi.**
+
+> **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+> n'est pas localisée.** Il ne rougit pas quand la traduction manque — il rougit
+> quand elle ARRIVE. C'est un cliquet à l'envers : il récompense l'absence de
+> localisation, et le prix se paie au moment exact où on répare le défaut.
+
+Les deux tests voisins (`A11yLabelComposerTests`) codaient le même littéral, et
+l'un d'eux **passait pour une mauvaise raison** : il assertait
+`compose(content).contains("lu")` sur un contenu dont le texte est « Sa**lu**t ».
+Il aurait tenu même si le segment d'accusé de livraison avait disparu
+entièrement. Les trois demandent désormais sa valeur au catalogue, comme le
+faisaient déjà tous leurs voisins de fichier.
+
 ### 4.2 La carte, dans ses deux miroirs
 
 `/MeeshyWidgets/` entre dans `catalogByTargetFragment` **et** dans le miroir CLI
@@ -199,6 +227,22 @@ Pas de chaîne d'outils Apple dans cet environnement (pas de `swift`, pas de
 `xcodebuild`) : **le gate réel est la CI `iOS Tests`**. Ce qui est vérifiable ici
 l'a été par un miroir Python du scanner de la suite, validé sur un point fixe
 avant toute modification.
+
+**Et le gate iOS de ce dépôt est un OPT-IN, ce qui a failli laisser passer le
+lot sans preuve.** `Portée du run` lit le SUJET du commit de tête : sans
+« smoke test », « run test » ou « to test », le job macOS **compile seulement**
+et saute `Run iOS tests (without building)`. Le premier run de cette PR est donc
+sorti **vert sans avoir exécuté un seul test** — et le workflow le dit dans le
+NOM du check (« Build app (app + cibles de test) » contre « Build app + tests
+unitaires »), ce qui est la seule chose qui distingue les deux verts. La suite
+complète a été déclenchée par `workflow_dispatch` (que le workflow traite
+explicitement comme `run_tests=true`) sur le SHA de tête, puis relancée sur la PR
+avec le mot-clé dans le sujet.
+
+> **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+> exécuté.** Le vert compile-seul prouve que le Swift type-checke — ce qui était
+> réellement l'inconnue ici, faute de compilateur local — et rien d'autre. C'est
+> ce vert-là qui aurait laissé partir le `signal trap` du § 4.1.
 
 | contrôle | résultat |
 |---|---|

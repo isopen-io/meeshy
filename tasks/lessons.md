@@ -19003,3 +19003,32 @@ catalogues du dépôt.
   d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
   l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
   évité un cycle CI de cinquante.
+
+- **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+  n'est PAS localisée.** `FocalVoiceOverParityTests` cherchait le segment
+  d'accusé de livraison par le littéral `"lu"`, force-unwrappé. Il passait
+  uniquement parce que `a11y.delivery.read` était absente du catalogue : toutes
+  les locales retombaient sur le `defaultValue` français. La clé ajoutée, le
+  simulateur anglais de la CI rend « read », l'index vaut `nil`, `signal trap` —
+  1 échec sur 9 062. **Un tel test est un cliquet à l'envers : il ne rougit pas
+  quand la traduction manque, il rougit quand elle ARRIVE**, et le prix se paie
+  au moment exact où l'on répare le défaut. Corollaire mesuré sur le voisin :
+  `contains("lu")` passait sur un contenu texte « Sa**lu**t » — donc même si le
+  segment gardé avait disparu. Demander sa valeur au CATALOGUE, comme le
+  faisaient déjà tous les tests voisins.
+
+- **« Zéro ligne de production modifiée » n'est pas « zéro changement de
+  comportement ».** Entrer une clé au catalogue change ce que `String(localized:)`
+  rend dans les six autres locales — c'est l'objet même du lot. Avant de conclure
+  qu'un lot de catalogue est inerte, chercher qui COMPARE ces chaînes : tests
+  d'abord, code de production ensuite.
+
+- **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+  EXÉCUTÉ.** Le gate iOS de ce dépôt est un opt-in par mot-clé dans le SUJET du
+  commit de tête (« smoke test » / « run test » / « to test ») ; sans lui, le job
+  macOS compile et saute `Run iOS tests`. Le premier run de la PR 270i est sorti
+  vert sans exécuter un seul test — le workflow le dit dans le NOM du check
+  (« Build app (app + cibles de test) » vs « Build app + tests unitaires »), et
+  c'est la seule chose qui distingue les deux verts. **Lire les étapes du job, pas
+  sa conclusion.** `workflow_dispatch` force la suite complète sans pousser de
+  commit vide.
