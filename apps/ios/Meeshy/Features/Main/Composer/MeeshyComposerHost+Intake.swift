@@ -382,6 +382,25 @@ extension MeeshyComposerHost {
             // qu'un texte existait a été retiré sur directive porteur.
             HapticFeedback.light()
             editsSceneDescription = true
+        case .drawing:
+            // **Une porte à BASCULE, la seule du rail.** Les six autres font
+            // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui
+            // dure, et il faut pouvoir en sortir par là où l'on est entré —
+            // sinon le seul moyen de reprendre la main sur les objets serait de
+            // quitter l'écran.
+            //
+            // La bande suit le mode et n'est pas un état parallèle : deux
+            // booléens auraient permis « je dessine mais la bande est fermée »,
+            // c'est-à-dire un doigt qui trace sans qu'aucun réglage ne soit
+            // atteignable.
+            HapticFeedback.light()
+            if viewModel.isDrawingActive {
+                viewModel.exitDrawingEditingMode()
+                requestedSceneBand = nil
+            } else {
+                viewModel.enterDrawingEditingMode()
+                requestedSceneBand = .drawing
+            }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
             // la feuille est montée au-dessus de l'aiguillage des surfaces, pas

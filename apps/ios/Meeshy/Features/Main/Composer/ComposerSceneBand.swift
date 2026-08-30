@@ -36,6 +36,11 @@ nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
     case palette
     case timeline
     case textStyles
+    /// **Les réglages du pinceau** — couleurs, épaisseur, gomme (#4092, vue
+    /// `3b`). Elle appartient au critère par la COMPARAISON latérale : on
+    /// choisit une couleur en la voyant à côté des autres, exactement comme un
+    /// fond.
+    case drawing
 
     /// **La bande réellement OUVERTE — `nil` ⇒ le bas ne porte que le socle.**
     ///
@@ -82,10 +87,19 @@ struct ComposerSceneBandView: View {
     var openingEffect: StoryTransitionEffect?
     var onPickOpening: ((StoryTransitionEffect?) -> Void)?
 
+    /// La bande de dessin est une vue du SDK montée telle quelle — elle vit là
+    /// où vivent les six réglages de pinceau qu'elle rend (#4092). `nil` ⇒ la
+    /// bande `drawing` n'a pas de contenu, donc l'hôte ne la sert pas.
+    var drawingBand: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
             palette
+        case .drawing:
+            // Montée telle quelle : la bande de dessin est un atome du SDK,
+            // et cette vue n'a rien à décider de ses réglages.
+            drawingBand
         case .timeline, .textStyles:
             // Aucun contenu : ces deux contextes appartiennent au critère mais
             // n'ont pas d'hôte ici (la timeline vit dans l'atelier ; les 18

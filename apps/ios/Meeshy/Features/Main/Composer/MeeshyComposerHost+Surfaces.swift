@@ -361,6 +361,19 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
+            // **Les deux montages du dessin** (#4092). La bande porte les
+            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
+            // la bande est ouverte par la même porte qui entre dans le mode —
+            // mais elles sont montées à deux endroits distincts, parce qu'elles
+            // ne vivent pas au même niveau : l'une sous la scène, l'autre
+            // dessus.
+            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
+            // reste : le canvas garde son calque persisté, il continue de
+            // recevoir les touches, et aucune surface ne se pose dessus.
+            drawingSurface: viewModel.isDrawingActive
+                ? AnyView(MeeshyDrawingSurface(viewModel: viewModel))
+                : nil,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )

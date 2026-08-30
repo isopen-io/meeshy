@@ -50,9 +50,13 @@ final class ComposerSceneBandTests: XCTestCase {
     /// La liste est celle de la planche, et elle est FERMÉE. Ce témoin rougit
     /// si un quatrième contexte s'y glisse sans que le critère
     /// — un axe horizontal, ou une comparaison latérale — ait été rediscuté.
+    /// **`drawing` entre au #4092, et le critère tient sans être réécrit** : on
+    /// choisit une couleur de pinceau en la voyant à côté des autres, comme un
+    /// fond — c'est la COMPARAISON LATÉRALE, la seconde moitié du critère. Une
+    /// cinquième entrée ferait rougir ce témoin, et c'est ce qu'on lui demande.
     func test_lesContextes_sontCeuxDeLaPlanche() {
         XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)),
-                       ["palette", "timeline", "textStyles"])
+                       ["palette", "timeline", "textStyles", "drawing"])
     }
 
     // MARK: - Le `⋯` rouvre la palette là où la rangée d'outils a disparu

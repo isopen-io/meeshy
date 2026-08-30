@@ -112,7 +112,9 @@ extension StoryComposerViewModel {
         }
     }
 
-    var isDrawingActive: Bool { activeTool == .drawing }
+    /// `public` : l'hôte lit ce drapeau pour DEUX décisions distinctes — monter
+    /// ou non la surface de capture, et savoir dans quel sens la porte bascule.
+    public var isDrawingActive: Bool { activeTool == .drawing }
 
     func saveBackgroundTransform() {
         guard let id = slides[safe: currentSlideIndex]?.id else { return }

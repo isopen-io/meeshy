@@ -81,7 +81,10 @@ extension StoryComposerViewModel {
     /// band montre `DrawingStrokeList`. Le plein écran de tracé s'active à
     /// la sélection d'un pinceau (`enterImmersiveDrawing`). Idempotent si
     /// déjà actif (préserve la sélection/le panneau).
-    func enterDrawingEditingMode() {
+    /// `public` : la porte « Dessiner » du composer unifié entre et sort du
+    /// mode (#4092). C'est un MODE, pas une ingestion — d'où la bascule, et
+    /// d'où le besoin des deux sens depuis l'app.
+    public func enterDrawingEditingMode() {
         if drawingEditingMode.isActive { return }
         drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
     }
@@ -101,7 +104,7 @@ extension StoryComposerViewModel {
     /// 1 : « lorsqu'on quitte on revient au système initial » (user
     /// 2026-07-11). Guardé sur `isActive` pour qu'un exit no-op (appelé à
     /// chaque changement d'outil) n'écrase pas un zoom posé HORS dessin.
-    func exitDrawingEditingMode() {
+    public func exitDrawingEditingMode() {
         guard drawingEditingMode.isActive else { return }
         drawingEditingMode = .inactive
         isDrawingImmersive = false
@@ -189,4 +192,37 @@ extension StoryComposerViewModel {
         transform(&strokes[index])
         drawingStrokes = strokes
     }
+    /// **Effacer par le geste — une mutation de MODÈLE, pas de vue.**
+    ///
+    /// Elle vivait sur `StoryComposerView` (`+Canvas.swift`), où elle filtrait
+    /// `viewModel.drawingStrokes` depuis l'extérieur. Rien ne l'y obligeait :
+    /// elle ne lit aucune géométrie de vue, seulement des points DESIGN déjà
+    /// projetés par la couche de capture. Sa place sur la vue était le seul
+    /// obstacle à monter la gomme ailleurs (#4092).
+    ///
+    /// Le rayon est en pixels DESIGN — le même repère que les traits — donc il
+    /// vaut identiquement quelle que soit la taille rendue de la scène. C'est
+    /// ce qui fait qu'effacer sur la scène incrustée du plateau et sur
+    /// l'atelier plein écran demande le même geste.
+    ///
+    /// **Le retour haptique n'est donné que si quelque chose a DISPARU** : une
+    /// gomme passée dans le vide qui vibre ferait croire à un effacement.
+    func eraseStrokes(near erasePoints: [CGPoint]) {
+        guard !erasePoints.isEmpty else { return }
+        let eraseRadius: CGFloat = 28  // design px
+        let survivors = drawingStrokes.filter { stroke in
+            let reach = CGFloat(stroke.width) / 2 + eraseRadius
+            for sp in StrokePathBuilder.renderPoints(for: stroke) {
+                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
+                    return false
+                }
+            }
+            return true
+        }
+        if survivors.count != drawingStrokes.count {
+            drawingStrokes = survivors
+            HapticFeedback.light()
+        }
+    }
+
 }

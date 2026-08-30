@@ -59,17 +59,39 @@ final class ComposerRailDoorTests: XCTestCase {
 
     /// Aucune porte ne doit rester sans niveau : le `switch` est exhaustif au
     /// compilateur, ce témoin garde qu'aucune n'a été rangée par défaut.
+    ///
+    /// **`.scene` entre au #4092**, et l'élargissement de cette liste est
+    /// délibéré : le dessin n'agit ni sur la publication, ni sur une slide qui
+    /// survivrait sans toile, ni sur UN objet. Un quatrième niveau ajouté sans
+    /// cette raison ferait rougir ce témoin, et c'est ce qu'on lui demande.
     func test_chaquePorte_declareSonNiveau() {
         for porte in ComposerRailDoor.allCases {
-            XCTAssertTrue([.publication, .slide, .object].contains(porte.level), porte.rawValue)
+            XCTAssertTrue([.publication, .slide, .object, .scene].contains(porte.level),
+                          porte.rawValue)
+        }
+    }
+
+    /// **Le niveau `.scene` exige une toile, exactement comme `.object`.** Ce
+    /// témoin est le contrepoids du précédent : sans lui, ranger une porte en
+    /// `.scene` « parce que ça sonne juste » la ferait paraître sur un `status`.
+    func test_lesNiveauxQuiExigentUneToile_disparaissentDunStatus() {
+        let sansScene = ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                                 format: .status, allowsCapture: true)
+        for porte in sansScene {
+            XCTAssertNotEqual(porte.level, .object, porte.rawValue)
+            XCTAssertNotEqual(porte.level, .scene, porte.rawValue)
         }
     }
 
     // MARK: - L'ordre, qui est un contrat de mémoire musculaire
 
+    /// **`drawing` s'insère entre `sound` et `sticker` (#4092)**, et la place
+    /// n'est pas libre : la rangée d'outils de la vue `3b` range DESSIN avant
+    /// STICKER, avant MENTION, avant LIEU. Le rail garde donc l'ordre relatif
+    /// de la maquette, en y intercalant les portes qu'elle ne dessine pas.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .sticker, .mention, .place])
+                       [.description, .media, .sound, .drawing, .sticker, .mention, .place])
     }
 
     func test_leRailCanonique_neManqueAucunePorte() {
@@ -275,9 +297,16 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
 
     /// La bande de la scène passe par la même capacité — sans quoi le littéral
     /// qu'elle portait aurait survécu à la garde négative de la suite suivante.
-    func test_seuleLaPalette_estUneBandeServie() {
-        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette],
-                       "Une bande servie sans contenu occuperait le bas de l'écran pour rien.")
+    /// **Deux bandes servies depuis le #4092** — et la garde ne se relâche pas :
+    /// elle vérifie que chacune a un CONTENU, ce qui est la seule chose qui
+    /// justifiait « palette seule » quand elle était écrite. `timeline` et
+    /// `textStyles` restent dehors faute d'hôte.
+    func test_lesBandesServies_ontTouteUnContenu() {
+        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette, .drawing])
+        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.timeline),
+                       "La timeline vit dans l'atelier (#4075) — la servir peindrait une bande vide.")
+        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.textStyles),
+                       "Les 18 styles exigent un objet `text` sélectionné, qu'aucune porte ne pose (#4401).")
     }
 
     /// **Loi 4 — ce qui n'a pas de chemin reste ABSENT.** Cette garde est le
@@ -674,5 +703,127 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
         XCTAssertFalse(source.contains("@ObservedObject"))
         XCTAssertFalse(source.contains("@StateObject"))
         XCTAssertTrue(source.contains("varcanUndo:Bool=false"))
+    }
+}
+
+/// **La scène se dessine** (#4092, vue `3b` — le dessin est le PREMIER outil
+/// que la maquette y pose).
+final class ComposerDrawingDoorTests: XCTestCase {
+
+    /// **Un niveau de plus, et il était nécessaire.** Ranger le dessin en
+    /// `.slide` l'aurait fait paraître sur un `status`, qui n'a pas de toile ;
+    /// le ranger en `.object` aurait promis des contrôleurs d'empilement à
+    /// quelque chose qui n'est pas un objet.
+    func test_leDessin_agitSurLaSCENE() {
+        XCTAssertEqual(ComposerRailDoor.drawing.level, .scene)
+    }
+
+    /// La porte est SERVIE, et elle atteint le rail sur un format à scène.
+    func test_laPorteDessin_atteintLeRail() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .story, allowsCapture: true)
+        XCTAssertTrue(portes.contains(.drawing))
+    }
+
+    /// **Et elle disparaît d'un `status`** — c'est ce que le niveau `.scene`
+    /// existe pour dire. Ce témoin tomberait si quelqu'un rangeait la porte en
+    /// `.slide` « parce que les traits vivent dans la slide ».
+    func test_laPorteDessin_disparaitDunStatus() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .status, allowsCapture: true)
+        XCTAssertFalse(portes.contains(.drawing))
+    }
+
+    /// L'ordre du rail suit celui de la maquette : le dessin précède le
+    /// sticker, comme dans la rangée d'outils de la vue `3b`.
+    func test_leDessin_precedeLeSticker() {
+        let rail = ComposerRailDoor.canonicalRail
+        guard let d = rail.firstIndex(of: .drawing),
+              let s = rail.firstIndex(of: .sticker) else {
+            return XCTFail("Les deux portes doivent être au rail canonique")
+        }
+        XCTAssertLessThan(d, s)
+    }
+
+    /// Chaque porte garde un libellé DISTINCT — VoiceOver ne peut pas nommer
+    /// deux portes pareil.
+    func test_leDessin_aSonPropreLibelle() {
+        XCTAssertFalse(ComposerRailCopy.label(.drawing).isEmpty)
+        XCTAssertEqual(Set(ComposerRailDoor.allCases.map(ComposerRailCopy.label)).count,
+                       ComposerRailDoor.allCases.count)
+    }
+
+    /// La bande des réglages de pinceau est SERVIE — sans elle, entrer en mode
+    /// dessin donnerait un doigt qui trace sans qu'aucun réglage soit
+    /// atteignable.
+    func test_laBandeDeDessin_estServie() {
+        XCTAssertTrue(ComposerSceneCapabilities.bands.contains(.drawing))
+        XCTAssertEqual(ComposerSceneBand.opened(.drawing,
+                                                served: ComposerSceneCapabilities.bands),
+                       .drawing)
+    }
+}
+
+/// Le câblage du dessin — la porte, le mode, les deux montages.
+final class ComposerDrawingWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func surfaceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_lesSources_sontLisibles() throws {
+        XCTAssertTrue(try hostSource().contains("MeeshyDrawingSurface"))
+        XCTAssertTrue(try surfaceSource().contains("struct ComposerSceneSurface"))
+    }
+
+    /// **Une porte à BASCULE — la seule du rail.** Les six autres font entrer
+    /// quelque chose et se referment ; celle-ci ouvre un MODE qui dure, dont il
+    /// faut pouvoir sortir par où l'on est entré.
+    func test_laPorte_basculeLeMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("ifviewModel.isDrawingActive{viewModel.exitDrawingEditingMode()"))
+        XCTAssertTrue(source.contains("viewModel.enterDrawingEditingMode()"))
+    }
+
+    /// **La bande suit le mode, elle n'est pas un état parallèle.** Deux
+    /// booléens auraient permis « je dessine mais la bande est fermée » — un
+    /// doigt qui trace sans réglage atteignable.
+    func test_laBande_suitLeMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("requestedSceneBand=.drawing"))
+    }
+
+    /// **Le canvas RETIRE son calque persisté pendant le dessin**, sinon le
+    /// trait s'affiche deux fois, à deux endroits (défaut 2026-05-27).
+    func test_leCanvas_retireSonCalquePendantLeDessin() throws {
+        let source = compact(try surfaceSource())
+        XCTAssertTrue(source.contains("isDrawingOverlayActive:drawingSurface!=nil"))
+    }
+
+    /// **Et il cesse de recevoir les touches** : sans cela, le doigt qui trace
+    /// déplacerait aussi l'objet sous lui — deux gestes pour un seul mouvement.
+    func test_leCanvas_neRecoitPlusLesTouchesPendantLeDessin() throws {
+        let source = compact(try surfaceSource())
+        XCTAssertTrue(source.contains(".allowsHitTesting(drawingSurface==nil)"))
+        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+    }
+
+    /// **La surface n'est montée QUE pendant le mode** (loi 4) — une couche de
+    /// capture posée en permanence volerait chaque touche de la scène.
+    func test_laSurface_nExistePasHorsDuMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("drawingSurface:viewModel.isDrawingActive"))
     }
 }

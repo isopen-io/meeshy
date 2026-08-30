@@ -92,6 +92,14 @@ struct ComposerSceneSurface: View {
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
 
+    /// La bande de réglages du pinceau, montée par l'hôte (#4092).
+    var drawingBand: AnyView?
+
+    /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
+    /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
+    /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
+    var drawingSurface: AnyView?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -123,9 +131,18 @@ struct ComposerSceneSurface: View {
                     onItemTapped: onItemTapped,
                     onBackgroundTapped: onBackgroundTapped,
                     loadedImages: sceneImages,
-                    loadedImagesVersion: sceneImagesVersion
+                    loadedImagesVersion: sceneImagesVersion,
+                    // Le canvas retire son calque de dessin persisté pendant
+                    // qu'une surface live est posée dessus — sinon le trait
+                    // s'affiche deux fois, à deux endroits (défaut 2026-05-27).
+                    isDrawingOverlayActive: drawingSurface != nil
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le canvas cesse de recevoir les touches pendant le
+                // dessin.** Sans cela, le doigt qui trace déplacerait aussi
+                // l'objet sous lui : deux gestes pour un seul mouvement.
+                .allowsHitTesting(drawingSurface == nil)
+                .overlay { drawingSurface }
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
                 // un goût de marge mais une conséquence — cible tactile 44 pt,
@@ -171,7 +188,8 @@ struct ComposerSceneSurface: View {
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening)
+                                          onPickOpening: onPickBandOpening,
+                                          drawingBand: drawingBand)
                 }
 
             }

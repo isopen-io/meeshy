@@ -368,7 +368,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .sticker, .mention, .place
+        .description, .media, .sound, .drawing, .sticker, .mention, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -388,7 +388,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
     /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
     /// surface ne pose encore (#4083).
-    static let bands: Set<ComposerSceneBand> = [.palette]
+    static let bands: Set<ComposerSceneBand> = [.palette, .drawing]
 }
 
 
