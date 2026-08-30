@@ -587,6 +587,84 @@ describe('Admin content routes — GET /translations', () => {
     await bigbossApp.close();
   });
 
+  /**
+   * #4386 — la console de traduction ne sert plus le texte d'un message
+   * SUPPRIMÉ ni d'un message PROTÉGÉ.
+   *
+   * Les témoins portent sur la VALEUR SERVIE, en traversant le sérialiseur
+   * (`app.inject`), jamais sur le `select` ni sur le `where` : une garde
+   * vérifiée sur la requête est vraie de la requête, pas de ce qui sort. Le
+   * témoin du `where` juste au-dessus reste utile pour la RAISON du filtre —
+   * il ne prouve rien sur la charge.
+   */
+  it('exclut du `where` les messages supprimés — `deletedAt: null`, comme la jumelle /messages', async () => {
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const args = (mockPrisma.message.findMany as any).mock.calls[0][0];
+    expect(args.where.deletedAt).toBeNull();
+    await bigbossApp.close();
+  });
+
+  it('charge les colonnes de protection — sans elles, la garde ne PEUT pas s\'appliquer', async () => {
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const args = (mockPrisma.message.findMany as any).mock.calls[0][0];
+    // Un champ de protection présent au modèle et absent de la requête est un
+    // piège armé : le prédicat répondrait « non protégé » sur TOUT message.
+    for (const colonne of ['isViewOnce', 'isBlurred', 'effectFlags', 'expiresAt', 'isEncrypted', 'encryptionMode']) {
+      expect(args.select[colonne]).toBe(true);
+    }
+    await bigbossApp.close();
+  });
+
+  it.each([
+    ['vue unique', { isViewOnce: true }],
+    ['flouté', { isBlurred: true }],
+    ['éphémère expiré', { expiresAt: new Date(Date.now() - 60_000) }],
+    ['chiffré', { isEncrypted: true }],
+  ])('n\'expose NI le texte original NI la traduction d\'un message %s', async (_nom, protection) => {
+    mockPrisma.message.findMany.mockResolvedValue([
+      makeFakeMessageWithTranslations(protection as any),
+    ]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    expect(response.statusCode).toBe(200);
+
+    // La CHARGE ENTIÈRE est inspectée, pas seulement les deux champs qu'on
+    // vise : le corps sert `content`, `originalContent` (le MÊME texte sous un
+    // second nom) et `translatedContent`, et le schéma déclare les lignes en
+    // `additionalProperties: true` — tout ce qui est chargé sort. Chercher
+    // dans le texte brut est la seule lecture qui ne rate pas un troisième nom.
+    expect(response.body).not.toContain('Hola');    // l'original
+    expect(response.body).not.toContain('Bonjour'); // la traduction fr
+    expect(response.body).not.toContain('Hello');   // la traduction en
+
+    const body = JSON.parse(response.body);
+    expect(body.data).toEqual([]);
+    await bigbossApp.close();
+  });
+
+  it('sert normalement un message NON protégé — la garde vise la protection, pas la route', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([makeFakeMessageWithTranslations()]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const body = JSON.parse(response.body);
+    // Sans ce témoin, une garde qui exclut TOUT passerait les quatre ci-dessus.
+    expect(body.data).toHaveLength(2);
+    expect(response.body).toContain('Bonjour');
+    await bigbossApp.close();
+  });
+
   it('includes translations.not.null in prisma where clause', async () => {
     const bigbossApp = buildApp('BIGBOSS');
     await bigbossApp.ready();
