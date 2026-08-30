@@ -76,6 +76,26 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     }
 }
 
+/// **Les contextes auxquels la pastille CÈDE, en un seul endroit** (#4028).
+///
+/// La règle était écrite en morceaux : le viewer de story dans la bannière, les
+/// réels chez l'hôte iPhone, rien chez l'iPad. Trois écritures d'une même
+/// question sont trois occasions de diverger — et c'est arrivé, l'iPad n'ayant
+/// jamais reçu la garde des réels (pour une raison documentée, mais que rien ne
+/// distinguait d'un oubli).
+///
+/// Elle applique la doctrine du #4051 : **un contenu qui prend le haut de
+/// l'écran est un contexte à lui, et le chrome lui cède.** Une notification
+/// in-app en est un — et l'ordre de rendu ne pouvait de toute façon pas les
+/// départager, la pastille étant un `.overlay` appliqué APRÈS le `ZStack` qui
+/// porte le toast : aucun `zIndex` interne ne pouvait la passer.
+nonisolated enum SyncPillVisibility {
+    static func isVisible(storyViewerPresenting: Bool,
+                          inAppNoticePresenting: Bool) -> Bool {
+        !storyViewerPresenting && !inAppNoticePresenting
+    }
+}
+
 /// Inline rotating pill that lists every signal the user might care about
 /// from the top of the screen — connection state, queued offline ops, and
 /// stuck inflight work — in a single discreet chip. Matches the legacy

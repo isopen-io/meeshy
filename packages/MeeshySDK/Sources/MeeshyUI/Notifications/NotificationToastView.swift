@@ -129,7 +129,11 @@ public struct NotificationToastView: View {
             )
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 16)
+        // #4028 — PLUS LARGE. La marge passe de 16 à 8 pt : +16 pt de largeur
+        // utile, ce qui tient un mot de plus par ligne d'aperçu. Un jeton du
+        // système plutôt qu'un nombre choisi — `MeeshySpacing.sm` est déjà la
+        // marge de bord des surfaces qui veulent occuper l'écran.
+        .padding(.horizontal, MeeshySpacing.sm)
         // La bannière est UN élément pour VoiceOver : trois fragments lus
         // séparément (« Alice a commenté votre réel », « super photo », l'image)
         // font trois arrêts là où l'information est une.
