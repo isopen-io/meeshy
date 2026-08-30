@@ -467,16 +467,27 @@ struct ComposerDocumentSurface: View {
                         }
                         ForEach(tools, id: \.rawValue) { tool in
                             toolButton(tool)
-                        }
-                        // **La bascule de fond passe en QUEUE (#4071).** Elle
-                        // vivait juste après l'emoji, au 4e rang : elle y
-                        // poussait « Fichier », « Position » et « Vocal » hors
-                        // champ, trois outils que la maquette nomme et dont
-                        // aucun pixel ne paraissait. C'est un ajout de l'app,
-                        // pas de la cible — il reste (loi 1), il ne passe plus
-                        // devant.
-                        if onPickBackground != nil {
-                            backgroundColorToggle
+                            // **La bascule de fond reste au 4e rang (#4071),
+                            // et j'y suis revenu APRÈS mesure.**
+                            //
+                            // Huit entrées nommées ne tiennent pas sur 402 pt —
+                            // ni en les resserrant, ni en les réordonnant :
+                            // quelque chose débordera toujours. Le vrai
+                            // arbitrage n'est donc pas « quel OUTIL cacher »
+                            // mais « quelle PORTE ».
+                            //
+                            // Je l'avais passée en queue pour rendre visibles
+                            // « Fichier », « Position » et « Vocal ». Mesuré à
+                            // l'écran, c'était pire : elle devenait invisible,
+                            // alors que **c'est elle qui fait NAÎTRE la
+                            // scène** (vue `1b` : « choisir un fond fait naître
+                            // la scène incrustée »). Cacher la porte d'une
+                            // branche entière du composer coûte plus que cacher
+                            // deux outils qui, eux, restent atteignables au
+                            // balayage — et la tuile qui dépasse le dit.
+                            if tool == .emoji, onPickBackground != nil {
+                                backgroundColorToggle
+                            }
                         }
                     }
                     // Le padding vertical vit ICI, dans le contenu défilant :
