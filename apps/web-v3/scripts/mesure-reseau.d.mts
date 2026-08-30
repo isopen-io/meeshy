@@ -147,6 +147,30 @@ export declare const composeVerdictReseau: (
 
 export declare const raisonLisible: (erreur: unknown) => string;
 
+/**
+ * Le contexte de navigateur dont `mesurePage` a besoin — structurel, pour que ce
+ * fichier de déclarations ne dépende pas de Playwright. Un appelant lui passe un
+ * `Browser` ; le seul membre qu'il utilise est `newContext`.
+ */
+export type NavigateurDeMesure = {
+  newContext(options: Record<string, unknown>): Promise<{
+    newPage(): Promise<unknown>;
+    newCDPSession(page: unknown): Promise<unknown>;
+    close(): Promise<void>;
+  }>;
+};
+
+export declare const mesurePage: (args: {
+  readonly url: string;
+  readonly commande: string;
+  readonly navigateur: NavigateurDeMesure;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly timeoutMs?: number;
+  readonly profil?: ProfilReseau | null;
+  /** L'agent servi à la page. Défaut : l'iPhone du § 8.3. */
+  readonly userAgent?: string;
+}) => Promise<Mesure>;
+
 export declare const mesureUrls: (
   urls: readonly string[],
   commandePour: (url: string) => string,
