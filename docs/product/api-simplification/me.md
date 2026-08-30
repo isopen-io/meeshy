@@ -39,7 +39,7 @@ aucun débit.
 | `POST /users/me/change-phone` (`:462`) | S3 | JWT | **aucun** | light | iOS + web + Android | à fusionner vers `POST /me/contact-changes` |
 | `POST /users/me/verify-phone-change` (`:583`) | S3 | JWT | **aucun** | light | iOS + web + Android | à fusionner vers `.../{channel}/verify` |
 | `GET /me/preferences` (`me/preferences/index.ts:61`) | S3 | JWT | global | medium | iOS seul | à fusionner vers `GET /me/preferences?categories=` |
-| `DELETE /me/preferences` (`:143`) | S3 | JWT | global | light | **PERSONNE** | à fusionner vers `DELETE /me/preferences?categories=` |
+| `DELETE /me/preferences` (`unified-routes.ts:401`) | S3 | JWT | global | light | **PERSONNE** | ✅ **fusionnée** — sert `?categories=` depuis #4181 |
 | `GET /me/preferences/encryption` (`:228`) | S3 | JWT | global | light | web (`stores/user-preferences-store.ts:358`, `encryption-settings.tsx`) | à fusionner vers `GET /me?expand=security` |
 | `GET /me/preferences/{7 catégories}` (`factory:112`) | S3 | JWT | global | light | web (5 sites) | à fusionner vers `GET /me/preferences` |
 | `PUT /me/preferences/{7 catégories}` (`factory:150`) | S3 | JWT | **aucun** | light | web (3 sites) | à fusionner vers `PATCH …?mode=replace` |
@@ -464,6 +464,17 @@ versions publiées du client Android, pas deux du gateway.
 | `GET /voice/profile/consent`, `POST` | `/me/consents` | 2 versions iOS (seul consommateur) |
 
 **Ce qui ne prend pas d'alias, parce que personne ne l'appelle** : `GET /me/me`,
-`GET /users/me/test`, `DELETE /me/preferences`, `PUT /users/:id`, `DELETE /users/:id`. Cinq routes
+`GET /users/me/test`, `PUT /users/:id`, `DELETE /users/:id`. **Quatre** routes
 retirables **dès la première étape**, sans transition — `GET /me/preferences/encryption`, lui, a un
 lecteur web (`encryption-settings.tsx`) et ne peut donc pas être retiré sans migrer cet écran.
+
+> **`DELETE /me/preferences` a quitté cette liste (#4366).** Elle y figurait comme « retirable » ;
+> #4181 l'a REMPLACÉE par la forme `?categories=` au lieu de la retirer, et c'est le bon cadre — une
+> remise à zéro par catégories est ce que l'écran veut, la remise à zéro GLOBALE est ce que personne
+> ne demandait. La route est donc **vivante**, avec un sens neuf, et un témoin exige désormais sa
+> PRÉSENCE (`identity-twins-retired.test.ts` : « sert la remise à zéro par CATÉGORIES »).
+>
+> Deux issues demandaient donc l'inverse l'une de l'autre. Ce n'était pas une contradiction à
+> arbitrer mais un **inventaire périmé** : #4186 énumérait des retraits, #4181 en a converti un en
+> remplacement onze heures avant, et l'énumération n'a pas suivi. **Un inventaire qui liste des
+> décisions vieillit à chaque décision prise ailleurs.**
