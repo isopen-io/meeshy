@@ -88,20 +88,32 @@ extension StoryComposerViewModel {
         return effects.backgroundTransform?.videoFitMode != "fit"
     }
 
-    /// Ratio de canvas à PERSISTER (`nil` = pas de fond, portrait 9:16 par
-    /// défaut) dérivé du fond d'un slide : « l'import du fond impose le cadre
-    /// et forme du Canvas ». Ratio CONTINU du fond (pas de snap binaire
-    /// portrait/landscape, directive user 2026-07-14), clampé à [9/21, 21/9]
-    /// pour éviter un canvas dégénéré sur un fond au ratio extrême (panorama,
-    /// capture ultra-haute).
+    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme
+    /// (directive porteur, 2026-08-31).**
+    ///
+    /// Elle suivait le ratio CONTINU du fond, clampé à [9/21, 21/9] : « l'import
+    /// du fond impose le cadre et forme du Canvas » (directive du 2026-07-14).
+    /// Une photo paysage donnait donc un canvas 16:9 — ce que le porteur a
+    /// mesuré sur capture, là où toutes les planches du document montrent une
+    /// scène verticale.
+    ///
+    /// **Ce que la règle d'avant coûtait, au-delà de la forme** : le canvas
+    /// changeait de proportion SOUS la composition. Un texte posé sur une scène
+    /// verticale se retrouvait ailleurs dès qu'on ajoutait un fond paysage, et
+    /// l'outil de dessin traçait sur un cadre qui n'était plus celui de la carte
+    /// (#4515). Une scène qui change de forme n'est plus une scène : c'est un
+    /// cadre qui suit son contenu, quand c'est au contenu de trouver sa place
+    /// dans le cadre.
+    ///
+    /// `nil` veut dire « portrait 9:16 » — la valeur par défaut de
+    /// `StoryCanvasAspect.from(ratio:)`. On n'écrit donc pas un nombre : **on
+    /// s'abstient d'en imposer un**, ce qui laisse le défaut du modèle décider.
+    ///
+    /// Ce qui est déjà PUBLIÉ garde son ratio : cette règle ne gouverne que ce
+    /// qui se compose maintenant. Et le média qui ne remplit pas la scène laisse
+    /// des bandes — elles se peignent, elles ne restent pas noires.
     static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
-        guard let bg = effects.resolvedBackgroundMedia else { return nil }
-        return clampedCanvasRatio(bg.aspectRatio)
-    }
-
-    /// Clamp pur, testé indirectement via `canvasAspectRatio(forBackgroundOf:)`.
-    private static func clampedCanvasRatio(_ ratio: Double) -> Double {
-        min(21.0 / 9.0, max(9.0 / 21.0, ratio))
+        nil
     }
 
     var isContentToolActive: Bool {
