@@ -392,6 +392,11 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
               <input
                 type="date"
                 data-testid="participant-profile-history-grant-input"
+                // Le libellé voisin est un `<span>`, pas un `<label for>` : sans
+                // ce nom, un lecteur d'écran annonce « champ de date » et rien
+                // d'autre. Le `data-testid` est un identifiant de TEST, il ne
+                // nomme personne (#4393).
+                aria-label={t('participantProfile.historyGrant.label', 'Voit l’historique depuis')}
                 className="ml-auto rounded border border-gray-200 bg-transparent px-1.5 py-0.5 text-sm text-gray-800 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100"
                 max={todayDateInputValue()}
                 value={profile.historyVisibleFrom ? toDateInputValue(profile.historyVisibleFrom) : ''}
@@ -407,7 +412,10 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
                   type="button"
                   data-testid="participant-profile-history-grant-clear"
                   aria-label={t('participantProfile.historyGrant.clear', 'Retirer')}
-                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:hover:text-gray-200"
+                  // 44 px de cible, la moitié de la marge verticale reprise
+                  // par `-my-2` pour que la rangée ne double pas de hauteur :
+                  // l'icône fait 14 px, et une cible de 14 px se rate (#4393).
+                  className="relative -my-2 flex h-11 w-11 flex-shrink-0 items-center justify-center text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:hover:text-gray-200"
                   disabled={historyGrantPending}
                   onClick={() => onSetHistoryGrant(null)}
                 >
@@ -428,6 +436,10 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
           {historyGrantError && (
             <div
               data-testid="participant-profile-history-grant-error"
+              // `alert` : l'échec d'une écriture doit être ANNONCÉ, pas
+              // seulement dessiné — qui ne voit pas l'écran ne saurait sinon
+              // jamais que sa date n'a pas été posée (#4393).
+              role="alert"
               className="text-xs text-red-500 dark:text-red-400"
             >
               {historyGrantError}

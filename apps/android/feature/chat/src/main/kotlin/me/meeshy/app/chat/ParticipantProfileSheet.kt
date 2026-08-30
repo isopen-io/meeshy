@@ -30,7 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -203,6 +205,13 @@ fun ParticipantProfileSheet(
                                 text = stringResource(R.string.participant_profile_history_failed),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
+                                // L'échec d'une écriture doit être ANNONCÉ, pas
+                                // seulement dessiné : qui ne voit pas l'écran ne
+                                // saurait sinon jamais que sa date n'a pas été
+                                // posée (#4393).
+                                modifier = Modifier.semantics {
+                                    liveRegion = LiveRegionMode.Polite
+                                },
                             )
                         }
                     }

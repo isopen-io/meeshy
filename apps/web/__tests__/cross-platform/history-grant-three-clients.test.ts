@@ -118,3 +118,59 @@ describe('« voit l’historique depuis le <date> » — les trois clients disen
     }
   });
 });
+
+/**
+ * #4393 — le geste s'utilise sans voir.
+ *
+ * Ce que ces témoins gardent est exactement ce qu'une recette au lecteur
+ * d'écran a vérifié une fois : le contrôle porte un NOM (un identifiant de test
+ * n'en est pas un), l'échec est ANNONCÉ (un texte qui apparaît ne réveille
+ * aucun lecteur d'écran tout seul), et la cible se vise.
+ */
+describe('« voit l’historique depuis le <date> » — s’utilise sans voir', () => {
+  const NOM_ACCESSIBLE: Record<keyof typeof SURFACES, RegExp> = {
+    // Le libellé voisin est un `<span>`, jamais un `<label for>`.
+    web: /aria-label=\{t\('participantProfile\.historyGrant\.label'/,
+    // `.labelsHidden()` retire l'étiquette de VoiceOver aussi.
+    ios: /\.accessibilityLabel\(seesHistorySinceLabel\)/,
+    // Le contrôle Android est un bouton PORTANT son texte : il se nomme seul.
+    android: /Text\(stringResource\(R\.string\.participant_profile_history_set\)\)/,
+  };
+
+  const ERREUR_ANNONCEE: Record<keyof typeof SURFACES, RegExp> = {
+    web: /role="alert"/,
+    // SwiftUI n'a pas de région vivante : l'annonce se pose où l'état s'écrit.
+    ios: /UIAccessibility\.post\(notification: \.announcement, argument: message\)/,
+    android: /liveRegion = LiveRegionMode\.Polite/,
+  };
+
+  it.each(plateformes)('%s : le contrôle de date porte un NOM accessible', (plateforme) => {
+    expect(SURFACES[plateforme]).toMatch(NOM_ACCESSIBLE[plateforme]);
+  });
+
+  it.each(plateformes)('%s : l’échec de l’écriture est ANNONCÉ', (plateforme) => {
+    expect(SURFACES[plateforme]).toMatch(ERREUR_ANNONCEE[plateforme]);
+  });
+
+  it.each(['web', 'ios'] as const)(
+    '%s : le retrait offre une cible de 44 px — Android la tient de Material',
+    (plateforme) => {
+      // Une cible dessinée à la taille de son glyphe (14 px web, ~20 pt iOS) se
+      // rate. Le `TextButton` Android, lui, est déjà à 48 dp par construction :
+      // rien à affirmer dans sa source, et l'affirmer serait un faux témoin.
+      expect(SURFACES[plateforme]).toMatch(
+        plateforme === 'web' ? /h-11 w-11/ : /\.frame\(minWidth: 44, minHeight: 44\)/
+      );
+    }
+  );
+
+  it.each(plateformes)('%s : l’icône du geste reste décorative', (plateforme) => {
+    const decorative: Record<keyof typeof SURFACES, RegExp> = {
+      web: /<History className="h-3\.5 w-3\.5[^"]*" aria-hidden="true"|<History className="h-3\.5 w-3\.5"/,
+      // iOS : un `Image(systemName:)` sans label n'est pas exposé seul.
+      ios: /Image\(systemName: "clock\.arrow\.circlepath"\)/,
+      android: /contentDescription = null/,
+    };
+    expect(SURFACES[plateforme]).toMatch(decorative[plateforme]);
+  });
+});
