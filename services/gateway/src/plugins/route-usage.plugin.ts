@@ -88,6 +88,12 @@ export function registerRouteUsageHook(
     compteur.record({
       method: request.method,
       routePattern: request.routeOptions?.url,
+      // Le chemin BRUT n'est lu QUE lorsque aucune route n'a matché, et
+      // seulement pour le comparer à `ROUTES_RETIREES` (#4365) : il ne devient
+      // jamais une clé libre, sans quoi n'importe quel appelant fabriquerait
+      // autant de seaux qu'il veut. La cardinalité reste bornée par une
+      // DÉCLARATION, pas par un plafond.
+      rawPath: request.url,
       versionHeader: versionDe(request),
       platformHeader: plateformeDe(request),
       userAgent: agentDe(request),

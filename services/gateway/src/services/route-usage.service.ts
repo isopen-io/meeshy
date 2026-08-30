@@ -146,6 +146,13 @@ export type SurveilleeMalDeclaree = {
   readonly motif: MotifMauvaiseDeclaration;
 };
 
+/** Le nom d'une adresse retiree, si l'echantillon en vise une (#4365). */
+export function routeRetireeDe(echantillon: { method: string; rawPath?: string | undefined }): string | undefined {
+  if (!echantillon.rawPath) return undefined;
+  const chemin = echantillon.rawPath.split('?')[0];
+  return ROUTES_RETIREES.has(`${echantillon.method} ${chemin}`) ? chemin : undefined;
+}
+
 /** L'echantillon tel que le hook `onResponse` le lit, sans aucune identite. */
 export type EchantillonUsage = {
   readonly method: string;
@@ -154,6 +161,15 @@ export type EchantillonUsage = {
   readonly versionHeader?: string | undefined;
   readonly platformHeader?: string | undefined;
   readonly userAgent?: string | undefined;
+  /**
+   * Le chemin BRUT, sans requête — le seul témoin d'une route RETIRÉE (#4365).
+   *
+   * Quand une adresse n'est plus montée, `routePattern` est `undefined` et
+   * tout son trafic tombe dans le seau unique `(unrouted)`. On sait alors
+   * qu'il y a des 404, jamais SUR QUOI. C'est précisément la question que
+   * posent les quatre lots de retrait : « ce couple est-il encore appelé ? ».
+   */
+  readonly rawPath?: string | undefined;
 };
 
 /** Un seau servi : une route, une origine, un compte, une derniere vue. */
@@ -208,6 +224,42 @@ const TOUTES = '*';
 
 /** Ce qui remplace le motif quand la requete n'a matche aucune route. */
 export const ROUTE_NON_MONTEE = '(unrouted)';
+
+/**
+ * Les adresses RETIRÉES qu'on veut continuer à compter (#4365).
+ *
+ * ## Pourquoi elles ne peuvent pas passer par `ROUTES_SURVEILLEES`
+ *
+ * Le compteur s'attache aux routes SERVIES : une adresse retirée n'est plus
+ * montée, donc `routePattern` vaut `undefined` et son trafic se noie dans le
+ * seau unique `(unrouted)` avec toutes les fautes de frappe de la planète. On
+ * sait qu'il y a des 404 ; on ne sait pas sur quoi — et c'est exactement la
+ * question que posent les quatre lots de retrait (#4186, #4187, #4188, #4190),
+ * dont le critère commun exige « journaux d'accès à zéro sur 30 jours ».
+ *
+ * ## Le zéro que cette table rend LISIBLE, et celui qu'elle ne rend pas
+ *
+ * Un couple ABSENT de cette table et à zéro dans `(unrouted)` ne prouve rien —
+ * `(unrouted)` agrège. Un couple PRÉSENT ici et à zéro prouve qu'aucune
+ * requête n'a atteint cette adresse pendant la fenêtre. C'est la seule forme
+ * de zéro qui vaille, et elle exige de DÉCLARER ce qu'on surveille avant de
+ * pouvoir l'affirmer.
+ *
+ * ## Ce qu'elle ne corrige pas, et qui doit se lire avec le chiffre
+ *
+ * Les deux angles morts que #4275 nomme déjà valent ici : un cache navigateur
+ * ou un service worker sert sans atteindre le gateway, et l'agrégat est en
+ * mémoire, par instance. Un zéro se lit AVEC eux, jamais seul.
+ *
+ * Le chemin est comparé LITTÉRALEMENT (après retrait de la requête) : ces
+ * adresses n'ont pas de paramètre, ou alors elles n'entrent pas ici.
+ */
+export const ROUTES_RETIREES: ReadonlySet<string> = new Set([
+  'POST /api/v1/auth/validate-session',
+  'GET /api/v1/auth/magic-link/validate',
+  'GET /api/v1/me/me',
+  'GET /api/v1/users/me/test',
+]);
 
 /**
  * Le vocabulaire CLOS des plateformes. Un en-tete hors de cette liste retombe
@@ -361,7 +413,10 @@ export class RouteUsageCounter {
   record(echantillon: EchantillonUsage): void {
     const maintenant = this.clock();
     const tranche = this.trancheCourante(maintenant);
-    const route = echantillon.routePattern ?? ROUTE_NON_MONTEE;
+    // Une adresse RETIRÉE garde son nom plutôt que de se noyer dans
+    // `(unrouted)` — sans quoi son zéro serait indistinguable de celui d'une
+    // faute de frappe (#4365).
+    const route = echantillon.routePattern ?? routeRetireeDe(echantillon) ?? ROUTE_NON_MONTEE;
 
     if (this.watchedKeys.has(`${echantillon.method} ${route}`)) {
       // Le seau TOTAL. Il existe deja — le pre-semis de `trancheCourante` l'a
