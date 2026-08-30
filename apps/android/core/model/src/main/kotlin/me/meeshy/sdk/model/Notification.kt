@@ -144,6 +144,18 @@ data class NotificationContext(
     val reactionId: String? = null,
     val postId: String? = null,
     val commentId: String? = null,
+    val parentCommentId: String? = null,
+    /** Avatar du groupe — repli de la bannière quand l'expéditeur n'a pas d'avatar personnel. */
+    val conversationAvatar: String? = null,
+    /**
+     * URL du 1er attachment du message — la vignette de la bannière quand le mime est une image.
+     *
+     * **Absent quand le message est protégé** (éphémère, vue unique, flouté, chiffré) : la
+     * passerelle le retient EN BLOC derrière `mediaMayTravel` (cycle 125). Le client n'a donc
+     * rien à re-garder ici — mais il ne doit pas non plus le FABRIQUER depuis une autre source.
+     */
+    val firstAttachmentUrl: String? = null,
+    val firstAttachmentMimeType: String? = null,
 )
 
 /** Read/lifecycle state of a notification — port of NotificationState (NotificationModels.swift). */
@@ -175,6 +187,16 @@ data class NotificationMetadata(
     val commentPreview: String? = null,
     val emoji: String? = null,
     val postType: String? = null,
+    /**
+     * Discriminant d'entité de la famille `friend_new_*`, que la passerelle a historiquement
+     * émis SOUS CE NOM au lieu de `postType`. Lu en repli.
+     */
+    val contentType: String? = null,
+    val parentCommentId: String? = null,
+    /** Miniature du contenu visé (post / story / réel) — la vignette de la bannière. */
+    val postThumbnailUrl: String? = null,
+    /** Nature du média principal du contenu visé — « image » | « video » | « audio ». */
+    val mediaType: String? = null,
     val deviceName: String? = null,
     val deviceVendor: String? = null,
     val deviceOS: String? = null,
@@ -194,6 +216,23 @@ data class ApiNotification(
     val userId: String = "",
     val type: String = "system",
     val priority: String? = null,
+    /**
+     * Le cadrage d'en-tête composé par la passerelle (`buildPushHeader`) : l'acteur, ou
+     * « Meeshy » quand il n'y en a pas.
+     */
+    val title: String? = null,
+    /**
+     * La PHRASE D'ACTION localisée par la passerelle (« a commenté votre statut », « veut se
+     * connecter ») pour tout ce qui n'est pas un message de conversation ; le NOM DU GROUPE
+     * pour un message de groupe.
+     *
+     * Elle voyageait déjà sur le fil — `buildPushHeader` la promeut en `subtitle` justement
+     * parce qu'iOS réécrit le TITRE d'une Communication Notification. Mais aucun décodeur
+     * Android ne la DÉCLARAIT : kotlinx la jetait, et la bannière in-app ne pouvait pas dire
+     * CE QUI venait d'arriver. Même forme que `lastMessageTranslations` sur `ApiConversation`
+     * (cycle 118) — une donnée servie depuis toujours, lue par personne.
+     */
+    val subtitle: String? = null,
     val content: String? = null,
     val actor: NotificationActor? = null,
     val context: NotificationContext? = null,

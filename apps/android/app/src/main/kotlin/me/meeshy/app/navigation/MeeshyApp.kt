@@ -76,6 +76,7 @@ import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.MyShareLinksScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
+import me.meeshy.app.notifications.NotificationBannerHost
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -998,6 +999,20 @@ fun MeeshyApp(
         }
       }
     }
+
+        // #4457 — la bannière in-app se monte UNE fois, ICI, par-dessus la navigation.
+        // `NotificationToastPolicy` portait sa décision depuis des mois SANS aucun appelant
+        // de production : un `notification:new` reçu app ouverte ne produisait rien de
+        // visible sur Android, pendant qu'iOS et le web affichaient les sept cadrages.
+        // Montée à la racine et non par écran : une bannière SUIT le lecteur, et une
+        // instance par écran en ferait autant de rivales. Sous le splash, qui couvre tout au
+        // démarrage à froid.
+        NotificationBannerHost(
+            activeConversationId = navBackStack?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG),
+            activePostId = navBackStack?.arguments?.getString(PostDetailViewModel.POST_ID_ARG),
+            onOpenConversation = { navController.navigate(Routes.chat(it)) },
+            onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+        )
 
         if (showSplash) {
             MeeshySplashScreen(
