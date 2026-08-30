@@ -536,18 +536,28 @@ final class StoryViewModelTests: XCTestCase {
     func test_markViewed_enqueuesDurableOutboxRecord() async {
         // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
         // plus par le POST fire-and-forget direct.
-        let item = makeStoryItem(id: "view-service-test", isViewed: false)
+        //
+        // L'identifiant est un ObjectId SERVEUR (24 hexadécimaux), et ce n'est
+        // plus décoratif : `markViewed` refuse d'enfiler ce que le serveur ne
+        // sait pas adresser (#4044 — un `pending_<uuid>` de story en cours de
+        // publication faisait lever Prisma, donc 500, donc une ligne d'outbox
+        // condamnée). La fixture « view-service-test » était une chaîne
+        // qu'aucune story ne porte : elle faisait tomber ce témoin pour la
+        // mauvaise raison. Le refus lui-même est couvert par
+        // `StoryViewedMarkingTests`, qui en est le site.
+        let storyId = "507f1f77bcf86cd799439021"
+        let item = makeStoryItem(id: storyId, isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
         var enqueuedStoryIds: [String] = []
         sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
-        sut.markViewed(storyId: "view-service-test")
+        sut.markViewed(storyId: storyId)
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
+        XCTAssertEqual(enqueuedStoryIds, [storyId])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {

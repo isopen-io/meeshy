@@ -302,4 +302,42 @@ final class StoryComposerSeedTests: XCTestCase {
                 + "et une carte « Reprendre » qui écrase la graine au premier tap."
         )
     }
+
+    // MARK: - #4025 — une graine peut ne semer QUE du texte
+
+    /// **Le défaut.** La graine ne connaissait que `.image` et `.video` : un
+    /// message TEXTE n'avait aucune porte d'entrée vers l'atelier, alors que son
+    /// texte a une destination évidente — la DESCRIPTION de la slide.
+    ///
+    /// Le texte n'est donc PAS un troisième cas de `Payload` : ce qu'on pose sur
+    /// le canvas et ce qui pré-remplit la description sont deux choses de nature
+    /// différente, et un message porte souvent les deux. Le payload devient
+    /// optionnel, la description l'accompagne.
+    @MainActor
+    func test_seed_textOnly_fillsTheSlideDescription() throws {
+        let graine = try XCTUnwrap(StoryComposerSeed.text("On se voit à 18h"))
+        let sut = StoryComposerViewModel(seeding: graine)
+
+        XCTAssertEqual(sut.currentSlide.content, "On se voit à 18h")
+        XCTAssertTrue(sut.isSeededSession,
+                      "une session semée par du texte est semée au même titre qu'une autre")
+    }
+
+    /// Un texte fait d'espaces ne sème rien : la fabrique le DIT en rendant
+    /// `nil`, plutôt que d'ouvrir un atelier sur une description vide.
+    func test_seed_blankText_yieldsNoSeed() {
+        XCTAssertNil(StoryComposerSeed.text("   \n\t "))
+        XCTAssertNil(StoryComposerSeed.text(""))
+    }
+
+    /// **Média ET texte ensemble** — la légende que l'auteur a déjà écrite ne
+    /// lui est pas redemandée.
+    @MainActor
+    func test_seed_imageWithDescription_posesBoth() {
+        let sut = StoryComposerViewModel(seeding: StoryComposerSeed(
+            payload: .image(makeImage()), description: "au bord du lac"))
+
+        XCTAssertTrue(sut.hasBackgroundImage, "le média se pose toujours sur le canvas")
+        XCTAssertEqual(sut.currentSlide.content, "au bord du lac")
+    }
 }
