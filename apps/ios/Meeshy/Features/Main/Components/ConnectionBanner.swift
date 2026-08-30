@@ -26,6 +26,13 @@ import MeeshyUI
 /// clears — there is no 3-cycle auto-hide; the rotation runs as long as
 /// the entry list is non-empty.
 struct ConnectionBanner: View {
+    /// #4028 — la pastille cède à une notification in-app. Le gestionnaire est
+    /// un singleton STABLE : l'observer ici plutôt que de faire passer un
+    /// drapeau par les deux hôtes évite d'ajouter la même ligne à deux endroits
+    /// dont l'un est hors budget — et surtout évite une troisième écriture de
+    /// la même question, que la règle `SyncPillVisibility` vient justement de
+    /// rassembler.
+    @ObservedObject private var inAppNotices = NotificationToastManager.shared
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -242,7 +249,10 @@ struct ConnectionBanner: View {
                     label: "@\(username)",
                     iconName: nil,
                     dotStyle: .brand,
-                    source: .conversation(id: conversationId),
+                    // #4027 — la frappe mène à la CONVERSATION, sans ancre :
+                    // « X écrit » ne désigne aucun message, il n'y en a pas
+                    // encore. `nil` est ici le verdict juste, pas un trou.
+                    source: .conversation(id: conversationId, messageId: nil),
                     showsActivityDots: true
                 )
             }
@@ -268,7 +278,8 @@ struct ConnectionBanner: View {
         // le fullScreenCover du root ne supprime pas les safeAreaInset /
         // overlays du parent et le pill restait visible par-dessus le
         // header story (bug 2026-05-27).
-        if isStoryViewerPresenting {
+        if !SyncPillVisibility.isVisible(storyViewerPresenting: isStoryViewerPresenting,
+                                         inAppNoticePresenting: inAppNotices.currentToast != nil) {
             EmptyView()
         } else {
             ZStack(alignment: .top) {

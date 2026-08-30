@@ -30,7 +30,12 @@ nonisolated enum ComposerOrigin: Equatable {
     case repost(ofPostId: String, sourceFormat: ComposerFormat)
     case edit(postId: String, documentFormat: ComposerFormat)
     case draft(id: String), share
-    case conversationMedia(messageId: String, attachmentId: String)
+    /// `attachmentId` est OPTIONNEL depuis le #4025 : la même origine sert
+    /// désormais un message TEXTE, qui n'a aucune pièce jointe. Aucun lecteur
+    /// n'en est affecté — les `switch` du dépôt matchent `case .conversationMedia:`
+    /// sans jamais lier l'identifiant, qui voyage comme contexte et non comme
+    /// donnée de décision.
+    case conversationMedia(messageId: String, attachmentId: String?)
 }
 
 nonisolated extension ComposerOrigin {

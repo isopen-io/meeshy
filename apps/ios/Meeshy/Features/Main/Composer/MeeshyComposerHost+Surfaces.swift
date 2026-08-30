@@ -252,6 +252,40 @@ extension MeeshyComposerHost {
     /// `⋯`) : deux dérivations d'une même valeur auraient divergé au premier
     /// ajustement. Ce qui diffère est ce qui n'a de sens QUE sur une scène —
     /// les deux rails et la géométrie d'encastrement.
+    /// **La bande de mention du texte de scène** (#4475).
+    ///
+    /// Trois conditions, et la troisième est celle qu'on oublie :
+    /// 1. un texte est en cours d'édition — hors édition, il n'y a pas de
+    ///    frappe à interpréter ;
+    /// 2. une requête `@` est active ;
+    /// 3. **des personnes correspondent** — sans quoi la bande de verre serait
+    ///    peinte vide. « Aucun ami accepté » et « aucune correspondance » sont
+    ///    des états NOMINAUX, pas des chargements en attente : ce champ n'a
+    ///    aucun appel réseau qui remplirait la liste plus tard.
+    ///
+    /// **Le choix écrit dans l'OBJET, pas dans un champ de vue.** Le texte
+    /// courant vient du modèle et y retourne par `updateTextContent` — le même
+    /// site que la frappe. Un `@State` intermédiaire aurait fait diverger ce que
+    /// le canvas affiche de ce que la publication emporte.
+    var sceneMentionStrip: AnyView? {
+        if let id = viewModel.textEditingMode.activeTextId,
+           sceneMentionBox.controller.activeQuery != nil,
+           !sceneMentionBox.controller.suggestions.isEmpty,
+           let objet = viewModel.currentEffects.textObjects.first(where: { $0.id == id }) {
+            AnyView(
+                ComposerMentionStrip(
+                    controller: sceneMentionBox.controller,
+                    currentText: objet.text,
+                    onSelect: { remplace in
+                        viewModel.updateTextContent(id: id, text: remplace)
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            )
+        }
+        return nil
+    }
+
     var sceneSurface: some View {
         ComposerSceneSurface(
             localMedia: documentLocalMedia,
@@ -270,17 +304,6 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
-            // **L'historique n'est servi QUE par la scène**
-            // (`ComposerHistoryService`) : c'est la seule surface où les gestes
-            // — poser un sticker, avancer un objet, changer le fond — ne se
-            // défont par rien d'autre. Sur le document, le dernier geste est
-            // presque toujours du texte, que le clavier annule déjà.
-            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
-                && viewModel.canUndoGlobal,
-            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
-                && viewModel.canRedoGlobal,
-            onUndo: { performHistoryUndo() },
-            onRedo: { performHistoryRedo() },
             slide: Binding(
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
@@ -313,12 +336,41 @@ extension MeeshyComposerHost {
             // le fait sous l'atelier. Elle était retenue parce que « rien ne
             // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
             // meuble qui le fait désormais, en ouvrant sa zone basse.
-            railDoors: ComposerRailDoor.offered(
-                served: ComposerSceneCapabilities.doors,
-                format: selectedFormat,
-                allowsCapture: profile.allowsCapture
+            // **Le rail montre les portes, OU les contrôleurs de l'outil
+            // ouvert** (directive porteur 2026-08-30). La résolution est une
+            // règle pure : le meuble ne décide pas ici quel outil l'emporte,
+            // il fournit l'état.
+            railMode: ComposerRailMode.resolve(
+                drawing: viewModel.isDrawingActive,
+                textEditing: viewModel.textEditingMode.activeTextId != nil,
+                expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
+                expandedTextTool: viewModel.textEditingMode.expandedTool,
+                doors: ComposerRailDoor.offered(
+                    served: ComposerSceneCapabilities.doors,
+                    format: selectedFormat,
+                    allowsCapture: profile.allowsCapture
+                )
             ),
             onRailDoor: { door in handleRailDoor(door) },
+            onRailToolControl: { control in handleRailToolControl(control) },
+            onRailExitTool: { handleRailExitTool() },
+            // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
+            // seule qui ne peut pas être une porte. `BlankCanvasPasteStarter`
+            // lit `\.storyPaste` lui-même (le meuble l'injecte déjà) et
+            // s'éteint quand le presse-papier n'a rien d'acceptable : c'est le
+            // système qui tient la loi 4 ici, pas nous.
+            railSystemEntry: AnyView(
+                BlankCanvasPasteStarter(canAddMedia: viewModel.canAddMedia) { items in
+                    handlePastedItems(items)
+                }
+                .labelStyle(.iconOnly)
+                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le
+                // plancher de l'app est iOS 16. Sur une cible de 44 pt, la
+                // capsule EST un cercle.
+                .buttonBorderShape(.capsule)
+            ),
+            // La maquette range COLLAGE entre STICKER et MENTION.
+            railSystemEntryAfter: .sticker,
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
@@ -335,6 +387,9 @@ extension MeeshyComposerHost {
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
+            // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
+            // d'où sa place tout en haut du rail et son séparateur.
+            onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -361,13 +416,34 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
-            // **Les deux montages du dessin** (#4092). La bande porte les
-            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
-            // la bande est ouverte par la même porte qui entre dans le mode —
-            // mais elles sont montées à deux endroits distincts, parce qu'elles
-            // ne vivent pas au même niveau : l'une sous la scène, l'autre
-            // dessus.
-            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
+            // le trait, et les contrôleurs qui règlent le pinceau. Les deux
+            // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau
+            // (stylo / marqueur / gomme), couleur, épaisseur, lissage,
+            // annulation par trait. Une bande simplifiée écrite ici aurait
+            // perdu quatre capacités que l'atelier a (leçon 336).
+            // **Les OPTIONS de l'outil déplié**, sous la scène. Les bulles sont
+            // au rail ; ce panneau porte ce qui a besoin de largeur — la
+            // palette, la glissière, les dix-huit styles. `MeeshyToolOptionsPanel`
+            // rend `EmptyView` quand rien n'est déplié, donc le montage est
+            // inconditionnel et la loi 4 est tenue par la vue elle-même.
+            toolOptions: AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)),
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, texte in
+                viewModel.updateTextContent(id: id, text: texte)
+                // La frappe nourrit la requête `@` — même contrat que le champ
+                // de description et celui du document, sur le troisième champ
+                // de saisie du composer (#4475).
+                sceneMentionBox.controller.handleQuery(in: texte)
+            },
+            // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
+            // ce qu'il advient d'une coquille vide — il la supprime.
+            onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
+            // **La bande n'existe que pendant l'édition ET avec des personnes à
+            // proposer.** Gater sur la seule requête peindrait une bande de
+            // verre vide quand aucun ami accepté ne correspond — un état
+            // NOMINAL, pas une erreur.
+            mentionStrip: sceneMentionStrip,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.

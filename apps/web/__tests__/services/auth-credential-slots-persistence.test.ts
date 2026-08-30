@@ -81,7 +81,12 @@ describe('authService.login() — clé persistée', () => {
 });
 
 describe('magicLinkService.validateMagicLink() — clé persistée', () => {
-  it('écrit le sessionToken réel du serveur sous SESSION_TOKEN, jamais sous REFRESH_TOKEN', async () => {
+  // Le défaut mesuré par #4404 (sessionToken atterrissant sous l'ancienne
+  // clé REFRESH_TOKEN) n'est plus testable tel quel : cette clé a été
+  // retirée (#4405, étape 3, aucune route ne l'ayant jamais produite). La
+  // seule assertion qui reste significative est positive — SESSION_TOKEN
+  // porte bien la vraie valeur serveur.
+  it('écrit le sessionToken réel du serveur sous SESSION_TOKEN', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse({
       success: true,
       data: {
@@ -96,13 +101,11 @@ describe('magicLinkService.validateMagicLink() — clé persistée', () => {
     await magicLinkService.validateMagicLink('magic-tok');
 
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('server-session-token');
-    // Le défaut mesuré : le sessionToken atterrissait sous REFRESH_TOKEN.
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).not.toBe('server-session-token');
   });
 });
 
 describe('twoFactorService.verify() — clé persistée', () => {
-  it('écrit le sessionToken réel du serveur sous SESSION_TOKEN, jamais sous REFRESH_TOKEN', async () => {
+  it('écrit le sessionToken réel du serveur sous SESSION_TOKEN', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse({
       success: true,
       data: {
@@ -116,7 +119,5 @@ describe('twoFactorService.verify() — clé persistée', () => {
     await twoFactorService.verify('2fa-temp-token', '123456');
 
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('server-session-token');
-    // Le défaut mesuré : le sessionToken atterrissait sous REFRESH_TOKEN.
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).not.toBe('server-session-token');
   });
 });

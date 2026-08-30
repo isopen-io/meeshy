@@ -162,7 +162,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    @Published var textEditingMode: TextEditingMode = .inactive
+    /// `public` en LECTURE (#4401) : le meuble monte le contrôleur de texte et
+    /// relaie l'édition en ligne quand un texte est actif. L'ÉCRITURE reste au
+    /// module — elle passe par `enterTextEditingMode` / `exitTextEditingMode`,
+    /// qui gardent le verrou du badge de republication et suppriment les
+    /// coquilles vides. Un site d'appel qui poserait le mode à la main
+    /// contournerait les deux.
+    @Published public internal(set) var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 
@@ -198,7 +204,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
-    @Published var drawingEditingMode: DrawingEditingMode = .inactive
+    /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié (directive
+    /// porteur 2026-08-30). L'écriture reste au module — elle passe par
+    /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
+    /// drapeaux par paires.
+    @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
     /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un

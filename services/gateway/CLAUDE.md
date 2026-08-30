@@ -226,6 +226,46 @@ npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
 Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
 préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
 
+## Une adresse hors `/api` est hors de tout ce qui s'ancre sur `/api` — jusqu'à son retrait INCLUS
+
+Déprécier une adresse ne la retire pas d'un périmètre : ça annonce sa fin. Les trois
+en-têtes `Deprecation` / `Sunset` / `Link` (#4274) s'adressent à un **client** ; une
+règle de proxy, de WAF, de quota, de journalisation ou de catalogue s'ancre sur un
+**préfixe de chemin** et ne les lit jamais. Un alias racine reste donc servi, et hors
+de ces règles, pendant TOUTE sa fenêtre de retrait (180 jours par défaut,
+`FENETRE_DE_RETRAIT_JOURS`).
+
+**Une entrée montée avec un préfixe vide déclare donc DEUX choses, pas une** : pourquoi
+elle vit à cette adresse (déjà exigé par `RouteRegistrationEntry.prefix`, qui est requis)
+et **ce que cette adresse ne reçoit pas**. Écrire la première sans la seconde est le
+défaut fermé par #4367 — le commentaire de `voice-analysis-legacy-alias`
+(`routes/index.ts`) en est le modèle.
+
+Ancrer une règle sur `/api` sans y nommer les adresses racine SERVIES est le défaut
+symétrique. Deux règles vivent aujourd'hui dans le dépôt, à vérifier avant d'en écrire
+une troisième :
+
+| règle | ancrage | ce qu'elle fait des adresses racine |
+|---|---|---|
+| routage de production (Traefik, `docker-compose.{prod,staging}.yml`) | **HÔTE** — `Host(gate[.staging].meeshy.me)` → `gateway:3000` | les sert, tous chemins : il n'y a pas de porte `/api` à franchir |
+| routeur LAN de développement `gateway-ip` (`docker-compose.local.yml`) | **CHEMIN** — `Host(192.168.1.171) && PathPrefix('/api')` | ne les prend PAS : elles tombent chez `frontend-ip`, qui n'a pas de `PathPrefix` |
+| `ROUTES_SURVEILLEES` (`services/route-usage.service.ts`, #4275) | **CHEMIN** — 57 entrées (2026-08-30), toutes `/api/v1/` | les compte dans la table brute, ne les MATÉRIALISE pas dans la portée `watched` |
+
+Les `handle /api/*` du `Caddyfile` et les `location /api/` des quatre confs nginx qui
+relaient vers la passerelle (`default.conf`, `dev.conf`, `production.conf`,
+`ssl-optimized.conf`) décrivent une topologie mono-hôte que ce dépôt **ne déploie pas** :
+Caddy n'est référencé par aucun compose, trois de ces confs sont sur la liste de
+suppression de `scripts/cleanup-production.sh` et la quatrième n'est référencée nulle
+part. La seule conf nginx réellement montée est `static-files.conf`, qui sert
+`static.meeshy.me` et ne relaie rien vers la passerelle. Ne pas les lire comme des règles
+vivantes.
+
+Témoin : `src/__tests__/route-manifest/unprefixed-mounts.ts` fige les modules montés sans
+préfixe (5 modules, 22 routes) et rougit si l'un rejoint la racine sans décision écrite,
+ou si une décision `hors-api` ne dit pas sa conséquence de périmètre. Il complète, sans
+le doubler, `no-routes-outside-api-v1.ts` — celui-ci balaie les CHEMINS servis, celui-là
+les MONTAGES qui décident de l'adresse.
+
 ## Service Pattern
 ```typescript
 export class ServiceName {

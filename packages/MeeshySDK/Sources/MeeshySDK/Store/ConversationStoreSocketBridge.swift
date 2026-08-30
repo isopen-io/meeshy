@@ -13,6 +13,7 @@ import Combine
 /// - `conversation:updated`        → `ConversationStore.applyConversationUpdated`
 ///   (bump-to-top on new message + metadata changes: title, avatar, …)
 /// - `conversation:deleted`        → `ConversationStore.applyConversationDeleted`
+/// - `conversation:restored`       → lecture bornée puis `ConversationStore.applyConversationRestored`
 /// - `conversation:participant-left` / `-banned`, MOI pour sujet
 ///                                 → `ConversationStore.applyConversationDeleted`
 /// - `user:preferences-updated` (conversation scope, versioned)
@@ -55,14 +56,37 @@ public final class ConversationStoreSocketBridge {
     /// Injected for testability; production reads it from `AuthManager`.
     private let currentUserId: @Sendable () async -> String?
 
+    /// La lecture BORNÉE d'UNE conversation (#4389).
+    ///
+    /// `conversation:restored` dit qu'une ligne revient, sans la porter — sa
+    /// charge est `{ userId, conversationId }`, miroir de la descendante. Il
+    /// faut donc aller la chercher, et le geste est `GET /conversations/:id`,
+    /// JAMAIS un rechargement de la liste : rejouer les pages écrase les
+    /// écritures socket concurrentes et duplique une ligne à chaque frontière
+    /// de page (la route paginant par offset sur `lastMessageAt` décroissant).
+    /// C'est la règle que le web écrit noir sur blanc dans son `CLAUDE.md`, et
+    /// elle vaut identiquement ici.
+    ///
+    /// Injectée pour que le bridge se teste sans réseau ; la production la
+    /// branche sur `ConversationService.getById` projeté par
+    /// `toConversation(currentUserId:)`. Rend `nil` quand la lecture échoue —
+    /// une restauration ratée laisse la liste telle quelle, elle ne fabrique
+    /// pas de ligne.
+    private let fetchConversation: @Sendable (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation?
+
     public init(
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared,
-        currentUserId: @escaping @Sendable () async -> String? = { AuthManager.shared.currentUser?.id }
+        currentUserId: @escaping @Sendable () async -> String? = { AuthManager.shared.currentUser?.id },
+        fetchConversation: @escaping @Sendable (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation? = { conversationId, me in
+            guard let api = try? await ConversationService.shared.getById(conversationId) else { return nil }
+            return api.toConversation(currentUserId: me)
+        }
     ) {
         self.store = store
         self.categoryStore = categoryStore
         self.currentUserId = currentUserId
+        self.fetchConversation = fetchConversation
     }
 
     /// Wire the shared socket manager's broadcasts to the stores.
@@ -83,6 +107,7 @@ public final class ConversationStoreSocketBridge {
         activate(
             conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
+            conversationRestored: socket.conversationRestored.eraseToAnyPublisher(),
             participantLeft: socket.participantSelfLeft.eraseToAnyPublisher(),
             participantBanned: socket.participantBanned.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
@@ -103,6 +128,7 @@ public final class ConversationStoreSocketBridge {
     func activate(
         conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>,
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
+        conversationRestored: AnyPublisher<ConversationRestoredSocketEvent, Never> = Empty().eraseToAnyPublisher(),
         participantLeft: AnyPublisher<ParticipantLeftEvent, Never> = Empty().eraseToAnyPublisher(),
         participantBanned: AnyPublisher<ParticipantBannedEvent, Never> = Empty().eraseToAnyPublisher(),
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
@@ -127,6 +153,21 @@ public final class ConversationStoreSocketBridge {
 
         conversationDeleted.sink { event in
             Task { await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId)) }
+        }.store(in: &cancellables)
+
+        // La MONTANTE du couple (#4389). Le gate d'identité est celui des
+        // autres broadcasts personnels : `conversation:restored` part sur la
+        // room `user:<id>` du seul restaurateur, mais un payload au `userId`
+        // vide — la fenêtre où l'auth n'est pas encore résolue — ne doit
+        // ramener aucune ligne au hasard.
+        let fetch = self.fetchConversation
+        let me = self.currentUserId
+        conversationRestored.sink { event in
+            Task {
+                guard let myId = await me(), !myId.isEmpty, event.userId == myId else { return }
+                guard let conversation = await fetch(event.conversationId, myId) else { return }
+                await store.applyConversationRestored(conversation)
+            }
         }.store(in: &cancellables)
 
         // Quitter, être retiré, être banni : trois manières de perdre une

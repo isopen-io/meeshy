@@ -345,7 +345,9 @@ export function sweepMissingSuccessSchemas(routesDir: string): ReadonlyArray<Mis
 const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
   'admin/content.ts|200': 2,
   'admin/posts.ts|200': 2,
-  'conversations/messages.ts|200': 2,
+  // #4284 a découpé conversations/messages.ts en fichiers frères ; ces deux
+  // sites vivent désormais dans messages-send.ts (compte inchangé : 2).
+  'conversations/messages-send.ts|200': 2,
   'conversations/threads.ts|200': 1,
   'me/export.ts|200': 3,
   'me/preferences/preference-router-factory.ts|200': 3,
@@ -361,7 +363,9 @@ const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
  */
 const FROZEN_MISSING_SUCCESS_SCHEMAS: readonly string[] = [
   'auth/revoke-all-sessions.ts|get|/revoke-all-sessions|no-response-key',
-  'conversations/core.ts|get|/conversations/:id/analysis|response-no-success-code',
+  // #4284 a découpé conversations/core.ts en fichiers frères ; cette route
+  // vit désormais dans core-detail.ts (compte inchangé : cette seule route).
+  'conversations/core-detail.ts|get|/conversations/:id/analysis|response-no-success-code',
   'invitations.ts|post|/invitations/email|no-response-key',
   'me/delete-account.ts|get|/account/deletion|no-response-key',
   // Les deux memes routes, dans leur fichier propre (#4146). Leur schema de

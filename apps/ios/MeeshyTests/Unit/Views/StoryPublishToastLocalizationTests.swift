@@ -50,6 +50,10 @@ final class StoryPublishToastLocalizationTests: XCTestCase {
 
     func test_storyPublishToastKeys_useFrenchDefaultValues() throws {
         let source = try Self.strippedSource(of: "Features/Main/ViewModels/StoryViewModel.swift")
+        XCTAssertGreaterThan(
+            source.count, 400,
+            "Source (unité) de StoryViewModel introuvable ou vide — cette garde ne mesurerait rien."
+        )
 
         for (key, expected) in [
             ("story.published", "Story publiée"),
@@ -105,9 +109,21 @@ final class StoryPublishToastLocalizationTests: XCTestCase {
 
     /// Commentaires retirés : la prose qui documente le fix cite elle-même les
     /// libellés cherchés.
+    ///
+    /// `StoryViewModel` s'est scindé en plusieurs fichiers (#4425) : ce
+    /// chemin précis passe par l'UNITÉ (`AppSourceGuard.storyViewModelSource`)
+    /// plutôt que par une lecture directe, sinon la clé cherchée ci-dessus
+    /// deviendrait introuvable le jour où elle migre vers un fichier frère
+    /// (`StoryViewModel+Publication.swift`). Tout autre appelant de ce helper
+    /// continue de lire son fichier tel quel.
     private static func strippedSource(of relativePath: String) throws -> String {
-        let url = repoRoot().appendingPathComponent("Meeshy").appendingPathComponent(relativePath)
-        let source = try String(contentsOf: url, encoding: .utf8)
+        let source: String
+        if "Meeshy/" + relativePath == AppSourceGuard.storyViewModelPath {
+            source = try AppSourceGuard.storyViewModelSource()
+        } else {
+            let url = repoRoot().appendingPathComponent("Meeshy").appendingPathComponent(relativePath)
+            source = try String(contentsOf: url, encoding: .utf8)
+        }
         return source
             .components(separatedBy: "\n")
             .map { line -> String in

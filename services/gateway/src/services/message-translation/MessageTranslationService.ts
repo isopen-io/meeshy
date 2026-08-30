@@ -2415,10 +2415,23 @@ export class MessageTranslationService extends EventEmitter {
       // ═══════════════════════════════════════════════════════════════════════════
       // VÉRIFICATION DES CONSENTEMENTS VOCAUX
       // ═══════════════════════════════════════════════════════════════════════════
-      const bypassConsentCheck = process.env.BYPASS_VOICE_CONSENT_CHECK === 'true';
+      // #4348 — il n'y a PLUS de dérogation par variable d'environnement.
+      //
+      // `BYPASS_VOICE_CONSENT_CHECK === 'true'` forçait ici les trois
+      // consentements à `true`, y compris dans le `catch` plus bas. C'était le
+      // jumeau exact du court-circuit `NODE_ENV === 'development'` que ce même
+      // lot retire de `ConsentValidationService` — même forme, même pipeline,
+      // à un appelant de distance.
+      //
+      // Un consentement se prouve par une DONNÉE, jamais par un environnement
+      // d'exécution : une variable mal positionnée suffisait à réputer toute
+      // la population consentante, sans trace, sans horodatage, et sans rien à
+      // montrer à un régulateur. Ce qu'elle rendait commode — un environnement
+      // de développement qui parle — est désormais fourni par la graine, qui
+      // écrit de vrais consentements horodatés.
       logger.info(
         `🔍 [VOICE-PROFILE-TRACE] Vérification consentements | ` +
-        `Sender: ${params.senderId} | GenerateClone: ${params.generateVoiceClone} | Bypass: ${bypassConsentCheck}`
+        `Sender: ${params.senderId} | GenerateClone: ${params.generateVoiceClone}`
       );
 
       let hasVoiceCloningConsent = false;
@@ -2428,12 +2441,7 @@ export class MessageTranslationService extends EventEmitter {
       try {
         logger.info(`🔍 [VOICE-PROFILE-TRACE] Vérification consentements...`);
 
-        if (bypassConsentCheck) {
-          logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ BYPASS activé - force consentements à TRUE`);
-          hasVoiceCloningConsent = true;
-          hasVoiceProfileConsent = true;
-          canGenerateTranslatedAudio = true;
-        } else {
+        {
           // Utilisation du ConsentValidationService pour vérifier les consentements
           const consentService = new ConsentValidationService(this.prisma);
           const consentStatus = await consentService.getConsentStatus(params.senderId);
@@ -2477,15 +2485,12 @@ export class MessageTranslationService extends EventEmitter {
       } catch (consentError) {
         logger.error(`🔍 [VOICE-PROFILE-TRACE] ❌ ERREUR vérification consentements: ${consentError}`);
         logger.error(`🔍 [VOICE-PROFILE-TRACE] Stack: ${consentError instanceof Error ? consentError.stack : 'N/A'}`);
-        // En cas d'erreur, on continue sans clonage vocal par sécurité
-        if (bypassConsentCheck) {
-          hasVoiceCloningConsent = true;
-          hasVoiceProfileConsent = true;
-        } else {
-          // Par sécurité, désactiver le clonage vocal en cas d'erreur
-          hasVoiceCloningConsent = false;
-          hasVoiceProfileConsent = false;
-        }
+        // FAIL-CLOSED, sans exception : une lecture qui ne conclut pas ne
+        // prouve aucun consentement. La branche de dérogation qui vivait ici
+        // était la pire des deux — elle s'appliquait précisément au moment où
+        // le service ne savait RIEN (#4348).
+        hasVoiceCloningConsent = false;
+        hasVoiceProfileConsent = false;
       }
 
       // Déterminer si on génère le clonage vocal

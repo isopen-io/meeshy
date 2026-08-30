@@ -17,15 +17,40 @@ jest.mock('sonner', () => ({
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
+const mockPut = jest.fn();
 const mockDelete = jest.fn();
 
 jest.mock('@/services/api.service', () => ({
   apiService: {
     get: (...args: any[]) => mockGet(...args),
     post: (...args: any[]) => mockPost(...args),
+    put: (...args: any[]) => mockPut(...args),
     delete: (...args: any[]) => mockDelete(...args),
   },
   TIMEOUT_VOICE_PROFILE: 300000,
+}));
+
+// ─── Mock @/lib/config (catalogue partagé) ─────────────────────────────────────
+//
+// #4348 (critère 8) — `API_ENDPOINTS.me.consentsByPurpose` a atterri dans le
+// catalogue RÉEL (`packages/shared/api/endpoints.ts`) PENDANT l'écriture de
+// ce correctif (session gateway parallèle, hors du territoire WEB de #4348 —
+// voir la note d'intégration en tête de `use-voice-profile-management.ts`).
+// Le mock reste malgré tout la bonne pratique : mocker `@meeshy/shared/api/
+// endpoints` directement serait INERTE ici (moduleNameMapper redirige vers
+// `packages/shared/dist`, cf. `apps/web/CLAUDE.md`) — le module `dist/`
+// compilé n'est pas nécessairement à jour dans tout arbre de travail. Mocker
+// `@/lib/config`, module LOCAL au web que le hook consomme, fixe le contrat
+// attendu de façon déterministe, sans dépendre de l'état du `dist/` partagé
+// ni de l'ordre de livraison des sessions parallèles.
+const CONSENTS_BY_PURPOSE_PATH = (purpose: string) => `/api/v1/me/consents/${purpose}`;
+
+jest.mock('@/lib/config', () => ({
+  API_ENDPOINTS: {
+    me: {
+      consentsByPurpose: (purpose: string) => `/api/v1/me/consents/${purpose}`,
+    },
+  },
 }));
 
 // ─── Factories ────────────────────────────────────────────────────────────────
@@ -61,6 +86,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   // Default: loadProfile resolves with no profile
   mockGet.mockResolvedValue({ success: true, data: makeNoProfileData() });
+  // Default: the unified /me/consents write succeeds (best-effort, #4348 critère 8)
+  mockPut.mockResolvedValue({ success: true });
 });
 
 describe('useVoiceProfileManagement', () => {
@@ -304,6 +331,56 @@ describe('useVoiceProfileManagement', () => {
       expect(mockToastSuccess).toHaveBeenCalledWith('Voice cloning enabled');
     });
 
+    // #4348 (critère 8) — l'octroi part AUSSI vers la surface unifiée
+    // `PUT /me/consents/{purpose}`, adressée via le catalogue partagé
+    // (`API_ENDPOINTS.me.consentsByPurpose`), jamais un chemin écrit à la
+    // main. Le corps ne porte QUE `{ granted, policyVersion }` — aucun champ
+    // de date : le serveur horodate seul (contrat #4335/#4348).
+    it('also PUTs the granted purpose to the catalogue-addressed unified /me/consents surface', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.grantVoiceCloningConsent();
+      });
+
+      expect(mockPut).toHaveBeenCalledWith(
+        CONSENTS_BY_PURPOSE_PATH('voice-cloning'),
+        { granted: true, policyVersion: expect.any(String) }
+      );
+      // Zod strict côté serveur ne déclare aucun champ de date : le web n'en
+      // envoie donc aucun — le corps ne porte QUE ces deux clés.
+      const [, body] = mockPut.mock.calls[0];
+      expect(Object.keys(body).sort()).toEqual(['granted', 'policyVersion']);
+    });
+
+    it('still grants via the historical writer even when the unified surface is not available yet (best-effort, no user-facing error)', async () => {
+      mockPut.mockRejectedValueOnce(new Error('/me/consents not deployed yet'));
+      mockPost.mockResolvedValueOnce({ success: true });
+      // loadProfile() runs after the grant — reflect the granted state
+      mockGet.mockResolvedValueOnce({
+        success: true,
+        data: makeProfileData({
+          consentStatus: {
+            voiceRecordingConsentAt: '2026-01-01T00:00:00Z',
+            voiceCloningEnabledAt: '2026-02-01T00:00:00Z',
+          },
+        }),
+      });
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.grantVoiceCloningConsent();
+      });
+
+      expect(result.current.hasVoiceCloningConsent).toBe(true);
+      expect(mockToastSuccess).toHaveBeenCalledWith('Voice cloning enabled');
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
     it('does not update state when success=false', async () => {
       mockPost.mockResolvedValueOnce({ success: false });
 
@@ -325,9 +402,49 @@ describe('useVoiceProfileManagement', () => {
 
       expect(mockToastError).toHaveBeenCalledWith('Failed to enable voice cloning');
     });
+
+    /**
+     * #4348 — l'écriture MIROIR ne part pas quand l'AUTORITAIRE échoue.
+     *
+     * L'ordre inverse a été écrit puis corrigé à la revue : le `PUT
+     * /me/consents` partait en premier, sans condition. Quand l'appel
+     * autoritaire échouait derrière, l'écran affichait « Failed to enable
+     * voice cloning » pendant que le serveur avait déjà persisté
+     * `voiceCloningEnabledAt` ET les trois ancêtres que la cascade pose —
+     * que l'utilisateur n'a jamais vu accorder. Un geste juridiquement
+     * significatif, enregistré comme accordé sous un message d'échec.
+     *
+     * Le témoin assert sur l'ABSENCE d'appel : c'est la seule forme qui
+     * tombe si quelqu'un remet le miroir en tête.
+     */
+    it("n'écrit RIEN vers la surface unifiée quand l'écrivain autoritaire échoue", async () => {
+      mockPost.mockRejectedValueOnce(new Error('gateway down'));
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.grantVoiceCloningConsent();
+      });
+
+      expect(mockPut).not.toHaveBeenCalled();
+      expect(result.current.hasVoiceCloningConsent).toBe(false);
+      expect(mockToastError).toHaveBeenCalledWith('Failed to enable voice cloning');
+    });
   });
 
   describe('revokeVoiceCloningConsent', () => {
+    /** Miroir exact du témoin d'octroi ci-dessus, côté RETRAIT. */
+    it("n'écrit RIEN vers la surface unifiée quand la révocation autoritaire échoue", async () => {
+      mockPost.mockRejectedValueOnce(new Error('gateway down'));
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.revokeVoiceCloningConsent();
+      });
+
+      expect(mockPut).not.toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith('Failed to disable voice cloning');
+    });
+
     it('revokes voice cloning consent and reloads profile', async () => {
       // Revoke directly (no need to pre-grant in test)
       mockPost.mockResolvedValueOnce({ success: true });
@@ -351,6 +468,26 @@ describe('useVoiceProfileManagement', () => {
       expect(mockToastSuccess).toHaveBeenCalledWith('Voice cloning disabled');
     });
 
+    // #4348 (critère 8) — témoin explicite que la RÉVOCATION part, pas
+    // seulement l'octroi : la même surface `PUT /me/consents/{purpose}`
+    // reçoit `granted: false`, jamais un défaut figé à `true`.
+    it('also PUTs granted:false to the unified /me/consents surface — the revocation itself leaves', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.revokeVoiceCloningConsent();
+      });
+
+      expect(mockPut).toHaveBeenCalledWith(
+        CONSENTS_BY_PURPOSE_PATH('voice-cloning'),
+        { granted: false, policyVersion: expect.any(String) }
+      );
+    });
+
     it('does not update state when success=false', async () => {
       mockPost.mockResolvedValueOnce({ success: false });
 
@@ -372,6 +509,58 @@ describe('useVoiceProfileManagement', () => {
       });
 
       expect(mockToastError).toHaveBeenCalledWith('Failed to disable voice cloning');
+    });
+  });
+
+  // #4348 (critère 8) — la surface unifiée `/me/consents` ne doit JAMAIS
+  // recevoir d'écriture qui ne provienne pas d'un geste explicite de
+  // l'utilisateur (octroi ou révocation) : ni au montage, ni pendant
+  // `loadProfile`, ni parce que le défaut serait resté figé d'un appel à
+  // l'autre.
+  describe('the unified /me/consents surface only ever receives an explicit user gesture (#4348 critère 8)', () => {
+    it('sends no PUT to /me/consents merely from mounting the hook', () => {
+      renderHook(() => useVoiceProfileManagement());
+      expect(mockPut).not.toHaveBeenCalled();
+    });
+
+    it('sends no PUT to /me/consents from loadProfile alone, even when cloning consent is already granted server-side', async () => {
+      mockGet.mockResolvedValueOnce({
+        success: true,
+        data: makeProfileData({
+          consentStatus: {
+            voiceRecordingConsentAt: '2026-01-01T00:00:00Z',
+            voiceCloningEnabledAt: '2026-02-01T00:00:00Z',
+          },
+        }),
+      });
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.loadProfile();
+      });
+
+      expect(result.current.hasVoiceCloningConsent).toBe(true);
+      expect(mockPut).not.toHaveBeenCalled();
+    });
+
+    it('sends the flipped boolean on each explicit gesture — granting then revoking are two distinct payloads, not a stale default', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
+      const { result } = renderHook(() => useVoiceProfileManagement());
+
+      await act(async () => {
+        await result.current.grantVoiceCloningConsent();
+      });
+      await act(async () => {
+        await result.current.revokeVoiceCloningConsent();
+      });
+
+      expect(mockPut).toHaveBeenCalledTimes(2);
+      expect(mockPut.mock.calls[0][1]).toEqual({ granted: true, policyVersion: expect.any(String) });
+      expect(mockPut.mock.calls[1][1]).toEqual({ granted: false, policyVersion: expect.any(String) });
     });
   });
 });

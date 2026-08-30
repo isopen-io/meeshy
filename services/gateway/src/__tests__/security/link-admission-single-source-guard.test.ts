@@ -29,10 +29,11 @@
  *     d'invitation), il n'admet personne. `POST /anonymous/join/:linkId`,
  *     dans le MÊME fichier, ne compare plus rien lui-même : il délègue à
  *     `performLinkJoin` → `admitLinkEntry`.
- *   - `routes/conversations/messages.ts` (`GET …/messages`) — pas une porte
- *     d'ENTRÉE mais le PLANCHER de lecture d'un participant DÉJÀ admis,
- *     documenté en place (« Le lien de partage répond ici à DEUX questions
- *     distinctes sur la même ligne »).
+ *   - `routes/conversations/messages-list.ts` (`GET …/messages`, déplacé
+ *     depuis `messages.ts` par le découpage #4284 — même site, même raison)
+ *     — pas une porte d'ENTRÉE mais le PLANCHER de lecture d'un participant
+ *     DÉJÀ admis, documenté en place (« Le lien de partage répond ici à DEUX
+ *     questions distinctes sur la même ligne »).
  *
  * Geler documente que ces deux sites sont VUS, pas qu'ils sont exemptés sans
  * raison — la raison est écrite ci-dessus et sur place. Un troisième site qui
@@ -62,7 +63,9 @@ const ALLOWED = new Set([
   'services/conversations/linkAdmission.ts', // admitLinkEntry — LA loi
   'routes/conversations/link-admission.ts', // claimLinkUse — sa réclamation atomique (critère 3)
   'routes/anonymous.ts', // GET /anonymous/link/:identifier — aperçu public, n'admet personne
-  'routes/conversations/messages.ts', // plancher de lecture d'un participant déjà admis
+  // #4284 a découpé conversations/messages.ts en fichiers frères ; ce site
+  // (plancher de lecture d'un participant déjà admis) vit désormais ici.
+  'routes/conversations/messages-list.ts',
 ]);
 
 function listTsFiles(dir: string): string[] {

@@ -1,12 +1,12 @@
 import XCTest
 @testable import MeeshySDK
 
-/// Tests for the in-app toast presentation helpers on `SocketNotificationEvent`
-/// (`SocketNotificationEvent+Toast.swift`). Verifies that:
-///   * group messages render sender = title, group = subtitle, message = body
-///   * direct messages have no subtitle
-///   * social / interaction events render a precise action phrase
-///   * the avatar falls back from sender → group → initials
+/// Ce qui IDENTIFIE l'auteur d'une bannière in-app
+/// (`SocketNotificationEvent+Toast.swift`) : nom affiché, avatar avec ses deux
+/// replis (expéditeur → groupe → initiales), et le nom canonique du groupe.
+///
+/// Ce que la bannière DIT — headline, corps, vignette, réaction — est tenu par
+/// `NotificationBannerPresentationTests` : deux questions, deux suites.
 final class SocketNotificationToastTests: XCTestCase {
 
     private let decoder = JSONDecoder()
@@ -15,9 +15,9 @@ final class SocketNotificationToastTests: XCTestCase {
         try decoder.decode(SocketNotificationEvent.self, from: Data(json.utf8))
     }
 
-    // MARK: - Group message: sender = title, group = subtitle
+    // MARK: - Nom du groupe (matière première du cadrage « X dans <groupe> »)
 
-    func test_groupMessage_titleIsSender_subtitleIsGroup_bodyIsContent() throws {
+    func test_groupName_isTheConversationTitle() throws {
         let event = try makeEvent("""
         {
             "id": "n1", "userId": "u1", "type": "new_message",
@@ -27,12 +27,11 @@ final class SocketNotificationToastTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Alice Dupont")
-        XCTAssertEqual(event.toastSubtitle, "Équipe Tech")
-        XCTAssertEqual(event.toastBody, "Salut tout le monde")
+        XCTAssertEqual(event.actorDisplayName, "Alice Dupont")
+        XCTAssertEqual(event.conversationGroupName, "Équipe Tech")
     }
 
-    func test_directMessage_hasNoSubtitle() throws {
+    func test_groupName_isNilForADirectMessage() throws {
         let event = try makeEvent("""
         {
             "id": "n2", "userId": "u1", "type": "new_message",
@@ -42,119 +41,22 @@ final class SocketNotificationToastTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Bob")
-        XCTAssertNil(event.toastSubtitle)
-        XCTAssertEqual(event.toastBody, "Coucou")
+        XCTAssertNil(event.conversationGroupName)
     }
 
-    func test_groupMessage_withAttachment_bodyPrefixesLabel() throws {
+    /// Un contenu social n'a pas de groupe — même quand la passerelle y met un
+    /// titre de conversation par accident, ce n'est pas un cadrage « dans ».
+    func test_groupName_isNilForASocialEvent() throws {
         let event = try makeEvent("""
         {
-            "id": "n3", "userId": "u1", "type": "new_message",
-            "content": "",
-            "actor": { "id": "a1", "displayName": "Alice" },
-            "context": { "conversationTitle": "Photos", "conversationType": "group" },
-            "metadata": { "attachments": { "count": 1, "firstType": "image" } }
-        }
-        """)
-
-        XCTAssertEqual(event.toastSubtitle, "Photos")
-        XCTAssertEqual(event.toastBody, "\u{1F4F7} Photo")
-    }
-
-    // MARK: - Prisme i18n : titre = acteur, corps = content gateway localisé
-
-    func test_commentReply_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n4", "userId": "u1", "type": "comment_reply",
-            "content": "Bien vu !",
-            "actor": { "id": "a1", "displayName": "Charlie" },
-            "context": { "postId": "p1", "commentId": "cm1" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Charlie")
-        XCTAssertEqual(event.toastBody, "Bien vu !")
-        XCTAssertNil(event.toastSubtitle)
-    }
-
-    func test_postComment_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n5", "userId": "u1", "type": "post_comment",
+            "id": "n3", "userId": "u1", "type": "post_comment",
             "content": "Superbe photo",
-            "actor": { "id": "a1", "displayName": "Dana" }
+            "actor": { "id": "a1", "displayName": "Dana" },
+            "context": { "conversationTitle": "Équipe Tech", "conversationType": "group" }
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Dana")
-        XCTAssertEqual(event.toastBody, "Superbe photo")
-    }
-
-    func test_storyComment_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n6", "userId": "u1", "type": "story_new_comment",
-            "content": "a commenté votre story",
-            "actor": { "id": "a1", "displayName": "Eve" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Eve")
-        XCTAssertEqual(event.toastBody, "a commenté votre story")
-    }
-
-    func test_statusReaction_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n7", "userId": "u1", "type": "status_reaction",
-            "content": "a réagi \u{2764}\u{FE0F} à votre statut",
-            "actor": { "id": "a1", "displayName": "Frank" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Frank")
-        XCTAssertEqual(event.toastBody, "a réagi \u{2764}\u{FE0F} à votre statut")
-    }
-
-    func test_messageReaction_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n8", "userId": "u1", "type": "message_reaction",
-            "content": "a réagi \u{1F525} à votre message",
-            "actor": { "id": "a1", "displayName": "Grace" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Grace")
-        XCTAssertEqual(event.toastBody, "a réagi \u{1F525} à votre message")
-    }
-
-    func test_postRepost_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n9", "userId": "u1", "type": "post_repost",
-            "content": "a partagé votre publication",
-            "actor": { "id": "a1", "displayName": "Heidi" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Heidi")
-        XCTAssertEqual(event.toastBody, "a partagé votre publication")
-    }
-
-    func test_friendNewStory_titleActor_bodyGatewayContent() throws {
-        let event = try makeEvent("""
-        {
-            "id": "n10", "userId": "u1", "type": "friend_new_story",
-            "content": "a publié une nouvelle story",
-            "actor": { "id": "a1", "displayName": "Ivan" }
-        }
-        """)
-
-        XCTAssertEqual(event.toastTitle, "Ivan")
-        XCTAssertEqual(event.toastBody, "a publié une nouvelle story")
+        XCTAssertNil(event.conversationGroupName)
     }
 
     // MARK: - Avatar fallback
@@ -198,7 +100,7 @@ final class SocketNotificationToastTests: XCTestCase {
         XCTAssertEqual(event.toastAvatarName, "Bob")
     }
 
-    // MARK: - Fallbacks
+    // MARK: - Replis
 
     func test_unknownActor_fallsBackToQuelquun() throws {
         let event = try makeEvent("""
@@ -208,6 +110,6 @@ final class SocketNotificationToastTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(event.toastTitle, "Quelqu'un")
+        XCTAssertEqual(event.actorDisplayName, "Quelqu'un")
     }
 }

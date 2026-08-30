@@ -11,7 +11,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
     case thickness  // épaisseur
     case smoothing  // lissage : raw / curve / line
 
-    var sfSymbol: String {
+    public var sfSymbol: String {
         switch self {
         case .tool:      return "pencil.tip"
         case .color:     return "paintpalette.fill"
@@ -20,7 +20,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
         }
     }
 
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .tool:      return String(localized: "story.drawEdit.tool.tool", defaultValue: "Pinceau", bundle: .module)
         case .color:     return String(localized: "story.drawEdit.tool.color", defaultValue: "Couleur du trait", bundle: .module)
@@ -89,6 +89,43 @@ extension StoryComposerViewModel {
         drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
     }
 
+    /// **TRACER, tout de suite** — l'intention du plateau, en un seul geste
+    /// (#4092).
+    ///
+    /// L'atelier entre au dessin en DEUX temps : `enterDrawingEditingMode()`
+    /// ouvre le mode LISTE (« par défaut rien n'est activé, c'est la liste des
+    /// éléments de traits »), puis choisir un pinceau bascule en plein écran de
+    /// tracé. C'est juste pour une surface qui a la place d'afficher une liste.
+    ///
+    /// La vue `3b` ne décrit pas ce parcours : taper DESSIN doit donner un
+    /// doigt qui trace, avec ses couleurs et sa gomme sous la scène. Rien de
+    /// plus.
+    ///
+    /// **Ce que la vérification simulateur a trouvé (2026-08-30)** : la porte
+    /// du plateau appelait `enterDrawingEditingMode()` seul. La bande de
+    /// réglages paraissait, et le doigt traçait dans le VIDE — parce que la
+    /// couche de capture est montée sur `isDrawingActive`, c'est-à-dire
+    /// `activeTool == .drawing`, et que rien sur ce chemin ne posait l'outil.
+    /// Deux drapeaux pour un seul état apparent : la bande disait « je
+    /// dessine », le canvas disait « non ».
+    ///
+    /// Cette méthode pose les DEUX, et c'est pourquoi elle existe plutôt que de
+    /// publier `selectTool` : un site d'appel qui doit poser deux drapeaux dans
+    /// le bon ordre pour obtenir un état finit par n'en poser qu'un.
+    public func beginDrawing() {
+        activeTool = .drawing
+        enterImmersiveDrawing()
+    }
+
+    /// Sortie symétrique — elle retire les deux drapeaux que `beginDrawing` a
+    /// posés. Sans le second, la porte ne pourrait plus BASCULER : elle
+    /// retrouverait `isDrawingActive == true` et rentrerait dans le mode qu'on
+    /// vient de lui demander de quitter.
+    public func endDrawing() {
+        exitDrawingEditingMode()
+        if activeTool == .drawing { activeTool = nil }
+    }
+
     /// Sélection d'un pinceau → plein écran de tracé : canvas full-bleed
     /// dessinable jusqu'aux angles, bulles flottantes seules (le band se
     /// replie côté vue), pinch-zoom 2 doigts actif.
@@ -112,7 +149,7 @@ extension StoryComposerViewModel {
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
-    func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
+    public func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
         guard case .active(let strokeId, _) = drawingEditingMode else { return }
         drawingEditingMode = .active(strokeId: strokeId, expandedTool: tool)
     }
@@ -154,7 +191,7 @@ extension StoryComposerViewModel {
 
     /// Sélectionne un trait pour l'édition par-trait. `nil` désélectionne. Un id
     /// inexistant est ignoré (no-op). No-op si pas en mode édition.
-    func selectStroke(_ id: String?) {
+    public func selectStroke(_ id: String?) {
         guard case .active(_, let expandedTool) = drawingEditingMode else { return }
         if let id, !drawingStrokes.contains(where: { $0.id == id }) { return }
         drawingEditingMode = .active(strokeId: id, expandedTool: expandedTool)

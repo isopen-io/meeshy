@@ -56,7 +56,14 @@ extension MeeshyComposerHost {
         for media in documentContentMedia where media.kind != .audio
             && slideIdByMediaURL[media.sourceURL] == nil {
             let target: String
-            if slideIdByMediaURL.isEmpty,
+            // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une porte
+            // du rail ajoute « en additif » ; créer une page est le geste de
+            // `[+]`, et lui seul (directive porteur 2026-08-30). La rangée du
+            // document, elle, garde la doctrine de la vue `1g` — en Post, une
+            // slide est UN média.
+            if railPosedMediaURLs.contains(media.sourceURL) {
+                target = viewModel.currentSlide.id
+            } else if slideIdByMediaURL.isEmpty,
                (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
                 target = viewModel.currentSlide.id
             } else {
@@ -264,11 +271,11 @@ extension MeeshyComposerHost {
                 if let transcription {
                     documentLanguage = transcription.language
                 }
-                showsAudioComposer = false
+                presentedPortal = nil
                 HapticFeedback.light()
             },
             onPublishBorrowed: { _ in
-                showsAudioComposer = false
+                presentedPortal = nil
             }
         )
     }
@@ -305,7 +312,7 @@ extension MeeshyComposerHost {
 
     var documentLanguageCapsule: some View {
         Button {
-            showsDocumentLanguagePicker = true
+            presentedPortal = .language
             HapticFeedback.light()
         } label: {
             Text(ComposerLanguageFlag.label(for: documentLanguage))
@@ -372,7 +379,7 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   presentMediaSources()
+        case .media:   railPosesNextMedia = true; presentMediaSources()
         case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -395,11 +402,26 @@ extension MeeshyComposerHost {
             // atteignable.
             HapticFeedback.light()
             if viewModel.isDrawingActive {
-                viewModel.exitDrawingEditingMode()
-                requestedSceneBand = nil
+                viewModel.endDrawing()
             } else {
-                viewModel.enterDrawingEditingMode()
-                requestedSceneBand = .drawing
+                // `beginDrawing()` et non `enterDrawingEditingMode()` : le
+                // second n'ouvre que le mode LISTE de l'atelier, et laisse
+                // `activeTool` intact — donc la couche de capture n'est jamais
+                // montée et le doigt trace dans le vide. Défaut mesuré au
+                // simulateur le 2026-08-30 : la bande paraissait, le trait
+                // jamais.
+                viewModel.beginDrawing()
+            }
+        case .text:
+            // **Poser PUIS ouvrir l'éditeur, dans le même geste.** `addText()`
+            // crée une coquille vide : la laisser sans éditeur donnerait un
+            // objet invisible que rien ne remplit — un contrôle sans effet.
+            //
+            // La coquille vide est supprimée si l'auteur referme sans écrire
+            // (`exitTextEditingMode`), donc « poser » n'engage à rien.
+            HapticFeedback.light()
+            if let objet = viewModel.addText() {
+                viewModel.enterTextEditingMode(textId: objet.id)
             }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
@@ -408,7 +430,7 @@ extension MeeshyComposerHost {
             // précisément la chaîne que l'inventaire de
             // `ComposerIntakePortalsTests` tient.
             HapticFeedback.light()
-            showsStickerPicker = true
+            presentedPortal = .sticker
         }
     }
 
@@ -439,19 +461,19 @@ extension MeeshyComposerHost {
         switch tool.effect {
         case .insertsEmojiIntoText:
             HapticFeedback.light()
-            showsEmojiPicker = true
+            presentedPortal = .emoji
         case .opensReferencePicker:
             HapticFeedback.light()
-            showsReferencePicker = true
+            presentedPortal = .reference
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
             presentMediaIntake(intake)
         case .attachesLocation:
             HapticFeedback.light()
-            showsLocationPicker = true
+            presentedPortal = .location
         case .attachesTranscribedAudio:
             HapticFeedback.light()
-            showsAudioComposer = true
+            presentedPortal = .audio
         case .none:
             break
         }
@@ -475,6 +497,39 @@ extension MeeshyComposerHost {
     /// théorique : il n'a simplement pas de producteur aujourd'hui, la règle
     /// n'ôtant que la caméra. Le rendre impossible à écrire coûterait plus que
     /// de le traiter.
+    /// **Un contrôleur d'outil a été tapé** — on déplie son panneau, ou on le
+    /// replie s'il l'était déjà.
+    ///
+    /// L'identifiant porte sa famille en préfixe (`drawing.` / `text.`), et
+    /// c'est ce qui permet à cette fonction de rester une seule : le rail ne
+    /// connaît pas les deux énumérés du SDK, et le meuble n'a pas à se demander
+    /// dans quel mode il est — l'identifiant le dit.
+    func handleRailToolControl(_ control: ComposerToolControl) {
+        HapticFeedback.light()
+        if let brut = control.id.split(separator: ".", maxSplits: 1).last.map(String.init) {
+            if control.id.hasPrefix("drawing."), let outil = DrawingEditTool(rawValue: brut) {
+                // Régler le PINCEAU, jamais un trait déjà posé : la sélection
+                // par-trait est un autre geste, et laisser les deux ouverts
+                // ferait régler l'un en croyant régler l'autre.
+                viewModel.selectStroke(nil)
+                viewModel.setExpandedDrawingTool(control.isExpanded ? nil : outil)
+            } else if control.id.hasPrefix("text."), let outil = TextEditTool(rawValue: brut) {
+                viewModel.setExpandedTool(control.isExpanded ? nil : outil)
+            }
+        }
+    }
+
+    /// **Le `(x)`** — termine l'outil en cours, quel qu'il soit, et rend le rail
+    /// à ses portes. Il ne détruit rien : ce qui a été posé reste sur la scène.
+    func handleRailExitTool() {
+        HapticFeedback.light()
+        if viewModel.isDrawingActive {
+            viewModel.endDrawing()
+        } else if viewModel.textEditingMode.activeTextId != nil {
+            viewModel.exitTextEditingMode()
+        }
+    }
+
     func presentMediaSources() {
         HapticFeedback.light()
         let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
@@ -523,7 +578,7 @@ extension MeeshyComposerHost {
 
     func presentSoundSource(_ source: ComposerSoundSource) {
         switch source {
-        case .library: showsSoundLibrary = true
+        case .library: presentedPortal = .soundLibrary
         case .record:  handleDocumentTool(.microphone)
         }
     }
@@ -536,10 +591,10 @@ extension MeeshyComposerHost {
         SoundLibraryPicker(
             onPick: { sound in
                 viewModel.addBorrowedSound(sound)
-                showsSoundLibrary = false
+                presentedPortal = nil
                 HapticFeedback.light()
             },
-            onCancel: { showsSoundLibrary = false }
+            onCancel: { presentedPortal = nil }
         )
     }
 
@@ -548,7 +603,7 @@ extension MeeshyComposerHost {
         case .photoLibrary:
             showsPhotoPicker = true
         case .camera:
-            showsCamera = true
+            presentedPortal = .camera
         case .files:
             showsFileImporter = true
         }
@@ -564,7 +619,17 @@ extension MeeshyComposerHost {
     /// EXTENSION avant ce repli terminal), jamais une vidéo sélectionnée
     /// figée `durationMs: nil` (`.durationMs`, sans quoi `ReelComposition`
     /// la classerait `.post` au lieu de `.reel`).
+    /// Marque les médias que l'ingestion va poser comme venant du RAIL, puis
+    /// retombe. Un drapeau qui resterait vrai ferait poser sur la scène
+    /// courante le média suivant, même arrivé par la rangée du document.
+    func consumeRailPosing(_ urls: [URL]) {
+        guard railPosesNextMedia else { return }
+        railPosedMediaURLs.formUnion(urls)
+        railPosesNextMedia = false
+    }
+
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
+        var posees: [URL] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let declaredType = item.supportedContentTypes.first
@@ -579,7 +644,9 @@ extension MeeshyComposerHost {
                 declaredMimeType: mime,
                 durationMs: duration
             ))
+            posees.append(url)
         }
+        consumeRailPosing(posees)
         HapticFeedback.light()
     }
 
@@ -595,6 +662,56 @@ extension MeeshyComposerHost {
     /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
     /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
     /// pour rien.
+    /// **Ce qu'un COLLAGE pose** (#4092) — et il ne pose pas comme l'atelier.
+    ///
+    /// L'atelier a `posePastedItems`, qui route vers `addCapturedMedia` et
+    /// `addRecordingToBackground` : deux helpers qui portent son état de
+    /// CHARGEMENT (`isLoadingMedia`, `mediaLoadProgress`), une orchestration de
+    /// vue que le meuble n'a pas et n'a pas à recopier.
+    ///
+    /// Le meuble a le sien, et il est déjà écrit : `ingestCameraCapture` pose
+    /// une image ou une vidéo dans `documentLocalMedia`, en sondant le mime et
+    /// la durée. Un collage d'image EST une capture, du point de vue de ce qui
+    /// arrive dans le document — la seule différence est d'où viennent les
+    /// octets.
+    ///
+    /// **Ce n'est donc pas une réécriture de `posePastedItems`, c'est le même
+    /// geste branché sur l'ingestion de CE meuble.** Recopier les helpers de
+    /// l'atelier aurait apporté avec eux un état de chargement dont rien ici ne
+    /// se sert (leçon 336 : emprunter ce qui décide, pas ce qui orchestre).
+    ///
+    /// Le TEXTE, lui, garde sa règle partagée : `StoryPastePolicy` décide s'il
+    /// devient la description ou un objet de scène, et cette question ne dépend
+    /// pas de la surface qui colle.
+    func handlePastedItems(_ items: [StoryPastedItem]) {
+        for item in items {
+            switch item {
+            case .image(let image):
+                Task { await ingestCameraCapture(.photo(image)) }
+            case .video(let url):
+                Task { await ingestCameraCapture(.video(url)) }
+            case .audio(let url):
+                // Un son collé rejoint la scène comme un son EMPRUNTÉ le ferait
+                // — c'est le même objet, et `addAudioObject` en est le site
+                // unique. Le fichier voyage par `loadedAudioURLs`.
+                viewModel.attachPastedAudio(url: url)
+            case .text(let contenu):
+                switch StoryPastePolicy.placement(forText: contenu) {
+                case .description(let texte):
+                    documentText = texte
+                case .textObject(let texte):
+                    if let objet = viewModel.addText() {
+                        viewModel.updateTextContent(id: objet.id, text: texte)
+                        viewModel.exitTextEditingMode()
+                    }
+                case nil:
+                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
+                }
+            }
+        }
+        HapticFeedback.light()
+    }
+
     func ingestCameraCapture(_ result: CameraResult) async {
         switch result {
         case .photo(let image):
@@ -603,6 +720,7 @@ extension MeeshyComposerHost {
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
+            consumeRailPosing([url])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(
@@ -610,6 +728,7 @@ extension MeeshyComposerHost {
                 declaredMimeType: "video/quicktime",
                 durationMs: duration
             ))
+            consumeRailPosing([url])
         }
         HapticFeedback.light()
     }
@@ -638,6 +757,7 @@ extension MeeshyComposerHost {
     /// `Task`, comme les deux autres ingestions.
     func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
         guard case .success(let urls) = result else { return }
+        var posees: [URL] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -652,7 +772,9 @@ extension MeeshyComposerHost {
                 declaredMimeType: mime,
                 durationMs: duration
             ))
+            posees.append(destination)
         }
+        consumeRailPosing(posees)
         HapticFeedback.light()
     }
 
@@ -671,7 +793,7 @@ extension MeeshyComposerHost {
     var emojiPickerSheet: some View {
         EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
             documentText += emoji
-            showsEmojiPicker = false
+            presentedPortal = nil
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -687,23 +809,35 @@ extension MeeshyComposerHost {
     /// fermée (« `showsEmojiPicker` insère dans le TEXTE, ce qui n'est pas la
     /// même chose » — la phrase était juste, la conclusion non).
     ///
-    /// **La feuille reste OUVERTE après une pose**, comme sous l'atelier : on
-    /// pose rarement un seul sticker, et refermer à chaque glyphe ferait payer
-    /// une réouverture par objet. Le `swipe-down` natif la ferme.
+    /// **La feuille se REFERME sur la pose** (directive porteur 2026-08-30).
+    ///
+    /// Elle restait ouverte, par emprunt à l'atelier : « on pose rarement un
+    /// seul sticker ». C'était un raisonnement de PLANCHE de stickers, pas de
+    /// scène — sur un plateau, poser un sticker et le PLACER sont un seul
+    /// geste, et une feuille qui recouvre la moitié basse empêche la seconde
+    /// moitié. Refermer rend la scène au doigt immédiatement.
+    ///
+    /// **Et le sticker se pose en GRAND.** Le défaut de la taille par défaut
+    /// donne un glyphe minuscule au centre, que l'auteur doit agrandir avant de
+    /// le placer — deux gestes pour un. `StorySticker.posedScale` le pose à la
+    /// taille où il se voit.
     ///
     /// Les deux rappels vont au VIEWMODEL, jamais au canvas : muter par le
     /// modèle est ce qui garde publication, reader et export d'accord — et le
     /// meuble n'a aucune référence à la vue UIKit.
     var stickerPickerSheet: some View {
         StickerPickerView(onStickerSelected: { emoji in
-            viewModel.addSticker(emoji: emoji)
+            viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
+            presentedPortal = nil
             HapticFeedback.light()
         }, onLibraryStickerSelected: { item in
             // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
             // `loadedImages` jusqu'à ce que la publication le téléverse et
             // remplisse `postMediaId`.
             viewModel.addSticker(image: item.thumbnail,
-                                 provider: StoryStickerLibraryItem.provider)
+                                 provider: StoryStickerLibraryItem.provider,
+                                 scale: StorySticker.posedScale)
+            presentedPortal = nil
             HapticFeedback.light()
         })
         .presentationDetents([.medium])

@@ -38,7 +38,13 @@ import { join } from 'path';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
-const MESSAGE_READ = /\bprisma\.message\.(findMany|count)\s*\(/g;
+// `aggregateRaw` fait partie du balayage depuis #4391 : une agrégation MongoDB
+// sur `Message` EST une lecture de messages, et l'omettre créait un angle mort
+// — `admin/languages.ts` lisait déjà quatre fois la collection sans jamais
+// apparaître ici, et #4391 a converti une lecture de `admin/messages.ts` vers
+// cette forme. Un balayage qui rétrécit quand la lecture change de FORME
+// n'atteste plus rien.
+const MESSAGE_READ = /\bprisma\.message\.(findMany|count|aggregateRaw)\s*\(/g;
 const APPLY_HIDING = /\bapplyPersonalHistoryHiding\s*\(/g;
 
 type Classification =
@@ -53,7 +59,22 @@ type Classification =
  */
 const SURFACES: Record<string, Classification> = {
   // ── Applique le masquage personnel ────────────────────────────────────────
-  'conversations/messages.ts': { kind: 'applies', reads: 11, applications: 10 },
+  // conversations/messages.ts (11 lectures, 10 applications) a été découpé
+  // en fichiers frères par #4284 ; les quatre entrées ci-dessous se
+  // partagent EXACTEMENT ces deux totaux (6+1+2+2=11 lectures,
+  // 6+0+2+2=10 applications) — aucune lecture ni application n'a été
+  // ajoutée ni retirée, seul le fichier a changé. L'écart d'une unité entre
+  // lectures et applications, jusqu'ici anonyme dans le compte global du
+  // fichier unique, se trouve maintenant sur `messages-list-query.ts` :
+  // `enrichForwardedMessagesForList` y relit le message SOURCE d'un
+  // transfert par id direct (`where: { id: { in: … } }`), gardé par sa
+  // propre réciprocité (`resolveForwardSourceGateForReader`) plutôt que par
+  // `applyPersonalHistoryHiding` — le même écart qu'avant le découpage,
+  // seulement plus précisément localisé.
+  'conversations/messages-list.ts': { kind: 'applies', reads: 6, applications: 6 },
+  'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 0 },
+  'conversations/messages-pin.ts': { kind: 'applies', reads: 2, applications: 2 },
+  'conversations/messages-search.ts': { kind: 'applies', reads: 2, applications: 2 },
   'conversations/threads.ts': { kind: 'applies', reads: 1, applications: 2 },
 
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
@@ -82,7 +103,10 @@ const SURFACES: Record<string, Classification> = {
       'écriture et lecture), et un id situé sous le plancher est refusé en 404. ' +
       "L'exemption porte donc sur le CONTENU, jamais sur l'admission.",
   },
-  'conversations/messages-advanced.ts': {
+  // conversations/messages-advanced.ts → messages-advanced-reads.ts (#4284,
+  // découpage par responsabilité). Même lecture, même raison ; seul le
+  // chemin a changé.
+  'conversations/messages-advanced-reads.ts': {
     kind: 'exempt',
     reads: 1,
     why:
@@ -118,9 +142,19 @@ const SURFACES: Record<string, Classification> = {
     reads: 3,
     why: 'Analytics de liens de tracking — agrège des URLs, pas des messages lisibles.',
   },
-  'admin/agent.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // admin/agent.ts → admin/agent-configs.ts (#4284, découpage par
+  // responsabilité — GET /configs/:conversationId/messages) : même deux
+  // lectures, même raison, seul le chemin a changé.
+  'admin/agent-configs.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
   'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
+  // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
+  // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
+  // que le balayage élargi rend visible.
   'admin/messages.ts': { kind: 'exempt', reads: 11, why: 'Surface admin/modération.' },
+  // Déclarée par #4391 en même temps que l'élargissement du balayage : ses
+  // quatre lectures sont des `aggregateRaw` (paires de traduction, utilisateurs
+  // distincts par langue, volumes quotidiens), invisibles jusque-là.
+  'admin/languages.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/system-rankings.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   // 4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
   // lectures) est passée en régime SOUVERAIN et a été extraite dans son
@@ -157,7 +191,9 @@ const SURFACES: Record<string, Classification> = {
  * `conversation`, donc invisibles au balayage ci-dessus. C'est exactement la
  * forme qui échappe à un dénombrement naïf, d'où leur déclaration séparée.
  */
-const NESTED_PREVIEW_SURFACES = ['conversations/core.ts', 'conversations/search.ts'];
+// conversations/core.ts → conversations/core-list.ts (#4284 : GET
+// /conversations, seule route de ce fichier à porter l'aperçu imbriqué).
+const NESTED_PREVIEW_SURFACES = ['conversations/core-list.ts', 'conversations/search.ts'];
 
 const SOCKETIO_DIR = join(__dirname, '../../../socketio');
 

@@ -29,8 +29,12 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
         XCTAssertEqual(entry.dotStyle, SyncPillDotStyle.brand)
         XCTAssertTrue(entry.showsActivityDots,
                       "quelqu'un est en train d'écrire : l'entrée doit se lire comme en cours")
-        XCTAssertEqual(entry.source, OutboxUIItem.Source.conversation(id: "conv1"),
-                       "le tap doit ouvrir la conversation où l'on écrit")
+        XCTAssertEqual(entry.source, OutboxUIItem.Source.conversation(id: "conv1", messageId: nil),
+                       """
+                       le tap doit ouvrir la conversation où l'on écrit — et SANS ancre \
+                       de message (#4027) : « X écrit » ne désigne aucun message, il n'y \
+                       en a pas encore. Viser ici ferait sauter le fil sur un id arbitraire.
+                       """)
     }
 
     func test_typingEntries_excludesTheOpenConversation() {

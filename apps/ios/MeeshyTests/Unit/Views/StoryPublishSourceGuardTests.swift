@@ -76,6 +76,10 @@ final class StoryPublishSourceGuardTests: XCTestCase {
     func test_storyViewModel_hasNoDuplicatedFriendsLiteral() throws {
         let source = try Self.strippedLines(of: "Features/Main/ViewModels/StoryViewModel.swift")
             .joined(separator: "\n")
+        // Garde-fou de la garde : une source vide ferait passer l'assertion
+        // négative ci-dessous au vert sans rien avoir vérifié.
+        XCTAssertGreaterThan(source.count, 400,
+                             "Source (unité) de StoryViewModel introuvable ou vide — la garde ne mesurerait rien.")
 
         XCTAssertFalse(
             source.contains("\"FRIENDS\""),
@@ -123,15 +127,28 @@ final class StoryPublishSourceGuardTests: XCTestCase {
         return lowerBound
     }
 
+    /// `StoryViewModel` s'est scindé en plusieurs fichiers (#4425) : ce chemin
+    /// précis passe par l'UNITÉ (`AppSourceGuard.storyViewModelSource`) — les
+    /// deux gardes ci-dessus cherchent des séquences (ordre d'appels, absence
+    /// d'un littéral) qui peuvent vivre dans un fichier frère
+    /// (`StoryViewModel+Publication.swift`) depuis le découpage. Les deux
+    /// autres appelants (`StoryTrayView.swift`, `MyStoriesView.swift`)
+    /// continuent de lire leur fichier tel quel.
     private static func strippedLines(of relativePath: String) throws -> [String] {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()  // …/Unit/Views
-            .deletingLastPathComponent()  // …/Unit
-            .deletingLastPathComponent()  // …/MeeshyTests
-            .deletingLastPathComponent()  // …/apps/ios
-            .appendingPathComponent("Meeshy")
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        let raw: String
+        if "Meeshy/" + relativePath == AppSourceGuard.storyViewModelPath {
+            raw = try AppSourceGuard.storyViewModelSource()
+        } else {
+            let url = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()  // …/Unit/Views
+                .deletingLastPathComponent()  // …/Unit
+                .deletingLastPathComponent()  // …/MeeshyTests
+                .deletingLastPathComponent()  // …/apps/ios
+                .appendingPathComponent("Meeshy")
+                .appendingPathComponent(relativePath)
+            raw = try String(contentsOf: url, encoding: .utf8)
+        }
+        return raw
             .components(separatedBy: "\n")
             .map { line -> String in
                 guard let range = line.range(of: "//") else { return line }

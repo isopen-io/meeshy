@@ -207,7 +207,7 @@ struct ConversationComposerState {
     var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
-    var composeMediaTarget: ComposableMediaTarget? = nil
+    var composeMediaTarget: ComposableMessageTarget? = nil
     /// La même cible, RETENUE le temps qu'une feuille se referme.
     ///
     /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
@@ -216,7 +216,7 @@ struct ConversationComposerState {
     /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
     /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
     /// délai n'est qu'un pari.
-    var pendingComposeTarget: ComposableMediaTarget? = nil
+    var pendingComposeTarget: ComposableMessageTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
@@ -1001,7 +1001,7 @@ struct ConversationView: View {
                     // dixième porte : la feuille se referme et rend la main,
                     // l'hôte pose le même état que l'appui long. Elle ne monte
                     // pas le meuble, ce qui en ferait un second contrat d'envoi.
-                    onCompose: { composerState.pendingComposeTarget = ComposableMediaTarget(message: msgToForward) },
+                    onCompose: { composerState.pendingComposeTarget = ComposableMessageTarget(message: msgToForward) },
                     onDismiss: { composerState.forwardMessage = nil }
                 )
                     .presentationDetents([.medium, .large])
@@ -1089,15 +1089,10 @@ struct ConversationView: View {
                     onDismiss: { composerState.composeMediaTarget = nil }
                 )
             }
-            .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
-                ConversationMediaGalleryView(
-                    allAttachments: viewModel.allVisualAttachments,
-                    startAttachmentId: startAttachment.id,
-                    accentColor: accentColor,
-                    captionMap: viewModel.mediaCaptionMap,
-                    senderInfoMap: viewModel.mediaSenderInfoMap
-                )
-            }
+            .modifier(ConversationMediaGalleryLayer(
+                viewModel: viewModel, scrollState: $scrollState,
+                composerState: $composerState, accentColor: accentColor,
+                onReply: { triggerReply(for: $0) }))
             .fullScreenCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video":
@@ -2751,7 +2746,7 @@ struct ConversationView: View {
                 onCompose: {
                     // L'overlay ne monte rien : il rend la main. Le même état
                     // que le second déclencheur, un seul chemin de présentation.
-                    composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+                    composerState.composeMediaTarget = ComposableMessageTarget(message: msg)
                 },
                 onSelect: { beginSelectionMode(seedingWith: msg.id) },
                 isDirect: isDirect,
@@ -2926,7 +2921,7 @@ struct ConversationView: View {
         case .compose:
             Button {
                 HapticFeedback.light()
-                composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+                composerState.composeMediaTarget = ComposableMessageTarget(message: msg)
             } label: {
                 Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main), systemImage: "wand.and.stars")
             }

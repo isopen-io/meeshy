@@ -20,7 +20,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 541,
+  "routeCount": 547,
   "routes": [
     {
       "method": "DELETE",
@@ -942,6 +942,20 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/socketio/stats",
+      "module": "socketIOAdminRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2892,6 +2906,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/consents",
+      "module": "meConsentsRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/delete-account/cancel",
       "module": "deleteAccountRoutes",
       "mountPrefix": "/api/v1/me",
@@ -3545,6 +3573,20 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/socketio/stats",
+      "module": "socketIOAdminRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4959,6 +5001,20 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/socketio/disconnect-user",
+      "module": "socketIOAdminRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6797,6 +6853,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/socketio/disconnect-user",
+      "module": "socketIOAdminRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/status-metrics/reset",
       "module": "maintenanceRoutes",
       "mountPrefix": "/api/v1",
@@ -7415,6 +7485,20 @@
       "path": "/api/v1/directory/contacts",
       "module": "directoryContactsRoutes",
       "mountPrefix": "/api/v1/directory",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/consents/:purpose",
+      "module": "meConsentsRoutes",
+      "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

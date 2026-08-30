@@ -17,7 +17,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { LoginForm } from '../../../components/auth/login-form';
+import { LoginForm, buildVerifyTwoFactorUrl } from '../../../components/auth/login-form';
+import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -164,6 +165,7 @@ describe('LoginForm', () => {
     window.location.href = '';
     window.location.pathname = '/login';
     window.location.search = '';
+    sessionStorage.clear();
   });
 
   describe('Initial Rendering', () => {
@@ -437,15 +439,43 @@ describe('LoginForm', () => {
       });
     });
 
-    it('handles alternative response format with access_token', async () => {
+  });
+
+  describe('Two-Factor Authentication (#4458)', () => {
+    // Measured contract — services/gateway/src/routes/auth/login.ts:121-135
+    // (registerLoginRoutes, POST /login): when the account carries a second
+    // factor, the gateway returns `{ success: true, data: { requires2FA: true,
+    // twoFactorToken, rememberDevice, user: {...no-token profile...}, message } }`.
+    // No `token` — the three-branch cascade below this point in the component
+    // requires one, so this shape used to fall through to the generic
+    // "unknown error" message instead of reaching /auth/verify-2fa (issue #4458).
+    //
+    // Keys aligned with what /auth/verify-2fa actually reads (its own
+    // sessionStorage.getItem calls) and with what the sibling
+    // /auth/magic-link/validate flow already writes for the same screen —
+    // SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN / _USER_ID / _USERNAME.
+    //
+    // Redirect is asserted via next/navigation's router.push (mockPush) —
+    // jsdom 26+ makes window.location and its methods non-configurable own
+    // properties in this repo's test environment (see the ErrorBoundary and
+    // safe-redirect suites), so an assignment to location.href cannot be
+    // observed from a test. What IS observed, per the task's own directive,
+    // is what's really persisted: the sessionStorage keys /auth/verify-2fa
+    // actually reads on mount.
+    it('stores the pending 2FA session and redirects to /auth/verify-2fa when the gateway requires a second factor', async () => {
       const user = userEvent.setup();
-      const mockUser = { id: '1', username: 'testuser' };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: mockUser,
-          access_token: 'test-access-token',
+          success: true,
+          data: {
+            requires2FA: true,
+            twoFactorToken: 'temp-token-abc',
+            rememberDevice: false,
+            user: { id: 'user-42', username: 'testuser', email: 'testuser@example.com' },
+            message: 'Veuillez entrer votre code d\'authentification à deux facteurs',
+          },
         }),
       });
 
@@ -461,8 +491,70 @@ describe('LoginForm', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockLogin).toHaveBeenCalledWith(mockUser, 'test-access-token', undefined, undefined);
+        expect(sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN)).toBe('temp-token-abc');
       });
+      expect(sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID)).toBe('user-42');
+      expect(sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME)).toBe('testuser');
+      expect(mockPush).toHaveBeenCalledWith('/auth/verify-2fa');
+
+      // Never a partial/soft "success" — no token was ever granted for this
+      // login, so the session must not be established.
+      expect(mockLogin).not.toHaveBeenCalled();
+      expect(screen.queryByText('Unknown error')).not.toBeInTheDocument();
+    });
+
+    it('does not redirect to the 2FA screen on an ordinary token-bearing success (negative witness)', async () => {
+      const user = userEvent.setup();
+      const mockUser = { id: '1', username: 'testuser' };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { user: mockUser, token: 'test-token' },
+        }),
+      });
+
+      render(<LoginForm />);
+
+      const usernameInput = screen.getByPlaceholderText(/Pseudonyme ou numero de telephone/i);
+      const passwordInput = screen.getByPlaceholderText(/Mot de passe/i);
+
+      await user.type(usernameInput, 'testuser');
+      await user.type(passwordInput, 'password123');
+
+      const submitButton = screen.getByRole('button', { name: /Login/i });
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalledWith(mockUser, 'test-token', undefined, undefined);
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN)).toBeNull();
+    });
+  });
+
+  describe('buildVerifyTwoFactorUrl (#4458)', () => {
+    // window.location.search cannot be simulated in this jsdom environment
+    // (same non-configurable-Location limitation as above), so the
+    // returnUrl-forwarding + safe-path clamping is exercised directly as the
+    // pure function the component calls, rather than through a form
+    // submission that could never actually vary the input.
+    it('targets the plain 2FA screen when no returnUrl is present', () => {
+      expect(buildVerifyTwoFactorUrl('')).toBe('/auth/verify-2fa');
+    });
+
+    it('forwards a same-origin returnUrl, percent-encoded', () => {
+      expect(buildVerifyTwoFactorUrl('?returnUrl=%2Fsettings')).toBe(
+        '/auth/verify-2fa?returnUrl=%2Fsettings'
+      );
+    });
+
+    it('clamps an off-origin returnUrl to "/" rather than forwarding it verbatim', () => {
+      expect(buildVerifyTwoFactorUrl('?returnUrl=https%3A%2F%2Fattacker.example')).toBe(
+        '/auth/verify-2fa?returnUrl=%2F'
+      );
     });
   });
 
@@ -557,6 +649,39 @@ describe('LoginForm', () => {
       await waitFor(() => {
         expect(mockToast.error).toHaveBeenCalled();
       });
+    });
+
+    it('rejects the legacy unwrapped access_token contract the gateway no longer serves', async () => {
+      // services/gateway/src/routes/auth/login.ts always wraps its payload
+      // via sendSuccess() -> { success, data }, and `access_token` has zero
+      // occurrences anywhere under services/gateway/src. This top-level
+      // `{ user, access_token }` shape (no `success`, no `data` envelope) was
+      // one of two dead branches in the token cascade (#4458) — asserting its
+      // rejection here keeps it from being silently reintroduced.
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: '1', username: 'testuser' },
+          access_token: 'test-access-token',
+        }),
+      });
+
+      render(<LoginForm />);
+
+      const usernameInput = screen.getByPlaceholderText(/Pseudonyme ou numero de telephone/i);
+      const passwordInput = screen.getByPlaceholderText(/Mot de passe/i);
+
+      await user.type(usernameInput, 'testuser');
+      await user.type(passwordInput, 'password123');
+
+      const submitButton = screen.getByRole('button', { name: /Login/i });
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalledWith('Unknown error');
+      });
+      expect(mockLogin).not.toHaveBeenCalled();
     });
   });
 

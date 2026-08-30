@@ -536,18 +536,28 @@ final class StoryViewModelTests: XCTestCase {
     func test_markViewed_enqueuesDurableOutboxRecord() async {
         // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
         // plus par le POST fire-and-forget direct.
-        let item = makeStoryItem(id: "view-service-test", isViewed: false)
+        //
+        // L'identifiant est un ObjectId SERVEUR (24 hexadécimaux), et ce n'est
+        // plus décoratif : `markViewed` refuse d'enfiler ce que le serveur ne
+        // sait pas adresser (#4044 — un `pending_<uuid>` de story en cours de
+        // publication faisait lever Prisma, donc 500, donc une ligne d'outbox
+        // condamnée). La fixture « view-service-test » était une chaîne
+        // qu'aucune story ne porte : elle faisait tomber ce témoin pour la
+        // mauvaise raison. Le refus lui-même est couvert par
+        // `StoryViewedMarkingTests`, qui en est le site.
+        let storyId = "507f1f77bcf86cd799439021"
+        let item = makeStoryItem(id: storyId, isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
         var enqueuedStoryIds: [String] = []
         sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
-        sut.markViewed(storyId: "view-service-test")
+        sut.markViewed(storyId: storyId)
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
+        XCTAssertEqual(enqueuedStoryIds, [storyId])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {
@@ -2665,16 +2675,15 @@ final class StoryViewModelTests: XCTestCase {
     /// la fonction (jamais le fichier entier), équilibrée par accolades via
     /// `DeclarationBodyScanner` — insensible aux commentaires ajoutés au-dessus.
     func test_prefetchStoryMediaURLs_blockConsultsTheDownloadPolicy() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/ViewModels
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel.swift")
-        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        // Lit l'UNITÉ (#4425), pas le seul fichier `StoryViewModel.swift` :
+        // `prefetchStoryMediaURLs` peut vivre dans un fichier frère
+        // (`StoryViewModel+MediaPreload.swift`) depuis le découpage — une
+        // lecture bornée au fichier historique ne trouverait plus son corps,
+        // et cette garde de câblage ne mesurerait plus rien.
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
 
         guard let body = DeclarationBodyScanner.body(containing: "private static func prefetchStoryMediaURLs(", in: source) else {
-            XCTFail("prefetchStoryMediaURLs body not found — StoryViewModel.swift changed shape, update this guard's anchor.")
+            XCTFail("prefetchStoryMediaURLs body not found — StoryViewModel's unit changed shape, update this guard's anchor.")
             return
         }
 

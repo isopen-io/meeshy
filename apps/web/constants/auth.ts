@@ -4,7 +4,6 @@
 
 export const AUTH_STORAGE_KEYS = {
   AUTH_TOKEN: 'meeshy_auth_token',
-  REFRESH_TOKEN: 'meeshy_refresh_token',
   SESSION_TOKEN: 'meeshy_session_token',
   USER_DATA: 'meeshy_user_data',
   ANONYMOUS_SESSION: 'meeshy_anonymous_session',

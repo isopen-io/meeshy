@@ -610,6 +610,9 @@ describe('Admin invitation routes', () => {
       count: jest.fn<any>(),
       update: jest.fn<any>(),
       groupBy: jest.fn<any>(),
+      // #4465 — `GET /timeline/daily` lit désormais `aggregateRaw` (comptage
+      // par jour × statut en base), plus `findMany`.
+      aggregateRaw: jest.fn<any>(),
     },
   };
 
@@ -633,6 +636,7 @@ describe('Admin invitation routes', () => {
     mockPrisma.friendRequest.groupBy.mockResolvedValue([]);
     mockPrisma.friendRequest.findUnique.mockResolvedValue(null);
     mockPrisma.friendRequest.update.mockResolvedValue({});
+    mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([]);
   });
 
   afterAll(async () => {
@@ -1143,8 +1147,10 @@ describe('Admin invitation routes', () => {
     });
 
     it('returns 200 with 7 days of empty timeline when no invitations', async () => {
-      mockPrisma.friendRequest.findMany.mockResolvedValue([]);
-
+      // #4465 : la route lit désormais `aggregateRaw` (comptage par jour ×
+      // statut en base), plus `findMany` — le `beforeEach` règle déjà
+      // `aggregateRaw` sur `[]`, ce qui reproduit fidèlement « aucune
+      // invitation sur la fenêtre ».
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1166,10 +1172,13 @@ describe('Admin invitation routes', () => {
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
 
-      mockPrisma.friendRequest.findMany.mockResolvedValue([
-        { createdAt: today, status: 'accepted' },
-        { createdAt: today, status: 'rejected' },
-        { createdAt: today, status: 'pending' },
+      // #4465 : le `$group` par {jour, statut} rend une ligne par COMBINAISON
+      // — trois statuts le même jour = trois lignes, chacune avec son propre
+      // `count`, pas trois documents `{createdAt, status}` à replier.
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: todayStr, status: 'accepted' }, count: 1 },
+        { _id: { date: todayStr, status: 'rejected' }, count: 1 },
+        { _id: { date: todayStr, status: 'pending' }, count: 1 },
       ]);
 
       app = buildInvApp('BIGBOSS');
@@ -1186,13 +1195,37 @@ describe('Admin invitation routes', () => {
       expect(todayEntry.rejected).toBe(1);
     });
 
+    it('sums multiple invitations for the SAME day × status into one count, not one row each', async () => {
+      // #4465 : preuve que le handler somme `row.count` (pas `+1` par ligne) —
+      // le `$group` peut rendre count:5 en UNE ligne pour 5 invitations
+      // acceptées le même jour.
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: todayStr, status: 'accepted' }, count: 5 },
+      ]);
+
+      app = buildInvApp('ADMIN');
+      await app.ready();
+
+      const response = await app.inject({ method: 'GET', url: '/timeline/daily' });
+      const body = JSON.parse(response.body);
+
+      const todayEntry = body.data.find((e: any) => e.date === todayStr);
+      expect(todayEntry.sent).toBe(5);
+      expect(todayEntry.accepted).toBe(5);
+      expect(todayEntry.rejected).toBe(0);
+    });
+
     it('ignores invitations with a date outside the 7-day dailyData window', async () => {
-      // An invitation created 30 days ago won't match any key in dailyData (7 days)
+      // A row grouped 30 days ago won't match any key in dailyData (7 days)
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 30);
+      const oldDateStr = oldDate.toISOString().split('T')[0];
 
-      mockPrisma.friendRequest.findMany.mockResolvedValue([
-        { createdAt: oldDate, status: 'accepted' },
+      mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([
+        { _id: { date: oldDateStr, status: 'accepted' }, count: 1 },
       ]);
 
       app = buildInvApp('ADMIN');
@@ -1201,14 +1234,16 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({ method: 'GET', url: '/timeline/daily' });
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      // All 7 days should show 0 since the old invitation doesn't match any daily bucket
+      // All 7 days should show 0 since the old row doesn't match any daily bucket
       body.data.forEach((entry: any) => {
         expect(entry.sent).toBe(0);
       });
     });
 
     it('returns 500 when DB throws', async () => {
-      mockPrisma.friendRequest.findMany.mockRejectedValue(new Error('DB error'));
+      // #4465 : la route lit désormais `aggregateRaw`, pas `findMany` — le
+      // témoin d'erreur pointe la méthode que la route appelle réellement.
+      mockPrisma.friendRequest.aggregateRaw.mockRejectedValue(new Error('DB error'));
 
       app = buildInvApp('ADMIN');
       await app.ready();

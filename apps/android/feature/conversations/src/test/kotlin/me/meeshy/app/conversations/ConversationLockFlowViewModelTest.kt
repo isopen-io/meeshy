@@ -63,6 +63,7 @@ class ConversationLockFlowViewModelTest {
             every { messageReceived } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
             every { conversationDeleted } returns MutableSharedFlow()
+            every { conversationRestored } returns MutableSharedFlow()
             every { conversationClosed } returns MutableSharedFlow()
             every { participantLeft } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()

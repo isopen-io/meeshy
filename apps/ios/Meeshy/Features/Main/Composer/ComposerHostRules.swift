@@ -368,7 +368,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .drawing, .sticker, .mention, .place
+        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -388,7 +388,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
     /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
     /// surface ne pose encore (#4083).
-    static let bands: Set<ComposerSceneBand> = [.palette, .drawing]
+    static let bands: Set<ComposerSceneBand> = [.palette]
 }
 
 
@@ -554,13 +554,27 @@ nonisolated enum ComposerHistoryCopy {
 /// défait autre chose que le dernier geste visible est pire qu'absent.**
 ///
 /// La scène, elle, accumule des gestes qui ne se défont par rien d'autre :
-/// poser un sticker, avancer un objet d'un plan, changer le fond. C'est là que
-/// l'historique répond à une question que l'utilisateur se pose.
+/// poser un sticker, avancer un objet d'un plan, changer le fond.
+///
+/// ## Le défaut que la vérification simulateur a trouvé (2026-08-30)
+///
+/// Ce prédicat prenait un `ComposerSurfaceKind`. Il compilait, il était testé,
+/// et il ne pouvait JAMAIS rendre `true` là où il comptait : la scène incrustée
+/// est un `ComposerSurfaceKind.document` **qui a une scène** — c'est
+/// `ComposerMountedView.scene` qui la nomme, et seul lui. Le `.scene` du KIND
+/// désigne l'ATELIER, une surface que ce meuble ne monte pas sur ce chemin.
+///
+/// > **Deux énumérations dont un cas porte le même nom décrivent deux niveaux
+/// > différents, et le compilateur ne peut pas dire laquelle on voulait.** Le
+/// > témoin qui l'aurait attrapé n'est pas un test de plus sur le prédicat —
+/// > il en avait trois, tous verts — mais un test qui part de l'ÉTAT réel :
+/// > « un document AVEC une scène sert-il l'historique ? »
 nonisolated enum ComposerHistoryService {
 
-    /// - Parameter surface: la surface MONTÉE, pas le format — c'est la
-    ///   présence de la scène qui décide, et elle seule.
-    static func servesHistory(on surface: ComposerSurfaceKind) -> Bool {
-        surface == .scene
+    /// - Parameter view: la vue réellement MONTÉE — jamais le format, jamais le
+    ///   kind de surface. C'est la présence de la scène qui décide, et elle
+    ///   seule ; `ComposerMountedView` est le seul type qui la porte.
+    static func servesHistory(on view: ComposerMountedView) -> Bool {
+        view == .scene || view == .atelier
     }
 }

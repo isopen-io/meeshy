@@ -47,8 +47,39 @@ const FICHIERS_DE_PROFIL = [
   'routes/users/contact-change.ts',
 ] as const;
 
+/**
+ * **L'unité d'un fichier découpé, jamais le seul fichier nommé (#4284).**
+ *
+ * `routes/users/profile.ts` est devenu une FAÇADE de ré-export de 40 lignes :
+ * les trois routes GET dont ce témoin garde la porte (`/u/:username`,
+ * `/users/:id`, `/users/id/:id`) vivent désormais dans `profile-lookups.ts`.
+ * Lire le seul fichier nommé laissait donc ce témoin VERT en ne scannant plus
+ * aucun schéma — et sa borne anti-vide ne pouvait pas l'attraper : la façade
+ * pèse encore 1699 octets, bien au-delà des 500 exigés.
+ *
+ * C'est le mode de panne que la leçon 308 décrit, avec le tour de plus qui le
+ * rend invisible : le terrain n'a pas DISPARU, il a MAIGRI. Une borne de
+ * taille garde contre l'effacement, jamais contre le déménagement.
+ *
+ * Le balayage est un GLOB — `X.ts` plus tout `X-*.ts` du même répertoire —
+ * jamais une liste de parties écrite à la main, qui se périmerait au prochain
+ * découpage sans que rien ne rougisse.
+ */
+function uniteDeFichiers(relatif: string): readonly string[] {
+  const complet = path.resolve(__dirname, '../..', relatif);
+  const dossier = path.dirname(complet);
+  const base = path.basename(complet, '.ts');
+  return fs
+    .readdirSync(dossier)
+    .filter((nom) => nom === `${base}.ts` || (nom.startsWith(`${base}-`) && nom.endsWith('.ts')))
+    .sort()
+    .map((nom) => path.join(path.dirname(relatif), nom));
+}
+
+const FICHIERS_SCANNES = FICHIERS_DE_PROFIL.flatMap(uniteDeFichiers);
+
 describe('Les schémas de profil déclarent ce qu’ils servent', () => {
-  it.each(FICHIERS_DE_PROFIL)('%s ne porte aucun `additionalProperties: true`', (relatif) => {
+  it.each(FICHIERS_SCANNES)('%s ne porte aucun `additionalProperties: true`', (relatif) => {
     const complet = path.resolve(__dirname, '../..', relatif);
     const source = fs.readFileSync(complet, 'utf8');
 
@@ -73,10 +104,19 @@ describe('Les schémas de profil déclarent ce qu’ils servent', () => {
     // Une garde négative meurt en silence quand son terrain disparaît : un
     // fichier renommé rendrait `[]` et la garde serait verte en ne mesurant
     // plus rien (leçon 308).
-    for (const relatif of FICHIERS_DE_PROFIL) {
+    for (const relatif of FICHIERS_SCANNES) {
       const complet = path.resolve(__dirname, '../..', relatif);
       expect(fs.existsSync(complet)).toBe(true);
       expect(fs.readFileSync(complet, 'utf8').length).toBeGreaterThan(500);
     }
+
+    // BORNE de RÉSOLUTION, distincte de la borne de taille ci-dessus : un glob
+    // cassé (répertoire ou base de nom mal calculés) rendrait le seul fichier
+    // nommé, et ce témoin redeviendrait EN SILENCE celui, épinglé à un chemin,
+    // qu'il remplace. `users/profile.ts` a trois frères depuis #4284 ; l'exiger
+    // à la BAISSE (> 1, jamais une égalité) laisse un futur découpage en
+    // ajouter sans faire rougir.
+    expect(uniteDeFichiers('routes/users/profile.ts').length).toBeGreaterThan(1);
+    expect(FICHIERS_SCANNES.length).toBeGreaterThan(FICHIERS_DE_PROFIL.length);
   });
 });

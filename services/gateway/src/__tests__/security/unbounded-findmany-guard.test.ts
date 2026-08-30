@@ -191,17 +191,40 @@ function compterParFichier(sites: ReadonlyArray<UnboundedFindManySite>): Record<
 // les dix siens.
 // =============================================================================
 const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
+  // #4284 a découpé admin/agent.ts en fichiers frères ; les huit sites
+  // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
+  // (4). Le compte total est inchangé.
+  'admin/agent-configs.ts': 4,
+  'admin/agent-observability.ts': 4,
   'admin/agent-topics.ts': 1,
-  'admin/agent.ts': 8,
-  'admin/invitations.ts': 1,
-  'admin/messages.ts': 3,
+  // `admin/invitations.ts` avait 1 (`GET /timeline/daily`) : #4465 l'a RETIRE.
+  // La ligne ne devient pas 0, elle DISPARAIT (`compterParFichier` n'accumule
+  // que les fichiers qui ont au moins un site) — meme mecanique que
+  // `conversations/messages-list-query.ts` deux cycles plus tot (1 -> 0 sur
+  // `/users/me/stats/timeline`, voir plus bas).
+  //
+  // 3 -> 2 -> 1 : #4391 avait deja retire le `findMany` de `GET
+  // /admin/messages/stats` (histogramme quotidien + longueur moyenne, remplaces
+  // par UN `aggregateRaw` + `$facet` — patron de `admin/languages.ts`). #4465
+  // retire le second : `GET /trends` ramenait `select: { createdAt }` sur 7
+  // jours pour un histogramme heure/jour-de-semaine — deux repliements MODULO,
+  // donc un second `$facet` (`$hour`/`$dayOfWeek`), pas un `count` par tranche
+  // contigue. Le SEUL restant est la relecture des participants du top-10 de
+  // `/stats`, bornee transitivement par le `take: 10` du `groupBy` qui
+  // l'alimente — ce compteur ne sait pas lire une borne transitive.
+  'admin/messages.ts': 1,
   'admin/posts.ts': 1,
   'admin/system-rankings.ts': 13,
   'auth/register.ts': 1,
   'communities/membership.ts': 1,
   'community-preferences.ts': 1,
   'conversations/ban.ts': 2,
-  'conversations/core.ts': 8,
+  // #4284 a découpé conversations/core.ts en fichiers frères ; les huit
+  // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2)
+  // et core-list.ts (3). Le compte total est inchangé.
+  'conversations/core-detail.ts': 3,
+  'conversations/core-lifecycle.ts': 2,
+  'conversations/core-list.ts': 3,
   'conversations/leave.ts': 1,
   // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
   // (currentUserReactions au niveau du message, currentUserConsumption par piece
@@ -210,10 +233,17 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // n'atteignaient AUCUN client. Deux d'entre elles etaient des findMany nus.
   // Un cliquet qui descend parce que le travail a disparu est la seule facon
   // agreable de le voir descendre.
-  'conversations/messages.ts': 3,
+  // #4284 a ensuite découpé conversations/messages.ts en fichiers frères :
+  // les trois sites vivent désormais dans messages-list-query.ts, seul
+  // compte inchangé.
+  'conversations/messages-list-query.ts': 3,
   // Cinq, et non sept : deux sites ont suivi le geste de retrait d'un
   // participant dans son propre fichier (#4176). Le compte total est inchangé.
-  'conversations/participants.ts': 5,
+  // #4284 a ensuite découpé conversations/participants.ts en fichiers
+  // frères ; les cinq sites vivent désormais dans participants-presence.ts
+  // (1) et participants-writes.ts (4). Le compte total reste inchangé.
+  'conversations/participants-presence.ts': 1,
+  'conversations/participants-writes.ts': 4,
   'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,
@@ -244,7 +274,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'signal-protocol.ts': 1,
   'sync/membership.ts': 1,
   'user-deletions.ts': 2,
-  'user-stats.ts': 1,
+  // 1 -> 0, donc la CLE disparait : #4391 a retire le dernier `findMany` nu du
+  // fichier — `GET /users/me/stats/timeline` ramenait UNE LIGNE PAR MESSAGE des
+  // 90 derniers jours (`select: { createdAt }`, sans `take`) pour en faire un
+  // histogramme de 90 entiers. Un COUNT par tranche, en parallele, le remplace
+  // (patron de `admin/analytics.ts`). Le budget de lignes lues est garde par
+  // `__tests__/security/stats-routes-row-budget.test.ts`.
 };
 
 describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère 4)', () => {
@@ -264,12 +299,19 @@ describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère
     // `admin/users.ts`) sont désormais ENTIÈREMENT propres — absents de
     // l'inventaire gelé — et le sont donc DEUX fois : ici, route par route, et
     // dans le compte GLOBAL du premier `it` ci-dessus.
-    const messagesAdvanced = readFileSync(join(ROUTES_DIR, 'conversations/messages-advanced.ts'), 'utf8');
-    const reactionsHandler = messagesAdvanced.slice(
-      messagesAdvanced.indexOf("'/conversations/:id/reactions'"),
-      messagesAdvanced.indexOf("'/conversations/:id/status'")
+    //
+    // #4284 a découpé conversations/messages-advanced.ts et admin/agent.ts en
+    // fichiers frères, et les deux slices ci-dessous suivent leurs routes :
+    // sans ce déplacement, `messagesAdvanced.indexOf(...)`/`agent.indexOf(...)`
+    // rendent -1 des deux côtés, la slice résultante est la chaîne VIDE, et
+    // `scanUnboundedFindMany('', …)` rend `[]` sans avoir rien lu — un témoin
+    // vert qui ne prouve plus rien (mesuré : c'était le cas avant ce correctif).
+    const messagesAdvancedReads = readFileSync(join(ROUTES_DIR, 'conversations/messages-advanced-reads.ts'), 'utf8');
+    const reactionsHandler = messagesAdvancedReads.slice(
+      messagesAdvancedReads.indexOf("'/conversations/:id/reactions'"),
+      messagesAdvancedReads.indexOf("'/conversations/:id/status'")
     );
-    expect(scanUnboundedFindMany(reactionsHandler, 'conversations/messages-advanced.ts#reactions')).toEqual([]);
+    expect(scanUnboundedFindMany(reactionsHandler, 'conversations/messages-advanced-reads.ts#reactions')).toEqual([]);
 
     const communitiesCore = readFileSync(join(ROUTES_DIR, 'communities/core.ts'), 'utf8');
     const conversationsHandler = communitiesCore.slice(
@@ -285,11 +327,16 @@ describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère
     const linkPreviewHandler = anonymous.slice(anonymous.indexOf("'/anonymous/link/:identifier'"));
     expect(scanUnboundedFindMany(linkPreviewHandler, 'anonymous.ts#link-preview')).toEqual([]);
 
-    const agent = readFileSync(join(ROUTES_DIR, 'admin/agent.ts'), 'utf8');
-    const configsHandler = agent.slice(agent.indexOf("'/configs'"), agent.indexOf("'/configs/:conversationId'"));
-    const rolesHandler = agent.slice(agent.indexOf("'/configs/:conversationId/roles'"), agent.indexOf("'/roles/:conversationId/:userId/assign'"));
-    expect(scanUnboundedFindMany(configsHandler, 'admin/agent.ts#configs')).toEqual([]);
-    expect(scanUnboundedFindMany(rolesHandler, 'admin/agent.ts#roles')).toEqual([]);
+    // `/configs` et `/configs/:conversationId/roles` vivent toutes deux
+    // désormais dans agent-configs.ts (#4284), dans le même ordre qu'avant le
+    // découpage ; la borne de fin de `rolesHandler` devient la route suivante
+    // DANS CE FICHIER (`/configs/:conversationId/summary`) puisque
+    // `/roles/:conversationId/:userId/assign` a migré vers agent-roles.ts.
+    const agentConfigs = readFileSync(join(ROUTES_DIR, 'admin/agent-configs.ts'), 'utf8');
+    const configsHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs'"), agentConfigs.indexOf("'/configs/:conversationId'"));
+    const rolesHandler = agentConfigs.slice(agentConfigs.indexOf("'/configs/:conversationId/roles'"), agentConfigs.indexOf("'/configs/:conversationId/summary'"));
+    expect(scanUnboundedFindMany(configsHandler, 'admin/agent-configs.ts#configs')).toEqual([]);
+    expect(scanUnboundedFindMany(rolesHandler, 'admin/agent-configs.ts#roles')).toEqual([]);
 
     const users = readFileSync(join(ROUTES_DIR, 'admin/users.ts'), 'utf8');
     const reportedMessagesHandler = users.slice(

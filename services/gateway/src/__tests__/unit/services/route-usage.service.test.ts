@@ -29,7 +29,10 @@ import {
   ROUTE_NON_MONTEE,
   normaliserPlateforme,
   normaliserVersion,
+  servieSousApi,
+  surveilleesMalDeclarees,
   type EchantillonUsage,
+  type RouteSurveillee,
 } from '../../../services/route-usage.service';
 
 const SURVEILLEE = { method: 'GET', route: '/api/v1/auth/me', issue: 4178 } as const;
@@ -370,9 +373,14 @@ describe('RouteUsageCounter — la charge porte ses angles morts', () => {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('ROUTES_SURVEILLEES — les adresses depreciees, instrumentees en priorite', () => {
-  it('couvre les sept issues qui attendent un zero', () => {
+  it('couvre les onze issues qui attendent un zero', () => {
+    // Les quatre dernieres sont arrivees avec #4470 : ce sont les issues des
+    // alias servis HORS `/api/v1/`, dont le zero de ce compteur est le seul
+    // argument de retrait — #4277 (alias racine de l'analyse vocale), #4317
+    // (delete-for-me de conversation), #4324 (lecture d'octets legacy), #4376
+    // (gestes Socket.IO non versionnes).
     const issues = new Set(ROUTES_SURVEILLEES.map((r) => r.issue));
-    expect([...issues].sort()).toEqual([4154, 4155, 4161, 4178, 4181, 4182, 4184]);
+    expect([...issues].sort()).toEqual([4154, 4155, 4161, 4178, 4181, 4182, 4184, 4277, 4317, 4324, 4376]);
   });
 
   it('porte les vingt-huit routes par categorie de preferences (#4181)', () => {
@@ -397,10 +405,107 @@ describe('ROUTES_SURVEILLEES — les adresses depreciees, instrumentees en prior
     expect(adresses).not.toContain('DELETE /api/v1/me/preferences');
   });
 
-  it('declare chaque adresse avec son prefixe monte', () => {
-    for (const r of ROUTES_SURVEILLEES) {
-      expect(r.route.startsWith('/api/v1/')).toBe(true);
-    }
+  it('declare chaque adresse : prefixee, ou justifiee', () => {
+    // Le garde precedent exigeait `route.startsWith('/api/v1/')` sur TOUTES les
+    // entrees. Il rendait par construction impossible de surveiller les huit
+    // alias depreciees servies hors du prefixe — c'est-a-dire le mecanisme
+    // meme cense gouverner leur retrait (#4470).
+    expect(surveilleesMalDeclarees()).toEqual([]);
+  });
+
+  it('porte les neuf alias depreciees hors /api/v1, chacune declaree', () => {
+    // Le decompte est POSE, jamais derive : « pour chaque element d'une liste
+    // vide » ne tombe jamais, et c'est exactement l'etat que #4470 corrige.
+    const alias = ROUTES_SURVEILLEES.filter((r) => !r.route.startsWith('/api/v1/'));
+    expect(alias).toHaveLength(9);
+    expect(alias.filter((r) => r.horsPrefixe?.famille === 'alias-racine')).toHaveLength(5);
+    expect(alias.filter((r) => r.horsPrefixe?.famille === 'alias-non-versionne')).toHaveLength(4);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Le garde de declaration (#4470) — il doit savoir TOMBER
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('surveilleesMalDeclarees — la raison ecrite remplace la forme du chemin', () => {
+  const PREFIXEE: RouteSurveillee = { method: 'GET', route: '/api/v1/auth/me', issue: 4178 };
+  const RACINE: RouteSurveillee = {
+    method: 'GET',
+    route: '/voice/analysis',
+    issue: 4277,
+    horsPrefixe: { famille: 'alias-racine', raison: 'Alias racine de GET /api/v1/voice/analysis.' },
+  };
+
+  it('accepte une adresse prefixee sans declaration', () => {
+    expect(surveilleesMalDeclarees([PREFIXEE])).toEqual([]);
+  });
+
+  it('accepte une adresse hors prefixe DECLAREE', () => {
+    expect(surveilleesMalDeclarees([RACINE])).toEqual([]);
+  });
+
+  it('REFUSE une adresse hors prefixe sans declaration — la contrainte que le garde precedent portait', () => {
+    const nue: RouteSurveillee = { method: 'GET', route: '/voice/analysis', issue: 4277 };
+    expect(surveilleesMalDeclarees([nue])).toEqual([
+      { method: 'GET', route: '/voice/analysis', motif: 'hors-prefixe-sans-declaration' },
+    ]);
+  });
+
+  it('REFUSE une raison vide — une declaration sans motif n’en est pas une', () => {
+    const creuse: RouteSurveillee = { ...RACINE, horsPrefixe: { famille: 'alias-racine', raison: '   ' } };
+    expect(surveilleesMalDeclarees([creuse])).toEqual([
+      { method: 'GET', route: '/voice/analysis', motif: 'raison-vide' },
+    ]);
+  });
+
+  it('REFUSE une declaration posee sur une adresse prefixee — elle ne justifie plus rien', () => {
+    const perimee: RouteSurveillee = {
+      ...PREFIXEE,
+      horsPrefixe: { famille: 'alias-racine', raison: 'au cas ou' },
+    };
+    expect(surveilleesMalDeclarees([perimee])).toEqual([
+      { method: 'GET', route: '/api/v1/auth/me', motif: 'declaration-perimee' },
+    ]);
+  });
+
+  it('REFUSE une famille que le CHEMIN dement, dans les deux sens', () => {
+    // Sans cette confrontation, `famille` serait un commentaire : on pourrait
+    // ecrire n'importe lequel des deux mots sans qu'aucun temoin ne rougisse.
+    const menteuse: RouteSurveillee = {
+      ...RACINE,
+      horsPrefixe: { famille: 'alias-non-versionne', raison: 'Alias racine de GET /api/v1/voice/analysis.' },
+    };
+    expect(surveilleesMalDeclarees([menteuse])).toEqual([
+      { method: 'GET', route: '/voice/analysis', motif: 'famille-dementie' },
+    ]);
+
+    const inverse: RouteSurveillee = {
+      method: 'GET',
+      route: '/api/socketio/stats',
+      issue: 4376,
+      horsPrefixe: { famille: 'alias-racine', raison: 'Alias non versionne de GET /api/v1/socketio/stats.' },
+    };
+    expect(surveilleesMalDeclarees([inverse])).toEqual([
+      { method: 'GET', route: '/api/socketio/stats', motif: 'famille-dementie' },
+    ]);
+  });
+
+  it('REFUSE un chemin non absolu, declare ou non — il ne designerait aucune route', () => {
+    const relative: RouteSurveillee = {
+      method: 'GET',
+      route: 'voice/analysis',
+      issue: 4277,
+      horsPrefixe: { famille: 'alias-racine', raison: 'Alias racine.' },
+    };
+    expect(surveilleesMalDeclarees([relative])).toEqual([
+      { method: 'GET', route: 'voice/analysis', motif: 'chemin-non-absolu' },
+    ]);
+  });
+
+  it('range `/apiary` hors du perimetre `/api` — un prefixe se compare par SEGMENT', () => {
+    expect(servieSousApi('/api')).toBe(true);
+    expect(servieSousApi('/api/socketio/stats')).toBe(true);
+    expect(servieSousApi('/apiary/analysis')).toBe(false);
   });
 });
 

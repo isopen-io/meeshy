@@ -143,8 +143,23 @@ final class StoryCanvasLeaveSceneTests: XCTestCase {
 
     // MARK: - Le libellé
 
+    /// Le verbe ne s'écrit plus en français EN DUR : `title` est localisée
+    /// depuis `11acc349f0` (« douze mots cessent de répondre en français à tout
+    /// le monde »), et ce témoin comparait encore à « Sortir de la scène » —
+    /// vert en locale française, rouge partout ailleurs, y compris sur le
+    /// simulateur de la CI.
+    ///
+    /// Ce que le témoin VOULAIT dire survit intact, et sans littéral : la
+    /// sortie de scène porte un verbe À ELLE, distinct de celui de la
+    /// suppression. C'est la phrase du commentaire ci-dessous — « sortir n'est
+    /// pas supprimer » — appliquée au mot autant qu'au glyphe.
+    @MainActor
     func test_leaveScene_porteSonVerbeEtSonGlyphe() {
-        XCTAssertEqual(StoryCanvasContextAction.leaveScene.title, "Sortir de la scène")
+        XCTAssertFalse(StoryCanvasContextAction.leaveScene.title.isEmpty,
+                       "un verbe vide ne dirait rien à personne, dans aucune langue")
+        XCTAssertNotEqual(StoryCanvasContextAction.leaveScene.title,
+                          StoryCanvasContextAction.delete.title,
+                          "Sortir n'est pas supprimer — deux verbes distincts.")
         XCTAssertFalse(StoryCanvasContextAction.leaveScene.systemImage.isEmpty)
         XCTAssertNotEqual(StoryCanvasContextAction.leaveScene.systemImage,
                           StoryCanvasContextAction.delete.systemImage,

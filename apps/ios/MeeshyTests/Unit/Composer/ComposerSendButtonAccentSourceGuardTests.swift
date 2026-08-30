@@ -15,7 +15,17 @@ import XCTest
 /// SÉMANTIQUE, pas une identité de conversation.
 final class ComposerSendButtonAccentSourceGuardTests: XCTestCase {
 
-    private static let composerPath = "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift"
+    /// **L'UNITE, jamais le seul fichier-tete.** `UniversalComposerBar` a ete
+    /// decoupee pour rentrer dans le budget de taille, et `sendButton` a suivi
+    /// dans `UniversalComposerBar+Send.swift`. La garde, qui lisait le
+    /// fichier-tete, ne trouvait plus son ancre : elle levait `GuardIsBlind` —
+    /// bruyamment, ce qui est son merite — mais elle ne gardait plus rien.
+    ///
+    /// C'est le mode d'extinction exact que `AppSourceGuard.unitURLs` existe
+    /// pour empecher : « une liste de parties se perime au premier fichier
+    /// ajoute ». Elle lit desormais le type ET ses extensions, par GLOB — un
+    /// second decoupage ne la reprendra pas.
+    private static let composerPath = "Meeshy/Features/Main/Components/UniversalComposerBar.swift"
     private static let blockAnchor = "var sendButton: some View {"
 
     // MARK: - La garde voit bien le bloc qu'elle prétend garder
@@ -98,20 +108,7 @@ final class ComposerSendButtonAccentSourceGuardTests: XCTestCase {
     /// des gardes app-side) : un commentaire citant le symbole interdit ne doit
     /// ni satisfaire ni faire échouer une garde — seul le code peint des pixels.
     private static func sendButtonBlock() throws -> String {
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Composer
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // apps/ios
-            .deletingLastPathComponent()   // apps
-            .deletingLastPathComponent()   // repo root
-
-        let file = repoRoot.appendingPathComponent(composerPath)
-        guard FileManager.default.fileExists(atPath: file.path) else {
-            throw XCTSkip("Source introuvable depuis \(repoRoot.path) — arbre source indisponible")
-        }
-
-        let source = AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(composerPath))
         guard let anchor = source.range(of: blockAnchor) else {
             throw GuardIsBlind(description: "Ancre « \(blockAnchor) » introuvable : la garde ne garde plus rien")
         }

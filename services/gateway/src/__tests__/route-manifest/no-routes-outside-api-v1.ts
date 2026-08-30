@@ -87,6 +87,26 @@ export const ALLOWED_OUTSIDE_API_V1: readonly AllowedOutsideApiV1[] = [
     family: 'deprecated-alias',
     reason: 'Alias racine de GET/POST /api/v1/voice/analysis (#4277 critère 1).',
   },
+  // ── Les deux alias dépréciés des gestes d'administration Socket.IO (#4376) ──
+  // Ils ne sont pas NOUVEAUX : ils étaient servis en production depuis
+  // toujours, et n'apparaissaient dans aucun manifeste parce que
+  // `setupSocketIO()` monte ses routes hors de `registerAllRoutes`, le seul
+  // graphe que le collecteur montait (#4376). Les rendre VISIBLES les a fait
+  // tomber ici — le témoin faisant exactement son travail : une adresse hors
+  // `/api/v1` se déclare, avec sa famille et sa raison, ou elle rougit. Elles
+  // portent les trois en-têtes `Deprecation`/`Sunset`/`Link` (#4274) posés par
+  // `aliasNonVersionne()` dans `socketio/socketio-admin-routes.ts`, et leur
+  // successeur versionné est servi à côté d'elles depuis 00a56691c7.
+  {
+    path: '/api/socketio/stats',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de GET /api/v1/socketio/stats (#4376) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
+  },
+  {
+    path: '/api/socketio/disconnect-user',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de POST /api/v1/socketio/disconnect-user (#4376) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
+  },
   // ── Les sept routes de userDeletionsRoutes — DETTE CONNUE, pas une décision ──
   // `DELETE .../conversations/:conversationId/delete-for-me` PARTAGE son
   // adresse finale sous /api/v1 avec un DOUBLON déjà vivant

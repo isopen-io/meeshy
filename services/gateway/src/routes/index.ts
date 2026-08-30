@@ -121,6 +121,7 @@ import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
 import { meCategoriesRoutes } from './me/categories';
+import { meConsentsRoutes } from './me/consents';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -177,9 +178,10 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 60 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
- * `conversation-receipts`), réparties en QUATRE segments plutôt qu'une liste
- * plate — et ce n'est pas une préférence de mise en page.
+ * 61 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
+ * `conversation-receipts` ; #4348 en ajoute une, `me-consents`), réparties en
+ * QUATRE segments plutôt qu'une liste plate — et ce n'est pas une préférence
+ * de mise en page.
  *
  * ## Pourquoi quatre tables, et pas une
  *
@@ -260,6 +262,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // AUTONOME au même préfixe, l'ancienne adresse restant servie comme alias
   // déprécié depuis `routes/me/preferences/categories.ts`.
   { name: 'me-categories', prefix: `${API_PREFIX}/me`, module: meCategoriesRoutes },
+  // Deux routes NEUVES, sans alias : `/voice/profile/consent` reste montée
+  // (elle n'est pas retirée par ce lot, voir doc-comment de
+  // `routes/me/consents.ts`) — même patron de montage AUTONOME que
+  // `me-permissions`/`me-categories` juste au-dessus (#4348).
+  { name: 'me-consents', prefix: `${API_PREFIX}/me`, module: meConsentsRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },
@@ -310,6 +317,57 @@ export const ROUTE_TABLE_BEFORE_VOICE_PLUGIN: readonly RouteRegistrationEntry[] 
     // dans `routes/voice-analysis.ts`). Avant ce lot, cette route ne recevait
     // AUCUN objet d'options ; `prefix: ''` est la même adresse, dite au lieu
     // d'être sous-entendue.
+    //
+    // ── La conséquence de PÉRIMÈTRE, assumée (#4367 critère 1) ────────────
+    //
+    // Ce qui précède motive l'ADRESSE. Il ne dit rien de ce que cette adresse
+    // NE REÇOIT PAS, et c'est la moitié qui manquait : les trois en-têtes
+    // `Deprecation` / `Sunset` / `Link` s'adressent à un CLIENT — aucune règle
+    // de proxy, de WAF ou de journalisation ne les lit. Une telle règle s'ancre
+    // sur un PRÉFIXE DE CHEMIN. Ces cinq adresses (`GET|POST
+    // /attachments/:attachmentId/analysis`, `POST /attachments/batch/analysis`,
+    // `GET|POST /voice/analysis`) sont donc hors de TOUTE règle ancrée sur
+    // `/api`, et le rester jusqu'au retrait du 2027-02-25 INCLUS : un alias
+    // déprécié est servi jusqu'à son `sunset`, la dépréciation ne le retire
+    // pas du périmètre, elle annonce sa fin.
+    //
+    // L'alias N'EST PAS déplacé sous `/api` pour autant — ce serait retirer
+    // aux appelants, avant l'échéance, l'adresse qu'on vient de leur promettre
+    // de servir jusque-là.
+    //
+    // Mesuré au 2026-08-30, et c'est ce qui rend la conséquence tolérable
+    // AUJOURD'HUI : aucune règle vivante n'est ainsi ancrée sur le chemin
+    // d'accès de production. Prod et staging routent par HÔTE
+    // (`Host(gate.meeshy.me)` / `Host(gate.staging.meeshy.me)` →
+    // `gateway:3000`, TOUS chemins, `infrastructure/docker/compose/
+    // docker-compose.{prod,staging}.yml`) : il n'y a pas de porte `/api` à
+    // franchir, ce qui explique le `200` observé sur staging. Les `handle
+    // /api/*` du `Caddyfile` et les `location /api/` des quatre confs nginx qui
+    // relaient vers la passerelle (`default.conf`, `dev.conf`,
+    // `production.conf`, `ssl-optimized.conf`) décrivent une topologie
+    // mono-hôte que ce dépôt ne déploie pas : Caddy n'est référencé par aucun
+    // compose, trois de ces confs sont sur la liste de suppression de
+    // `scripts/cleanup-production.sh` et la quatrième n'est référencée nulle
+    // part ; seul `static-files.conf` est monté, et il ne relaie rien vers la
+    // passerelle. Le seul ancrage `/api` VIVANT du dépôt est le routeur
+    // LAN de développement `gateway-ip` (`docker-compose.local.yml`,
+    // `Host(192.168.1.171) && PathPrefix('/api')`) : sous lui, ces cinq
+    // adresses tombent chez `frontend-ip` — l'illustration exacte de la
+    // conséquence décrite ici.
+    //
+    // La conséquence porte donc sur ce qui viendrait APRÈS. Elle a porté,
+    // un temps, sur une règle INTERNE : `ROUTES_SURVEILLEES`
+    // (`services/route-usage.service.ts`, #4275) ancrait sa garde sur le
+    // préfixe, si bien que le compteur comptait ces cinq adresses dans sa
+    // table brute sans jamais les MATÉRIALISER dans la portée `watched`
+    // que sert la route S5 — le mécanisme censé gouverner leur retrait
+    // était aveugle à ce qu'il devait retirer. SOLDÉ par #4470 : la garde
+    // exige désormais une déclaration motivée plutôt qu'une forme de
+    // chemin, et les neuf alias du dépôt hors `/api/v1` y sont déclarés. Toute règle ancrée sur `/api` — quota, WAF,
+    // journal d'API, catalogue — doit donc nommer ces cinq chemins
+    // explicitement jusqu'au `sunset`. Le témoin
+    // `__tests__/route-manifest/unprefixed-mounts.ts` tient cette décision et
+    // rougit si un module rejoint la racine sans la sienne.
     prefix: '',
     module: voiceAnalysisLegacyAliasRoutes,
   },
@@ -326,7 +384,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 60 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 61 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

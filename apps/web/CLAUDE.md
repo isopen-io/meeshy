@@ -156,6 +156,36 @@ Reste **24 fichiers** portant une telle fabrique morte (`grep -rl
 "jest.mock('@meeshy/shared"`) — dépouillement à faire, aucun n'est un défaut de
 justesse.
 
+**Un double PARTIEL d'un module perd en silence tout ce que le module GAGNE.**
+Une fabrique qui ÉNUMÈRE les exports à la main est un inventaire, et un
+inventaire est en retard par construction : il ne se signale qu'au moment où le
+module grandit — donc jamais avant, et jamais chez celui qui l'a écrit.
+
+```ts
+// ✗ inventaire — le jour où l'importateur lit une 5e fonction, elle vaut `undefined`
+jest.mock('@/utils/notification-helpers', () => ({
+  buildNotificationTitle: () => 'title', /* …trois autres… */
+}));
+
+// ✓ prolonger, puis surcharger CE QU'ON VEUT RENDRE CONSTANT
+jest.mock('@/utils/notification-helpers', () => ({
+  ...jest.requireActual('@/utils/notification-helpers'),
+  getNotificationLink: () => '/link',
+}));
+```
+
+Mesuré le 2026-08-30 sur les deux suites de `use-notifications-manager-rq` : la
+bannière in-app s'est mise à lire `getActorDisplayName` et `getNotificationIcon`,
+absentes des deux fabriques, et quatre témoins sont tombés sur un `TypeError` qui
+ne disait rien du comportement testé. La règle était déjà écrite — dans
+`services/gateway/CLAUDE.md`, avec trois exemplaires datés. **Une règle vaut là
+où quelqu'un l'a récitée** ; celle-ci n'avait jamais été portée côté web.
+
+Corollaire de méthode, payé le même jour : **lancer les suites qui EXERCENT le
+module changé, pas seulement celles qu'on vient d'écrire.** Le lot avait fait
+tourner `__tests__/utils/` (ses propres témoins, verts) et pas la suite complète,
+qui met 3 min et aurait nommé le défaut avant la CI.
+
 ## Critical Gotchas
 - Firebase optional - graceful degradation without it
 - Audio only via WebSocket `message:send-with-attachments` (not REST)

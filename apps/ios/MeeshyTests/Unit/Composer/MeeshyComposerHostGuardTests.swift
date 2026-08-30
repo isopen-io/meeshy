@@ -2676,12 +2676,21 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// parce qu'elles sont aveugles, et redeviendraient rouges en recouvrant la
     /// vue. C'est précisément pour cela que le retrait ne se fait pas ici, en
     /// passant.
-    private static let cecitePreexistante: Set<String> = [
-        "StoryViewModel.swift",
+    ///
+    /// `StoryViewModel.swift` s'exprime par l'UNITÉ (#4425), pas par son seul
+    /// nom : le découpage peut déplacer la cécité préexistante vers un fichier
+    /// frère (`StoryViewModel+Publication.swift`, …) sans qu'elle soit RÉGLÉE
+    /// pour autant — l'exclure sous son nom d'origine seulement ferait rougir
+    /// `sourcesDeLApp()` sur un fichier neuf pour une dette qui existait déjà
+    /// sous l'ancien nom. `AppSourceGuard.storyViewModelURLs()` GLOBBE plutôt
+    /// que d'énumérer : elle suit le découpage sans qu'il faille revenir ici.
+    private static let cecitePreexistante: Set<String> = Set(
+        AppSourceGuard.storyViewModelURLs().map(\.lastPathComponent)
+    ).union([
         "MessageAccessibilityLabelComposer.swift",
         "ComposerDropResolver.swift",
         "LentilleFocusCard.swift",
-    ]
+    ])
 
     /// Un commentaire ne doit JAMAIS pouvoir rendre un fichier invisible aux
     /// gardes de source.

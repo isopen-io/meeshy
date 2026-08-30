@@ -229,10 +229,6 @@ struct MeeshyComposerHost: View {
     /// vérités à faire diverger, pour une capacité identique.
     @State var composerReferences: [ComposerReference] = []
 
-    /// La feuille qui NOMME — ouverte par l'outil `@` de la rangée du
-    /// document. Même patron que `showsEmojiPicker` : la présentation vit
-    /// dans le meuble, jamais dans la surface, qui reste sans état.
-    @State var showsReferencePicker = false
 
     /// L'envoi EN VOL du socle. Il ferme le gate le temps de l'aller-retour :
     /// sans lui, un double tap sur la flèche produirait deux publications, ce
@@ -259,14 +255,10 @@ struct MeeshyComposerHost: View {
     /// devine pas.
     @State var showsSoundSourceChooser = false
 
-    /// L'étagère elle-même, une fois la provenance choisie.
-    @State var showsSoundLibrary = false
 
     @State var showsMediaSourceChooser = false
 
-    @State var showsStickerPicker = false
 
-    @State var showsEmojiPicker = false
 
     /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
     /// `DefaultComposerLanguage.resolve()` — le point de DÉPART du brouillon
@@ -278,11 +270,6 @@ struct MeeshyComposerHost: View {
     /// ait aucun moyen de corriger.
     @State var documentLanguage = DefaultComposerLanguage.resolve()
 
-    /// Le sélecteur de langue de la rangée est-il ouvert ? Même forme que
-    /// `showsEmojiPicker` juste au-dessus, pour la même raison : le sélecteur
-    /// vit dans le meuble, qui possède `documentLanguage`, jamais dans la
-    /// surface.
-    @State var showsDocumentLanguagePicker = false
 
     /// **L'ingestion de fichiers LOCAUX (T2.3).** Trois sélecteurs, un état
     /// par famille — même patron que `showsEmojiPicker` /
@@ -292,14 +279,62 @@ struct MeeshyComposerHost: View {
     /// `CameraView` (`ComposerDocumentSurfaceTests`
     /// `.test_laSurface_neFabriquePasUnSecondPipelineDIngestion`, élargie à la
     /// caméra par ce lot).
+    /// **UNE feuille à la fois, et le type l'impose** (#4467).
+    ///
+    /// Huit booléens vécurent ici, chacun avec son `.sheet(isPresented:)`.
+    /// SwiftUI n'en supporte qu'une par vue : dès que deux passaient à `true`
+    /// dans la même transaction, il levait « only presenting a single sheet is
+    /// supported » et **terminait le process**. Trois terminaisons mesurées au
+    /// simulateur le 2026-08-30, sur trois points d'interaction différents.
+    ///
+    /// L'inventaire des portails (#4120) garantissait que chaque booléen est
+    /// LU ; il ne pouvait pas garantir qu'un seul l'est à la fois — une règle de
+    /// placement ne dit rien du nombre. Le type somme, lui, rend l'état invalide
+    /// IRREPRÉSENTABLE : une variable ne porte qu'une valeur, et ouvrir un
+    /// portail ferme le précédent au lieu de l'empiler.
+    /// **Les mentions du texte de SCÈNE** (#4475).
+    ///
+    /// La bande existait sur deux champs de saisie sur trois — la description
+    /// et le texte du document. Taper `@arto` dans un objet texte posé sur la
+    /// scène écrivait littéralement « @arto » : aucune liste, aucun lien,
+    /// aucune notification. Une affordance qui RESSEMBLE à une mention sans en
+    /// être une est pire qu'une absence — c'est la loi 4 vue depuis le LECTEUR.
+    ///
+    /// Rien n'a été ajouté au canvas UIKit pour l'obtenir : `onInlineTextChanged`
+    /// remonte déjà le texte à chaque frappe, et c'est tout ce qu'une requête
+    /// `@` demande. Le canvas n'a aucune raison de connaître les amis de
+    /// l'auteur.
+    @StateObject var sceneMentionBox = ComposerMentionControllerBox()
+
+    @State var presentedPortal: ComposerPortal?
+
+    /// **Ce que le RAIL a posé** (directive porteur 2026-08-30).
+    ///
+    /// > « Les images canoniques de gauche permettent d'ajouter des éléments à
+    /// > l'actuelle scène, en ADDITIF. […] `[+]` est maintenant réservé à créer
+    /// > une slide. »
+    ///
+    /// En Post, `syncPostMediaIntoSlides` donne à chaque média SA slide — c'est
+    /// la doctrine de la vue `1g` (« en Post, une slide est UN média »), et elle
+    /// vaut pour la rangée du document. Elle ne vaut PAS pour le rail : depuis
+    /// que `[+]` existe, créer une page est un geste EXPLICITE, et une porte qui
+    /// en crée une au passage surprend.
+    ///
+    /// Ce jeu d'URL est ce qui distingue les deux origines. Sans lui, il
+    /// faudrait un second chemin d'ingestion — et deux chemins pour un seul
+    /// média divergeraient au premier champ ajouté.
+    /// La prochaine ingestion vient-elle du RAIL ? Posé par la porte, consommé
+    /// par l'ingestion — il vaut pour UNE pose, jamais pour un état durable :
+    /// un drapeau qui resterait vrai ferait poser sur la scène courante le
+    /// média suivant, même arrivé par la rangée du document.
+    @State var railPosesNextMedia = false
+
+    @State var railPosedMediaURLs: Set<URL> = []
+
     @State var showsPhotoPicker = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
-    @State var showsCamera = false
     @State var showsFileImporter = false
 
-    /// **Le sélecteur de lieu (T2.5).** Même patron que les trois au-dessus :
-    /// vit dans le meuble, jamais dans `ComposerDocumentSurface`.
-    @State var showsLocationPicker = false
 
     /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
     /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
@@ -402,11 +437,6 @@ struct MeeshyComposerHost: View {
     /// sans lieu à indexer.
     @State var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
 
-    /// **T2.6 — le sixième et dernier outil de la rangée.** Même patron que
-    /// `showsLocationPicker` juste au-dessus : le sélecteur vit dans le
-    /// MEUBLE, jamais dans `ComposerDocumentSurface`, qui reste une
-    /// présentation sans état.
-    @State var showsAudioComposer = false
 
     /// **T2.6 — la transcription du vocal composé par `AudioPostComposerView`.**
     /// Voyage À CÔTÉ de `documentLocalMedia` (l'enregistrement, posé comme un
@@ -921,11 +951,7 @@ struct MeeshyComposerHost: View {
                 .padding(.bottom, 10)
             }
         }
-        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
-        .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
-        .sheet(isPresented: $showsStickerPicker) { stickerPickerSheet }
         .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
                             isPresented: $showsMediaSourceChooser,
                             titleVisibility: .visible) {
@@ -950,7 +976,6 @@ struct MeeshyComposerHost: View {
             }
             Button(ComposerSoundSourcePolicy.cancel, role: .cancel) { }
         }
-        .sheet(isPresented: $showsSoundLibrary) { soundLibrarySheet }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant
         // que la scène est montée perdrait tout ce que le document a posé
@@ -969,15 +994,35 @@ struct MeeshyComposerHost: View {
         // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
         // tout défaire.
         .task { viewModel.seedHistory() }
-        .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
-        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
+        // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
+        // acceptés que la bande du document, par la même source. Deux
+        // chargements auraient donné deux listes à faire diverger, et deux
+        // moments où « aucun ami » se lit différemment.
+        .task { sceneMentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
         // ici disait « montés ICI, sur le meuble, jamais dans
         // `ComposerDocumentSurface` » — et « ici » désignait l'expression
         // `documentSurface`. La phrase était juste, le placement ne l'était
         // pas : c'est ce demi-pas qui a rendu les quatre portes du rail
         // inertes (#4120). Ils sont désormais où la phrase les mettait.
-        .sheet(isPresented: $showsCamera) { documentCameraSheet }
+        // **LA feuille du meuble — une seule, et c'est le correctif de #4467.**
+        //
+        // Le `switch` est exhaustif : un neuvième portail ne compile pas tant
+        // qu'il n'a pas dit ce qu'il montre. C'est la même discipline que les
+        // portes du rail, appliquée à la présentation — et elle remplace huit
+        // modificateurs que rien n'empêchait de s'activer ensemble.
+        .sheet(item: $presentedPortal) { portail in
+            switch portail {
+            case .location:     documentLocationPickerSheet
+            case .audio:        documentAudioComposerSheet
+            case .emoji:        emojiPickerSheet
+            case .sticker:      stickerPickerSheet
+            case .soundLibrary: soundLibrarySheet
+            case .reference:    referencePickerSheet
+            case .language:     documentLanguagePickerSheet
+            case .camera:       documentCameraSheet
+            }
+        }
         .photosPicker(
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
@@ -999,9 +1044,21 @@ struct MeeshyComposerHost: View {
         }
     }
 
+    /// **La vue réellement MONTÉE** — et c'est elle, jamais le kind de surface,
+    /// qui répond à « y a-t-il une scène à l'écran ? ».
+    ///
+    /// Elle était calculée en ligne dans l'aiguillage. Un second site en a eu
+    /// besoin — l'historique (#4402) — et a interrogé `mountedSurface` à la
+    /// place : ça compilait, et ça ne pouvait jamais rendre vrai, la scène
+    /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
+    /// endroit ne peut pas être lue de travers ailleurs.
+    var mountedComposerView: ComposerMountedView {
+        ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene)
+    }
+
     @ViewBuilder
     var surface: some View {
-        switch ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene) {
+        switch mountedComposerView {
         case .atelier:
             composerSurface
         case .scene:

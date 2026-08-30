@@ -209,7 +209,10 @@ extension StoryComposerViewModel {
 
     var canAddText: Bool { textCount < 5 }
 
-    var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
+    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
+    /// collage que la pose refuserait ensuite en silence.
+    public var canAddMedia: Bool { mediaCount < 10 }
 
     var canAddImage: Bool {
         canAddMedia &&
@@ -227,7 +230,11 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
-    func addText() -> StoryTextObject? {
+    /// `public` : la porte TEXTE du composer unifié pose l'objet (#4401). Elle
+    /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
+    /// coquille restée vide est supprimée à la sortie de l'éditeur
+    /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
+    public func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
@@ -415,12 +422,18 @@ extension StoryComposerViewModel {
     /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
     /// exactement au même point.
     @discardableResult
-    public func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
+    /// - Parameter scale: l'échelle de POSE. `nil` garde le défaut du modèle
+    ///   (taille de référence) ; les surfaces qui posent sur une scène passent
+    ///   `StorySticker.posedScale`, à laquelle le sticker se voit d'emblée.
+    public func addSticker(emoji: String,
+                           provider: String? = nil,
+                           scale: Double? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, provider: provider,
+        var sticker = StorySticker(emoji: emoji, provider: provider,
                                    sourceLanguage: declaredContentLanguage,
                                    x: 0.5 + offset, y: 0.5 + offset)
+        if let scale { sticker.scale = scale }
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -444,8 +457,11 @@ extension StoryComposerViewModel {
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
     @discardableResult
-    public func addSticker(image: UIImage, provider: String) -> StorySticker {
-        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji, provider: provider)
+    public func addSticker(image: UIImage,
+                           provider: String,
+                           scale: Double? = nil) -> StorySticker {
+        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
+                                 provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
         return sticker
     }
@@ -754,7 +770,7 @@ extension StoryComposerViewModel {
     /// ouvre l'éditeur, ce qui est juste pour l'auteur qui écrit. Un collage
     /// apporte déjà son texte ; le faire transiter par l'éditeur obligerait
     /// l'auteur à valider ce qu'il vient de coller.
-    func updateTextContent(id: String, text: String) {
+    public func updateTextContent(id: String, text: String) {
         var effects = currentEffects
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }

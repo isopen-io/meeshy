@@ -390,6 +390,21 @@ public struct ConversationDeletedSocketEvent: Decodable, Sendable {
     public let conversationId: String
 }
 
+/// `conversation:restored` — la MONTANTE du couple `delete-for-me` /
+/// `restore-for-me` (#4389, moitié cliente de #4344).
+///
+/// Miroir EXACT de `ConversationDeletedSocketEvent` — mêmes deux champs, même
+/// room personnelle (`ROOMS.user`), même geste symétrique. La charge n'est pas
+/// élargie d'un octet, et c'est délibéré : le décodeur iOS est STRICT, donc un
+/// champ non optionnel absent fait échouer le décodage de l'événement ENTIER,
+/// en silence, dans un `catch`. Un nom NEUF plutôt qu'un élargissement de
+/// `conversation:updated` relève de la même mesure — c'est la leçon du cycle
+/// 128, et le serveur a tranché pareil.
+public struct ConversationRestoredSocketEvent: Decodable, Sendable {
+    public let userId: String
+    public let conversationId: String
+}
+
 /// `user:preferences-reordered` — batch drag-reorder broadcast.
 public struct UserPreferencesReorderedSocketEvent: Decodable, Sendable {
     public struct Update: Decodable, Sendable {
@@ -1512,117 +1527,6 @@ public struct MentionCreatedEvent: Decodable, Sendable {
     public let timestamp: String?
 }
 
-// MARK: - Notification Socket Event Data
-
-public struct SocketNotificationEvent: Decodable, Sendable {
-    public let id: String
-    public let userId: String
-    public let type: String
-    public let title: String?
-    public let content: String
-    public let priority: String?
-    public let isRead: Bool?
-
-    // Gateway sends nested objects — decoded into typed structs
-    public let actor: SocketNotificationActor?
-    public let context: SocketNotificationContext?
-    public let metadata: SocketNotificationMetadata?
-
-    /// SyncEngine A5 — numéro de séquence monotone per-user tamponné par le
-    /// gateway (`emitWithSeq`, A2.1) sous la clé JSON `_seq`. `nil` sur un
-    /// gateway antérieur (backward-compat). Consommé par `SyncSeqState` pour
-    /// la détection de gap EXACTE au reconnect.
-    public let seq: Int64?
-
-    private enum CodingKeys: String, CodingKey {
-        case id, userId, type, title, content, priority, isRead
-        case actor, context, metadata
-        case seq = "_seq"
-    }
-
-    // Computed accessors: resolve from nested structs (gateway format)
-    public var senderUsername: String? { actor?.username }
-    public var senderDisplayName: String? { actor?.displayName }
-    public var senderAvatar: String? { actor?.avatar }
-    public var senderId: String? { actor?.id }
-    public var conversationId: String? { context?.conversationId }
-    public var messageId: String? { context?.messageId }
-    public var postId: String? { context?.postId ?? metadata?.postId }
-    public var commentId: String? { context?.commentId ?? metadata?.commentId }
-    public var parentCommentId: String? { context?.parentCommentId ?? metadata?.parentCommentId }
-    /// Discriminant d'entité : `postType` fait autorité, `contentType` sert de
-    /// repli (famille `friend_new_*`). Le NOM du type de notification n'est
-    /// JAMAIS un discriminant — `story_thread_reply` est émis pour n'importe
-    /// quel contenu commenté, réel inclus.
-    public var postType: String? {
-        let explicit = metadata?.postType
-        return explicit?.isEmpty == false ? explicit : metadata?.contentType
-    }
-    public var messagePreview: String? { metadata?.commentPreview }
-    public var conversationTitle: String? { context?.conversationTitle }
-    public var conversationAvatar: String? { context?.conversationAvatar }
-    public var conversationType: String? { context?.conversationType }
-    public var isDirect: Bool { context?.conversationType == "direct" }
-    public var attachments: SocketNotificationAttachments? { metadata?.attachments }
-
-    public var attachmentLabel: String? {
-        guard let att = metadata?.attachments, let count = att.count, count > 0 else { return nil }
-        if count > 1 { return "\u{1F4CE} \(count) fichiers" }
-        switch att.firstType {
-        case "image": return "\u{1F4F7} Photo"
-        case "video": return "\u{1F3AC} Vid\u{00E9}o"
-        case "audio": return "\u{1F3B5} Audio"
-        case "document": return "\u{1F4C4} Document"
-        default: return "\u{1F4CE} Fichier"
-        }
-    }
-
-    public var notificationType: MeeshyNotificationType {
-        MeeshyNotificationType(rawValue: type) ?? .system
-    }
-}
-
-public struct SocketNotificationActor: Decodable, Sendable {
-    public let id: String?
-    public let username: String?
-    public let displayName: String?
-    public let avatar: String?
-}
-
-public struct SocketNotificationContext: Decodable, Sendable {
-    public let conversationId: String?
-    public let conversationTitle: String?
-    /// Avatar (image URL) of the conversation/group. Used by the in-app toast
-    /// as a fallback when the sender has no personal avatar (group messages).
-    public let conversationAvatar: String?
-    public let conversationType: String?
-    public let messageId: String?
-    public let postId: String?
-    public let commentId: String?
-    public let parentCommentId: String?
-    public let friendRequestId: String?
-}
-
-public struct SocketNotificationMetadata: Decodable, Sendable {
-    public let postId: String?
-    public let commentId: String?
-    public let parentCommentId: String?
-    public let postType: String?
-    /// Discriminant d'entité de la famille `friend_new_*`, que la gateway a
-    /// historiquement émis SOUS CE NOM au lieu de `postType`. Lu en repli pour
-    /// que le nouveau réel d'un ami n'atterrisse pas sur le détail de post plat.
-    public let contentType: String?
-    public let commentPreview: String?
-    public let emoji: String?
-    public let attachments: SocketNotificationAttachments?
-}
-
-public struct SocketNotificationAttachments: Decodable, Sendable {
-    public let count: Int?
-    public let firstType: String?
-    public let firstFilename: String?
-}
-
 public struct ConversationNewEvent: Decodable, Sendable {
     public let conversationId: String
     public let conversationType: String
@@ -1771,6 +1675,12 @@ public protocol MessageSocketProviding: Sendable {
     /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
     /// received while offline came back from the dead on the next cold start.
     var conversationDeleted: PassthroughSubject<ConversationDeletedSocketEvent, Never> { get }
+    /// `conversation:restored` — la conversation revient dans MA liste, sur mes
+    /// AUTRES appareils (#4389). Exposé au protocole pour la même raison que sa
+    /// jumelle descendante : une restauration reçue par un seul abonné laisserait
+    /// les autres consommateurs — le cache disque comme le moteur de synchro —
+    /// sur un état que le serveur a déjà quitté.
+    var conversationRestored: PassthroughSubject<ConversationRestoredSocketEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     /// Conversation-scope variant of `user:preferences-updated` (versioned).
     /// Routed separately from `userPreferencesUpdated` (category scope) so the
@@ -2025,6 +1935,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
     public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+    public let conversationRestored = PassthroughSubject<ConversationRestoredSocketEvent, Never>()
 
     // Combine publishers — profil public d'un CONTACT
     public let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
@@ -3840,6 +3751,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ConversationDeletedSocketEvent.self, from: data) { [weak self] event in
                 self?.conversationDeleted.send(event)
+            }
+        }
+
+        socket.on("conversation:restored") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationRestoredSocketEvent.self, from: data) { [weak self] event in
+                self?.conversationRestored.send(event)
             }
         }
 
