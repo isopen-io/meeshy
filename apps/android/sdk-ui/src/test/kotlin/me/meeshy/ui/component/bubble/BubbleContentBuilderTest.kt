@@ -38,6 +38,7 @@ private fun message(
     isBlurred: Boolean? = null,
     isViewOnce: Boolean? = null,
     expiresAt: String? = null,
+    messageSource: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -59,6 +60,7 @@ private fun message(
     isBlurred = isBlurred,
     isViewOnce = isViewOnce,
     expiresAt = expiresAt,
+    messageSource = messageSource,
 )
 
 class BubbleContentBuilderTest {
@@ -77,6 +79,28 @@ class BubbleContentBuilderTest {
         val content = BubbleContentBuilder.build(message(senderId = "other"), currentUserId = "me", preferences = french)
 
         assertThat(content.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `a system-source message is flagged isSystem so it renders as a centered notice`() {
+        val content = BubbleContentBuilder.build(
+            message(messageSource = "system", content = "Alice a rejoint la conversation"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isSystem).isTrue()
+    }
+
+    @Test
+    fun `an ordinary user message is not flagged isSystem`() {
+        val content = BubbleContentBuilder.build(
+            message(messageSource = "user"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isSystem).isFalse()
     }
 
     @Test

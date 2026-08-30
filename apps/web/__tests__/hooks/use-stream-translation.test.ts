@@ -17,13 +17,13 @@ jest.mock('@/hooks/useMessageTranslation', () => ({
 
 import { useStreamTranslation } from '@/hooks/use-stream-translation';
 
-const setup = (systemLanguage = 'fr') => {
+const setup = (user: Record<string, unknown> = { systemLanguage: 'fr' }) => {
   const updates: Array<{ id: string; updater: (prev: any) => any }> = [];
   const updateMessage = (id: string, updater: (prev: any) => any) =>
     updates.push({ id, updater });
   const { result } = renderHook(() =>
     useStreamTranslation({
-      user: { id: 'u1', systemLanguage } as any,
+      user: { id: 'u1', ...user } as any,
       updateMessage,
     }),
   );
@@ -67,7 +67,7 @@ describe('useStreamTranslation — canonicalisation de langue', () => {
   });
 
   it('détecte une traduction fr-FR comme pertinente pour un lecteur fr', () => {
-    const { result } = setup('fr');
+    const { result } = setup({ systemLanguage: 'fr' });
     result.current.handleTranslation('m3', [
       { targetLanguage: 'fr-FR', sourceLanguage: 'en', translatedContent: 'Bonjour' },
     ]);
@@ -75,10 +75,24 @@ describe('useStreamTranslation — canonicalisation de langue', () => {
   });
 
   it('ne compte pas une traduction dans une langue non lue (fil ≠ fi)', () => {
-    const { result } = setup('fi');
+    const { result } = setup({ systemLanguage: 'fi' });
     result.current.handleTranslation('m4', [
       { targetLanguage: 'fil', sourceLanguage: 'en', translatedContent: 'Kumusta' },
     ]);
     expect(mockIncrement).not.toHaveBeenCalled();
+  });
+});
+
+describe('useStreamTranslation — le prisme du lecteur descend jusqu’au rang 4', () => {
+  it('compte une traduction pertinente pour la SEULE locale appareil (rang 4)', () => {
+    // Lecteur sans préférence in-app : son unique signal de langue est la locale
+    // appareil persistée (`deviceLocale`, 4e priorité du Prisme). Une traduction
+    // vers cette langue lui EST pertinente — la liste bâtie à la main (rangs 1→3)
+    // la manquait, divergeant de la SSOT getUserLanguagePreferences.
+    const { result } = setup({ systemLanguage: '', deviceLocale: 'de' });
+    result.current.handleTranslation('m5', [
+      { targetLanguage: 'de', sourceLanguage: 'en', translatedContent: 'Hallo' },
+    ]);
+    expect(mockIncrement).toHaveBeenCalledWith('en', 'de');
   });
 });

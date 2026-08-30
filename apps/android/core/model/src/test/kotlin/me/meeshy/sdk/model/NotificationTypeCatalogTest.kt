@@ -69,6 +69,55 @@ class NotificationTypeCatalogTest {
         ).inOrder()
     }
 
+    @Test
+    fun sections_callsCategoryPutsIncomingBeforeMissedThenVoicemail() {
+        val calls = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.CALLS }
+            .items.map { it.type }
+
+        // iOS orders callsEnabled ahead of missedCallEnabled in its notification settings.
+        assertThat(calls).containsExactly(
+            NotificationType.INCOMING_CALL,
+            NotificationType.MISSED_CALL,
+            NotificationType.VOICEMAIL,
+        ).inOrder()
+    }
+
+    @Test
+    fun sections_socialCategoryEndsWithFriendContent() {
+        val social = NotificationTypeCatalog.sections(UserNotificationPreferences())
+            .first { it.category == NotificationCategory.SOCIAL }
+            .items.map { it.type }
+
+        // iOS places friendContentEnabled last in its Fil social section.
+        assertThat(social.last()).isEqualTo(NotificationType.FRIEND_CONTENT)
+    }
+
+    @Test
+    fun toggle_incomingCallLensReadsAndWritesCallsEnabled() {
+        val off = NotificationTypeCatalog.toggle(
+            UserNotificationPreferences(callsEnabled = true),
+            NotificationType.INCOMING_CALL,
+            enabled = false,
+        )
+        assertThat(off.callsEnabled).isFalse()
+        assertThat(NotificationTypeCatalog.isEnabled(off, NotificationType.INCOMING_CALL)).isFalse()
+        // The neighbouring missed-call toggle is untouched.
+        assertThat(off.missedCallEnabled).isTrue()
+    }
+
+    @Test
+    fun toggle_friendContentLensReadsAndWritesFriendContentEnabled() {
+        val off = NotificationTypeCatalog.toggle(
+            UserNotificationPreferences(friendContentEnabled = true),
+            NotificationType.FRIEND_CONTENT,
+            enabled = false,
+        )
+        assertThat(off.friendContentEnabled).isFalse()
+        assertThat(NotificationTypeCatalog.isEnabled(off, NotificationType.FRIEND_CONTENT)).isFalse()
+        assertThat(off.commentLikeEnabled).isEqualTo(UserNotificationPreferences().commentLikeEnabled)
+    }
+
     // ---- sections: enabled-state derivation ------------------------------
 
     @Test

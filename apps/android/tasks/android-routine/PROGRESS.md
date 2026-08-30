@@ -2,6 +2,314 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the in-app real-time notification toast is finally WIRED — the three pure §M building
+> blocks (`NotificationToastPolicy`, `NotificationTypeToggle`, the `MeeshyNotificationToast` atom), each
+> merged unwired by a prior slice, now come alive behind one orchestrator with a 2 s dedup window and a 7 s
+> auto-dismiss** (slice `notification-toast-orchestrator`, feature-parity §M "In-app real-time notification
+> toast" `[ ]`→`[x]`). iOS keeps the toast half of `NotificationToastManager` — `handleNewNotification`
+> (dedup `Set<String>` + one 2 s removal `Task` per id → policy gate → `showToast`) + `showToast` (7 s
+> `toastDismissTask`, cancelled on replace) + `onConversationOpened/onPostOpened` (dismiss a toast the user
+> just walked into). Android had the pure GATE (`NotificationToastPolicy.decide`) but NO caller, no dedup
+> window, no timer, no active-screen tracking — a complete dead end (grep confirmed zero callers of the
+> policy AND of `MeeshyNotificationToast`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]`. Prior slice on `main` (#4481
+> `notification-prefs-calls-friend-content`, commit `545869ce`). `origin/main` fetched (HEAD `122c5278`);
+> branched `claude/apps/android/notification-toast-orchestrator` off it. My working branch was 6 commits
+> behind main (predated #4435/#4464/#4481), so branching fresh off `origin/main` was mandatory to see the
+> `NotificationTypeToggle`/`callsEnabled`/`friendContentEnabled` those slices added. Diff verified
+> `apps/android` only (1 core main + 1 core test + 3 feature main + 2 feature test + tracking docs, no
+> `local.properties`).
+>
+> **The change — one pure value type + one orchestrator VM + one mount.** (1) New pure `:core:model`
+> `ToastDedupWindow` (immutable, generic-free): a capacity-free, TTL-bounded (default 2_000 ms — iOS parity)
+> map of id→seenAt. `admit(id, nowMillis)` prunes expired first (`now - seen < ttl`, boundary EXCLUSIVE like
+> iOS's 2 s removal), reports duplicate on a still-fresh id WITHOUT refreshing its timestamp (iOS schedules
+> the removal once at first sight, never reschedules), and is blank-id-safe + referentially stable (same
+> instance when nothing changed). **SOTA over iOS:** iOS spawns one detached coroutine per id to self-clean;
+> this is a clock-free pure value type pruned lazily on the next admit — every branch JVM-testable, the
+> "when" (the millis to pass) owned by the orchestrator. (2) `NotificationToastViewModel`
+> (`:feature:notifications`) subscribes to `MessageSocketManager.notificationReceived`, threads the window
+> through `NotificationToastPolicy.decide` (the same push/DND/per-type gate the settings slices built),
+> exposes `currentToast: StateFlow<ApiNotification?>`, schedules a 7 s auto-dismiss (cancelled + re-armed on
+> a newer toast; a stale timer also no-ops via an id re-check), and offers `onConversationOpened/Closed`,
+> `onPostOpened/Closed`, `dismiss` — the active-screen hooks that pull down a toast the user just opened.
+> `NotificationToastClock` (interface + `RealNotificationToastClock` + `@Binds`, the `CallClock` precedent)
+> exposes BOTH `nowMillis()` (dedup) and `localDateTime()` (DND) so a test pins each exactly. (3)
+> `NotificationToastHost` composable mounts `MeeshyNotificationToast` from the StateFlow (slide-in from top,
+> tap → `onOpen` + dismiss), fed by two pure projections `notificationToastSenderName`/`…Subtitle`.
+> Deliberately EXCLUDED (a genuinely cross-cutting follow-up, noted in §M): placing `NotificationToastHost`
+> at the app scaffold and calling the `onConversationOpened/Closed` hooks from every chat/feed screen.
+>
+> **Tests: +33, RED-proven.** `ToastDedupWindowTest` +13 (default 2 s TTL; first admit records; second within
+> window dups + no growth; 1 ms-before dup / exactly-at-TTL not-dup; a duplicate does NOT refresh the original
+> timestamp; distinct ids independent; expired pruned on next admit; blank never dups/stored + same instance;
+> dup-no-prune same instance; new id new instance; custom TTL; non-positive TTL rejected).
+> `NotificationToastHostTest` +6 (sender name displayName→username→brand fallback; subtitle
+> conversationTitle→content→empty). `NotificationToastViewModelTest` +14 (fresh surfaces; dedup within window
+> not re-surfaced; same id after window re-surfaces; open-conversation suppressed; push-off suppressed;
+> per-type-off suppressed; 7 s auto-dismiss; an older toast's timer doesn't dismiss a newer toast;
+> open-conversation/open-post dismiss a standing toast; different-conversation leaves it; open-post suppressed;
+> close-conversation re-opens suppression; `dismiss` clears). **RED proven by mutation:** the pure boundary
+> `<`→`<=` fails exactly `readmittingExactlyAtTheTtl`/`customTtlIsHonoured`/`aDuplicateDoesNotRefresh…` (13
+> tests, 3 failed); the VM `isDuplicate`→`false` fails exactly `aDuplicateDeliveryWithinTheWindow…` and the
+> auto-dismiss guard→`false` fails exactly `aShownToastAutoDismissesAfterSevenSeconds` (14 tests, 2 failed).
+> A NOTE captures why deleting `dismissJob?.cancel()` stayed GREEN — the id-guard already protects the
+> behaviour, so the cancel is hygiene, not correctness, and a behaviour test rightly can't isolate it.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) +
+> `platforms;android-35` + `build-tools;35.0.0` + `platform-tools`; SDK auto-pulled `android-37.0`, and
+> `compileSdk = 37` resolved via the `android-37 → android-37.0` symlink (the documented fix). Kept
+> `local.properties` out of the diff (gitignored — `git check-ignore` confirmed).
+>
+> **Verified — full `./apps/android/meeshy.sh check` GREEN** (assembleDebug + all-module testDebugUnitTest).
+> Reviewer **PASS** (diff `apps/android` only; SDK purity — pure `:core:model` value type + `:feature`
+> orchestration/clock/mount, no `android.*` in the model; SSOT — one dedup window, the existing policy reused
+> as the single gate, no re-implementation; instant-app — `currentToast` StateFlow, pure synchronous decision,
+> no I/O; UDF — immutable StateFlow, cancellation-safe `viewModelScope`; no tautological tests — verdicts
+> derived from iOS behaviour, RED-proven; no coverage floor lowered).
+>
+> **Next**: mount `NotificationToastHost` at the app scaffold + call `onConversationOpened/Closed` /
+> `onPostOpened/Closed` from the chat and feed screens (cross-cutting app wiring — the last §M toast piece).
+> For a pure-core next slice, a Chat/Feed value type. Read the chosen box's iOS audit part read-only before
+> branching.
+
+> On 2026-08-30 **incoming-call and friend-content notifications now honour a REAL toggle instead of
+> being always-on — the last `isTypeEnabled` parity gap closes, and the user gets two reachable
+> Settings rows for them** (slice `notification-prefs-calls-friend-content`, feature-parity §M
+> "`callsEnabled` + `friendContentEnabled` notification toggles" `[ ]`→`[x]`). The prior slice
+> (`notification-toast-per-type-gate`, #4464) built the wire-type→toggle resolver but left
+> incoming-call and friend feed/story/mood in its always-on set with a stated boundary: "Android's
+> `UserNotificationPreferences` has neither `callsEnabled` nor `friendContentEnabled` field yet — a
+> tracked follow-up." This slice adds those two fields and wires them end-to-end.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice on
+> `main` (#4464 `notification-toast-per-type-gate`, commit `021a975f`). `origin/main` fetched (HEAD
+> `1a8ee5c6`); branched `claude/apps/android/notification-prefs-calls-friend-content` off it; local
+> HEAD == origin/main before branching. Diff verified `apps/android` only (4 core main + 4 core test +
+> 1 settings screen + 4 locale strings + tracking docs, no `local.properties`).
+>
+> **The change — two model fields, wired through catalog + sync + toast.** (1) `UserNotificationPreferences`
+> gains `callsEnabled` (after `missedCallEnabled`) and `friendContentEnabled` (after `commentLikeEnabled`),
+> both default `true` — exact iOS `defaults` + gateway `NotificationPreferenceSchema` parity (verified
+> against `packages/shared/types/preferences/notification.ts`). (2) `NotificationTypeToggle` moves
+> `incoming_call`/`call`/`CALL_INCOMING` out of `ALWAYS_ON` into a group gated on `callsEnabled`, and
+> `friend_new_story`/`friend_new_post`/`friend_new_mood` into one gated on `friendContentEnabled` — the raw
+> wire strings verified 1:1 against iOS `NotificationModels.swift` (`incomingCall="incoming_call"`,
+> `incomingCallAlert="call"`, `legacyCallIncoming="CALL_INCOMING"`). The always-on set now holds ONLY the
+> types iOS itself leaves toggle-less (translation/transcription/voice-clone, gamification, legacy
+> status/affiliate) — full `isTypeEnabled` parity. (3) `NotificationPreferenceSyncBody` carries both fields
+> in `from`/`toPreferences` (gateway-schema order) so a toggle set on iOS/web round-trips to Android and the
+> toast honours it. (4) `NotificationTypeCatalog` gains `INCOMING_CALL` (CALLS, before MISSED_CALL — iOS puts
+> `callsEnabled` ahead of `missedCall`) + `FRIEND_CONTENT` (SOCIAL, last — iOS Fil social order), with
+> get/set lenses; the pure `sections()` projection auto-renders two reachable rows in Settings ▸ Notifications
+> (+`settings_notif_type_incoming_call` / `settings_notif_type_friend_content` ×4 locales, exhaustive `when`
+> in `SettingsScreen` forces both arms). **SOTA over iOS:** the toggle grouping stays data-driven (one
+> class-load `BY_TYPE` map, no per-call switch re-walk), the catalog remains the single grouping SSOT, and the
+> sync body is the single gateway-contract projection — so the same two fields flow through one resolver, one
+> catalog, one wire body, never three divergent copies.
+>
+> **Tests: +8, RED-proven.** `NotificationTypeToggleTest` +2 (`callsToggleGovernsIncomingCallTypesButNotFinishedCalls`
+> — incoming trio off when `callsEnabled` off, finished-call trio still on; `friendContentToggleGovernsFriendFeedStoryAndMood`
+> — friend trio off, `friend_story_comment`→postComment + `post_like` untouched), plus the all-off sweep and
+> its always-on set corrected (calls/friend removed — now correctly silenced under all-off, a STRICTER
+> assertion). `NotificationTypeCatalogTest` +4 (CALLS order = INCOMING_CALL,MISSED_CALL,VOICEMAIL; SOCIAL ends
+> with FRIEND_CONTENT; both new lenses read/write the right field without clobbering neighbours).
+> `NotificationPreferenceSyncBodyTest` +2 (default block carries both toggles true; both survive the round trip
+> both ways) + the `gatewayFields` set corrected to the real 32-field contract. `PreferenceSyncBodyReadProjectionTest`
+> fixture gained the two keys (gateway sends every key) + a strengthened witness (wire `false` must override the
+> local `true` default). **RED proven by mutation:** flipping the production `incoming_call` gate from
+> `it.callsEnabled` to `true` fails EXACTLY `callsToggleGovernsIncomingCallTypesButNotFinishedCalls` +
+> `onlyTheToggleLessTypesSurviveEveryToggleOff` (18 tests, 2 failed), nothing else.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) + `platforms;android-35`/
+> `android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` via the `android-37 → android-37.0`
+> symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full `./apps/android/meeshy.sh check` BUILD SUCCESSFUL** (assembleDebug + all-module
+> `testDebugUnitTest`, 973 tasks; `:core:model` alone = 3273 tests green after the +8, up from 3271). Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — pure `:core:model` building blocks + settings label glue, no
+> `android.*` in the model; SSOT — one toggle resolver, one catalog, one sync body, no divergent copies;
+> instant-app — pure synchronous predicates, no I/O; UDF — n/a pure; no tautological tests — verdicts derived from
+> iOS `isTypeEnabled` + gateway schema, not the impl; no coverage floor lowered — fixtures corrected to the real
+> gateway contract and witnesses STRENGTHENED, never weakened; RED-proven).
+>
+> **Next**: the toast's STATEFUL orchestrator (2 s dedup window, 7 s auto-dismiss, `onConversationOpened/Closed`
+> hooks) and the UI mount + tap-to-navigate (`MeeshyNotificationToast` atom exists in `:sdk-ui`, still uncalled)
+> stay open in §M. For a pure-core next slice, a Chat/Feed value type. Read the chosen box's iOS audit part
+> read-only before branching.
+
+> On 2026-08-30 **the in-app real-time notification toast finally honours the user's PER-TYPE toggles —
+> a `member_left` or `comment_like` push whose toggle is off no longer pops a toast, while a
+> toggle-less type (translation, incoming-call, friend-content) still does** (slice
+> `notification-toast-per-type-gate`, feature-parity §M — closes the gap the toast policy's own
+> doc-comment declared open on 2026-08-17). iOS gates the in-app banner on
+> `UserNotificationPreferences.isTypeEnabled` (`UserNotificationPreferences+Filter.swift`), an 80-case
+> switch over `MeeshyNotificationType`; Android's `NotificationToastPolicy` deliberately shipped WITHOUT
+> that check ("Android has no raw-wire-type→toggle resolver to reuse — building one is real, separate
+> work"), so every type passed once push+DND cleared. That resolver is now built.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`notification-center-category-filter`) is on `main` (#4435 was the last android merge, commit 79f769b6).
+> `origin/main` fetched (forced-update dc401b37→79f769b6); branched `claude/apps/android/notification-toast-per-type-gate`
+> off it; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (2 new core files + 2 edited core files + feature-parity.md + routine docs, no
+> `local.properties`).
+>
+> **The change — one pure wire-type→toggle resolver + one policy layer.** (1) New pure `:core:model`
+> `NotificationTypeToggle.isEnabled(type, preferences)` — a faithful port of iOS `isTypeEnabled`, keyed
+> DIRECTLY on the raw wire `type` string (both `new_message` and legacy `NEW_MESSAGE`) so no
+> `MeeshyNotificationType` enum is needed on Android. The 80-arm switch is expressed once as data
+> (`ToggleGroup(types, predicate)`) built into an immutable `BY_TYPE` map at class-load — SOTA over iOS's
+> per-call `switch` re-walk. Unknown types collapse onto `systemEnabled` via the EXISTING
+> `NotificationTypeVocabulary.canonical` (iOS `rawValue ?? .system`) — SSOT reuse, not a second collapse
+> table. The toggle grouping is its OWN SSOT (deliberately NOT the 11-chip filter grouping: `STORY_REPLY`
+> toggles `storyReactionEnabled` though it sits under the SOCIAL chip; `comment_reaction` toggles
+> `commentLikeEnabled`; `STATUS_UPDATE` is toggle-less though under the CONTACTS chip). (2)
+> `NotificationToastPolicy.decide` gains a third preference layer after push+DND — `isTypeEnabled` fail →
+> `BlockedByPreferences` (existing decision case reused, sealed interface unchanged). **Faithful boundary:**
+> iOS gates incoming-call on `callsEnabled` and friend feed/story/mood on `friendContentEnabled`; Android's
+> `UserNotificationPreferences` has neither field yet, so those types resolve to always-enabled exactly like
+> iOS's toggle-less power-user types (translation/gamification). Adding the two fields (model + sync body +
+> Settings row) is a NEW tracked box in §M, not invented here.
+>
+> **Tests: +21, RED-proven.** `NotificationTypeToggleTest` +17 (all-on sweep over `KNOWN_TYPES`; all-off
+> sweep leaving only the 17 toggle-less types; system-toggle governs exactly the 9 system types and no
+> collateral; per-toggle governance for newMessage/reply/missedCall-not-incoming/reaction-vs-storyReaction/
+> commentLike/contactRequest/memberLeft-vs-memberJoined/groupInvite/conversation/postComment/postLike/mention;
+> unknown+blank→system). `NotificationToastPolicyTest` +4 (toggle-off→blocked, toggle-on→show,
+> toggle-less→show even with neighbour toggles off, push-master overrides an enabled per-type toggle).
+> **RED proven TWICE this run:** (a) the initial `allOn = UserNotificationPreferences()` fixture was wrong —
+> `memberLeftEnabled`/`commentLikeEnabled` default to `false`, so the all-on sweep RED-failed until the
+> fixture forced them true (a real defaults gotcha, NOTES-logged); (b) mutating the production `story_reaction`
+> group from `storyReactionEnabled`→`reactionEnabled` fails exactly `reactionAndStoryReactionAreDistinctToggles`
+> and nothing else.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (slow, ~150 MB); cmdline-tools (11076708) +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` via the
+> `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full `./apps/android/meeshy.sh check` BUILD SUCCESSFUL** (assembleDebug + all-module
+> `testDebugUnitTest`, 973 tasks, 4m47s; `:core:model` alone = 3264 tests green) and RED-proof confirmed.
+> Reviewer **PASS** (diff `apps/android` only — 2 core files + 2 core tests + feature-parity.md + routine
+> docs, no `local.properties`; SDK purity — pure `:core:model` building block, no `android.*`, no
+> orchestration; SSOT — reuses `NotificationTypeVocabulary.canonical`, own toggle grouping justified;
+> instant-app — pure synchronous predicate, no I/O; UDF — n/a pure function; no tautological tests — every
+> expected verdict derived from iOS semantics, not the impl's map; no coverage floor lowered — new pure logic
+> with all-on/all-off completeness sweeps, RED-proven).
+>
+> **Next**: the `callsEnabled` + `friendContentEnabled` model fields (new §M box) would let those two type
+> families honour a real toggle instead of always-on. The toast's remaining sub-slices stay open: the STATEFUL
+> orchestrator (2 s dedup window bookkeeping, 7 s auto-dismiss, `onConversationOpened/Closed` hooks) and the UI
+> mount + tap-to-navigate (the `MeeshyNotificationToast` atom exists in `:sdk-ui`, still uncalled). Read the
+> chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-30 **a system message renders as a centered notice, no longer as the arriver's own signed
+> bubble** (slice `chat-system-notice`, PR #4435, feature-parity "Message système → notice centrée" line).
+> Android had `Message.isSystemMessage` (`messageSource == "system"`) but used it ONLY for grouping — a
+> join/leave/legacy-summary row still went through the standard bubble path and rendered SIGNED by its
+> author. iOS classifies `.system` FIRST in `ThemedMessageBubble` and renders a centered `BubbleSystemNoticeView`
+> (or the richer call/join notices). This slice ships the foundation: the `.system` arm + the plain centered
+> notice; call/join notices are follow-up slices on top of it. Pure, JVM-testable (`BubbleRenderKind`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4267 (jcnm gateway), no
+> `claude/apps/android/<slice-id>` slice, nothing of mine to merge. Branched off freshly-fetched `origin/main`
+> (`ddcf0133`). Diff verified `apps/android` only (7 files: 3 main + 2 test in `:core:model`/`:sdk-ui`, +2 the
+> presenter/bubble glue).
+>
+> **The change.** `:core:model` `BubbleRenderKind.Kind.System` + `resolve(isSystem = …, …)` checked FIRST
+> (`isSystem -> System` above deleted/burned/ephemeral, matching iOS `case .system` precedence) + `Kind.isSystem`
+> predicate. `:sdk-ui`: `BubbleContent.isSystem` (fed by `ApiMessage.isSystemMessage` in `BubbleContentBuilder`),
+> `rememberBubbleRenderKind` short-circuits on `isSystem` before any clock read, and `MessageBubble` renders a
+> centered avatar-less `BubbleSystemNoticeView` (port of iOS `BubbleSystemNoticeView`; subtle `backgroundTertiary`
+> capsule, muted centered text; a blank notice renders nothing). Coherent with Android's timeless bubbles (no
+> per-notice clock, unlike iOS — the thread's day-headers already carry time).
+>
+> **Tests: +10, RED-proven.** `BubbleRenderKindTest`: system→System, system wins over deleted / burned /
+> ephemeral-expired, never-system→Standard, `isSystem` predicate (+ System added to the two existing predicate
+> guards). `BubbleContentBuilderTest`: `messageSource == "system"` → `isSystem` true; `"user"` → false. **RED**:
+> removing the `isSystem -> Kind.System` first arm fails EXACTLY the four system cases (the base case + the
+> three precedence collisions), no collateral — verified 2026-08-30.
+>
+> **Verified.** `:core:model` + `:sdk-ui` `testDebugUnitTest` green locally (BUILD SUCCESSFUL 3m40s); full
+> `./apps/android/meeshy.sh check` + CI Android in flight on PR #4435. Reviewer PASS (diff `apps/android` only,
+> no `local.properties`; SDK purity — pure decision in `:core:model`, Compose glue in `:sdk-ui`; SSOT — the
+> single render-kind decision, no re-implementation; no tautological tests; no coverage floor lowered).
+>
+> **Next**: the enriched system notices on top of this arm — the **join notice** (`BubbleJoinNoticeView`: a
+> pure `JoinNoticePresentation` from participant metadata — givenName/username/isAnonymous/linkRules — + a
+> localized "X a rejoint la conversation" catalog honoring the Prisme; needs `ApiMessage` join metadata
+> decode) or the **call-summary notice** (`BubbleCallNoticeView`: pure per-viewer direction from a
+> `callSummary`). Both are pure cores with a live consumer (this `.system` branch). Read the iOS
+> `BubbleSystemViews.swift` / `BubbleCallNoticeView.swift` first.
+
+> On 2026-08-30 **audio-transcription karaoke gained its pure sync heart — given the timed
+> segments, the playback position, the engine progress and the playing state, one function names
+> which segment is "lit"** (slice `transcription-active-segment-resolver`, feature-parity §P
+> "synchronized karaoke-style transcription (tap-to-seek)" `[ ]`→`[~]`). iOS keeps this as the
+> single source of truth `AudioPlayerView.activeSegmentIndex(segments:currentTime:progress:isPlaying:)`
+> shared between the bubble player and `MediaTranscriptionView`; Android had NO karaoke resolver at
+> all (a §P Complétude gap — the timed `MessageTranscriptionSegment` list existed but nothing turned a
+> playback clock into a lit word).
+>
+> **Step 0 — no open android-routine PR, and a STALE-tracking correction.** `list_pull_requests`
+> (open) → empty; nothing of mine to merge. But the PROGRESS/feature-parity read at the top was
+> **behind `main`**: the previous top entry is `notification-center-category-filter` (#4421), yet
+> `git log origin/main -- apps/android` shows #4464 (per-type toggle `isTypeEnabled` port), #4481
+> (incoming-call & friend-content real toggles), #4435 (system→centred notice) and #4493 (in-app toast
+> wired, pure `ToastDedupWindow` + orchestrator VM) all merged AFTER it without prepending a PROGRESS
+> entry. I first (wrongly) picked `notification-per-type-toggle-gate` off the stale "Next", started
+> writing it, and `git status` revealed `NotificationTypeToggle.kt` was `M` not `??` — the slice was
+> already on `main` (#4464/#4481). Restored the clobbered files (`git checkout`), and re-picked from
+> `git log`, not from PROGRESS. **Lesson (NOTES §): the routine's "Next" is advisory and can lag `main`;
+> the frontier is `git log origin/main -- apps/android`, and a new file must be confirmed absent on
+> `main` before it is written.** Branched `claude/apps/android/transcription-active-segment-resolver`
+> off freshly-fetched `origin/main` (`d485e072`).
+>
+> **The change — one pure function, no wiring churn.** New `:core:model`
+> `TranscriptionKaraokeResolver.activeSegmentIndex(segments, currentTimeSeconds, progress, isPlaying)`
+> → `Int?`, a faithful port of the iOS three-layer resolver: (1) `!isPlaying || empty` → `null`
+> (iOS "BUG D" guard — at rest `currentTime==0` and a segment starting at `0` would false-highlight
+> segment 0); (2) if ANY segment has real timing (`end > start`) → the FIRST segment whose half-open
+> window `[start, end)` contains the position (start inclusive, end exclusive), else `null`
+> (before-first / in-gap / past-last); (3) no usable timing (every `start==end`, e.g. `0…0`, so no
+> window could match) → proportional `floor(progress·count)` clamped to `0..count-1`. Android's
+> nullable `MessageTranscriptionSegment.startTime/endTime` read as `0.0`, matching iOS's non-optional
+> `TranscriptionDisplaySegment` default. **SOTA over iOS:** it operates on the real domain model (no
+> shadow display type), and every branch is an isolated JVM test rather than a `@ViewBuilder`-embedded
+> computed property. Blast radius: one new file + one new test file — no existing code touched (the
+> Compose flow-layout that paints the spans + tap-to-seek is app-side glue, left as a tracked §P
+> follow-up).
+>
+> **Tests: +19, RED-proven.** `TranscriptionKaraokeResolverTest` covers: paused→null (even with a
+> matching window); empty→null; inside-window; start-inclusive; end-exclusive (boundary belongs to the
+> next segment); before-first→null; in-gap→null; past-last→null; overlapping windows→first match;
+> single timed segment→0; one real segment flips the whole list to the timing branch (a non-matching
+> position→null, not proportional); null bounds count as 0-timing→proportional; proportional at
+> progress 0 / 0.5 / 1.0(clamp) / negative(clamp) / >1(clamp) / single-untimed. **RED:** flipping the
+> end-boundary `<`→`<=` fails exactly `windowStartIsInclusive`, `windowEndIsExclusive` and
+> `positionPastTheLastSegmentLightsNothing` (verified: 3 failed under the mutation, green after revert).
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37` cleanly. `local.properties` kept out
+> of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 core file +
+> 1 test file + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block,
+> no android.*, no singleton, no "when to play" orchestration; SSOT — one karaoke resolver, no
+> re-implementation; instant-app — a pure projection, no I/O; UDF — pure function of its inputs; no
+> tautological tests; no coverage floor lowered — new pure logic with near-total branch coverage,
+> RED-proven).
+>
+> **Next**: the karaoke Compose flow-layout (paint the coloured/bold spans, tap-a-word→seek,
+> auto-scroll the active span to centre — iOS `MediaTranscriptionView`) is the §P follow-up that
+> consumes this resolver; video watch-progress reporting is the other half of the same line. For a
+> pure-core next slice, an audio-player chrome/plan value type (iOS `AudioPlayerView.plan(for:)`) or a
+> Feed value type. **Confirm the target file is absent on `origin/main` before writing.**
+
+
 > On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
 > ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /
 > Contacts / Groups / Calls / Translations / System (or Unread)** (slice `notification-center-category-filter`,

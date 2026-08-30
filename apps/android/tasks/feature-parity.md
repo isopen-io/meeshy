@@ -2148,6 +2148,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message système → notice centrée — **fondation done** (slice `chat-system-notice`, 2026-08-30) :
+      un message `messageSource == "system"` (avis d'arrivée/départ, résumés hérités) se rendait comme
+      le premier message SIGNÉ de l'arrivant, faute d'un arm dédié. Ajoute `BubbleRenderKind.Kind.System`
+      résolu **EN PREMIER** dans `resolve(...)` (parité iOS `ThemedMessageBubble` `case .system`, vérifié
+      avant deleted/burned/ephemeral ; le presenter court-circuite avant toute lecture d'horloge) ;
+      `BubbleContent.isSystem` ← `ApiMessage.isSystemMessage` dans `BubbleContentBuilder` ; `MessageBubble`
+      rend une `BubbleSystemNoticeView` centrée, sans avatar ni nom (port iOS `BubbleSystemNoticeView`,
+      capsule subtile `backgroundTertiary`, texte muté centré ; notice vide → rien). +10 tests, RED-prouvés
+      (retirer l'arm `isSystem` → exactement les 4 cas système échouent — le cas de base + 3 collisions de
+      précédence —, aucun collatéral). Diff `apps/android`
+      only. **Reste** : notices d'appel enrichies (`BubbleCallNoticeView`) et d'arrivée
+      (`BubbleJoinNoticeView` + catalogue localisé + règles de lien) — lots suivants sur cet arm.
 - [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
       `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
       (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
@@ -6721,6 +6733,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
       ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
       empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
+- [x] In-app real-time notification toast — **shipped 2026-08-30** (slice
+      `notification-toast-orchestrator`): the stateful glue that finally makes the three previously
+      ORPHAN §M building blocks live — `NotificationToastPolicy` (active-screen/dedup/push/DND/per-type
+      gate), the new pure `ToastDedupWindow`, and the `MeeshyNotificationToast` atom. Port of the toast
+      half of iOS `NotificationToastManager` (`handleNewNotification`/`showToast`/`onConversationOpened`).
+      New pure `:core:model` `ToastDedupWindow` (immutable, 2 s TTL, `admit(id, now)→(window,isDuplicate)`,
+      prune-on-admit, blank-id-safe, referential-stable) replaces iOS's mutable `Set<String>` + one 2 s
+      removal `Task` per id. `NotificationToastViewModel` (`:feature:notifications`) threads it through the
+      policy off the `notificationReceived` socket seam, exposes `currentToast: StateFlow<ApiNotification?>`,
+      auto-dismisses after 7 s (iOS parity, cancelled when replaced), and offers
+      `onConversationOpened/Closed`, `onPostOpened/Closed`, `dismiss` hooks. `NotificationToastClock`
+      (interface + `@Binds`) makes both the dedup millis and the DND `LocalDateTime` test-pinnable.
+      `NotificationToastHost` composable mounts the atom (slide-in, tap-to-open) with pure
+      `notificationToastSenderName`/`notificationToastSubtitle` projections. +25 tests (13 `ToastDedupWindow`
+      + 6 host projection + 14 VM incl. the 2 s dedup window, 7 s auto-dismiss and its non-clobber, and every
+      active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
+      **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
+      `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
@@ -6811,17 +6841,46 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       id already shown in the last 2s" boolean is precomputed by the caller — inherently
       stateful, not this pure function's job), then push-enabled + DND-window gating (both reuse
       already-existing pure predicates, `UserNotificationPreferences.pushEnabled`/
-      `DndWindow.isActive`). +8 tests. **Deliberately narrower than iOS's own gate**: the
-      PER-TYPE toggle check (iOS `isTypeEnabled`, an 80-case switch over `MeeshyNotificationType`)
-      is NOT ported — Android has no raw-wire-type→toggle resolver to reuse
-      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum);
-      building one is real, separate work, left open rather than invented under this slice's
-      budget. Until then every type passes once push+DND clear.
+      `DndWindow.isActive`). +8 tests. **The PER-TYPE toggle check was originally deferred**: iOS
+      `isTypeEnabled` is an 80-case switch over `MeeshyNotificationType`
+      and Android had no raw-wire-type→toggle resolver to reuse
+      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum).
+      **That resolver shipped 2026-08-30** (slice `notification-toast-per-type-gate`): new pure
+      `:core:model` `NotificationTypeToggle.isEnabled(type, preferences)` faithfully ports iOS
+      `isTypeEnabled`, keyed directly on the raw wire `type` string (both lowercase canonical and
+      legacy uppercase alias) so no `MeeshyNotificationType` enum is needed. The switch is
+      expressed once as data (type-set → prefs predicate) built into an immutable class-load
+      lookup — SOTA over iOS's per-call `switch` re-walk. Unknown types collapse onto
+      `systemEnabled` via the existing `NotificationTypeVocabulary.canonical` (iOS
+      `rawValue ?? .system`). Wired into `NotificationToastPolicy.decide` as a third preference
+      layer after push+DND (fail → `BlockedByPreferences`). **Faithful boundary**: iOS gates
+      incoming-call on `callsEnabled` and friend feed/story/mood on `friendContentEnabled`;
+      Android's model has neither field yet, so those types resolve to always-enabled exactly like
+      iOS's toggle-less power-user types (translation, gamification) — tracked follow-up below.
+      +21 tests (17 `NotificationTypeToggle` incl. all-on / all-off completeness sweeps over
+      `KNOWN_TYPES`, cross-grouping cases `STORY_REPLY`→storyReaction /
+      `comment_reaction`→commentLike / `community_joined`→memberLeft, unknown+blank→system;
+      4 `NotificationToastPolicy` incl. toggle-off→blocked / toggle-on→show / toggle-less→show /
+      push-master-overrides-type).
       **Still open**: the STATEFUL wiring (dedup-window bookkeeping, the 7s dismiss timer, a
       Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
       called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
-      `ConversationSocketHandler.init`/`deinit` today), the per-type toggle resolver noted
-      above, and sub-slice (3) (UI mount + navigation).
+      `ConversationSocketHandler.init`/`deinit` today) and sub-slice (3) (UI mount + navigation).
+- [x] `callsEnabled` + `friendContentEnabled` notification toggles (model field + sync-body
+      mapping + Settings ▸ Notifications rows) — iOS gates incoming-call and friend
+      feed/story/mood on these two per-type toggles (`UserNotificationPreferences+Filter.swift`).
+      **Shipped 2026-08-30** (slice `notification-prefs-calls-friend-content`): both fields added
+      to `UserNotificationPreferences` (default `true`, gateway `NotificationPreferenceSchema`
+      parity), carried in `NotificationPreferenceSyncBody` (`from`/`toPreferences`, gateway-schema
+      order) so a toggle set on any device round-trips; `NotificationTypeToggle` now gates
+      `incoming_call`/`call`/`CALL_INCOMING` on `callsEnabled` and
+      `friend_new_story`/`friend_new_post`/`friend_new_mood` on `friendContentEnabled` — those six
+      leave the always-on set, closing the last `isTypeEnabled` parity gap; and `NotificationTypeCatalog`
+      gains `INCOMING_CALL` (CALLS, before MISSED_CALL — iOS order) + `FRIEND_CONTENT` (SOCIAL, last),
+      so the Settings ▸ Notifications editor auto-renders two reachable rows (+2 labels ×4 locales).
+      +8 tests (calls/friend gating both ways with neighbour-toggle isolation; CALLS/SOCIAL section
+      order; catalog lens read/write; sync-body field set = gateway contract + round-trip). RED-proven
+      (mutating the `callsEnabled` gate to always-on fails exactly the calls-gating + all-off sweep).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
@@ -7044,7 +7103,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
       player (seek bar, ±10s, speed 1.0–2.0×, swipe-to-dismiss); Picture-in-Picture
 - [ ] Single-active-player coordination across audio + video; save video to gallery
-- [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+- [~] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+      — **karaoke sync pure core shipped** (slice `transcription-active-segment-resolver`,
+      2026-08-30): pure `:core:model` `TranscriptionKaraokeResolver.activeSegmentIndex`
+      (segments + currentTime + progress + isPlaying → lit segment index | `null`), a faithful
+      port of iOS `AudioPlayerView.activeSegmentIndex` — the single source of truth iOS shares
+      between the bubble player and `MediaTranscriptionView`. Three layers: idle/empty → `null`
+      (iOS "BUG D" guard against false-highlighting segment 0 at rest); real timing → first
+      half-open `[start,end)` window containing the position (start inclusive, end exclusive),
+      `null` before-first / in-gap / past-last; no usable timing (all `start==end`) →
+      proportional `floor(progress·count)` clamped to range. Android's nullable segment bounds
+      read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
+      app-side glue (pending): the Compose flow-layout that paints the coloured spans +
+      tap-to-seek + auto-scroll, and video watch-progress reporting.
 - [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
 - [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)

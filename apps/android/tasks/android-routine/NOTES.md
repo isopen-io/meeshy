@@ -5,6 +5,83 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — a behaviour test can't isolate a REDUNDANT guard, and that's correct (slice `notification-toast-orchestrator`)
+The toast VM cancels the pending 7 s dismiss when a newer toast appears (`dismissJob?.cancel()`, iOS parity)
+AND the dismiss body re-checks `_currentToast.value?.id == notification.id` before clearing. I tried to
+RED-prove the cancel by deleting it — the suite stayed GREEN, because the id-guard ALREADY protects the
+user-visible behaviour (an older toast's timer never dismisses a newer toast). That's not a missing test: it's
+proof the cancel is a resource-hygiene optimisation, not a correctness mechanism, so a *behaviour* test rightly
+can't distinguish the two. Lesson: when a mutation doesn't turn a test red, first ask whether the mutated line
+is redundant to the behaviour before "strengthening" the test to catch it — asserting the cancel directly would
+be testing the implementation, which the rubric forbids. I renamed the test to
+`anOlderToastsTimerDoesNotDismissANewerToast` (what it proves) and RED-proved the two REAL behaviours instead:
+the VM dedup (`isDuplicate`→`false` fails `aDuplicateDelivery…`) and the auto-dismiss (guard→`false` fails
+`aShownToastAutoDismisses…`), plus the pure `ToastDedupWindow` boundary (`<`→`<=` fails the TTL tests).
+
+## 2026-08-30 — three orphan pure §M blocks were waiting for ONE orchestrator (slice `notification-toast-orchestrator`)
+`NotificationToastPolicy`, `NotificationTypeToggle` and the `MeeshyNotificationToast` atom were each built by a
+prior slice and merged with ZERO callers — the routine's incremental §M cadence (pure core now, wiring later).
+The honest "make it real" slice is the ViewModel that composes all three off the socket seam; it clears the
+orphan debt on the policy in one move. Grep `NotificationToastPolicy`/`MeeshyNotificationToast` for callers
+before adding a fourth pure block — if the third is still uncalled, wire it instead of stacking a fourth.
+
+## 2026-08-30 — Adding a REQUIRED field to a `@Serializable` wire body breaks its "every key present" decode fixtures (slice `notification-prefs-calls-friend-content`)
+`NotificationPreferenceSyncBody` fields are non-nullable with NO Kotlin defaults (a wire contract carries every
+key), so adding `callsEnabled`/`friendContentEnabled` to the data class made `kotlinx.serialization` throw
+`MissingFieldException` on any test JSON fixture that predated them — here `PreferenceSyncBodyReadProjectionTest`'s
+`notificationResponse` (documented "every key present"). The `NotificationPreferenceSyncBodyTest` `from`-projection
+tests did NOT break (they build the body from a `UserNotificationPreferences`, never decode raw JSON), which is
+why the first `check` only surfaced the two decode tests. **Lesson: when you add a field to a `@Serializable` sync
+body, grep the test tree for `decodeFromString<ThatBody>` / raw JSON fixtures with its sibling keys BEFORE running
+the gate** — the round-trip-from-model tests will pass and hide the fixture gap. Fixing the fixture is a
+correction, not a weakening: a real gateway response DOES carry the new key, so I set it to a value (`false`) that
+overrides the local `true` default and STRENGTHENED the witness (`assertThat(next.callsEnabled).isFalse()`).
+
+## 2026-08-30 — `UserNotificationPreferences()` is NOT "all on" (slice `notification-toast-per-type-gate`)
+Two per-type booleans default to `false` in the model: `memberLeftEnabled` and `commentLikeEnabled`
+(`Preferences.kt`). A test fixture named `allOn = UserNotificationPreferences()` therefore lies — and the
+RED run caught it: `everyTypeIsAllowedWhenAllTogglesAreOn` failed at the `member_left`/`comment_like` types
+because their (correctly-mapped) toggle was off by default, not because the production mapping was wrong. The
+fix is in the FIXTURE (`copy(memberLeftEnabled = true, commentLikeEnabled = true)`), not the code. Lesson:
+when a sweep test asserts "every X is true under the default block", first check the default block actually
+sets every relevant field true — a data-class default is a silent third state between "on" and "the test's
+mental model". This is also why the toast policy's `decide_blocksWhenThisTypesPerTypeToggleIsOff` uses
+`member_left` with the bare default block: it's the one type that's blocked *without* having to flip anything.
+
+## 2026-08-30 — the per-type toggle gate keys on the WIRE string, not an enum (slice `notification-toast-per-type-gate`)
+iOS `isTypeEnabled` switches over the decoded `MeeshyNotificationType`; the caller does `rawValue ?? .system`.
+Android has no such enum and doesn't need one — `NotificationTypeToggle.isEnabled(type: String, prefs)` keys
+directly on the raw wire string (both `new_message` and legacy `NEW_MESSAGE`) and reuses the existing
+`NotificationTypeVocabulary.canonical` (unknown → `"system"`) for the exact same `?? .system` collapse. The
+toggle grouping is genuinely its OWN SSOT — it does NOT match the 11-chip filter grouping (`STORY_REPLY` sits
+under the SOCIAL chip but toggles `storyReactionEnabled`; `comment_reaction` under REACTIONS-adjacent but
+toggles `commentLikeEnabled`; `STATUS_UPDATE` under CONTACTS chip but is toggle-less). Don't try to reuse
+`NotificationFilterCategory.DEFAULT_MATCHING` as the toggle map — different question, different answer. The
+completeness guard is the all-off sweep over `KNOWN_TYPES`: any wire type not mapped (and not in the
+always-on set) surfaces as an assertion failure, so a future wire type can't silently fall through.
+
+## 2026-08-30 — a field CONSUMED for one purpose is not WIRED for another (slice `chat-system-notice`)
+Android already carried `Message.isSystemMessage` (`messageSource == "system"`) and had ported the pure
+`BubbleRenderKind`, so the box looked "done at the model layer". But the flag was read in exactly ONE place —
+`MessageGrouping` (a system message never groups) — and `BubbleRenderKind.resolve` had no `isSystem` param at
+all: a join/leave/legacy-summary row fell through to the standard bubble and rendered SIGNED by its author,
+the precise defect iOS's `case .system` (checked FIRST) exists to prevent. **A flag being decoded AND used
+somewhere does not mean it reaches the surface that should branch on it.** The grep that catches this is not
+"does the model have the flag?" but "does the RENDER decision read it?" — the same "grep the consumer, not the
+block" reflex as the ThumbHash cold-load miss (2026-08-29), applied to a boolean instead of a painter. When a
+render-kind SSOT enumerates its arms (Standard/Deleted/Burned/EphemeralExpired), ask which iOS kinds it is
+MISSING before trusting it — `System` was simply absent, and nothing rougissait because the fallthrough
+compiled and rendered *a* bubble.
+
+## 2026-08-30 — port the PRECEDENCE, not just the arm; a witness must fire on a NON-first rank
+iOS resolves `.system` BEFORE `.deleted`/`.burned`/the ephemeral collapse. Adding `Kind.System` is worthless
+if it sits last in the `when` — the interesting behaviour is that a system message that is ALSO deleted /
+view-once-consumed / expired still renders as a notice. So the RED tests assert exactly those collisions
+(system+deleted→System, system+burned→System, system+expired→System), never just "system→System" (which a
+last-place arm would also pass). Same shape as the root CLAUDE.md §261 lesson (a rank witness is written on a
+rank OTHER than the first): here the witness is written on the *conflict*, where a wrong precedence would
+diverge, not on the trivial happy path where every ordering agrees.
+
 ## 2026-08-30 — the local gate catches a missing test-file import that the core-only pre-run misses (slice `notification-center-category-filter`)
 A per-module test run (`:core:model:testDebugUnitTest --tests …`) green-lit the pure model, but the FULL
 `assembleDebug testDebugUnitTest` gate then failed on `:feature:notifications:compileDebugUnitTestKotlin` with
@@ -2579,3 +2656,21 @@ Two porting specifics worth keeping:
   and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
   `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
   critical. Document which one you ported so the next reader doesn't "fix" it.
+
+## 2026-08-30 — the routine's "Next" can lag `main`; pick the slice from `git log`, and confirm the file is ABSENT before writing (slice `transcription-active-segment-resolver`)
+I opened PROGRESS.md, read its top entry (`notification-center-category-filter`, #4421) and its "Next", and
+picked `notification-per-type-toggle-gate` from it. Wrong: `git log origin/main -- apps/android` showed #4464,
+#4481, #4435 and #4493 all merged AFTER #4421 without prepending a PROGRESS entry — the per-type toggle gate was
+already on `main`. I only caught it because after `Write`-ing `NotificationTypeToggle.kt`, `git status` showed it
+as **`M` (modified), not `??` (untracked)** — the file already existed and I'd clobbered a committed version.
+Restored with `git checkout`.
+Lessons:
+- **The single source of the frontier is `git log origin/main -- apps/android`, not PROGRESS.md's "Next".** The
+  tracking files are prepended by disciplined slices, but a slice can merge without updating them, so "Next" is
+  advisory and can point at already-done work. Read the log first.
+- **Before writing any new file, confirm it is absent on `main`** (`git status` after `Write` must show `??`, or
+  grep `origin/main` for the type name up front). An `M` on a file you meant to create is the tell that the slice
+  is a duplicate.
+- A cheap guard against re-doing a merged slice: for any candidate, `grep -rl <TypeName>` under `apps/android`
+  BEFORE designing it. Here `NotificationTypeToggle`, `NotificationFilterCategory` and the toast dedup window all
+  already existed — the whole §M notification area is done through #4493.
