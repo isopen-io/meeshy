@@ -1,0 +1,339 @@
+{
+ "source": "MeeshyWebV3.dc.html",
+ "count": 37,
+ "vues": [
+  {
+   "id": "linkRedirect",
+   "label": "Ouverture du lien",
+   "route": "/l/:token",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "Ouverture du lien",
+   "subtitle": "Redirection",
+   "png": "cible/linkRedirect.png"
+  },
+  {
+   "id": "join",
+   "label": "Rejoindre",
+   "route": "/chats/:lien",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/join.png"
+  },
+  {
+   "id": "rights",
+   "label": "Droits du lien",
+   "route": "/chats/:lien",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/rights.png"
+  },
+  {
+   "id": "login",
+   "label": "Se connecter",
+   "route": "/login?next=/l/:token",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "Se connecter",
+   "subtitle": "Lien gardé de côté",
+   "png": "cible/login.png"
+  },
+  {
+   "id": "signup",
+   "label": "Créer un compte",
+   "route": "/signup?next=/l/:token",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "Créer un compte",
+   "subtitle": "Lien gardé de côté",
+   "png": "cible/signup.png"
+  },
+  {
+   "id": "linkExpired",
+   "label": "Lien expiré",
+   "route": "/l/:token",
+   "group": "ENTRÉE PUBLIQUE",
+   "title": "Lien expiré",
+   "subtitle": "Accès refusé",
+   "png": "cible/linkExpired.png"
+  },
+  {
+   "id": "home",
+   "label": "Bonjour Amina",
+   "route": "/",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Bonjour Amina",
+   "subtitle": "Accueil connecté · meeshy.me/",
+   "png": "cible/home.png"
+  },
+  {
+   "id": "chats",
+   "label": "Chats",
+   "route": "/chats",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Chats",
+   "subtitle": "Liste des conversations",
+   "png": "cible/chats.png"
+  },
+  {
+   "id": "thread",
+   "label": "Équipe Lagos",
+   "route": "/chats/:identifiant",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Équipe Lagos",
+   "subtitle": "4 en ligne",
+   "png": "cible/thread.png"
+  },
+  {
+   "id": "rich",
+   "label": "Types de messages",
+   "route": "/chats/:id",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Types de messages",
+   "subtitle": "Image, vidéo, audio, transfert, réponse, story",
+   "png": "cible/rich.png"
+  },
+  {
+   "id": "media",
+   "label": "Médias partagés",
+   "route": "/chats/:id/medias",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Médias partagés",
+   "subtitle": "Équipe Lagos · 48 éléments",
+   "png": "cible/media.png"
+  },
+  {
+   "id": "search",
+   "label": "Recherche",
+   "route": "/search",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Recherche",
+   "subtitle": "Partout",
+   "png": "cible/search.png"
+  },
+  {
+   "id": "callAudio",
+   "label": "Appel audio",
+   "route": "/calls/:id",
+   "group": "APPELS",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/callAudio.png"
+  },
+  {
+   "id": "callVideo",
+   "label": "Appel vidéo",
+   "route": "/calls/:id?video",
+   "group": "APPELS",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/callVideo.png"
+  },
+  {
+   "id": "calls",
+   "label": "Appels",
+   "route": "/calls",
+   "group": "APPELS",
+   "title": "Appels",
+   "subtitle": "Historique",
+   "png": "cible/calls.png"
+  },
+  {
+   "id": "feed",
+   "label": "Fil",
+   "route": "/feed",
+   "group": "SOCIAL",
+   "title": "Fil",
+   "subtitle": "Postes et réels",
+   "png": "cible/feed.png"
+  },
+  {
+   "id": "reels",
+   "label": "Réels",
+   "route": "/feed/reels",
+   "group": "SOCIAL",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/reels.png"
+  },
+  {
+   "id": "composer",
+   "label": "Composer",
+   "route": "/composer",
+   "group": "SOCIAL",
+   "title": "Composer",
+   "subtitle": "Post, réel, story, humeur",
+   "png": "cible/composer.png"
+  },
+  {
+   "id": "comments",
+   "label": "Commentaires",
+   "route": "/post/:id",
+   "group": "SOCIAL",
+   "title": "Commentaires",
+   "subtitle": "Revue de mars",
+   "png": "cible/comments.png"
+  },
+  {
+   "id": "story",
+   "label": "Story",
+   "route": "/stories/:id",
+   "group": "SOCIAL",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/story.png"
+  },
+  {
+   "id": "storyCreate",
+   "label": "Nouvelle story",
+   "route": "/stories/new",
+   "group": "SOCIAL",
+   "title": "Nouvelle story",
+   "subtitle": "Capture, texte, langue",
+   "png": "cible/storyCreate.png"
+  },
+  {
+   "id": "storyFail",
+   "label": "Story",
+   "route": "/stories/:id",
+   "group": "SOCIAL",
+   "title": "Story",
+   "subtitle": "Indisponible",
+   "png": "cible/storyFail.png"
+  },
+  {
+   "id": "notifs",
+   "label": "Notifications",
+   "route": "/notifications",
+   "group": "ESPACE MEMBRE",
+   "title": "Notifications",
+   "subtitle": "5 non lues sur 128",
+   "png": "cible/notifs.png"
+  },
+  {
+   "id": "contacts",
+   "label": "Contacts",
+   "route": "/contacts",
+   "group": "ESPACE MEMBRE",
+   "title": "Contacts",
+   "subtitle": "3 demandes en attente",
+   "png": "cible/contacts.png"
+  },
+  {
+   "id": "communities",
+   "label": "Communautés",
+   "route": "/communities",
+   "group": "ESPACE MEMBRE",
+   "title": "Communautés",
+   "subtitle": "Vos espaces",
+   "png": "cible/communities.png"
+  },
+  {
+   "id": "links",
+   "label": "Mes liens",
+   "route": "/links",
+   "group": "ESPACE MEMBRE",
+   "title": "Mes liens",
+   "subtitle": "2 liens actifs",
+   "png": "cible/links.png"
+  },
+  {
+   "id": "settings",
+   "label": "Paramètres",
+   "route": "/settings",
+   "group": "ESPACE MEMBRE",
+   "title": "Paramètres",
+   "subtitle": "Compte et application",
+   "png": "cible/settings.png"
+  },
+  {
+   "id": "notifPrefs",
+   "label": "Notifications",
+   "route": "/notifications/preferences",
+   "group": "ESPACE MEMBRE",
+   "title": "Notifications",
+   "subtitle": "Réglages",
+   "png": "cible/notifPrefs.png"
+  },
+  {
+   "id": "profileEdit",
+   "label": "Modifier le profil",
+   "route": "/settings/profile/edit",
+   "group": "ESPACE MEMBRE",
+   "title": "Modifier le profil",
+   "subtitle": "Bannière, avatar, bio, téléphone",
+   "png": "cible/profileEdit.png"
+  },
+  {
+   "id": "password",
+   "label": "Mot de passe",
+   "route": "/settings/security/password",
+   "group": "ESPACE MEMBRE",
+   "title": "Mot de passe",
+   "subtitle": "Réinitialisation",
+   "png": "cible/password.png"
+  },
+  {
+   "id": "detail-profile",
+   "label": "Profil",
+   "route": "/settings/profile",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Profil",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-profile.png"
+  },
+  {
+   "id": "detail-privacy",
+   "label": "Confidentialité",
+   "route": "/settings/privacy",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Confidentialité",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-privacy.png"
+  },
+  {
+   "id": "detail-security",
+   "label": "Sécurité",
+   "route": "/settings/security",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Sécurité",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-security.png"
+  },
+  {
+   "id": "detail-media",
+   "label": "Médias",
+   "route": "/settings/media",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Médias",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-media.png"
+  },
+  {
+   "id": "detail-message",
+   "label": "Messages",
+   "route": "/settings/message",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Messages",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-message.png"
+  },
+  {
+   "id": "detail-notification",
+   "label": "Notifications",
+   "route": "/settings/notification",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Notifications",
+   "subtitle": "Réglages",
+   "png": "cible/detail-notification.png"
+  },
+  {
+   "id": "detail-application",
+   "label": "Application",
+   "route": "/settings/application",
+   "group": "ESPACE MEMBRE — FICHES DE REGLAGES",
+   "title": "Application",
+   "subtitle": "Paramètres",
+   "png": "cible/detail-application.png"
+  }
+ ]
+}
