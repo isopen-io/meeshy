@@ -13,20 +13,6 @@ import {
 } from '@meeshy/shared/utils/validation';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { depreciee } from '../../utils/deprecation';
-
-/**
- * Le sursis des trois portes de profil (#4274).
- *
- * `depuis` est la date de fermeture de #4161 — le jour ou
- * `/directory/people/:handle` est devenue l'adresse unique. Aucun `retraitLe` :
- * #4161 c.9 et c.10 exigent l'extinction des versions iOS INSTALLEES et le
- * comptage des appels Android. Un profil s'ouvre depuis un lien partage, et
- * cette queue est longue ; le compteur est #4275.
- */
-const ANNONCE_PROFIL = {
-  depuis: '2026-08-29',
-  successeur: '/api/v1/directory/people/:handle',
-} as const;
 import {
   userSchema,
   userMinimalSchema,
@@ -46,6 +32,23 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { annoncerDepreciation, dateDeRetrait, type AdresseDepreciee } from '../../utils/deprecation';
 
+/**
+ * Le sursis des trois portes de profil (#4274, corrigé #4440).
+ *
+ * Chaque route pose SON PROPRE successeur RÉSOLU dans `onRequest` (patron de
+ * `routes/posts/sounds.ts`), et non plus une constante PARTAGÉE dont le
+ * `:handle` partait tel quel sur le fil — `onRequest` court avant la
+ * validation Ajv et le handler, donc annonce même une réponse que le handler
+ * n'atteint jamais. `/directory/people/:handle` accepte le MÊME identifiant
+ * brut que ces trois portes (`servirProfilPublic`) : le successeur se calcule
+ * par substitution du paramètre, sans requête base.
+ *
+ * `annonceProfil(handle)` reste appelée dans CHAQUE handler : `Link` étant
+ * CUMULATIF (RFC 8288 §3), une 200 le porte deux fois — redondant, jamais
+ * faux — et la retirer romprait le compte par route que garde
+ * `deprecated-alias-headers-guard.test.ts`. Aucun `retraitLe` neuf : le
+ * compteur d'adoption (#4275) n'existe pas encore.
+ */
 const DEPUIS_PROFIL = '2026-08-29';
 
 /** L'annonce d'un alias de profil — le successeur porte le handle RÉSOLU. */
@@ -761,7 +764,8 @@ export async function updateUsername(fastify: FastifyInstance) {
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
-    onRequest: depreciee(ANNONCE_PROFIL),
+    // Successeur RÉSOLU depuis la requête, jamais un gabarit (#4440) — voir DEPUIS_PROFIL.
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { username: string }).username)}` }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
@@ -834,7 +838,8 @@ export async function getUserByUsername(fastify: FastifyInstance) {
  */
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
-    onRequest: depreciee(ANNONCE_PROFIL),
+    // Successeur RÉSOLU (#4440) — `id` porte un ObjectId OU un username, tous deux acceptés tels quels par `/directory/people/:handle`.
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { id: string }).id)}` }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
@@ -967,7 +972,8 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
-    onRequest: depreciee(ANNONCE_PROFIL),
+    // Successeur RÉSOLU (#4440) — `id` est ici contraint à un ObjectId par le schéma des `params`, accepté tel quel en aval.
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { id: string }).id)}` }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',
