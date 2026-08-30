@@ -57,6 +57,7 @@
     <string name="settings_notif_type_mention">Menciones</string>
     <string name="settings_notif_type_reaction">Reacciones</string>
     <string name="settings_notif_type_conversation">Novedades de conversación</string>
+    <string name="settings_notif_type_incoming_call">Llamadas entrantes</string>
     <string name="settings_notif_type_missed_call">Llamadas perdidas</string>
     <string name="settings_notif_type_voicemail">Buzón de voz</string>
     <string name="settings_notif_type_post_like">Me gusta en publicaciones</string>
@@ -65,6 +66,7 @@
     <string name="settings_notif_type_story_reaction">Reacciones a historias</string>
     <string name="settings_notif_type_comment_reply">Respuestas a comentarios</string>
     <string name="settings_notif_type_comment_like">Me gusta en comentarios</string>
+    <string name="settings_notif_type_friend_content">Actividad de amigos</string>
     <string name="settings_notif_type_contact_request">Solicitudes de contacto</string>
     <string name="settings_notif_type_group_invite">Invitaciones de grupo</string>
     <string name="settings_notif_type_member_joined">Nuevo miembro</string>

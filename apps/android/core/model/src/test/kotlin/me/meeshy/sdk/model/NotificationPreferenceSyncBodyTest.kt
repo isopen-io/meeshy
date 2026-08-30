@@ -20,14 +20,20 @@ class NotificationPreferenceSyncBodyTest {
 
     private val json = Json { encodeDefaults = true }
 
-    /** The exact field set the gateway `NotificationPreferenceSchema` accepts (30 fields). */
+    /**
+     * The field set the gateway `NotificationPreferenceSchema` accepts and this body carries.
+     * `callsEnabled` and `friendContentEnabled` are the two per-type toggles that gate
+     * incoming-call and friend-content notifications (iOS `isTypeEnabled` parity). The
+     * gateway's `dndUtcOffsetMinutes` (GW7) is a separate DND concern still absent from the
+     * Android block, so it is deliberately NOT part of this body yet.
+     */
     private val gatewayFields = setOf(
         "pushEnabled", "emailEnabled", "soundEnabled", "vibrationEnabled",
-        "newMessageEnabled", "missedCallEnabled", "voicemailEnabled", "systemEnabled",
+        "newMessageEnabled", "missedCallEnabled", "callsEnabled", "voicemailEnabled", "systemEnabled",
         "conversationEnabled", "replyEnabled", "mentionEnabled", "reactionEnabled",
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
-        "commentReplyEnabled", "commentLikeEnabled",
+        "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
         "dndEnabled", "dndStartTime", "dndEndTime", "dndDays",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )
@@ -105,5 +111,22 @@ class NotificationPreferenceSyncBodyTest {
         // the model default that intentionally diverges from the others survives the projection
         assertThat(body.memberLeftEnabled).isFalse()
         assertThat(body.commentLikeEnabled).isFalse()
+        // the two per-type toggles default on (iOS + gateway schema parity)
+        assertThat(body.callsEnabled).isTrue()
+        assertThat(body.friendContentEnabled).isTrue()
+    }
+
+    @Test
+    fun `the calls and friend-content toggles survive the round trip both ways`() {
+        val prefs = UserNotificationPreferences(callsEnabled = false, friendContentEnabled = false)
+
+        val body = NotificationPreferenceSyncBody.from(prefs)
+        assertThat(body.callsEnabled).isFalse()
+        assertThat(body.friendContentEnabled).isFalse()
+
+        // toPreferences carries the gateway's values back onto the local block.
+        val roundTripped = body.toPreferences(UserNotificationPreferences())
+        assertThat(roundTripped.callsEnabled).isFalse()
+        assertThat(roundTripped.friendContentEnabled).isFalse()
     }
 }

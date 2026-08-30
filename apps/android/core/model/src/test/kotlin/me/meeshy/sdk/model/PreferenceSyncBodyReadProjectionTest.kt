@@ -39,12 +39,14 @@ class PreferenceSyncBodyReadProjectionTest {
         {
           "pushEnabled": false, "emailEnabled": false, "soundEnabled": false,
           "vibrationEnabled": false, "newMessageEnabled": false, "missedCallEnabled": false,
-          "voicemailEnabled": false, "systemEnabled": false, "conversationEnabled": false,
+          "callsEnabled": false, "voicemailEnabled": false, "systemEnabled": false,
+          "conversationEnabled": false,
           "replyEnabled": false, "mentionEnabled": false, "reactionEnabled": false,
           "contactRequestEnabled": false, "groupInviteEnabled": false,
           "memberJoinedEnabled": false, "memberLeftEnabled": true,
           "postLikeEnabled": false, "postCommentEnabled": false, "postRepostEnabled": false,
           "storyReactionEnabled": false, "commentReplyEnabled": false, "commentLikeEnabled": true,
+          "friendContentEnabled": false,
           "dndEnabled": true, "dndStartTime": "23:30", "dndEndTime": "07:15",
           "dndDays": ["mon", "fri"],
           "showPreview": false, "showSenderName": false, "groupNotifications": false,
@@ -68,6 +70,10 @@ class PreferenceSyncBodyReadProjectionTest {
         // silently kept defaults instead of reading the wire would pass on all the others.
         assertThat(next.memberLeftEnabled).isTrue()
         assertThat(next.commentLikeEnabled).isTrue()
+        // callsEnabled/friendContentEnabled default TRUE locally; the wire says false, so a
+        // projection that ignored them would wrongly report true here.
+        assertThat(next.callsEnabled).isFalse()
+        assertThat(next.friendContentEnabled).isFalse()
     }
 
     /**
