@@ -428,7 +428,11 @@ struct ComposerDocumentSurface: View {
             // côtés, avec des outils qu'aucun geste n'atteignait.
             HStack(spacing: 16) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
+                    // 8 pt entre TUILES, pas 16 : depuis #4071 chaque entree porte son mot,
+                    // donc elle est deux fois plus large qu'un glyphe nu. Garder
+                    // l'ecart des glyphes aurait fait defiler la rangee au bout de
+                    // trois entrees.
+                    HStack(spacing: 8) {
                         if let toolRowLeadingAccessory {
                             toolRowLeadingAccessory
                         }
@@ -472,16 +476,51 @@ struct ComposerDocumentSurface: View {
     }
 
     /// Un bouton d'outil de la rangée (extrait pour intercaler l'icône couleur).
+    /// **Une TUILE : l'icône, et son mot dessous** (`1a`, #4071).
+    ///
+    /// Elle fut un glyphe nu. Les libellés existaient — traduits en sept langues
+    /// par `ComposerDocumentCopy.label` — mais uniquement en `accessibilityLabel` :
+    /// **lus par VoiceOver, jamais vus.** Mesuré le 2026-08-30 sur Meeshy-iOS26,
+    /// la rangée alignait huit glyphes muets, dont deux paires que rien ne
+    /// distingue à l'œil pour qui ne connaît pas le jeu SF — `photo`/`paperclip`
+    /// et `mappin.and.ellipse`/`mic`.
+    ///
+    /// C'est la loi 12 : la complexité se paie dans le CODE, jamais chez
+    /// l'utilisateur. Faire deviner une porte d'ingestion est le contraire.
+    ///
+    /// **Le mot est celui de l'app, pas celui de la maquette.** La cible écrit
+    /// `PHOTO · CAMÉRA · EMOJI · DOC · LIEU · MICRO` ; le dépôt dit « Photos »,
+    /// « Caméra », « Emoji », « Fichier », « Position », « Mentionner ». On garde
+    /// le vocabulaire du dépôt : les abréviations de la maquette économisent de la
+    /// place, elles ne tranchent pas un vocabulaire — et les remplacer orphelinerait
+    /// sept catalogues pour un gain nul.
+    ///
+    /// `.caption2`, pas une taille en points : sur la seule surface où il faut LIRE
+    /// pour choisir sa porte, ignorer Dynamic Type serait le pire endroit.
     private func toolButton(_ tool: ComposerDocumentTool) -> some View {
         Button {
             lastTappedTool = tool
             onTool?(tool)
         } label: {
-            Image(systemName: tool.symbolName)
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .composerToolBounce(active: lastTappedTool == tool)
+            VStack(spacing: 6) {
+                Image(systemName: tool.symbolName)
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .composerToolBounce(active: lastTappedTool == tool)
+                Text(ComposerDocumentCopy.label(tool))
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            .frame(minWidth: 52)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(MeeshyColors.textSecondary(isDark: true).opacity(0.22),
+                                  lineWidth: 1)
+            )
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
     }
@@ -496,12 +535,31 @@ struct ComposerDocumentSurface: View {
             }
             HapticFeedback.light()
         } label: {
-            Image(systemName: "paintpalette")
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundColor(showColorPalette
-                    ? Color(hex: MeeshyColors.brandPrimaryHex)
-                    : MeeshyColors.textSecondary(isDark: true))
+            // Même TUILE que ses voisines (#4071) : la rangée se lit comme une
+            // famille, et un bouton qui porterait seul un glyphe nu au milieu de
+            // six tuiles nommées se lirait comme un accident, pas comme un choix.
+            VStack(spacing: 6) {
+                Image(systemName: "paintpalette")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                Text(ComposerDocumentCopy.background)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundColor(showColorPalette
+                ? Color(hex: MeeshyColors.brandPrimaryHex)
+                : MeeshyColors.textSecondary(isDark: true))
+            .frame(minWidth: 52)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(showColorPalette
+                        ? Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.55)
+                        : MeeshyColors.textSecondary(isDark: true).opacity(0.22),
+                                  lineWidth: 1)
+            )
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
         // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active
