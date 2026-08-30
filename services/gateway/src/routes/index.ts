@@ -120,6 +120,7 @@ import { routeUsageAdminRoutes } from './admin/route-usage';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
+import { meCategoriesRoutes } from './me/categories';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -175,8 +176,9 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 58 entrées, réparties en QUATRE segments plutôt qu'une liste plate — et ce
- * n'est pas une préférence de mise en page.
+ * 59 entrées (#4359 en ajoute une, `me-categories`), réparties en QUATRE
+ * segments plutôt qu'une liste plate — et ce n'est pas une préférence de
+ * mise en page.
  *
  * ## Pourquoi quatre tables, et pas une
  *
@@ -252,6 +254,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'users', prefix: API_PREFIX, module: userRoutes },
   { name: 'me-preferences', prefix: `${API_PREFIX}/me`, module: meRoutes },
   { name: 'me-permissions', prefix: `${API_PREFIX}/me`, module: mePermissionsRoutes },
+  // Cinq routes déplacées de `/me/preferences/categories` (#4359, suivi de
+  // #4182) — même patron que `me-permissions` juste au-dessus : montage
+  // AUTONOME au même préfixe, l'ancienne adresse restant servie comme alias
+  // déprécié depuis `routes/me/preferences/categories.ts`.
+  { name: 'me-categories', prefix: `${API_PREFIX}/me`, module: meCategoriesRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },
@@ -312,7 +319,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 58 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 59 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

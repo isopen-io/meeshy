@@ -12,6 +12,9 @@ export interface AuthResponse {
   data?: {
     user: SocketIOUser;
     token: string;
+    // Le même sessionToken que celui envoyé (glissé en TTL côté serveur,
+    // jamais renouvelé) — présent uniquement sur la réponse de /auth/refresh.
+    sessionToken?: string;
     expiresIn: number;
   };
   error?: string;
@@ -163,13 +166,25 @@ class AuthService {
 
   /**
    * Rafraîchit le token d'authentification (API call)
+   *
+   * Corps STRICTEMENT aligné sur le schéma serveur de `POST /api/v1/auth/refresh`
+   * (`AuthSchemas.refreshToken`, `services/gateway/src/routes/auth/magic-link.ts`) :
+   * `token` (le JWT, éventuellement expiré — REQUIS, la route répond 400 sans lui)
+   * et `sessionToken` (le jeton de session longue durée du login — OPTIONNEL,
+   * active le renouvellement à fenêtre glissante). Il n'y a AUCUN champ
+   * `refreshToken` dans ce schéma, et la route ne lit jamais l'en-tête
+   * `Authorization` (`security: []`).
+   *
+   * `sessionToken` vient de l'APPELANT : `AuthManager` n'a pas de lecteur pour
+   * le sien (`getSessionToken()` y lit la session ANONYME, un concept distinct —
+   * seuls `setCredentials`/`updateTokens` écrivent la valeur du compte inscrit).
+   * Le store Zustand, lui, la garde dans son propre état persisté.
    */
-  async refreshToken(): Promise<AuthResponse> {
+  async refreshToken(sessionToken?: string | null): Promise<AuthResponse> {
     try {
       const token = authManager.getAuthToken();
-      const refreshToken = authManager.getRefreshToken();
 
-      if (!token && !refreshToken) {
+      if (!token) {
         return {
           success: false,
           error: 'Aucun token à rafraîchir'
@@ -181,17 +196,19 @@ class AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token, refreshToken }),
+        body: JSON.stringify({ token, sessionToken: sessionToken ?? undefined }),
       });
 
       const data = await response.json();
 
       if (data.success && data.data?.token) {
-        // Mettre à jour via AuthManager
+        // Mettre à jour via AuthManager — le serveur ne rend jamais de
+        // refreshToken (absent de son schéma), et le sessionToken qu'il rend
+        // est le MÊME que celui envoyé (TTL glissé côté serveur uniquement).
         authManager.updateTokens(
           data.data.token,
-          data.data.refreshToken,
           undefined,
+          data.data.sessionToken,
           data.data.expiresIn
         );
       }

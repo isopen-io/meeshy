@@ -261,6 +261,17 @@ export function registerSharingRoutes(
   // route de modification ici : les métadonnées d'une conversation ont un seul point
   // d'écriture, et `conversation-update-route.test.ts` le garde sur PUT comme sur PATCH.
   // Récupérer les liens de partage d'une conversation (pour les admins)
+  //
+  // #4351 — ses deux sœurs (`/new-link` ci-dessus, `/join/:linkId` plus bas)
+  // annoncent déjà leur successeur ; cette porte ne le faisait pas alors
+  // qu'elle a un successeur STRICT et déjà servi : `GET /links?conversationId=`
+  // (`routes/links/user.ts`, #4170) rend le MÊME filtre modérateur/membre —
+  // `viewerIsModerator` en `meta` plutôt qu'en racine — SANS le défaut
+  // `creatorId` corrigé ailleurs (cf. commentaire de `links/user.ts`), et EN
+  // PLUS une vraie pagination (celle-ci lit `findMany` sans `take`/`skip` :
+  // elle rend TOUT lien de la conversation, non borné). `onRequest` court
+  // avant `preValidation` pour que l'annonce parte même sur un refus (403 non
+  // membre) — voir `utils/deprecation.ts`.
   fastify.get('/conversations/:conversationId/links', {
     schema: {
       description: 'Get all shareable links for a conversation (moderators see all links, members see only their own)',
@@ -302,6 +313,10 @@ export function registerSharingRoutes(
         500: errorResponseSchema
       }
     },
+    onRequest: [depreciee({
+      depuis: '2026-08-30',
+      successeur: (request) => `/api/v1/links?conversationId=${(request.params as { conversationId: string }).conversationId}`,
+    })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {

@@ -848,6 +848,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationDeleted(listener);
   }
 
+  onConversationRestored(listener: import('./types').ConversationRestoredListener): UnsubscribeFn {
+    return this.presenceService.onConversationRestored(listener);
+  }
+
   onConversationUpdated(listener: import('./types').ConversationUpdatedListener): UnsubscribeFn {
     return this.presenceService.onConversationUpdated(listener);
   }

@@ -1671,13 +1671,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for conversation:deleted — user removed the conversation for themselves.
+    // Same gesture as conversation:participant-left and conversation:participant-banned.
     const handleConversationDeleted = (data: { userId: string; conversationId: string }) => {
-      const { conversationId: deletedId } = data;
-      if (!deletedId) return;
-      updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.filter((c) => c.id !== deletedId)
-      );
-      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(deletedId) });
+      dropConversationFromCache(data.conversationId);
+    };
+
+    // Handler for conversation:restored — inverse of conversation:deleted: the
+    // user undid a "delete for me" (`POST /conversations/:id/restore-for-me`,
+    // #4344) and the conversation must come back into their list, on every
+    // device. Same gesture as `conversation:new` / a lifted ban — a bounded
+    // read (`fetchConversationIntoCache` above), never a page replay.
+    const handleConversationRestored = (data: { userId: string; conversationId: string }) => {
+      const { conversationId: restoredId } = data;
+      if (!restoredId) return;
+      fetchConversationIntoCache(restoredId);
     };
 
     // Handler for conversation:updated — metadata changed (title, settings) or lastMessage bump.
@@ -1798,6 +1805,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
+    const unsubscribeConversationRestored = meeshySocketIOService.onConversationRestored(handleConversationRestored);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
     const unsubscribeParticipantJoined = meeshySocketIOService.onConversationParticipantJoined(handleConversationParticipantJoined);
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
@@ -1831,6 +1839,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeParticipantRole?.();
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
+      unsubscribeConversationRestored();
       unsubscribeConversationUpdated?.();
       unsubscribeParticipantJoined?.();
       unsubscribeParticipantLeft?.();

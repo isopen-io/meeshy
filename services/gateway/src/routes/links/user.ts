@@ -16,6 +16,13 @@ import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagin
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import { depreciee } from '../../utils/deprecation';
+import {
+  parseFieldList,
+  parseTokenSet,
+  restrictFields,
+  selectForFields,
+  type ColumnPlan,
+} from '../../utils/sparse-fieldset';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
@@ -80,6 +87,156 @@ async function computeShareLinksSummary(
 
 type LinkItem = Record<string, unknown>;
 
+/** Les trois volets d'`?expand=`, et l'unique jeton d'`?include=`. */
+type LinkExpansion = 'conversation' | 'creator' | 'policy';
+const LINK_EXPANSIONS: readonly LinkExpansion[] = ['conversation', 'creator', 'policy'] as const;
+const LINK_INCLUSIONS = ['summary'] as const;
+
+/** Les dix clés du SOCLE — celles que `mapBaseLinkItem` compose, toujours servies. */
+const CLES_SOCLE = [
+  'id',
+  'linkId',
+  'identifier',
+  'name',
+  'isActive',
+  'currentUses',
+  'maxUses',
+  'expiresAt',
+  'createdAt',
+  'conversationTitle',
+] as const;
+
+/** Les seize clés de POLICE — celles que `mapPolicyFields` compose sur `?expand=policy`. */
+const CLES_POLICE = [
+  'description',
+  'maxConcurrentUsers',
+  'currentConcurrentUsers',
+  'maxUniqueSessions',
+  'currentUniqueSessions',
+  'allowAnonymousMessages',
+  'allowAnonymousFiles',
+  'allowAnonymousImages',
+  'allowViewHistory',
+  'requireAccount',
+  'requireNickname',
+  'requireEmail',
+  'requireBirthday',
+  'allowedCountries',
+  'allowedLanguages',
+  'allowedIpRanges',
+] as const;
+
+/**
+ * Tout ce qu'un lien PEUT porter — le littéral que {@link linkPlan} projette.
+ *
+ * La requête posait auparavant un `include` : Prisma y charge TOUS les
+ * scalaires de la table, et les deux jointures étaient inconditionnelles.
+ * `creator` partait ainsi pour cent pour cent des appelants et n'était recopiée
+ * que pour ceux qui la nomment — c'est-à-dire presque personne (#4356).
+ */
+const COLONNES_LIEN = {
+  id: true,
+  linkId: true,
+  identifier: true,
+  name: true,
+  isActive: true,
+  currentUses: true,
+  maxUses: true,
+  expiresAt: true,
+  createdAt: true,
+  description: true,
+  maxConcurrentUsers: true,
+  currentConcurrentUsers: true,
+  maxUniqueSessions: true,
+  currentUniqueSessions: true,
+  allowAnonymousMessages: true,
+  allowAnonymousFiles: true,
+  allowAnonymousImages: true,
+  allowViewHistory: true,
+  requireAccount: true,
+  requireNickname: true,
+  requireEmail: true,
+  requireBirthday: true,
+  allowedCountries: true,
+  allowedLanguages: true,
+  allowedIpRanges: true,
+  conversation: { select: { id: true, title: true, type: true, description: true } },
+  creator: {
+    select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true },
+  },
+} as const;
+
+/**
+ * Ce que chaque clé SERVIE coûte en colonnes.
+ *
+ * `id` et `createdAt` sont ÉPINGLÉS pour des raisons qui ne sont pas de
+ * projection : l'`id` est le CURSEUR de la page suivante
+ * (`buildCursorPaginationMeta`), et `createdAt` porte le tri ET l'appel
+ * inconditionnel `.toISOString()` de `mapBaseLinkItem`. Les retirer sur un
+ * `?fields=` qui ne les nomme pas casserait la pagination, pas la charge utile.
+ *
+ * `conversationTitle` est la seule clé DÉRIVÉE : elle vient de la jointure, pas
+ * d'une colonne du lien. Les seize clés de police et les huit autres du socle
+ * se produisent elles-mêmes.
+ */
+const linkPlan: ColumnPlan<typeof COLONNES_LIEN> = {
+  full: COLONNES_LIEN,
+  pinned: ['id', 'createdAt'],
+  columns: { conversationTitle: ['conversation'] },
+};
+
+/**
+ * Ce que la requête doit CHARGER pour la page demandée.
+ *
+ * Le calcul suit exactement l'ordre du gestionnaire — socle, puis expansions,
+ * puis `fields` — parce que sur cette route `fields` s'applique APRÈS `expand`
+ * (contrat #4170) : un bloc qui ne survivra pas au filtre n'a aucune raison
+ * d'être chargé. La liste rendue n'est JAMAIS `null` : sans paramètre, elle
+ * vaut les dix clés du socle, et c'est précisément ce qui allège le chemin
+ * nominal sans rien changer à ce qu'il sert.
+ */
+function clesServies(
+  expand: ReadonlySet<LinkExpansion>,
+  fields: ReadonlySet<string> | null
+): ReadonlySet<string> {
+  const servies = new Set<string>(CLES_SOCLE);
+  if (expand.has('conversation')) servies.add('conversation');
+  if (expand.has('creator')) servies.add('creator');
+  if (expand.has('policy')) for (const cle of CLES_POLICE) servies.add(cle);
+  if (fields === null) return servies;
+  return new Set([...servies].filter((cle) => fields.has(cle)));
+}
+
+/**
+ * Une ligne telle que la requête PROJETÉE la rend.
+ *
+ * Tout est optionnel sauf les deux colonnes épinglées : c'est la contrepartie
+ * exacte de la réduction, et le typage le dit plutôt que de le taire. Les deux
+ * mappeurs ci-dessous lisaient déjà chaque champ avec `?? null` ou `?.` — ce
+ * qu'ils composent pour une colonne absente est ensuite retiré par le MÊME
+ * `fields` qui l'a fait sauter du `select`.
+ */
+type LinkRow = {
+  id: string;
+  createdAt: Date;
+  linkId?: string;
+  identifier?: string;
+  name?: string | null;
+  isActive?: boolean;
+  currentUses?: number;
+  maxUses?: number | null;
+  expiresAt?: Date | null;
+  conversation?: { id?: string; title?: string | null; type?: string; description?: string | null } | null;
+  creator?: {
+    id: string;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    displayName: string | null;
+    avatar: string | null;
+  } | null;
+} & Partial<Record<(typeof CLES_POLICE)[number], unknown>>;
+
 /**
  * Le mapping DE BASE — identique, champ pour champ, à ce que `GET /links`
  * rendait avant ce lot. iOS (`MyShareLink`, `ShareLinkModels.swift:216`) et
@@ -89,26 +246,7 @@ type LinkItem = Record<string, unknown>;
  * ou ne retirent donc jamais rien à CE socle, ils l'augmentent ou le filtrent
  * par-dessus.
  */
-function mapBaseLinkItem(l: {
-  id: string;
-  linkId: string;
-  identifier: string;
-  name: string | null;
-  isActive: boolean;
-  currentUses: number;
-  maxUses: number | null;
-  expiresAt: Date | null;
-  createdAt: Date;
-  conversation: { id: string; title: string | null; type: string; description?: string | null } | null;
-  creator?: {
-    id: string;
-    username: string;
-    firstName: string | null;
-    lastName: string | null;
-    displayName: string | null;
-    avatar: string | null;
-  };
-}): LinkItem {
+function mapBaseLinkItem(l: LinkRow): LinkItem {
   return {
     id: l.id,
     linkId: l.linkId,
@@ -127,34 +265,18 @@ function mapBaseLinkItem(l: {
  * Champs de POLICE d'un lien (permissions anonymes, restrictions, compteurs
  * de concurrence) — `expand=policy`, gardé HORS du socle par défaut.
  *
- * Toutes des colonnes SCALAIRES de `ConversationShareLink` : `findMany`
- * ci-dessous ne pose aucun `select` restrictif, donc Prisma les charge déjà
- * pour CHAQUE appelant, `?expand=policy` ou non — cette fonction ne coûte
- * rien de plus en base, elle décide seulement ce qui est RECOPIÉ dans la
- * réponse. `conversation-links-section.tsx` (web) est le premier consommateur :
+ * Toutes des colonnes SCALAIRES de `ConversationShareLink`. Elles étaient
+ * chargées pour CHAQUE appelant — `findMany` posait un `include`, qui ramène
+ * tous les scalaires de la table — et `?expand=policy` ne décidait que de ce
+ * qui était RECOPIÉ. Depuis #4356 le volet décide aussi de ce qui est CHARGÉ :
+ * seize colonnes que personne ne demandait ne quittent plus la base.
+ * `conversation-links-section.tsx` (web) est le premier consommateur :
  * la popover de détails d'un lien y affiche permissions et restrictions, que
  * `GET /conversations/:conversationId/links` rendait déjà (avant #4170) mais
  * dont le schéma OpenAPI ne déclarait qu'un sous-ensemble étroit — servies
  * ici en entier, déclarées en entier (voir le schéma de réponse plus bas).
  */
-function mapPolicyFields(l: {
-  description: string | null;
-  maxConcurrentUsers: number | null;
-  currentConcurrentUsers: number;
-  maxUniqueSessions: number | null;
-  currentUniqueSessions: number;
-  allowAnonymousMessages: boolean;
-  allowAnonymousFiles: boolean;
-  allowAnonymousImages: boolean;
-  allowViewHistory: boolean;
-  requireAccount: boolean;
-  requireNickname: boolean;
-  requireEmail: boolean;
-  requireBirthday: boolean;
-  allowedCountries: string[];
-  allowedLanguages: string[];
-  allowedIpRanges: string[];
-}): LinkItem {
+function mapPolicyFields(l: LinkRow): LinkItem {
   return {
     description: l.description ?? null,
     maxConcurrentUsers: l.maxConcurrentUsers ?? null,
@@ -376,15 +498,14 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         where = forceMineOnly ? { conversationId, createdBy: userId } : { conversationId };
       }
 
-      const expand = new Set(
-        typeof query.expand === 'string' ? query.expand.split(',').map(s => s.trim()).filter(Boolean) : []
-      );
-      const includeSet = new Set(
-        typeof query.include === 'string' ? query.include.split(',').map(s => s.trim()).filter(Boolean) : []
-      );
-      const requestedFields = typeof query.fields === 'string'
-        ? new Set(query.fields.split(',').map(s => s.trim()).filter(Boolean))
-        : null;
+      // Trois `new Set` écrits en ligne vivaient ici, avec trois bornes
+      // légèrement différentes des trois autres analyseurs du dépôt. La
+      // grammaire est désormais UNE (`utils/sparse-fieldset.ts`, #4356) ; ce
+      // fichier ne garde que son VOCABULAIRE — et `expand`/`include` le
+      // déclarent enfin, là où un `new Set` nu acceptait n'importe quoi.
+      const expand = parseTokenSet(query.expand, LINK_EXPANSIONS);
+      const includeSet = parseTokenSet(query.include, LINK_INCLUSIONS);
+      const requestedFields = parseFieldList(query.fields);
 
       // Curseur keyset : opaque pour l'appelant, c'est l'`id` du dernier lien
       // de la page précédente. Recherché SANS le `where` courant — un curseur
@@ -403,31 +524,32 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       const usingCursor = cursorCreatedAt !== null;
       const findManyWhere = usingCursor ? { ...where, createdAt: { lt: cursorCreatedAt } } : where;
 
-      // `conversation` (pour `conversationTitle`, toujours servi) et `creator`
-      // sont chargés SANS CONDITION — deux jointures indexées bon marché — et
-      // `expand` décide seulement de ce qui est RECOPIÉ dans la réponse, pas de
-      // ce qui est chargé. Conditionner le `include` Prisma lui-même sur un
-      // booléen d'exécution rend le type de retour de `findMany` dépendant
-      // d'une union que TypeScript ne peut pas réduire au site d'appel — cette
-      // forme-ci reste un unique type stable, sans assertion.
+      // La requête charge ce que la PAGE va servir, et rien d'autre (#4356).
+      // Elle posait un `include` : Prisma y ramène tous les scalaires de la
+      // table, et les deux jointures partaient sans condition — `creator` pour
+      // cent pour cent des appelants, recopiée pour ceux qui la nomment.
+      //
+      // L'objection historique à un `include` conditionnel — « le type de
+      // retour de `findMany` dépendrait d'une union que TypeScript ne peut pas
+      // réduire au site d'appel » — tombe avec un `select` calculé et un type
+      // de LIGNE déclaré (`LinkRow`) : le type est stable, et il dit la vérité
+      // sur ce qui peut manquer, au lieu de promettre des colonnes que la
+      // projection ne demande plus.
+      const select = selectForFields(linkPlan, clesServies(expand, requestedFields));
+
       const [links, total, summary] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where: findManyWhere,
           orderBy: { createdAt: 'desc' },
           ...(usingCursor ? {} : { skip: offset }),
           take: limit,
-          include: {
-            conversation: { select: { id: true, title: true, type: true, description: true } },
-            creator: {
-              select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true }
-            }
-          },
+          select,
         }),
         fastify.prisma.conversationShareLink.count({ where }),
         includeSet.has('summary') ? computeShareLinksSummary(fastify, where) : Promise.resolve(null),
       ]);
 
-      const mapped: LinkItem[] = links.map((l) => {
+      const mapped: LinkItem[] = (links as unknown as LinkRow[]).map((l) => {
         const enriched: LinkItem = { ...mapBaseLinkItem(l) };
         if (expand.has('conversation') && l.conversation) {
           enriched.conversation = {
@@ -443,10 +565,11 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         if (expand.has('policy')) {
           Object.assign(enriched, mapPolicyFields(l));
         }
-        if (!requestedFields || requestedFields.size === 0) return enriched;
-        return Object.fromEntries(
-          Object.entries(enriched).filter(([key]) => requestedFields.has(key))
-        );
+        // Aucune clé n'est ÉPINGLÉE à la sortie : `?fields=description` rend
+        // `{description}` seul, comme avant #4356. L'épinglage du plan gouverne
+        // ce qui est CHARGÉ (l'`id` du curseur, `createdAt`), jamais ce qui est
+        // SERVI — les deux questions sont distinctes et le restent.
+        return restrictFields(enriched, requestedFields);
       });
 
       const pagination = createPaginationMeta(total, offset, limit, links.length);

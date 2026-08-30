@@ -86,7 +86,7 @@ describe('ROUTE_TABLE (#4278)', () => {
     }
   });
 
-  it('a exactement 58 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
+  it('a exactement 59 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
     // Compte ancré au 2026-08-30 sur les 65 actes d'enregistrement de
     // `route-registration.ts` moins les 8 montages qui exigent PLUS qu'un
     // {module, prefix} (traduction, userDeletions, conversationRoutes,
@@ -103,7 +103,17 @@ describe('ROUTE_TABLE (#4278)', () => {
     // route ajoutée et aucune autre. L'alias `admin/me/permissions` garde son
     // entrée `admin-me-permissions` : il reste SERVI, il n'est pas déplacé —
     // c'est ce qui rend l'écart de +1 (et non 0) attendu.
-    expect(ROUTE_TABLE.length).toBe(58);
+    //
+    // 58 → 59 le 2026-08-30 (#4359) : entrée `me-categories`, les CINQ adresses
+    // canoniques `/api/v1/me/categories` (list, create, update, delete,
+    // reorder). Le chiffre n'est pas ajusté en aveugle — la vérification que
+    // le commentaire ci-dessus prescrit a été faite : le manifeste régénéré
+    // passe de 534 à 539 routes, soit exactement ces cinq-là et aucune autre,
+    // et le diff du cliquet ne portait que des ajouts (aucune route retirée ni
+    // renommée). Les six adresses `/me/preferences/categories` gardent leur
+    // entrée : elles restent SERVIES en alias annoncé, ce qui rend l'écart de
+    // +1 sur la table (et non 0) attendu.
+    expect(ROUTE_TABLE.length).toBe(59);
   });
 });
 

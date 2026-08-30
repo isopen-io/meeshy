@@ -23,6 +23,32 @@
  * `?categories=` VIDE vaut absent — donc « tout ». C'est le contrat écrit dans
  * `docs/product/api-simplification/me.md` (« `?categories=` (absent = tout) »),
  * et il vaut aussi pour le `DELETE` : une remise à zéro sans liste remet tout.
+ *
+ * ## Pourquoi ce module n'utilise PAS `utils/sparse-fieldset.ts`
+ *
+ * #4356 a fondu en un seul les trois analyseurs de `?fields=`/`?expand=` du
+ * dépôt (`directory/person.ts`, `me/get-me.ts`, `links/user.ts`). Celui-ci est
+ * resté dehors, et ce n'est pas un oubli : ce n'est pas la même grammaire.
+ *
+ * | | grammaire partagée | celle-ci |
+ * |---|---|---|
+ * | vocabulaire | OUVERT (les clés qu'un objet servi porte) | FERMÉ (sept catégories, leurs clés connues) |
+ * | jeton inconnu | ignoré | **400** |
+ * | niveaux | un | deux (`catégorie.clé`) |
+ * | `fields` seul | restreint le scope | l'ÉLARGIT (une catégorie non citée dans `categories` devient servie) |
+ *
+ * Les deux règles sur l'inconnu sont justes chacune de son côté, et
+ * inconciliables : sur un vocabulaire OUVERT, refuser casse un client plus
+ * récent que le serveur ; sur un vocabulaire FERMÉ, ignorer une faute de frappe
+ * sert une réponse partielle qui a l'air d'une vérité (§ ci-dessus). Les fondre
+ * obligerait à en trahir une.
+ *
+ * Et il n'y a rien à gagner sur la REQUÊTE : la réduction par CATÉGORIE est
+ * déjà faite (`resolveCompleteCategories` ne `select`e que les colonnes JSON
+ * des catégories demandées), et le second niveau nomme des clés À L'INTÉRIEUR
+ * d'une colonne `Json` — que Prisma ne sait pas projeter. `applyFields`
+ * ci-dessous est donc un filtrage APRÈS chargement par NÉCESSITÉ, pas par
+ * négligence.
  */
 
 import {

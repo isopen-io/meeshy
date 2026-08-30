@@ -6,6 +6,7 @@ import { jetonRecherche } from '../../utils/search-tokens';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { validatePagination } from '../../utils/pagination';
+import { parseTokenSet } from '../../utils/sparse-fieldset';
 import {
   mayOrderByRawPresence,
   servedOnlineFirst,
@@ -39,6 +40,13 @@ const PROJECTION_MINIMALE = {
   displayName: true,
   avatar: true,
 } as const;
+
+/**
+ * Le vocabulaire d'`?expand=` sur cette route — un seul jeton. Le cinquième
+ * analyseur en ligne rejoint `utils/sparse-fieldset.ts` (#4356, #4406) : même
+ * sémantique (vocabulaire ouvert, jeton inconnu ignoré, jamais refusé).
+ */
+const EXPANSIONS_PEOPLE = ['presence'] as const;
 
 /**
  * `GET /directory/people` — chercher une personne, par les NOMS seulement (S2).
@@ -167,7 +175,7 @@ export async function directoryPeopleRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const avecPresence = (expand ?? '').split(',').map((s) => s.trim()).includes('presence');
+      const avecPresence = parseTokenSet(expand, EXPANSIONS_PEOPLE).has('presence');
       const presenceViewer = viewerFromRequest(request);
 
       const lignes = await fastify.prisma.user.findMany({
