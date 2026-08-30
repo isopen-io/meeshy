@@ -523,10 +523,14 @@ export class AuthMiddleware {
       const tokenHash = hashSessionToken(sessionToken);
 
       const participant = await this.prisma.participant.findFirst({
+        // `isActive` ne filtre PLUS ici (#4410) : il se lit et se décide en
+        // aval. Tant qu'il était dans le `where`, un invité RÉVOQUÉ et un
+        // jeton INVENTÉ rendaient tous deux « aucune ligne », et la
+        // distinction n'était pas perdue à la remontée — elle n'était jamais
+        // faite. Le message d'erreur nommait pourtant les deux cas.
         where: {
           sessionTokenHash: tokenHash,
           type: 'anonymous',
-          isActive: true,
         },
         select: {
           id: true,
@@ -546,7 +550,16 @@ export class AuthMiddleware {
       });
 
       if (!participant) {
-        throw new Error('Anonymous participant not found or inactive');
+        throw new Error('Anonymous participant not found');
+      }
+
+      // L'invité dont le lien a été révoqué (`revokeShareLinkGuests`) porte un
+      // jeton VALIDE sur un participant DÉSACTIVÉ. Lui rendre le même 401 nu
+      // qu'à un jeton inventé l'envoie retenter indéfiniment un geste qui ne
+      // peut pas aboutir — et prive l'opérateur qui reçoit son signalement du
+      // seul fait qui explique la panne.
+      if (participant.isActive === false) {
+        throw new GuestAccessRevokedError();
       }
 
       if (this.statusService) {
@@ -593,6 +606,11 @@ export class AuthMiddleware {
       };
 
     } catch (error) {
+      // La cause TYPÉE traverse (#4410). Ce `catch` uniformisait TOUT en
+      // « Invalid session token » — c'est lui qui effaçait la distinction, et
+      // pas seulement le `catch` extérieur : une erreur qu'on vient de
+      // qualifier ne survit pas à un gestionnaire qui réécrit sans regarder.
+      if (error instanceof GuestAccessRevokedError) throw error;
       authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
@@ -633,6 +651,35 @@ export class AuthMiddleware {
  * symbole de module — pour que la clé survive à deux instanciations du module.
  * Non énumérable : rien de ce qui sérialise un hook ne doit changer de forme.
  */
+/**
+ * L'accès d'un invité a été RETIRÉ — son jeton est valide, son participant est
+ * désactivé (#4410).
+ *
+ * Un type, pas une chaîne : c'est ce qui permet au `catch` du middleware de
+ * traduire la cause en code stable sans reconnaître un message. Un message se
+ * reformule, et le jour où il l'est, le refus redevient muet sans que rien ne
+ * rougisse.
+ *
+ * ## L'arbitrage de confidentialité, tranché
+ *
+ * Dire « ton accès a été retiré » confirme au porteur du jeton que le lien a
+ * EXISTÉ et qu'il y était admis. C'est acceptable, et pour une raison qui se
+ * mesure : seul un jeton qui CORRESPOND à un participant réel obtient cette
+ * réponse. Un jeton inventé ne trouve aucune ligne et reçoit le 401 générique.
+ * L'information n'est donc rendue qu'à quelqu'un qui détenait déjà la preuve
+ * de son admission.
+ *
+ * Ce qui reste tu, et qui n'est pas négociable : PAR QUI, QUAND, et quelle
+ * conversation. Le refus dit qu'il n'y a rien à retenter, pas ce qui s'est
+ * passé.
+ */
+export class GuestAccessRevokedError extends Error {
+  constructor() {
+    super('Guest access revoked');
+    this.name = 'GuestAccessRevokedError';
+  }
+}
+
 export const AUTH_REGIME = Symbol.for('meeshy.gateway.auth-regime');
 
 /** Ce que déclare un middleware d'authentification sur lui-même. */
@@ -707,6 +754,20 @@ export function createUnifiedAuthMiddleware(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
       authLogger.warn('Auth failure', { errorMessage });
+
+      // 410 GONE, pas 401 : l'accès n'est pas à re-tenter, il n'existe plus.
+      // Même code de statut et même famille de motifs que
+      // `POST /anonymous/session/refresh`, qui rendait déjà `LINK_DEACTIVATED`
+      // pour ce cas exact — sur la seule porte qui RAFRAÎCHIT une session, pas
+      // sur celles qui la consomment. Un client distingue ainsi « réessaie »
+      // de « c'est fini », ce qu'aucun 401 ne lui permettait.
+      if (error instanceof GuestAccessRevokedError) {
+        return reply.status(410).send({
+          success: false,
+          error: 'GUEST_ACCESS_REVOKED',
+          message: "L'acces de cet invite a ete retire"
+        });
+      }
 
       if (options.requireAuth) {
         return reply.status(401).send({
