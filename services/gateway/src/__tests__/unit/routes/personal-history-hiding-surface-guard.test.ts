@@ -86,6 +86,17 @@ const SURFACES: Record<string, Classification> = {
       'dans `syncMessages`. Le flux `deleted` (tombstones) reste non filtré à ' +
       "dessein : retirer un message déjà masqué est un no-op côté client.",
   },
+  'conversations/receipts.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "La collection d'accusés (#4349) ne rend AUCUN contenu de message : ses " +
+      'deux lectures servent `{id, senderId, createdAt}` (anti-spoof) et `{id}` ' +
+      "(portée `recent`). Elle n'est pas pour autant aveugle au masquage — le " +
+      'PLANCHER est appliqué sur les deux chemins (`reader.historyFloor()`, ' +
+      'écriture et lecture), et un id situé sous le plancher est refusé en 404. ' +
+      "L'exemption porte donc sur le CONTENU, jamais sur l'admission.",
+  },
   // conversations/messages-advanced.ts → messages-advanced-reads.ts (#4284,
   // découpage par responsabilité). Même lecture, même raison ; seul le
   // chemin a changé.

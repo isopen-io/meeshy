@@ -12,12 +12,12 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Sent", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Delivered", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Read", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Not seen", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Listened", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Seen", bundle: .main)
+        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoyé", bundle: .main)
+        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribué", bundle: .main)
+        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
+        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
+        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
+        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
         }
     }
 
@@ -271,7 +271,7 @@ struct MessageViewsDetailView: View {
                     metaDivider
                     metaInfoRow(
                         icon: "arrowshape.turn.up.forward.fill",
-                        label: String(localized: "message.detail.forwarded", defaultValue: "Forwarded", bundle: .main),
+                        label: String(localized: "message.detail.forwarded", defaultValue: "Transféré", bundle: .main),
                         value: BubbleForwardedIndicator.label(for: ForwardBadgePolicy.attribution(for: message.forwardedFrom)),
                         accent: accent
                     )
@@ -312,7 +312,7 @@ struct MessageViewsDetailView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(accent.opacity(0.7))
-                Text(String(localized: "message-detail.send-history.title", defaultValue: "Send history", bundle: .main))
+                Text(String(localized: "message-detail.send-history.title", defaultValue: "Historique d'envoi", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -324,7 +324,7 @@ struct MessageViewsDetailView: View {
             if let first = sendAttempts.first {
                 metaInfoRow(
                     icon: "paperplane",
-                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1st attempt", bundle: .main),
+                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1re tentative", bundle: .main),
                     value: formatDateTimeFR(first.startedAt),
                     accent: accent
                 )
@@ -364,8 +364,8 @@ struct MessageViewsDetailView: View {
                 .frame(width: 16)
                 .padding(.top, 1)
                 .accessibilityLabel(isSuccess
-                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Succeeded", bundle: .main)
-                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Failed", bundle: .main))
+                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Réussi", bundle: .main)
+                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Échec", bundle: .main))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -400,10 +400,10 @@ struct MessageViewsDetailView: View {
 
     private func sendAttemptTransportLabel(_ transport: String) -> String {
         switch SendAttemptRecord.Transport(rawValue: transport) {
-        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Real-time", bundle: .main)
+        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Temps réel", bundle: .main)
         case .rest: return "REST"
-        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Real-time fallback", bundle: .main)
-        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Auto retry", bundle: .main)
+        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Repli temps réel", bundle: .main)
+        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Nouvelle tentative automatique", bundle: .main)
         case nil: return transport
         }
     }
@@ -564,7 +564,7 @@ struct MessageViewsDetailView: View {
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a recu le message", bundle: .main), accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a reçu le message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.slash.fill",
@@ -610,7 +610,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attache", bundle: .main), accent: accent)
+                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attaché", bundle: .main), accent: accent)
                 }
             }
         }
@@ -634,7 +634,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune video attachee", bundle: .main), accent: accent)
+                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune vidéo attachée", bundle: .main), accent: accent)
                 }
             }
         }
@@ -898,14 +898,14 @@ struct MessageViewsDetailView: View {
                 // Not combined into one element: the button must stay independently
                 // focusable for VoiceOver.
                 .accessibilityHidden(true)
-            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
+            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les données", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
             Button {
                 readStatusData = nil
                 Task { await loadReadStatus() }
             } label: {
-                Text(String(localized: "common.retry", defaultValue: "Reessayer", bundle: .main))
+                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)

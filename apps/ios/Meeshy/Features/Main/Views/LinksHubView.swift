@@ -129,7 +129,7 @@ struct LinksHubView: View {
 
             linkCard(
                 icon: "chart.line.uptrend.xyaxis",
-                title: String(localized: "links.hub.tracking.title", defaultValue: "Liens de tracking", bundle: .main),
+                title: String(localized: "links.hub.tracking.title", defaultValue: "Liens de suivi", bundle: .main),
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
                 accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,

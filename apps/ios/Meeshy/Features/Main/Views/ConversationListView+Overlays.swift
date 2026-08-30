@@ -1026,7 +1026,7 @@ struct ConversationListHeaderOverlay: View {
                             Image(systemName: "square.stack.fill")
                                 .font(MeeshyFont.relative(13, weight: .semibold))
                                 .accessibilityHidden(true)
-                            Text(String(localized: "conversation.list.feed", defaultValue: "Feed", bundle: .main))
+                            Text(String(localized: "conversation.list.feed", defaultValue: "Flux", bundle: .main))
                                 .font(MeeshyFont.relative(13, weight: .semibold))
                         }
                         .foregroundStyle(
@@ -1072,7 +1072,7 @@ struct ConversationListHeaderOverlay: View {
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
                             }
-                            .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
+                            .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Créer un lien de partage", bundle: .main))
 
                             Button {
                                 onNewConversation?()
@@ -1132,7 +1132,7 @@ struct ConversationListHeaderOverlay: View {
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
-                        .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
+                        .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Réglages", bundle: .main))
                     }
                 }
                 // Loi commune `ScrollMotion` : une vue en mouvement ne montre
@@ -1216,7 +1216,7 @@ struct ConversationListBottomBar: View {
     private var communitiesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(String(localized: "communities.title", defaultValue: "Communaut\u{00e9}s"))
+                Text(String(localized: "communities.title", defaultValue: "Communautés"))
                     .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(

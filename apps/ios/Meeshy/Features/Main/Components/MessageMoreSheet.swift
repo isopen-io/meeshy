@@ -476,7 +476,7 @@ struct MessageMoreSheet: View {
         case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
         case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .edit: return String(localized: "action.edit", defaultValue: "Éditer", bundle: .main)
+        case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
         case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)

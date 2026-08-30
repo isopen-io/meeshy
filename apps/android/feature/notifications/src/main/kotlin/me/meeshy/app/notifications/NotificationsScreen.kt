@@ -1,6 +1,9 @@
 package me.meeshy.app.notifications
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,15 +13,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +55,7 @@ import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -90,47 +96,64 @@ fun NotificationsScreen(
             snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
         ) { padding ->
-            PullToRefreshBox(
-                isRefreshing = state.isSyncing,
-                onRefresh = viewModel::load,
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
             ) {
-                when {
-                    state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MeeshyPalette.Indigo500)
-                    }
-                    state.notifications.isEmpty() -> Box(
-                        Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.notifications_empty),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
-                    else -> LazyColumn {
-                        itemsIndexed(state.notifications, key = { _, item -> item.id }) { index, notification ->
-                            if (index == state.notifications.lastIndex) {
-                                LaunchedEffect(notification.id) { viewModel.loadMore() }
-                            }
-                            NotificationItem(
-                                notification = notification,
-                                onTap = { viewModel.markAsRead(notification.id) },
-                                onMarkRead = { viewModel.markAsRead(notification.id) },
-                                onDelete = { viewModel.deleteNotification(notification.id) },
-                            )
-                            HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
+                if (!state.isLoading && state.notifications.isNotEmpty()) {
+                    NotificationCategoryChips(
+                        selected = state.selectedCategory,
+                        onSelect = viewModel::selectCategory,
+                    )
+                }
+                PullToRefreshBox(
+                    isRefreshing = state.isSyncing,
+                    onRefresh = viewModel::load,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    val rows = state.filteredNotifications
+                    when {
+                        state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = MeeshyPalette.Indigo500)
                         }
-                        if (state.isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        rows.isEmpty() -> Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    if (state.notifications.isEmpty()) {
+                                        R.string.notifications_empty
+                                    } else {
+                                        R.string.notifications_empty_category
+                                    },
+                                ),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
+                        else -> LazyColumn {
+                            itemsIndexed(rows, key = { _, item -> item.id }) { index, notification ->
+                                if (index == rows.lastIndex) {
+                                    LaunchedEffect(notification.id) { viewModel.loadMore() }
+                                }
+                                NotificationItem(
+                                    notification = notification,
+                                    onTap = { viewModel.markAsRead(notification.id) },
+                                    onMarkRead = { viewModel.markAsRead(notification.id) },
+                                    onDelete = { viewModel.deleteNotification(notification.id) },
+                                )
+                                HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
+                            }
+                            if (state.isLoadingMore) {
+                                item {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    }
                                 }
                             }
                         }
@@ -139,6 +162,56 @@ fun NotificationsScreen(
             }
         }
     }
+}
+
+/**
+ * The 11-chip filter bar of the notification center — port of iOS `NotificationListView`'s
+ * category chips. Horizontally scrollable, single-select; the active chip carries its category's
+ * deterministic [NotificationFilterCategory.accentHex] so the bar colour-codes consistently with the
+ * per-row accents. Selecting a chip is a pure client-side projection (no refetch).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationCategoryChips(
+    selected: NotificationFilterCategory,
+    onSelect: (NotificationFilterCategory) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        NotificationFilterCategory.entries.forEach { category ->
+            val isSelected = category == selected
+            val accent = hexColor(category.accentHex)
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(category) },
+                label = { Text(stringResource(category.labelRes())) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = accent.copy(alpha = 0.18f),
+                    selectedLabelColor = accent,
+                ),
+            )
+        }
+    }
+}
+
+@StringRes
+private fun NotificationFilterCategory.labelRes(): Int = when (this) {
+    NotificationFilterCategory.ALL -> R.string.notifications_category_all
+    NotificationFilterCategory.UNREAD -> R.string.notifications_category_unread
+    NotificationFilterCategory.MESSAGES -> R.string.notifications_category_messages
+    NotificationFilterCategory.REACTIONS -> R.string.notifications_category_reactions
+    NotificationFilterCategory.MENTIONS -> R.string.notifications_category_mentions
+    NotificationFilterCategory.SOCIAL -> R.string.notifications_category_social
+    NotificationFilterCategory.CONTACTS -> R.string.notifications_category_contacts
+    NotificationFilterCategory.GROUPS -> R.string.notifications_category_groups
+    NotificationFilterCategory.CALLS -> R.string.notifications_category_calls
+    NotificationFilterCategory.TRANSLATIONS -> R.string.notifications_category_translations
+    NotificationFilterCategory.SYSTEM -> R.string.notifications_category_system
 }
 
 /**

@@ -144,7 +144,7 @@ struct ReelRepostEmbedCell: View {
     private var attributionHeader: some View {
         if let repost = post.repost {
             let handle = repost.authorUsername ?? repost.author
-            Text(String(localized: "story.repost.from", defaultValue: "Reposted from", bundle: .main) + " @\(handle)")
+            Text(String(localized: "story.repost.from", defaultValue: "Repartagé depuis", bundle: .main) + " @\(handle)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 4)

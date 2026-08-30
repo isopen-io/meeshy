@@ -3,8 +3,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
-import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
-import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 
 // Le fragment vit dans `utils/message-sender-select.ts` (partagé avec le delta
 // `/sync`, qui ne peut pas importer ce module de routes) et reste ré-exporté ici
@@ -18,6 +16,10 @@ export { messageSenderUserSelect };
 // ordre pour des chemins distincts, mais `route-manifest.json` le reflète).
 // `SendMessageBodySchema` et `buildAfterWatermarkClause` restent importables
 // depuis CE fichier (tests + appelants historiques) via ré-export explicite.
+// #4349 — `POST /conversations/:id/mark-read` est un ADAPTATEUR de la
+// collection unique d'accusés : le gestionnaire, son dimensionnement de débit
+// et toutes ses gardes viennent d'ICI, jamais d'une copie locale.
+import { receiptContext, receiptHandlers } from './receipts';
 import { registerMessagesListRoute } from './messages-list';
 import { registerMarkReadRoute, registerMarkUnreadRoute } from './messages-read-status';
 import { registerSendMessageRoute } from './messages-send';
@@ -59,9 +61,11 @@ export function registerMessagesRoutes(
   });
 
   const socketIOHandler = fastify.socketIOHandler;
-  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
-  // G-123 — cf. la même attache aux trois portes de `routes/message-read-status.ts`.
-  const bridgeService = new ConversationBridgeService(prisma);
+  // Les gestionnaires de la collection d'accusés, construits UNE fois — la
+  // diffusion `read-status:updated`, la préférence `showReadReceipts` et le
+  // pont ✦ (G-123) sont attachés là-bas, pour les cinq portes d'écriture à la
+  // fois. Ce fichier n'en instancie plus aucun collaborateur en propre.
+  const receipts = receiptHandlers(receiptContext(fastify, prisma));
 
   // `MessagingService` is stateless across requests, so it is built once and
   // reused. The POST /messages handler previously re-imported the module and
@@ -84,11 +88,7 @@ export function registerMessagesRoutes(
 
   registerMessagesListRoute(fastify, prisma, optionalAuth);
 
-  registerMarkReadRoute(fastify, prisma, participantAuth, {
-    socketIOHandler,
-    privacyPreferencesService,
-    bridgeService
-  });
+  registerMarkReadRoute(fastify, participantAuth, receipts);
 
   registerSendMessageRoute(fastify, prisma, optionalAuth, getMessagingService, socketIOHandler);
 

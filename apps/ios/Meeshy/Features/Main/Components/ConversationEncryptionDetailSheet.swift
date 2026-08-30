@@ -24,7 +24,7 @@ struct ConversationEncryptionDetailSheet: View {
                             ProgressView()
                                 .controlSize(.small)
                             Text(String(localized: "conversation.encryption.detail.loading",
-                                        defaultValue: "Loading status…",
+                                        defaultValue: "Chargement du statut…",
                                         bundle: .main))
                                 .foregroundColor(.secondary)
                         }
@@ -44,13 +44,13 @@ struct ConversationEncryptionDetailSheet: View {
                 }
             }
             .navigationTitle(String(localized: "conversation.encryption.detail.title",
-                                    defaultValue: "Encryption",
+                                    defaultValue: "Chiffrement",
                                     bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.close",
-                                  defaultValue: "Close",
+                                  defaultValue: "Fermer",
                                   bundle: .main)) { dismiss() }
                 }
             }
@@ -73,7 +73,7 @@ struct ConversationEncryptionDetailSheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.activeLabel",
-                                defaultValue: "Active encryption",
+                                defaultValue: "Chiffrement actif",
                                 bundle: .main))
                         .font(.headline)
                     Text(modeLabel(mode))
@@ -91,23 +91,23 @@ struct ConversationEncryptionDetailSheet: View {
                            value: modeLabel(mode))
             if let enabledAt = status.enabledAt {
                 LabeledContent(String(localized: "conversation.encryption.detail.enabledOn",
-                                      defaultValue: "Activated on",
+                                      defaultValue: "Activé le",
                                       bundle: .main),
                                value: enabledAt.formatted(date: .abbreviated, time: .shortened))
             }
             LabeledContent(String(localized: "conversation.encryption.detail.translation",
-                                  defaultValue: "Translation",
+                                  defaultValue: "Traduction",
                                   bundle: .main),
                            value: status.canTranslate
                                 ? String(localized: "conversation.encryption.detail.translation.available",
-                                         defaultValue: "Available",
+                                         defaultValue: "Disponible",
                                          bundle: .main)
                                 : String(localized: "conversation.encryption.detail.translation.disabled",
-                                         defaultValue: "Disabled",
+                                         defaultValue: "Désactivé",
                                          bundle: .main))
         } header: {
             Text(String(localized: "conversation.encryption.detail.detailsHeader",
-                        defaultValue: "Details",
+                        defaultValue: "Détails",
                         bundle: .main))
         }
 
@@ -120,7 +120,7 @@ struct ConversationEncryptionDetailSheet: View {
                     // convey the state; hide the symbol from VoiceOver.
                     .accessibilityHidden(true)
                 Text(String(localized: "conversation.encryption.detail.toggleEnabled",
-                            defaultValue: "Encryption enabled",
+                            defaultValue: "Chiffrement activé",
                             bundle: .main))
                 Spacer()
                 Toggle("", isOn: .constant(true))
@@ -129,7 +129,7 @@ struct ConversationEncryptionDetailSheet: View {
             }
         } footer: {
             Text(String(localized: "conversation.encryption.detail.immutabilityFooter",
-                        defaultValue: "Once enabled, encryption cannot be disabled for this conversation. This protects against security regressions.",
+                        defaultValue: "Une fois activé, le chiffrement ne peut plus être désactivé pour cette conversation. Cela protège contre les régressions de sécurité.",
                         bundle: .main))
                 .font(.caption)
         }
@@ -149,11 +149,11 @@ struct ConversationEncryptionDetailSheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
-                                defaultValue: "Unencrypted conversation",
+                                defaultValue: "Conversation non chiffrée",
                                 bundle: .main))
                         .font(.headline)
                     Text(String(localized: "conversation.encryption.detail.inactiveSubtitle",
-                                defaultValue: "Messages are stored in plaintext on the server.",
+                                defaultValue: "Les messages sont stockés en clair sur le serveur.",
                                 bundle: .main))
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -186,7 +186,7 @@ struct ConversationEncryptionDetailSheet: View {
                         bundle: .main))
         } footer: {
             Text(String(localized: "conversation.encryption.detail.activationFooter",
-                        defaultValue: "Activation is irreversible. Choose the mode that fits your translation and privacy needs.",
+                        defaultValue: "L'activation est irréversible. Choisissez le mode adapté à vos besoins de traduction et de confidentialité.",
                         bundle: .main))
                 .font(.caption)
         }
@@ -205,7 +205,7 @@ struct ConversationEncryptionDetailSheet: View {
                             // encryption" text is the button's spoken label.
                             .accessibilityHidden(true)
                         Text(String(localized: "conversation.encryption.detail.activate",
-                                    defaultValue: "Enable encryption",
+                                    defaultValue: "Activer le chiffrement",
                                     bundle: .main)).fontWeight(.semibold)
                     }
                     Spacer()
@@ -223,15 +223,15 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.label",
-                          defaultValue: "End-to-End (Signal)",
+                          defaultValue: "Bout en bout (Signal)",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.label",
-                          defaultValue: "Server (AES-256-GCM)",
+                          defaultValue: "Serveur (AES-256-GCM)",
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.label",
-                          defaultValue: "Hybrid (E2EE + Server)",
+                          defaultValue: "Hybride (E2EE + serveur)",
                           bundle: .main)
         }
     }
@@ -240,15 +240,15 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.description",
-                          defaultValue: "Maximum privacy. Automatic translation is not available.",
+                          defaultValue: "Confidentialité maximale. La traduction automatique n'est pas disponible.",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.description",
-                          defaultValue: "Server protected. Translation remains available (recommended).",
+                          defaultValue: "Protégé côté serveur. La traduction reste disponible (recommandé).",
                           bundle: .main)
         case .hybrid:
             return String(localized: "conversation.encryption.mode.hybrid.description",
-                          defaultValue: "Double layer. Slower, translation preserved.",
+                          defaultValue: "Double couche. Plus lent, traduction préservée.",
                           bundle: .main)
         }
     }

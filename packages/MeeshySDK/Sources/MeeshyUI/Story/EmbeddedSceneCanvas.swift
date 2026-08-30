@@ -71,6 +71,19 @@ public struct EmbeddedSceneCanvas: View {
     /// sans le cookie laisserait le canvas sur sa version périmée.
     public var loadedImagesVersion: UInt64
 
+    /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
+    /// surface de dessin est active** (#4092).
+    ///
+    /// Sans ce drapeau, le trait s'affiche DEUX fois : une par le calque du
+    /// canvas — projeté dans l'espace design —, une par la surface live, en
+    /// coordonnées de bounds. Les deux ne tombent pas au même endroit : le
+    /// symptôme est un dessin « écrit en double », décalé (défaut 2026-05-27,
+    /// déjà payé par l'atelier).
+    ///
+    /// Il est REÇU, jamais déduit : la scène incrustée ne sait pas si son hôte
+    /// a monté une surface de dessin par-dessus elle.
+    public var isDrawingOverlayActive: Bool = false
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
@@ -79,6 +92,7 @@ public struct EmbeddedSceneCanvas: View {
         onBackgroundTapped: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
         loadedImagesVersion: UInt64 = 0,
+        isDrawingOverlayActive: Bool = false,
         referenceViewport: CGSize = CGSize(width: 402, height: 874)
     ) {
         self._slide = slide
@@ -88,6 +102,7 @@ public struct EmbeddedSceneCanvas: View {
         self.onBackgroundTapped = onBackgroundTapped
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
+        self.isDrawingOverlayActive = isDrawingOverlayActive
         self.referenceViewport = referenceViewport
     }
 
@@ -117,6 +132,7 @@ public struct EmbeddedSceneCanvas: View {
                 slide: $slide,
                 onItemTapped: onItemTapped,
                 onBackgroundTapped: onBackgroundTapped,
+                isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
                 loadedImagesVersion: loadedImagesVersion,
                 // Rayon compensé par l'échelle : la carte est rendue à sa taille

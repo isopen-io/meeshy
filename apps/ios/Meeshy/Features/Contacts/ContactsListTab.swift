@@ -72,7 +72,7 @@ struct ContactsListTab: View {
                     Capsule().stroke(isActive ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
                 )
         }
-        .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre: %@%@", bundle: .main), filter.title, countSuffix))
+        .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre : %@%@", bundle: .main), filter.title, countSuffix))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
@@ -206,7 +206,7 @@ struct ContactsListTab: View {
             icon: "person.2.slash",
             title: viewModel.searchQuery.isEmpty
                 ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main)
-                : String(localized: "contacts.list.no-results", defaultValue: "Aucun resultat", bundle: .main),
+                : String(localized: "contacts.list.no-results", defaultValue: "Aucun résultat", bundle: .main),
             subtitle: ""
         )
     }

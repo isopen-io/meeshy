@@ -368,7 +368,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .sticker, .mention, .place
+        .description, .media, .sound, .drawing, .sticker, .mention, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -388,7 +388,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
     /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
     /// surface ne pose encore (#4083).
-    static let bands: Set<ComposerSceneBand> = [.palette]
+    static let bands: Set<ComposerSceneBand> = [.palette, .drawing]
 }
 
 
@@ -452,5 +452,115 @@ nonisolated enum ComposerMediaSourcePolicy {
 
     static var cancel: String {
         String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+}
+
+
+/// **D'où vient un son posé sur la scène** — et pourquoi la porte n'en servait
+/// qu'une provenance.
+///
+/// La porte `sound` du rail routait vers `handleDocumentTool(.microphone)` :
+/// elle n'ENREGISTRAIT que. Emprunter un son à l'étagère était impossible
+/// depuis le composer unifié — aucune occurrence de `SoundLibraryPicker` ni
+/// d'`addBorrowedSound` dans tout le meuble — alors que le socle de la vue `1b`
+/// affiche déjà un crédit de son (« ♫ NUITS BLANCHES · @lume · 0:28 »).
+///
+/// **Troisième fois sur le même écran** qu'une porte unique ne sert qu'une de
+/// ses sources, après le média (caméra et fichier perdus) et les capacités de
+/// la scène (sticker, empilement). Le motif se répète parce que rien n'oppose
+/// une porte à ce qu'elle PROMET : le rail dit « Ajouter un son », le handler
+/// en sert un seul type.
+///
+/// ## Les deux provenances ne posent pas le même objet, et c'est la doctrine
+///
+/// La vue `2c` le dit sans détour — « la provenance gouverne l'affichage » :
+///
+/// | provenance | ce qu'elle pose | conséquence |
+/// |---|---|---|
+/// | étagère | `addBorrowedSound` → objet audio `isBackground` | allume le crédit et le 🔇 des surfaces de lecture |
+/// | micro | une note vocale | **n'est JAMAIS un fond audio** |
+///
+/// Les fondre en un seul geste ferait d'une note vocale la bande-son de la
+/// publication — exactement ce que la doctrine interdit.
+///
+/// ## Aucun gate, et c'est mesuré
+///
+/// `allowsCapture` ne retire que la CAMÉRA (`ComposerDocumentToolPolicy.visibleTools`
+/// filtre `.camera`, jamais `.microphone`) : reprendre un contenu publié
+/// n'interdit pas d'y enregistrer un vocal. Et la porte `sound` étant de niveau
+/// OBJET, elle n'existe déjà que là où une scène peut recevoir le résultat.
+nonisolated enum ComposerSoundSource: Equatable, Hashable, CaseIterable {
+    /// L'étagère — un son EMPRUNTÉ, qui devient le fond de la scène.
+    case library
+    /// Le micro — une note vocale, qui ne le devient jamais.
+    case record
+}
+
+nonisolated enum ComposerSoundSourcePolicy {
+
+    /// L'ordre n'est pas décoratif : **emprunter d'abord**. C'est le geste
+    /// nominal d'une scène — on habille une composition avec un son qui existe
+    /// —, là où enregistrer est le geste rare. La vue `2c` les range dans cet
+    /// ordre pour la même raison.
+    static let offered: [ComposerSoundSource] = [.library, .record]
+
+    static func label(_ source: ComposerSoundSource) -> String {
+        switch source {
+        case .library:
+            return String(localized: "composer.rail.sound.library",
+                          defaultValue: "Emprunter un son", bundle: .main)
+        case .record:
+            return String(localized: "composer.rail.sound.record",
+                          defaultValue: "Enregistrer un vocal", bundle: .main)
+        }
+    }
+
+    /// Le titre de la feuille est **le libellé de la porte**, comme pour le
+    /// média : `composer.rail.sound` dit déjà « Ajouter un son » dans les sept
+    /// langues servies.
+    static var chooserTitle: String { ComposerRailCopy.label(.sound) }
+
+    static var cancel: String { ComposerMediaSourcePolicy.cancel }
+}
+
+
+/// **Les libellés de l'historique** (#4402).
+///
+/// Ils sont ici, avec les autres règles pures du meuble, et pas dans la barre
+/// haute : c'est la barre qui les AFFICHE, mais c'est le meuble qui décide que
+/// l'historique existe. Un jour où une seconde surface servira l'historique,
+/// elle lira les mêmes mots sans dépendre de la vue qui les portait.
+nonisolated enum ComposerHistoryCopy {
+
+    static var undo: String {
+        String(localized: "composer.history.undo",
+               defaultValue: "Annuler", bundle: .main)
+    }
+
+    static var redo: String {
+        String(localized: "composer.history.redo",
+               defaultValue: "Rétablir", bundle: .main)
+    }
+}
+
+
+/// **Qui sert l'historique, et pourquoi pas tout le monde** (#4402).
+///
+/// L'historique du composer photographie `slides` — la SCÈNE et ses objets.
+/// Sur l'écran DOCUMENT, ce que l'auteur vient de faire est presque toujours du
+/// texte, que le clavier annule déjà par son propre geste ; y montrer un
+/// « annuler » qui remonte une pose de fond faite deux écrans plus tôt
+/// promettrait d'annuler la frappe et ferait autre chose. **Un contrôle qui
+/// défait autre chose que le dernier geste visible est pire qu'absent.**
+///
+/// La scène, elle, accumule des gestes qui ne se défont par rien d'autre :
+/// poser un sticker, avancer un objet d'un plan, changer le fond. C'est là que
+/// l'historique répond à une question que l'utilisateur se pose.
+nonisolated enum ComposerHistoryService {
+
+    /// - Parameter surface: la surface MONTÉE, pas le format — c'est la
+    ///   présence de la scène qui décide, et elle seule.
+    static func servesHistory(on surface: ComposerSurfaceKind) -> Bool {
+        surface == .scene
     }
 }

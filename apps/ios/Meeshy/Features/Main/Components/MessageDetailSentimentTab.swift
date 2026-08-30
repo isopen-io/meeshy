@@ -105,10 +105,10 @@ struct MessageDetailSentimentTab: View, Equatable {
     }
 
     private static func sentimentLabel(_ score: Double) -> String {
-        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Very negative", bundle: .main) }
-        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Negative", bundle: .main) }
-        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutral", bundle: .main) }
-        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positive", bundle: .main) }
-        return String(localized: "sentiment.very-positive", defaultValue: "Very positive", bundle: .main)
+        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Très négatif", bundle: .main) }
+        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Négatif", bundle: .main) }
+        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main) }
+        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main) }
+        return String(localized: "sentiment.very-positive", defaultValue: "Très positif", bundle: .main)
     }
 }

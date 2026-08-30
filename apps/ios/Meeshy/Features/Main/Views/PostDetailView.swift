@@ -1158,7 +1158,7 @@ struct PostDetailView: View {
                     Task { await viewModel.pinPost(postId) }
                     HapticFeedback.light()
                 } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
                 }
                 Button {
                     isEditing = true

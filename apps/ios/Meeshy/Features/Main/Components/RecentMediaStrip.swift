@@ -479,7 +479,7 @@ struct RecentMediaStrip: View {
                 }
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
-                .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la s\u{00E9}lection", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la sélection", bundle: .main))
 
                 Spacer()
 
@@ -506,7 +506,7 @@ struct RecentMediaStrip: View {
                 .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentColor))
                 .disabled(selection.isEmpty || isBatchResolving)
                 .opacity(selection.isEmpty ? 0.5 : 1)
-                .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la s\u{00E9}lection", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la sélection", bundle: .main))
             }
             .padding(.horizontal, hPadding)
             .padding(.top, 8)
@@ -691,7 +691,7 @@ struct RecentMediaStrip: View {
             }
             .frame(width: size, height: size)
         }
-        .accessibilityLabel(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))
+        .accessibilityLabel(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la photothèque", bundle: .main))
     }
 }
 
@@ -768,10 +768,10 @@ private struct RecentMediaCell: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(asset.mediaType == .video
-            ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vid\u{00E9}o r\u{00E9}cente", bundle: .main)
-            : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo r\u{00E9}cente", bundle: .main))
+            ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vidéo récente", bundle: .main)
+            : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo récente", bundle: .main))
         .accessibilityValue(selectionIndex != nil
-            ? String(localized: "composer.a11y.selectedState", defaultValue: "S\u{00E9}lectionn\u{00E9}", bundle: .main)
+            ? String(localized: "composer.a11y.selectedState", defaultValue: "Sélectionné", bundle: .main)
             : "")
         .contextMenu {
             // `.compactMenu` (iOS 16.4+) renders the three actions as the
@@ -803,14 +803,14 @@ private struct RecentMediaCell: View {
         }
         Button(action: onToggleSelect) {
             Label(
-                String(localized: "composer.recent.select", defaultValue: "S\u{00E9}lectionner", bundle: .main),
+                String(localized: "composer.recent.select", defaultValue: "Sélectionner", bundle: .main),
                 systemImage: selectionIndex != nil ? "checkmark.circle.fill" : "checkmark.circle"
             )
         }
         if canEdit {
             Button(action: onEditTap) {
                 Label(
-                    String(localized: "composer.recent.edit", defaultValue: "\u{00C9}diter", bundle: .main),
+                    String(localized: "composer.recent.edit", defaultValue: "Éditer", bundle: .main),
                     systemImage: "pencil"
                 )
             }

@@ -150,17 +150,17 @@ struct ForwardPickerSheet: View {
                 }
                 .background(.ultraThinMaterial)
             }
-            .navigationTitle(String(localized: "forward.title", defaultValue: "Forward", bundle: .main))
+            .navigationTitle(String(localized: "forward.title", defaultValue: "Transférer", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                         onDismiss()
                     }
                 }
             }
-            .searchable(text: $pickerModel.searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Search a conversation", bundle: .main))
+            .searchable(text: $pickerModel.searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main))
             .adaptiveOnChange(of: pickerModel.searchText) { _, newValue in
                 Task { await pickerModel.search(newValue) }
             }
@@ -235,7 +235,7 @@ struct ForwardPickerSheet: View {
     private var previewText: String {
         if !message.content.isEmpty { return message.content }
         guard let first = message.attachments.first else {
-            return String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main)
+            return String(localized: "forward.media-placeholder", defaultValue: "[Média]", bundle: .main)
         }
         let kindLabel: String
         switch first.kind {

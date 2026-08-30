@@ -184,7 +184,7 @@ struct ConnectionBanner: View {
         } else if isDisconnected && showReconnecting {
             result.append(SyncPillEntry(
                 id: "status.disconnected",
-                label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion"),
+                label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion en cours"),
                 iconName: nil,
                 dotStyle: .warning,
                 source: nil

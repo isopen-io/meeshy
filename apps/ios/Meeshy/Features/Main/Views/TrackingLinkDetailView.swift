@@ -109,7 +109,7 @@ struct TrackingLinkDetailView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
             shareActionButton
-            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
+            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
                 generateQRAndShare()
             }
             detailActionButton(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: MeeshyColors.error) {
@@ -162,7 +162,7 @@ struct TrackingLinkDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(String(localized: "tracking.link.detail.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
             HStack(spacing: 12) {
-                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total clics", bundle: .main), icon: "cursorarrow.click", color: MeeshyColors.trackingAccentHex)
+                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total des clics", bundle: .main), icon: "cursorarrow.click", color: MeeshyColors.trackingAccentHex)
                 bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: MeeshyColors.brandPrimaryHex)
             }
             if let last = link.lastClickedAt {
@@ -328,7 +328,7 @@ struct TrackingLinkDetailView: View {
                 if link.source != nil && link.medium != nil { Divider().padding(.leading, 16) }
                 if let m = link.medium { infoRow("Medium", value: m) }
                 Divider().padding(.leading, 16)
-                infoRow(String(localized: "tracking.link.detail.destinationUrl", defaultValue: "URL destination", bundle: .main), value: link.originalUrl)
+                infoRow(String(localized: "tracking.link.detail.destinationUrl", defaultValue: "URL de destination", bundle: .main), value: link.originalUrl)
                 Divider().padding(.leading, 16)
                 infoRow(String(localized: "tracking.link.detail.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }

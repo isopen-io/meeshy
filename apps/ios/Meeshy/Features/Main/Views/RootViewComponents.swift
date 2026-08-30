@@ -693,7 +693,7 @@ struct ThemedFeedOverlay: View {
                                 context: .feedComposer
                             )
 
-                            Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
+                            Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
 

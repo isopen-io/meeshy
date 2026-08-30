@@ -43,7 +43,7 @@ struct ReportMessageSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    Text(String(localized: "report.message.title", defaultValue: "Why are you reporting this message?", bundle: .main))
+                    Text(String(localized: "report.message.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,11 +55,11 @@ struct ReportMessageSheet: View {
 
                     if selectedType != nil {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(String(localized: "report.message.details.label", defaultValue: "Details (optional)", bundle: .main))
+                            Text(String(localized: "report.message.details.label", defaultValue: "Détails (facultatif)", bundle: .main))
                                 .font(.footnote.weight(.medium))
                                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
 
-                            TextField(String(localized: "report.message.details.placeholder", defaultValue: "Describe the issue...", bundle: .main), text: $reason, axis: .vertical)
+                            TextField(String(localized: "report.message.details.placeholder", defaultValue: "Décrivez le problème…", bundle: .main), text: $reason, axis: .vertical)
                                 .font(.subheadline)
                                 .lineLimit(3...6)
                                 .padding(12)
@@ -78,11 +78,11 @@ struct ReportMessageSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
-            .navigationTitle(String(localized: "report.message.nav.title", defaultValue: "Report", bundle: .main))
+            .navigationTitle(String(localized: "report.message.nav.title", defaultValue: "Signaler", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main)) { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -94,7 +94,7 @@ struct ReportMessageSheet: View {
                             ProgressView()
                                 .tint(Color(hex: accentColor))
                         } else {
-                            Text(String(localized: "report.message.send", defaultValue: "Send", bundle: .main))
+                            Text(String(localized: "report.message.send", defaultValue: "Envoyer", bundle: .main))
                                 .fontWeight(.semibold)
                         }
                     }
@@ -103,7 +103,7 @@ struct ReportMessageSheet: View {
                     // leaving a *toolbar* control with no accessible name — the
                     // hardest kind to identify by touch exploration. Reuses the
                     // visible key, so voice and screen stay identical.
-                    .accessibilityLabel(String(localized: "report.message.send", defaultValue: "Send", bundle: .main))
+                    .accessibilityLabel(String(localized: "report.message.send", defaultValue: "Envoyer", bundle: .main))
                     .disabled(selectedType == nil || isSubmitting)
                 }
             }
@@ -177,24 +177,24 @@ enum ReportType: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .spam: return String(localized: "report.message.type.spam.label", defaultValue: "Spam", bundle: .main)
-        case .inappropriate: return String(localized: "report.message.type.inappropriate.label", defaultValue: "Inappropriate Content", bundle: .main)
-        case .harassment: return String(localized: "report.message.type.harassment.label", defaultValue: "Harassment", bundle: .main)
+        case .inappropriate: return String(localized: "report.message.type.inappropriate.label", defaultValue: "Contenu inapproprié", bundle: .main)
+        case .harassment: return String(localized: "report.message.type.harassment.label", defaultValue: "Harcèlement", bundle: .main)
         case .violence: return String(localized: "report.message.type.violence.label", defaultValue: "Violence", bundle: .main)
-        case .hate_speech: return String(localized: "report.message.type.hate_speech.label", defaultValue: "Hate Speech", bundle: .main)
-        case .impersonation: return String(localized: "report.message.type.impersonation.label", defaultValue: "Impersonation", bundle: .main)
-        case .other: return String(localized: "report.message.type.other.label", defaultValue: "Other", bundle: .main)
+        case .hate_speech: return String(localized: "report.message.type.hate_speech.label", defaultValue: "Discours haineux", bundle: .main)
+        case .impersonation: return String(localized: "report.message.type.impersonation.label", defaultValue: "Usurpation d'identité", bundle: .main)
+        case .other: return String(localized: "report.message.type.other.label", defaultValue: "Autre", bundle: .main)
         }
     }
 
     var description: String {
         switch self {
-        case .spam: return String(localized: "report.message.type.spam.description", defaultValue: "Repetitive or promotional messages", bundle: .main)
-        case .inappropriate: return String(localized: "report.message.type.inappropriate.description", defaultValue: "Sexual or disturbing content", bundle: .main)
-        case .harassment: return String(localized: "report.message.type.harassment.description", defaultValue: "Intimidation or threats", bundle: .main)
-        case .violence: return String(localized: "report.message.type.violence.description", defaultValue: "Incitement to violence", bundle: .main)
-        case .hate_speech: return String(localized: "report.message.type.hate_speech.description", defaultValue: "Discrimination or hateful content", bundle: .main)
-        case .impersonation: return String(localized: "report.message.type.impersonation.description", defaultValue: "Pretending to be someone else", bundle: .main)
-        case .other: return String(localized: "report.message.type.other.description", defaultValue: "Another reason", bundle: .main)
+        case .spam: return String(localized: "report.message.type.spam.description", defaultValue: "Messages répétitifs ou promotionnels", bundle: .main)
+        case .inappropriate: return String(localized: "report.message.type.inappropriate.description", defaultValue: "Contenu sexuel ou choquant", bundle: .main)
+        case .harassment: return String(localized: "report.message.type.harassment.description", defaultValue: "Intimidation ou menaces", bundle: .main)
+        case .violence: return String(localized: "report.message.type.violence.description", defaultValue: "Incitation à la violence", bundle: .main)
+        case .hate_speech: return String(localized: "report.message.type.hate_speech.description", defaultValue: "Discrimination ou contenu haineux", bundle: .main)
+        case .impersonation: return String(localized: "report.message.type.impersonation.description", defaultValue: "Se faire passer pour quelqu'un d'autre", bundle: .main)
+        case .other: return String(localized: "report.message.type.other.description", defaultValue: "Une autre raison", bundle: .main)
         }
     }
 

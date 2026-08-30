@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -19,12 +20,22 @@ import javax.inject.Inject
 data class NotificationsUiState(
     val notifications: List<ApiNotification> = emptyList(),
     val unreadCount: Int = 0,
+    val selectedCategory: NotificationFilterCategory = NotificationFilterCategory.ALL,
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    /**
+     * The rows the list actually renders for the selected chip — port of iOS
+     * `NotificationListViewModel.filteredNotifications`. The full [notifications] list stays the
+     * single source (the badge count, pagination and socket prepend all work off it); the chip is a
+     * pure client-side projection over it, so switching chips never refetches.
+     */
+    val filteredNotifications: List<ApiNotification>
+        get() = selectedCategory.filter(notifications)
+}
 
 /**
  * Cache-first (ARCHITECTURE.md §4, feature-parity §M): [NotificationRepository.notificationsStream]
@@ -156,6 +167,9 @@ class NotificationsViewModel @Inject constructor(
      * next scroll simply retries).
      */
     fun loadMore() {
+        // iOS paginates only under the ALL chip; a category chip filters an already-loaded list
+        // client-side, so fetching further pages while it hides them would be wasted work.
+        if (_state.value.selectedCategory != NotificationFilterCategory.ALL) return
         if (_state.value.isLoadingMore || !_state.value.hasMore) return
         _state.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
@@ -169,6 +183,15 @@ class NotificationsViewModel @Inject constructor(
                 _state.update { it.copy(isLoadingMore = false) }
             }
         }
+    }
+
+    /**
+     * Selects a filter chip — a pure, network-free state change (the list is already loaded).
+     * Re-selecting the active chip is inert. Mirror of iOS setting `selectedCategory`/`unreadOnly`.
+     */
+    fun selectCategory(category: NotificationFilterCategory) {
+        if (_state.value.selectedCategory == category) return
+        _state.update { it.copy(selectedCategory = category) }
     }
 
     fun markAsRead(notificationId: String) {

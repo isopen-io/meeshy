@@ -21,7 +21,7 @@ struct SecurityVerificationView: View {
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                         .accessibilityHidden(true)
 
-                    Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
+                    Text(String(localized: "security.verify.title", defaultValue: "Chiffrement de bout en bout", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
@@ -45,7 +45,7 @@ struct SecurityVerificationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
-                        Text(String(localized: "common.done", defaultValue: "Done", bundle: .main)).bold()
+                        Text(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)).bold()
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
@@ -74,14 +74,14 @@ struct SecurityVerificationView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .shadow(color: theme.textPrimary.opacity(0.1), radius: 10)
-                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code of the safety number, to scan on the other device", bundle: .main))
+                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code du numéro de sécurité, à scanner sur l'autre appareil", bundle: .main))
         }
 
         // Libellé + numéro fusionnés en un seul élément VoiceOver, avec les
         // chiffres espacés pour une lecture digit-par-digit (comparaison à voix
         // haute lors de la vérification), plutôt que lus comme de grands nombres.
         VStack(spacing: MeeshySpacing.sm) {
-            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
+            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
@@ -94,7 +94,7 @@ struct SecurityVerificationView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main)
+            String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main)
                 + ", " + spelledSafetyNumber(safetyNumber)
         )
 
@@ -116,12 +116,12 @@ struct SecurityVerificationView: View {
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Vérification indisponible", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
 
-            Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.description", defaultValue: "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)

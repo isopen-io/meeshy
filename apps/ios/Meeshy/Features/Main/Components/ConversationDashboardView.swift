@@ -114,7 +114,7 @@ struct ConversationDashboardView: View {
                         )
                         .frame(height: 100)
 
-                        Text(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
+                        Text(String(localized: "dashboard.health", defaultValue: "Santé", bundle: .main))
                             .font(MeeshyFont.relative(11, weight: .heavy, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .tracking(1.0)
@@ -126,7 +126,7 @@ struct ConversationDashboardView: View {
                     // « Santé » séparément. Un élément unique « Santé : 78 » (clé déjà
                     // localisée, valeur brute — 0 clé i18n neuve, cohérent avec StatRing).
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
+                    .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Santé", bundle: .main))
                     .accessibilityValue(LocalizedNumber.exact(health))
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
@@ -293,7 +293,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveVideoCount,
                     maxValue: mediaMax,
-                    label: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main),
+                    label: String(localized: "dashboard.stat.videos", defaultValue: "Vidéos", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -333,7 +333,7 @@ struct ConversationDashboardView: View {
     private var activityChartSection: some View {
         sectionCard {
             HStack {
-                sectionHeader(icon: "chart.line.uptrend.xyaxis", title: String(localized: "dashboard.section.activity", defaultValue: "Activite", bundle: .main))
+                sectionHeader(icon: "chart.line.uptrend.xyaxis", title: String(localized: "dashboard.section.activity", defaultValue: "Activité", bundle: .main))
                 Spacer()
                 periodPicker
             }
@@ -436,7 +436,7 @@ struct ConversationDashboardView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(MeeshyFont.relative(24, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.3))
-            Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de donnees", bundle: .main))
+            Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de données", bundle: .main))
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -448,7 +448,7 @@ struct ConversationDashboardView: View {
 
     private func agentParticipantProfilesSection(_ profiles: [ParticipantProfile]) -> some View {
         sectionCard {
-            sectionHeader(icon: "brain.fill", title: String(localized: "dashboard.section.participant-profiles", defaultValue: "Profils participants", bundle: .main))
+            sectionHeader(icon: "brain.fill", title: String(localized: "dashboard.section.participant-profiles", defaultValue: "Profils des participants", bundle: .main))
 
             ForEach(profiles) { profile in
                 VStack(alignment: .leading, spacing: 10) {
@@ -578,7 +578,7 @@ struct ConversationDashboardView: View {
             if let pers = traits.personality {
                 let scores = extractTraitScores(from: pers)
                 if !scores.isEmpty {
-                    traitBarCategory(String(localized: "dashboard.trait.personality", defaultValue: "Personnalite", bundle: .main), traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.personality", defaultValue: "Personnalité", bundle: .main), traits: scores)
                 }
             }
             if let inter = traits.interpersonal {
@@ -590,7 +590,7 @@ struct ConversationDashboardView: View {
             if let emot = traits.emotional {
                 let scores = extractTraitScores(from: emot)
                 if !scores.isEmpty {
-                    traitBarCategory(String(localized: "dashboard.trait.emotional", defaultValue: "Emotionnel", bundle: .main), traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.emotional", defaultValue: "Émotionnel", bundle: .main), traits: scores)
                 }
             }
         }
@@ -649,7 +649,7 @@ struct ConversationDashboardView: View {
 
     private var participantBreakdownSection: some View {
         sectionCard {
-            sectionHeader(icon: "person.2.fill", title: String(localized: "dashboard.section.participant-activity", defaultValue: "Activite par participant", bundle: .main))
+            sectionHeader(icon: "person.2.fill", title: String(localized: "dashboard.section.participant-activity", defaultValue: "Activité par participant", bundle: .main))
 
             let stats = participantStats.prefix(10)
             let maxCount = stats.first?.messageCount ?? 1
@@ -729,7 +729,7 @@ struct ConversationDashboardView: View {
                     )
                     sentimentSegment(
                         emoji: "\u{1F614}",
-                        label: String(localized: "dashboard.sentiment.negative", defaultValue: "Negatif", bundle: .main),
+                        label: String(localized: "dashboard.sentiment.negative", defaultValue: "Négatif", bundle: .main),
                         count: analysis.negative,
                         total: analysis.total,
                         color: MeeshyColors.error
@@ -1138,7 +1138,7 @@ struct ConversationDashboardView: View {
             ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accent, count: textOnly),
             ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: MeeshyColors.success, count: images),
             ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo400, count: audio),
-            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: MeeshyColors.error, count: videos),
+            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Vidéos", bundle: .main), icon: "video.fill", color: MeeshyColors.error, count: videos),
             ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: MeeshyColors.warning, count: files),
         ].filter { $0.count > 0 }
     }

@@ -90,7 +90,7 @@ describe('formatLastMessage — durée vidéo', () => {
  *
  * Le principe fondateur du produit dit que le prisme s'applique à TOUT le
  * contenu, previews comprises. La vue conversation traduit déjà ses messages
- * (`use-message-translations`) ; la ligne de liste de la MÊME conversation
+ * (`use-message-display`) ; la ligne de liste de la MÊME conversation
  * rendait le contenu brut de l'expéditeur. Un lecteur francophone lisait
  * « Hello » dans sa sidebar et « Bonjour » une fois le fil ouvert.
  *

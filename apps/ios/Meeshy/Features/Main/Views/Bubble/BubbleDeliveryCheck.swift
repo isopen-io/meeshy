@@ -109,7 +109,7 @@ struct BubbleDeliveryCheck: View, Equatable {
     static func label(_ label: DeliveryLabel) -> String {
         switch label {
         case .offlinePending:
-            return String(localized: "bubble.delivery.offlinePending", defaultValue: "En attente, hors-ligne", bundle: .main)
+            return String(localized: "bubble.delivery.offlinePending", defaultValue: "En attente, hors ligne", bundle: .main)
         case .sending:
             return String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
         case .slow:

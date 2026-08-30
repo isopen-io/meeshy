@@ -76,7 +76,7 @@ struct MessageLanguageDetailView: View {
                 Image(systemName: "text.bubble.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(originalColor)
-                Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
+                Text(String(format: String(localized: "message-detail.original", defaultValue: "Original • %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()

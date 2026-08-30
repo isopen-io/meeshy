@@ -25,7 +25,6 @@ import { useNotificationActions } from '@/stores/notification-store';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useSocketCacheSync } from '@/hooks/queries/use-socket-cache-sync';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
-import { useMessageTranslations } from '@/hooks/use-message-translations';
 import { useReplyStore } from '@/stores/reply-store';
 
 // Hooks de stream extraits (NOUVEAUX)
@@ -64,6 +63,8 @@ import type { User, Message } from '@meeshy/shared/types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import {
   getUserLanguageChoices,
+  getUserLanguagePreferences,
+  resolveUserPreferredLanguage,
   type BubbleStreamPageProps,
   type _LanguageChoice
 } from '@/lib/bubble-stream-modules';
@@ -215,17 +216,11 @@ export function BubbleStreamPage({
     return () => clearTimeout(focusTimeout);
   }, [conversationId, isAnonymousMode]);
 
-  // Hook pour les préférences de traduction
-  const {
-    getUserLanguagePreferences,
-    resolveUserPreferredLanguage,
-  } = useMessageTranslations({ currentUser: user });
-
   // États de base
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [, setDetectedLanguage] = useState<string>('fr');
-  const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage());
+  const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage(user));
   // Canonical (normalized) system code — must match languageChoices[0].code so the
   // selection-validation effect below never treats the default as out-of-range.
   const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(normalizeLanguageCode(user.systemLanguage) || 'fr');
@@ -236,7 +231,7 @@ export function BubbleStreamPage({
   const [hasLoadedMessages, setHasLoadedMessages] = useState(false);
 
   // Langues utilisées par l'utilisateur
-  const usedLanguages: string[] = getUserLanguagePreferences();
+  const usedLanguages: string[] = getUserLanguagePreferences(user);
 
   // Choix de langues mémorisés (CRITIQUE pour éviter re-renders)
   const languageChoices = useMemo(() => getUserLanguageChoices(user), [
@@ -451,9 +446,9 @@ export function BubbleStreamPage({
 
   // Mise à jour de la langue utilisateur
   useEffect(() => {
-    const newUserLanguage = resolveUserPreferredLanguage();
+    const newUserLanguage = resolveUserPreferredLanguage(user);
     setUserLanguage(newUserLanguage);
-  }, [user.systemLanguage, user.regionalLanguage, user.customDestinationLanguage, resolveUserPreferredLanguage]);
+  }, [user, user.systemLanguage, user.regionalLanguage, user.customDestinationLanguage]);
 
   // Validation de la langue sélectionnée
   useEffect(() => {

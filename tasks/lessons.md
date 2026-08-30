@@ -19758,55 +19758,50 @@ vérifiée) : même famille, autre support — là c'était la LISTE qui mentait
 JUSTIFICATION.
 ---
 
-## Leçon 335 — un gate de TEST ne peut pas voir ce que son compilateur AMNISTIE
+## Leçon 336 — une extraction qui perd une capacité de son site d'origine n'est pas une extraction, c'est une réécriture
 
-Le lot #4359 a livré cinq routes canoniques sous `/me/categories`. Son agent a joué ses témoins
-ciblés (25/25) puis sept suites de non-régression (55/55) : **tout vert**. Le gate complet du gateway
-l'était aussi — **1028 suites, 21627 témoins, zéro échec**.
+**Le fait.** Le composer unifié avait besoin de la surface de dessin de l'atelier. La règle du dépôt est
+écrite : « un contrôle venu d'un panneau privé s'emprunte par EXTRACTION — son corps sort dans une vue
+partagée publique, et l'ancien panneau consomme la vue extraite lui aussi » (#4035). J'ai sorti le corps :
+trois vues, sept lectures de ViewModel, un `ZStack` de soixante-quatre lignes.
 
-`npx tsc --noEmit` rendait **EXIT=2**, sur quatre `TS2345` dans le fichier neuf.
+**Ce que la première extraction perdait.** La couche de capture de l'atelier reçoit un rappel de plus que
+les autres — `onViewportPinch` —, qui permet de zoomer d'inspection PENDANT le dessin. Il ne participe à
+rien de ce que la vue extraite « est » : ni à la capture du trait, ni à son rendu, ni à la gomme. Il ne
+figurait donc dans aucune des sept lectures que j'avais recensées pour composer la nouvelle vue, et la
+vue extraite compilait, et l'atelier compilait, et rien n'aurait rougi.
 
-Les quatre montages canoniques omettaient les **génériques de route** que leur alias déclare
-(`fastify.post<{ Body: CategoryBody }>(…)`). Sans eux, Fastify infère `RouteGenericInterface`, et le
-gestionnaire typé n'est plus assignable au paramètre attendu. Le code sort **avant même** de tourner.
+> **Le test d'une extraction n'est pas « le nouveau site marche-t-il ? » mais « l'ANCIEN site a-t-il
+> encore tout ce qu'il avait ? »** — et il se répond en comparant les ENTRÉES du bloc extrait, une à une,
+> pas en relisant ce qu'il produit. Un rappel qu'aucune des deux surfaces ne partage est justement celui
+> qu'on oublie : il n'appartient pas au dénominateur commun, donc il disparaît quand on cherche le
+> dénominateur commun.
 
-### Pourquoi aucun témoin ne pouvait le voir
+Le remède est petit — la vue extraite REÇOIT le rappel en optionnel et le relaie sans le décider — mais il
+fallait le voir. Ce qui l'a fait voir : relire le bloc supprimé ligne à ligne AVANT de l'écraser, et non
+la vue neuve après l'avoir écrite. Le diff d'une extraction se lit dans le sens de la SUPPRESSION.
 
-`jest.config.json` du gateway porte `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]`.
-**`TS2345` est dans la liste.** `ts-jest` compile donc le fichier fautif, avale l'erreur, et exécute
-un code que `tsc` refuse. Un témoin — ciblé, complet, ou les deux — est **structurellement incapable**
-de rougir sur cette classe.
+**Corollaire de placement, tiré du même lot.** La bande de réglages du pinceau pouvait vivre côté app,
+dans la bande de la scène. Elle vit côté SDK, avec la surface, pour une raison mesurable : ses six
+entrées sont des `@Published` INTERNES. Les publier pour qu'une vue de l'app les lise, c'est **six accès
+ouverts pour un seul écran**, et chaque `public` posé sur un réglage est une promesse de stabilité que ce
+réglage n'a pas. Loger la vue là où vit son état n'a rien coûté à la pureté du SDK — cette bande ne décide
+de rien, elle rend des réglages et les repose.
 
-Et l'étape « Type-check » de la CI est **BLOQUANTE** pour `gateway` depuis le cycle 105 bis. Le lot
-serait donc parti vert en local et rouge en CI, sur une erreur qu'aucun test n'aurait localisée.
+> **Quand une vue et son état ne sont pas du même côté d'une frontière de module, déplacer la VUE coûte
+> presque toujours moins que publier l'ÉTAT.** Une vue publiée expose une forme ; six réglages publiés
+> exposent six libertés d'évolution.
 
-> **Un gate ne garde que ce que son outil REGARDE.** `services/gateway/CLAUDE.md` le dit déjà, à
-> propos des couples `(événement, charge)` : *« noter les codes IGNORÉS par ts-jest : 2322 et 2345
-> sont exactement ceux qu'un couple dépareillé produit — un témoin ne peut donc pas servir de cliquet
-> pour ces deux-là »*. La règle était écrite. Elle vaut au-delà des événements : **elle vaut pour
-> toute assignabilité**, et donc pour tout montage Fastify typé.
+Le compilateur a d'ailleurs tranché la partie qui restait : le MODE (`isDrawingActive`,
+`enterDrawingEditingMode`, `exitDrawingEditingMode`) devait, lui, franchir la frontière — c'est l'hôte
+qui décide QUAND on dessine. Trois accès, pas neuf. La ligne de partage n'est pas « SDK ou app » mais
+**« qui décide » contre « qui rend »**.
 
-### La règle de manœuvre
+Voir la leçon 335 (un commentaire qui explique une absence est le seul que rien ne fait rougir) : cinq
+fois dans la même session, seul un niveau d'accès retenait un geste. Ici, pour la première fois, en poser
+un de plus aurait été le mauvais correctif.
 
-**`npx tsc --noEmit` se joue SÉPARÉMENT de `jest`, et son code de sortie se lit.** Les deux ne sont
-pas redondants : ils regardent des choses disjointes, et l'un amnistie précisément ce que l'autre
-bloque. Un lot qui ajoute un **montage de route** ou touche une **signature partagée** est
-exactement le cas où l'écart s'ouvre.
-
-Corollaire de brief : un sous-agent à qui l'on interdit le gate complet (à raison — un run parasite
-rend les mesures inattribuables) **ne peut pas découvrir cette classe**. C'est donc à l'intégrateur
-de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça compile ».
-
-### Deux corollaires de forme, tirés du correctif
-
-- **Le générique se recopie de l'ALIAS, jamais réinventé.** Le module d'origine déclarait déjà les
-  six formes exactes ; le canonique en omettait quatre.
-- **Un type nommé par un générique doit être EXPORTÉ, pas redéclaré.** `CategoryBody` et
-  `CategoryIdParams` étaient `interface` privées du module d'origine. Les redéclarer côté canonique
-  aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
-  exportées et importées.
-
-## Leçon 336 — un FLAKE de charge et un défaut SENSIBLE à la charge ont le même symptôme ; seul le second gate les sépare
+## Leçon 337 — un FLAKE de charge et un défaut SENSIBLE à la charge ont le même symptôme ; seul le second gate les sépare
 
 **Contexte (2026-08-30, boucle d'intégration, #4420).** Le gate gateway complet, lancé sur un
 arbre, rend **24 suites rouges** en 4 254 s. Le dépôt a une règle pour ça, et elle est juste :
@@ -19880,3 +19875,250 @@ symptôme.**
 Sites : `services/gateway/src/utils/safe-regex.ts` (`DEFAULT_STARTUP_BUDGET_MS`, `OffLoopBudgets`,
 `relancer`), témoin dans `__tests__/unit/routes/admin/agent-topics-safe-regex.test.ts`.
 Gate après correctif : 1028 suites, 21 628 tests, exit 0.
+
+## Leçon 338 — un gate de TEST ne peut pas voir ce que son compilateur AMNISTIE
+
+Le lot #4359 a livré cinq routes canoniques sous `/me/categories`. Son agent a joué ses témoins
+ciblés (25/25) puis sept suites de non-régression (55/55) : **tout vert**. Le gate complet du gateway
+l'était aussi — **1028 suites, 21627 témoins, zéro échec**.
+
+`npx tsc --noEmit` rendait **EXIT=2**, sur quatre `TS2345` dans le fichier neuf.
+
+Les quatre montages canoniques omettaient les **génériques de route** que leur alias déclare
+(`fastify.post<{ Body: CategoryBody }>(…)`). Sans eux, Fastify infère `RouteGenericInterface`, et le
+gestionnaire typé n'est plus assignable au paramètre attendu. Le code sort **avant même** de tourner.
+
+### Pourquoi aucun témoin ne pouvait le voir
+
+`jest.config.json` du gateway porte `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]`.
+**`TS2345` est dans la liste.** `ts-jest` compile donc le fichier fautif, avale l'erreur, et exécute
+un code que `tsc` refuse. Un témoin — ciblé, complet, ou les deux — est **structurellement incapable**
+de rougir sur cette classe.
+
+Et l'étape « Type-check » de la CI est **BLOQUANTE** pour `gateway` depuis le cycle 105 bis. Le lot
+serait donc parti vert en local et rouge en CI, sur une erreur qu'aucun test n'aurait localisée.
+
+> **Un gate ne garde que ce que son outil REGARDE.** `services/gateway/CLAUDE.md` le dit déjà, à
+> propos des couples `(événement, charge)` : *« noter les codes IGNORÉS par ts-jest : 2322 et 2345
+> sont exactement ceux qu'un couple dépareillé produit — un témoin ne peut donc pas servir de cliquet
+> pour ces deux-là »*. La règle était écrite. Elle vaut au-delà des événements : **elle vaut pour
+> toute assignabilité**, et donc pour tout montage Fastify typé.
+
+### La règle de manœuvre
+
+**`npx tsc --noEmit` se joue SÉPARÉMENT de `jest`, et son code de sortie se lit.** Les deux ne sont
+pas redondants : ils regardent des choses disjointes, et l'un amnistie précisément ce que l'autre
+bloque. Un lot qui ajoute un **montage de route** ou touche une **signature partagée** est
+exactement le cas où l'écart s'ouvre.
+
+Corollaire de brief : un sous-agent à qui l'on interdit le gate complet (à raison — un run parasite
+rend les mesures inattribuables) **ne peut pas découvrir cette classe**. C'est donc à l'intégrateur
+de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça compile ».
+
+### Deux corollaires de forme, tirés du correctif
+
+- **Le générique se recopie de l'ALIAS, jamais réinventé.** Le module d'origine déclarait déjà les
+  six formes exactes ; le canonique en omettait quatre.
+- **Un type nommé par un générique doit être EXPORTÉ, pas redéclaré.** `CategoryBody` et
+  `CategoryIdParams` étaient `interface` privées du module d'origine. Les redéclarer côté canonique
+  aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
+  exportées et importées.
+
+## Leçon 339 — une garde négative posée sur un FICHIER attrape les jumelles innocentes de ce qu'elle vise
+
+**Le fait.** Six titres d'action du SDK étaient des littéraux français en dur ; je les ai fait passer par le
+catalogue, et j'ai écrit la garde qui interdit leur retour :
+
+```swift
+for interdit in ["case.edit:return\"", "case.duplicate:return\"", …] {
+    XCTAssertFalse(compact(sourceDuFichier).contains(interdit))
+}
+```
+
+Elle était **rouge en permanence**, sur le code corrigé comme sur l'ancien. La cause tient en une ligne :
+`systemImage`, la propriété calculée VOISINE, rend `case .edit: return "pencil"` — un nom de symbole SF,
+parfaitement légitime, et de la **même forme syntaxique** que l'interdit.
+
+> **Un interdit de forme se cherche dans une PORTÉE, jamais dans un fichier.** Deux propriétés voisines
+> peuvent avoir la même syntaxe et des sens opposés : l'une rend des mots à traduire, l'autre des
+> identifiants système qu'il serait faux de traduire. Le fichier ne les distingue pas ; la déclaration,
+> si.
+
+**Ce que le cadrage a rendu possible, en plus de la justesse.** Une fois la garde bornée au corps de
+`title`, un SECOND témoin devient écrivable et utile : `systemImage` **doit** continuer de rendre des
+littéraux, et rien ne le protégeait d'une « correction » par excès de zèle par la personne suivante qui
+lirait la première garde. Deux gardes opposées sur deux voisines — l'une interdit le littéral, l'autre
+l'exige — ne sont écrivables que si chacune sait où elle s'applique.
+
+**Le témoin du témoin.** Le cadrage introduit son propre mode d'extinction : si l'ancre (`public var
+title: String`) est renommée, `corpsDe` rend `nil` et la garde passe au vert en n'ayant rien lu. D'où
+l'assertion positive AVANT les négatives — « le corps lu contient bien `story.canvas.action.edit` » —
+qui est le fusible de la portée elle-même. Une garde de portée sans fusible de portée est une garde qui
+s'éteint au premier renommage.
+
+**Comment je l'ai vue.** Pas en relisant la garde : en la rejouant sur l'état AVANT et l'état APRÈS, et
+en constatant `6/6` des deux côtés. **Une garde négative qui rend le même verdict sur les deux états ne
+mesure pas ce qu'elle prétend** — qu'elle soit verte des deux côtés (née morte, leçon des gardes
+positives) ou rouge des deux côtés (mal cadrée). Le test d'une garde n'est pas son verdict, c'est
+l'ÉCART entre ses deux verdicts.
+
+Voir la leçon 335 (le commentaire qui explique une absence) et la 336 (l'extraction qui perd une
+capacité) : trois formes du même angle mort, où ce qui est écrit à côté de la chose corrigée décide de
+la validité du correctif.
+## 268i — vérifier la contrainte qu'on HÉRITE avant de la transmettre
+
+- **Une contrainte plausible, écrite une fois, fige une tâche indéfiniment.**
+  #4308 disait : « mécanique, mais à faire avec un compilateur : 648 littéraux
+  Swift, dont beaucoup contiennent des apostrophes (`J'aime`) et des accents ;
+  une erreur d'échappement casse la compilation ». Je l'ai répétée telle quelle
+  dans deux itérations. **Ni l'apostrophe ni l'accent ne s'échappent dans un
+  littéral Swift** — seuls `"` et `\`. Mesuré : sur 504 divergences, **500 ne
+  demandent aucun échappement** et **zéro** contient un guillemet, un antislash
+  ou un saut de ligne. Le risque énoncé n'existait pas sur ce lot.
+  La question à poser à toute contrainte héritée : **quelle mesure la
+  soutient ?** — et si la réponse est « aucune », la mesurer coûte quelques
+  minutes contre des itérations de blocage.
+
+- **Un remplacement de masse se fait sur des BORNES vérifiées, pas sur une
+  expression régulière.** Les 498 littéraux ont été réécrits aux offsets absolus
+  extraits du segment d'appel à parenthèses équilibrées, chaque borne contrôlée
+  avant écriture (`src[start:end] == inline`), les éditions appliquées de DROITE
+  à GAUCHE pour que les décalages restent valides. Puis trois contrôles par
+  fichier : mêmes clés, mêmes lignes, mêmes appels. Sans le contrôle « mêmes
+  clés », une borne fausse aurait réécrit un identifiant de clé au lieu de son
+  libellé — un défaut que la compile n'attrape pas et que les deux règles ne
+  voient pas.
+
+- **Classer ce qui RESTE par sa NATURE, pas seulement le compter.** Les 34 sites
+  non réconciliables se sont révélés être deux familles distinctes : des clés
+  **absentes du catalogue** (leur `defaultValue` s'affiche partout — il manque une
+  entrée, pas un alignement) et des clés **PLURIELLES**. J'ai d'abord écrit
+  « plurielles » pour les quatre premières et j'allais l'étendre aux 34 : la
+  vérification a montré que la majorité était absente du catalogue. **Un
+  échantillon ne nomme pas une population.**
+
+- **Une garde peut contenir un cas qu'aucune correction ne satisfait.** La règle
+  B compare le littéral à `sourceValues[key]`, lu depuis le `stringUnit` PLAT ;
+  une clé plurielle n'en a pas, la valeur est `nil`, et la comparaison échoue
+  quoi qu'on écrive. Trois fichiers sont donc inépinglables **par construction**,
+  pas par dette. C'est la famille du correctif 226i — qui avait appris la
+  pluralité à `loadTranslations` et l'a oubliée pour `values`. **Quand un
+  correctif enseigne une notion à UN lecteur de catalogue, chercher les autres
+  lecteurs du même catalogue.**
+
+## 269i — un repli qui protège d'une panne peut MASQUER une autre
+
+- **Un `defaultValue` rend INVISIBLE l'absence de sa clé au catalogue.** La garde
+  qui traque les clés non résolues (`test_everyUsedIdentifierKeyResolvesInDevelopmentLanguage`)
+  ne regarde que les appels **sans** `defaultValue` — et c'est justifié : un repli
+  garantit qu'on n'affichera jamais l'identifiant brut à l'écran. Mais cette
+  garantie porte sur le CRASH VISUEL, pas sur la LANGUE. Une clé absente du
+  catalogue n'a aucune localisation : son `defaultValue` s'affiche **tel quel dans
+  les sept locales**. Mesuré : 29 chaînes, dont **sept libellés VoiceOver**, sont
+  servies en français à tous les lecteurs non francophones — et en français NON
+  ACCENTUÉ aux francophones, personne n'ayant relu ce littéral comme du texte
+  affiché. **Demander d'un repli : de quoi protège-t-il exactement, et qu'est-ce
+  que sa présence dispense de vérifier ?**
+
+- **Ne pas produire 102 chaînes de traduction de sa propre autorité.** Sur 26
+  clés absentes, 9 ont déjà leur traduction ailleurs dans le catalogue et se
+  réutilisent sans rien inventer ; les 17 autres demanderaient une traduction
+  neuve en six langues dont l'arabe. C'est du texte expédié à des utilisateurs,
+  invérifiable depuis cet environnement — et **une traduction arabe approximative
+  est un défaut pire que le repli français honnête qu'elle remplacerait**. C'est
+  le principe déjà écrit dans `untranslatableKeys` pour les CGU, appliqué au
+  VOLUME plutôt qu'à la nature du texte. Mesurer, tabuler ce qui se réutilise,
+  et remettre la décision — pas deviner.
+
+- **Un lot qui ne débloque rien peut valoir d'être fait, à condition de le dire.**
+  Les 186 dernières réconciliations ne rendent aucun écran épinglable : leurs 40
+  fichiers sont tous retenus par l'autre règle. Leur valeur est que le code cesse
+  de mentir, et qu'ils basculeront sans repasser par là le jour où leurs
+  traductions arrivent. **Annoncer « zéro gain sur la métrique visible » évite de
+  laisser croire à un gain qu'on n'a pas obtenu.**
+
+## 270i — une carte ne peut pas signaler l'entrée qu'elle n'a pas
+
+**Contexte** — 269i lègue « 29 clés absentes du catalogue ». Le remesurage en rend
+114, dont 22 appartiennent à `MeeshyWidgets`. Or `apps/ios/MeeshyWidgets/Localizable.xcstrings`
+existe depuis que la cible existe : 39 clés, les sept locales. C'est la GARDE qui
+lisait le mauvais catalogue — `catalogByTargetFragment` nommait deux des trois
+catalogues du dépôt.
+
+- **Une table de résolution incomplète ne produit pas d'échec, elle produit une
+  MESURE FAUSSE.** Une cible non mappée retombe silencieusement sur le catalogue
+  de l'app : ses clés y sont absentes, donc comptées non traduites alors qu'elles
+  sont traduites, et ses sources restent inépinglables bien qu'elles passent déjà
+  toutes les règles. Le cliquet portait 22 dettes inexistantes sur 114 et refusait
+  une protection déjà acquise. **Un chiffre qui ne bouge pas n'est pas un chiffre
+  qui est juste.**
+
+- **Un témoin écrit DEPUIS la carte ne peut pas voir ce qui n'y est pas.** Toutes
+  les gardes de la suite consommaient `catalogByTargetFragment` — aucune ne
+  pouvait donc constater son entrée manquante : une table ne se lit que pour les
+  entrées qu'elle a. Le témoin doit venir de la source qui connaît l'INVENTAIRE
+  COMPLET — ici le système de fichiers : « tout `.xcstrings` de l'arbre iOS est
+  soit le catalogue de l'app, soit mappé », plus la direction inverse (aucun
+  mappage mort) et un sondage par fragment (le mappage RÉSOUT vraiment). C'est la
+  forme, appliquée à une table de configuration, de la leçon 261 : une énumération
+  porte deux affirmations — « ces entrées sont justes » (vérifiable) et « ce sont
+  toutes les entrées » (presque jamais vérifiée).
+
+- **Les trous d'un catalogue ne sont pas dispersés : ce sont les VALEURS
+  MANQUANTES de familles par ailleurs traduites.** `DeliveryStatus` a six cas, le
+  compositeur émet une clé par cas, trois sont au catalogue et trois non : un
+  lecteur d'écran arabophone entendait trois états en arabe et trois en français
+  dans la même phrase. La pastille de synchronisation annonce ses 53 opérations en
+  sept langues et ses deux boutons en français. **Le code, lui, a l'air complet —
+  la complétude qu'on vérifie à l'œil est celle du `switch`, pas celle du
+  catalogue.** À une clé absente, demander non seulement « que voit
+  l'utilisateur ? » mais **« quelles sont ses SŒURS, et sont-elles là ? »**
+
+- **Compléter une famille attrape ce qu'un balayage par égalité de chaîne laisse
+  derrière.** Dix des onze clés remplies l'ont été en copiant verbatim une entrée
+  portant déjà le même français ; la onzième, `a11y.delivery.sending`, n'a pas de
+  jumelle textuelle (« en cours d'envoi » vs « Envoi en cours ») et n'aurait été
+  trouvée par aucune recherche d'égalité. Et sa CASSE se déduit sans rien inventer :
+  les trois sœurs déjà au catalogue portent la forme mi-phrase en minuscule dans
+  les six mêmes langues (`gesendet` là où la bulle dit `Gesendet`). **Une famille
+  à moitié traduite documente sa propre convention — c'est la ressource la moins
+  chère et la plus sûre pour remplir l'autre moitié.**
+
+- **Un témoin qui n'a jamais été exécuté est une hypothèse.** Le premier jet de
+  `test_everyPerTargetCatalogIsMapped` élisait les catalogues par leur EXTENSION
+  (`.xcstrings`) et rougissait : deux cibles expédient aussi un
+  `InfoPlist.xcstrings`, qui localise des valeurs d'`Info.plist` lues par le
+  système — pas une table adressable depuis `String(localized:)`. Le critère juste
+  est le NOM DE FICHIER (`Localizable.xcstrings`), la table par défaut. Sans chaîne
+  d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
+  l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
+  évité un cycle CI de cinquante.
+
+- **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+  n'est PAS localisée.** `FocalVoiceOverParityTests` cherchait le segment
+  d'accusé de livraison par le littéral `"lu"`, force-unwrappé. Il passait
+  uniquement parce que `a11y.delivery.read` était absente du catalogue : toutes
+  les locales retombaient sur le `defaultValue` français. La clé ajoutée, le
+  simulateur anglais de la CI rend « read », l'index vaut `nil`, `signal trap` —
+  1 échec sur 9 062. **Un tel test est un cliquet à l'envers : il ne rougit pas
+  quand la traduction manque, il rougit quand elle ARRIVE**, et le prix se paie
+  au moment exact où l'on répare le défaut. Corollaire mesuré sur le voisin :
+  `contains("lu")` passait sur un contenu texte « Sa**lu**t » — donc même si le
+  segment gardé avait disparu. Demander sa valeur au CATALOGUE, comme le
+  faisaient déjà tous les tests voisins.
+
+- **« Zéro ligne de production modifiée » n'est pas « zéro changement de
+  comportement ».** Entrer une clé au catalogue change ce que `String(localized:)`
+  rend dans les six autres locales — c'est l'objet même du lot. Avant de conclure
+  qu'un lot de catalogue est inerte, chercher qui COMPARE ces chaînes : tests
+  d'abord, code de production ensuite.
+
+- **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+  EXÉCUTÉ.** Le gate iOS de ce dépôt est un opt-in par mot-clé dans le SUJET du
+  commit de tête (« smoke test » / « run test » / « to test ») ; sans lui, le job
+  macOS compile et saute `Run iOS tests`. Le premier run de la PR 270i est sorti
+  vert sans exécuter un seul test — le workflow le dit dans le NOM du check
+  (« Build app (app + cibles de test) » vs « Build app + tests unitaires »), et
+  c'est la seule chose qui distingue les deux verts. **Lire les étapes du job, pas
+  sa conclusion.** `workflow_dispatch` force la suite complète sans pousser de
+  commit vide.

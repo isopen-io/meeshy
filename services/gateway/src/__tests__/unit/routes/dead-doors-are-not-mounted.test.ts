@@ -98,7 +98,15 @@ jest.mock('../../../validation/helpers', () => ({
   validateQuery: jest.fn(() => async () => {}),
 }));
 
+// PROLONGE, ne remplace pas (CLAUDE.md § « Un double PARTIEL d'un module perd
+// en silence tout ce que le module GAGNE »). Le double énumératif d'avant a
+// cessé de charger ce fichier le jour où `routes/conversations/receipts.ts` a
+// composé `MarkReadBodySchema.extend({ type })` au chargement du module :
+// `undefined.extend` — la TROISIÈME fois que ce patron casse une suite dans ce
+// dépôt (cycles 91, 93, 104). `requireActual` + surcharge ciblée : ces cinq
+// schémas ne servent ici qu'à des `validateX` déjà doublés au-dessus.
 jest.mock('../../../validation/messages-schemas', () => ({
+  ...(jest.requireActual('../../../validation/messages-schemas') as Record<string, unknown>),
   MessageParamsSchema: {},
   AttachmentParamsSchema: {},
   UpdateMessageBodySchema: {},

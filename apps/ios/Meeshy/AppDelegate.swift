@@ -337,59 +337,59 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func registerNotificationCategories() {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
-            title: String(localized: "notifications.action.reply", defaultValue: "Reply"),
+            title: String(localized: "notifications.action.reply", defaultValue: "Répondre"),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer"),
             textInputPlaceholder: String(localized: "notifications.action.message", defaultValue: "Message…")
         )
 
         let markReadAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.markRead.rawValue,
-            title: String(localized: "notifications.action.markRead", defaultValue: "Mark as read"),
+            title: String(localized: "notifications.action.markRead", defaultValue: "Marquer comme lu"),
             options: []
         )
 
         let commentAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.comment.rawValue,
-            title: String(localized: "notifications.action.comment", defaultValue: "Comment"),
+            title: String(localized: "notifications.action.comment", defaultValue: "Commenter"),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
-            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Comment…")
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer"),
+            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Commenter…")
         )
 
         let viewAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.view.rawValue,
-            title: String(localized: "notifications.action.view", defaultValue: "View"),
+            title: String(localized: "notifications.action.view", defaultValue: "Voir"),
             options: [.foreground]
         )
 
         let acceptAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.accept.rawValue,
-            title: String(localized: "notifications.action.accept", defaultValue: "Accept"),
+            title: String(localized: "notifications.action.accept", defaultValue: "Accepter"),
             options: []
         )
 
         let declineAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.decline.rawValue,
-            title: String(localized: "notifications.action.decline", defaultValue: "Decline"),
+            title: String(localized: "notifications.action.decline", defaultValue: "Refuser"),
             options: [.destructive]
         )
 
         let callbackAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.callback.rawValue,
-            title: String(localized: "notifications.action.callback", defaultValue: "Call back"),
+            title: String(localized: "notifications.action.callback", defaultValue: "Rappeler"),
             options: [.foreground]
         )
 
         let answerCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.answerCall.rawValue,
-            title: String(localized: "notifications.action.answer", defaultValue: "Answer"),
+            title: String(localized: "notifications.action.answer", defaultValue: "Répondre"),
             options: [.foreground]
         )
 
         let declineCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.declineCall.rawValue,
-            title: String(localized: "notifications.action.declineCall", defaultValue: "Decline"),
+            title: String(localized: "notifications.action.declineCall", defaultValue: "Refuser"),
             options: [.destructive]
         )
 

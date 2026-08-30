@@ -41,6 +41,8 @@ import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
+import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
+import { SocketTranslationRequestSchema } from '../validation/socket-event-schemas.js';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
@@ -1761,7 +1763,7 @@ export class MeeshySocketIOManager {
         try { await this.messageHandler.handleMessageDelete(socket, data, callback); } catch (error) { logger.error('[MESSAGE_DELETE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
-      socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
+      socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data) => {
         // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
         const translationUserId = this.socketToUser.get(socket.id);
         if (!translationUserId) {
@@ -1997,15 +1999,29 @@ export class MeeshySocketIOManager {
   }
 
 
-  private async _handleTranslationRequest(socket: Socket, data: { messageId: string; targetLanguage: string }) {
+  private async _handleTranslationRequest(socket: Socket, data: unknown) {
     try {
+      // Frontière Zod partagée — même garde que les douze familles de handlers
+      // délégués. `messageId` filait jusqu'ici en clair dans `findUnique` sur une
+      // colonne ObjectId : une valeur non-ObjectId (chaîne lisible, `undefined`,
+      // objet) y jetait `Malformed ObjectID` / `PrismaClientValidationError`,
+      // avalé par le `catch` du site d'appel en une erreur opaque. Valider ici
+      // rejette la charge malformée AVANT toute requête, comme le fait déjà
+      // `SocketMessageSendSchema` pour les références de transfert.
+      const validation = validateSocketEvent(SocketTranslationRequestSchema, data);
+      if (isValidationFailure(validation)) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: validation.error });
+        return;
+      }
+      const { messageId, targetLanguage } = validation.data;
+
       const userId = this.socketToUser.get(socket.id);
       if (!userId) {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'User not authenticated' });
         return;
       }
-      
-      
+
+
       // Charger le message pour connaître sa conversation, PUIS vérifier
       // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
       // Sans cette garde en amont, la branche cache divulguait le contenu
@@ -2013,7 +2029,7 @@ export class MeeshySocketIOManager {
       // donc un message déjà mis en cache fuitait vers n'importe quel socket
       // connaissant son id (IDOR / message-content disclosure).
       const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
+        where: { id: messageId },
         select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
       });
 
@@ -2042,7 +2058,7 @@ export class MeeshySocketIOManager {
       }
 
       // Récupérer la traduction (depuis le cache ou la base de données)
-      const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
+      const translation = await this.translationService.getTranslation(messageId, targetLanguage);
 
       if (translation) {
         // MÊME constructeur que le retour ZMQ (`_handleTextTranslationReady`).
@@ -2054,8 +2070,8 @@ export class MeeshySocketIOManager {
         // était en cache, c'est-à-dire sur le chemin instantané ; elle ne
         // « marchait » que sur cache MISS, servie par l'autre constructeur.
         socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, buildTranslationEvent({
-          messageId: data.messageId,
-          targetLanguage: data.targetLanguage,
+          messageId,
+          targetLanguage,
           translatedText: translation.translatedText,
           sourceLanguage: translation.sourceLanguage,
           translationModel: translation.translatorModel || translation.modelType,
@@ -2074,11 +2090,11 @@ export class MeeshySocketIOManager {
             senderId: message.senderId ?? undefined,
             content: message.content,
             originalLanguage: message.originalLanguage ?? 'auto',
-            targetLanguage: data.targetLanguage,
+            targetLanguage,
             encryptionMode: message.encryptionMode as MessageData['encryptionMode'],
           });
 
-          logger.info(`🔄 On-demand translation requested for message ${data.messageId} -> ${data.targetLanguage}`);
+          logger.info(`🔄 On-demand translation requested for message ${messageId} -> ${targetLanguage}`);
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
           socket.emit(SERVER_EVENTS.ERROR, {
