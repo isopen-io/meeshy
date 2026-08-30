@@ -113,3 +113,43 @@ public extension View {
     }
 }
 
+// MARK: - La RÉSERVE BASSE déclarée par l'hôte (#4361)
+
+/// Combien de points l'hôte occupe EN BAS de l'atelier, et que le canvas doit
+/// donc libérer.
+///
+/// Le composer sait déjà se rétracter au-dessus de ce qui s'ouvre : une band,
+/// une feuille système. Mais ces deux termes sont INTERNES à l'atelier
+/// (`presentedSheetHeight`), et un meuble app-side qui ouvre sa propre zone —
+/// la saisie de description — n'avait aucun moyen de le dire. Il ne lui restait
+/// qu'à RECOUVRIR la scène, ce que #4124 avait fait avec un voile.
+///
+/// Recouvrir est le mauvais geste ici : **écrire une description, c'est
+/// regarder la scène qu'on décrit.** Le voile la retirait au moment précis où
+/// elle sert.
+///
+/// La valeur est MESURÉE, jamais constante : la zone de saisie grandit avec le
+/// texte et le clavier la pousse. C'est le même choix que la band, dont la
+/// réserve vient de sa hauteur rendue (`onBandHeightChange`) et non de son
+/// layout — une hauteur supposée sous-estime dès que le contenu déborde.
+///
+/// `0` = l'hôte n'occupe rien ; le canvas retrouve sa géométrie de repos.
+struct StoryComposerCanvasBottomReservationKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    var storyComposerCanvasBottomReservation: CGFloat {
+        get { self[StoryComposerCanvasBottomReservationKey.self] }
+        set { self[StoryComposerCanvasBottomReservationKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Déclare la hauteur que l'hôte occupe en bas de l'atelier. Le canvas se
+    /// rétracte AU-DESSUS, il ne se fait pas recouvrir.
+    func storyComposerCanvasBottomReservation(_ height: CGFloat) -> some View {
+        environment(\.storyComposerCanvasBottomReservation, max(0, height))
+    }
+}
+

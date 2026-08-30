@@ -1,0 +1,21 @@
+/* Reconstitution locale des jetons du design system "nocturne" de la planche v3.
+   La planche les charge depuis _ds/nocturne-<uuid>/styles.css, absent du depot.
+   Ces valeurs sont deduites des couleurs ecrites en dur DANS la planche
+   (#0d0e16 body, #161826 BG, #75798c, #9397ab, #292b31, #2b2e40) et servent
+   UNIQUEMENT au rendu des captures cibles. Le design system reel de la v3 est
+   celui de Meeshy — voir apps/web-v3. */
+:root {
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-bg: #0d0e16;
+  --color-surface: #161826;
+  --color-text: #edeef5;
+  --color-neutral-400: #b9bcd0;
+  --color-neutral-500: #9397ab;
+  --color-neutral-600: #75798c;
+  --color-neutral-700: #4b4f63;
+  --color-neutral-800: #33364a;
+  --color-neutral-900: #22243a;
+  --color-accent-200: #c7cbff;
+  --color-accent-300: #a5aeff;
+  --color-accent-400: #818cf8;
+}

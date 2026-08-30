@@ -1,0 +1,4 @@
+# Sorties du harnais de conformite : produites a chaque passe, jamais versionnees.
+# Les CIBLES (cible/) le sont — ce sont elles qui font foi.
+rendu/
+rapport-conformite.json

@@ -95,25 +95,63 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body.")
         XCTAssertFalse(compacte.contains("mountedSurface==.scene{sceneDescriptionSection}"),
                        "La description est revenue occuper le bas en permanence.")
-        XCTAssertTrue(compacte.contains("ifeditsSceneDescription{sceneDescriptionLayer}"),
-                      "Elle doit s'ouvrir en COUCHE, par-dessus tout.")
+        // **RETOURNÉ au #4361.** Elle s'ouvrait en COUCHE par-dessus tout ; elle
+        // s'ancre désormais en BAS et fait REMONTER la scène. La directive qui
+        // l'avait mise en couche (#4124) visait juste — la description ne doit
+        // pas occuper le bas en permanence — mais recouvrir était le mauvais
+        // geste : écrire une description, c'est regarder la scène qu'on décrit.
+        XCTAssertTrue(compacte.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
+                      "Elle doit s'ouvrir en ZONE BASSE, la scène remontant au-dessus.")
     }
 
-    /// Le flou vient du MATÉRIAU, jamais d'un `.blur()` : ce dernier aurait
-    /// re-rendu le canvas — `StoryCanvasUIView` reconstruit ses layers à chaque
-    /// `layoutSubviews` — pour un effet que le système compose à coût nul.
-    func test_leFlou_vientDuMateriau_jamaisDUnBlur() throws {
-        let code = try host()
-        guard let couche = declarationBody(startingAt: "var sceneDescriptionLayer: some View",
-                                           in: code) else {
-            return XCTFail("`sceneDescriptionLayer` est introuvable")
-        }
-        let compacte = compact(couche)
-        XCTAssertTrue(compacte.contains(".fill(.ultraThinMaterial)"))
-        XCTAssertFalse(compacte.contains(".blur(radius:"),
-                       "Un `.blur` re-rendrait le canvas à chaque image.")
-        XCTAssertTrue(compacte.contains("placement:.keyboard"),
-                      "« Terminé » se pose là où le système le met : au-dessus du clavier.")
+    /// **RETOURNÉ au #4361 — il n'y a plus de flou du tout, et c'est le point.**
+    ///
+    /// Cette garde protégeait le fait que le voile venait d'un MATÉRIAU plutôt
+    /// que d'un `.blur()`, qui aurait re-rendu le canvas à chaque image. La
+    /// raison était bonne ; le voile, lui, a disparu — la scène ne se floute
+    /// plus, elle REMONTE. Ce qu'il faut garder n'est donc plus « le bon flou »
+    /// mais « aucun flou », et la mécanique qui le remplace.
+    func test_laScene_neSeFloutePlus_elleRemonte() throws {
+        // `host()` rend la source BRUTE : la seule occurrence restante de
+        // `.blur(radius:)` est dans un commentaire qui explique pourquoi on n'en
+        // met pas. Une garde qui lirait les commentaires interdirait d'écrire la
+        // raison — c'est la leçon « lire le CODE, pas les commentaires ».
+        let compacte = compact(AppSourceGuard.stripComments(try host()))
+        XCTAssertFalse(
+            compacte.contains(".blur(radius:"),
+            "Un `.blur` re-rendrait le canvas à chaque image — et il n'a plus rien à flouter."
+        )
+        XCTAssertTrue(
+            compacte.contains(".storyComposerCanvasBottomReservation("),
+            "La scène remonte parce que le meuble DÉCLARE ce qu'il occupe en bas. Sans cette "
+                + "déclaration, la saisie recouvrirait la scène — le geste que #4361 retire."
+        )
+        XCTAssertTrue(
+            compacte.contains("editsSceneDescription?sceneDescriptionEditorHeight:0"),
+            "… et la réserve est la hauteur MESURÉE, remise à zéro à la fermeture : une constante "
+                + "ferait remonter la scène du mauvais nombre de points dès la deuxième ligne."
+        )
+    }
+
+    /// « Terminé » se pose là où le système le met : au-dessus du clavier —
+    /// jamais un bouton flottant, qui passerait sous le clavier dès que le texte
+    /// grandit. La règle a survécu au changement de forme ; son adresse a bougé
+    /// vers le type nommé qui porte désormais la zone.
+    func test_leBoutonTermine_vitSurLaBarreDuClavier() throws {
+        let code = AppSourceGuard.stripComments(try editorSource())
+        XCTAssertTrue(compact(code).contains("placement:.keyboard"))
+    }
+
+    private func editorSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneDescriptionEditor.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
+        return brut
     }
 
     /// L'atelier reçoit son accessoire de rangée haute — sans ce câblage, le

@@ -338,6 +338,11 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
+    /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
+    /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
+    /// d'être recouvert.
+    @State var sceneDescriptionEditorHeight: CGFloat = 0
+
     /// **La télécommande de publication de l'atelier** (#4135).
     ///
     /// `@StateObject` et non `@State` : le meuble doit se re-rendre quand
@@ -747,9 +752,17 @@ struct MeeshyComposerHost: View {
         // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
         // la directive demande la scène FLOUTÉE et un « Terminé » au-dessus du
         // clavier — deux choses qu'une feuille ne sait pas faire ensemble.
-        .overlay {
-            if editsSceneDescription { sceneDescriptionLayer }
+        // **La saisie s'ancre en BAS, la scène monte au-dessus** (#4361). Elle
+        // fut une couche plein écran voilant la scène ; écrire une description,
+        // c'est regarder la scène qu'on décrit, et le voile la retirait au
+        // moment précis où elle sert. La remontée passe par
+        // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
+        // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
+        // seconde.
+        .overlay(alignment: .bottom) {
+            if editsSceneDescription { sceneDescriptionEditor }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
         // `initial: true` couvre la graine SYNCHRONE (la republication, connue
         // dès la construction) ; le changement couvre la graine ASYNCHRONE (la
         // reprise hors-ligne, qui arrive quand la file a répondu). Un seul

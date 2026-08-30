@@ -999,7 +999,8 @@ extension StoryComposerView {
             measuredBottomBandHeight: measuredBottomBandHeight,
             composerBandHeight: composerBandHeight,
             presentedSystemSheetFraction: presentedSystemSheetFraction,
-            composerScreenHeight: composerScreenHeight
+            composerScreenHeight: composerScreenHeight,
+            hostBottomReservation: hostCanvasBottomReservation
         )
     }
 
@@ -1020,9 +1021,22 @@ extension StoryComposerView {
         measuredBottomBandHeight: CGFloat,
         composerBandHeight: CGFloat,
         presentedSystemSheetFraction: CGFloat?,
-        composerScreenHeight: CGFloat
+        composerScreenHeight: CGFloat,
+        /// **Ce que l'HÔTE occupe en bas** (#4361) — sa zone de saisie de
+        /// description. Défaut `0` : un appelant qui l'ignore obtient le
+        /// comportement d'avant, exactement.
+        ///
+        /// Elle entre par un `max`, comme les deux autres termes, et pour la
+        /// même raison : ces réserves ne s'ADDITIONNENT pas. Band et saisie
+        /// occupent le même bas d'écran ; les sommer ferait remonter le canvas
+        /// deux fois trop haut le jour où les deux coexistent.
+        hostBottomReservation: CGFloat = 0
     ) -> CGFloat {
-        guard canvasIsCarded else { return 0 }
+        // La réserve de l'hôte vaut MÊME hors cardage : elle ne décrit pas un
+        // panneau de l'atelier mais une zone que le meuble a réellement peinte
+        // par-dessus. La retenir derrière `canvasIsCarded` laisserait la saisie
+        // recouvrir un canvas plein écran — le défaut qu'on corrige.
+        guard canvasIsCarded else { return min(composerScreenHeight * 0.85, max(0, hostBottomReservation)) }
         var height: CGFloat = 0
         if !effectiveBandIsHidden {
             // Réserve = distance du HAUT RÉEL de la band (coord globales,
@@ -1044,6 +1058,7 @@ extension StoryComposerView {
         if let fraction = presentedSystemSheetFraction {
             height = max(height, composerScreenHeight * fraction)
         }
+        height = max(height, max(0, hostBottomReservation))
         // Plafond de SÉCURITÉ (0.85 H) : jamais atteint par une band réaliste
         // (max ~60 % avec `composerBandMaxHeight`), il ne fait qu'empêcher un
         // `measuredBandTopY` transitoire aberrant (0 au montage) d'écraser le
