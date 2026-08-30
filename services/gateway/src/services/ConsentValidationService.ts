@@ -133,8 +133,21 @@ export class ConsentValidationService {
     // (#4180). Le blob `application.voiceCloningConsentAt` n'est plus lu —
     // il servait de repli qui masquait exactement une révocation (colonne
     // remise à `null`, blob encore daté ⇒ `hasVoiceCloningConsent` restait
-    // vrai). `thirdPartyServicesConsentAt` reste dans le blob : il n'a pas
-    // de colonne `User` miroir et n'appartient pas aux cinq clés de #4180.
+    // vrai).
+    //
+    // `thirdPartyServicesConsentAt` NE PEUT PAS entrer dans ce blob — ce
+    // commentaire affirmait le contraire (« reste dans le blob ») avant
+    // #4343, ce qui était faux : `ApplicationPreferenceSchema` ne déclare
+    // pas cette clé, donc Zod la STRIPPE en silence (mode par défaut) sur
+    // les deux chemins d'écriture de `PATCH`/`PUT /me/preferences/application`
+    // — un client qui l'envoie reçoit `200` et la clé disparaît sans jamais
+    // atteindre Mongo. Il n'a pas non plus de colonne `User` miroir, ce qui
+    // reste vrai. La lecture ci-dessous ne trouve donc RIEN, TOUJOURS :
+    // `hasThirdPartyServicesConsent` (ligne suivante) vaut `false` pour tout
+    // le monde, sans exception, ce qui bloque `betaFeaturesEnabled` et
+    // `scanFilesForMalware` pour quiconque. L'arbitrage — (a) un vrai
+    // consentement avec sa colonne, (b) le retrait de l'exigence, (c) son
+    // rattachement à `hasDataProcessingConsent` — est ouvert sous #4343.
     const thirdPartyServicesConsentAt = applicationPrefs.thirdPartyServicesConsentAt;
 
     const hasVoiceCloningConsent = !!voiceCloningEnabledAt && hasVoiceProfileConsent;
