@@ -108,7 +108,7 @@ struct DeleteAccountView: View {
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(MeeshyColors.error)
 
-                Text(String(localized: "account.delete.warning.title", defaultValue: "Action irreversible", bundle: .main))
+                Text(String(localized: "account.delete.warning.title", defaultValue: "Action irréversible", bundle: .main))
                     .font(MeeshyFont.relative(17, weight: .bold))
                     .foregroundColor(MeeshyColors.error)
             }
@@ -346,7 +346,7 @@ struct DeleteAccountView: View {
     private var confirmationPhraseAccessibilityValue: String {
         confirmationText == requiredPhrase
             ? String(localized: "account.delete.confirmation.value.matched", defaultValue: "Phrase correcte", bundle: .main)
-            : String(localized: "account.delete.confirmation.value.pending", defaultValue: "Phrase incomplete", bundle: .main)
+            : String(localized: "account.delete.confirmation.value.pending", defaultValue: "Phrase incomplète", bundle: .main)
     }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {

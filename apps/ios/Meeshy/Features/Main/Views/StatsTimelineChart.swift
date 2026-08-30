@@ -56,7 +56,7 @@ struct StatsTimelineChart: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "stats.timeline.chart.a11y", defaultValue: "Activity chart over 30 days", bundle: .main))
+        .accessibilityLabel(String(localized: "stats.timeline.chart.a11y", defaultValue: "Graphique d'activité sur 30 jours", bundle: .main))
         .accessibilityValue(Self.accessibilitySummary(for: timeline))
     }
 
@@ -67,7 +67,7 @@ struct StatsTimelineChart: View {
         guard !timeline.isEmpty else {
             return String(
                 localized: "stats.timeline.chart.a11y.empty",
-                defaultValue: "No activity recorded yet",
+                defaultValue: "Aucune activité enregistrée",
                 bundle: .main
             )
         }

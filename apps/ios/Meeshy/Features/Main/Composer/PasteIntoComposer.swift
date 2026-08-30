@@ -271,7 +271,7 @@ extension PasteIntoComposer {
     @MainActor
     private static var unnamedItem: String {
         String(localized: "composer.drop.unnamedItem",
-               defaultValue: "\u{00E9}l\u{00E9}ment sans nom", bundle: .main)
+               defaultValue: "élément sans nom", bundle: .main)
     }
 }
 

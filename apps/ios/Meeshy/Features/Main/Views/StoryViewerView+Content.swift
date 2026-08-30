@@ -277,6 +277,16 @@ extension StoryViewerView {
 
                 switch axis {
                 case 1: // Horizontal — group navigation
+                    // NE PAS retourner ce signe seul (#4297, tenté puis annulé).
+                    // La navigation par groupe n'est pas qu'une décision : c'est
+                    // un CUBE, dont toute la géométrie vit en espace ÉCRAN —
+                    // `horizontalDrag`, `groupSlide`, `totalSlideX`,
+                    // `exitX = forward ? -screenW : screenW`, et l'orientation des
+                    // faces voisines. Retourner la décision sans retourner le cube
+                    // ferait partir la face de commit à l'OPPOSÉ du doigt qui
+                    // vient de la pousser : une incohérence pire que le défaut
+                    // actuel, où l'arabe est simplement orienté comme le français.
+                    // Le retournement complet demande le simulateur (#4298).
                     let dx = value.translation.width
                     let predicted = value.predictedEndTranslation.width
 
@@ -1944,7 +1954,7 @@ struct StoryCommentsOverlayView: View {
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
-            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
+            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
                 .font(MeeshyFont.relative(11))
                 .foregroundColor(.white.opacity(0.65))
         }
@@ -2868,12 +2878,28 @@ struct StoryCommentRowView: View, Equatable {
             .buttonStyle(.plain)
             .disabled(isInFlight)
             .frame(minHeight: 44)
+            // Ce « j'aime » n'avait AUCUNE étiquette : VoiceOver n'en tirait
+            // que le cœur et le compteur. Sa JUMELLE de `FeedCommentsSheet` —
+            // le même contrôle, sur la même entité — porte le vocabulaire
+            // complet depuis toujours ; il est repris ici à l'identique plutôt
+            // que réinventé (253i, #4266).
+            //
+            // Un « j'aime » n'est PAS un `.isToggle` : son nom dit l'ACTION
+            // (« J'aime » / « Je n'aime plus ») et sa valeur porte le COMPTE,
+            // pas un « Activé ». C'est le patron que la jumelle a établi.
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isLiked
+                ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
+                : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
+            .accessibilityValue(LocalizedNumber.exact(likeCount))
+            .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
             Button(action: onReply) {
                 HStack(spacing: 3) {
                     Image(systemName: "arrowshape.turn.up.left")
                         .font(MeeshyFont.relative(11, weight: .semibold))
-                    Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
+                    Text(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
                 .foregroundColor(overlayColor.opacity(0.88))

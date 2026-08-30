@@ -471,6 +471,20 @@ describe('LocationHandler', () => {
       expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 
+    it('rejects a forged payload missing conversationId at the Zod boundary', async () => {
+      // location:live-stop had no boundary guard before iter 281 — a forged
+      // payload without conversationId went straight to normalizeConversationId.
+      // The schema now refuses it before any work; the stream verb has no
+      // callback, so the only observable is that nothing is normalized/emitted.
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationStop(socket, {} as any);
+
+      expect(mockNormalize).not.toHaveBeenCalled();
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
     it('returns early when user is not a participant', async () => {
       const prisma = makePrisma(null);
       const { handler } = makeHandler({ prisma });

@@ -114,6 +114,298 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
         "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
+        // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
+        // (chaque clé traduite dans les six locales requises ET `defaultValue`
+        // inline égal à la valeur du catalogue). Les épingler ne change pas une
+        // ligne de production : cela interdit seulement qu'ils REDESCENDENT.
+        //
+        // La liste s'arrête à quarante parce que 92 autres fichiers sont tout
+        // aussi propres, mais que le parseur qui les a élus n'est pas
+        // compilable ici : on épingle un lot que la CI valide, puis on poursuit.
+        //
+        // Ce qui MANQUE à cette liste dit l'essentiel :
+        // `NotificationSettingsView` (53 clés), `SecurityView` (44),
+        // `ConversationView` (43), `MyStoriesView` (42), `GlobalSearchView`
+        // (34)… en sont ABSENTS non par oubli mais parce que leurs
+        // `defaultValue` inline divergent de la valeur du catalogue — 648 clés
+        // dans tout le dépôt. `test_pinnedScreenDefaultsMatchCatalog` le refuse
+        // à raison : le catalogue est ce qui S'AFFICHE, donc un `defaultValue`
+        // divergent est du texte mort qui ment au lecteur (#4308).
+        "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
+        "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
+        "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
+        "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
+        "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
+        "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
+        "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
+        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
+        // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
+        // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
+        // pourquoi il n'en prenait pas plus : « le risque n'est pas par fichier
+        // mais par PARSEUR — s'il se trompe, il se trompe partout ». La CI a
+        // depuis validé ce parseur sur les 40 premiers, du premier coup, sur les
+        // DEUX règles. Le solde est donc pris avec une confiance mesurée.
+        //
+        // Ce qui reste dehors n'y est pas par oubli : 164 fichiers échouent
+        // encore, dont 154 sur la SEULE règle du `defaultValue` (#4308, 648 clés
+        // divergentes). C'est la dette de littéraux, pas la traduction, qui
+        // borne désormais ce cliquet — la règle A n'en retient que 56.
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatFan.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationOptionsViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationHelperViews.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/MessageListView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift",  // 4
+        "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/FeedPostLocationView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/StoryCanvasAccessibility.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ReelFeedSoundButton.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
+        "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundColorPalette.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ContactSyncService.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ConversationCreator.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/VideoLegacySupport.swift",  // 1
+        // 268i (#4308) — les 105 écrans débloqués par la RÉCONCILIATION des
+        // `defaultValue`. Ils ne butaient que sur la règle B : leur littéral
+        // inline disait « Reply » là où le catalogue `fr` — celui qui
+        // S'AFFICHE — dit « Répondre ». 498 littéraux réalignés sur le
+        // catalogue, aucun changement de comportement.
+        //
+        // Trois fichiers du lot en sont EXCLUS : `StatsTimelineChart`,
+        // `MembersCountLabel`, `UnreadCountLabel`. Leurs clés sont
+        // PLURIELLES, donc sans `stringUnit` plat — la règle B compare le
+        // littéral à une valeur source qui n'existe pas pour un pluriel, et
+        // aucune réconciliation ne peut la satisfaire (suivi ouvert).
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",  // 60
+        "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",  // 58
+        "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",  // 56
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
+        "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",  // 41
+        "apps/ios/Meeshy/Features/Main/Views/GlobalSearchView.swift",  // 40
+        "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
+        "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
+        "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
+        "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
+        "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29
+        "apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift",  // 28
+        "apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift",  // 28
+        "apps/ios/Meeshy/Features/Main/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
+        "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
+        "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
+        "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
+        "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Components/CameraView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
+        "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
+        "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
+        "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/LinksHubView.swift",  // 14
+        "apps/ios/Meeshy/AppDelegate.swift",  // 13
+        "apps/ios/Meeshy/Features/Contacts/CallDetailSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Views/AffiliateCreateView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/CommunityLinkDetailView.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift",  // 10
+        "apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/BookmarksView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/PrivacyPolicyView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/TermsOfServiceView.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/BlockedTab.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetailSentimentTab.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 7
+        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
+        "apps/ios/Meeshy/MeeshyApp.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/ContactCardView.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/LanguagePickerSheet.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/ConnectionBanner.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/CommentMediaView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Drop.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Composer/PasteIntoComposer.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/AchievementBadgeView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/WebRTCVideoView.swift",  // 3
+        "apps/ios/Meeshy/Features/Contacts/ContactsHubView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalSystemRows.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/BookmarksViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",  // 2
+        "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/CharacterCountLabel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationLoadingView.swift",  // 1
+        // 270i (#4364) — the four screens the eleven new catalog entries unblock.
+        // Each held a key that was ABSENT from the catalog, so its `defaultValue`
+        // shipped French to the six other locales; each is now translated in all
+        // seven. Three of the four are ACCESSIBILITY surfaces, where the gap was
+        // spoken rather than read.
+        "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Components/AddParticipantSheet.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",  // 4
+        // 270i — the first two sources OUTSIDE the app target ever pinned. They
+        // needed no work: both already passed BOTH rules against the widget
+        // catalog. What was missing was the map entry telling this suite which
+        // catalog serves them (`catalogByTargetFragment`), without which they were
+        // measured against the app catalog and looked untranslated.
+        "apps/ios/MeeshyWidgets/MeeshyWidgets.swift",  // 25
+        "apps/ios/MeeshyWidgets/LiveActivities.swift",  // 11
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
@@ -223,6 +515,124 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// **Added 270i (#4364). Every catalog shipped by a target is READ by this suite.**
+    ///
+    /// An app extension is a separate bundle, so a `String(localized:)` in its sources
+    /// resolves against the catalog shipped INSIDE it. `catalogByTargetFragment` is the
+    /// map that says which — and it named the share extension and the notification
+    /// extension while `MeeshyWidgets/Localizable.xcstrings` (39 keys, all seven
+    /// locales) sat unread beside them. Nothing went red: an unmapped target simply
+    /// falls back to the app catalog, where its keys do not exist, so its strings are
+    /// reported as untranslated when they are translated, and its sources can never be
+    /// pinned. A silent MIS-measure, not a failure.
+    ///
+    /// The omission was invisible from the map itself — a map is only ever read for the
+    /// entries it has. It becomes visible from the FILESYSTEM, which is what this guard
+    /// reads: every `Localizable.xcstrings` in the iOS tree is either the app catalog or
+    /// mapped to the fragment of the target that owns it. The reverse direction too, so
+    /// a moved or renamed catalog cannot leave a dead entry behind — that would restore
+    /// the exact same silent fallback.
+    func test_everyPerTargetCatalogIsMapped() throws {
+        let env = try makeEnvironment()
+        let iosRoot = env.repoRoot.appendingPathComponent("apps/ios")
+
+        let catalogsOnDisk = catalogFiles(under: iosRoot)
+            .map { $0.path.replacingOccurrences(of: env.repoRoot.path + "/", with: "") }
+            .filter { $0 != Self.appCatalogPath }
+            .sorted()
+        XCTAssertFalse(
+            catalogsOnDisk.isEmpty,
+            "No per-target catalog found under apps/ios — the scan lost its way rather "
+            + "than the extensions losing their catalogs."
+        )
+
+        let mapped = Set(Environment.catalogByTargetFragment.values)
+        let unmapped = catalogsOnDisk.filter { !mapped.contains($0) }
+        XCTAssertTrue(
+            unmapped.isEmpty,
+            "These catalogs ship inside a target but are never read by this suite, so "
+            + "that target's keys are measured against the app catalog — where they do "
+            + "not exist. Add them to `catalogByTargetFragment`:\n"
+            + unmapped.joined(separator: "\n")
+        )
+
+        let onDisk = Set(catalogsOnDisk)
+        let dangling = mapped.filter { !onDisk.contains($0) }.sorted()
+        XCTAssertTrue(
+            dangling.isEmpty,
+            "These mapped catalogs no longer exist, so their target silently falls back "
+            + "to the app catalog:\n" + dangling.joined(separator: "\n")
+        )
+
+        // A mapped entry is only worth its line if a source under that fragment
+        // actually resolves to it: the map is consulted by `catalog(resolvedFor:)`,
+        // whose fallback is the app catalog — the very thing being guarded against.
+        for (fragment, path) in Environment.catalogByTargetFragment {
+            let probe = URL(fileURLWithPath: "\(env.repoRoot.path)\(fragment)Probe.swift")
+            let expected = try loadTranslations(env.repoRoot.appendingPathComponent(path))
+            XCTAssertEqual(
+                Set(env.catalog(resolvedFor: probe).translations.keys), Set(expected.keys),
+                "A source under \(fragment) does not resolve against \(path)"
+            )
+        }
+    }
+
+    /// Every `Localizable.xcstrings` under `directory`, build products excluded.
+    ///
+    /// The FILENAME is the scope, not the extension: a catalog is a string TABLE, and
+    /// `String(localized:)` without a `table:` argument resolves against `Localizable`
+    /// alone. `InfoPlist.xcstrings` — which two targets also ship — localizes Info.plist
+    /// values (bundle name, usage descriptions) that the system reads directly, so it is
+    /// no more mappable here than it is callable from code. Measured: no call site in
+    /// the iOS tree passes `table:`, so `Localizable` is the whole of what this suite
+    /// models.
+    ///
+    /// Derived data is skipped by DESCENT rather than by filtering its files:
+    /// `apps/ios/Build` holds tens of thousands of intermediates, each with its own copy.
+    private func catalogFiles(under directory: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        var catalogs: [URL] = []
+        for case let url as URL in enumerator {
+            if url.lastPathComponent == "Build" || url.lastPathComponent == ".build" {
+                enumerator.skipDescendants()
+                continue
+            }
+            if url.lastPathComponent == "Localizable.xcstrings" { catalogs.append(url) }
+        }
+        return catalogs
+    }
+
+    /// **Borne du scanner — il voit les DEUX écritures d'un appel (258i, #4292).**
+    ///
+    /// Le marqueur a été un littéral pendant huit itérations, et un appel réparti sur
+    /// plusieurs lignes lui était invisible. Le cliquet ci-dessus repose entièrement
+    /// sur ce que le scanner VOIT : rétréci à nouveau, il ne rougirait pas — il
+    /// compterait simplement moins, et le plafond deviendrait franchissable sans que
+    /// rien ne le signale.
+    ///
+    /// Cette borne épingle donc les deux formes contre un échantillon dont la réponse
+    /// est connue, plutôt que contre le dépôt, dont le contenu bouge.
+    func test_leScannerVoitLesAppelsRepartisSurPlusieursLignes() {
+        let source = """
+        let a = String(localized: "une.ligne", defaultValue: "A", bundle: .main)
+        let b = String(
+            localized: "plusieurs.lignes",
+            defaultValue: "B",
+            bundle: .main
+        )
+        """
+        let keys = localizedCalls(in: source).map(\.key).sorted()
+        XCTAssertEqual(
+            keys, ["plusieurs.lignes", "une.ligne"],
+            "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
+            + "plafond du cliquet borne une mesure partielle"
+        )
+    }
+
     /// Keys with at least one locale expressed as plural variations.
     private func pluralizedKeys(_ url: URL) throws -> [String] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
@@ -251,17 +661,34 @@ final class LocalizationConsistencyTests: XCTestCase {
             }
         }
 
-        // Pinned at the 226i measurement: 1669 at 220i, −63 for the onboarding step
-        // flow (225i), then −54 for share-link creation and −7 once pluralized keys
-        // stopped being miscounted (226i). RE-MEASURED at 224i when the scan became
-        // per-target: unchanged, because the five share-extension keys are currently
-        // duplicated into the app catalog as well, so they were already counted as
-        // translated — the per-target scan and the 226i gains therefore compose.
+        // History: 1669 at 220i, −63 for the onboarding step flow (225i), then −54 for
+        // share-link creation and −7 once pluralized keys stopped being miscounted
+        // (226i) — pinned at 1545. RE-MEASURED at 224i when the scan became per-target:
+        // unchanged, because the five share-extension keys are currently duplicated
+        // into the app catalog as well, so they were already counted as translated.
+        //
+        // RE-PINNED at 258i (#4292) — 1545 → 114. The ceiling had stopped bounding
+        // anything: the catalog filled up over the intervening iterations (3397 of
+        // 3408 entries translated in all six required locales), so the real backlog had
+        // fallen to 102 while the pin stayed at 1545. A ratchet that admits 1443 new
+        // untranslated keys is a comment, not a ratchet. The +12 on top of 102 are keys
+        // the scanner could not SEE until this iteration widened its marker to
+        // multi-line calls — they were always untranslated, merely uncountable, and
+        // making them countable is the precondition for ever clearing them (#4293).
+        //
+        // RE-PINNED at 270i (#4364) — 114 → 81, in two independent moves. −22 is pure
+        // measurement: `MeeshyWidgets` ships its own fully translated catalog and this
+        // suite had never read it, so 22 widget keys were counted against the app
+        // catalog, where they do not exist. −11 is real work: eleven keys entered the
+        // app catalog in all seven locales, ten of them copied verbatim from an entry
+        // that already carried the same French text (see the `contacts.phonebook` /
+        // `sync.pill.a11y` / `a11y.delivery` fills of that iteration).
+        //
         // The number must only ever go DOWN: a failure means a new key was introduced
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
         // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 1545
+        let backlogCeiling = 81
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
@@ -429,9 +856,19 @@ final class LocalizationConsistencyTests: XCTestCase {
         /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
         /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
         /// inherit the enclosing type's global actor.
+        ///
+        /// **`MeeshyWidgets` joined at 270i (#4364).** It has shipped its own catalog —
+        /// 39 keys, all seven locales — since the target existed, and this map named two
+        /// of the three. Every guard in this suite therefore measured the home-screen
+        /// widgets and the Live Activities against the APP catalog, where their keys do
+        /// not exist: 22 keys counted as untranslated while fully translated in the
+        /// catalog that actually serves them, and the two widget sources unpinnable
+        /// though both already pass both rules. `test_everyPerTargetCatalogIsMapped` is the
+        /// witness that keeps the next extension from repeating it.
         static let catalogByTargetFragment: [String: String] = [
             "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
             "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+            "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
         ]
 
         let repoRoot: URL
@@ -633,16 +1070,29 @@ final class LocalizationConsistencyTests: XCTestCase {
     /// whether the call carries a `defaultValue:` and/or `bundle: .module`.
     /// The call segment is delimited by a string-aware balanced-paren scan so
     /// parentheses inside string literals don't end it prematurely.
+    ///
+    /// **The marker is a pattern, not a literal (258i, #4292).** It used to be the
+    /// exact string `"String(localized:"`, which a call broken over several lines —
+    /// `String(\n    localized: "…"` — does not contain. 226i measured that blind
+    /// spot at 92 calls over 46 files and deliberately left it, for a reason that was
+    /// sound at the time: widening the marker reveals keys and so RAISES the backlog,
+    /// which the ratchet forbids. It was sound against a ceiling believed tight. The
+    /// ceiling was 1545 against a real backlog of 102, so the answer was to widen AND
+    /// re-pin — the blind spot had meanwhile grown to 185 calls over 61 files, because
+    /// nothing stopped new ones being written.
+    ///
+    /// `\s*` after the paren matches both shapes at once. The `openParen` arithmetic
+    /// below is unaffected: `(` still immediately follows `String` in every call,
+    /// single-line or not.
     private func localizedCalls(in source: String) -> [LocalizedCall] {
-        let marker = "String(localized:"
+        guard let marker = try? NSRegularExpression(pattern: #"String\(\s*localized:"#) else { return [] }
         let ns = source as NSString
         let stringPrefixLength = ("String" as NSString).length
         var calls: [LocalizedCall] = []
         var searchStart = 0
         while searchStart < ns.length {
-            let found = ns.range(
-                of: marker,
-                options: [],
+            let found = marker.rangeOfFirstMatch(
+                in: source,
                 range: NSRange(location: searchStart, length: ns.length - searchStart)
             )
             if found.location == NSNotFound { break }

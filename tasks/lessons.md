@@ -18262,3 +18262,773 @@ j'ai copié la FORME d'un fichier de test éprouvé sans lire ses doc-comments.
   drapeaux d'un aperçu ressemble à la puce de langue de 249i, mais rien n'y est
   cliquable : y monter `LanguageFlagChip` aurait annoncé un bouton qui n'existe
   pas. Ressemblance visuelle n'est pas identité de rôle.
+
+## 252i — une garde généralise à ses instances, pas au concept
+
+- **Une garde bâtie sur les instances qu'on a trouvées attrape leur
+  RE-CRÉATION, jamais une variante qui résout le même problème autrement.**
+  #4248 avait soldé huit copies de la puce de langue et interdit leur FORME (le
+  soulignement dessiné, les clés réservées). Deux copies vivaient déjà ailleurs
+  et lui échappaient : elles disaient leur état par l'OPACITÉ et par un fond de
+  puce, et s'étiquetaient depuis une autre table. Quatrième fois en cinq lots
+  qu'une règle juste reste bornée à la forme où on l'a écrite — **la première
+  où c'est la GARDE, et non le code, qui porte la limite.** Une garde doit
+  interroger le RÔLE (« qui décide quel drapeau porte un code ? », « qui nomme
+  un drapeau à VoiceOver ? »), pas le dessin.
+- **Une source unique doit être plus RICHE que la plus riche des copies qu'elle
+  remplace, jamais leur intersection.** Le lot a failli livrer une régression
+  silencieuse : la copie lisait une table de 78 langues, la source unique une de
+  41. Router l'une vers l'autre rendait « WO » là où la rangée montrait 🇸🇳 —
+  pour 39 langues, sans qu'aucun test ne rougisse, et seulement chez les
+  locuteurs concernés. **La question à poser à toute consolidation :** *que
+  savait la copie que la source ignore ?*
+- **Une source unique de CONTRÔLE a deux moitiés : la VUE et le VOCABULAIRE.**
+  Un site qui ne peut pas prendre la vue (ici : un bouton dans un bouton) doit
+  pouvoir prendre le reste. Sans cette seconde moitié, il ré-écrit trois lignes
+  d'accessibilité — et c'est exactement ainsi que les copies 9 et 10 avaient
+  divergé.
+- **Un compteur n'est pas une mesure tant qu'on n'a pas vérifié qu'il rate ce
+  qu'il doit rater.** Quatre scanners avant un nombre publiable (102 → 20 → 13 →
+  40/15/16/9) : fenêtre trop courte, fenêtre avalée par les commentaires,
+  marcheur cassé sur un ternaire multi-lignes. Les trois premiers nombres
+  avaient l'air publiables. Ce qui les a démasqués n'est jamais un
+  raisonnement : c'est d'avoir cherché dans les résultats **un témoin dont je
+  CONNAISSAIS la réponse** (un site que je savais conforme et qui ressortait
+  fautif). **Toute mesure doit inclure un tel témoin.**
+- **Un banc qui épingle une VALEUR documente une décision que le code ne porte
+  pas.** Le balayage `grep` fait AVANT le push (leçon 251i bis, appliquée) n'a
+  pas seulement évité un rouge : il a révélé que les deux tables divergent sur
+  `pt` (🇵🇹 vs 🇧🇷) et qu'un banc épinglait 🇧🇷. **Devant un tel conflit, ne
+  pas trancher en refactorant** : isoler la décision produit, la laisser au
+  porteur, et poser dans la garde une **exemption NOMMÉE et motivée** — jamais
+  une regex discrètement étroite, qui cacherait le choix au lieu de l'exposer.
+- **Un attribut d'ISOLATION ne se pose pas par prudence — il se pose après avoir
+  lu l'isolation de ce que la fonction APPELLE (252i bis).** J'ai marqué le
+  vocabulaire de la puce `nonisolated` en me disant que la marque était « sans
+  risque dans les deux cas ». Elle est légale partout, mais elle **contraint ce
+  que le corps a le droit de toucher** : huit erreurs de compile, toutes au même
+  endroit. `MeeshySDK/Package.swift` donne à **MeeshyUI**
+  `.defaultIsolation(MainActor.self)` (SE-0466) — `LanguageDisplay`, son
+  `from(code:)` et ses `flag`/`name` sont isolés ; le cœur `MeeshySDK`
+  (`LanguageData`, `MeeshyUser`) ne l'est pas. Un appel MainActor → nonisolated
+  est toujours licite, **jamais l'inverse**.
+  > Le pire est que j'avais ANTICIPÉ le problème d'isolation — c'est pour cela
+  > que j'ai posé la marque — et que la mitigation a créé la panne qu'elle
+  > visait, faute d'avoir vérifié dans quel SENS elle jouait. **Une mitigation
+  > posée sur une intuition non vérifiée est un pari, pas une précaution** ; le
+  > fichier qui donnait la réponse (`Package.swift`, `LanguageDisplay.swift`)
+  > était déjà ouvert.
+
+## 253i — une abstraction nommée d'après son premier appelant ne voyage pas
+
+- **Le NOM et le FICHIER d'une abstraction décident de sa portée, autant que sa
+  visibilité.** `callToggleAccessibility` était générique dans sa moindre ligne —
+  trait, valeur, repli iOS 17 — et son propre commentaire énonçait la règle
+  générale. Il vivait dans `CallView.swift` sous un nom d'appel : **cinq sites
+  l'appliquaient, tous des surfaces d'appel**, pendant que des bascules ailleurs
+  ne disaient leur état que par une couleur. C'est 252i déplacé d'un cran — là
+  une GARDE était bornée par la forme qu'elle interdisait, ici une RÈGLE par le
+  nom qu'on lui avait donné.
+- **Avant de choisir un remède, chercher la JUMELLE du contrôle et voir ce
+  qu'elle fait.** J'avais annoncé « trait + valeur » pour un bouton « j'aime » ;
+  sa jumelle d'un autre écran servait depuis toujours un NOM qui varie
+  (« J'aime » / « Je n'aime plus ») et une valeur qui porte le COMPTE. Un
+  « j'aime » n'est pas un interrupteur. **Une jumelle est une décision déjà
+  prise, souvent mieux argumentée que celle qu'on s'apprête à improviser** — et
+  ici la seconde moitié du même défaut vivait dans LE MÊME FICHIER, trente
+  lignes plus bas.
+- **Une garde qui suit un renommage sans changer de CIBLE est une garde morte.**
+  `test_..._isNotFilePrivate` lisait `CallView.swift` pour y interdire un motif ;
+  le modificateur ayant déménagé, elle serait restée **verte en cessant de
+  voir** — le défaut exact que 251i bis a payé d'un cycle. Renommer oblige à se
+  demander non seulement « qui cherche cette chose ? » mais **« ce que ce banc
+  lit contient-il encore ce qu'il juge ? »**.
+- **Interdire la RÉ-ÉCRITURE n'est pas exiger l'APPLICATION**, et il faut le
+  dire quand on ne peut que la première. La garde de 253i interdit de recopier
+  la clé et le trait — scannable, sûr. Exiger que tout contrôle branchant sur un
+  booléen expose son état demanderait un marcheur à parenthèses équilibrées ET
+  la détection des noms variables **à travers un constructeur maison** : c'est
+  ce motif qui a produit le seul faux positif de la mesure. Une garde partielle
+  annoncée comme partielle vaut mieux qu'une garde totale qu'on croit avoir.
+- **Un compteur qui rate un motif CORRECT est aussi faux qu'un compteur qui rate
+  un défaut.** Cinq affinages (102 → 20 → 13 → 9 → 5 réels) : les trois derniers
+  faux positifs étaient des sites JUSTES que l'instrument ne savait pas
+  reconnaître — un titre variable passé par `settingsRow(title:)`, une icône
+  reflétant un type et non un état, une rangée agrégée par son conteneur.
+  **Mesurer un défaut, c'est savoir énoncer ce qui n'en est pas un.**
+- **Un balayage qui cherche un objet par UN de ses noms d'emprunt rend un zéro
+  qui veut dire « je n'ai pas regardé là » (256i).** J'ai mesuré que
+  `ConversationStateStore` — 35 propriétés, 34 homonymes du ViewModel — n'était
+  lu par PERSONNE, et j'allais ouvrir une issue proposant de retirer son miroir
+  `messages` (une souscription Combine vivante sur le chemin le plus chaud de
+  l'app). **C'était faux** : les handlers détiennent le store sous
+  `private let state:` et le lisent en `state.X`, motif que mon regex
+  (`stateStore.` / `store.`) ne couvrait pas. `ConversationMediaHandler` lit
+  bien `state.messages`.
+  > **Avant de publier un zéro, chercher l'objet par son TYPE, pas par le nom
+  > qu'on suppose à sa variable.** Le coût de l'erreur n'était pas symétrique :
+  > un faux positif fait perdre une revue, ce faux zéro-ci proposait de
+  > supprimer du code qui MARCHE, avec une mesure à l'appui pour convaincre.
+- **Un échafaudage de migration se reconnaît à son commentaire, et se
+  RESPECTE.** Le store porte « Removed once the migration … is complete » : ce
+  n'est pas de la duplication accidentelle mais un plan en cours, dont la fin
+  est écrite. Le supprimer ou le recâbler unilatéralement, c'est jeter le
+  travail de quelqu'un — et c'est architecturalement significatif, donc cela se
+  remonte, jamais cela ne se décide seul.
+
+## 257i — la valeur de repos d'une animation n'est pas la valeur qu'elle visait
+
+- **Une animation qui dit un STATUT s'arrête aussi, mais elle doit continuer à
+  le DIRE.** Sept `repeatForever` sur 68 n'avaient aucun portillon Reduce
+  Motion, et c'étaient toutes des animations de statut — frappe, enregistrement,
+  sauvegarde, appel en cours. Elles avaient survécu à quatre audits
+  d'accessibilité parce qu'elles ressemblaient à de l'information, et qu'on ne
+  coupe pas une information. La règle qui les rattrape n'est pas « coupe le
+  mouvement » mais **« retire le VOYAGE, garde le SENS »**.
+
+- **Le portillon qu'on copie du voisin peut rendre le produit PIRE.**
+  `OnboardingAnimations.settleWithoutMotion` se pose sur la valeur CIBLE de
+  l'animation, ce qui est juste pour une décoration qui converge. Appliqué au
+  point d'appel en cours, dont l'animation tend vers `opacity 0.3`, il aurait
+  laissé un indicateur presque invisible ; appliqué aux formes d'onde
+  d'enregistrement, dont la cible est TIRÉE AU HASARD, il aurait rendu un trait
+  plat qui se lit « cassé ». **Avant de reprendre un remède éprouvé, demander
+  vers quoi l'animation qu'on arrête était en train d'aller** — la bonne valeur
+  de repos est tantôt la cible, tantôt son inverse, tantôt ni l'une ni l'autre.
+
+- **Une garde par FICHIER rend « gardé » dès qu'une AUTRE partie du fichier
+  décide.** Rejouée sur `origin/main`, ma règle attrapait 5 des 7 défauts :
+  `MeeshyApp` passait pour conscient parce qu'il injecte la clé d'environnement
+  à la racine, `MessageListViewController` parce qu'il appelle le prédicat 2 500
+  lignes au-dessus du site fautif, pour un autre sujet. Le proxy par fichier
+  reste le bon choix (une règle par déclaration condamnerait les treize boucles
+  légitimement gardées en amont de `ConversationAnimatedBackground`) — mais il
+  se COMPLÈTE par des épinglages nommés. **On ne découvre ce qu'une garde ne
+  voit pas qu'en la faisant ROUGIR sur l'état d'avant, jamais en la regardant
+  verdir sur sa branche.**
+
+- **Le zéro qui voulait dire « nulle part » (256i, revenu au cycle suivant).**
+  Un `cd apps/ios/Meeshy` d'un appel d'outil précédent a fait chercher
+  `apps/ios/Meeshy` SOUS `apps/ios/Meeshy` : la sonde a rendu « 0 occurrence »
+  sur tout le dépôt. Plausible — l'app venait de passer quatre sondes sans rien
+  à corriger. La forme est celle de 256i, mais plus dangereuse : là le
+  répertoire courant produisait un chemin d'écriture FAUX (visible), ici un
+  ensemble VIDE (invisible). Ce qui l'a attrapé n'est pas la relecture du
+  script, c'est **la borne** : « combien de `.swift` cette racine voit-elle ? ».
+  Chemin absolu toujours ; et un zéro ne se publie jamais sans une mesure
+  voisine dont la réponse est connue.
+
+- **Entre l'élégance non vérifiable et l'idiome prouvé, livrer l'idiome et
+  ouvrir l'issue.** Le `@propertyWrapper` `DynamicProperty` qui déclarait les
+  deux moitiés de Reduce Motion en une ligne était écrit, et c'était le bon
+  design. Retiré avant le push : zéro précédent dans le dépôt, cible app en
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (SE-0466), et aucune toolchain
+  Apple sur ce plan de travail pour le prouver — or une CI iOS rouge bloque
+  TOUTES les PR iOS. C'est 252i pris par l'autre bout : là j'avais AJOUTÉ des
+  marqueurs d'isolation « par sécurité » (huit erreurs de compilation), ici j'ai
+  refusé d'en supposer. **Ce qu'on ne peut pas compiler ne se pousse pas parce
+  qu'on en est raisonnablement sûr.**
+
+- **Deux vues voisines, deux formes, une seule raison.**
+  `BubbleEditedIndicator` est `Equatable` par SYNTHÈSE : une propriété stockée
+  `@Environment` (non `Equatable`) l'aurait cassée, donc elle passe par
+  `.meeshyAnimation` du SDK, qui lit l'environnement lui-même. Sa voisine
+  `BubbleCallNoticeView`, dont le `==` est MANUEL, peut déclarer les propriétés
+  sans risque. **Avant d'ajouter une propriété stockée à une vue, regarder
+  comment elle obtient son `Equatable`** — la synthèse est un contrat invisible
+  qu'un ajout anodin résilie.
+
+## 258i — avant de renoncer à une amélioration qu'un cliquet interdit, mesurer le cliquet
+
+- **Un cliquet qui laisse passer 1443 clés est un commentaire, pas un cliquet.**
+  Le plafond i18n était épinglé à 1545 depuis le 226i ; le backlog réel valait
+  **102**. Le catalogue s'était rempli entre-temps (3397 des 3408 entrées
+  traduites dans les six locales requises) sans que le pin suive, et rien ne
+  pouvait le signaler : un plafond trop HAUT ne rougit jamais. **Un seuil qui ne
+  descend pas avec la mesure cesse silencieusement de protéger** — le relire
+  périodiquement fait partie de sa maintenance, au même titre que le franchir.
+
+- **Une contrainte peut interdire le bon geste parce que la valeur qui la porte
+  a cessé d'être vraie.** 226i avait mesuré le trou du scanner (92 appels
+  multi-lignes invisibles) et RENONCÉ à l'élargir, avec un raisonnement
+  impeccable : « élargir fait apparaître des clés, donc MONTER le backlog, or le
+  plafond ne doit que descendre ». Juste — contre un plafond qu'on croyait
+  serré. La vraie réponse n'était ni élargir ni renoncer, mais **élargir ET
+  re-piquer**. Deux ans de trou (92 → 185 appels, 46 → 61 fichiers) ont couru
+  parce que personne n'a interrogé le 1545.
+
+- **Répliquer une règle, c'est répliquer ses FILTRES, pas seulement sa boucle.**
+  Ma copie a rendu 1024, puis 93, puis 102. Deux erreurs, toutes deux des
+  filtres omis ou durcis : `!call.isModuleBundle` oublié (je comptais les clés
+  du SDK contre le catalogue de l'app) et un `isIdentifier` plus strict que le
+  Swift (j'exigeais un point, je refusais `-`). La boucle était juste dès le
+  premier essai ; c'est ce qu'elle EXCLUT qui était faux.
+
+- **Ce qui atteste une réplication n'est pas sa relecture, c'est une borne dont
+  la réponse est connue.** Ici : en marqueur ÉTROIT, la réplication doit
+  reproduire l'état vert ACTUEL des trois règles sœurs (0/0/0). Elle l'a fait —
+  et c'est seulement à ce moment que le 102 est devenu crédible.
+
+- **Un chiffre peut mesurer ce que le dépôt ne mesure pas.** J'ai calculé « 133
+  orphelines en marqueur étroit, 23 en élargi » et j'étais à un pas d'en faire
+  un argument du correctif. Faux : le test des orphelines lit `combinedSource` et
+  y cherche des jetons entre guillemets — il n'appelle PAS `localizedCalls` et
+  est totalement insensible à ce changement. **Avant de citer une mesure comme
+  preuve, vérifier qu'elle porte sur la règle qu'on prétend améliorer**, pas sur
+  une règle voisine qui lui ressemble.
+
+- **Rendre une chose COMPTABLE est un livrable, même sans la corriger.** Les 12
+  clés révélées ne sont pas traduites et ne le sont pas devenues ici : elles
+  portent toutes un `defaultValue` interpolé, dont les spécificateurs de format
+  ne se vérifient pas sans rendu réel. Mais elles étaient INCOMPTABLES, donc
+  impossibles à planifier ; elles entrent dans le compte et ont leur issue.
+  C'est le même arbitrage qu'au 257i : livrer ce qui est prouvable, ouvrir
+  l'issue pour ce qui demande une chaîne d'outils qu'on n'a pas.
+
+## 259i — avant de retourner une DÉCISION, chercher ce que son signe pilote à côté d'elle
+
+- **SwiftUI retourne les piles, pas le SIGNE d'un glissement.** Troisième famille
+  de défauts RTL, après celle que SwiftUI traite seul (piles, alignements, marges)
+  et celle que garde `RightToLeftLayoutGuardTests` (symboles nommés par un côté
+  physique). `translation.width` est un déplacement à l'ÉCRAN : « `dx < -60` ⇒
+  suivant » dit en réalité « glisser vers la GAUCHE avance », vrai en français et
+  faux en arabe. Aussi silencieuse que la deuxième : rien ne casse, la navigation
+  part simplement à l'envers.
+
+- **Le tri fait partie de la mesure.** Sur 25 comparaisons, **16 ne doivent PAS se
+  retourner** : 9 n'encodent aucun sens (`abs()`, dominance d'axe) et 7 déplacent
+  un objet qui suit le doigt — une pastille d'appel jetée vers la droite part vers
+  la droite dans toutes les langues. Une garde qui aurait interdit le signe brut
+  aurait produit un bruit permanent ; elle épingle donc ce qui est DÉCIDÉ.
+
+- **La forme sûre d'un correctif qu'on ne peut pas exécuter : l'IDENTITÉ dans le
+  cas dominant.** Le helper rend `width` en LTR et `-width` en RTL ; les sites
+  gardent leurs comparaisons, seul l'opérande change. En LTR c'est ×1 — le
+  comportement de la quasi-totalité des sessions est préservé *par construction*,
+  vérifiable par lecture ET par test, sans simulateur.
+
+- **`.offset(x:)` n'est PAS retourné par SwiftUI**, contrairement aux marges et
+  aux alignements. C'est le discriminant qui a séparé les deux sites : `ReelsPlayerView`
+  a pu être retourné parce que son visuel tient en UN `.offset` (repassé en espace
+  écran par le même helper, qui est sa propre réciproque) ; le cube des stories,
+  non.
+
+- **Retourner une décision sans retourner sa GÉOMÉTRIE est pire que le défaut.**
+  J'ai retourné la navigation par groupe des stories, puis ANNULÉ : `horizontalDrag`,
+  `groupSlide`, `totalSlideX`, `exitX = forward ? -screenW : screenW` et
+  l'orientation des faces voisines vivent tous en espace écran et pilotent un cube
+  3D. En arabe, le doigt aurait poussé à droite, le cube suivi à droite, puis le
+  commit envoyé la face à GAUCHE. Aujourd'hui l'arabe est orienté comme le
+  français : faux, mais COHÉRENT — et un demi-retournement casse la relation entre
+  le doigt et l'image, ce qui se ressent immédiatement. **Un défaut cohérent vaut
+  mieux qu'un correctif partiel**, quand le partiel contredit le geste.
+
+- **C'est la forme du 257i sur une autre surface.** Là : « la valeur de repos n'est
+  pas la cible de l'animation ». Ici : « le signe de la décision n'est pas le seul
+  signe du geste ». Dans les deux cas, le remède ÉVIDENT dégradait le site, et ce
+  qui l'a révélé est la même question — **suivre la donnée jusqu'au PIXEL**, pas
+  jusqu'à la décision. `edgeDrag` avait l'air d'un simple seuil ; il pilotait aussi
+  une translation trente lignes plus haut.
+
+## 260i — mesurer un ORDRE par des offsets de texte, c'est mesurer l'ordre de DÉCLARATION
+
+- **Sonde close par la négative : le cache-first du dépôt est sain.** 126
+  `ProgressView` réels, 33 « suspects » — presque tous des spinners d'ACTION
+  (bouton d'envoi, 2FA) ou des pieds de PAGINATION posés après des lignes déjà
+  rendues. Ni les uns ni les autres ne violent la doctrine, qui vise l'écran qui
+  REMPLACE son contenu par une roue. Rien à corriger.
+
+- **Quatre faux positifs sur quatre, par un instrument qui ne pouvait pas être
+  juste.** Pour savoir si un ViewModel lit le cache AVANT le réseau, j'ai comparé
+  l'offset du premier `CacheCoordinator` à celui du premier appel de service —
+  dans le TEXTE du fichier. Sur `ConversationListViewModel` (1600+ lignes), une
+  propriété de service déclarée en tête gagne toujours contre un cache lu au
+  milieu d'une fonction. Le verdict « réseau avant cache » était faux pour les
+  quatre VM signalés : lu sur le chemin d'appel réel, `ConversationListViewModel`
+  est au contraire exemplaire — les quatre cas de `CacheResult` distingués, et
+  `.expired` va récupérer la charge sur disque pour qu'une resync hors-ligne ne
+  laisse jamais l'écran plus vide que ce qu'il a.
+
+  > **Un ORDRE ne se lit pas sur des octets, il se lit sur un chemin
+  > d'exécution.** Une heuristique positionnelle mesure où le code est ÉCRIT, pas
+  > quand il TOURNE — et sur un gros fichier les deux n'ont aucun rapport.
+
+- **Ce qui a sauvé la mesure est le même réflexe qu'aux trois itérations
+  précédentes** : ne pas publier un chiffre sans aller lire le site qu'il accuse.
+  Le premier flag ouvert (`ConversationListViewModel`, l'écran principal de
+  l'app) était aussi le plus grave — et donc celui qu'il fallait vérifier en
+  premier, pas en dernier. **Ouvrir d'abord le suspect dont l'accusation coûterait
+  le plus cher si elle était fausse.**
+
+- **Un résultat NÉGATIF est un livrable**, à condition d'être consigné avec son
+  instrument : sans cette note, la prochaine session relance la même sonde,
+  retrouve les mêmes 33 « suspects » et les mêmes 4 « violations », et refait le
+  chemin. Ce qui se consigne n'est pas « rien à faire » mais **pourquoi
+  l'instrument mentait**.
+
+## 261i — une règle déclarée trois fois et mesurée nulle part ; et j'étais moi-même en infraction
+
+- **Le budget de taille de fichier (800–1100 lignes, directive 2026-08-28) n'avait
+  aucun instrument.** Répété dans le `CLAUDE.md` racine et les `CLAUDE.md` de
+  répertoire, mesuré par aucun test : 42 fichiers hors budget, 88 338 lignes
+  cumulées, et rien pour empêcher le 43ᵉ. C'est la forme de #4292 poussée d'un
+  cran : là un cliquet avait cessé de mordre, ici il n'y en avait jamais eu.
+
+- **J'ai violé la règle cinq fois dans cette même session, sans m'en apercevoir.**
+  257i et 259i ont ajouté des lignes à `MeeshyApp` (1310), `MessageListViewController`
+  (3568), `ConversationMediaViews` (1212), `ReelsPlayerView` (2104) et
+  `StoryViewerView+Content` (3211) — tous déjà hors budget, alors que la directive
+  dit « ajouter à un fichier déjà hors budget est INTERDIT : on extrait d'abord ».
+  Les ajouts étaient minuscules et justifiés ; ce n'est pas l'excuse qui compte,
+  c'est que **rien ne pouvait me le dire** — ni la relecture, ni la CI.
+
+- **Le piège au moment d'écrire le cliquet : pinner sur AUJOURD'HUI.** Le réflexe
+  est de relever la mesure du jour (88 338) et de la sceller. Cela aurait
+  incorporé mes propres 70 lignes de régression dans le plafond — exactement le
+  jeu de mou que je venais de reprocher au cliquet i18n deux itérations plus tôt.
+  **Un cliquet posé sur l'état qu'on vient de dégrader légitime la dégradation.**
+  Pinné sur l'état d'AVANT (88 268), il rougit sur `main` tel quel : la dette a
+  donc dû être PAYÉE dans le même lot (extraction de 93 lignes vers
+  `RecordingWaveformBars.swift`, relocalisation pure) pour repasser au vert.
+
+- **Trois nombres valent mieux que 42 plafonds individuels.** Un plafond par
+  fichier interdit la croissance mais rougit dès qu'un fichier légitimement
+  DÉCOUPÉ fait disparaître son nom — la garde punirait alors le geste qu'elle veut
+  encourager. Un plafond dur pour les fichiers neufs + une liste qui ne peut que
+  rétrécir + un cumul qui ne peut que descendre obtiennent le même effet en
+  laissant la découpe passer.
+
+- **Découper « par responsabilité, pas par tranche » se vérifie au moment de
+  choisir la coupe.** `AnimatedWaveformBar` et `AudioLevelBar` sont sorties
+  ENSEMBLE parce qu'elles sont les deux barres de la même bande d'enregistrement —
+  l'une anime une hauteur, l'autre suit le niveau du micro. Extraire la première
+  seule aurait rendu le compte, et laissé sa jumelle orpheline.
+
+## 262i — une règle ARC ne s'applique qu'à ce qui est compté par ARC
+
+- **Quatre règles déclarées, zéro violation.** `print()` interdit, `try!`
+  interdit, couleurs littérales interdites, secrets hors `UserDefaults` : 0, 0, 0
+  et 0. Le dépôt est discipliné là où il s'est donné des règles nettes. Le
+  balayage a de la valeur quand même — il dit à la prochaine session de ne pas
+  refaire ces sondes.
+
+- **La seule « prise » était un faux positif PAR CONSTRUCTION.** Mon scanner a
+  signalé un `Timer.scheduledTimer` capturant `self` sans `[weak self]`, ce que
+  la règle du dépôt interdit explicitement. Sauf que l'hôte,
+  `UniversalComposerBar`, est une **struct** SwiftUI : `[weak self]` y est
+  INEXPRIMABLE (le mot-clé exige un type classe), il n'y a pas de compteur de
+  références à casser, et le timer est invalidé en cinq points dont la
+  disparition. La classe qui possède réellement un timer, `CameraView`, écrit
+  bien `[weak self]`.
+
+  > **Avant de reprocher une règle ARC à un site, vérifier que le site est
+  > compté par ARC.** `[weak self]`, les cycles de rétention, `unowned` : tout
+  > cela ne veut rien dire sur une valeur. Une règle recopiée sur des structs
+  > produit un faux positif à CHAQUE balayage — et celui qui la lit sans
+  > vérifier « corrige » du code qui ne compilera pas.
+
+- **Un compte élevé ne dit pas si c'est une paresse ou une contrainte.** 80
+  `AnyView` contre une règle qui dit « éviter » : le réflexe est d'annoncer 80
+  défauts. Lus, ce sont des effacements de type à une FRONTIÈRE D'API — un
+  paramètre qui accepte une vue optionnelle. Les retirer exige de rendre les
+  signatures génériques et de toucher tous les appelants : une refonte, pas un
+  remplacement, et donc pas un lot qu'on tente sans compilateur. **Compter, puis
+  LIRE avant de qualifier** — sinon on ouvre une issue qui promet un nettoyage
+  d'une heure pour un chantier de plusieurs jours.
+
+- **Deux sondes négatives d'affilée ne sont pas un échec de la boucle.** 260i et
+  262i n'ont rien corrigé parce qu'il n'y avait rien à corriger sur ces axes.
+  Ce qui serait un échec, c'est de fabriquer un changement pour que l'itération
+  « produise » quelque chose. Le livrable d'une sonde négative est la carte :
+  quels axes sont sains, et POURQUOI l'instrument se trompe là où il crie.
+
+## 263i — un cliquet ADDITIF qui ne grandit pas protège 1 % de ce qu'il pourrait
+
+- **`fullyLocalizedScreens` protégeait 3 fichiers sur 299 porteurs de clés.** Son
+  commentaire dit pourtant l'intention : « an iteration that finishes localizing
+  a screen adds its path here so the screen can never silently regress ». Mesuré :
+  **240 fichiers sont déjà 100 % traduits** dans les six locales requises et ne
+  sont pas épinglés. Un cliquet additif qu'on n'alimente pas n'est pas faux — il
+  est simplement presque vide, et personne ne s'en aperçoit puisqu'il est vert.
+
+- **La deuxième règle m'a évité une CI rouge.** Épingler un écran le soumet AUSSI
+  à `test_pinnedScreenDefaultsMatchCatalog` (le `defaultValue` inline doit égaler
+  la valeur du catalogue). Sur les 25 écrans les plus riches : **161 violations**.
+  Vérifier les DEUX règles avant d'écrire la liste, et non après le push, est la
+  seule raison pour laquelle ce lot est vert.
+
+- **648 `defaultValue` mentent sur ce que l'écran affiche.** Le catalogue gagne à
+  l'exécution ; le `defaultValue` n'est qu'un repli pour clé absente. Donc
+  `defaultValue: "Display"` en face d'un catalogue qui dit « Affichage » est du
+  texte MORT qui trompe le lecteur — et plusieurs sont en ANGLAIS dans une app de
+  source française (`Push`, `Preview`, `Reposts`). C'est aussi ce qui bloquait
+  l'épinglage des écrans les plus riches. → #4308.
+
+- **Un commentaire qui explique une liste doit être vérifié CONTRE la liste.**
+  J'ai écrit que les écrans les plus riches — dont `SettingsView` (87 clés) — en
+  étaient absents. `SettingsView` y EST : il passe les deux règles. Le commentaire
+  aurait survécu à la relecture (il était plausible) et menti durablement.
+  **Relire une justification en la confrontant aux données qu'elle décrit**, pas
+  au souvenir qu'on en a.
+
+- **Épingler 40 plutôt que 132, sciemment.** Les 132 candidats sortent du MÊME
+  parseur non compilable ici. Le risque n'est pas par fichier mais par PARSEUR :
+  s'il se trompe, il se trompe partout. Mais la session a montré quatre fois que
+  mes scanners ont des angles morts — on épingle donc un lot que la CI valide,
+  puis on poursuit avec une confiance mesurée plutôt que supposée.
+
+## 264i — un site dont les voisins sont justifiés RESSEMBLE à un site justifié
+
+- **Compter les prises d'un scanner avant d'avoir lu la doctrine qu'il traverse
+  revient à mesurer sa propre ignorance.** Premier balayage de l'itération :
+  « bouton à glyphe seul sans libellé VoiceOver », 871 `Button`, **6 candidats**
+  — et **six faux positifs**. Le scanner cherchait `.accessibilityLabel` sans
+  connaître l'idiome 183i du dépôt, qui MASQUE (`accessibilityHidden`) un bouton
+  imbriqué dans un élément combiné et rend son action au conteneur
+  (`.accessibilityAction(named:)`). Les six sites portaient le commentaire qui le
+  disait. Avant de croire une prise, chercher l'idiome qui la rendrait légitime
+  — il est souvent écrit juste en dessous.
+
+- **Une doctrine peut être parfaitement tenue et rester totalement non
+  protégée.** Les tailles de police figées sont régies par une règle énoncée sous
+  trois numéros d'itération (53i / 82i / 86i) : gel autorisé quand un CADRE FIXE
+  déborderait. Mesure : 247 sites, dont 37 sur du texte — et **36 des 37
+  portaient leur justification en commentaire, nommément**. La discipline était
+  réelle. L'instrument, inexistant. C'est la forme de #4302 (budget de taille) et
+  de #4292 (cliquet i18n) : *une règle déclarée dont la mesure n'existe pas ne
+  protège plus rien* — mais ici avec un raffinement : **plus une règle est bien
+  tenue à la main, plus l'absence d'instrument est difficile à voir**, parce que
+  chaque échantillon qu'on ouvre la confirme.
+
+- **Le 37ᵉ site est passé PARCE QUE ses voisins étaient corrects.**
+  `ProfileUserPostsList.chip` gelait son chiffre à 18 pt sous un libellé en
+  `.caption2` — qui scale — dans une tuile **sans hauteur fixe**. En AX5 le
+  libellé devenait 1,5× plus gros que le nombre qu'il légende : la hiérarchie
+  typographique de la carte s'inversait. Tous ses voisins de la liste ont un
+  cadre fixe qui justifie le gel. **Un site dont les voisins sont justifiés
+  RESSEMBLE à un site justifié** : c'est l'angle mort propre à toute règle tenue
+  par la relecture, et il ne se ferme qu'avec une mesure.
+
+- **Le discriminant d'une doctrine se cherche en AVAL du site, pas sur le site.**
+  Ce qui sépare un gel légitime d'un défaut n'est pas la ligne `.font(…)` — elles
+  sont identiques — mais l'existence d'un `.frame(width:height:)` posé plus bas,
+  et surtout **ce que font les VOISINS du même conteneur**. Un gel entouré de
+  gels est cohérent ; un gel à côté d'un `.caption2` qui scale est une inversion.
+
+- **Épingler une liste en SURENSEMBLE quand une règle repose sur une
+  classification.** La garde pose deux choses : une liste de fichiers et deux
+  compteurs. La liste compte TOUT site figé, sans regarder son receveur — elle ne
+  dépend donc d'aucune classification, et aucune divergence entre mon scanner
+  Python et le portage Swift ne peut la faire rougir à tort. Seuls les compteurs
+  portent le risque de divergence, et c'est là qu'il doit être : concentré, visible,
+  corrigible en un tour.
+
+- **La borne qui compte est celle qui interroge le classifieur, pas le compte.**
+  Un cliquet « ≤ 36 textes figés » resterait VERT si la classification
+  s'effondrait à 0 — le mode de panne du 256i (balayage qui ne voit rien),
+  transposé du balayage à la classification. La borne exige donc que les DEUX
+  populations soient non vides (glyphes > 150, textes > 20), plus trois témoins
+  synthétiques dont un vérifie que le masquage des commentaires tient : la
+  doctrine s'écrivant JUSTE au-dessus du site qu'elle justifie, une garde non
+  masquée compterait ses propres justifications.
+
+## 265i — une allowlist qui EXPLIQUE une anomalie est une sonde, pas une dispense
+
+- **Un littéral qu'on n'a pas décidé de localiser l'est quand même.** `Text(_:)`,
+  `Label(_:)`, `Button(_:)`, `Toggle(_:)`, `TextField(_:)`, `.navigationTitle(_:)`
+  prennent tous un `LocalizedStringKey` : Xcode extrait en clé de catalogue tout
+  littéral qu'on leur passe. Aucune intention n'est requise, aucun
+  `String(localized:)` n'est écrit — et une passe de traduction fera ensuite
+  voyager le texte. C'est ainsi que le message d'exemple de l'onboarding, qui
+  DEVAIT rester étranger pour démontrer le Prisme, s'est retrouvé traduit en
+  de / es / pt-BR : la carte montrait « l'allemand traduit vers l'allemand ».
+
+- **Le vecteur était invisible parce que tous les instruments visent le même
+  marqueur.** Les gardes i18n du dépôt s'accrochent à `String(localized:` — la
+  cohérence, le ratchet `defaultValue`, le cliquet `fullyLocalizedScreens`.
+  L'écran fautif était ÉPINGLÉ « fully localized ». La garantie était vraie et
+  hors sujet : elle protège contre une régression VERS le français, et le défaut
+  était une traduction de TROP. **Demander d'un instrument non seulement « que
+  vérifie-t-il ? » mais « par quelle ÉCRITURE entre ce qu'il vérifie ? » —
+  une seconde écriture produisant la même chose lui est invisible.**
+
+- **La leçon principale : une entrée d'allowlist qui EXPLIQUE pourquoi un cas est
+  inoffensif est un endroit où quelqu'un a vu le mécanisme et ne l'a pas suivi
+  jusqu'à sa cause.** `notAnInterfaceString = ["Jean-Pierre"]` portait le
+  commentaire « un NOM employé comme clé d'exemple : la clé fait la valeur ». La
+  description est exacte. Trois lignes plus bas dans le même fichier de
+  production, le même mécanisme cassait la démonstration du produit. Ces entrées
+  sont des SONDES : les relire en demandant « pourquoi ce cas existe-t-il ? »,
+  pas « ce cas est-il bien excusé ? ». Ici la réponse a supprimé la cause et vidé
+  l'exception.
+
+- **Un correctif de six clés qui produit un diff de 27 000 lignes n'est pas un
+  correctif de six clés.** Première tentative de retrait au catalogue :
+  re-sérialiser le JSON en Python → 27 016 lignes de diff et un réordonnancement
+  complet du fichier, pour six suppressions. Annulée, refaite au niveau des
+  LIGNES en équilibrant les accolades de chaque entrée : 168 suppressions, 0
+  insertion. **Reformater un fichier de données en passant est une modification à
+  part entière, qu'aucune relecture ne peut plus séparer du fond.**
+
+- **Une garde doit reconnaître le REMÈDE, pas seulement la faute.** Le témoin le
+  plus important de `LocalizedStringKeyLiteralGuardTests` est
+  `Text(verbatim: "…") → 0 site` : une garde qui interdit une écriture sans
+  reconnaître sa correction est insatisfaisable, et la première personne qui la
+  rencontre l'affaiblira pour passer.
+
+- **Choisir le périmètre d'une règle par ce qu'elle doit ATTRAPER, pas par ce que
+  le motif ramène.** Sans le filtre d'interpolation, le balayage rendait 187
+  sites dont 134 « violations » — toutes des `Text("@\(username)")`, c'est-à-dire
+  des expressions de mise en forme dont la clé est `"@%@"`. Avec le filtre : 51
+  sites, 7 violations, toutes réelles. Une règle qui rougit 134 fois pour un
+  défaut n'est pas appliquée, elle est contournée.
+
+- **Retirer les échappements avant de compter des lettres.** `"\u{1F4AD}"` porte
+  les lettres `u`, `F`, `A`, `D` dans le TEXTE SOURCE : un comptage naïf classe
+  une bulle de pensée comme de la prose. La question « ce littéral est-il du
+  texte humain ? » se pose sur la valeur DÉCODÉE, jamais sur sa graphie.
+
+- **Vérifier qu'une exception peut être vidée AVANT de la vider.** Avant
+  d'écrire `notAnInterfaceString = []`, mesurer : 0 autre clé symbolique du
+  catalogue ne manque son français. Sans cette mesure, vider l'exception était un
+  pari à 30 minutes de CI.
+
+## 266i — un motif qui RESSEMBLE à un défaut connu peut être la forme correcte d'une autre règle
+
+- **`map(String.init)` sur des clés déjà `String` a fait rougir la CI.**
+  `Dictionary.keys` porte des `String` ; y appliquer `String.init` laissait le
+  compilateur choisir entre une dizaine d'initialiseurs génériques —
+  `ambiguous use of 'init'`, bundle de tests non compilé, 26 minutes perdues. La
+  conversion demandée était `String → String` : **une conversion dont la source
+  et la cible sont le même type n'est pas une conversion, c'est un oubli.**
+  Sans compilateur ici, rien ne me contredit — d'où la relecture adversariale
+  AVANT le push, et le fait de préférer partout un idiome déjà passé en CI à un
+  idiome seulement plausible.
+
+- **Un motif qui ressemble à un défaut connu peut être la forme correcte d'une
+  AUTRE règle.** `@State private var isMutedMirror = SharedAVPlayerManager.shared.isMuted`
+  a la silhouette exacte du bug SwiftUI classique (une `@State` semée depuis un
+  singleton n'est qu'un instantané figé). Les douze sites portent tous leur
+  `.onReceive` apparié : c'est la loi « Zero Unnecessary Re-render » appliquée
+  correctement — on ne s'abonne pas à l'objet global, on miroite la primitive et
+  on la resynchronise. **Vérifier l'appariement, jamais reconnaître la
+  silhouette.**
+
+- **Un pourcentage de non-conformité n'est pas un défaut tant qu'on n'a pas lu ce
+  que le code FAIT.** 19 ViewModels sur 30 n'exposent pas `loadState` — 63 % de
+  non-conformité à une règle de la bible, ce qui ressemble à une trouvaille.
+  `BookmarksViewModel` lit pourtant le cache AVANT de toucher `isLoading`, sert
+  `.fresh` sans réseau et rafraîchit `.stale` en tâche de fond : le comportement
+  que la règle protège est là, sous un autre nom. C'est le piège du 260i
+  retourné — là l'instrument mentait, ici il dit vrai et sa CONCLUSION est
+  quand même fausse.
+
+- **Une doctrine peut nommer un composant qui n'existe pas sans être fausse.**
+  `SkeletonPlaceholder` n'apparaît dans aucun `.swift` du dépôt ; c'est un nom
+  GÉNÉRIQUE de la bible, réalisé sous quinze noms de domaine. La règle est mieux
+  tenue que ce qu'elle demandait — mais le lecteur qui cherche le nom écrit ne
+  trouve rien et peut conclure l'inverse. **Un nom de doctrine qui ne
+  correspond à aucun symbole doit dire qu'il est générique, et lister ce qui le
+  réalise**, sinon il coûte une enquête à chaque lecteur.
+
+- **Quatre balayages négatifs d'affilée ne sont pas un échec de méthode.** 254i,
+  255i, 260i, 262i puis les cinq sondes du 266i : sur un dépôt mûr, la mesure
+  qui ne trouve rien est le résultat le plus fréquent, et le publier vaut mieux
+  que de forcer une trouvaille. Ce qu'il faut en tirer n'est pas « chercher
+  ailleurs » mais **« que laisse cette sonde derrière elle ? »** — ici, une
+  matrice de cinq écrans nommée par la bible et gardée par rien.
+
+## 267i — une confiance se DÉPENSE là où on l'a gagnée
+
+- **Un lot volontairement partiel doit nommer ce qui le débloquera, sinon il ne
+  se termine jamais.** 263i a épinglé 40 écrans sur 132 en écrivant la condition
+  de la suite : « le risque n'est pas par fichier mais par PARSEUR ; on épingle
+  un lot que la CI valide, puis on poursuit avec une confiance mesurée ». La CI a
+  validé ; le solde se prend sans redébattre. **Un « pas tout de suite » sans
+  critère de reprise est un abandon déguisé.**
+
+- **Répliquer les FILTRES, pas la boucle** — la leçon 258i, appliquée
+  délibérément cette fois. La réplique a été refaite depuis la source, filtre par
+  filtre, et deux d'entre eux changent le résultat sans se voir : `state ==
+  "translated"` (un `needs_review` n'est PAS une traduction livrée) et les clés
+  PLURIELLES, dont chaque catégorie CLDR doit l'être — sans ce second filtre, les
+  neuf clés plurielles du catalogue comptent comme des trous dans toutes les
+  locales (défaut réel corrigé au 226i).
+
+- **Deux mesures indépendantes qui tombent sur le même nombre valent une
+  preuve.** La réplique rend 92 éligibles, exactement le solde annoncé quatre
+  itérations plus tôt (132 − 40). Ce n'est pas une confirmation logique — les
+  deux pouvaient se tromper pareil — mais c'est le contrôle le moins cher qui
+  existe, et il faut le poser avant de croire un scanner qu'on vient d'écrire.
+
+- **Vérifier une liste qu'on vient d'écrire en la RELISANT depuis le fichier
+  édité.** Contrôler les 135 chemins contre la liste que je viens de composer en
+  mémoire ne prouve rien sur ce qui est réellement dans le fichier : seule la
+  relecture attrape une faute de collage, une entrée dupliquée, une accolade
+  déplacée. Même raison que la borne « les chemins existent sur disque ».
+
+- **Un lot produit parfois un renseignement gratuit qui vaut plus que son
+  livrable.** En classant les 164 fichiers restants par la règle qui les bloque :
+  **154 sur la règle B** (`defaultValue` divergent, #4308) contre 56 sur la règle
+  A. Ce n'est donc plus la traduction qui borne ce cliquet, c'est la dette de
+  littéraux — et la prochaine action utile sur cette surface n'est pas
+  « traduire » mais « réconcilier ». Classer ce qui RESTE par sa cause, pas
+  seulement compter ce qui passe.
+
+## 268i — vérifier la contrainte qu'on HÉRITE avant de la transmettre
+
+- **Une contrainte plausible, écrite une fois, fige une tâche indéfiniment.**
+  #4308 disait : « mécanique, mais à faire avec un compilateur : 648 littéraux
+  Swift, dont beaucoup contiennent des apostrophes (`J'aime`) et des accents ;
+  une erreur d'échappement casse la compilation ». Je l'ai répétée telle quelle
+  dans deux itérations. **Ni l'apostrophe ni l'accent ne s'échappent dans un
+  littéral Swift** — seuls `"` et `\`. Mesuré : sur 504 divergences, **500 ne
+  demandent aucun échappement** et **zéro** contient un guillemet, un antislash
+  ou un saut de ligne. Le risque énoncé n'existait pas sur ce lot.
+  La question à poser à toute contrainte héritée : **quelle mesure la
+  soutient ?** — et si la réponse est « aucune », la mesurer coûte quelques
+  minutes contre des itérations de blocage.
+
+- **Un remplacement de masse se fait sur des BORNES vérifiées, pas sur une
+  expression régulière.** Les 498 littéraux ont été réécrits aux offsets absolus
+  extraits du segment d'appel à parenthèses équilibrées, chaque borne contrôlée
+  avant écriture (`src[start:end] == inline`), les éditions appliquées de DROITE
+  à GAUCHE pour que les décalages restent valides. Puis trois contrôles par
+  fichier : mêmes clés, mêmes lignes, mêmes appels. Sans le contrôle « mêmes
+  clés », une borne fausse aurait réécrit un identifiant de clé au lieu de son
+  libellé — un défaut que la compile n'attrape pas et que les deux règles ne
+  voient pas.
+
+- **Classer ce qui RESTE par sa NATURE, pas seulement le compter.** Les 34 sites
+  non réconciliables se sont révélés être deux familles distinctes : des clés
+  **absentes du catalogue** (leur `defaultValue` s'affiche partout — il manque une
+  entrée, pas un alignement) et des clés **PLURIELLES**. J'ai d'abord écrit
+  « plurielles » pour les quatre premières et j'allais l'étendre aux 34 : la
+  vérification a montré que la majorité était absente du catalogue. **Un
+  échantillon ne nomme pas une population.**
+
+- **Une garde peut contenir un cas qu'aucune correction ne satisfait.** La règle
+  B compare le littéral à `sourceValues[key]`, lu depuis le `stringUnit` PLAT ;
+  une clé plurielle n'en a pas, la valeur est `nil`, et la comparaison échoue
+  quoi qu'on écrive. Trois fichiers sont donc inépinglables **par construction**,
+  pas par dette. C'est la famille du correctif 226i — qui avait appris la
+  pluralité à `loadTranslations` et l'a oubliée pour `values`. **Quand un
+  correctif enseigne une notion à UN lecteur de catalogue, chercher les autres
+  lecteurs du même catalogue.**
+
+## 269i — un repli qui protège d'une panne peut MASQUER une autre
+
+- **Un `defaultValue` rend INVISIBLE l'absence de sa clé au catalogue.** La garde
+  qui traque les clés non résolues (`test_everyUsedIdentifierKeyResolvesInDevelopmentLanguage`)
+  ne regarde que les appels **sans** `defaultValue` — et c'est justifié : un repli
+  garantit qu'on n'affichera jamais l'identifiant brut à l'écran. Mais cette
+  garantie porte sur le CRASH VISUEL, pas sur la LANGUE. Une clé absente du
+  catalogue n'a aucune localisation : son `defaultValue` s'affiche **tel quel dans
+  les sept locales**. Mesuré : 29 chaînes, dont **sept libellés VoiceOver**, sont
+  servies en français à tous les lecteurs non francophones — et en français NON
+  ACCENTUÉ aux francophones, personne n'ayant relu ce littéral comme du texte
+  affiché. **Demander d'un repli : de quoi protège-t-il exactement, et qu'est-ce
+  que sa présence dispense de vérifier ?**
+
+- **Ne pas produire 102 chaînes de traduction de sa propre autorité.** Sur 26
+  clés absentes, 9 ont déjà leur traduction ailleurs dans le catalogue et se
+  réutilisent sans rien inventer ; les 17 autres demanderaient une traduction
+  neuve en six langues dont l'arabe. C'est du texte expédié à des utilisateurs,
+  invérifiable depuis cet environnement — et **une traduction arabe approximative
+  est un défaut pire que le repli français honnête qu'elle remplacerait**. C'est
+  le principe déjà écrit dans `untranslatableKeys` pour les CGU, appliqué au
+  VOLUME plutôt qu'à la nature du texte. Mesurer, tabuler ce qui se réutilise,
+  et remettre la décision — pas deviner.
+
+- **Un lot qui ne débloque rien peut valoir d'être fait, à condition de le dire.**
+  Les 186 dernières réconciliations ne rendent aucun écran épinglable : leurs 40
+  fichiers sont tous retenus par l'autre règle. Leur valeur est que le code cesse
+  de mentir, et qu'ils basculeront sans repasser par là le jour où leurs
+  traductions arrivent. **Annoncer « zéro gain sur la métrique visible » évite de
+  laisser croire à un gain qu'on n'a pas obtenu.**
+
+## 270i — une carte ne peut pas signaler l'entrée qu'elle n'a pas
+
+**Contexte** — 269i lègue « 29 clés absentes du catalogue ». Le remesurage en rend
+114, dont 22 appartiennent à `MeeshyWidgets`. Or `apps/ios/MeeshyWidgets/Localizable.xcstrings`
+existe depuis que la cible existe : 39 clés, les sept locales. C'est la GARDE qui
+lisait le mauvais catalogue — `catalogByTargetFragment` nommait deux des trois
+catalogues du dépôt.
+
+- **Une table de résolution incomplète ne produit pas d'échec, elle produit une
+  MESURE FAUSSE.** Une cible non mappée retombe silencieusement sur le catalogue
+  de l'app : ses clés y sont absentes, donc comptées non traduites alors qu'elles
+  sont traduites, et ses sources restent inépinglables bien qu'elles passent déjà
+  toutes les règles. Le cliquet portait 22 dettes inexistantes sur 114 et refusait
+  une protection déjà acquise. **Un chiffre qui ne bouge pas n'est pas un chiffre
+  qui est juste.**
+
+- **Un témoin écrit DEPUIS la carte ne peut pas voir ce qui n'y est pas.** Toutes
+  les gardes de la suite consommaient `catalogByTargetFragment` — aucune ne
+  pouvait donc constater son entrée manquante : une table ne se lit que pour les
+  entrées qu'elle a. Le témoin doit venir de la source qui connaît l'INVENTAIRE
+  COMPLET — ici le système de fichiers : « tout `.xcstrings` de l'arbre iOS est
+  soit le catalogue de l'app, soit mappé », plus la direction inverse (aucun
+  mappage mort) et un sondage par fragment (le mappage RÉSOUT vraiment). C'est la
+  forme, appliquée à une table de configuration, de la leçon 261 : une énumération
+  porte deux affirmations — « ces entrées sont justes » (vérifiable) et « ce sont
+  toutes les entrées » (presque jamais vérifiée).
+
+- **Les trous d'un catalogue ne sont pas dispersés : ce sont les VALEURS
+  MANQUANTES de familles par ailleurs traduites.** `DeliveryStatus` a six cas, le
+  compositeur émet une clé par cas, trois sont au catalogue et trois non : un
+  lecteur d'écran arabophone entendait trois états en arabe et trois en français
+  dans la même phrase. La pastille de synchronisation annonce ses 53 opérations en
+  sept langues et ses deux boutons en français. **Le code, lui, a l'air complet —
+  la complétude qu'on vérifie à l'œil est celle du `switch`, pas celle du
+  catalogue.** À une clé absente, demander non seulement « que voit
+  l'utilisateur ? » mais **« quelles sont ses SŒURS, et sont-elles là ? »**
+
+- **Compléter une famille attrape ce qu'un balayage par égalité de chaîne laisse
+  derrière.** Dix des onze clés remplies l'ont été en copiant verbatim une entrée
+  portant déjà le même français ; la onzième, `a11y.delivery.sending`, n'a pas de
+  jumelle textuelle (« en cours d'envoi » vs « Envoi en cours ») et n'aurait été
+  trouvée par aucune recherche d'égalité. Et sa CASSE se déduit sans rien inventer :
+  les trois sœurs déjà au catalogue portent la forme mi-phrase en minuscule dans
+  les six mêmes langues (`gesendet` là où la bulle dit `Gesendet`). **Une famille
+  à moitié traduite documente sa propre convention — c'est la ressource la moins
+  chère et la plus sûre pour remplir l'autre moitié.**
+
+- **Un témoin qui n'a jamais été exécuté est une hypothèse.** Le premier jet de
+  `test_everyPerTargetCatalogIsMapped` élisait les catalogues par leur EXTENSION
+  (`.xcstrings`) et rougissait : deux cibles expédient aussi un
+  `InfoPlist.xcstrings`, qui localise des valeurs d'`Info.plist` lues par le
+  système — pas une table adressable depuis `String(localized:)`. Le critère juste
+  est le NOM DE FICHIER (`Localizable.xcstrings`), la table par défaut. Sans chaîne
+  d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
+  l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
+  évité un cycle CI de cinquante.
+
+- **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+  n'est PAS localisée.** `FocalVoiceOverParityTests` cherchait le segment
+  d'accusé de livraison par le littéral `"lu"`, force-unwrappé. Il passait
+  uniquement parce que `a11y.delivery.read` était absente du catalogue : toutes
+  les locales retombaient sur le `defaultValue` français. La clé ajoutée, le
+  simulateur anglais de la CI rend « read », l'index vaut `nil`, `signal trap` —
+  1 échec sur 9 062. **Un tel test est un cliquet à l'envers : il ne rougit pas
+  quand la traduction manque, il rougit quand elle ARRIVE**, et le prix se paie
+  au moment exact où l'on répare le défaut. Corollaire mesuré sur le voisin :
+  `contains("lu")` passait sur un contenu texte « Sa**lu**t » — donc même si le
+  segment gardé avait disparu. Demander sa valeur au CATALOGUE, comme le
+  faisaient déjà tous les tests voisins.
+
+- **« Zéro ligne de production modifiée » n'est pas « zéro changement de
+  comportement ».** Entrer une clé au catalogue change ce que `String(localized:)`
+  rend dans les six autres locales — c'est l'objet même du lot. Avant de conclure
+  qu'un lot de catalogue est inerte, chercher qui COMPARE ces chaînes : tests
+  d'abord, code de production ensuite.
+
+- **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+  EXÉCUTÉ.** Le gate iOS de ce dépôt est un opt-in par mot-clé dans le SUJET du
+  commit de tête (« smoke test » / « run test » / « to test ») ; sans lui, le job
+  macOS compile et saute `Run iOS tests`. Le premier run de la PR 270i est sorti
+  vert sans exécuter un seul test — le workflow le dit dans le NOM du check
+  (« Build app (app + cibles de test) » vs « Build app + tests unitaires »), et
+  c'est la seule chose qui distingue les deux verts. **Lire les étapes du job, pas
+  sa conclusion.** `workflow_dispatch` force la suite complète sans pousser de
+  commit vide.

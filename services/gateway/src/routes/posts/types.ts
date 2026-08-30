@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -129,7 +130,7 @@ const StoryTextObjectSchema = z.object({
 
 const StoryStickerObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
-  emoji: z.string().max(16).optional(),
+  emoji: z.string().max(EMOJI_MAX_LENGTH).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
   scale: z.number().min(0).max(20).optional(),
@@ -513,7 +514,7 @@ export const ReelFeedQuerySchema = FeedQuerySchema.extend({
 });
 
 export const LikeSchema = z.object({
-  emoji: z.string().max(10).default('❤️'),
+  emoji: z.string().max(EMOJI_MAX_LENGTH).default('❤️'),
 });
 
 /**
@@ -541,7 +542,7 @@ export const LikeSchema = z.object({
  * geste à l'aveugle que cette route existe pour supprimer.
  */
 export const UnlikeSchema = z.object({
-  emoji: z.string().trim().min(1).max(10).optional(),
+  emoji: z.string().trim().min(1).max(EMOJI_MAX_LENGTH).optional(),
 });
 
 // ============================================

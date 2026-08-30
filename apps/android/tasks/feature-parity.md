@@ -2171,7 +2171,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
       `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
-      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      URLs; plus `highlightRanges` (accent- **and** case-insensitive/non-overlapping — `search-accent-fold-highlight`
+      2026-08-30, iOS `.diacriticInsensitive`/`.caseInsensitive` parity via pure `SearchTextFolder`, ranges mapped
+      back to original indices even when folding changes length, decomposed graphemes highlighted whole),
+      `extractUrls` (meeshy→mention→http),
       `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
@@ -3734,7 +3737,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
       than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
-- [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+- [~] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+      **Pure board core done** (`story-drawing-board`): a pure, immutable `StoryDrawingBoard`
+      (`:feature:stories`) porting the iOS `StoryComposerViewModel+DrawingEditing` reducer —
+      committed `strokes` + a `redoStack` + a `selectedStrokeId`, with `commit` / `undo` / `redo` /
+      `clear` / `delete` / `select` and per-stroke `recolorSelected` / `resizeSelected` /
+      `smoothSelected`. The redo-invariant lives in one place: `redoStack` is populated only by
+      `undo`, and any fresh action (`commit`, a real `delete`) invalidates it, while a property tweak
+      (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact. `StoryDrawingStroke` /
+      `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line)
+      mirror the iOS models with the exact gateway wire strings.
+      Two deliberate improvements over iOS: `undo`/`delete`/`select`/mutate no-ops return the same board
+      unchanged, and `delete` of an absent id keeps the redo history (iOS clears it unconditionally).
+      +33 tests, RED-proven (dropping `commit`'s `redoStack = emptyList()` fails exactly the
+      redo-invalidation test).
+      **Wire serialization done** (`story-drawing-strokes-wire`): the stroke wire model was promoted
+      from `:feature:stories` to `:core:model` (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/
+      `StrokeTool`/`StrokeSmoothing`, now `@Serializable` with `@SerialName` = the exact gateway strings)
+      so it is the SINGLE type the reducer AND the `StoryEffects.drawingStrokes` wire field both hold —
+      exactly as iOS keeps one `MeeshySDK/Models/StoryDrawingStroke` for both (no divergent twin).
+      `createdAt` is now carried as an optional `Double?` passthrough (epoch seconds) for round-trip
+      fidelity; the reducer still never reads it. `StoryEffects.drawingStrokes` decodes flat on the v1
+      wire and rides the v3 `kind:"drawing"` object's `payload.strokes`, projected back by
+      `CanvasV3Projection` (port of iOS `CanvasV3Migration.swift:580-583`); the legacy PKDrawing blob
+      (`payload.data`) has no Android renderer and is read as nothing to paint, an empty/absent `strokes`
+      normalises to `null`. +9 tests, RED-proven (neutering the projection branch fails exactly the 3
+      strokes-projection tests, oracle = shared `v1-legacy-rich` v1/v3 fixture pair). Pending: the Compose
+      capture surface (variable-width pressure render) + composer VM wiring — device/Compose-bound.
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
       `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
       symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
@@ -4209,8 +4238,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       BUILD SUCCESSFUL.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
-      surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
-      RAW background publish-all still pending.
+      surface a Retry/Discard strip above the tray — no silent loss); **RAW background publish-all**
+      done (slice `story-publish-queue-media-only`, 2026-08-29): `StoryRepository.decodeStoryPublish`
+      no longer requires text — a media-only (image/video, no caption) publish, exactly what the
+      composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`), now decodes and
+      so surfaces BOTH its optimistic self-ring AND its failure-recovery strip instead of being
+      silently dropped; `Pending`/`FailedStoryPublish.content` are nullable and carry `mediaIds`, the
+      strip shows a localised `stories_publish_media_summary` when there is no caption. +14 tests,
+      mutation-RED-proven (dropping the media clause reddens exactly the 3 media-only decode tests).
+      A media-preview THUMBNAIL in the ring (needs the local media URI on the outbox row) still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
 - [~] thumbHash blur-placeholder per slide — **display/read path DONE** (slice
@@ -4222,7 +4258,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
       mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
       **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
-      needs `Bitmap`→RGBA, so it is a separate follow-up using the already-ported `ThumbHash.encode`.
+      needs `Bitmap`→RGBA. Its JVM-testable half now shipped (slice `thumbhash-source-plan`, 2026-08-29):
+      `ThumbHash.sourcePlan(width, height) → ThumbHashSourcePlan(width, height, downscaled)` in `:core:model`
+      computes the legal `encode` input dimensions — caps the long edge at 100px, derives the short edge by
+      aspect ratio (round-half-up), clamps each side to ≥1 so an extreme banner ratio never rounds to a 0-side
+      encode input, and passes an already-in-budget source through verbatim (`downscaled=false`, no upscale).
+      +15 tests, mutation-RED-proven (dropping the ≥1 clamp reddens the extreme-ratio tests; `<` vs `<=`
+      on the budget boundary reddens the pass-through test). Remaining glue: the app-side `Bitmap` scale to
+      the plan + RGBA read-back + `ThumbHash.encode` at publish (device-bound).
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
@@ -4886,7 +4929,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
       exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
-- [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+- [~] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+      — **pure canvas-reprojection core shipped** (slice `story-canvas-reprojection`, 2026-08-30): the
+      JVM-testable heart of reposting a story's canvas into a post of a different aspect ratio. Pure
+      `:feature:stories` `CanvasReprojector(source, target)` ports iOS `CanvasReprojector`
+      (`MeeshyUI/Story/Canvas`): normalized `[0,1]` positions are reprojected center-anchored
+      (`(0.5,0.5)` a fixed point, scaled by the source/target aspect ratio), out-of-bounds results
+      clamped back into `[0,1]` and reported with a `ReprojectionWarning.Clamped(originalX, originalY)`;
+      scale/aspect/rotation invariant. `reproject(text/media/sticker)` per family; `reproject(audio)`
+      identity (no spatial position). Batch `reprojectAll(CanvasObjects) → RepostReprojection` collects
+      warnings in encounter order and exposes `repositionedCount`/`hasClampedItems` — the pure decision
+      the "N item(s) repositioned for the new aspect ratio" banner reads (iOS
+      `RepostReprojectionResult`/`reprojectionWarnings.count`). **SOTA over iOS:** a degenerate target
+      (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an
+      identity reprojection — a malformed canvas size can never corrupt coordinates. +15 tests
+      (`CanvasReprojectorTest`), mutation-RED-proven (suppressing the clamp warning reddens EXACTLY the
+      4 warning/count tests, the 10 centered/invariance/identity/empty tests stay green). **Pending
+      (device/Compose-bound):** the `RepostPayload` extractor from a `StorySlide`/`StoryItem` (needs the
+      source-canvas-aspect → size mapping, iOS `repostSourceCanvasSize`), reprojecting the freehand
+      `StoryDrawingStroke` set (Android's pure stroke model, not iOS's PencilKit blob — its own
+      follow-up once the stroke coordinate space is confirmed), `StoryLocationObject` (no Android model
+      yet), and the Compose "items repositioned" banner glue + `UnifiedPostComposer` import wiring.
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
       count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
 - [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
@@ -5727,10 +5790,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
       is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
       +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
-      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
-      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
-      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
-      and the accent-coherent filter panel UI (preset chips + advanced toggles).
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Low-light-boost decision core landed**
+      (slice `call-low-light-boost`): the pure `core:model` `LowLightBoostPolicy` is the SSOT for the
+      automatic low-light pass — a total, side-effect-free port of iOS `VideoFilterPipeline.applyLowLightBoost`
+      (§14.2.4). `plan(averageBrightness)` decides whether to lift a dim frame and by how much: `null` (forward
+      untouched) for no reading or any normalized brightness `≥ 0.3`, else a `LowLightBoost`
+      (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation) scaled by
+      `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4,
+      saturation 1+×0.2). **SOTA hardening over iOS:** `boostFactor` is **clamped to 0..1** so a degenerate
+      negative reading can never over-boost (iOS never clamps — its luma is always 0..255). `planForFrame(...)`
+      is the actuator's one-call seam that **folds `FrameLuminance.averageOfYPlane`** straight into `plan` —
+      literally the "folding `FrameLuminance`" clause. +13 behavioural tests. Mutation (RED proof): dropping
+      the clamp fails **exactly** the negative-reading test (13 tests, 1 failed, no collateral). **Pending:**
+      the WebRTC `VideoProcessor`/`VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation
+      blur + face-detect smoothing) that applies `effectiveConfig` per captured frame, the actuator glue that
+      applies the `LowLightBoost` filters to the frame, and the accent-coherent filter panel UI (preset
+      chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`
@@ -5754,8 +5829,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
-      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
-      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. **Thermal-source
+      mapping landed** (slice `call-thermal-status-mapping`): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the seven raw `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers,
+      monotonic & clamped at both ends, so the `:app` layer only forwards `getCurrentThermalStatus()`.
+      Pending: only the live RTP-sender actuator (needs an emulator/WebRTC, not JVM-testable).
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -5778,9 +5856,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
       `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
       `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
-      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
-      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
-      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Thermal-source mapping
+      landed** (slice `call-thermal-status-mapping`, 2026-08-29): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the raw `PowerManager.THERMAL_STATUS_*` int the `:app` layer forwards. **Pending:** only the real
+      WebRTC actuator seam (apply the cap to the live RTP video sender, debounce re-apply) + consuming
+      `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
@@ -5801,7 +5881,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
       identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
       fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
-      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      *pending* call's id. +15 tests. The **long-haul RTT recalibration** landed (slice
+      `call-quality-rtt-longhaul-parity`, 2026-08-29): the three Android RTT boundaries had been
+      ported at iOS's PRE-recalibration values (fair `200` / poor `300` / critical `500`) and never
+      followed iOS's move out to `300`/`500`/`800`. On a healthy Africa↔Asia call (RTT 250-450 ms,
+      already 155-221 ms on the backbone before the mobile last mile) Android misclassified the tier —
+      a 250 ms hop showed FAIR not GOOD, a 350 ms call showed POOR (weak-link error hue) not FAIR, a
+      550 ms link showed CRITICAL not POOR — so the very calls this ladder exists to serve were
+      painted red at 00:06 while iOS showed them healthy. `CallQualityThresholds.{VIDEO_FAIR_RTT_MS,
+      VIDEO_POOR_RTT_MS,POOR_RTT_MS}` are now at exact iOS `WebRTCTypes.QualityThresholds` parity;
+      packet-loss bands (the true congestion signal) were already correct and unchanged. +9 tests
+      (both-sides-of-boundary re-pins at 300/500/800 + three named intercontinental regressions),
+      RED-proven (9 fail against the stale constants, compile healthy). The **WebRTC stats reducer +
+      interval loss-ratio landed** (slice `call-stats-reduce`, 2026-08-29): the pure `core:model`
+      `CallStats` + `CallStats.RawEntry` + `CallStats.reduce(entries)` is the SSOT projection of a WebRTC
+      stats report — a faithful port of iOS `CallStats.reduce` (`WebRTCTypes.swift` §5.7): `candidate-pair`
+      sets rtt (`currentRoundTripTime`×1000) + `availableOutgoingBitrate`; `inbound-rtp` sums packetsLost/
+      bytesReceived, splits `packetsReceived` into audio/video by `kind`, means the audio jitter, and resolves
+      the primary codec via the FIRST inbound entry's `codecId → codec.mimeType` (`"audio/opus"`→`"opus"`);
+      `outbound-rtp` sums sent packets + bandwidth. `CallStats.intervalQualitySample(previous)` derives the
+      loss FRACTION `Δlost/(Δlost+Δreceived)` from two cumulative snapshots (port of `WebRTCService.adjustBitrate`)
+      — never the raw cumulative count (the P1-4 >100 %-loss bug), and **clamps each delta at 0** so a counter
+      reset (ICE restart) never yields negative/spurious loss. This is the pure half of the "live WebRTC stats
+      source" — the device actuator now only adapts `RTCStatsReport → List<RawEntry>` then calls `reduce` +
+      `intervalQualitySample`. +25 tests, RED-proven (drop the reset clamp → exactly the negative-loss test
+      fails; drop rtt×1000 → exactly the ms test; make codec last-wins → exactly the first-wins test; each 1
+      failed, no collateral). **Pending:** only the device WebRTC stats-report adapter that feeds `reduce`.
+      The **identity-aware active-call teardown** landed (slice
       `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
       `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
       CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
@@ -6603,8 +6709,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
-- [ ] Notification center with category filters (messages, reactions, mentions, social,
-      contacts, groups, calls, translations, system)
+- [x] Notification center with category filters (messages, reactions, mentions, social,
+      contacts, groups, calls, translations, system) — **shipped 2026-08-30** (slice
+      `notification-center-category-filter`): pure `:core:model` `NotificationFilterCategory`
+      (11 chips — ALL/UNREAD + 9 type chips) + `NotificationTypeVocabulary`, a faithful port of
+      iOS `NotificationCategory` (`MeeshyUI/Notifications/NotificationListView.swift`). Each chip
+      owns its backend-`type` set + `matches(type)`; `filter(list)` reproduces iOS
+      `filteredNotifications` exactly (ALL keeps all, UNREAD keeps unread of any type, a type chip
+      keeps matching rows read-or-not). Unknown wire type → `system` (iOS `rawValue ?? .system`),
+      known-but-uncategorised types surface only under ALL. Wired into `NotificationsViewModel`
+      (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
+      ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
+      empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
@@ -6792,7 +6908,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       parity, blank→null, unparseable→null, unix-epoch preserved).
 
 ## N. Search
-- [ ] Global search (messages, conversations, users) with recent searches + query highlighting
+- [~] Global search (messages, conversations, users) with recent searches + query highlighting —
+      three-tab search (`GlobalSearchViewModel` + `GlobalSearchRepository`, debounce 300 ms / 2-char
+      floor / single query feeds all tabs), recent searches (`RecentSearches`/`RecentSearchesStore`),
+      and accent-folded highlight ranges (`MessageTextParser.highlightRanges` via `SearchTextFolder`)
+      all done in earlier slices. **Cache-first query cache + socket invalidation done** (slice
+      `global-search-query-cache`, 2026-08-30): pure `:core:model` `SearchQueryCache<V>` — immutable
+      LRU (capacity 5) + TTL (120 s) keyed by normalised query (trim+lowercase), faithful port of iOS
+      `GlobalSearchViewModel.messageQueryCache` (`get` a pure read — an expired entry is a MISS, never a
+      mutation; `put` evicts the oldest past capacity and never a slot on re-put; `invalidate` clears).
+      `GlobalSearchViewModel` now serves a repeated in-TTL query from the cache with NO network round-trip
+      and NO spinner (dimension 2 Performance), and invalidates on `conversation:updated`/`conversation:deleted`
+      socket events (parity iOS `setupSocketInvalidation`), so a stale result never survives a data change.
+      +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
+      +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
+      re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
+      **Remaining:** query highlighting rendered in the RESULT rows (iOS `highlightedText`, currently only the
+      chat bubble renders `highlightRanges`), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,

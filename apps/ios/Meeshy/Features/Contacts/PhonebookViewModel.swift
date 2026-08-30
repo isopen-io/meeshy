@@ -156,7 +156,7 @@ final class PhonebookViewModel: ObservableObject {
         } catch {
             // Le cache déjà affiché prime : une revalidation ratée ne doit pas
             // effacer un répertoire consultable (dégradation offline).
-            loadState = contacts.isEmpty ? .error(String(localized: "contacts.phonebook.load-error", defaultValue: "Impossible de charger le repertoire", bundle: .main)) : .loaded
+            loadState = contacts.isEmpty ? .error(String(localized: "contacts.phonebook.load-error", defaultValue: "Impossible de charger le répertoire", bundle: .main)) : .loaded
         }
     }
 
@@ -193,7 +193,7 @@ final class PhonebookViewModel: ObservableObject {
             guard !silent else { return }
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.sync-error", defaultValue: "Impossible de synchroniser le repertoire", bundle: .main)
+                String(localized: "contacts.phonebook.sync-error", defaultValue: "Impossible de synchroniser le répertoire", bundle: .main)
             )
         }
     }
@@ -265,7 +265,7 @@ final class PhonebookViewModel: ObservableObject {
             )
         } catch {
             FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.erase-error", defaultValue: "Impossible d'effacer le repertoire", bundle: .main)
+                String(localized: "contacts.phonebook.erase-error", defaultValue: "Impossible d'effacer le répertoire", bundle: .main)
             )
         }
     }

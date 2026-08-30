@@ -1,0 +1,124 @@
+# =============================================================================
+# Pilotage — créer ou mettre à jour un milestone, à la demande
+#
+# POURQUOI CE WORKFLOW EXISTE. Une session Claude Code distante ne peut pas
+# créer de milestone : l'API REST de GitHub lui est fermée par la politique
+# d'egress de l'organisation (403 « GitHub access is not enabled for this
+# session »), et le serveur MCP GitHub, lui, n'expose aucun outil de milestone.
+# Or le CLAUDE.md racine impose qu'un livrable VIVE dans un milestone. Ce
+# workflow rend cette capacité au dépôt : le GITHUB_TOKEN d'Actions, sous
+# `issues: write`, crée le milestone que la session ne peut pas créer.
+#
+# IL VIT SUR LA BRANCHE PAR DÉFAUT, ET C'EST OBLIGATOIRE. GitHub n'enregistre
+# un `workflow_dispatch` que depuis la branche par défaut : posé sur une autre,
+# le dispatch rend 404 (mesuré). Ne pas le déplacer sur une branche de travail.
+#
+# Il est IDEMPOTENT : un milestone du même titre est mis à jour, jamais
+# dupliqué. Il rend le numéro du milestone dans le résumé du run — c'est ce
+# numéro qu'attend l'API des issues.
+# =============================================================================
+name: Pilotage — milestone
+
+on:
+  workflow_dispatch:
+    inputs:
+      titre:
+        description: "Titre du milestone — nommé par le RÉSULTAT attendu, jamais « Vague A » ni « Phase 1 »"
+        required: true
+        type: string
+      description:
+        description: "Ce que le milestone livre, et à quoi on saura qu'il est fini"
+        required: false
+        type: string
+        default: ''
+      echeance:
+        description: "Échéance au format AAAA-MM-JJ (vide = aucune)"
+        required: false
+        type: string
+        default: ''
+      issues:
+        description: "Numéros d'issues à rattacher, séparés par des virgules (ex. 4371,4372)"
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  issues: write
+
+concurrency:
+  group: pilotage-milestone
+  cancel-in-progress: false
+
+jobs:
+  milestone:
+    name: Créer ou mettre à jour
+    runs-on: ubuntu-latest
+    steps:
+      - name: Créer ou mettre à jour le milestone, puis rattacher les issues
+        uses: actions/github-script@v8
+        env:
+          TITRE: ${{ inputs.titre }}
+          DESCRIPTION: ${{ inputs.description }}
+          ECHEANCE: ${{ inputs.echeance }}
+          ISSUES: ${{ inputs.issues }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const titre = process.env.TITRE.trim();
+            if (!titre) throw new Error('Le titre est vide.');
+
+            const echeance = process.env.ECHEANCE.trim();
+            if (echeance && !/^\d{4}-\d{2}-\d{2}$/.test(echeance)) {
+              throw new Error(`Échéance « ${echeance} » : attendu AAAA-MM-JJ.`);
+            }
+
+            const champs = { title: titre, state: 'open' };
+            const description = process.env.DESCRIPTION.trim();
+            if (description) champs.description = description;
+            if (echeance) champs.due_on = `${echeance}T00:00:00Z`;
+
+            // Idempotence : on cherche d'abord, sur les deux états — un
+            // milestone fermé du même titre ne doit pas produire un doublon.
+            const existants = await github.paginate(github.rest.issues.listMilestones, {
+              owner, repo, state: 'all', per_page: 100,
+            });
+            const deja = existants.find(m => m.title === titre);
+
+            let milestone;
+            if (deja) {
+              milestone = (await github.rest.issues.updateMilestone({
+                owner, repo, milestone_number: deja.number, ...champs,
+              })).data;
+              core.info(`Milestone #${milestone.number} mis à jour (il existait déjà).`);
+            } else {
+              milestone = (await github.rest.issues.createMilestone({ owner, repo, ...champs })).data;
+              core.info(`Milestone #${milestone.number} créé.`);
+            }
+
+            const numeros = process.env.ISSUES.split(',').map(s => s.trim()).filter(Boolean);
+            const rattachees = [], refusees = [];
+            for (const n of numeros) {
+              const numero = Number(n);
+              if (!Number.isInteger(numero) || numero <= 0) { refusees.push(`${n} (pas un numéro)`); continue; }
+              try {
+                await github.rest.issues.update({ owner, repo, issue_number: numero, milestone: milestone.number });
+                rattachees.push(numero);
+              } catch (e) {
+                refusees.push(`${numero} (${e.status || '?'} ${e.message})`);
+              }
+            }
+
+            await core.summary
+              .addHeading(`Milestone #${milestone.number} — ${milestone.title}`)
+              .addRaw(`\n${deja ? 'Mis à jour' : 'Créé'} : ${milestone.html_url}\n\n`)
+              .addTable([
+                [{ data: 'Champ', header: true }, { data: 'Valeur', header: true }],
+                ['Numéro', String(milestone.number)],
+                ['Échéance', milestone.due_on ? milestone.due_on.slice(0, 10) : '—'],
+                ['Issues rattachées', rattachees.length ? rattachees.map(n => `#${n}`).join(', ') : '—'],
+                ['Refusées', refusees.length ? refusees.join(' · ') : '—'],
+              ])
+              .write();
+
+            if (refusees.length) core.warning(`Issues non rattachées : ${refusees.join(' · ')}`);
+            core.setOutput('numero', milestone.number);

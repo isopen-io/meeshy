@@ -116,7 +116,7 @@ final class DeclarationBodyScannerTests: XCTestCase {
         let pill = try source("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
         let mute = DeclarationBodyScanner.body(containing: "private var muteButton", in: pill)
         XCTAssertNotNil(mute)
-        XCTAssertTrue(mute!.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
+        XCTAssertTrue(mute!.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)"),
                       "à 1 001 caractères — un caractère au-delà de l'ancienne fenêtre de 1 000")
     }
 }

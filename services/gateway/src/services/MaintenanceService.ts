@@ -132,15 +132,28 @@ export class MaintenanceService {
 
     // OPTIMISATION: Tâche de maintenance pour l'état en ligne/hors ligne (toutes les 15 secondes)
     // Ancien: 60000ms (60s) -> Nouveau: 15000ms (15s) = 4x plus rapide
-    this.maintenanceInterval = setInterval(async () => {
+    //
+    // Callback NON-async + `void … .catch(…)` — forme bénie des services frères
+    // (ExpiredMessagesCleanupService, CallService). Un `setInterval(async () =>
+    // { await … })` n'attend pas son callback : un rejet n'a aucun try/catch
+    // englobant où être vu, et sous le `--unhandled-rejections=throw` par défaut
+    // de Node 22 son seul effet serait l'ARRÊT du process — toute la passerelle
+    // tombée pour une passe de maintenance best-effort (leçon 230/307). Ne jamais
+    // s'appuyer sur le try/catch interne du callee : il est faux dès qu'une
+    // instruction non gardée précède son propre catch.
+    this.maintenanceInterval = setInterval(() => {
       logger.debug('🔄 Exécution de la tâche de maintenance automatique...');
-      await this.updateOfflineUsers();
+      void this.updateOfflineUsers().catch((error) =>
+        logger.error('❌ Tâche de maintenance périodique échouée:', error)
+      );
     }, 15000); // Vérifier toutes les 15 secondes (4x plus rapide)
     this.maintenanceInterval.unref?.();
 
     // Tâche de nettoyage journalier (toutes les heures, mais ne s'exécute qu'une fois par jour)
-    this.dailyCleanupInterval = setInterval(async () => {
-      await this.runDailyCleanup();
+    this.dailyCleanupInterval = setInterval(() => {
+      void this.runDailyCleanup().catch((error) =>
+        logger.error('❌ Nettoyage journalier périodique échoué:', error)
+      );
     }, 60 * 60 * 1000); // Vérifier toutes les heures
     this.dailyCleanupInterval.unref?.();
 

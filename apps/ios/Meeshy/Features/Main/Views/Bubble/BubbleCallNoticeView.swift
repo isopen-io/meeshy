@@ -38,6 +38,16 @@ struct BubbleCallNoticeView: View, Equatable {
     /// Timer). Pure presentation state, excluded from Equatable by nature.
     @State private var livePulse = false
 
+    // `Equatable` est MANUEL sur cette vue (voir `==` juste dessous), donc deux
+    // propriétés `@Environment` ne cassent rien ici — contrairement à
+    // `BubbleEditedIndicator`, `Equatable` par synthèse, qui passe par
+    // `.meeshyAnimation` pour rester sans état.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
@@ -159,8 +169,13 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint)
                 .frame(width: 7, height: 7)
                 .opacity(livePulse ? 0.3 : 1)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
-                .onAppear { livePulse = true }
+                .meeshyAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
+                // Le repos est `false`, donc **opacité 1** — l'INVERSE de la
+                // cible de l'animation. Se poser sur la cible (0.3), ce que
+                // fait le portillon d'ambiance de l'onboarding, laisserait un
+                // point d'appel en cours presque invisible : le remède rendrait
+                // l'indicateur moins lisible que le défaut (#4286).
+                .onAppear { livePulse = !reduceMotion }
                 .accessibilityHidden(true)
             Text(subtitle)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
@@ -577,7 +592,7 @@ struct CallSummaryDetailSheet: View {
 
     private var callBackTitle: String {
         summary.callType == .video
-            ? String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main)
+            ? String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main)
             : String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main)
     }
 
@@ -589,7 +604,7 @@ struct CallSummaryDetailSheet: View {
                 icon: mediaGlyph,
                 label: String(localized: "calls.detail.type", defaultValue: "Type", bundle: .main),
                 value: summary.callType == .video
-                    ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
+                    ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
                     : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
             )
             detailRow(
@@ -607,7 +622,7 @@ struct CallSummaryDetailSheet: View {
             if let data = summary.dataSpentLabel {
                 detailRow(
                     icon: "arrow.up.arrow.down",
-                    label: String(localized: "calls.detail.data", defaultValue: "Données", bundle: .main),
+                    label: String(localized: "calls.detail.data", defaultValue: "Donnees", bundle: .main),
                     value: data
                 )
             }
@@ -693,7 +708,7 @@ struct CallSummaryDetailSheet: View {
 
     private func qualityWord(_ quality: CallSummaryMetadata.NetworkQuality) -> String {
         switch quality {
-        case .excellent: return String(localized: "bubble.call.quality.excellent", defaultValue: "Excellent", bundle: .main)
+        case .excellent: return String(localized: "bubble.call.quality.excellent", defaultValue: "Excellente", bundle: .main)
         case .good: return String(localized: "bubble.call.quality.good", defaultValue: "Bonne", bundle: .main)
         case .fair: return String(localized: "bubble.call.quality.fair", defaultValue: "Moyenne", bundle: .main)
         case .poor: return String(localized: "bubble.call.quality.poor", defaultValue: "Faible", bundle: .main)

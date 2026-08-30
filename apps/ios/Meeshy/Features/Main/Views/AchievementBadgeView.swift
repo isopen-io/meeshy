@@ -66,6 +66,6 @@ struct AchievementBadgeView: View {
         )
         .opacity(achievement.isUnlocked ? 1 : 0.7)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(achievement.name), \(achievement.isUnlocked ? String(localized: "achievement.unlocked", defaultValue: "unlocked", bundle: .main) : String(localized: "achievement.locked", defaultValue: "locked", bundle: .main)), \(achievement.current) \(String(localized: "achievement.outOf", defaultValue: "of", bundle: .main)) \(achievement.threshold)")
+        .accessibilityLabel("\(achievement.name), \(achievement.isUnlocked ? String(localized: "achievement.unlocked", defaultValue: "déverrouillé", bundle: .main) : String(localized: "achievement.locked", defaultValue: "verrouillé", bundle: .main)), \(achievement.current) \(String(localized: "achievement.outOf", defaultValue: "sur", bundle: .main)) \(achievement.threshold)")
     }
 }

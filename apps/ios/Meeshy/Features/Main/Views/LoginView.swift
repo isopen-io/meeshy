@@ -32,6 +32,12 @@ struct LoginView: View {
 
     @FocusState private var focusedField: Field?
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private enum Field { case username, password, accountPassword, customHost, twoFactorCode }
 
     private var isDark: Bool { theme.mode.isDark }
@@ -96,7 +102,7 @@ struct LoginView: View {
                 .padding(.bottom, MeeshySpacing.xxl)
                 .accessibilityHidden(true)
 
-                Text("Meeshy")
+                Text(verbatim: "Meeshy")
                     .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 6, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
@@ -171,8 +177,15 @@ struct LoginView: View {
                 .environmentObject(authManager)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                glowPulse = true
+            // Halo décoratif, même traitement que l'écran de démarrage : sous
+            // Reduce Motion il n'a pas de valeur de repos à rejoindre, il ne
+            // démarre pas. L'apparition des champs juste en dessous, elle,
+            // reste animée — c'est une transition qui se TERMINE, pas
+            // l'ambiance sans fin que Reduce Motion vise.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    glowPulse = true
+                }
             }
             withAnimation(.spring(response: 0.7, dampingFraction: 0.8).delay(0.2)) {
                 showFields = true

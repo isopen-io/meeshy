@@ -490,6 +490,71 @@ class StoryRepositoryTest {
     }
 
     @Test
+    fun `pendingPublishes decodes a media-only publish with no text`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = null, mediaIds = listOf("m1"), visibility = "FRIENDS"))
+
+        val pending = repo.pendingPublishes().first().single()
+
+        assertThat(pending.content).isNull()
+        assertThat(pending.mediaIds).containsExactly("m1")
+        assertThat(pending.visibility).isEqualTo("FRIENDS")
+    }
+
+    @Test
+    fun `pendingPublishes carries the queued media ids alongside the text`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "caption", mediaIds = listOf("m1", "m2")))
+
+        val pending = repo.pendingPublishes().first().single()
+
+        assertThat(pending.content).isEqualTo("caption")
+        assertThat(pending.mediaIds).containsExactly("m1", "m2").inOrder()
+    }
+
+    @Test
+    fun `pendingPublishes filters out blank media ids`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = null, mediaIds = listOf("", "  ", "m1")))
+
+        assertThat(repo.pendingPublishes().first().single().mediaIds).containsExactly("m1")
+    }
+
+    @Test
+    fun `pendingPublishes skips a publish with neither text nor media`() = runTest {
+        val outbox = outbox()
+        repository(outbox).enqueuePublish(CreateStoryRequest(content = "   ", mediaIds = listOf("", "  ")))
+
+        assertThat(repository(outbox).pendingPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `pendingPublishes leaves media ids empty for a text-only publish`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "just text"))
+
+        assertThat(repo.pendingPublishes().first().single().mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `failedPublishes surfaces an exhausted media-only publish`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        val cmid = repo.enqueuePublish(CreateStoryRequest(content = null, mediaIds = listOf("m1")))!!
+        outbox.markExhausted(cmid, "gave up")
+
+        val failed = repo.failedPublishes().first().single()
+
+        assertThat(failed.cmid).isEqualTo(cmid)
+        assertThat(failed.content).isNull()
+        assertThat(failed.mediaIds).containsExactly("m1")
+    }
+
+    @Test
     fun `publishQueue surfaces live and exhausted publishes together in one snapshot`() = runTest {
         val outbox = outbox()
         val repo = repository(outbox)

@@ -70,7 +70,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   message,
   currentUser,
   userLanguage,
-  _usedLanguages = [],
+  usedLanguages = [],
   currentDisplayLanguage,
   _isTranslating = false,
   translationError,
@@ -149,6 +149,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   } = useMessageDisplay({
     message: message as unknown,
     currentDisplayLanguage,
+    usedLanguages,
   });
 
   const hasReactions = message.reactionSummary && Object.keys(message.reactionSummary).length > 0;

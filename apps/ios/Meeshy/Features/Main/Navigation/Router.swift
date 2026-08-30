@@ -104,53 +104,53 @@ extension Route {
         case .conversation(let conv):
             return conv.name
         case .settings:
-            return String(localized: "route.title.settings", defaultValue: "Settings", bundle: .main)
+            return String(localized: "route.title.settings", defaultValue: "Paramètres", bundle: .main)
         case .profile:
-            return String(localized: "route.title.profile", defaultValue: "Profile", bundle: .main)
+            return String(localized: "route.title.profile", defaultValue: "Profil", bundle: .main)
         case .contacts(let tab):
             return tab.title
         case .peopleDiscovery:
-            return String(localized: "route.title.discover", defaultValue: "Discover", bundle: .main)
+            return String(localized: "route.title.discover", defaultValue: "Découvrir", bundle: .main)
         case .nearbyDiscovery:
             return String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main)
         case .communityList:
-            return String(localized: "route.title.communities", defaultValue: "Communities", bundle: .main)
+            return String(localized: "route.title.communities", defaultValue: "Communautés", bundle: .main)
         case .communityDetail:
-            return String(localized: "route.title.community", defaultValue: "Community", bundle: .main)
+            return String(localized: "route.title.community", defaultValue: "Communauté", bundle: .main)
         case .communityCreate:
-            return String(localized: "route.title.community_create", defaultValue: "New community", bundle: .main)
+            return String(localized: "route.title.community_create", defaultValue: "Nouvelle communauté", bundle: .main)
         case .communitySettings:
-            return String(localized: "route.title.community_settings", defaultValue: "Community settings", bundle: .main)
+            return String(localized: "route.title.community_settings", defaultValue: "Paramètres de la communauté", bundle: .main)
         case .communityMembers:
-            return String(localized: "route.title.members", defaultValue: "Members", bundle: .main)
+            return String(localized: "route.title.members", defaultValue: "Membres", bundle: .main)
         case .communityInvite:
-            return String(localized: "route.title.invite", defaultValue: "Invite", bundle: .main)
+            return String(localized: "route.title.invite", defaultValue: "Inviter", bundle: .main)
         case .notifications:
             return String(localized: "route.title.notifications", defaultValue: "Notifications", bundle: .main)
         case .userStats:
-            return String(localized: "route.title.stats", defaultValue: "Statistics", bundle: .main)
+            return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
         case .links:
-            return String(localized: "route.title.links", defaultValue: "Links", bundle: .main)
+            return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
-            return String(localized: "route.title.affiliate", defaultValue: "Affiliate", bundle: .main)
+            return String(localized: "route.title.affiliate", defaultValue: "Affiliation", bundle: .main)
         case .trackingLinks:
-            return String(localized: "route.title.tracking_links", defaultValue: "Tracking links", bundle: .main)
+            return String(localized: "route.title.tracking_links", defaultValue: "Liens de suivi", bundle: .main)
         case .shareLinks:
-            return String(localized: "route.title.share_links", defaultValue: "Share links", bundle: .main)
+            return String(localized: "route.title.share_links", defaultValue: "Liens de partage", bundle: .main)
         case .communityLinks:
-            return String(localized: "route.title.community_links", defaultValue: "Community links", bundle: .main)
+            return String(localized: "route.title.community_links", defaultValue: "Liens de communauté", bundle: .main)
         case .dataExport:
-            return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
+            return String(localized: "route.title.data_export", defaultValue: "Export de données", bundle: .main)
         case .postDetail(_, let post, _, _, _):
-            return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
+            return post?.author ?? String(localized: "route.title.post", defaultValue: "Publication", bundle: .main)
         case .hashtagResults(let tag):
             return "#\(tag)"
         case .bookmarks:
-            return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
+            return String(localized: "route.title.bookmarks", defaultValue: "Signets", bundle: .main)
         case .starredMessages:
-            return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
+            return String(localized: "route.title.starred", defaultValue: "Messages favoris", bundle: .main)
         case .friendRequests:
-            return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
+            return String(localized: "route.title.friend_requests", defaultValue: "Demandes d'amis", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
         }
@@ -446,7 +446,7 @@ final class Router: ObservableObject {
             Self.logger.info("Deep link navigated to conversation \(conversationId)")
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
-            FeedbackToastManager.shared.showError(String(localized: "deeplink.conversation.error", defaultValue: "Couldn't open the conversation", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "deeplink.conversation.error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main))
         }
     }
 
@@ -467,10 +467,10 @@ final class Router: ObservableObject {
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {
-            FeedbackToastManager.shared.showSuccess(String(localized: "magicLink.success", defaultValue: "Login successful!", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main))
             Self.logger.info("Magic link validated successfully")
         } else {
-            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
+            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main))
             Self.logger.error("Magic link validation failed")
         }
     }

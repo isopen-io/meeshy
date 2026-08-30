@@ -8,13 +8,582 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 2. Develop, commit, push on the working branch
 3. Once CI passes: merge into main via PR
 4. After merge: update this file with the new base
-5. Delete the feature branch after merge
+5. **Réinitialiser** la branche de travail sur le nouveau `main`
+   (`git checkout -B <branche> origin/main` + `push --force-with-lease`) —
+   **ne pas la SUPPRIMER** : les caches Actions sont scopés par ref, et
+   supprimer la ref les évince, ce qui fait repartir le gate iOS à froid et lui
+   fait dépasser son plafond de 50 min (mesure : § « La branche de travail se
+   RÉINITIALISE » ci-dessous).
 
 ---
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 251i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 270i, 2026-08-30)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+>
+> | itération | PR | squash sur `main` | issue |
+> |---|---|---|---|
+> | 251i | [#4257](https://github.com/isopen-io/meeshy/pull/4257) | `9286ce92` | #4256 |
+> | 252i | [#4261](https://github.com/isopen-io/meeshy/pull/4261) | `cd9aa95b` | #4260 |
+> | 253i | [#4268](https://github.com/isopen-io/meeshy/pull/4268) | `e087f501` | #4266 |
+> | 254i | [#4269](https://github.com/isopen-io/meeshy/pull/4269) | `0f05267c` | — |
+> | 255i | [#4271](https://github.com/isopen-io/meeshy/pull/4271) | `b8a30cfd` | — |
+> | 256i | [#4273](https://github.com/isopen-io/meeshy/pull/4273) | `1fbd1f4d` | — |
+> | 257i | [#4290](https://github.com/isopen-io/meeshy/pull/4290) | `9ac93624` | #4286 |
+> | 258i | [#4294](https://github.com/isopen-io/meeshy/pull/4294) | `5e162ed7` | #4292 |
+> | 259i | [#4299](https://github.com/isopen-io/meeshy/pull/4299) | `c96b307b` | #4297 |
+> | 260i | [#4301](https://github.com/isopen-io/meeshy/pull/4301) | `99d6d21c` | — |
+> | 261i | [#4303](https://github.com/isopen-io/meeshy/pull/4303) | `1af3cc38` | #4302 |
+> | 262i | [#4306](https://github.com/isopen-io/meeshy/pull/4306) | `22e6831f` | — |
+> | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
+> | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
+> | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
+> | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
+> | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
+> | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
+> | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
+>
+> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+>
+> ### 270i — le widget parlait sept langues, et la garde ne le savait pas (#4364)
+>
+> | mesure | avant | après |
+> |---|---|---|
+> | cliquet i18n (`backlogCeiling`) | 114 | **81** |
+> | écrans épinglés | 240 | **246** |
+> | règle A / règle B sur les épinglés | 0 / 0 | **0 / 0** |
+> | clés du catalogue app | 3 402 | **3 413** |
+>
+> - **`catalogByTargetFragment` nommait DEUX catalogues sur TROIS.**
+>   `apps/ios/MeeshyWidgets/Localizable.xcstrings` existe depuis que la cible
+>   existe — 39 clés, les sept locales — et aucune garde ne l'avait jamais ouvert.
+>   Une extension est un bundle SÉPARÉ : ses `String(localized:)` se résolvent
+>   contre le catalogue embarqué dans elle. **22 clés du widget et des Live
+>   Activities étaient comptées comme non traduites contre le catalogue de l'app**,
+>   où elles n'existent pas, et ses deux sources étaient inépinglables bien
+>   qu'elles passent déjà les deux règles.
+>   → *Rien ne rougissait* : une cible non mappée retombe SILENCIEUSEMENT sur le
+>   catalogue de l'app. Ce n'est pas un échec de garde, c'est une **mesure
+>   fausse** — elle compte une dette inexistante et refuse une protection acquise.
+> - **Un témoin qui interroge la carte ne peut pas voir ce qui n'y est pas.**
+>   `test_everyPerTargetCatalogIsMapped` lit le SYSTÈME DE FICHIERS — seul endroit
+>   qui connaît l'inventaire complet — dans les deux directions (aucun catalogue
+>   non mappé, aucun mappage mort), et SONDE chaque fragment pour prouver que
+>   `catalog(resolvedFor:)` s'en sert. Forme, appliquée à une table de
+>   configuration, de la leçon 261.
+> - **Les trous ne sont pas dispersés : ce sont les VALEURS MANQUANTES de familles
+>   traduites.** `DeliveryStatus` a six cas, trois au catalogue et trois absents :
+>   un lecteur d'écran arabophone entendait **trois états en arabe et trois en
+>   français dans la même phrase**. La pastille de synchronisation annonce ses 53
+>   opérations en sept langues et ses **deux boutons** en français.
+>   → *Un `defaultValue` rend invisible l'absence de sa clé* (#4328) ; quand
+>   l'absence frappe une VALEUR d'énumération, elle rend en plus invisible que la
+>   famille est à moitié traduite — la complétude qu'on vérifie à l'œil est celle
+>   du `switch`, pas celle du catalogue. **La question à poser à une clé absente
+>   n'est pas seulement « que voit l'utilisateur ? » mais « quelles sont ses
+>   SŒURS ? »**
+> - **Onze clés remplies dans les sept locales sans un mot inventé** : dix copiées
+>   verbatim d'une entrée portant déjà le même français, la onzième
+>   (`a11y.delivery.sending`) complétée depuis sa famille — un balayage par
+>   ÉGALITÉ DE CHAÎNE l'aurait laissée derrière, son français différant de sa
+>   jumelle. **Zéro ligne de production modifiée** : les onze `defaultValue`
+>   inline étaient déjà exactement le français retenu.
+> - **Les deux premières sources hors cible app jamais épinglées**
+>   (`MeeshyWidgets.swift`, `LiveActivities.swift`) : elles ne demandaient AUCUN
+>   travail, seulement la ligne de carte qui dit quel catalogue les sert.
+> - **Suite nommée** : une famille DISTINCTE de #4328 et plus grave — les
+>   `defaultValue` écrits en **ANGLAIS** dans un catalogue de langue source
+>   française (`security.verify.*`, `comments.*.a11yLabel`,
+>   `bubble.meta.ephemeral.a11y`). Ceux-là s'affichent en anglais dans les **sept**
+>   locales, francophone comprise.
+>
+> ### 269i — solder la réconciliation, et nommer ce qu'elle ne peut pas atteindre (#4328, #4329)
+>
+> | mesure | valeur |
+> |---|---|
+> | littéraux réconciliés | **186** dans 40 fichiers (+186 / −186) |
+> | divergences réconciliables dans TOUT le dépôt | **0** |
+> | épinglés (inchangé) | 240 écrans · 2 761 clés · règle A **0** / règle B **0** |
+>
+> - **Ce lot ne débloque aucun écran, et c'est assumé** : les 40 fichiers sont
+>   tous retenus par la règle A. Sa valeur est que le code cesse de mentir, et
+>   qu'ils deviendront épinglables dès l'arrivée de leurs traductions.
+> - **#4328 — 29 chaînes s'affichent en FRANÇAIS dans les six autres langues.**
+>   Leur clé est absente du catalogue, donc aucune localisation : le
+>   `defaultValue` est rendu tel quel partout — et en français NON ACCENTUÉ
+>   (« Repertoire vide », « Lui ecrire »). **Sept sont des libellés VoiceOver.**
+>   → *Un `defaultValue` rend INVISIBLE l'absence de sa clé* : la garde des clés
+>   non résolues ne regarde que les appels SANS `defaultValue`, parce qu'un repli
+>   garantit qu'on n'affichera pas l'identifiant brut. Vrai pour le CRASH, faux
+>   pour la LANGUE.
+> - **17 des 26 chaînes non traduites ne sont PAS produites ici** : 102 chaînes
+>   neuves en six langues dont l'arabe, invérifiables depuis cet environnement.
+>   Une traduction arabe approximative est pire que le repli français honnête.
+>   9 se réutilisent depuis le catalogue (table dans #4328).
+> - **#4329 — la règle B ne peut pas être satisfaite par une clé plurielle** :
+>   elle lit le `stringUnit` PLAT, qu'un pluriel n'a pas. Trois écrans
+>   inépinglables par construction. Moitié oubliée du correctif 226i.
+>
+> ### 268i — le code disait « Reply » là où l'app affiche « Répondre » (#4308, avancée)
+>
+> | mesure | valeur |
+> |---|---|
+> | littéraux réconciliés | **498** dans **105** fichiers |
+> | écrans épinglés | 135 → **240** |
+> | clés gardées | 1 210 → **2 761** |
+> | règle A / règle B | **0** / **0** |
+> | fichiers bloqués | 164 → **59** |
+>
+> - **La contrainte héritée était fausse, et mesurable.** #4308 disait « à faire
+>   avec un compilateur : beaucoup contiennent des apostrophes (`J'aime`) et des
+>   accents ». Or **ni l'apostrophe ni l'accent ne s'échappent en Swift** — seuls
+>   `"` et `\`. Mesuré : **500 des 504** divergences ne demandent AUCUN
+>   échappement, **0** contient un guillemet, un antislash ou un saut de ligne.
+>   L'énoncé a suffi à figer la tâche plusieurs itérations. **Vérifier la
+>   contrainte qu'on hérite avant de la transmettre.**
+> - Remplacement sur les **bornes absolues** du littéral (segment à parenthèses
+>   équilibrées), vérifiées avant écriture, appliquées de droite à gauche ; trois
+>   contrôles par fichier (clés identiques, lignes identiques, appels
+>   identiques). Diff **+487 / −487**, neutre en lignes — plusieurs de ces
+>   fichiers sont dans la dette de taille de #4302.
+> - **#4308 NE se ferme pas** : 186 divergences réconciliables restent (dans des
+>   fichiers que la règle A bloque de toute façon), ~30 clés sont ABSENTES du
+>   catalogue (il leur manque une entrée, pas un alignement), et 4 sont
+>   PLURIELLES.
+> - **Défaut de la garde trouvé en passant** : la règle B ne peut PAS être
+>   satisfaite par une clé plurielle — elle compare au `stringUnit` PLAT, qu'un
+>   pluriel n'a pas. Trois fichiers sont inépinglables **par construction**. Même
+>   famille que le correctif 226i, qui avait appris la pluralité à
+>   `loadTranslations` et l'a oubliée pour `values`.
+>
+> ### 267i — le solde du cliquet i18n, pris avec la confiance que la CI a rendue (#4322)
+>
+> 263i avait épinglé **40 écrans sur 132**, en nommant sa raison : « le risque
+> n'est pas par fichier mais par PARSEUR — s'il se trompe, il se trompe
+> partout ». La CI a validé ce parseur du premier coup sur les deux règles ;
+> le solde se prend.
+>
+> | mesure | valeur |
+> |---|---|
+> | écrans épinglés | 43 → **135** |
+> | clés gardées | 930 → **1 210** |
+> | règle A (traduction) / règle B (`defaultValue`) | **0** / **0** |
+> | éligibles restants | **0** — vivier épuisé |
+>
+> - **Répliquer les FILTRES, pas la boucle** (leçon 258i) : `state ==
+>   "translated"` (un `needs_review` n'est pas une traduction livrée), les
+>   pluriels par catégorie CLDR, `.module`, `isIdentifier`, le bloc `"""`
+>   qui rend `nil`, et l'exclusion des `defaultValue` interpolés.
+> - **Contrôle de cohérence** : la réplique rend 92 éligibles, exactement le
+>   solde annoncé quatre itérations plus tôt (132 − 40).
+> - **Ce n'est plus la traduction qui borne ce cliquet, c'est la dette de
+>   littéraux** : sur les 164 fichiers restants, **154** échouent sur la seule
+>   règle B (#4308, 648 `defaultValue` divergents) contre 56 sur la règle A.
+>
+> ### 266i — cinq sondes négatives, et le squelette que rien ne gardait (#4319)
+>
+> | doctrine sondée | mesure | verdict |
+> |---|---|---|
+> | `@ObservedObject` initialisé en ligne | **0** sur 145 | sain |
+> | `.id(UUID())` | **0** | sain |
+> | `@State` miroir d'un singleton | 12 miroirs, **12 `.onReceive` appariés** | sain |
+> | matrice squelettes Pattern I4 | **5/5**, + 6 hors bible | sain |
+> | `loadState` sur tout VM qui charge | 19/30 absents | contrat non tenu, **comportement correct** |
+>
+> - **Un motif qui RESSEMBLE à un défaut connu peut être la forme correcte d'une
+>   autre règle** : `@State` semée depuis un singleton est le bug SwiftUI
+>   classique — sauf que les douze sites portent leur `.onReceive` apparié et le
+>   disent sur place. C'est « Zero Unnecessary Re-render » bien appliqué.
+> - **Un pourcentage de non-conformité n'est pas un défaut tant qu'on n'a pas lu
+>   ce que le code FAIT** : 63 % des VM sans `loadState`, mais
+>   `BookmarksViewModel` lit le cache AVANT `isLoading` et ne met aucun spinner
+>   sur un cache chaud. Le comportement protégé est là, sous un autre nom.
+> - Ce que les sondes laissent : le Pattern I4 **nomme cinq écrans** et rien ne
+>   vérifiait qu'ils gardent leur squelette. Un refactor de `ConversationListView`
+>   rendrait l'écran principal **blanc au démarrage à froid**, tout restant vert.
+>   → `SkeletonColdStartGuardTests` (montage + définition), et
+>   `apps/ios/CLAUDE.md` nomme enfin les composants qui EXISTENT
+>   (`SkeletonPlaceholder` n'apparaît dans aucun `.swift` : nom générique de la
+>   bible, réalisé sous quinze noms de domaine).
+> - Bornes décisives : les trois témoins **négatifs** du détecteur de montage —
+>   une mention en commentaire, une mention en chaîne et un nom PRÉFIXÉ
+>   (`SkeletonFeedListPreview()`) ne sont pas des montages.
+>
+> ### 265i — l'onboarding démontrait le Prisme en traduisant l'allemand vers l'allemand (#4313)
+>
+> `Text(_:)` prend un `LocalizedStringKey` : **tout littéral qu'on lui passe
+> devient une clé de catalogue**, extraite par Xcode, sans qu'aucun développeur
+> n'ait écrit `String(localized:)` ni choisi quoi que ce soit.
+>
+> - La carte « Comment ça marche » de l'onboarding montre un message ORIGINAL
+>   étranger + sa TRADUCTION. L'original venait d'un littéral nu, donc du
+>   catalogue, donc traduit en **de / es / pt-BR**. Un Allemand qui choisit
+>   l'allemand voyait deux phrases allemandes, l'une dite « originale », l'autre
+>   sous l'icône `translate`. En es et pt-BR elles ne diffèrent que par les
+>   accents : **pire qu'une traduction absente, ça a l'air d'une traduction ratée.**
+> - **Aucune garde i18n ne pouvait le voir** : toutes s'accrochent à
+>   `String(localized:`. `OnboardingStepViews.swift` était même ÉPINGLÉ parmi les
+>   43 écrans « fully localized » du 263i — la régression n'est pas vers le
+>   français, c'est une traduction de TROP.
+> - **Le mécanisme avait déjà été rencontré et EXCUSÉ** :
+>   `notAnInterfaceString = ["Jean-Pierre"]` en décrivait le fonctionnement exact
+>   sans le remonter à sa cause, trois lignes au-dessus du défaut.
+>   → *Une entrée d'allowlist qui explique pourquoi une clé est inoffensive est
+>   un endroit où quelqu'un a VU le mécanisme et ne l'a pas suivi.*
+> - Remède : `Text(verbatim:)` (7 sites, en remplacement de ligne), 6 clés
+>   retirées du catalogue (**168 suppressions, 0 insertion** — la re-sérialisation
+>   JSON, essayée d'abord, produisait 27 016 lignes de diff et a été annulée), et
+>   `LocalizedStringKeyLiteralGuardTests`.
+> - Borne décisive : **le REMÈDE doit cesser d'être un site**. Une garde qui
+>   interdit une écriture sans reconnaître sa correction est insatisfaisable.
+>
+> ### 264i — la doctrine des tailles figées avait 36 justifications et zéro instrument (#4311)
+>
+> Deux balayages d'accessibilité, deux résultats de nature différente :
+>
+> | passe | mesure | verdict |
+> |---|---|---|
+> | bouton à glyphe seul sans libellé VoiceOver | 871 `Button`, 6 candidats | **0 défaut** — les six sont agrégés puis ré-exposés en action de rotor (idiome 183i) |
+> | taille de police figée | 247 sites, 88 fichiers, dont **37 sur du TEXTE** | **1 défaut** + le cliquet manquant |
+>
+> - **36 des 37 sites de texte portaient leur justification en commentaire**
+>   (doctrine 53i / 82i / 86i : un cadre fixe qui déborderait s'il scalait). Le
+>   37ᵉ — `ProfileUserPostsList.chip` — gelait son CHIFFRE à 18 pt sous un libellé
+>   en `.caption2`, qui scale, dans une tuile **sans hauteur fixe** : en AX5 le
+>   libellé devenait 1,5× plus gros que le nombre qu'il légende.
+> - **Un site dont les voisins sont justifiés RESSEMBLE à un site justifié** —
+>   l'angle mort exact d'une règle tenue par la relecture plutôt que par un
+>   instrument. C'est la forme de #4302 et #4292.
+> - Cliquet posé (`FixedFontSizeGuardTests`) : liste de 87 fichiers en
+>   **surensemble** (aucune classification en jeu, donc rien ne peut la faire
+>   rougir à tort) + texte ≤ **36** + total ≤ **245** + élagage obligatoire.
+>   Épinglé sur l'APRÈS-correctif → **rouge sur l'état d'où il vient**.
+> - Borne décisive : la classification texte/glyphe doit rendre les DEUX
+>   populations non vides. Un classifieur effondré rendrait 0 texte et laisserait
+>   le cliquet **vert en ne protégeant plus rien**.
+> - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
+>
+> ### ⚠️ 262i — cinq règles déclarées, quatre sans une seule violation (close par la négative)
+>
+> Balayage des règles du `CLAUDE.md` qui ont une forme MESURABLE. **Rien à
+> corriger sur quatre d'entre elles**, et la seule « prise » du scanner est un
+> faux positif par construction :
+>
+> | règle déclarée | occurrences |
+> |---|---|
+> | `print()` interdit (os.Logger) | **0** |
+> | `try!` interdit | **0** |
+> | `Color.red/.green/…` littéral | **0** |
+> | `as!` (cast forcé) | 1 |
+> | secrets en `UserDefaults` | **0** — E2E met les IDs de pairs en defaults et les `SymmetricKey` au **Keychain** : la bonne séparation |
+> | `[weak self]` sur closures stockées | 211 `.sink` **tous** gardés, 2 observers gardés |
+>
+> - **Le seul `Timer` sans `[weak self]` n'est pas un défaut** :
+>   `UniversalComposerBar` est une **struct** SwiftUI, où `[weak self]` n'est
+>   même pas EXPRIMABLE (il exige un type classe) — et son timer est invalidé en
+>   cinq points, dont la disparition. La classe qui possède vraiment un timer,
+>   `CameraView`, utilise bien `[weak self]`.
+>   **Une règle ARC ne s'applique qu'à ce qui est compté par ARC** : la recopier
+>   sur une vue de valeur produit un faux positif à chaque balayage.
+> - **`AnyView` : 80 occurrences (28 fichiers), et ce ne sont PAS des paresses** —
+>   ce sont des effacements de type à une frontière d'API (`accessory:`,
+>   `toolRowTrailingAccessory:`, `… ? AnyView(x) : nil`). Les retirer demande de
+>   rendre GÉNÉRIQUES les signatures et de toucher tous les appelants : refonte,
+>   pas remplacement. → **#4305** (commencer par `ConversationView`, 25 des 80).
+>
+> Ne pas relancer ces cinq sondes ; la seule piste ouverte est #4305.
+>
+> ### ⚠️ 260i — sondage « cache-first » : la dimension est SAINE (close par la négative)
+>
+> Sonde sur le principe non négociable « **jamais de spinner quand le cache a des
+> données** ». **Rien à corriger** — et le chemin pour l'établir vaut d'être noté,
+> parce que l'instrument a menti quatre fois sur quatre.
+>
+> | mesure | résultat |
+> |---|---|
+> | `ProgressView` réels | 126 dans 83 fichiers |
+> | conditionnés au chargement SANS test de vacuité | 33 — **presque tous légitimes** |
+> | ViewModels portant `loadState` | 11 |
+> | ViewModels signalés « réseau avant cache » | 4 → **4 faux positifs** |
+>
+> - Les 33 « suspects » sont en écrasante majorité des **spinners d'ACTION** (bouton
+>   d'envoi, vérification 2FA) ou des **pieds de pagination** posés APRÈS les lignes
+>   déjà rendues. Ni les uns ni les autres ne violent la doctrine, qui vise l'écran
+>   qui REMPLACE son contenu par une roue.
+> - Les 4 « réseau avant cache » venaient d'une heuristique **positionnelle** : je
+>   comparais l'offset du premier `CacheCoordinator` à celui du premier appel de
+>   service DANS LE TEXTE du fichier. Sur un ViewModel de 1600 lignes, une propriété
+>   de service déclarée en tête gagne toujours. Vérification faite sur le chemin de
+>   chargement RÉEL : `ConversationListViewModel` est exemplaire (cache d'abord, les
+>   quatre cas de `CacheResult` distingués, et `.expired` récupère la charge sur
+>   disque pour qu'une resync hors-ligne ne vide jamais l'écran) ;
+>   `ContactsListViewModel` et `GlobalSearchViewModel` distinguent aussi les quatre cas.
+>
+> > **Mesurer un ORDRE par des offsets de texte, c'est mesurer l'ordre de
+> > DÉCLARATION, pas l'ordre d'EXÉCUTION.** Un ordre ne se lit que sur le chemin
+> > d'appel. Quatre faux positifs sur quatre : l'instrument n'avait aucune valeur.
+>
+> Ne pas relancer cette sonde sans un instrument qui suit le flot d'exécution.
+>
+> ### 259i — le SIGNE d'un glissement, troisième famille RTL (#4297, MERGÉE `c96b307b`)
+>
+> SwiftUI retourne les piles et les marges ; `RightToLeftLayoutGuardTests` garde les
+> symboles nommés par un côté. **Personne ne gardait le signe d'un `DragGesture`** —
+> « `dx < -60` ⇒ suivant » veut dire « glisser à gauche avance », faux en arabe.
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-259i-reading-direction.md`.
+>
+> - **25 comparaisons de `translation.width`, dont 16 ne doivent PAS se retourner** :
+>   9 n'encodent aucun sens (`abs()`, dominance d'axe) et 7 déplacent un objet qui
+>   suit le doigt. Le tri fait partie de la mesure.
+> - **Forme sûre** : un helper qui est l'IDENTITÉ en LTR ; les sites gardent leurs
+>   comparaisons, seul l'opérande change. Le comportement actuel est préservé par
+>   construction, pas par vérification.
+> - **`.offset(x:)` n'est PAS retourné par SwiftUI** (contrairement aux marges et
+>   alignements). C'est le discriminant entre les deux cas : `ReelsPlayerView` a pu
+>   être retourné (son visuel tient en UN `.offset`), **le cube des stories NON**.
+> - **Retournement du cube TENTÉ puis ANNULÉ** : `horizontalDrag`, `groupSlide`,
+>   `totalSlideX`, `exitX` et l'orientation des faces vivent en espace écran.
+>   Retourner la seule décision aurait envoyé la face de commit à l'opposé du doigt —
+>   **pire que le défaut**, où l'arabe est au moins cohérent. → #4298 (simulateur).
+>
+> ### 258i — le cliquet i18n avait cessé de cliqueter (#4292, MERGÉE `5e162ed7`)
+>
+> Plafond épinglé **1545**, backlog réel **102** : le cliquet admettait 1443 clés
+> neuves non traduites. Le catalogue s'était rempli (3397/3408 traduites en 6
+> locales) sans que le pin suive. Re-piqué à **114**, marqueur du scanner élargi
+> aux appels multi-lignes (185 appels / 61 fichiers, contre 92/46 au 226i).
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-258i-i18n-ratchet.md`.
+>
+> - **226i avait vu le trou et renoncé, pour une raison JUSTE devenue fausse** :
+>   « élargir fait monter le backlog, or le plafond ne doit que descendre ». Vrai
+>   contre un plafond serré — il ne l'était plus. **Avant de renoncer à une
+>   amélioration qu'un cliquet interdit, mesurer le cliquet.**
+> - **Répliquer une règle, c'est répliquer ses FILTRES** : deux erreurs
+>   (`!isModuleBundle` oublié, `isIdentifier` trop strict) ont donné 1024 puis 93
+>   avant 102. Ce qui a attesté la fidélité : en marqueur ÉTROIT, la réplication
+>   reproduit l'état vert actuel des trois règles sœurs (0/0/0).
+> - **Un chiffre peut mesurer ce que le dépôt ne mesure pas** : mes « 133 → 23
+>   orphelines » étaient hors sujet — le test des orphelines lit `combinedSource`,
+>   pas `localizedCalls`, et est insensible à ce correctif.
+> - Backlog **102 ≠ 114** : les 12 de plus sont les clés que le marqueur étroit ne
+>   pouvait pas voir. Elles n'ont jamais été traduites ; elles étaient
+>   incomptables → #4293.
+>
+> ### 257i — les boucles perpétuelles de STATUT (#4286, MERGÉE `9ac93624`)
+>
+> Sept `repeatForever` sur 68 n'avaient aucun portillon Reduce Motion, et
+> c'étaient toutes des animations de **statut** (frappe, enregistrement,
+> sauvegarde, appel) — elles ressemblaient à de l'information. Détail :
+> `docs/analyses/uiux/2026-08-29-iteration-257i-perpetual-motion.md`.
+>
+> **Trois choses à ne pas refaire mesurer :**
+>
+> - **La valeur de repos n'est pas la cible de l'animation.** Copier
+>   `settleWithoutMotion` (onboarding) aurait rendu le point d'appel en cours
+>   presque invisible (cible = `opacity 0.3`) et les formes d'onde plates.
+> - **Une garde par FICHIER rend « gardé » dès qu'une autre partie du fichier
+>   décide** : rejouée sur `main`, elle attrape 5 des 7 défauts. Les deux
+>   manqués (`SplashScreen`, `TypingIndicatorBubble`) sont épinglés nommément.
+> - **Le `@propertyWrapper` `DynamicProperty` a été écrit puis RETIRÉ** : aucun
+>   précédent dans le dépôt, cible en `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`,
+>   et pas de toolchain Apple ici pour le prouver → #4289. La cible de TESTS,
+>   elle, est `nonisolated` : une suite qui touche du code app pose `@MainActor`.
+>
+> ### ⚠️ Le répertoire courant persiste — et un zéro peut vouloir dire « nulle part » (256i, revu 257i)
+>
+> Un `cd apps/ios/Meeshy` d'un appel d'outil précédent a fait chercher
+> `apps/ios/Meeshy` **sous** `apps/ios/Meeshy` : la sonde a rendu
+> **« 0 occurrence »** sur tout le dépôt, un résultat parfaitement plausible.
+> Ce qui l'a attrapé n'est pas la relecture du script mais la **borne** —
+> « combien de `.swift` cette racine voit-elle ? ». Toujours passer un chemin
+> ABSOLU, et toujours accompagner un zéro d'une mesure dont la réponse est connue.
+>
+> ### ⚠️ Les leçons vivent dans `tasks/lessons.md` à la RACINE (256i)
+>
+> `cd apps/ios` persiste d'un appel d'outil au suivant : un `cat >> tasks/lessons.md`
+> écrit alors dans `apps/ios/tasks/lessons.md`, un fichier qui n'existe pas et que
+> personne ne lit. Effet de bord mesuré : le chemin `apps/ios/**` est le filtre du
+> workflow `iOS Tests`, donc une PR annoncée « docs uniquement » a fait tourner le
+> gate iOS complet. **Vérifier le répertoire courant avant toute écriture par
+> redirection shell** — les outils `Write`/`Edit` prennent un chemin absolu et n'ont
+> pas ce piège.
+>
+> ### ⚠️ La branche de travail se RÉINITIALISE, elle ne se SUPPRIME pas (mesuré au 251i)
+>
+> Le protocole ci-dessous dit « supprimer la branche après le merge » (étape 5).
+> **Ne pas le faire — c'est ce qui a coûté un cycle de CI à 251i.** Les caches
+> Actions sont scopés par **ref** : supprimer la branche évince le cache SPM et
+> le cache DerivedData de la piste, et le premier run de l'itération suivante
+> repart **à froid**. Mesure comparée, même gate, même branche :
+>
+> | étape | run chaud | run froid |
+> |---|---|---|
+> | restauration SPM / DerivedData | 26 s / 23 s (hit) | 1 s / 0 s (**miss**) |
+> | compile | 7 min | **25 min** |
+> | tests | 13 min 43 → vert | **1 min 12 → tué** |
+>
+> Le préambule à froid consomme **47 des 50 minutes** du plafond
+> (`.github/workflows/ios.yml` → `timeout-minutes`), et la suite n'a plus le
+> budget de tourner. `git checkout -B <branche> origin/main` + `push
+> --force-with-lease` **préserve la ref** (donc les caches) tout en repartant de
+> `main` : c'est la manœuvre à faire à chaque itération.
+>
+> Corollaire de lecture, appris au même endroit : **« 0 test en échec » n'est pas
+> « les tests passent »**. L'étape qui dépouille le bundle affiche 0 quand la
+> suite a été TUÉE avant d'exécuter quoi que ce soit. Lire la durée et la
+> conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
+> résume.
+>
+> ### ⚠️ `ConversationStateStore` est VIVANT — ne pas le prendre pour du code mort
+>
+> Sonde de maintenabilité (256i) sur la duplication d'état, **close par la
+> négative**, et consignée parce que la conclusion FAUSSE était à un pas :
+>
+> - `ConversationStateStore` déclare **35** propriétés, dont **34** portent le
+>   même nom que des `@Published` de `ConversationViewModel`. Ce n'est PAS une
+>   duplication accidentelle : c'est un **échafaudage de migration documenté**
+>   (« Mirror the legacy `@Published var messages` into the new
+>   `ConversationStateStore.messages` … Removed once the migration … is
+>   complete »). Le ViewModel reste propriétaire ; le store est la destination.
+> - Un premier balayage a conclu « **0 lecture** » et j'allais ouvrir une issue
+>   proposant de retirer le miroir. **C'était faux** : les handlers détiennent le
+>   store sous le nom `private let state:` et le lisent en `state.X` — le motif
+>   que le balayage (`stateStore.` / `store.`) ne couvrait pas.
+>
+>   | consommateur réel | usage |
+>   |---|---|
+>   | `ConversationMediaHandler:32` | **lit** `state.messages` |
+>   | `ConversationSearchHandler` | **écrit** `state.searchResults`, `state.currentSearchQuery` |
+>
+> > **Un balayage qui cherche un objet par UN de ses noms d'emprunt rend un zéro
+> > qui veut dire « je n'ai pas regardé là ».** Le miroir `messages` est une
+> > souscription Combine vivante sur le chemin le plus chaud de l'app : conclure
+> > « personne ne lit » sans vérifier les alias aurait proposé de supprimer du
+> > code qui MARCHE. Avant de publier un zéro, chercher l'objet par son TYPE,
+> > pas par le nom qu'on suppose à sa variable.
+>
+> Rien à corriger. La migration est en cours et consommée.
+>
+> ### 255i — sondage « cohérence visuelle » : la dimension est SAINE (une seule prise, #4270)
+>
+> - Base `0f05267c`, après le merge de #4269.
+> - **Mesures, à ne pas refaire :**
+>
+>   | classe sondée | résultat |
+>   |---|---|
+>   | alias de couleur DÉPRÉCIÉS (`pink`, `coral`, `cyan`, `purple`, `teal`, `green`, `orange`, `infoBlue`, `primaryGradient`) | **0** — la migration vers l'échelle Indigo est COMPLÈTE |
+>   | `Color.red` brut | **0** |
+>   | dégradés de fond écrits à la main | **5 sites, 0 défaut** (voir ci-dessous) |
+>   | `Color.purple` brut | **3 sites, 1 concept** → seule prise, issue **#4270** |
+>
+> - **Les cinq dégradés sont tous LÉGITIMES**, et c'est le point instructif —
+>   le compte brut (« 5 sites recopient `backgroundGradient` ») était faux :
+>
+>   | site | verdict |
+>   |---|---|
+>   | `CallView:395` | **délibéré et commenté** : `theme.backgroundGradient` vire au quasi-blanc en clair, ce qui rendrait les libellés blancs invisibles |
+>   | `AudioPostComposerView:46` | délibéré et commenté — mais sa justification (« pas de token équivalent ») est **FACTUELLEMENT FAUSSE** : ces deux valeurs SONT celles de `backgroundGradient`. ⚠️ commentaire à corriger, à grouper avec le prochain lot qui touche du code d'app |
+>   | `MeeshyApp:1178` (splash) | **variante** : troisième couleur = `indigo950`, pas `0F0D19` |
+>   | `CallView:1917` | couleur de BORDURE, pas un dégradé |
+>   | `ConversationListHelpers:384` | byte-identique… mais dans une **leaf view** qui reçoit `isDark` en paramètre. La router vers `theme.backgroundGradient` ferait lire le singleton `ThemeManager` **dans une vue feuille** — soit violer la règle même que 254i vient de vérifier. **La duplication y est le COÛT de cette règle, pas un défaut.** |
+>
+>   > **Deux règles justes peuvent se contredire sur un site, et c'est la
+>   > seconde qui explique la « duplication » de la première.** Avant de router
+>   > un site vers une source unique, demander ce qui l'en empêchait.
+>
+> - **Le token qui manque vit dans le SDK** (`MeeshyColors`), hors du périmètre
+>   iOS-only de la piste → #4270, comme les cinq replis de drapeau du #4260.
+>
+> ### 254i — résultat NÉGATIF mesuré : la règle « Zero Unnecessary Re-render » est TENUE
+>
+> - **253i est MERGÉE** — PR #4268, squash `e087f501`, issue #4266 fermée, gate
+>   vert sur `799c0d60` (compile 9 min 34, suite **12 min 32 jusqu'au bout**).
+>   Synchronisation 254i : branche repartie de `origin/main` `e087f501`.
+> - **Mesure, à ne pas refaire** : la règle du dépôt « une vue rendue EN BOUCLE
+>   ne doit pas `@ObservedObject` un singleton global » (§ Leaf Views — Zero
+>   Unnecessary Re-render) est **respectée. 0 violation.**
+>
+>   | | |
+>   |---|---|
+>   | `@ObservedObject … = X.shared` dans l'app | **24** occurrences, **22** types |
+>   | types qui sont des ÉCRANS / feuilles / couches de présentation | **22** |
+>   | types rendus en BOUCLE (cellules, rangées) | **0** |
+>
+>   Les 22 sont `SettingsView`, `RootView`, `iPadRootView`, `IncomingCallView`,
+>   `ParticipantProfileSheet`, `SplashScreen`, les écrans de réglages… — chez
+>   qui observer un singleton est le patron NORMAL. Et les vues de rangée que la
+>   règle NOMME (`ThemedMessageBubble`, `MeeshyAvatar`, `ThemedConversationRow`,
+>   plus `FocalRow` et `LanguageFlagChip`) n'en portent **aucun**.
+>
+> - **⚠️ Limite de l'instrument, énoncée pour que le zéro se lise juste.** Le
+>   détecteur « ce type est-il instancié dans un `ForEach` ? » a été éprouvé sur
+>   trois TÉMOINS dont la réponse est connue — les trois vues que la règle cite.
+>   Il en a trouvé **deux sur trois** : `ThemedConversationRow` lui échappe,
+>   parce qu'elle est atteinte par une fonction constructrice de rangée, à un
+>   niveau d'indirection du `ForEach`.
+>
+>   **Le zéro ne repose donc PAS sur ce détecteur** : il repose sur la lecture
+>   des 22 types (tous des écrans) et sur la vérification DIRECTE que les vues
+>   de rangée ne portent pas d'observateur. Un compteur dont on connaît le
+>   défaut vaut mieux qu'un compteur qu'on croit exact — et un témoin qui tombe
+>   est ce qui permet de le dire.
+>
+> ### 253i — le vocabulaire des bascules, enfermé par son NOM (issue #4266)
+>
+> - Base `cd9aa95b`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-253i-toggle-vocabulary.md`.
+> - **252i déplacé d'un cran** : là une GARDE était bornée par la forme qu'elle
+>   interdisait ; ici une RÈGLE juste (`callToggleAccessibility` — trait
+>   `.isToggle`, valeur, repli iOS 17) était bornée par son **nom**, son
+>   **fichier** et ses **clés**. Cinq sites l'appliquaient, tous d'appel.
+> - Devenu `toggleStateAccessibility`, hors de `CallView.swift`, clés
+>   `a11y.toggle.*` (7 locales transportées, catalogue inchangé à 3408).
+>   **5 → 8 sites** ; 5 défauts réels soldés en DEUX familles de remède (trait +
+>   valeur pour les interrupteurs, **nom qui varie** pour un menu et un j'aime).
+> - **Le remède se lit sur la JUMELLE** : l'issue annonçait « trait + valeur »
+>   pour le j'aime de story ; sa jumelle de `FeedCommentsSheet` sert un NOM qui
+>   varie et une valeur qui porte le COMPTE. Un j'aime n'est pas un interrupteur.
+> - **Une garde qui suit un renommage sans changer de CIBLE est morte** :
+>   `isNotFilePrivate` lisait `CallView.swift`, qui ne contient plus le motif —
+>   elle serait restée verte en cessant de voir. Cible déplacée avec le code.
+> - **3 des 8 « muettes » n'étaient pas des défauts**, et le dire fait partie de
+>   la mesure : un titre variable passé par un constructeur maison, une icône de
+>   TYPE et non d'état, une rangée agrégée par son conteneur. Cinq affinages du
+>   balayage (102 → 20 → 13 → 9 → 5).
+> - **Garde partielle, annoncée comme telle** : elle interdit de RÉÉCRIRE le
+>   vocabulaire (clé + trait), elle n'exige pas encore qu'on l'APPLIQUE partout.
+>
+> ### 252i — la garde de 249i ne pouvait pas voir la neuvième copie (issue #4260)
+>
+> - Base `9286ce92`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-252i-language-flag-role.md`.
+> - **#4248 avait soldé huit copies de la puce de langue ; `FocalRow` en portait
+>   deux de plus, invisibles à sa garde** — celle-ci interdit une FORME (le
+>   soulignement dessiné, les clés réservées) et les deux copies disaient leur
+>   état par l'OPACITÉ et par un fond de puce. **Une garde bâtie sur les
+>   instances qu'on a trouvées généralise à ces instances, pas au concept** :
+>   celle de 252i interroge le RÔLE (qui décide du drapeau, qui le nomme).
+> - **Régression silencieuse évitée de justesse** : la copie lisait
+>   `LanguageData` (78 langues), la source unique `LanguageDisplay` (41). Router
+>   l'une vers l'autre rendait « WO » là où la rangée montrait 🇸🇳, pour
+>   39 langues, sans qu'aucun test ne rougisse. **Une source unique doit être
+>   plus riche que la plus riche des copies qu'elle remplace.**
+> - **Décision produit ISOLÉE, pas tranchée** : les deux tables divergent sur UN
+>   code — `pt`, 🇵🇹 vs 🇧🇷 — et un banc épingle 🇧🇷. `ComposerLanguageFlag`
+>   garde sa table, sous une **exemption nommée** dans la garde, jusqu'à ce que
+>   le porteur tranche (suite n° 1 de l'analyse).
+> - Preuve : secondes réponses à « quel drapeau ? » **10 → 0** ; étiquettes au
+>   nom nu **2 → 0** ; copies du contrôle **2 → 0** ; catalogue inchangé (3408).
+> - **Résultat NÉGATIF acquis, à ne pas refaire** : les *boutons à icône seule
+>   sans nom VoiceOver* ne sont pas une famille de défauts. 102 candidats bruts,
+>   **3** après un balayage correct, et les 3 sont délibérés et documentés.
+>   **Famille vide.**
+> - **Quatre scanners avant un nombre publiable** (102 → 20 → 13 → 40/15/16/9).
+>   Un compteur n'est pas une mesure tant qu'on n'a pas vérifié qu'il rate ce
+>   qu'il doit rater : **toute mesure inclut un témoin dont on connaît la
+>   réponse.**
+>
+> ---
+>
+> **Historique 251i (conservé) :**
 > - **250i est MERGÉE** — PR [#4252](https://github.com/isopen-io/meeshy/pull/4252), squash `c14593da`, issue #4251 fermée, 17 checks verts. **Les deux doutes de 250i sont SOLDÉS** : un `let` en tête d'un `ViewBuilder` compile, et `@MainActor` sur une seule méthode d'une classe de test non isolée compile et s'exécute.
 > - **Synchronisation 251i** : branche repartie de `origin/main` `c14593da`.
 >

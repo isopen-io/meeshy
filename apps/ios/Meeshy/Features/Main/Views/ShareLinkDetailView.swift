@@ -33,11 +33,11 @@ struct ShareLinkDetailView: View {
         }
         .navigationTitle(link.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(String(localized: "shareLink.deleteTitle", defaultValue: "Delete this link?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), role: .destructive) { deleteLink() }
-            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
+        .confirmationDialog(String(localized: "shareLink.deleteTitle", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "shareLink.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "shareLink.deleteConfirmation", defaultValue: "This action is irreversible. The link will no longer be accessible.", bundle: .main))
+            Text(String(localized: "shareLink.deleteConfirmation", defaultValue: "Cette action est irréversible. Le lien ne sera plus accessible.", bundle: .main))
         }
     }
 
@@ -88,7 +88,7 @@ struct ShareLinkDetailView: View {
 
     private var actionsBar: some View {
         HStack(spacing: 12) {
-            actionButton(String(localized: "common.copy", defaultValue: "Copy", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+            actionButton(String(localized: "common.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                          color: copiedFeedback ? MeeshyColors.success : MeeshyColors.shareAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
@@ -99,12 +99,12 @@ struct ShareLinkDetailView: View {
                 }
             }
             shareActionButton
-            actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Disable", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activate", bundle: .main),
+            actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Désactiver", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activer", bundle: .main),
                          icon: isActive ? "pause.circle" : "play.circle",
                          color: isActive ? MeeshyColors.warning : MeeshyColors.success) {
                 toggleActive()
             }
-            actionButton(String(localized: "shareLink.delete", defaultValue: "Delete", bundle: .main), icon: "trash", color: MeeshyColors.error) {
+            actionButton(String(localized: "shareLink.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: MeeshyColors.error) {
                 showDeleteConfirm = true
             }
         }
@@ -146,7 +146,7 @@ struct ShareLinkDetailView: View {
     /// no `.accessibilityAddTraits` needed, unlike the `actionButton` siblings.
     @ViewBuilder
     private var shareActionButton: some View {
-        let shareLabel = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        let shareLabel = String(localized: "common.share", defaultValue: "Partager", bundle: .main)
         if let url = URL(string: link.joinUrl) {
             ShareLink(item: url) {
                 actionButtonLabel(shareLabel, icon: "square.and.arrow.up", color: MeeshyColors.shareAccent)

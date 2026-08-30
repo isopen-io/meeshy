@@ -28,15 +28,28 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
-                Text(String(localized: "bubble.meta.saving", defaultValue: "Saving…", bundle: .main))
+                    // `meeshyAnimation` plutôt que les deux `@Environment` que
+                    // déclarent les autres sites : cette vue est `Equatable`
+                    // par SYNTHÈSE, et une propriété stockée `@Environment`
+                    // (non `Equatable`) la casserait. Le modificateur du SDK
+                    // lit l'environnement lui-même et laisse la vue sans état.
+                    //
+                    // Rien à choisir comme valeur de repos ici : 360° ≡ 0°, le
+                    // glyphe arrêté est exactement celui que la rotation
+                    // traverse — et le « Saving… » juste à droite continue de
+                    // dire ce que la rotation disait.
+                    .meeshyAnimation(
+                        .linear(duration: 1).repeatForever(autoreverses: false),
+                        value: isSaving
+                    )
+                Text(String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .italic()
             } else {
                 Image(systemName: "pencil")
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
-                Text(String(localized: "bubble.meta.edited", defaultValue: "Edited", bundle: .main))
+                Text(String(localized: "bubble.meta.edited", defaultValue: "modifié", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .italic()
                 if hasEditHistory {
@@ -67,14 +80,14 @@ struct BubblePinnedIndicator: View, Equatable {
                 .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
-            Text(String(localized: "bubble.meta.pinned", defaultValue: "Pinned", bundle: .main))
+            Text(String(localized: "bubble.meta.pinned", defaultValue: "épinglé", bundle: .main))
                 .font(.caption2.weight(.medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Pinned message", bundle: .main))
+        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Message épinglé", bundle: .main))
     }
 }
 
@@ -117,7 +130,7 @@ struct BubbleForwardedIndicator: View, Equatable {
         case .person(let name):
             return String(localized: "bubble.meta.forwarded.from", defaultValue: "Fwd. from \(name)", bundle: .main)
         case .anonymous:
-            return String(localized: "bubble.meta.forwarded", defaultValue: "Forwarded", bundle: .main)
+            return String(localized: "bubble.meta.forwarded", defaultValue: "Transféré", bundle: .main)
         }
     }
 }

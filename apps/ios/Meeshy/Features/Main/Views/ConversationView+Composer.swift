@@ -1040,7 +1040,7 @@ extension ConversationView {
                     .font(.system(size: 40))
                     .foregroundColor(.white.opacity(0.7))
                 Text(String(localized: "conversation.view.composer.attachmentUnavailable",
-                            defaultValue: "Pi\u{00E8}ce jointe indisponible", bundle: .main))
+                            defaultValue: "Pièce jointe indisponible", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .medium))
                     .foregroundColor(.white)
                 Button(action: onDismiss) {

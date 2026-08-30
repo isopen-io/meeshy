@@ -163,7 +163,7 @@ struct UserStatsView: View {
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.info)
                     .accessibilityHidden(true)
-                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITE", bundle: .main))
+                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)

@@ -53,7 +53,7 @@ struct CommentAttachmentsTray: View {
                     )
                     .foregroundColor(theme.textPrimary)
                     .accessibilityElement(children: .combine)
-                    .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))) {
+                    .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
                         remove(attachment)
                     }
                 }
@@ -115,7 +115,7 @@ struct CommentAttachmentsTray: View {
         )
         .foregroundColor(theme.textPrimary)
         .accessibilityElement(children: .combine)
-        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))) {
+        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
             onRemovePlace?()
         }
     }

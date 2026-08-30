@@ -51,7 +51,7 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
+                    .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Renvoyer le message", bundle: .main))
                 } else {
                     deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
@@ -162,8 +162,8 @@ struct BubbleFooter: View, Equatable {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(model.showsTranslate
-                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Translation available", bundle: .main)
-                                : String(localized: "bubble.footer.translation.request", defaultValue: "Request translation", bundle: .main))
+                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Traduction disponible", bundle: .main)
+                                : String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
         }
         if !model.flags.isEmpty {
             HStack(spacing: 2) {
@@ -194,7 +194,7 @@ struct BubbleFooter: View, Equatable {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
+                .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Renvoyer le message", bundle: .main))
             } else {
                 deliveryView(tint: metaColor, readTint: readColor)
             }
@@ -225,8 +225,8 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.footer.readStatus", defaultValue: "View read status", bundle: .main))
-                .accessibilityHint(String(localized: "bubble.footer.readStatus.hint", defaultValue: "Opens message detail at the Views tab", bundle: .main))
+                .accessibilityLabel(String(localized: "bubble.footer.readStatus", defaultValue: "Voir le statut de lecture", bundle: .main))
+                .accessibilityHint(String(localized: "bubble.footer.readStatus.hint", defaultValue: "Ouvre le détail du message sur l'onglet Vues", bundle: .main))
             } else {
                 check
             }

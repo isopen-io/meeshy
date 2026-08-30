@@ -24,7 +24,7 @@ struct AboutView: View {
     }
 
     private var copyLabel: String {
-        String(localized: "common.copy", defaultValue: "Copy", bundle: .main)
+        String(localized: "common.copy", defaultValue: "Copier", bundle: .main)
     }
 
     private func copyValue(_ value: String) {
@@ -63,7 +63,7 @@ struct AboutView: View {
 
             Spacer()
 
-            Text(String(localized: "about.title", defaultValue: "A propos", bundle: .main))
+            Text(String(localized: "about.title", defaultValue: "À propos", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -137,7 +137,7 @@ struct AboutView: View {
             VStack(spacing: 0) {
                 infoRow(icon: "apple.logo", title: String(localized: "about.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
                 infoRow(icon: "shippingbox.fill", title: String(localized: "about.info.bundleId", defaultValue: "Bundle ID", bundle: .main), value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
-                infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "SDK Version", bundle: .main), value: "1.0.0", color: accentColor)
+                infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "Version du SDK", bundle: .main), value: "1.0.0", color: accentColor)
             }
             .background(sectionBackground(tint: accentColor))
         }
@@ -165,13 +165,13 @@ struct AboutView: View {
 
     private var fonctionnalitesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalites", bundle: .main), icon: "star.fill", color: "F8B500")
+            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalités", bundle: .main), icon: "star.fill", color: "F8B500")
 
             VStack(spacing: 0) {
                 featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement bout en bout", bundle: .main), icon: "lock.shield.fill")
-                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction temps reel", bundle: .main), icon: "globe")
+                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction en temps réel", bundle: .main), icon: "globe")
                 featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), icon: "waveform")
-                featureRow(title: String(localized: "about.feature.themes", defaultValue: "Themes personnalisables", bundle: .main), icon: "paintbrush.fill")
+                featureRow(title: String(localized: "about.feature.themes", defaultValue: "Thèmes personnalisables", bundle: .main), icon: "paintbrush.fill")
                 featureRow(title: String(localized: "about.feature.cloudSync", defaultValue: "Synchronisation cloud", bundle: .main), icon: "cloud.fill")
             }
             .background(sectionBackground(tint: "F8B500"))
@@ -209,7 +209,7 @@ struct AboutView: View {
     // MARK: - Copyright
 
     private var copyrightSection: some View {
-        Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits reserves.", bundle: .main))
+        Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits réservés.", bundle: .main))
             .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)

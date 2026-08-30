@@ -3,7 +3,9 @@ import {
   isValidEmoji,
   sanitizeEmoji,
   POPULAR_EMOJIS,
+  EMOJI_MAX_LENGTH,
 } from '../../types/reaction.js';
+import { addReactionRequestSchema } from '../../types/api-schemas.js';
 
 describe('isValidEmoji', () => {
   describe('valid single emoji (Emoji_Presentation)', () => {
@@ -67,6 +69,16 @@ describe('isValidEmoji', () => {
     it('accepts a keycap sequence', () => {
       // #️⃣ = U+0023 + U+FE0F + U+20E3 — the RGI keycap grapheme
       expect(isValidEmoji('#️⃣')).toBe(true);
+    });
+
+    it('accepts a multi-person ZWJ family sequence (11 UTF-16 units)', () => {
+      // 👨‍👩‍👧‍👦 = man·ZWJ·woman·ZWJ·girl·ZWJ·boy — a single RGI grapheme
+      expect(isValidEmoji('👨‍👩‍👧‍👦')).toBe(true);
+    });
+
+    it('accepts the longest common RGI grapheme: kiss with two skin tones (15 units)', () => {
+      // 👩🏽‍❤️‍💋‍👨🏼 — the longest RGI emoji-zwj sequence in current Unicode
+      expect(isValidEmoji('👩🏽‍❤️‍💋‍👨🏼')).toBe(true);
     });
   });
 
@@ -195,5 +207,43 @@ describe('POPULAR_EMOJIS', () => {
   it('has no duplicate entries', () => {
     const unique = new Set(POPULAR_EMOJIS);
     expect(unique.size).toBe(POPULAR_EMOJIS.length);
+  });
+});
+
+describe('EMOJI_MAX_LENGTH (length bound SSOT)', () => {
+  // The Zod `.max()` length bound on reaction/sticker emoji fields counts
+  // UTF-16 code units (String.length). It MUST admit every emoji that the
+  // validity SSOT `isValidEmoji` accepts — otherwise a valid RGI grapheme is
+  // rejected by the length pre-check before the format check ever runs.
+  it('admits the longest common RGI grapheme (kiss with two skin tones, 15 units)', () => {
+    const longest = '👩🏽‍❤️‍💋‍👨🏼';
+    expect(isValidEmoji(longest)).toBe(true);
+    expect(longest.length).toBeLessThanOrEqual(EMOJI_MAX_LENGTH);
+  });
+
+  it('admits a multi-person family sequence (11 units)', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(family.length).toBeLessThanOrEqual(EMOJI_MAX_LENGTH);
+  });
+
+  it('leaves headroom beyond the longest measured RGI grapheme', () => {
+    expect(EMOJI_MAX_LENGTH).toBeGreaterThanOrEqual(15);
+  });
+
+  // The REST reaction body is validated by Fastify/AJV against this shared
+  // JSON-Schema BEFORE the handler runs. Its emoji length bound must be the SSOT
+  // — not a hardcoded literal — or a family/couple/tinted RGI emoji (11–15 units)
+  // is rejected at the portillon over REST while the Socket.IO twin (which reads
+  // EMOJI_MAX_LENGTH) accepts it. This guards against the bound re-diverging.
+  it('REST addReactionRequestSchema binds the emoji bound to the SSOT, not a literal', () => {
+    expect(addReactionRequestSchema.properties.emoji.maxLength).toBe(EMOJI_MAX_LENGTH);
+  });
+
+  it('REST addReactionRequestSchema admits a multi-person family sequence (11 units)', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(isValidEmoji(family)).toBe(true);
+    expect(family.length).toBeLessThanOrEqual(
+      addReactionRequestSchema.properties.emoji.maxLength
+    );
   });
 });

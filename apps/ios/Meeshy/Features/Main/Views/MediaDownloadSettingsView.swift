@@ -50,7 +50,7 @@ struct MediaDownloadSettingsView: View {
 
             Spacer()
 
-            Text(String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main))
+            Text(String(localized: "settings.media.download.title", defaultValue: "Téléchargement auto", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -83,7 +83,7 @@ struct MediaDownloadSettingsView: View {
                     binding: $store.preferences.audioTranslation
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.indigo300Hex,
+                    title: String(localized: "settings.media.download.video", defaultValue: "Vidéo", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.indigo300Hex,
                     binding: $store.preferences.video
                 )
                 Spacer().frame(height: 40)
@@ -104,7 +104,7 @@ struct MediaDownloadSettingsView: View {
                     fieldIcon("arrow.down.circle.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "settings.media.download.auto_title", defaultValue: "Telechargement automatique", bundle: .main))
+                        Text(String(localized: "settings.media.download.auto_title", defaultValue: "Téléchargement automatique", bundle: .main))
                             .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 

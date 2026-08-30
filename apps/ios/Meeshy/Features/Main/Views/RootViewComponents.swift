@@ -398,7 +398,7 @@ struct ThemedFeedOverlay: View {
             backArrowColor: MeeshyColors.indigo500,
             backgroundColor: theme.backgroundPrimary,
             titleView: {
-                Text("Meeshy Feed")
+                Text(verbatim: "Meeshy Feed")
                     .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
@@ -693,7 +693,7 @@ struct ThemedFeedOverlay: View {
                                 context: .feedComposer
                             )
 
-                            Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
+                            Text(String(localized: "composer.placeholder.share", defaultValue: "Partager quelque chose", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
 

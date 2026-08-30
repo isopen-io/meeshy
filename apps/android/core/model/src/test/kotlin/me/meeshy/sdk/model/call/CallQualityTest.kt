@@ -42,9 +42,16 @@ class CallQualityTest {
     }
 
     @Test
+    fun `rtt at the fair boundary stays good`() {
+        // videoFairRTT = 300 (iOS parity), strict '>' → exactly 300 is still good.
+        assertThat(VideoQualityLevel.from(rttMs = 300.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.GOOD)
+    }
+
+    @Test
     fun `rtt just past the fair boundary drops to fair`() {
-        // videoFairRTT = 200.
-        assertThat(VideoQualityLevel.from(rttMs = 201.0, packetLoss = 0.0))
+        // videoFairRTT = 300 (iOS parity).
+        assertThat(VideoQualityLevel.from(rttMs = 300.1, packetLoss = 0.0))
             .isEqualTo(VideoQualityLevel.FAIR)
     }
 
@@ -56,9 +63,16 @@ class CallQualityTest {
     }
 
     @Test
+    fun `rtt at the poor boundary stays fair`() {
+        // videoPoorRTT = 500 (iOS parity), strict '>' → exactly 500 is still fair.
+        assertThat(VideoQualityLevel.from(rttMs = 500.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.FAIR)
+    }
+
+    @Test
     fun `rtt just past the poor boundary drops to poor`() {
-        // videoPoorRTT = 300.
-        assertThat(VideoQualityLevel.from(rttMs = 301.0, packetLoss = 0.0))
+        // videoPoorRTT = 500 (iOS parity).
+        assertThat(VideoQualityLevel.from(rttMs = 500.1, packetLoss = 0.0))
             .isEqualTo(VideoQualityLevel.POOR)
     }
 
@@ -70,10 +84,50 @@ class CallQualityTest {
     }
 
     @Test
+    fun `rtt at the critical ceiling stays poor`() {
+        // poorRTT = 800 (iOS parity), strict '>' → exactly 800 is still poor.
+        assertThat(VideoQualityLevel.from(rttMs = 800.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.POOR)
+    }
+
+    @Test
     fun `rtt past the poor rtt ceiling is critical`() {
-        // poorRTT = 500.
-        assertThat(VideoQualityLevel.from(rttMs = 501.0, packetLoss = 0.0))
+        // poorRTT = 800 (iOS parity).
+        assertThat(VideoQualityLevel.from(rttMs = 800.1, packetLoss = 0.0))
             .isEqualTo(VideoQualityLevel.CRITICAL)
+    }
+
+    // --- long-haul / intercontinental regression (iOS RTT recalibration) ----
+    // The prior boundaries (fair >200, poor >300, critical >500) painted a
+    // HEALTHY submarine-backbone call red at 00:06. An Africa↔Asia hop is
+    // already 155-221 ms RTT before the mobile last mile (WACS 155, 2Africa 158,
+    // ACC-1 221), so a healthy intercontinental call routinely sits at 250-450 ms.
+    // These pin the recalibrated ladder against those real baselines.
+
+    @Test
+    fun `a healthy transcontinental backbone hop stays good not fair`() {
+        // 250 ms — a bare Africa↔Asia backbone RTT. Under the stale ladder this
+        // was FAIR (>videoFairRTT 200); at iOS parity (300) it is GOOD.
+        assertThat(VideoQualityLevel.from(rttMs = 250.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.GOOD)
+    }
+
+    @Test
+    fun `an intercontinental call with a mobile last mile stays fair not poor`() {
+        // 350 ms — backbone hop + a 4G/5G last mile, no loss. Under the stale
+        // ladder this was POOR (>videoPoorRTT 300) and rendered as a WEAK link
+        // in the error hue; at iOS parity it is FAIR (a healthy, usable call).
+        assertThat(VideoQualityLevel.from(rttMs = 350.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.FAIR)
+    }
+
+    @Test
+    fun `a slow but not congested long-haul link stays poor not critical`() {
+        // 550 ms — a stressed long-haul link, still zero loss. Under the stale
+        // ladder this was CRITICAL (>poorRTT 500); at iOS parity it is POOR, so
+        // outbound video survives rather than being torn down as unusable.
+        assertThat(VideoQualityLevel.from(rttMs = 550.0, packetLoss = 0.0))
+            .isEqualTo(VideoQualityLevel.POOR)
     }
 
     @Test
@@ -176,7 +230,7 @@ class CallQualityTest {
     fun `a sample classifies through the rtt-and-loss ladder`() {
         assertThat(CallQualitySample(rttMs = 50.0, packetLoss = 0.0).level())
             .isEqualTo(VideoQualityLevel.EXCELLENT)
-        assertThat(CallQualitySample(rttMs = 250.0, packetLoss = 0.0).level())
+        assertThat(CallQualitySample(rttMs = 350.0, packetLoss = 0.0).level())
             .isEqualTo(VideoQualityLevel.FAIR)
     }
 

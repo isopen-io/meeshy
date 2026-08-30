@@ -199,6 +199,7 @@ class StoryRepository @Inject constructor(
             visibility = request.visibility,
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
+            mediaIds = request.mediaIds,
         )
     }
 
@@ -231,22 +232,33 @@ class StoryRepository @Inject constructor(
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
             failedAtMillis = updatedAt,
+            mediaIds = request.mediaIds,
         )
     }
 
-    /** A non-blank story publish decoded from this row's payload, or null if undecodable/blank. */
+    /**
+     * A story publish decoded from this row's payload, or null if undecodable or
+     * carrying nothing to show. A publish is shown when it has non-blank text OR at
+     * least one non-blank media id: a media-only (RAW background) story is a
+     * first-class publish (its [content] stays null), matching iOS, where an
+     * image/video-only story queues just like a captioned one. A row with neither
+     * text nor media is skipped defensively.
+     */
     private fun OutboxEntity.decodeStoryPublish(): DecodedStoryPublish? {
         val request = runCatching {
             MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
         }.getOrNull() ?: return null
-        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
-        return DecodedStoryPublish(content, request.visibility, request.originalLanguage)
+        val content = request.content?.takeIf { it.isNotBlank() }
+        val mediaIds = request.mediaIds.orEmpty().filter { it.isNotBlank() }
+        if (content == null && mediaIds.isEmpty()) return null
+        return DecodedStoryPublish(content, request.visibility, request.originalLanguage, mediaIds)
     }
 
     private data class DecodedStoryPublish(
-        val content: String,
+        val content: String?,
         val visibility: String,
         val originalLanguage: String?,
+        val mediaIds: List<String>,
     )
 
     /**

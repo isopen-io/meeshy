@@ -78,7 +78,7 @@ final class AffiliatesViewModel: ObservableObject {
             try? await CacheCoordinator.shared.affiliates.save(referrals, for: cacheKey)
         } catch {
             loadState = referrals.isEmpty
-                ? .error(String(localized: "contacts.affiliates.load-error", defaultValue: "Impossible de charger les affilies", bundle: .main))
+                ? .error(String(localized: "contacts.affiliates.load-error", defaultValue: "Impossible de charger les affiliés", bundle: .main))
                 : .loaded
         }
     }

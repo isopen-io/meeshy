@@ -221,7 +221,7 @@ struct OnboardingFlowView: View {
 
             if viewModel.currentStep == .profile {
                 Button(action: { viewModel.nextStep() }) {
-                    Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
+                    Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette étape", bundle: .main))
                         .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -241,7 +241,7 @@ struct OnboardingFlowView: View {
     private var buttonTitle: String {
         switch viewModel.currentStep {
         case .recap:
-            return String(localized: "onboarding.button.create-account", defaultValue: "Creer mon compte", bundle: .main)
+            return String(localized: "onboarding.button.create-account", defaultValue: "Créer mon compte", bundle: .main)
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:

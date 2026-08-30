@@ -357,7 +357,7 @@ struct FocalQuotedReplyView: View, Equatable {
         } else {
             HStack(spacing: 4) {
                 previewGlyph
-                let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Media", bundle: .main)
+                let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
                 MessageTextRenderer.render(
                     reference.previewText.isEmpty ? fallback : reference.previewText,
                     fontSize: 12,

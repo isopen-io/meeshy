@@ -245,13 +245,26 @@ describe('SocketConversationLeaveSchema', () => {
 });
 
 describe('SocketReactionAddSchema', () => {
-  it('accepts a valid emoji up to 10 chars', () => {
+  it('accepts a simple single emoji', () => {
     const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👍' });
     expect(result.success).toBe(true);
   });
 
-  it('rejects an emoji exceeding 10 chars', () => {
-    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '😀'.repeat(11) });
+  it('accepts a multi-person RGI family emoji (11 UTF-16 units)', () => {
+    // 👨‍👩‍👧‍👦 is a single valid RGI grapheme (isValidEmoji accepts it) but is
+    // 11 code units — the old max(10) length bound rejected it at the boundary
+    // before the format check ran, blocking a nominal picker emoji.
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👨‍👩‍👧‍👦' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the longest common RGI grapheme (kiss with two skin tones, 15 units)', () => {
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '👩🏽‍❤️‍💋‍👨🏼' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an oversized forged emoji payload', () => {
+    const result = SocketReactionAddSchema.safeParse({ messageId: VALID_MONGO_ID, emoji: '😀'.repeat(20) });
     expect(result.success).toBe(false);
   });
 

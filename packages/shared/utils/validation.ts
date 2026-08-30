@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
+import { EMOJI_MAX_LENGTH } from '../types/reaction.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
@@ -103,11 +104,19 @@ const supportedLanguageCode = z
  * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
  * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
  * inchangé, seul le stockage des codes région-taggés est corrigé.
+ *
+ * La borne `.max(6)` reflète la longueur MAXIMALE d'un code 639-3 région-taggé
+ * (`[a-z]{3}` + `-` + `[A-Z]{2}` = 6, ex. `'bas-CM'`, `'ewo-CM'`), miroir de
+ * {@link CommonSchemas.language}. Un `.max(5)` tombait AVANT la `.transform` et
+ * rejetait ces locales de plateforme (`Locale.current` / `Accept-Language`) en
+ * HTTP 400 — la même exclusion silencieuse que l'itération 266 a fermée sur les
+ * langues de contenu, manquée ici parce que `.min`/`.max` sur deux lignes
+ * échappaient à son grep mono-ligne.
  */
 const customDestinationLanguageCode = z
   .string()
   .min(2)
-  .max(5)
+  .max(6)
   .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
@@ -1303,7 +1312,7 @@ export const ReactionSchemas = {
 
   // Ajouter une réaction
   add: z.object({
-    emoji: z.string().min(1).max(10),
+    emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
   }),
 };
 

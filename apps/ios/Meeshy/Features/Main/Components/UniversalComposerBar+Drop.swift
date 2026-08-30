@@ -68,7 +68,7 @@ struct ComposerDropTargetModifier: ViewModifier {
             )
             .overlay(
                 Label {
-                    Text(String(localized: "composer.drop.hint", defaultValue: "D\u{00E9}poser ici", bundle: .main))
+                    Text(String(localized: "composer.drop.hint", defaultValue: "Déposer ici", bundle: .main))
                         .font(.footnote.weight(.semibold))
                 } icon: {
                     Image(systemName: "arrow.down.doc.fill")
@@ -116,7 +116,7 @@ struct ComposerDropTargetModifier: ViewModifier {
                 .filter { resolved[$0.offset] == nil }
                 .map { entry in
                     entry.element.suggestedName
-                        ?? String(localized: "composer.drop.unnamedItem", defaultValue: "\u{00E9}l\u{00E9}ment sans nom", bundle: .main)
+                        ?? String(localized: "composer.drop.unnamedItem", defaultValue: "élément sans nom", bundle: .main)
                 }
             if !failedNames.isEmpty {
                 ComposerIngestFeedback.showFailure(names: failedNames)

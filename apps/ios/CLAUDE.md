@@ -423,7 +423,25 @@ Every ViewModel loading data MUST:
 2. Distinguish `.fresh` / `.stale` / `.expired` / `.empty` in a switch
 3. Display `.stale` immediately + silent background refresh
 4. NO spinner when cached data exists
-5. Use SkeletonPlaceholder (not ProgressView) on empty cache
+5. Show a SKELETON (not a ProgressView) on empty cache
+
+**`SkeletonPlaceholder` n'existe pas — c'est un nom générique de la bible.** Le
+dépôt le réalise sous des noms de DOMAINE, un par forme de contenu, et la
+matrice du Pattern I4 en nomme cinq (garde : `SkeletonColdStartGuardTests`) :
+
+| écran | composant | où il vit |
+|---|---|---|
+| Liste conversations | `SkeletonConversationRow` | SDK — `MeeshyUI/Primitives/SkeletonView.swift` |
+| Messages | `SkeletonMessageBubble` | SDK — idem |
+| Feed | `SkeletonFeedList` (→ `SkeletonFeedPost`) | app — `Views/Skeletons/` |
+| Stories | `SkeletonStoryTrayRow` (→ `SkeletonStoryThumb`) | app — `Views/Skeletons/` |
+| Profil | `SkeletonProfileHeader` | app — `Views/Skeletons/` |
+
+Six autres écrans en ont un sans que la bible l'ait exigé : `ContactsSkeletonList`,
+`SkeletonLinkRow`/`SkeletonLinkList`, `LentilleSkeletonRow`, `NearbySkeletonRow`,
+`LivingSummarySkeleton`. Un squelette neuf se bâtit sur `SkeletonShape` +
+`skeletonShimmer()` (Reduce Motion géré par `ShimmerModifier`), et chaque rangée
+porte `.accessibilityElement(children: .ignore)` + un libellé de chargement.
 
 ### LoadState Enum
 Every data-loading ViewModel MUST expose `loadState: LoadState`:

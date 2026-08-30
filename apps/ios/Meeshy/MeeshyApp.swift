@@ -142,7 +142,7 @@ struct MeeshyApp: App {
                             session: guestSession,
                             onSessionCreated: { ctx in
                                 if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Unable to save session", bundle: .main))
+                                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Impossible d'enregistrer la session", bundle: .main))
                                 }
                                 activeGuestSession = GuestSession(
                                     identifier: guestSession.identifier,
@@ -1022,9 +1022,9 @@ struct MeeshyApp: App {
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
-                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Login successful!", bundle: .main))
+                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Connexion réussie !", bundle: .main))
             } else {
-                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
+                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Lien invalide ou expiré", bundle: .main))
             }
         }
     }
@@ -1170,6 +1170,12 @@ struct SplashScreen: View {
     @State private var backgroundScale: CGFloat = 1.2
     @ObservedObject private var theme = ThemeManager.shared
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private var isDark: Bool { theme.mode.isDark }
 
     var body: some View {
@@ -1224,7 +1230,7 @@ struct SplashScreen: View {
                     .padding(.bottom, 32)
 
                 // App Name
-                Text("Meeshy")
+                Text(verbatim: "Meeshy")
                     .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
@@ -1272,8 +1278,16 @@ struct SplashScreen: View {
                 showSubtitle = true
             }
 
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                glowPulse = true
+            // Le halo est DÉCORATIF : sous Reduce Motion il ne se pose sur
+            // aucune valeur, il n'existe pas. `glowPulse` reste `false`, donc
+            // les trois orbes gardent leur échelle de repos. Avec le halo de
+            // `LoginView`, ce sont les deux seuls des sept sites de #4286 où
+            // « ne rien faire » est le bon repos — les cinq autres portent un
+            // STATUT, et devaient choisir une valeur qui le dit encore.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    glowPulse = true
+                }
             }
 
             withAnimation(.easeInOut(duration: 1.0)) {

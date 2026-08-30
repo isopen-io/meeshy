@@ -1638,7 +1638,7 @@ struct CommentsSheetView: View {
                                 .frame(width: 18, height: 18)
                                 .background(Circle().fill(theme.textMuted.opacity(0.15)))
                         }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -1671,7 +1671,7 @@ struct CommentsSheetView: View {
                                 .frame(width: 18, height: 18)
                                 .background(Circle().fill(theme.textMuted.opacity(0.15)))
                         }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)

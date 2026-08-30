@@ -57,6 +57,7 @@ interface FocalRowProps {
   currentUser?: User;
   userLanguage: string;
   currentDisplayLanguage: string;
+  usedLanguages?: readonly string[];
   translationError?: string;
   conversationType?: ConversationType;
   userRole?: 'USER' | 'MEMBER' | 'MODERATOR' | 'ADMIN' | 'CREATOR' | 'AUDIT' | 'ANALYST' | 'BIGBOSS';
@@ -100,6 +101,7 @@ export const FocalRow = memo(function FocalRow({
   currentUser,
   userLanguage,
   currentDisplayLanguage,
+  usedLanguages = [],
   translationError,
   conversationType = 'direct',
   userRole = 'USER',
@@ -172,6 +174,7 @@ export const FocalRow = memo(function FocalRow({
   } = useMessageDisplay({
     message: message as unknown as DisplayMessage,
     currentDisplayLanguage,
+    usedLanguages,
   });
 
   const handleCopy = useCallback(async () => {

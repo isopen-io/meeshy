@@ -158,7 +158,7 @@ NC='\033[0m'
 # est un `.max(5)` → `.max(6)` sur des schémas Zod, une borne de validation
 # RUNTIME dont `z.string()` infère le même type — delta de types nul, par
 # construction.
-readonly WEB_BASELINE=1194
+readonly WEB_BASELINE=1184
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

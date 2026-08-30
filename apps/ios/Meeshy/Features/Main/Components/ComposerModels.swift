@@ -105,8 +105,19 @@ enum DefaultComposerLanguage {
 /// `nonisolated` au niveau du type : la cible app compile sous
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non.
 nonisolated enum ComposerLanguageFlag {
-    /// Code hors du référentiel `LanguageData` → code brut en capitales,
-    /// jamais un bouton vide.
+    /// Code hors référentiel → code brut en capitales, jamais un bouton vide.
+    ///
+    /// Cette règle a été REDÉCOUVERTE ici, mot pour mot, sans savoir que #4248
+    /// l'avait déjà choisie pour la puce de langue : deux sites, même
+    /// raisonnement, aucun ne connaissait l'autre.
+    ///
+    /// **Ce site NE rejoint PAS la source unique, et la raison est mesurée**
+    /// (252i, #4260) : sur les 39 codes que les deux tables partagent, elles
+    /// s'accordent sur 38 et divergent sur UN — `pt`, que `LanguageDisplay`
+    /// rend 🇵🇹 et `LanguageData` 🇧🇷. Le banc voisin épingle `pt-BR` → 🇧🇷.
+    /// Trancher « quel drapeau porte le portugais » est une décision PRODUIT,
+    /// pas un détail de refactor : elle a son issue, et ce helper garde sa
+    /// table jusqu'à ce qu'elle soit prise.
     static func label(for code: String) -> String {
         let base = MeeshyUser.normalizeLanguageCode(code) ?? code.lowercased()
         return LanguageData.info(for: base)?.flag ?? code.uppercased()
@@ -217,6 +228,15 @@ struct ComposerWaveformBar: View {
 
     @State private var height: CGFloat = 4
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    private static let restingMin: CGFloat = 4
+    private static let restingMax: CGFloat = 24
+
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
             .fill(
@@ -240,6 +260,22 @@ struct ComposerWaveformBar: View {
 
     private func animate() {
         guard isRecording else { return }
+        // Sous Reduce Motion la barre se POSE au lieu de battre. Elle ne se pose
+        // NI sur la cible (tirée au hasard, donc instable d'un rendu à l'autre)
+        // NI sur `minHeight` (toutes les barres à la même hauteur = un trait
+        // plat, qui se lit « enregistreur cassé »). Le chrono d'enregistrement
+        // continue de dire que c'est en cours ; la forme d'onde doit seulement
+        // rester lisible comme une forme d'onde.
+        guard !reduceMotion else {
+            withTransaction(Transaction(animation: nil)) {
+                height = RestingWaveform.height(
+                    index: index,
+                    minHeight: Self.restingMin,
+                    maxHeight: Self.restingMax
+                )
+            }
+            return
+        }
         let delay = Double(index) * 0.05
         withAnimation(
             .easeInOut(duration: Double.random(in: 0.3...0.6))

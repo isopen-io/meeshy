@@ -1047,7 +1047,7 @@ private struct ActiveUploadRow: View {
 
             if isFailed {
                 Button(action: onRetry) {
-                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
+                    Label(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main), systemImage: "arrow.clockwise")
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
@@ -1126,7 +1126,7 @@ private struct FailedStoryRow: View {
                     .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .buttonStyle(.bordered)
-            .accessibilityLabel(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main))
+            .accessibilityLabel(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main))
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
