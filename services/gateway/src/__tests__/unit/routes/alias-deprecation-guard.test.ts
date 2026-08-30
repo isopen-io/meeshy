@@ -37,7 +37,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { join, relative, dirname, basename } from 'path';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
@@ -439,8 +439,31 @@ describe('La dette ne pourrit pas', () => {
   });
 
   it('chaque alias invisible au balayage existe encore, à son empreinte', () => {
+    // #4284 — l'empreinte se cherche dans l'UNITÉ (le fichier nommé plus ses
+    // frères `X-*.ts`), jamais dans le seul fichier nommé : `users/profile.ts`
+    // est devenu une façade de ré-export et l'empreinte vit désormais dans
+    // `profile-lookups.ts`. Même doctrine que `uniteDeSite` de
+    // `deprecated-alias-headers-guard` et que `AppSourceGuard.unit` (#4425) —
+    // un GLOB, jamais une liste de parties, qui se périmerait au découpage
+    // suivant sans que rien ne rougisse.
+    const uniteDeFichier = (relatif: string): string => {
+      const dossier = join(ROUTES_DIR, dirname(relatif));
+      const base = basename(relatif, '.ts');
+      return readdirSync(dossier)
+        .filter((nom) => nom === basename(relatif) || (nom.startsWith(`${base}-`) && nom.endsWith('.ts')))
+        .sort()
+        .map((nom) => readFileSync(join(dossier, nom), 'utf8'))
+        .join('\n');
+    };
+
+    // BORNE : un glob cassé rendrait le seul fichier nommé et ce témoin
+    // redeviendrait en silence celui, épinglé, qu'il remplace.
+    expect(uniteDeFichier('users/profile.ts').length).toBeGreaterThan(
+      readFileSync(join(ROUTES_DIR, 'users/profile.ts'), 'utf8').length
+    );
+
     const absents = ALIAS_INVISIBLES_AU_BALAYAGE.filter(
-      ({ fichier, empreinte }) => !readFileSync(join(ROUTES_DIR, fichier), 'utf8').includes(empreinte)
+      ({ fichier, empreinte }) => !uniteDeFichier(fichier).includes(empreinte)
     ).map((a) => a.fichier);
 
     expect(absents).toEqual([]);

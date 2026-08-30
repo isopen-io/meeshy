@@ -68,7 +68,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ProfileUserPostsList.swift",
         "ReelsPlayerView.swift",
         "RootView.swift",
-        "StoryViewModel.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
         "StoryViewerView+Sidebar.swift",
@@ -109,7 +108,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// Le cliquet a fait exactement son travail : il a refusé l'ajout, et
     /// l'extraction qui s'en est suivie nomme le concept au lieu de le cacher
     /// dans un `body`.
-    private static let legacyLineCeiling = 82_767
+    /// **80 183 depuis #4425.** `StoryViewModel.swift` a quitté la dette à son
+    /// tour : ses 3 584 lignes se répartissent en `StoryViewModel+Publication`
+    /// (960, la file durable et sa réconciliation), `+PublicationUpload` (811,
+    /// séparé de `+Publication` pour rester sous le budget), `+MediaPreload`
+    /// (431, préchargement et épinglage LRU), `+Viewing` (302, « vu » et
+    /// impressions), `StoryViewModelRules` (157, les règles pures) et le type
+    /// lui-même (1 000). Toutes sous le budget 800–1100. Le plafond baisse de
+    /// tout ce que le fichier pesait (3 584), et non de sa seule part
+    /// au-dessus de 1100 : un nom qui sort de la liste en sort ENTIER.
+    private static let legacyLineCeiling = 80_183
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

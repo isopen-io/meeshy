@@ -2675,16 +2675,15 @@ final class StoryViewModelTests: XCTestCase {
     /// la fonction (jamais le fichier entier), équilibrée par accolades via
     /// `DeclarationBodyScanner` — insensible aux commentaires ajoutés au-dessus.
     func test_prefetchStoryMediaURLs_blockConsultsTheDownloadPolicy() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/ViewModels
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel.swift")
-        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        // Lit l'UNITÉ (#4425), pas le seul fichier `StoryViewModel.swift` :
+        // `prefetchStoryMediaURLs` peut vivre dans un fichier frère
+        // (`StoryViewModel+MediaPreload.swift`) depuis le découpage — une
+        // lecture bornée au fichier historique ne trouverait plus son corps,
+        // et cette garde de câblage ne mesurerait plus rien.
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
 
         guard let body = DeclarationBodyScanner.body(containing: "private static func prefetchStoryMediaURLs(", in: source) else {
-            XCTFail("prefetchStoryMediaURLs body not found — StoryViewModel.swift changed shape, update this guard's anchor.")
+            XCTFail("prefetchStoryMediaURLs body not found — StoryViewModel's unit changed shape, update this guard's anchor.")
             return
         }
 
