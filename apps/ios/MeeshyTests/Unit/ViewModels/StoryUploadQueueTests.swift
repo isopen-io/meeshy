@@ -796,7 +796,13 @@ final class StoryUploadQueueTests: XCTestCase {
     /// jour où ce motif change simplement de nom.
     func test_publish_uploadsStickerImagesThroughTheCommonPath() throws {
         let code = try storyViewModelSource()
-        XCTAssertTrue(code.contains("private func runStoryUpload"),
+        // Pas "private func" : le découpage #4425 a promu `runStoryUpload` en
+        // internal (lu depuis `StoryViewModel+Publication.swift`, une
+        // extension d'un autre fichier) — même conséquence mécanique
+        // qu'anticipée par l'issue pour tout membre `private` traversant la
+        // frontière du découpage. La parenthèse exclut les sites d'appel :
+        // seule la DÉCLARATION porte le jeton "func runStoryUpload(".
+        XCTAssertTrue(code.contains("func runStoryUpload("),
                       "Pipeline de publication introuvable — la garde ne mesurerait rien.")
         XCTAssertTrue(code.contains("StoryStickerUpload.pendingUploadIds("),
                       "Le publish ne demande plus quelles images de stickers restent à téléverser.")

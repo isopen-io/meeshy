@@ -300,7 +300,11 @@ const DETTE: readonly { readonly cle: string; readonly issue: string }[] = [
   // (#4423) : poser un en-tête sur cinq routes vivantes qu'appellent trois
   // clients ne se décide pas en fin d'intégration. Ce sont bien des alias —
   // c'est pourquoi ils sont ici et non dans la liste des SUCCESSEURS.
-  { cle: 'conversations/messages.ts POST /conversations/:id/mark-read', issue: '#4423' },
+  // #4284 — la route est declaree dans `messages-read-status.ts` depuis le
+  // decoupage de `conversations/messages.ts` (2945 lignes). La CLE porte le
+  // fichier de DECLARATION : c'est ce qui la fait rougir plutot que de la
+  // laisser designer une adresse vide.
+  { cle: 'conversations/messages-read-status.ts POST /conversations/:id/mark-read', issue: '#4423' },
   { cle: 'message-read-status.ts GET /messages/:messageId/read-status', issue: '#4423' },
   { cle: 'message-read-status.ts GET /conversations/:conversationId/read-statuses', issue: '#4423' },
   { cle: 'message-read-status.ts POST /conversations/:conversationId/mark-as-read', issue: '#4423' },
