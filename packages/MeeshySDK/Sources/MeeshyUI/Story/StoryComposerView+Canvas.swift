@@ -486,8 +486,35 @@ extension StoryComposerView {
                                        defaultValue: "Écrire un texte", bundle: .module))
     }
 
+    /// **« Coller » vit sur sa PROPRE rangée, sous les deux autres** (#4378,
+    /// directive porteur 2026-08-30) :
+    ///
+    /// > « Le bouton coller doit être centré plus bas pour que les autres
+    /// > boutons restent au centre ! »
+    ///
+    /// Les trois capsules partageaient un `HStack`. Mesuré à l'écran : la
+    /// troisième débordait du bord droit, et surtout les deux premières s'en
+    /// trouvaient poussées HORS du centre — la rangée entière se décalait pour
+    /// loger celle qui dépassait.
+    ///
+    /// Une seconde rangée règle les deux d'un coup : « Caméra » et « Galerie »
+    /// retrouvent le centre, et « Coller » y est aussi, sous elles. Le
+    /// `VStack` ne se peint pas quand la seconde rangée est vide — la capsule se
+    /// retire d'elle-même quand le presse-papier ne porte rien d'acceptable, et
+    /// un interstice réservé à une vue absente serait un trou.
     @ViewBuilder
     private var blankCanvasStarterRow: some View {
+        VStack(spacing: 10) {
+            blankCanvasCaptureRow
+            BlankCanvasPasteStarter(
+                canAddMedia: viewModel.canAddMedia,
+                onItems: { posePastedItems($0) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var blankCanvasCaptureRow: some View {
         HStack(spacing: 10) {
             if offersCameraStarter {
                 blankCanvasStarterCapsule(
@@ -502,13 +529,6 @@ extension StoryComposerView {
             if viewModel.canAddMedia {
                 blankCanvasGalleryStarter
             }
-            // C5b — le presse-papier entre dans le composer. La capsule lit
-            // `\.storyPaste` elle-même : `StoryComposerView` n'a pas à porter une
-            // quatrième `@Environment` pour une amorce.
-            BlankCanvasPasteStarter(
-                canAddMedia: viewModel.canAddMedia,
-                onItems: { posePastedItems($0) }
-            )
         }
     }
 
