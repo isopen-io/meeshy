@@ -162,7 +162,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    @Published var textEditingMode: TextEditingMode = .inactive
+    /// `public` en LECTURE (#4401) : le meuble monte le contrôleur de texte et
+    /// relaie l'édition en ligne quand un texte est actif. L'ÉCRITURE reste au
+    /// module — elle passe par `enterTextEditingMode` / `exitTextEditingMode`,
+    /// qui gardent le verrou du badge de republication et suppriment les
+    /// coquilles vides. Un site d'appel qui poserait le mode à la main
+    /// contournerait les deux.
+    @Published public internal(set) var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 

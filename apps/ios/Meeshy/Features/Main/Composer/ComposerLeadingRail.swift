@@ -121,6 +121,9 @@ nonisolated enum ComposerRailCopy {
         case .drawing:
             return String(localized: "composer.rail.drawing",
                           defaultValue: "Dessiner", bundle: .main)
+        case .text:
+            return String(localized: "composer.rail.text",
+                          defaultValue: "Ajouter du texte", bundle: .main)
         }
     }
 }
