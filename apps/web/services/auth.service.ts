@@ -77,10 +77,17 @@ class AuthService {
       if (data.success && data.data?.token) {
         // NOUVEAU: Utiliser AuthManager (source unique de vérité)
         // Nettoie automatiquement les sessions précédentes
+        //
+        // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
+        // — cinq créneaux (#4404). `refreshToken` n'est jamais rendu par cette
+        // route (#4405, mesuré) : le concept reste lu ici, pas inventé.
+        // `sessionToken` DOIT atterrir dans SON propre créneau, jamais dans
+        // celui d'`expiresIn` — c'était le défaut sur ce site précis.
         authManager.setCredentials(
           data.data.user,
           data.data.token,
           data.data.refreshToken,
+          data.data.sessionToken,
           data.data.expiresIn
         );
       } else {

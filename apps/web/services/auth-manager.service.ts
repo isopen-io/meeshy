@@ -73,6 +73,19 @@ class AuthManager {
 
   // ==================== CREDENTIALS (RW) ====================
 
+  /**
+   * Persiste les credentials d'un compte inscrit — seul point d'écriture pour
+   * `AUTH_TOKEN` / `REFRESH_TOKEN` / `SESSION_TOKEN` / `USER_DATA` ensemble.
+   *
+   * Cinq paramètres positionnels, dont trois `string | undefined`
+   * indiscernables au typage : le compilateur ne peut pas voir un
+   * `refreshToken` glissé dans le créneau `sessionToken`, ni un `expiresIn`
+   * (nombre) glissé dans un créneau `string | undefined` — trois des quatre
+   * appelants historiques s'y sont trompés, deux d'entre eux à deux crans
+   * (#4404). Passer explicitement `undefined` pour tout paramètre dont la
+   * source n'a pas de valeur ; ne JAMAIS décaler l'argument suivant dans le
+   * créneau resté vide. Modèle de référence : `hooks/use-auth.ts:173`.
+   */
   setCredentials(
     user: User,
     authToken: string,
