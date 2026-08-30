@@ -9,9 +9,13 @@
 # workflow rend cette capacité au dépôt : le GITHUB_TOKEN d'Actions, sous
 # `issues: write`, crée le milestone que la session ne peut pas créer.
 #
+# IL VIT SUR LA BRANCHE PAR DÉFAUT, ET C'EST OBLIGATOIRE. GitHub n'enregistre
+# un `workflow_dispatch` que depuis la branche par défaut : posé sur une autre,
+# le dispatch rend 404 (mesuré). Ne pas le déplacer sur une branche de travail.
+#
 # Il est IDEMPOTENT : un milestone du même titre est mis à jour, jamais
 # dupliqué. Il rend le numéro du milestone dans le résumé du run — c'est ce
-# numéro que `issue_write` attend.
+# numéro qu'attend l'API des issues.
 # =============================================================================
 name: Pilotage — milestone
 
