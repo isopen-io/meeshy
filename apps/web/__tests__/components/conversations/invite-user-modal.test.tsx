@@ -230,7 +230,7 @@ describe('InviteUserModal', () => {
 
       await waitFor(() => {
         expect(apiService.get).toHaveBeenCalledWith(
-          expect.stringContaining('/api/users/search')
+          expect.stringContaining('/api/v1/users/search')
         );
       });
     });
@@ -535,7 +535,7 @@ describe('InviteUserModal', () => {
 
       await waitFor(() => {
         expect(apiService.post).toHaveBeenCalledWith(
-          '/api/conversations/conv-1/invite',
+          '/api/v1/conversations/conv-1/invite',
           { userId: 'user-2' }
         );
       });

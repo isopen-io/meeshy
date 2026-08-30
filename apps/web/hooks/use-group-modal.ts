@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import type { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 /**
  * DÉCISION (#4222) — ce que cette modale crée est une COMMUNAUTÉ, pas une
@@ -111,7 +112,7 @@ export function useGroupModal(currentUserId?: string) {
           return;
         }
 
-        const url = `${buildApiUrl('/users/search')}?q=${encodeURIComponent(trimmedQuery)}`;
+        const url = `${buildApiUrl(API_ENDPOINTS.users.search)}?q=${encodeURIComponent(trimmedQuery)}`;
 
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
@@ -175,7 +176,7 @@ export function useGroupModal(currentUserId?: string) {
       const description = groupDescription.trim() || undefined;
 
       const créer = (charge: ChargeCréationCommunauté) =>
-        fetch(buildApiUrl('/communities'), {
+        fetch(buildApiUrl(API_ENDPOINTS.communities.root), {
           method: 'POST',
           headers,
           body: JSON.stringify(charge),
@@ -215,7 +216,7 @@ export function useGroupModal(currentUserId?: string) {
       const refusés = (
         await Promise.allSettled(
           selectedUsers.map((membre) =>
-            fetch(`${buildApiUrl('/communities')}/${communauté.id}/members`, {
+            fetch(buildApiUrl(API_ENDPOINTS.communities.byIdMembers(communauté.id)), {
               method: 'POST',
               headers,
               body: JSON.stringify({ userId: membre.id }),

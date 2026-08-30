@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger';
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from './auth-manager.service';
 
 export interface EditMessageRequest {
@@ -34,7 +35,7 @@ export class MessageService {
       }
 
       const response = await fetch(
-        buildApiUrl(`/conversations/${conversationId}/messages/${messageId}`),
+        buildApiUrl(API_ENDPOINTS.conversations.byIdMessagesByMessageId(conversationId, messageId)),
         {
           method: 'PUT',
           headers: {
@@ -72,7 +73,7 @@ export class MessageService {
       }
 
       const response = await fetch(
-        buildApiUrl(`/conversations/${conversationId}/messages/${messageId}`),
+        buildApiUrl(API_ENDPOINTS.conversations.byIdMessagesByMessageId(conversationId, messageId)),
         {
           method: 'DELETE',
           headers: {

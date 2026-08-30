@@ -168,7 +168,7 @@ export function CreateLinkButton({
 
       const token = typeof window !== 'undefined' ? authManager.getAuthToken() : null;
       
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.CONVERSATION.CREATE_LINK), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.root), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

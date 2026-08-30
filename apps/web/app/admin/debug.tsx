@@ -40,7 +40,7 @@ const AdminDebug: React.FC = () => {
 
         if (token) {
           // Charger l'utilisateur depuis l'API
-          const userResponse = await fetch(buildApiUrl(API_ENDPOINTS.AUTH.ME), {
+          const userResponse = await fetch(buildApiUrl(API_ENDPOINTS.auth.me), {
             headers: { Authorization: `Bearer ${token}` }
           });
 

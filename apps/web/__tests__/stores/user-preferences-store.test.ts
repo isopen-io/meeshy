@@ -16,7 +16,9 @@ jest.mock('@/services/auth-manager.service', () => ({
 }));
 
 jest.mock('@/lib/config', () => ({
-  buildApiUrl: (path: string) => `https://api.meeshy.test/api/v1${path}`,
+  // #4281 — miroir du vrai comportement (lib/config.ts) : un chemin déjà
+  // préfixé /api/v… (catalogue partagé) n'est pas re-préfixé.
+  buildApiUrl: (path: string) => `https://api.meeshy.test${path.startsWith('/api/v') ? path : `/api/v1${path}`}`,
 }));
 
 global.fetch = jest.fn();

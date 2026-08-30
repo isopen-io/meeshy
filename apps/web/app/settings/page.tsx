@@ -26,6 +26,7 @@ import { useCurrentUserQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { PreferenceCategory } from '@/types/preferences';
 
 const ProfileSettings = dynamic(
@@ -273,7 +274,7 @@ export default function SettingsPage() {
         queryFn: () =>
           apiService
             .get<{ success: boolean; data?: Record<string, unknown> }>(
-              '/api/v1/me/preferences',
+              API_ENDPOINTS.me.preferences,
               { categories: cat }
             )
             .then(r => r.data?.data?.[cat]),

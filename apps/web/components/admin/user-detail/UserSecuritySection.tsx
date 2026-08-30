@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Shield, Lock, Key, CheckCircle, XCircle, Unlock } from 'lucide-react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -46,7 +47,7 @@ export function UserSecuritySection({
   // d'entre elles avaient omis la hiérarchie.
   const handleUnlockAccount = async () => {
     try {
-      await apiService.patch(`/admin/users/${userId}/security`, { unlock: true });
+      await apiService.patch(API_ENDPOINTS.admin.usersByUserIdSecurity(userId), { unlock: true });
       toast.success(t('security.accountUnlocked'));
       onUpdate();
     } catch (error: unknown) {
@@ -57,7 +58,7 @@ export function UserSecuritySection({
   const handleToggle2FA = async () => {
     try {
       const has2FA = !!user.twoFactorEnabledAt;
-      await apiService.patch(`/admin/users/${userId}/security`, { twoFactorEnabled: !has2FA });
+      await apiService.patch(API_ENDPOINTS.admin.usersByUserIdSecurity(userId), { twoFactorEnabled: !has2FA });
       toast.success(t(has2FA ? 'security.twoFactorDisabled' : 'security.twoFactorEnabled'));
       onUpdate();
     } catch (error: unknown) {

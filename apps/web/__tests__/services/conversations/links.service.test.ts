@@ -72,7 +72,7 @@ describe('LinksService', () => {
       expect(mockCrudService.getConversation).not.toHaveBeenCalled();
       expect(mockGenerateLinkName).not.toHaveBeenCalled();
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/conversations/conv-1/new-link',
+        '/api/v1/conversations/conv-1/new-link',
         expect.objectContaining({ name: 'My Custom Link' }),
       );
       expect(result).toBe('https://meeshy.me/join/link-123');
@@ -93,7 +93,7 @@ describe('LinksService', () => {
         }),
       );
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/conversations/conv-1/new-link',
+        '/api/v1/conversations/conv-1/new-link',
         expect.objectContaining({ name: 'Generated Link Name' }),
       );
     });
@@ -141,7 +141,7 @@ describe('LinksService', () => {
       await svc.createInviteLink('conv-1');
 
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/conversations/conv-1/new-link',
+        '/api/v1/conversations/conv-1/new-link',
         expect.objectContaining({ name: "Lien d'invitation" }),
       );
     });
@@ -162,7 +162,7 @@ describe('LinksService', () => {
       });
 
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/conversations/conv-1/new-link',
+        '/api/v1/conversations/conv-1/new-link',
         expect.objectContaining({
           maxUses: 100,
           expiresAt: '2026-12-31T00:00:00.000Z',
@@ -182,7 +182,7 @@ describe('LinksService', () => {
       await svc.createInviteLink('conv-1', { name: 'Link' });
 
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/conversations/conv-1/new-link',
+        '/api/v1/conversations/conv-1/new-link',
         expect.objectContaining({
           allowAnonymousMessages: true,
           allowAnonymousFiles: false,
@@ -258,7 +258,7 @@ describe('LinksService', () => {
 
       const result = await svc.createConversationWithLink({ name: 'My Link' });
 
-      expect(mockApi.post).toHaveBeenCalledWith('/api/links', expect.objectContaining({ name: 'My Link' }));
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/links', expect.objectContaining({ name: 'My Link' }));
       // `/chat/:linkId` est l'URL canonique du partage — `/join/:linkId` est
       // redirigé en 308 et ne doit plus être FABRIQUÉ.
       expect(result).toContain('/chat/link-456');
@@ -272,7 +272,7 @@ describe('LinksService', () => {
       await svc.createConversationWithLink();
 
       expect(mockApi.post).toHaveBeenCalledWith(
-        '/api/links',
+        '/api/v1/links',
         expect.objectContaining({
           name: 'Nouvelle conversation',
           description: 'Rejoignez cette conversation',

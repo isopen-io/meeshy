@@ -2,6 +2,7 @@ import { logger } from '@/utils/logger';
 import { SocketIOUser } from '@/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from './auth-manager.service';
 
 
@@ -60,7 +61,7 @@ class AuthService {
    */
   async login(username: string, password: string): Promise<AuthResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/login'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.login), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,7 +107,7 @@ class AuthService {
     try {
       const token = authManager.getAuthToken();
       if (token) {
-        await fetch(buildApiUrl('/auth/logout'), {
+        await fetch(buildApiUrl(API_ENDPOINTS.auth.logout), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -135,7 +136,7 @@ class AuthService {
         };
       }
 
-      const response = await fetch(buildApiUrl('/auth/me'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.me), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -175,7 +176,7 @@ class AuthService {
         };
       }
 
-      const response = await fetch(buildApiUrl('/auth/refresh'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.refresh), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

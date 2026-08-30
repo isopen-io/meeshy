@@ -21,6 +21,11 @@ jest.mock('../../../utils/sanitize', () => ({
 
 jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token) => 'hashed-' + token),
+  // #4167 — `routes/anonymous.ts` déléguait sa PROPRE génération avant ce lot ;
+  // `performLinkJoin` (`routes/conversations/link-admission.ts`) appelle
+  // désormais le SEUL exemplaire du dépôt (`utils/session-token.ts`), que ce
+  // double doit donc fournir lui aussi.
+  generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -76,6 +81,10 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn().mockResolvedValue(mockShareLink),
       findUnique: jest.fn().mockResolvedValue({ ...mockShareLink }),
       update: jest.fn().mockResolvedValue({}),
+      // #4167 — l'incrément de `currentUses` est désormais ATOMIQUE
+      // (`updateMany` guardé par un `WHERE`, critère de fin #3) : `count: 1`
+      // dit « la capacité a bien été prise ».
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: { findFirst: jest.fn().mockResolvedValue(null) },
     participant: {
@@ -119,16 +128,27 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.statusCode).toBe(410);
   });
 
-  it('returns 410 when max uses exceeded', async () => {
+  // #4167 — `maxUses`/`maxConcurrentUsers` épuisés rendaient 410/429 chacun de
+  // son côté ; `admitLinkEntry` (loi d'admission UNIQUE, appelée pour les deux
+  // identités) les fusionne en `409 LINK_EXHAUSTED` — même famille de refus,
+  // même code, sur les deux portes. Ce n'est pas une régression : c'est
+  // exactement l'unification que #4167 demande (« deux portes, deux polices »
+  // devient une police).
+  // `.error`/`code` ne s'assertent pas ici : ce fichier mocke
+  // `errorResponseSchema` en `{ properties: {} }` (schéma allégé pour le test
+  // de TRANSPORT), donc le sérialiseur les efface avant qu'un test ne
+  // puisse les lire — cf. `linkAdmission.test.ts` pour un témoin qui
+  // traverse la vraie enveloppe (`code`/`error` asserted there).
+  it('returns 409 LINK_EXHAUSTED when max uses exceeded', async () => {
     (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, maxUses: 5, currentUses: 5 });
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
-    expect(res.statusCode).toBe(410);
+    expect(res.statusCode).toBe(409);
   });
 
-  it('returns 429 when max concurrent users reached', async () => {
+  it('returns 409 LINK_EXHAUSTED when max concurrent users reached', async () => {
     (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, maxConcurrentUsers: 10, currentConcurrentUsers: 10 });
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
-    expect(res.statusCode).toBe(429);
+    expect(res.statusCode).toBe(409);
   });
 
   it('returns 403 when language not allowed', async () => {
@@ -187,6 +207,23 @@ describe('POST /anonymous/join/:linkId', () => {
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+  });
+
+  // #4167 + #4274 — un alias qui ne dit rien au client n'existe pas pour lui.
+  // La garde de source (`deprecated-alias-headers-guard.test.ts`) prouve que
+  // `depreciee(...)` est APPELÉ ; elle ne prouve pas qu'il est SERVI. Ce
+  // témoin traverse la VRAIE réponse HTTP — y compris sur un refus (410), pas
+  // seulement le chemin de succès, puisque `onRequest` court avant toute
+  // décision du handler.
+  it('porte les en-têtes de dépréciation (Deprecation, Link) — succès ET refus', async () => {
+    const ok = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+    expect(ok.headers['deprecation']).toMatch(/^@\d+$/);
+    expect(ok.headers['link']).toBe(`</api/v1/links/${LINK_ID}/members>; rel="successor-version"`);
+
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    const notFound = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+    expect(notFound.statusCode).toBe(404);
+    expect(notFound.headers['deprecation']).toMatch(/^@\d+$/);
   });
 
   // La porte compare le `body.language` du joignant (canonicalisé au boundary
@@ -323,6 +360,12 @@ describe('POST /anonymous/refresh', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });
+
+  it('porte les en-têtes de dépréciation — alias de PATCH /guest-sessions/me (#4167/#4274)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/anonymous/refresh', payload: { sessionToken: 'some-token' } });
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
+    expect(res.headers['link']).toBe('</api/v1/guest-sessions/me>; rel="successor-version"');
+  });
 });
 
 // ─── POST /anonymous/leave ────────────────────────────────────────────────────
@@ -345,6 +388,12 @@ describe('POST /anonymous/leave', () => {
     const res = await app.inject({ method: 'POST', url: '/anonymous/leave', payload: { sessionToken: 'some-token' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+
+  it('porte les en-têtes de dépréciation — alias de DELETE /guest-sessions/me (#4167/#4274)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/anonymous/leave', payload: { sessionToken: 'some-token' } });
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
+    expect(res.headers['link']).toBe('</api/v1/guest-sessions/me>; rel="successor-version"');
   });
 });
 

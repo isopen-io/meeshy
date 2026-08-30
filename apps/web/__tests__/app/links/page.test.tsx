@@ -93,7 +93,7 @@ const mockLink = {
 
 function mockFetchSequence(shareLinksBody: unknown) {
   (global.fetch as jest.Mock).mockImplementation((url: string) => {
-    if (typeof url === 'string' && url.includes('/api/tracking-links/')) {
+    if (typeof url === 'string' && url.includes('/tracking-links/')) {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ data: { trackingLinks: [] }, pagination: { hasMore: false } }),
@@ -120,9 +120,9 @@ describe('LinksPage — adresses migrées par #4170', () => {
 
     await waitFor(() => {
       const calls = (global.fetch as jest.Mock).mock.calls.map((c) => c[0] as string);
-      const shareLinksCall = calls.find((u) => u.includes('/api/links'));
+      const shareLinksCall = calls.find((u) => u.includes('/links'));
       expect(shareLinksCall).toBeDefined();
-      expect(shareLinksCall).toContain('/api/links?limit=');
+      expect(shareLinksCall).toContain('/links?limit=');
       expect(shareLinksCall).toContain('expand=conversation');
       expect(shareLinksCall).not.toContain('/my-links');
     });
@@ -141,7 +141,7 @@ describe('LinksPage — adresses migrées par #4170', () => {
         (c) => c[1]?.method === 'PATCH' && (c[0] as string).includes(mockLink.linkId)
       );
       expect(toggleCall).toBeDefined();
-      expect(toggleCall![0]).toBe(`http://localhost:3000/api/links/${mockLink.linkId}`);
+      expect(toggleCall![0]).toBe(`http://localhost:3000/api/v1/links/${mockLink.linkId}`);
       expect(toggleCall![0]).not.toContain('/toggle');
       expect(JSON.parse(toggleCall![1].body)).toEqual({ isActive: false });
     });
@@ -160,7 +160,7 @@ describe('LinksPage — adresses migrées par #4170', () => {
         (c) => c[1]?.method === 'PATCH' && (c[0] as string).includes(mockLink.linkId)
       );
       expect(extendCall).toBeDefined();
-      expect(extendCall![0]).toBe(`http://localhost:3000/api/links/${mockLink.linkId}`);
+      expect(extendCall![0]).toBe(`http://localhost:3000/api/v1/links/${mockLink.linkId}`);
       expect(extendCall![0]).not.toContain('/extend');
       expect(JSON.parse(extendCall![1].body)).toHaveProperty('expiresAt');
     });

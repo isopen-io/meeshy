@@ -16,6 +16,7 @@ import { logger } from '@/utils/logger';
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 // ============================================================================
 // Types
@@ -131,7 +132,7 @@ class PhoneTransferService {
    */
   async initiateTransfer(request: PhoneTransferInitRequest): Promise<PhoneTransferInitResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/initiate'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferInitiate), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,7 +175,7 @@ class PhoneTransferService {
     request: PhoneTransferForRegistrationInitRequest
   ): Promise<PhoneTransferForRegistrationInitResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/initiate-registration'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferInitiateRegistration), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +218,7 @@ class PhoneTransferService {
     request: PhoneTransferForRegistrationVerifyRequest
   ): Promise<PhoneTransferForRegistrationVerifyResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/verify-registration'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferVerifyRegistration), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +258,7 @@ class PhoneTransferService {
    */
   async verifyAndTransfer(request: PhoneTransferVerifyRequest): Promise<PhoneTransferVerifyResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/verify'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferVerify), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -295,7 +296,7 @@ class PhoneTransferService {
    */
   async resendCode(request: PhoneTransferResendRequest): Promise<PhoneTransferResendResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/resend'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferResend), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -331,7 +332,7 @@ class PhoneTransferService {
    */
   async cancelTransfer(request: PhoneTransferCancelRequest): Promise<{ success: boolean }> {
     try {
-      const response = await fetch(buildApiUrl('/auth/phone-transfer/cancel'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.phoneTransferCancel), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

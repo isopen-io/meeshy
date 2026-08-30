@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { isValidObjectId } from '@/utils/conversation-id-utils';
 import RedirectMessage from './RedirectMessage';
 import { getServerLocale } from '@/lib/i18n/server-locale';
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
 
   try {
     // Récupérer les informations de la conversation
-    const response = await fetch(buildApiUrl(`/conversations/${conversationId}`), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.conversations.byId(conversationId)), {
       next: { revalidate: 300 } // Cache 5 minutes
     });
 

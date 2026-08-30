@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
@@ -249,7 +250,7 @@ export function SearchPageContent() {
       const contactName = getUserDisplayName(contact);
       const conversationTitle = `${currentUserName} & ${contactName}`;
 
-      const response = await fetch(buildApiUrl('/conversations'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.conversations.root), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -281,7 +282,7 @@ export function SearchPageContent() {
   const joinCommunity = async (communityId: string) => {
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/communities/${communityId}/join`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.communities.byIdJoin(communityId)), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

@@ -11,7 +11,9 @@ jest.mock('@/services/api.service', () => ({
 }));
 
 jest.mock('@/lib/config', () => ({
-  buildApiUrl: (endpoint: string) => `http://localhost:3000/api/v1${endpoint}`,
+  // #4281 — buildApiUrl(endpoint) miroir du vrai comportement (lib/config.ts) :
+  // un chemin déjà préfixé /api/v… (catalogue partagé) n'est PAS re-préfixé.
+  buildApiUrl: (endpoint: string) => `http://localhost:3000${endpoint.startsWith('/api/v') ? endpoint : `/api/v1${endpoint}`}`,
 }));
 
 const mockApi = apiService as jest.Mocked<typeof apiService>;
@@ -215,13 +217,13 @@ describe('postsService', () => {
     it('calls POST /posts/:postId/like with default emoji', async () => {
       mockApi.post.mockResolvedValue({ success: true });
       await postsService.likePost('post-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/like', { emoji: '❤️' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/like', { emoji: '❤️' });
     });
 
     it('calls POST /posts/:postId/like with custom emoji', async () => {
       mockApi.post.mockResolvedValue({ success: true });
       await postsService.likePost('post-1', '🔥');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/like', { emoji: '🔥' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/like', { emoji: '🔥' });
     });
   });
 
@@ -229,7 +231,7 @@ describe('postsService', () => {
     it('calls DELETE /posts/:postId/like', async () => {
       mockApi.delete.mockResolvedValue({ success: true });
       await postsService.unlikePost('post-1');
-      expect(mockApi.delete).toHaveBeenCalledWith('/posts/post-1/like');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/v1/posts/post-1/like');
     });
   });
 
@@ -331,13 +333,13 @@ describe('postsService', () => {
     it('calls POST /posts/impressions/batch with ids and default source feed', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
       await postsService.recordImpressions(['p1', 'p2']);
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/impressions/batch', { postIds: ['p1', 'p2'], source: 'feed' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/impressions/batch', { postIds: ['p1', 'p2'], source: 'feed' });
     });
 
     it('forwards an explicit source', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
       await postsService.recordImpressions(['p1'], 'profile');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/impressions/batch', { postIds: ['p1'], source: 'profile' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/impressions/batch', { postIds: ['p1'], source: 'profile' });
     });
 
     it('is a no-op when the id list is empty (never hits the network)', async () => {
@@ -352,9 +354,9 @@ describe('postsService', () => {
       await postsService.recordImpressions(ids);
 
       expect(mockApi.post).toHaveBeenCalledTimes(3);
-      expect(mockApi.post).toHaveBeenNthCalledWith(1, '/posts/impressions/batch', { postIds: ids.slice(0, 50), source: 'feed' });
-      expect(mockApi.post).toHaveBeenNthCalledWith(2, '/posts/impressions/batch', { postIds: ids.slice(50, 100), source: 'feed' });
-      expect(mockApi.post).toHaveBeenNthCalledWith(3, '/posts/impressions/batch', { postIds: ids.slice(100, 120), source: 'feed' });
+      expect(mockApi.post).toHaveBeenNthCalledWith(1, '/api/v1/posts/impressions/batch', { postIds: ids.slice(0, 50), source: 'feed' });
+      expect(mockApi.post).toHaveBeenNthCalledWith(2, '/api/v1/posts/impressions/batch', { postIds: ids.slice(50, 100), source: 'feed' });
+      expect(mockApi.post).toHaveBeenNthCalledWith(3, '/api/v1/posts/impressions/batch', { postIds: ids.slice(100, 120), source: 'feed' });
     });
   });
 
@@ -362,13 +364,13 @@ describe('postsService', () => {
     it('calls POST /posts/:postId/impression with default source detail', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
       await postsService.recordImpression('post-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'detail' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/impression', { source: 'detail' });
     });
 
     it('forwards an explicit source', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: true } });
       await postsService.recordImpression('post-1', 'notification');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/impression', { source: 'notification' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/impression', { source: 'notification' });
     });
   });
 
@@ -376,13 +378,13 @@ describe('postsService', () => {
     it('calls POST /posts/:postId/downloads with mediaIds and default surface detail', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: 1 } });
       await postsService.recordMediaDownloads('post-1', ['media-1']);
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1'], surface: 'detail' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/downloads', { mediaIds: ['media-1'], surface: 'detail' });
     });
 
     it('forwards an explicit surface', async () => {
       mockApi.post.mockResolvedValue({ success: true, data: { recorded: 2 } });
       await postsService.recordMediaDownloads('post-1', ['media-1', 'media-2'], 'feed');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/downloads', { mediaIds: ['media-1', 'media-2'], surface: 'feed' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/downloads', { mediaIds: ['media-1', 'media-2'], surface: 'feed' });
     });
 
     it('is a no-op when mediaIds is empty (never hits the network)', async () => {
@@ -446,7 +448,7 @@ describe('postsService', () => {
     it('calls POST /posts/:postId/comments/:commentId/like', async () => {
       mockApi.post.mockResolvedValue({ success: true });
       await postsService.likeComment('post-1', 'comment-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/post-1/comments/comment-1/like', { emoji: '❤️' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/post-1/comments/comment-1/like', { emoji: '❤️' });
     });
   });
 
@@ -454,7 +456,7 @@ describe('postsService', () => {
     it('calls DELETE /posts/:postId/comments/:commentId/like', async () => {
       mockApi.delete.mockResolvedValue({ success: true });
       await postsService.unlikeComment('post-1', 'comment-1');
-      expect(mockApi.delete).toHaveBeenCalledWith('/posts/post-1/comments/comment-1/like');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/v1/posts/post-1/comments/comment-1/like');
     });
   });
 });

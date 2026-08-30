@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
@@ -289,7 +290,7 @@ export function useFriendRequestsV2(
       // qu'appelait ce site était le plus FAIBLE des deux qui coexistaient —
       // ni garde d'auto-envoi, ni contrôle de désactivation, ni contrôle de
       // blocage. L'adresse canonique porte les trois.
-      await apiService.post('/directory/friend-requests', { receiverId, ...(message && { message }) });
+      await apiService.post(API_ENDPOINTS.directory.friendRequests, { receiverId, ...(message && { message }) });
     },
     onMutate: async ({ receiverId }) => {
       if (!currentUserId) return {};
@@ -319,7 +320,7 @@ export function useFriendRequestsV2(
       // d'une acceptation porte enfin `conversation` — le serveur la greffait
       // déjà, mais son schéma ne la déclarant pas, elle était supprimée à la
       // sérialisation et le client devait la rechercher.
-      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'accept' });
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'accept' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -347,7 +348,7 @@ export function useFriendRequestsV2(
 
   const rejectMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'reject' });
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'reject' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -368,7 +369,7 @@ export function useFriendRequestsV2(
       // `dismiss`, et non un `DELETE` à part : `cancel` est le geste de
       // l'ÉMETTEUR, `dismiss` celui de l'une ou l'autre partie — ce que
       // l'ancienne route acceptait sans distinguer.
-      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'dismiss' });
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'dismiss' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: sentQueryKey });

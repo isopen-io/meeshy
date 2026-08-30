@@ -115,6 +115,12 @@ const SITES: readonly Site[] = [
   { file: 'users/blocking.ts', marker: "fastify.post<{ Params: { userId: string } }>('/users/:userId/block'", label: 'POST /users/:userId/block', via: 'depreciee(' },
   { file: 'users/blocking.ts', marker: "fastify.delete<{ Params: { userId: string } }>('/users/:userId/block'", label: 'DELETE /users/:userId/block', via: 'depreciee(' },
   { file: 'users/blocking.ts', marker: "fastify.get('/users/me/blocked-users'", label: 'GET /users/me/blocked-users', via: 'depreciee(' },
+
+  // `anonymous.ts` — les trois alias de session invitée (#4167), vers
+  // `POST /links/:key/members` et `PATCH|DELETE /guest-sessions/me`.
+  { file: 'anonymous.ts', marker: "fastify.post('/anonymous/join/:linkId'", label: 'POST /anonymous/join/:linkId', via: 'depreciee(' },
+  { file: 'anonymous.ts', marker: "fastify.post('/anonymous/refresh'", label: 'POST /anonymous/refresh', via: 'depreciee(' },
+  { file: 'anonymous.ts', marker: "fastify.post('/anonymous/leave'", label: 'POST /anonymous/leave', via: 'depreciee(' },
 ];
 
 describe('Partie 1 — chaque route ALIAS de ce lot marque son sursis dans SON bloc', () => {
@@ -214,6 +220,14 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
     'admin/users-write.ts',
     'users/profile.ts',
     'users/blocking.ts',
+    // `anonymous.ts` (#4167) — trois alias de session invitée par lien de
+    // partage, vers `POST /links/:key/members` et `PATCH|DELETE
+    // /guest-sessions/me`. Le mot « ADAPTATEUR MINCE » qui l'a fait ENTRER
+    // ici cite l'énoncé même de l'issue #4167 (« restent montées en
+    // adaptateurs minces vers ce handler ») — coïncidence lexicale avec la
+    // convention de #4274, pas une intention empruntée ; la garde ne
+    // regarde que le TEXTE, elle a donc raison de la traiter pareil.
+    'anonymous.ts',
   ].sort();
 
   // Fichiers HORS territoire (autres sessions/issues du même lot). Cliquet :
@@ -238,7 +252,11 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
 
   it.each(MON_TERRITOIRE)('%s (mon territoire) importe et appelle réellement le site unique', (relatif) => {
     const texte = fs.readFileSync(path.join(RACINE_ROUTES, relatif), 'utf8');
-    expect(texte).toContain("from '../../utils/deprecation'");
+    // Chemin relatif variable selon la PROFONDEUR du fichier sous `routes/` —
+    // `admin/reports.ts` (un niveau) importe par `../../utils/deprecation`,
+    // `anonymous.ts` (directement sous `routes/`, #4167) par
+    // `../utils/deprecation`. La forme, jamais un nombre de `..` fixe.
+    expect(texte).toMatch(/from '(?:\.\.\/)+utils\/deprecation'/);
     const nbDeclarations = texte.split('\n').filter(declareUnAlias).length;
     const nbAppels =
       texte.split('depreciee(').length - 1 + (texte.split('annoncerDepreciation(').length - 1);

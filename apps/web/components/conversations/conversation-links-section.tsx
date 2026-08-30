@@ -17,6 +17,7 @@ import { Link2, Copy, Clock, Users, Eye, FileText, Image, MessageSquare, CheckCi
 
 import { copyToClipboard } from '@/lib/clipboard';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
@@ -90,8 +91,9 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
       // traverser fast-json-stringify) — `link.creator` était donc toujours
       // `undefined` et faisait planter cette popover à l'ouverture ; `policy`
       // restaure permissions et restrictions pour la même raison.
+      const linksEndpoint = `${API_ENDPOINTS.links.root}?conversationId=${conversationId}&expand=creator,policy`;
       const response = await fetch(
-        buildApiUrl(`/links?conversationId=${conversationId}&expand=creator,policy`),
+        buildApiUrl(linksEndpoint),
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

@@ -41,7 +41,7 @@ describe('TwoFactorService.getStatus', () => {
     const result = await twoFactorService.getStatus();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://gate.meeshy.me/auth/2fa/status',
+      'https://gate.meeshy.me/api/v1/auth/2fa/status',
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({ Authorization: 'Bearer bearer-token' }),
@@ -80,7 +80,7 @@ describe('TwoFactorService.setup', () => {
     const result = await twoFactorService.setup();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://gate.meeshy.me/auth/2fa/setup',
+      'https://gate.meeshy.me/api/v1/auth/2fa/setup',
       expect.objectContaining({ method: 'POST' })
     );
     expect(result.data?.secret).toBe('SECRET');

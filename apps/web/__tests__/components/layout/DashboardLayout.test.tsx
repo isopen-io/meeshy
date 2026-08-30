@@ -113,8 +113,8 @@ jest.mock('@/lib/config', () => ({
   ...jest.requireActual('@/lib/config'),
   buildApiUrl: (endpoint: string) => `http://api.test${endpoint}`,
   API_ENDPOINTS: {
-    AUTH: {
-      LOGOUT: '/auth/logout',
+    auth: {
+      logout: '/auth/logout',
     },
   },
 }));

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { useI18n } from '@/hooks/useI18n';
 import { ExpandableLinkCard } from '@/components/links/expandable-link-card';
@@ -156,8 +157,9 @@ export default function LinksPage() {
       // reste de cette page lisent. `pagination.hasMore` — déjà le même champ
       // sur les deux routes — continue de gouverner `hasMoreShareLinks`.
       const fetchShareLinks = async () => {
+        const shareLinksEndpoint = `${API_ENDPOINTS.links.root}?limit=${LINKS_PER_PAGE}&offset=${offset}&expand=conversation`;
         const shareLinksResponse = await fetch(
-          buildApiUrl(`/api/links?limit=${LINKS_PER_PAGE}&offset=${offset}&expand=conversation`),
+          buildApiUrl(shareLinksEndpoint),
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -206,8 +208,9 @@ export default function LinksPage() {
       const token = authManager.getAuthToken();
       const offset = append ? trackingLinksOffset : 0;
 
+      const trackingLinksEndpoint = `${API_ENDPOINTS.trackingLinks.userMe}?limit=${LINKS_PER_PAGE}&offset=${offset}`;
       const response = await fetch(
-        buildApiUrl(`/api/tracking-links/user/me?limit=${LINKS_PER_PAGE}&offset=${offset}`),
+        buildApiUrl(trackingLinksEndpoint),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -348,7 +351,7 @@ export default function LinksPage() {
   const handleToggleActive = async (link: ConversationLink) => {
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byLinkId(link.linkId)), {
         method: 'PATCH',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -379,7 +382,7 @@ export default function LinksPage() {
       const newExpiresAt = new Date(link.expiresAt || new Date());
       newExpiresAt.setDate(newExpiresAt.getDate() + days);
 
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byLinkId(link.linkId)), {
         method: 'PATCH',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -406,7 +409,7 @@ export default function LinksPage() {
 
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byLinkId(link.linkId)), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

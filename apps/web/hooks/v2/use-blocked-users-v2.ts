@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { BlockedUser } from '@/types/contacts';
 
@@ -59,14 +60,14 @@ export function useBlockedUsersV2(
     mutationFn: async (userId: string) => {
       // `PUT`, jamais `POST` : bloquer est une APPARTENANCE à un ensemble,
       // donc idempotente. L'ancienne route rendait 409 au second appel (#4164).
-      await apiService.put(`/directory/blocks/${userId}`);
+      await apiService.put(API_ENDPOINTS.directory.blocksByUserId(userId));
     },
     onSettled: () => invalidate(),
   });
 
   const unblockMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiService.delete(`/directory/blocks/${userId}`);
+      await apiService.delete(API_ENDPOINTS.directory.blocksByUserId(userId));
     },
     onMutate: async (userId: string) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.blockedUsers.list() });

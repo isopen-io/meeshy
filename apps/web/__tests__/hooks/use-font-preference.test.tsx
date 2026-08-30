@@ -195,7 +195,7 @@ describe('useFontPreference', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/me/preferences?categories=application',
+        'https://api.example.com/api/v1/me/preferences?categories=application',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer auth-token-123',
@@ -304,7 +304,7 @@ describe('useFontPreference', () => {
       expect(urlsAppelées.filter((url) => url.includes('user-preferences'))).toEqual([]);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/me/preferences',
+        'https://api.example.com/api/v1/me/preferences',
         expect.objectContaining({
           method: 'PATCH',
           headers: expect.objectContaining({ Authorization: 'Bearer auth-token-123' }),

@@ -121,8 +121,8 @@ jest.mock('@/lib/geolocation', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((endpoint: string) => `http://localhost:3000${endpoint}`),
   API_ENDPOINTS: {
-    AUTH: {
-      LOGIN: '/api/auth/login',
+    auth: {
+      login: '/api/auth/login',
     },
   },
 }));

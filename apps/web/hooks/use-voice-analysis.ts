@@ -9,6 +9,7 @@
 
 import { useState, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 
 interface UseVoiceAnalysisReturn {
@@ -37,7 +38,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       const response = await apiService.get<{
         success: boolean;
         data: { analysis: VoiceQualityAnalysis } | null;
-      }>('/api/voice/analysis');
+      }>(API_ENDPOINTS.voice.analysis);
 
       if (response.success && response.data) {
         setAnalysis((response.data as any).data?.analysis ?? (response.data as any).analysis);
@@ -63,7 +64,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
       const response = await apiService.get<{
         success: boolean;
         data: { analysis: VoiceQualityAnalysis } | null;
-      }>(`/api/attachments/${attachmentId}/analysis`);
+      }>(API_ENDPOINTS.attachments.byAttachmentIdAnalysis(attachmentId));
 
       if (response.success && response.data) {
         setAnalysis((response.data as any).data?.analysis ?? (response.data as any).analysis);
@@ -93,7 +94,7 @@ export function useVoiceAnalysis(): UseVoiceAnalysisReturn {
           analysis: VoiceQualityAnalysis;
           persisted: boolean;
         };
-      }>('/api/voice/analysis', {
+      }>(API_ENDPOINTS.voice.analysis, {
         audioBase64,
         persist: true
       });

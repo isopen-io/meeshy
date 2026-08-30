@@ -53,7 +53,7 @@ describe('magicLinkService.requestMagicLink', () => {
     await magicLinkService.requestMagicLink('  ALICE@example.com  ');
 
     const [url, opts] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://localhost:3000/auth/magic-link/request');
+    expect(url).toBe('http://localhost:3000/api/v1/auth/magic-link/request');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body as string);
     expect(body.email).toBe('alice@example.com');
@@ -105,7 +105,7 @@ describe('magicLinkService.validateMagicLink', () => {
     await magicLinkService.validateMagicLink('tok-abc');
 
     const [url, opts] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://localhost:3000/auth/magic-link/validate');
+    expect(url).toBe('http://localhost:3000/api/v1/auth/magic-link/validate');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body as string);
     expect(body.token).toBe('tok-abc');

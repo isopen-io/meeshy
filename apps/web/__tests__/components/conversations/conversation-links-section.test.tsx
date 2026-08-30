@@ -292,7 +292,7 @@ describe('ConversationLinksSection', () => {
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          'http://localhost:3000/links?conversationId=conv-1&expand=creator,policy',
+          'http://localhost:3000/api/v1/links?conversationId=conv-1&expand=creator,policy',
           expect.objectContaining({
             headers: { Authorization: 'Bearer mock-token' },
           })

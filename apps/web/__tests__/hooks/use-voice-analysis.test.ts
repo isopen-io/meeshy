@@ -121,7 +121,7 @@ describe('useVoiceAnalysis', () => {
         await result.current.fetchProfileAnalysis();
       });
 
-      expect(mockGet).toHaveBeenCalledWith('/api/voice/analysis');
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/voice/analysis');
     });
   });
 
@@ -135,7 +135,7 @@ describe('useVoiceAnalysis', () => {
         await result.current.fetchAttachmentAnalysis('attach-123');
       });
 
-      expect(mockGet).toHaveBeenCalledWith('/api/attachments/attach-123/analysis');
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/attachments/attach-123/analysis');
       expect(result.current.analysis).toEqual(analysis);
     });
 
@@ -199,7 +199,7 @@ describe('useVoiceAnalysis', () => {
         await result.current.analyzeProfile('base64audiodata==');
       });
 
-      expect(mockPost).toHaveBeenCalledWith('/api/voice/analysis', {
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/voice/analysis', {
         audioBase64: 'base64audiodata==',
         persist: true,
       });

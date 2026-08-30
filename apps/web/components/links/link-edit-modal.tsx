@@ -25,6 +25,7 @@ import { ConversationLink } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 
 interface LinkEditModalProps {
@@ -74,7 +75,7 @@ export function LinkEditModal({ link, isOpen, onClose, onUpdate }: LinkEditModal
     setIsLoading(true);
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byLinkId(link.linkId)), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -407,7 +407,7 @@ describe('useVideoPlayback', () => {
       });
 
       expect(mockApiPost).toHaveBeenCalledWith(
-        '/attachments/att-001/status',
+        '/api/v1/attachments/att-001/status',
         expect.objectContaining({ action: 'watched', complete: false }),
       );
       jest.useRealTimers();
@@ -594,7 +594,7 @@ describe('useVideoPlayback', () => {
       act(() => { hookRef.current!.handleEnded(); });
       expect(mockApiPost).toHaveBeenCalledTimes(1);
       expect(mockApiPost).toHaveBeenCalledWith(
-        '/attachments/att-001/status',
+        '/api/v1/attachments/att-001/status',
         expect.objectContaining({ action: 'watched', complete: true }),
       );
     });
@@ -732,7 +732,7 @@ describe('useVideoPlayback', () => {
         hookRef.current!.handleEnded();
       });
       expect(mockApiPost).toHaveBeenCalledWith(
-        '/attachments/my-att-42/status',
+        '/api/v1/attachments/my-att-42/status',
         {
           action: 'watched',
           playPositionMs: 15000,

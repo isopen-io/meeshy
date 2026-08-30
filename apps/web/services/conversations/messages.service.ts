@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import { splitConsumedLanguages } from '@/utils/consumed-language';
@@ -85,7 +86,7 @@ export class MessagesService {
         cursorPagination?: CursorPaginationMeta;
         meta?: { userLanguage?: string };
       }>(
-        `/conversations/${conversationId}/messages`,
+        API_ENDPOINTS.conversations.byIdMessages(conversationId),
         queryParams,
         { signal: controller.signal }
       );
@@ -126,7 +127,7 @@ export class MessagesService {
    */
   async sendMessage(conversationId: string, data: SendMessageRequest): Promise<Message> {
     const response = await apiService.post<{ success: boolean; data: Message }>(
-      `/conversations/${conversationId}/messages`,
+      API_ENDPOINTS.conversations.byIdMessages(conversationId),
       data
     );
 
@@ -157,7 +158,7 @@ export class MessagesService {
      */
     consumedLanguages?: ReadonlyMap<string, string | null>
   ): Promise<void> {
-    const url = `/conversations/${conversationId}/mark-as-read`;
+    const url = API_ENDPOINTS.conversations.byConversationIdMarkAsRead(conversationId);
 
     // Les messages en cours d'envoi portent un `cid_<uuid>` et non un ObjectId.
     // En laisser passer un ferait rejeter TOUT le lot en 400, donc perdre les
@@ -192,7 +193,7 @@ export class MessagesService {
    * Marquer les messages d'une conversation comme reçus (delivered)
    */
   async markAsReceived(conversationId: string): Promise<void> {
-    await apiService.post(`/conversations/${conversationId}/mark-as-received`);
+    await apiService.post(API_ENDPOINTS.conversations.byConversationIdMarkAsReceived(conversationId));
   }
 
   /**
@@ -202,7 +203,7 @@ export class MessagesService {
     const response = await apiService.get<{
       success: boolean;
       data: Record<string, { totalMembers: number; receivedCount: number; readCount: number }>;
-    }>(`/conversations/${conversationId}/read-statuses`, { messageIds: messageIds.join(',') });
+    }>(API_ENDPOINTS.conversations.byConversationIdReadStatuses(conversationId), { messageIds: messageIds.join(',') });
 
     return response.data?.data ?? {};
   }
@@ -238,7 +239,7 @@ export class MessagesService {
         readDevice?: string | null;
       }>;
       pagination: { total: number; limit: number; offset: number; hasMore: boolean };
-    }>(`/messages/${messageId}/status-details`, {
+    }>(API_ENDPOINTS.messages.byMessageIdStatusDetails(messageId), {
       offset: options.offset ?? 0,
       limit: options.limit ?? 50,
       filter: options.filter ?? 'all',
@@ -259,7 +260,7 @@ export class MessagesService {
 
     try {
       const response = await apiService.post<MarkAsReadResponse>(
-        `/conversations/${conversationId}/mark-read`,
+        API_ENDPOINTS.conversations.byIdMarkRead(conversationId),
         {}
       );
 

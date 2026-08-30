@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { TFunction } from '@/hooks/useI18n';
 
@@ -72,8 +73,9 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
 
     try {
       const param = type === 'username' ? 'username' : type === 'email' ? 'email' : 'phoneNumber';
+      const checkAvailabilityEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?${param}=${encodeURIComponent(val.trim())}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?${param}=${encodeURIComponent(val.trim())}`),
+        buildApiUrl(checkAvailabilityEndpoint),
         { signal: controller.signal }
       );
 

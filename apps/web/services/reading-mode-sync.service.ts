@@ -18,6 +18,7 @@
  * @see apps/web/hooks/lentille/use-reading-mode-server-sync.ts (l'unique appelant de `fetchServerReadingModePreference`)
  */
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
 export interface ServerReadingModePreference {
@@ -44,7 +45,7 @@ export async function fetchServerReadingModePreference(
   conversationId: string
 ): Promise<ServerReadingModePreference | null> {
   const response = await apiService.get<ConversationPreferencesResponseBody>(
-    `/user-preferences/conversations/${conversationId}`
+    API_ENDPOINTS.userPreferences.conversationsByConversationId(conversationId)
   );
   const body = response?.data;
   if (!body) return null;
@@ -67,5 +68,5 @@ export async function writeReadingModePreferenceToServer(
   conversationId: string,
   value: ReadingModePreference
 ): Promise<void> {
-  await apiService.put(`/user-preferences/conversations/${conversationId}`, { readingMode: value });
+  await apiService.put(API_ENDPOINTS.userPreferences.conversationsByConversationId(conversationId), { readingMode: value });
 }

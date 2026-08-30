@@ -1,5 +1,6 @@
 import { User } from '@/types';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 
 // SSOT du décodage JWT côté client (base64url-safe) — cf. `utils/jwt`.
@@ -71,7 +72,7 @@ export async function checkAuthStatus(): Promise<AuthState> {
 
   if (token) {
     try {
-      const response = await fetch(buildApiUrl('/auth/me'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.me), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -125,7 +126,7 @@ export async function checkAuthStatus(): Promise<AuthState> {
   
   if (anonymousToken) {
     try {
-      const response = await fetch(buildApiUrl('/anonymous/refresh'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.anonymous.refresh), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

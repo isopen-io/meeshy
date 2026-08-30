@@ -258,7 +258,7 @@ describe('useFriendRequestsV2', () => {
 
     // L'unique chemin d'envoi (#4162) : celui qu'appelait ce site était le plus
     // FAIBLE des deux qui coexistaient côté serveur.
-    expect(mockPost).toHaveBeenCalledWith('/directory/friend-requests', { receiverId: 'targetUserId' });
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/directory/friend-requests', { receiverId: 'targetUserId' });
   });
 
   it('accepts a friend request via mutation', async () => {
@@ -274,7 +274,7 @@ describe('useFriendRequestsV2', () => {
     });
 
     // Un geste, un VERBE : le corps porte une ACTION, pas un statut.
-    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'accept' });
+    expect(mockPatch).toHaveBeenCalledWith('/api/v1/directory/friend-requests/req1', { action: 'accept' });
   });
 
   it('reflète connected de façon optimiste dès acceptRequest, avant toute résolution réseau', async () => {
@@ -337,7 +337,7 @@ describe('useFriendRequestsV2', () => {
       await result.current.rejectRequest('req1');
     });
 
-    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'reject' });
+    expect(mockPatch).toHaveBeenCalledWith('/api/v1/directory/friend-requests/req1', { action: 'reject' });
   });
 
   it('cancels a friend request via mutation', async () => {
@@ -353,7 +353,7 @@ describe('useFriendRequestsV2', () => {
     });
 
     // `dismiss` remplace le `DELETE` séparé : quatre gestes, un seul verbe.
-    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'dismiss' });
+    expect(mockPatch).toHaveBeenCalledWith('/api/v1/directory/friend-requests/req1', { action: 'dismiss' });
   });
 
   it('invalidates and refetches when the OTHER party cancels/removes a request', async () => {

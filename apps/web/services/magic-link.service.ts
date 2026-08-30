@@ -1,4 +1,5 @@
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { authManager } from './auth-manager.service';
 
@@ -117,7 +118,7 @@ class MagicLinkService {
    */
   async requestMagicLink(email: string, rememberDevice: boolean = false): Promise<MagicLinkRequestResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/magic-link/request'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.magicLinkRequest), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +148,7 @@ class MagicLinkService {
    */
   async validateMagicLink(token: string): Promise<MagicLinkValidateResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/magic-link/validate'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.magicLinkValidate), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

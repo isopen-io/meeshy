@@ -348,6 +348,15 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/anonymous/refresh', why: 'sessionToken du corps haché puis vérifié en base (fail-closed)' },
   { method: 'POST', url: '/api/v1/anonymous/leave', why: 'idem' },
   { method: 'GET', url: '/api/v1/anonymous/link/:identifier', why: "aperçu pré-jointure d'un lien de partage, sans contenu de messages" },
+  // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
+  // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
+  // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).
+  // `admitLinkEntry` (`services/conversations/linkAdmission.ts`) est la garde —
+  // un JWT valide y bascule simplement l'identité de invité à inscrit, jamais un
+  // 401/403 générique, exactement comme `anonymous/join` ne l'a jamais rendu.
+  { method: 'POST', url: '/api/v1/links/:key/members', why: "point d'entrée UNIFIÉ de jointure par lien — S1 invité (aucune créance) · S2 inscrit (JWT optionnel), gardé par admitLinkEntry" },
+  { method: 'PATCH', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/refresh' },
+  { method: 'DELETE', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/leave' },
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
@@ -512,7 +521,6 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     // `hooks/use-group-modal.ts` est resté caché derrière `lib/server-cache.ts`
     // pendant deux tours.
     const fantômes = new Map<string, { url: string; site: string }>();
-    let littéraux = 0;
 
     for (const fichier of fichiers) {
       const source = fs.readFileSync(fichier, 'utf8');
@@ -531,7 +539,6 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
         const suite = source.slice(m.index! + m[0].length, m.index! + m[0].length + 3);
         if (m[0].endsWith(')') && /^\}\s*[/`]/.test(suite)) continue;
 
-        littéraux++;
         const url = versUrlServeur(m[1]);
         if (!estServie(url)) {
           const site = path.relative(racineWeb, fichier);
@@ -542,7 +549,37 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
 
     // Garde-fou du harnais lui-même : si l'extraction cesse de trouver des
     // appels, la garde passerait au vert en ne mesurant plus rien.
-    expect(littéraux).toBeGreaterThan(40);
+    //
+    // Ce garde-fou a porté un PLANCHER DE VOLUME (`littéraux > 40`), calibré
+    // sur un web qui écrivait ses adresses à la main. #4281 en a migré 217 vers
+    // le catalogue partagé : il en reste trois, et le plancher est devenu
+    // inatteignable — non parce que l'extraction a CASSÉ, mais parce qu'elle a
+    // RÉUSSI. Un plancher de volume posé sur une quantité qu'un chantier a pour
+    // BUT de réduire à zéro finit forcément par rougir sur un progrès, puis par
+    // être abaissé à zéro : c'est-à-dire exactement l'état muet qu'il prétendait
+    // interdire. Il ne mesurait pas la santé de l'extracteur, il mesurait
+    // l'ampleur de la dette.
+    //
+    // Les deux façons dont cette garde peut devenir muette se gardent donc
+    // séparément, et aucune des deux ne décroît avec la migration.
+
+    // 1. Le BALAYAGE atteint-il l'arbre ? Un `racineWeb` cassé rendrait une
+    //    liste vide, et tout le reste passerait au vert sans rien lire.
+    expect(fichiers.length).toBeGreaterThan(500);
+
+    // 2. L'EXTRACTEUR reconnaît-il encore les deux formes d'appel ? Question qui
+    //    se répond sur un échantillon FIXE, insensible à ce que le web contient.
+    //    Si `motif` cesse de matcher, ceci rougit — même le jour où il ne reste
+    //    plus un seul littéral en production.
+    const ÉCHANTILLON = [
+      "apiService.get('/api/v1/echantillon/verbe');",
+      "buildApiUrl('/api/v1/echantillon/constructeur');",
+    ].join('\n');
+    const extraits = [...ÉCHANTILLON.matchAll(motif)].map((m) => m[1]);
+    expect(extraits).toEqual([
+      '/api/v1/echantillon/verbe',
+      '/api/v1/echantillon/constructeur',
+    ]);
 
     // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration
     // lit trois sondes qui n'existent pas — un défaut RÉEL, trouvé par cette

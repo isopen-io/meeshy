@@ -27,7 +27,7 @@ export function useLinkValidation(linkIdentifier: string) {
         const token = authManager.getAuthToken();
         const response = await fetch(
           buildApiUrl(
-            API_ENDPOINTS.CONVERSATION.CHECK_LINK_IDENTIFIER(
+            API_ENDPOINTS.links.checkIdentifierByIdentifier(
               encodeURIComponent(linkIdentifier.trim())
             )
           ),
