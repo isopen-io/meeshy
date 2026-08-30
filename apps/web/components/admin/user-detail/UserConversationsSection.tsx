@@ -7,7 +7,19 @@ import { MessageSquare, Users, Clock, Loader2, Paperclip, ShieldCheck, X } from 
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { useUser } from '@/stores';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
+
+/**
+ * Doit rester égal à `REASON_MIN_LENGTH` dans
+ * `services/gateway/src/routes/admin/conversation-messages-sovereign.ts` —
+ * le schéma AJV de `GET /admin/conversations/:conversationId/messages` y
+ * refuse tout `reason` plus court avec un 400, AVANT le handler. Le web ne
+ * peut pas importer cette constante depuis le gateway (paquets distincts) ;
+ * elle est donc recopiée ICI, et doit être tenue à jour si le seuil serveur
+ * change (issue #4383).
+ */
+const SOVEREIGN_REASON_MIN_LENGTH = 10;
 
 interface ParticipantUser {
   id: string;
@@ -232,7 +244,106 @@ function GroupMembersModal({ conversation, onClose }: { conversation: AdminUserC
   );
 }
 
-function ConversationMessagesModal({ conversation, onClose }: { conversation: AdminUserConversation; onClose: () => void }) {
+/**
+ * Motif écrit d'une lecture souveraine (#4383) — la garde CLIENT qui précède
+ * `ConversationMessagesModal`. `requireSovereign()` réserve déjà la route
+ * elle-même à BIGBOSS côté serveur ; ce prompt évite l'aller-retour réseau
+ * (403 systématique pour tout autre rôle, 400 systématique sans motif) et
+ * DIT à l'opérateur pourquoi on le lui demande — le taire le priverait de
+ * l'information qui justifie la question (issue #4383, critère 3).
+ */
+function SovereignReasonModal({
+  conversation,
+  onCancel,
+  onConfirm,
+}: {
+  conversation: AdminUserConversation;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const { t } = useI18n('admin');
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const trimmed = reason.trim();
+  const tooShort = trimmed.length < SOVEREIGN_REASON_MIN_LENGTH;
+
+  const handleConfirm = () => {
+    setTouched(true);
+    if (tooShort) return;
+    onConfirm(trimmed);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <Card
+        className="w-full max-w-md dark:bg-gray-900 dark:border-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 dark:text-gray-100 text-base min-w-0">
+            <ShieldCheck className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">{t('usersDetail.sovereignReasonTitle')}</span>
+          </CardTitle>
+          <button onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t('usersDetail.sovereignReasonNotice')}
+          </p>
+          <div className="space-y-1">
+            <label htmlFor="sovereign-reason-input" className="text-xs font-medium dark:text-gray-200">
+              {t('usersDetail.sovereignReasonLabel')}
+            </label>
+            <textarea
+              id="sovereign-reason-input"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              onBlur={() => setTouched(true)}
+              placeholder={t('usersDetail.sovereignReasonPlaceholder')}
+              rows={3}
+              className="w-full text-sm border dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              {t('usersDetail.sovereignReasonHint', { min: String(SOVEREIGN_REASON_MIN_LENGTH) })}
+            </p>
+            {touched && tooShort && (
+              <p className="text-[11px] text-red-600 dark:text-red-400">
+                {t('usersDetail.sovereignReasonTooShort', { min: String(SOVEREIGN_REASON_MIN_LENGTH) })}
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={onCancel}
+              className="text-xs px-3 py-1.5 rounded-md border dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              {t('usersDetail.cancelButton')}
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={tooShort}
+              className="text-xs px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {t('usersDetail.sovereignReasonConfirm')}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ConversationMessagesModal({
+  conversation,
+  reason,
+  onClose,
+}: {
+  conversation: AdminUserConversation;
+  reason: string;
+  onClose: () => void;
+}) {
   const { t } = useI18n('admin');
   const locale = useCurrentInterfaceLanguage();
   const [messages, setMessages] = useState<AdminConversationMessage[]>([]);
@@ -249,7 +360,7 @@ function ConversationMessagesModal({ conversation, onClose }: { conversation: Ad
     try {
       const resp = await apiService.get<PaginatedMessages>(
         `/admin/conversations/${conversation.id}/messages`,
-        { offset: nextOffset, limit: MESSAGES_PAGE_SIZE }
+        { offset: nextOffset, limit: MESSAGES_PAGE_SIZE, reason }
       );
       const page = resp.data?.data ?? [];
       const pagination = resp.data?.pagination;
@@ -302,6 +413,13 @@ function ConversationMessagesModal({ conversation, onClose }: { conversation: Ad
             <X className="h-5 w-5" />
           </button>
         </CardHeader>
+        <p
+          className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400 px-4 pb-2 -mt-2 truncate"
+          title={reason}
+        >
+          <ShieldCheck className="h-3 w-3 flex-shrink-0" />
+          {t('usersDetail.sovereignReadTrackedNotice', { reason })}
+        </p>
         <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
           <div ref={scrollRef} className="h-full max-h-[70vh] overflow-y-auto px-4 pb-4 space-y-2">
             {loading ? (
@@ -362,6 +480,12 @@ function ConversationMessagesModal({ conversation, onClose }: { conversation: Ad
 export function UserConversationsSection({ userId }: { userId: string }) {
   const { t } = useI18n('admin');
   const locale = useCurrentInterfaceLanguage();
+  const currentUser = useUser();
+  // `GET /admin/conversations/:id/messages` est en régime souverain côté
+  // serveur (`requireSovereign()`, #4383) : BIGBOSS et lui seul, sinon 403.
+  // Un contrôle voué au 403 ne se propose pas — le bouton "view messages"
+  // n'existe même pas pour les autres rôles.
+  const isSovereignReader = currentUser?.role === 'BIGBOSS';
   const [conversations, setConversations] = useState<AdminUserConversation[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -370,7 +494,8 @@ export function UserConversationsSection({ userId }: { userId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalConversation, setModalConversation] = useState<AdminUserConversation | null>(null);
-  const [messagesConversation, setMessagesConversation] = useState<AdminUserConversation | null>(null);
+  const [reasonPromptConversation, setReasonPromptConversation] = useState<AdminUserConversation | null>(null);
+  const [messagesModal, setMessagesModal] = useState<{ conversation: AdminUserConversation; reason: string } | null>(null);
 
   const load = async (nextOffset: number, replace: boolean) => {
     if (replace) setLoading(true); else setLoadingMore(true);
@@ -477,13 +602,15 @@ export function UserConversationsSection({ userId }: { userId: string }) {
                         <span>{t('usersDetail.viewMembers')} ({conv.memberCount})</span>
                       </button>
                     )}
-                    <button
-                      onClick={() => setMessagesConversation(conv)}
-                      className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                    >
-                      <MessageSquare className="h-3 w-3" />
-                      <span>{t('usersDetail.viewMessages')}</span>
-                    </button>
+                    {isSovereignReader && (
+                      <button
+                        onClick={() => setReasonPromptConversation(conv)}
+                        className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        <span>{t('usersDetail.viewMessages')}</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -526,8 +653,23 @@ export function UserConversationsSection({ userId }: { userId: string }) {
         <GroupMembersModal conversation={modalConversation} onClose={() => setModalConversation(null)} />
       )}
 
-      {messagesConversation && (
-        <ConversationMessagesModal conversation={messagesConversation} onClose={() => setMessagesConversation(null)} />
+      {reasonPromptConversation && (
+        <SovereignReasonModal
+          conversation={reasonPromptConversation}
+          onCancel={() => setReasonPromptConversation(null)}
+          onConfirm={(reason) => {
+            setMessagesModal({ conversation: reasonPromptConversation, reason });
+            setReasonPromptConversation(null);
+          }}
+        />
+      )}
+
+      {messagesModal && (
+        <ConversationMessagesModal
+          conversation={messagesModal.conversation}
+          reason={messagesModal.reason}
+          onClose={() => setMessagesModal(null)}
+        />
       )}
     </Card>
   );
