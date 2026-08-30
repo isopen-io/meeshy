@@ -2200,19 +2200,33 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(result).toBeNull();
     });
 
-    it('handles BYPASS_VOICE_CONSENT_CHECK env var', async () => {
+    /**
+     * #4348 — la variable d'environnement n'accorde PLUS aucun consentement.
+     *
+     * Ce témoin figeait l'inverse : il posait `BYPASS_VOICE_CONSENT_CHECK` et
+     * attestait que le traitement aboutissait. Il gardait donc la dérogation,
+     * pas la garde — et il serait resté vert si quelqu'un avait élargi le
+     * bypass, tout en tombant le jour où on le retire. Retourné : la présence
+     * de la variable ne doit RIEN changer, et c'est ce qui se vérifie.
+     */
+    it("ne laisse aucune variable d'environnement accorder un consentement", async () => {
+      const appel = {
+        messageId: 'msg-bypass',
+        attachmentId: 'att-bypass',
+        conversationId: 'conv-bypass',
+        senderId: 'user-bypass',
+        audioUrl: '/url/audio.mp3',
+        audioPath: '/app/uploads/audio.mp3',
+        audioDurationMs: 2000
+      };
+
+      const sansVariable = await svc.processAudioAttachment(appel);
+
       process.env.BYPASS_VOICE_CONSENT_CHECK = 'true';
       try {
-        const result = await svc.processAudioAttachment({
-          messageId: 'msg-bypass',
-          attachmentId: 'att-bypass',
-          conversationId: 'conv-bypass',
-          senderId: 'user-bypass',
-          audioUrl: '/url/audio.mp3',
-          audioPath: '/app/uploads/audio.mp3',
-          audioDurationMs: 2000
-        });
-        expect(result).not.toBeNull();
+        const avecVariable = await svc.processAudioAttachment(appel);
+        // Le MÊME verdict des deux côtés : poser la variable n'ouvre rien.
+        expect(avecVariable === null).toBe(sansVariable === null);
       } finally {
         delete process.env.BYPASS_VOICE_CONSENT_CHECK;
       }

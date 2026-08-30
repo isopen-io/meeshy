@@ -65,23 +65,15 @@ export class ConsentValidationService {
       }
     });
 
-    // En développement, activer automatiquement tous les consentements
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
-    if (isDevelopment) {
-      return {
-        hasDataProcessingConsent: true,
-        hasVoiceDataConsent: true,
-        hasVoiceProfileConsent: true,
-        hasVoiceCloningConsent: true,
-        hasThirdPartyServicesConsent: true,
-        canTranscribeAudio: true,
-        canTranslateText: true,
-        canTranslateAudio: true,
-        canGenerateTranslatedAudio: true,
-        canUseVoiceCloning: true
-      };
-    }
+    // Le court-circuit `NODE_ENV === 'development'` est SUPPRIMÉ (#4348) : un
+    // consentement se prouve par une DONNÉE, jamais par un environnement
+    // d'exécution — cette garde échouait OUVERT sur une variable qu'une
+    // simple erreur de configuration suffit à poser (un `NODE_ENV` mal
+    // positionné en production aurait réputé toute la population
+    // consentante, sans trace ni horodatage). Les comptes de développement
+    // reçoivent désormais un vrai consentement horodaté, écrit par le seed
+    // (`packages/shared/seed.ts`) — ils passent la garde parce qu'ils ont
+    // consenti, pas parce que le processus tourne quelque part.
 
     // Parser les préférences audio (JSON). `applicationPrefs` reste lu plus
     // bas pour `thirdPartyServicesConsentAt` (hors périmètre #4180) — plus

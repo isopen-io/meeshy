@@ -231,6 +231,24 @@ taken from a photo imported, so any catch-up rule would manufacture a claim
 nobody made. Idempotent — it only touches documents where the field is absent,
 so a re-run never overwrites a declaration a client made in the meantime.
 
+### 014_merge_consent_blob_into_user_columns.js
+
+Merges the five legacy consent keys still living in
+`UserPreferences.application` (`dataProcessingConsentAt`, `voiceDataConsentAt`,
+`voiceProfileConsentAt`, `voiceCloningConsentAt`, `voiceCloningEnabledAt`) into
+the four `User.*ConsentAt` columns that `ConsentValidationService` now reads
+exclusively (#4180, #4348). Uses MongoDB's `$max` update operator per account
+— the larger of the existing column and the blob value wins, so an account
+that had already consented via the column can never regress. After the merge,
+the five keys are removed from `application` (backed up first, per account,
+into `ApplicationConsentBlob_backup_014`).
+
+Dry-run by default (`mongosh <uri> --file 014_…js`): prints the count of
+accounts still carrying a blob key with a `null` column — read this number
+before applying. Pass `APPLIQUER=true` to write
+(`mongosh <uri> --eval 'var APPLIQUER=true' --file 014_…js`). Idempotent: a
+re-run is a no-op once every account is merged and purged.
+
 ## Expected Results After Migration
 
 ```javascript

@@ -122,7 +122,15 @@ describe('ROUTE_TABLE (#4278)', () => {
     // sur le manifeste) attendu. Le manifeste et
     // `packages/shared/api/endpoints.ts` sont DÉRIVÉS et régénérés par
     // l'intégrateur, hors territoire de l'issue.
-    expect(ROUTE_TABLE.length).toBe(60);
+    //
+    // 60 → 61 le 2026-08-30 (#4348) : entrée `me-consents`, les DEUX adresses
+    // NEUVES `GET`/`PUT /api/v1/me/consents{,/:purpose}` — pas un alias :
+    // `/voice/profile/consent` reste montée séparément (`voice-profile`,
+    // inchangée), retirer/fusionner les deux écrivains étant un suivi
+    // explicitement hors périmètre de #4348 (voir doc-comment de
+    // `routes/me/consents.ts`). L'écart de +1 sur la table (et +2 sur le
+    // manifeste) est donc attendu, sans aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(61);
   });
 });
 
