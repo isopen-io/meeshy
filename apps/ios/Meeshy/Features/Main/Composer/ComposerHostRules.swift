@@ -147,6 +147,92 @@ nonisolated enum ComposerSceneFloatingRail {
     }
 }
 
+/// **Ce que l'inspecteur d'un objet DIT de lui (#4073, vue `1c`).**
+///
+/// La planche montre une rangée horizontale de jetons portant des valeurs
+/// lisibles — `STYLE · NÉON`, `TAILLE 38`, `ALIGN ▭`, `0:00 → 0:06`. L'app rend
+/// des bulles d'icônes : on y lit ce qu'on peut CHANGER, jamais ce qui EST.
+///
+/// La différence n'est pas décorative. Un réglage qu'il faut ouvrir pour
+/// connaître oblige l'auteur à explorer pour se souvenir ; un jeton qui porte sa
+/// valeur répond sans être touché. C'est la dimension 12 — **la complexité se
+/// paie dans le code, jamais chez l'utilisateur**.
+///
+/// La règle rend des MOTS, pas des vues : ce qu'un jeton affiche s'éprouve sans
+/// monter d'écran, ce qu'il ouvre est l'affaire de la vue.
+nonisolated enum ComposerObjectChips {
+
+    struct Chip: Equatable {
+        /// Identité STABLE, indépendante du libellé : c'est elle que la vue
+        /// utilise pour savoir quel réglage ouvrir, et elle ne change pas quand
+        /// la valeur change.
+        let id: String
+        let label: String
+    }
+
+    /// **Un jeton paraît quand il a quelque chose à DIRE** (loi 8). Un style
+    /// absent ne fabrique pas « STYLE · — » : ce libellé occuperait la place en
+    /// affirmant une valeur qui n'existe pas, ce qui enseigne moins que rien.
+    ///
+    /// La TAILLE fait exception et paraît toujours : elle n'est jamais absente
+    /// du modèle — `fontSize` est non-optionnelle et porte une valeur par
+    /// défaut. Il n'y a donc pas d'état « sans taille » à taire.
+    ///
+    /// L'ordre suit la planche — ce qui change l'apparence d'abord, le temps en
+    /// dernier — et il ne dépend PAS de ce qui est renseigné : un jeton qui
+    /// apparaît ne doit pas déplacer ses voisins sous le doigt.
+    static func chips(for text: StoryTextObject) -> [Chip] {
+        var jetons: [Chip] = []
+        if let style = text.textStyle, !style.isEmpty {
+            jetons.append(Chip(id: "style", label: "STYLE · \(styleName(style))"))
+        }
+        jetons.append(Chip(id: "size", label: "TAILLE \(Int(text.fontSize.rounded()))"))
+        if let align = text.textAlign, !align.isEmpty {
+            jetons.append(Chip(id: "align", label: "ALIGN · \(alignName(align))"))
+        }
+        if let fenetre = window(start: text.startTime, duration: text.duration) {
+            jetons.append(Chip(id: "window", label: fenetre))
+        }
+        return jetons
+    }
+
+    /// `nil` ⇒ le texte est PERMANENT : il n'a pas de fin à annoncer, et un
+    /// « 0:00 → 0:00 » mentirait sur sa durée.
+    static func window(start: Double?, duration: Double?) -> String? {
+        guard let duration, duration > 0 else { return nil }
+        let debut = max(0, start ?? 0)
+        return "\(timecode(debut)) → \(timecode(debut + duration))"
+    }
+
+    static func timecode(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Les cinq styles du modèle, dans les mots de la planche. Un style inconnu
+    /// se rend TEL QUEL en majuscules plutôt que d'être tu : une valeur que le
+    /// serveur a acceptée existe, et la cacher ferait croire à son absence.
+    static func styleName(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "neon": return "NÉON"
+        case "bold": return "GRAS"
+        case "typewriter": return "MACHINE"
+        case "handwriting": return "MANUSCRIT"
+        case "classic": return "CLASSIQUE"
+        default: return raw.uppercased()
+        }
+    }
+
+    static func alignName(_ raw: String) -> String {
+        switch raw.lowercased() {
+        case "left": return "GAUCHE"
+        case "center": return "CENTRÉ"
+        case "right": return "DROITE"
+        default: return raw.uppercased()
+        }
+    }
+}
+
 nonisolated enum ComposerSocleDensity {
     static func showsLabels(_ size: DynamicTypeSize) -> Bool {
         !size.isAccessibilitySize

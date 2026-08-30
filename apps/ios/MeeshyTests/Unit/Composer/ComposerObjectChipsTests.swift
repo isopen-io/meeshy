@@ -1,0 +1,91 @@
+import XCTest
+@testable import Meeshy
+@testable import MeeshySDK
+
+/// **L'inspecteur de `1c` porte des VALEURS LISIBLES, pas des glyphes muets
+/// (#4073).**
+///
+/// La planche `1c` montre une rangée horizontale de jetons : `STYLE · NÉON`,
+/// `TAILLE 38`, `ALIGN ▭`, `0:00 → 0:06`. Chacun dit l'état COURANT de l'objet
+/// sélectionné avant même qu'on le touche. L'app rend aujourd'hui des bulles
+/// d'icônes — on y lit ce qu'on peut CHANGER, jamais ce qui EST.
+///
+/// La différence n'est pas décorative : un réglage qu'il faut ouvrir pour
+/// connaître oblige l'auteur à explorer pour se souvenir. Un jeton qui porte sa
+/// valeur répond sans être touché — c'est la dimension 12, la complexité se paie
+/// dans le code, pas chez l'utilisateur.
+///
+/// **La règle est PURE et rend des mots, pas des vues.** Ce qu'un jeton AFFICHE
+/// s'éprouve sans monter d'écran ; ce qu'il ouvre est l'affaire de la vue.
+final class ComposerObjectChipsTests: XCTestCase {
+
+    private func texte(style: String? = nil,
+                       taille: Double = 38,
+                       align: String? = nil,
+                       debut: Double? = nil,
+                       duree: Double? = nil) -> StoryTextObject {
+        var t = StoryTextObject(text: "Dernier soir de tournage", x: 0.5, y: 0.5)
+        t.textStyle = style
+        t.fontSize = taille
+        t.textAlign = align
+        t.startTime = debut
+        t.duration = duree
+        return t
+    }
+
+    func test_laTaille_seLitSansOuvrirQuoiQueCeSoit() {
+        let jetons = ComposerObjectChips.chips(for: texte(taille: 38))
+        XCTAssertTrue(jetons.contains { $0.label == "TAILLE 38" },
+                      "le jeton porte la valeur courante — \(jetons.map(\.label))")
+    }
+
+    /// **Un style ABSENT ne fabrique pas un jeton « aucun ».** Loi 8 : le jeton
+    /// paraît quand il a quelque chose à dire. « STYLE · — » enseignerait moins
+    /// que rien : il occuperait la place en affirmant une valeur qui n'existe pas.
+    func test_unStyleAbsent_neFabriquePasDeJeton() {
+        let jetons = ComposerObjectChips.chips(for: texte(style: nil))
+        XCTAssertFalse(jetons.contains { $0.label.hasPrefix("STYLE") })
+    }
+
+    func test_unStylePose_seNommeEnMajuscules() {
+        let jetons = ComposerObjectChips.chips(for: texte(style: "neon"))
+        XCTAssertTrue(jetons.contains { $0.label == "STYLE · NÉON" },
+                      "la planche écrit « STYLE · NÉON » — \(jetons.map(\.label))")
+    }
+
+    /// La fenêtre de temps se lit `0:00 → 0:06`, et seulement quand l'objet en a
+    /// une : un texte permanent n'a pas de fin à annoncer.
+    func test_laFenetreDeTemps_seLitQuandElleExiste() {
+        let avec = ComposerObjectChips.chips(for: texte(debut: 0, duree: 6))
+        XCTAssertTrue(avec.contains { $0.label == "0:00 → 0:06" }, "\(avec.map(\.label))")
+
+        let permanent = ComposerObjectChips.chips(for: texte(debut: nil, duree: nil))
+        XCTAssertFalse(permanent.contains { $0.label.contains("→") })
+    }
+
+    func test_lAlignement_seLitParSonMot() {
+        let jetons = ComposerObjectChips.chips(for: texte(align: "center"))
+        XCTAssertTrue(jetons.contains { $0.label == "ALIGN · CENTRÉ" }, "\(jetons.map(\.label))")
+    }
+
+    /// **Le fusible.** Une règle qui rendrait toujours une liste vide passerait
+    /// les trois témoins négatifs ci-dessus sans rien servir.
+    func test_unTexteCompletPorteSesQuatreJetons() {
+        let jetons = ComposerObjectChips.chips(
+            for: texte(style: "neon", taille: 38, align: "center", debut: 0, duree: 6))
+        XCTAssertEqual(jetons.count, 4, "\(jetons.map(\.label))")
+        XCTAssertEqual(Set(jetons.map(\.id)).count, 4, "deux jetons ne partagent pas une identité")
+    }
+
+    /// L'ORDRE suit la planche : ce qui change l'apparence d'abord, le temps en
+    /// dernier. Il ne dépend pas de ce qui est renseigné — un jeton qui
+    /// apparaît ne doit pas déplacer ses voisins sous le doigt.
+    func test_lOrdreSuitLaPlanche_etNeDependPasDeCeQuiEstRenseigne() {
+        let complet = ComposerObjectChips.chips(
+            for: texte(style: "neon", align: "center", debut: 0, duree: 6)).map(\.id)
+        XCTAssertEqual(complet, ["style", "size", "align", "window"])
+
+        let partiel = ComposerObjectChips.chips(for: texte(align: "center")).map(\.id)
+        XCTAssertEqual(partiel, ["size", "align"], "l'ordre des survivants est celui du complet")
+    }
+}
