@@ -1,5 +1,634 @@
 # @meeshy/web
 
+## 1.33.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la page de pilotage cesse de se tuer elle-meme pendant sa publication
+  - le fond ThumbHash du reel plein ecran cesse d'etre recouvert par le thumbnail
+  - la legende se replie a 30 mots et en montre 15 — deux nombres, pas un
+  - le rail ne lit plus le disque pendant son body
+  - rogner une video ou un son de scene — des BORNES, jamais un fichier cuit
+  - la cible de mesure device ne compilait pas — une cible hors gate n'est compilée par personne
+  - un numero de lecon redevient une cle, et le cliquet compte l'identifiant CITABLE plutot que la suite de chiffres
+  - in-app real-time toast wired — pure ToastDedupWindow + orchestrator VM (#4493)
+  - la garde de parite lisait « ( » comme un parametre — son fusible l'a dit
+  - la bannière in-app dit CE QUI vient d'arriver — la politique qui décidait n'avait aucun lecteur
+  - le fling du fil devient mesurable sur appareil réel — une cible XCUITest porte les métriques
+  - la liste du fil ne se dessine plus sous la Rivière et le Résumé, qui la recouvrent
+  - un effet de message persistant s'arrête quand son message quitte l'écran
+  - la Rivière cesse de se réveiller elle-même à chaque mesure de bulle
+  - la porte son ouvre le micro, et le son pose sa PLACE avant d'atterrir
+  - setCredentials prend un objet nomme, et la confusion de creneaux devient inexprimable
+  - le catalogue retrouve son ordre — 188 lignes voulues, 16 760 touchees
+  - le socle L0 tient en UN site par donnée — jetons, sprite, thème, cycle de vie, jeton invité
+  - la legende du lecteur se deplie enfin — dix mots, de l'ombre, plein ecran
+  - depuis le plein ecran, repondre au media — au message qui le porte
+  - depuis le plein ecran, creer une story, un reel ou un post avec ce media
+  - ConversationMediaGalleryView rentre dans son budget — 1259 lignes decoupees par responsabilite
+  - incoming-call & friend-content notifications honour a real toggle (#4481)
+  - un clip de scene peut dire QUELLE PART de sa source il joue
+  - ecrire « @ » dans un texte de scene ouvre la rail des mentions
+  - la notification in-app passe devant la pastille — qui cede, plutot que de lutter pour un pixel
+  - composer avec un message AUDIO — le son devient le son de la scene
+  - l'annulation descend au socle, le sticker se pose en grand, et le rail ajoute a la scene courante
+  - l'ecriture miroir du consentement passe APRES celle qui fait foi
+  - le double tap gagne les cellules media — et quatre temoins qui ne s'executaient PAS entrent enfin dans leur classe
+  - les consentements se lisent et s'ecrivent sous /me/consents
+  - la garde du mode de lecture balaie la FAMILLE de fichiers, et cesse de mesurer un chemin
+  - le COLLAGE rejoint le rail — et c'est la forme du controle qui a dicte la forme du rail
+  - un double tap sur une bulle ouvre la barre de reaction rapide
+  - un compte a double facteur peut enfin se connecter par le formulaire principal
+  - le composer cesse de terminer l'app — une seule feuille, et le type l'impose
+  - les statistiques de traduction temps réel descendent le Prisme jusqu'au rang 4
+  - deux setters redeviennent accessibles a leurs extensions -- le decoupage de StoryViewModel cassait private(set)
+  - toast honours per-type notification toggles (isTypeEnabled port) (#4464)
+  - ComposerDocumentSurface rentre dans son budget, et six cliquets suivent le decoupage
+  - deux doubles de test enumeraient leurs exports, et la banniere en a lu deux de plus -- run test
+  - StoryViewModelRules importe MeeshyUI, sans quoi #4425 ne compile pas — run tests
+  - le rail gauche devient MODAL — les outils remplacent les portes, et le rail droit gagne sa frame [+]
+  - la connexion a deux facteurs vise la porte qui peut l'authentifier, et le corps qu'elle exige
+  - la banniere in-app dit CE QUI est arrive, pas seulement QUI -- run test
+  - le plateau emprunte les VRAIS outils — dessin complet, texte enfin posable, et trois defauts vus au simulateur
+  - une entree de la pastille mene au MESSAGE, plus seulement a sa conversation
+  - système → notice centrée (BubbleRenderKind.System) (#4435)
+  - la conversation restauree revient sur les AUTRES appareils -- run test
+  - StoryViewModel rentre dans son budget, et sept gardes cessent de lire un seul fichier
+  - douze mots cessent de repondre en francais a tout le monde
+  - la v3 est joignable, se construit et sa conformite se mesure
+  - la scene se dessine — la surface de l'atelier est EXTRAITE, pas recopiee
+  - retirer le hook mort `useMessageTranslations` — jumelle divergente rang-1 du Prisme (#4390)
+  - le fond du plateau retrouve sa rangee « Ouverture »
+  - le jeton de rafraichissement cesse d'occuper une case que personne ne remplit
+  - le plateau annule et retablit — une pose ratee cesse d'etre definitive
+  - la porte son du plateau ouvre l'ETAGERE autant que le micro
+  - une story pas encore publiee cesse de condamner sa ligne d'outbox — et un id malforme repond au lieu de lever
+  - l'adresse de l'image d'apercu porte sa VERSION, et s'ecrit a un seul endroit
+  - l'image d'apercu que quatre pages annoncaient depuis toujours est enfin SERVIE
+  - notification-center category filter (11 chips) via pure NotificationFilterCategory (#4421)
+  - trois chemins d'authentification cessent de ranger leurs jetons dans les mauvais creneaux
+  - la porte media de la scene ouvre les TROIS sources — la camera et le fichier revenaient de nulle part
+  - cache-first global search via pure SearchQueryCache + socket invalidation (#4408)
+  - la suppression pour soi APPELLE le geste partage au lieu de le recopier
+  - le plateau sert le sticker et l'empilement — deux absences que leur commentaire disait impossibles
+  - la conversation restauree revient dans la liste des autres appareils, par un abonnement qui s'attache vraiment
+  - le rafraichissement de session vise l'adresse servie, avec le corps que la route exige vraiment
+  - l'octroi d'historique s'utilise sans voir, et son plafond ne tranche plus
+  - le like d'un commentaire dit enfin qu'il est le mien — et le « reste » annoncé se réduit à ce seul site
+  - les quatre appels de jeton push visent l'adresse servie, avec le verbe et le champ que la route exige
+  - le lecteur de conversation d'administration demande son motif et ne s'offre qu'au rang qui peut l'obtenir
+  - coller du TEXTE pose enfin quelque chose, et « Coller » cesse de s'afficher les mains vides
+  - accent-insensitive search highlight via pure SearchTextFolder (#4385)
+  - les entrees du composer disent ce qu'elles font
+  - les deux derniers fichiers du composer rentrent dans leur budget
+  - « Coller » descend sur sa rangee, et la regle qui decide OU coller est ecrite
+  - le glissement de la description devient CONTROLE — et la regle vaut pour tous les glissements (run test)
+  - la description ne s'affiche que si on la demande, et sa validation n'a plus deux boutons pour un acte (run test)
+  - reaction emoji length bound is the SSOT on the REST/AJV path too (#4373)
+  - ecrire une description ne cache plus la scene, et l'ecran de lancement cesse d'avaler les gestes (run test)
+  - pure canvas reprojector — center-anchored [0,1] rescale + items-repositioned count (story-canvas-reprojection) (#4369)
+  - le message recu app fermee atteint le DISQUE avant qu'iOS suspende le processus (run test)
+  - l'aperçu de réponse (replyTo) descend le Prisme ordonné (rangs 1→4), plus seulement la langue du parent
+  - les six pastilles de l'atelier deviennent la rangee canonique, et la description y entre (run test)
+  - drawing-stroke wire model in :core:model + v3 drawing projection (story-drawing-strokes-wire) (#4355)
+  - la garde des chemins d'API compile, et le point regagne est grave
+  - le web cesse d'ecrire ses adresses d'API a la main, et deux cent dix-sept sites passent par le catalogue
+  - l'audience, l'oeil et la fleche descendent au socle sous la scene — et l'audience ne ment pas (run test)
+  - la garde des chemins d'API lit le DEPOT, plus le disque
+  - le gate app repasse ENTIEREMENT au vert — 9097 tests, 0 echec (run test)
+  - trois ecrans tronquaient leur liste a 100 relations — le double repondait par le PONT du protocole, pas par l'exigence
+  - un changement de police quitte enfin le navigateur, et les reglages parlent a une seule route
+  - le meuble du composer rentre dans son budget — et l'adresse de ses gardes devient l'UNITE, pas un fichier
+  - pure freehand-drawing board — undo/redo/clear + per-stroke edit (story-drawing-board) (#4331)
+  - collapse raw PowerManager.THERMAL*STATUS*\* onto the ThermalState tier the sender-cap plan consumes (#4295)
+  - la route posee sur une cle de media porte sa VERSION, et une cle n'est pas qu'une date
+  - le corps du message descend le Prisme ordonné (rangs 1→4), plus seulement le rang 1 (#4316)
+  - quatre resolveurs d'URL de media n'en font plus qu'un, et il POSE la route
+  - le SDK iOS POSE la route d'un media, au lieu d'attendre que la base la porte
+  - pure ThumbHash source-downscale planner (thumbhash-source-plan) (#4321)
+  - la garde d'execution s'importe avec son extension, comme tout le reste
+  - pure WebRTC stats reducer + interval loss-ratio (call-stats-reduce) (#4314)
+  - un Node trop ancien le DIT au moment ou il echoue, pas a l'installation
+  - lever un bannissement se dit dans les sept langues, comme le poser
+  - l'ordre des arguments suit la DECLARATION, pas l'intention de qui appelle
+  - recalibrate call-quality RTT ladder to iOS long-haul parity (#4304)
+  - une decision PURE n'a que faire de l'isolation du module qui l'heberge
+  - un glissement de navigation se retourne pour l'arabe, un objet qu'on déplace non (#4299)
+  - un JWT porte sa session, pour qu'une revocation ciblee l'atteigne
+  - ouvrir une session ne passe plus par une jumelle appauvrie, et un oracle de session disparait
+  - les listings d'amitie passent du decalage au curseur, sur les trois clients
+  - fermer une video en pause ne detruit plus la position de reprise qu'on vient d'ecrire
+  - le plein ecran d'un media de commentaire feuillette l'objet entier, legendes comprises
+  - une boucle de STATUT s'arrête sous Reduce Motion sans cesser de le dire (#4290)
+  - l'onglet sante lit trois sondes qui existent, et dessine leur echec
+  - creer un groupe depuis le tableau de bord aboutit — un groupe est une COMMUNAUTE
+  - les six routes des sujets de l'agent repondent, et un motif explosif ne fige plus le gateway
+  - pure low-light-boost decision core folded from the frame's luma (#4272)
+  - signaler un contenu n'est plus un geste d'administration
+  - le vocabulaire des bascules était enfermé par son NOM (253i) (#4268)
+  - une permission ne garde pas une ROUTE, elle garde un CHAMP
+  - la puce de langue avait une NEUVIÈME copie, que la garde ne pouvait pas voir (252i) (#4261)
+  - toute garde d'administration s'écrit avec le vocabulaire de la loi unique
+  - a media-only story queued offline surfaces its ring and failure strip, not silent loss (#4262)
+  - une seule matrice dit qui peut administrer, et les clients la lisent à une adresse
+  - le point qui sépare naît muet, et ne s'écrit plus qu'à un endroit (251i) (#4257)
+  - une erreur typée garde son sens, et révoquer une session coupe CE socket
+  - a story slide shows an instant blur behind its loading background image (#4259)
+  - le carnet d'adresses se synchronise par DELTA, jamais en entier
+  - un bouton dessiné ne laisse plus son dessin faire la cible (250i) (#4252)
+  - une demande d'amitié suit UN chemin, dans les deux sens
+  - a story draft's on-canvas stickers survive leaving the composer, retiring the fidelity gate (#4253)
+  - bloquer devient un ÉTAT, et la présence d'un inconnu ne fuit plus
+  - la puce de langue se dessine à UN endroit, et sa cible est enfin servie (249i) (#4249)
+  - a story draft's on-canvas text elements survive leaving the composer (#4247)
+  - les trois clients lisent un profil à l'adresse canonique, en un aller-retour
+  - a story draft's colour/media background survives leaving the composer (#4244)
+  - verifier un numero ne dit plus s'il appartient a un compte
+  - trouver une personne passe par deux portes
+  - un écran de réglages dont le chargement a échoué ne remet plus les autres réglages à zéro
+  - leaveCall() décide "dernier participant ?" sur une lecture fraîche, plus un instantané périmé (Vague 183)
+  - les préférences se relisent à la reconnexion socket (parité #4197/#4209)
+  - changer un réglage de confidentialité ne remet plus le chiffrement à zéro
+  - l'API ne sert plus de route « to be implemented »
+  - a story draft's pinned duration survives leaving the composer (#4229)
+  - ouvrir une suppression de compte exige la preuve qu'on est la
+  - un onglet ouvert hors ligne ne déclare plus une hydratation qui n'a rien lu
+  - visiter un lien de suppression ne supprime plus un compte
+  - aucun ecran n'appelle plus une route qui n'existe pas — et une garde qui le prouve
+  - le double des préférences se rattrape à la reconnexion, sans annuler un geste en cours
+  - leaveCall() rediffusait encore call:ended/summary sur la branche « conflit de version »
+  - couper ses accusés de lecture éteint les coches sans recharger la page
+  - un réglage changé sur un autre appareil atteint l'iPhone tout de suite
+  - l'import manquant du double d'outbox dans les témoins de synchro
+  - les préférences user-level se rattrapent à la connexion, sans annuler un geste en attente
+  - coturn TURN config was versioned but never mounted (#3641)
+  - le collecteur de test vit dans backgroundScope, pas dans le TestScope
+  - les deux GET neufs manquaient au double de CategoryRepositoryTest
+  - un réglage changé sur un autre appareil atteint enfin le magasin local
+  - la scene de l'atelier se centre, respire et s'ecrit par-dessus — la carte se detache par son OMBRE
+  - un glob de chemin dans un KDoc ouvrait un commentaire imbriqué
+  - les préférences changées sur un autre appareil atteignent enfin le téléphone
+  - le titre du mood devient la question, Publier rejoint la croix en LiquidGlass
+  - le @ ouvre les mentions dans la description, et le CI iOS repasse au VERT (beta)
+  - les quatre portes du rail ouvrent enfin — un portail d'ingestion appartient au MEUBLE, jamais a une surface
+  - le bas respire — la rangee d'outils devient conditionnelle, la description devient un calque de LECTURE
+  - meeshy.sh sait viser un simulateur du PROJET — et le budget de taille des fichiers devient une regle
+  - la scene incrustee devient une SURFACE — quatrieme vue, zero exception dans le document
+  - le document cesse de porter les exceptions de la scene — retour a la regle 4.3
+  - le rail trailing porte les controleurs — la MEME regle que l'appui long, une autre geographie
+  - les filtres de conversation se composent, sous le rail — et un second appui les retire
+  - le rail se pose DANS le couloir reserve — et la preuve est un NOMBRE, pas un coup d'oeil
+  - débloquer un contact aboutit enfin — un type trop strict transformait le succès serveur en échec client
+  - le rail leading porte les portes — et les six n'agissent PAS sur le meme niveau
+  - la frappe s'annonce depuis la Dynamic Island — la pastille garde sa taille et retrouve son assise
+  - la scene s'ENCASTRE entre les deux rails — l'encastrement cesse d'etre un litteral
+  - « Sortir de la scene » — la quatrieme action de l'appui long, celle qui ecrit le PLAN
+  - la LEGENDE d'un media voyage enfin jusqu'au serveur — la colonne servie que personne n'ecrivait
+  - le survol d'envoi disparaît — le message part, la bulle arrive, rien entre les deux
+  - le gate redevient vert — et l'outil « @ » ouvre enfin la feuille qui nomme
+  - l'amorce « derniere capture » parait enfin — un mode PhotoKit qui ne telechargeait jamais
+  - le socle RETRECIT aux grandes tailles de texte — il ne se casse plus en syllabes
+  - la rangee d'outils DEFILE, et son occultation est la teinte du plateau
+  - l'appui long n'offre plus que les actions qui ont un EFFET
+  - un son pose sur une scene en devient la BANDE-SON — le troisieme emplacement
+  - l'inspecteur de scene etait cable de bout en bout — et INATTEIGNABLE
+  - le mime DECLARE voyage avec le media pose — l'extension cesse d'etre devinee
+  - le composant Position dit QUEL lieu — entete, bascule, croix de verre, et le chip disparait
+  - le Mood rejoint l'eventail du fil — et l'ordre publieur-avant-offre est tenu
+  - la fiche d'un participant existe enfin, et un administrateur y ouvre l'historique par date
+  - « qui voit l'historique » quitte la diffusion large, et un départ du salon global est respecté
+  - le ⋯ arrive avec son premier contenu — et « tout effacer » revele que reset() n'oubliait pas ce qu'il avait porte
+  - le header du composer d'un seul tenant — fermeture, type en menu de verre, rail des slides — et l'oeil revient au socle
+  - un post à plusieurs médias devient un carrousel de slides, navigable et peint plein cadre
+  - la frappe atteint enfin le pixel, et l'accent tient six secondes réarmables
+  - accent SyncPill lié au signal, retry nettoie la file, suppression sans confirmation
+  - une rangée qui entre à l'écran arrive à sa hauteur, jamais étirée
+  - taper un objet de la scène incrustée fait paraître ses contrôles au-dessus de la rangée d'outils
+  - transférer arme la sélection, coche visuelle fiable, suppression groupée
+  - choisir un fond fait NAÎTRE la scène incrustée en haut de l'écran document — plus de switch vers l'atelier plein écran (Phase 2 composer unifié #3939)
+  - EmbeddedSceneCanvas — le canvas de scène éditable, borné et arrondi (Phase 1 composer unifié #3939)
+  - la toolRow redevient statique à fond uniforme — fini le fond noir sous le drapeau
+  - la liste de mentions montre avatar + nom d'affichage + @pseudo
+  - la toolRow défile sous le drapeau fixe, la palette de couleur se replie derrière une icône (#4031 #4032)
+  - le fold « Position » (découvrabilité à proximité) redevient lisible sur le plateau sombre
+  - un SIMPLE tap sur une vidéo l'ouvre en plein écran (double tap réservé aux réactions #4020)
+  - la coche de sélection s'affiche sur TOUT message coché, compteur « N sélectionnés » dès 2 (#4022 #4023)
+  - Sélectionner promu en action primaire, clavier ne se rouvre plus, cercles toujours à gauche, reconfigure ciblé (#4004, #4005 ter, #515)
+  - la pastille de synchro se voit, s'anime et s'efface (#4016 #4017 #4018)
+  - un double-tap sur une vidéo l'ouvre en plein écran et la lit
+  - une citation média désigne la MÊME pièce jointe à l'icône et à l'ouverture
+  - le survol d'envoi ne double plus l'emoji à gauche en Focal/Script
+  - décale les bulles reçues pour loger le cercle de sélection dans la marge (#4005 bis)
+  - sélection multiple de messages, plafonnée à 100, pour un transfert groupé (#4005)
+  - le forward retrouve son cache-first — les conversations de la machine s'affichent sans spinner
+  - le repositionnement du longpress lisait un frame jamais alimenté en mode liste standard (#4004)
+  - le menu longpress ferme le clavier, remonte vers le centre si trop bas, et restitue l'état après (#4004)
+  - éditer un message ne perd plus le brouillon en cours (#4003)
+  - « depuis le 15 » ouvre bien le 15, et un silence n'efface plus l'octroi
+  - mentions sous le curseur, sans chevauchement toolRow, repli découvrabilité (beta)
+  - une conversation ouverte longtemps ne chauffe plus — le pouls de la pastille de synchro n'empile plus ses animations
+  - la révocation par push atteint le DISQUE avant qu'iOS suspende le processus
+  - le fond flou reste un FOND — jamais la vignette nette, jamais un blob abandonné
+  - dette technique du plein écran net — cache, gardes, reprise de poster
+  - la vignette reste un état de chargement lisible, jamais un blocage silencieux
+  - un admin pose ou retire « voit l'historique depuis le <date> » sur la fiche
+  - la visionneuse plein écran d'image ouvre nette, jamais sur la vignette
+  - le plein écran d'une image ou d'une vidéo ouvre net, jamais sur la vignette
+  - un push de révocation met à jour le cache et la cloche, pas seulement la bannière
+  - mentions sous le texte, fond n'active plus la scène plein écran (#3904, #3939)
+  - retire la remontée du survol d'envoi — ne garde que le fondu
+  - retire le padding mort qui faisait déborder toolRow (#3903)
+  - toolRow sans chevauchement, @mention et repli découvrabilité (#3903, #3904, #3905)
+  - un emoji rapide envoie directement au lieu de rester dans le champ
+  - le survol d'envoi passe derrière la barre, prend la forme réelle et se pose en douceur
+  - persist a story draft's photo filter (+intensity) across leaving the composer (#3936)
+  - la garde des durées SUIT l'hôte qui a déménagé (248i, run tests)
+  - persist the story-draft canvas framing (pan/zoom) across leaving the composer (#3932)
+  - une étiquette de média se résout à UN endroit — 17 gravures et 44 jumelles soldées (248i)
+  - logout teardown wipes the in-progress story composer draft (#3929)
+  - Prism preview parity mirror tracks the fixture's 30 vectors (#3930)
+  - le repli de la clé de dedup strippe la région — parité des 3 miroirs (iter 278)
+  - rend la gate iOS verte — 3 gardes rouges (1 de mon fix carte, 2 héritées) (beta)
+  - un seul sélecteur de mode — l'éventail absorbe le sélecteur de destination, RÉEL rejoint STORY sur la scène (B3, #3926)
+  - une description repliable sous le canvas, affichée par le reader par-dessus la scène — B2, #3925
+  - le média composé au document SUIT dans la scène — B1 clôt la préservation du contenu (texte + média), #3924
+  - le survol d'envoi monte depuis hors écran (sous le clavier) avec un effet ressort
+  - le bouton d'envoi apparaît/disparaît en tourbillon ; deux emojis rapides envoient directement
+  - la carte à proximité passe à deux niveaux — switch Nearby/Discover en haut, puis sous-modes (Nearby: Densité·Points·Liste ; Discover: Densité·Populaire, chaleur par vues+impressions)
+  - le canvas se travaille dans une carte franche — contour arrondi SOLIDE, plus de pointillé ; le magnet reste, il représente les zones de vue/vie (directive 2026-08-27)
+  - le contenu écrit suit dans la scène qui naît — loi 9, changer de mode ne jette pas le texte (B1 incrément 1, #3924)
+  - l'horloge d'édition s'éteint après quelques secondes d'inactivité
+  - E2 ne conflate que quand il y a du TEXTE — un vocal PUR garde la langue parlée (7.4b), le crux bascule sur content==nil (E2, #3887)
+  - câble le nom de l'expéditeur sur la pastille de retour
+  - le texte envoyé s'envole du composer vers le fil
+  - en Script/Focal, le drapeau de langue ferme le groupe
+  - l'UI langue par élément couvre média/audio/sticker/lieu — barre flottante sur sélection, mêmes choix que le texte, point d'entrée unique (E3 UI, #3888)
+  - la pastille de retour au direct nomme l'expéditeur
+  - chaque élément de la scène porte sa langue d'origine — sticker/lieu rejoignent texte/média/audio, défaut = langue déclarée, round-trip wire (E3 couche données, #3888)
+  - la barre est transparente, le bouton d'envoi n'apparaît qu'avec du contenu
+  - a restored story draft drops media that's gone instead of resurrecting it (#3922)
+  - le média de fond porte sa propre langue, distincte du texte — le crux document ne conflate plus texte et audio (E2, #3887)
+  - structure d'affichage média par le poste — carousel (post) / diapositives horizontales (réel), dérivé du type, sans autre choix (directive 2026-08-27)
+  - l'invalidation de récupération du scroll ancre la lecture
+  - le badge de non-lus rattrape le curseur serveur depuis Résumé et Rivière
+  - la langue déclarée au composer est le défaut de tout objet de la scène et du contenu réel/story (E1, #3886)
+  - choisir STORY route vers la scène et publie STORY — le type choisi gouverne vraiment la publication (F1/F2, #3884 #3885)
+  - choisir une couleur de fond fait naître la scène 9:16 — un post sans visuel devient une toile (F2, #3885)
+  - le média qui qualifie se choisit d'un geste — POST · RÉEL · STORY, et le type choisi gouverne la publication (F1, #3884)
+  - le plein écran d'une image ou d'une vidéo ouvre net, jamais sur une vignette
+  - codes de vérification cryptographiques + neutralisation d'injection CSV
+  - story composer draft survives leaving and reopening (#3899)
+  - retire la clé morte `emoji.close` — la feuille d'emoji est passée à `common.cancel` (suivi A, #3880)
+  - on VOIT le média choisi — ruban de vignettes retirables, et le type POST↔RÉEL suit le média (B, #3883)
+  - l'inscription s'annonce dans Meeshy, et l'historique ne s'ouvre que depuis l'arrivée
+  - la rangée d'outils passe à un jeu SF moderne — famille ligne, rendu hiérarchique, rebond au tap (C, #3882)
+  - un push de contrôle annule la bannière déjà livrée au retrait/à la suppression, et l'édition la remplace
+  - les feuilles de création du composer portent un Cancel SÉMANTIQUE — placé par le système, miroité en RTL, lié à Échap (A, #3880)
+  - un composant réutilisé annonce le titre de SON contexte — la langue du post ne dit plus « Langue de l'audio » (beta)
+  - repost someone else's story — composer carries repostOfId to the wire (#3889)
+  - les schémas de pagination admin convergent sur UNE forme entière bornée
+  - reader-side locked repost attribution badge in the story viewer (#3864)
+  - la page du fil récupérée est persistée AVANT que loadFeed rende la main — plus de sauvegarde détachée jamais attendue
+  - le test d'échappement </ porte sur un champ que la page embarque encore (horizon), pas sur title retiré de KEEP_ITEM
+  - la page n'embarque que les champs qu'elle lit (164 → 100 Ko) ; pagination GraphQL, parseur --paginate et repli REST testés
+  - la page « Avancement Meeshy » sur GitHub Pages — % global, par horizon, par milestone, rythme par période — régénérée par une Action
+  - la revue adversariale du lot 3 attrape 3 commentaires stale et un nom de test qui ment
+  - le CONTENU d'une diffusion admin descend le Prisme ORDONNÉ
+  - une traduction vide ne vide plus la ligne de liste — le résolveur iOS rejoint la SSOT TS et le jumeau Android ; le test « session anonyme nulle » cesse d'hériter du jeton de son voisin
+  - la citation reste sur la feuille, l'overlay iPad reçoit un nom, et le retrait de la feuille a son inventaire opposable
+  - le PLEIN composer du fil passe par le meuble unifié — sans perdre un seul de ses outils
+  - unified long-press context menu for canvas text elements (#3859)
+  - les cinq outils de la barre du composer font enfin quelque chose — le micro clôt le lot 2, et la voix garde SA langue
+  - composer draws the persistent safe-zone + rule-of-thirds overlay while dragging (#3855)
+  - un socket vivant prouve la connexion — le bandeau « hors ligne » cesse de croire navigator.onLine, et une adhésion orpheline ne perd plus l'instantané des non-lus
+  - le 5e outil pose un LIEU sur le post — avec son second opt-in de trouvabilité, off par défaut et jamais posé sans consentement
+  - sept boucles de travail continu éteintes — le chrome respire à l'annonce, se tait au repos
+  - une vidéo composée dans le meuble peut rester un post simple — l'interrupteur POST ↔ RÉEL que la feuille absorbée portait
+  - le glow des six boutons du menu ne respire plus invisible derrière la liste
+  - visée vérifiée des sauts de message + lecture de fenêtre GRDB hors MainActor
+  - trois outils du meuble posent un fichier local — et ce fichier part avec sa VRAIE durée et son VRAI mime, pas figé
+  - modernize TaskTimeout async sleep to duration API
+  - viewer honours a text element's frosted-glass / solid backdrop (#3748)
+  - un post écrit en anglais cesse de partir étiqueté français (T2.2)
+  - ComposerDocumentMedia retrouve son doc-comment, ComposerDocumentDraft le sien (revue Opus T2.1, constat 1)
+  - un post composé dans le meuble peut enfin porter une photo, une position et sa langue — et il part par la file durable (T2.1)
+  - composer authors a background video's framing (#3618)
+  - `autoTranslateEnabled` devient une préférence écrivable servie depuis une source unique, et l'export RGPD a enfin un bouton qui exporte
+  - la réaction à une story survit à une coupure réseau, et le 4e chemin des commentaires descend enfin le Prisme
+  - l'attribution d'une republication n'est plus contournable, et « Mettre au premier plan » a enfin un effet
+  - l'export MP4 rend enfin le zoom et le slide d'ouverture — et StoryPlaybackClock, sans appelant, disparaît
+  - resetMetrics cacheSize omits onlineEnsureCache
+  - resolve reactor identity via participant SSOT (181i)
+  - enforce numeric 6-digit regex on verifyPhone.code for parity with verifyEmail.code
+  - ouvrir une conversation au cache CHAUD rejoue le rattrapage par watermark — un trou de plus de trente messages n'est plus invisible
+  - l'accent d'un salon public/global/broadcast rejoint la couleur community, et Android rejoue enfin les 24 vecteurs partagés
+  - reader honours a background video's framing transform (#3530)
+  - composer authors a background image's framing transform (#3527)
+  - les durées passent par la locale, et VoiceOver les dit en mots (247i) — run test
+  - le regroupement de bulles brise le groupe au changement de jour — parité avec la règle canonique iOS/Rivière
+  - viewer honours a background image's framing transform (#3524)
+  - la présence n'est servie qu'aux amis, à soi et aux ADMIN+ — et la règle gouverne aussi ce qu'on SÉLECTIONNE, ce qu'on TRIE et ce qui part À CÔTÉ
+  - la famille deinit iOS 26.1 couvre TOUTE classe @MainActor de l'app, pas seulement les ObservableObject
+  - la lane release nomme sa cible à get_version_number — le projet a quatre targets et le prompt « What target ? » faisait échouer la lane APRÈS l'upload, en mode non interactif
+  - la garde core rend parse/bodyContainsDeinit private — result type privé
+  - la carte « Posts sur la carte » fusionne dans « À proximité » — mode Discover, réservé au staff de la plateforme
+  - 13 classes @MainActor du CORE MeeshySDK cessent de tuer les suites sur iOS 26.1 — 3e site de la famille
+  - TileBox gagne sa nonisolated deinit — le trou que la garde durcie a trouvé après le merge
+  - les gardes deinit encaissent la revue Opus — doc-comment exact, parseur qui ne blanchit plus à tort
+  - l'auteur choisit si la vidéo d'arrière-plan de story boucle (#3522)
+  - la garde deinit borne son seuil de sanité à l'effectif réel de MeeshyUI (88, pas 150)
+  - l'écran « À proximité » trappait à la première transition réseau — le sink d'un ViewModel @MainActor recevait sur la file utility de NetworkMonitor
+  - 69 classes de MeeshyUI sans deinit cessent de tuer les suites sur iOS 26.1 — et une garde l'interdit
+  - 71 classes @MainActor sans deinit cessent de tuer les suites sur iOS 26.1 — et une garde l'interdit
+  - fiche App Store complète — positionnement « amis sans frontières » branché sur la lane release
+  - composer designates a slide's looping background media (#3518)
+  - la présence n'est visible que des amis, de soi et des ADMIN+
+  - le renfort « c'est moi » gagne les pièces jointes, les commentaires de story et le détail de post — et la règle qu'il applique est enfin mesurée pour ce qu'elle dit
+  - la cellule C8 nomme enfin la sha qu'elle mesure — R2 de la revue 1b
+  - le renforcement « c'est moi » quitte ses quatre copies pour un composant — et la règle qu'il énonçait devient vérifiable
+  - la lede redit 109, plus 104 — R1 de la revue 1b
+  - l'action que J'AI faite se distingue à vue d'œil — un contour à l'accent du contenu
+  - réduire les aliases ISO 639-1 dépréciés (iw→he, in→id) — parité Prisme 3 clients
+  - author a text element's per-element visibility timing (#3516)
+  - l'ancien composer de mood disparaît — la parité est prouvée bloc par bloc
+  - trois signatures audio mortes quittent le SDK, et deux gardes cessent d'être vertes-et-vides
+  - defilement sans effet ni saut, accuses de lecture fideles a l'ecran, conversation ouverte a jour, frappe en Riviere (directives 1, 2, 3)
+  - --require-connected du gate devient un drapeau qui existe vraiment
+  - l'ancrage « garder sur mon fil » cesse d'emprunter le glyphe des favoris
+  - la garde A4 borne enfin sa fenêtre au site suivant, plus à 400 caractères aveugles
+  - libelles localises, bouton d'envoi a l'accent de la conversation, jetons de couleur (directive 8)
+  - geler la video au lieu de la couper sous mauvais reseau, iOS et web (directives 5, 6)
+  - prechargement soumis a la politique reseau, cache des commentaires reecrit, repost STORY hors du fil (directives 2, 7)
+  - la traduction tardive bascule la bulle, l'edition purge les caches, markAsReceived coalesce (directives 2, 3, 7)
+  - sockets compressees, session revoquee ecoutee, amis et notifications en masse synchronises (directives 2, 7)
+  - une mise a jour de profil n'efface plus les champs qu'elle n'edite pas (directive 3)
+  - synchroniser TOUT le carnet par lots avec filigrane serveur (directive 4)
+  - gate a timed element to its own play-mode visibility window (#3512)
+  - sur une story, republier et garder sur mon fil cessent d'être le même dessin
+  - la porte de mise a jour crashait toute suite de tests sur iOS 26.1 — une deinit isolee sans tache courante
+  - author a per-slide colour/gradient/random-pastel backdrop in the composer (#3510)
+  - un message rétracte la frappe qu'il annonçait — et la bannière in-app cesse de filtrer un utilisateur PRÉSENT
+  - ouvrir une conversation ne relisait RIEN du serveur — le fil restait sur un cache perime pendant que la liste, elle, etait reparee
+  - la garde trouve la FEUILLE, l'itérer trouve l'ARBRE [244i] — run test
+  - recharger une conversation rendait l etat n-1 pour toujours, et retirer une reaction en effacait une au hasard
+  - the viewer honours a slide's serialised colour background
+  - author a per-slide duration pin in the composer (#3505)
+  - lot 6 W8-W9 + lot 7 (7.5/7.7/7.8) — editer un REEL republie le reconvertissait en POST, sans un geste
+  - la règle ObjectId rejoint le SSOT partagé, et config.ts gagne sa borne testée [It. 266]
+  - the viewer honours per-slide duration (SSOT), not a flat 5s (#3503)
+  - la borne .max(5) des codes de langue rejetait bas-CM dans neuf schémas [It. 266]
+  - fold realtime story:updated into the tray cache (#3501)
+  - la garde lit le corpus UNE fois — et le rouge du fil est une course, pas un flake [243i] — run test
+  - lot 7 (7.2/7.3/7.4) — un post media publie HORS LIGNE arrivait VIDE, sans un mot
+  - fold realtime story:deleted into the tray cache (#3499)
+  - cinq fonctions que personne n'appelle, trois traductions que personne ne lit [243i] — run test
+  - une republication cesse de se dupliquer, et un media publie depuis le web EXISTE
+  - lot 5 — un media RECU se compose, et la porte cesse d etre une promesse
+  - skipMessageKeys avançait la chaîne sans avancer le compteur [It. 266]
+  - fold realtime story:updated into the open viewer (#3496)
+  - le témoin des chiffres arabes jugeait une GRAPHIE avec une API de COLLATION [242i]
+  - lot 4.7 — l ancrage atteint un ecran, et le publieur naît avant la fleche
+  - lot 6 W7 — les portes de CREATION basculent sur le meuble unifie
+  - le consentement de decouvrabilite, sa precision, et l ecran de proximite
+  - le socle cesse d offrir une audience que le serveur remplacera, et une memoire d audience cesse de boucler sur un refus
+  - le NOM cesse d etre tactile, l avatar devient la seule porte du profil, et un media cite se joue en plein ecran
+  - fold a realtime story:deleted out of the open viewer (#3494)
+  - lot 6 tranche W4-W6 — le micro devient un OUTIL, la story est absorbee, le mood et l audience passent par format
+  - la protection d un media CITE etait retiree par le serialiseur — la vignette d une vue unique s affichait apres un rechargement
+  - la bannière d'un vocal servait la bonne langue et attachait le mauvais son
+  - fold a realtime repost from post:reposted onto the feed head (#3490)
+  - summarizeCallReliability diluted qualityDistribution with never-connected calls [Vague 180]
+  - WebRtcCallCoordinatorTest.kt never stubbed engine.createAnswer() [Vague 178]
+  - WebRtcCallCoordinatorTest.kt had an unimportable io.mockk.match [Vague 178]
+  - le glisser-déposer d'une communauté n'atteignait aucun autre appareil
+  - l arc-en-ciel cesse d encadrer du vide, et son spectre cesse de tourner
+  - le double tap prend l action de la carte, l appui long retourne au menu du message
+  - le mood entre dans le meuble — et un doc-comment rendait 738 lignes INVISIBLES a toutes les gardes de source
+  - un message RAPPELÉ poussait son texte original vers la personne visée et les mentionnés
+  - reportIncomingVoIPCall never arms the background observer during ring (run test)
+  - UpdateMessageBodySchema n'avait aucun plafond de contenu — le seul transport d'écriture sans borne
+  - fold realtime post edits from post:updated onto the cached card (#3485)
+  - la bulle pré-enregistrée d'une réponse ou d'une mention était ordonnée par l'horloge du DEVICE
+  - le composer unifie arrive au web — le contrat partage trouve son premier consommateur, l eventail et la surface document
+  - fold realtime comment edits from comment:updated into the thread (#3482)
+  - rappeler depuis un avis d appel exige un APPUI LONG — le tap ne pose plus d appel
+  - expel an accountless visitor by participantId — main was red (#3479)
+  - isIpInRange admettait des IP HORS plage (allow-list sur-permissive)
+  - CallKit late-promotion of a still-ringing call was permanently unreachable
+  - la planche devient FIXE — plus aucune animation entre les messages
+  - répondre par un VOCAL poussait une bannière au corps VIDE
+  - un repost visait le MAILLON et non la RACINE, et reposter un mood fabriquait un contenu detruit une heure plus tard
+  - la porte du fil cesse de designer sa feuille historique — et le lot nomme les trois capacites qu il ne tient PAS
+  - WebRtcCallCoordinator applied any incoming WebRTC signal with no negotiation-epoch guard [Vague 178]
+  - la protection masquait le TEXTE et laissait partir le FICHIER
+  - les résolveurs posts + focal consomment resolvePrismTranslation au lieu de réécrire la descente (itération 262)
+  - la reconciliation depuis le cache cesse d ecrire « user » en dur
+  - la NATURE d un message devient corrigible — un avis d arrivee fige en « user » ne pouvait plus jamais redevenir « system »
+  - une conversation redevient modifiable, et un visiteur sans compte expulsable
+  - un sticker devient un MEDIA INTEGRE du post — pose, publie, dessine, et copiable depuis ce qu on recoit
+  - houseSpectrum traversait la frontiere d acteur a chaque appel
+  - une reaction recue ecrasait le message reagi dans la base locale
+  - le token `thread.row.padding.vertical` etait applique a iOS seulement
+  - le banc d'essai passait le locale sans le bundle — gabarit anglais en CI [242i] — run test
+  - une SEULE ligne basse — drapeaux et reactions a gauche, date et coches tout a droite
+  - la langue de cadrage d un destinataire nomme descendait au rang 1
+  - call:check-active dropped a rejoin when the departed CallParticipant row sorted last [Vague 177]
+  - les quatre rouges de la CI — un token de design ignore, une marge geometriquement fausse, deux interpolations Swift copiees telles quelles
+  - huit boutons dont le libellé est une FORME — la barre de progression de l'inscription [242i] — run test
+  - fold realtime comment translations from comment:translation-updated (#3469)
+  - fin de fichier en `\n` LITTERAL — la seule erreur du build iOS [cycle 124]
+  - l auteur retourne en bordure, les groupes respirent moins dedans et plus entre eux, 3 ou 5 drapeaux selon la magnificence
+  - la bulle pre-enregistree au demarrage a froid n'a jamais eu de corps [cycle 124]
+  - la vague 3 pose la cle de voute — le meuble a enfin un appelant de production
+  - trois arbitrages en attente — un golden qui ne se decode pas, des televersements sans locale, cinq gardes perdues
+  - la magnificence ne s arme plus au premier pixel — vitesse franche, ou defilement soutenu
+  - l auteur sort de la bulle magnifiee — sans capsule, comme en Script
+  - 67 cles affichaient leur identifiant en francais — et le cliquet ne pouvait pas le voir
+  - les deux gardes du dashboard épinglaient une graphie, pas leur règle [241i] — run test
+  - le fil push porte enfin `content` et `originalLanguage` — la bulle pré-enregistrée par la NSE était VIDE
+  - un vocal protégé ne pousse plus sa transcription, et la bannière d'un vocal descend le Prisme
+  - on ne lit pas ce qu on n a pas recu — « Distribue 0 » en face de « Lu 2 » sur le meme message
+  - l auteur d une bulle magnifiee redevient entier — et son toucher mene a ses conditions dans la conversation
+  - l arc-en-ciel des bulles devient une aurore — et les couleurs de l auteur cessent d etre ignorees
+  - deux orthographes du pourcentage dans un même composant — les nombres que la locale ne touchait pas [241i] — run test
+  - route message-search page size through validatePagination
+  - outgoing call ignored a real call:missed after the callee early-joined [Vague 176]
+  - fold realtime post:translation-updated into the feed (#3460)
+  - la coupe a trente mots ne vaut que pour la rangee plate — la bulle garde son depliage en ligne
+  - le fil au repos ne montre plus ses details de reception, la carte du focus perd son cadre, une transcription tient en trente mots
+  - les trois warnings du build, et quatre suites de tests qui ne tournaient nulle part
+  - « 1 réponses » — les compteurs d'engagement du fil qu'aucune clé plate ne pouvait accorder [240i] — run test
+  - un champ sans ecrivain sort des deux contrats de fil
+  - l'e-mail de demande d'amitie sort du depot — le canal etait deja servi
+  - `updatedSince` est REFUSE la ou il n'est pas implemente
+  - la lecture des posts d'un son porte sa borne EXPLICITE, et le cliquet des findMany nus redevient vert
+  - hasMore et le curseur portent enfin sur la MEME collection, filtree
+  - l'instrumentation du collecteur cesse de MODIFIER le graphe qu'elle observe
+  - un middleware d'authentification DECLARE son regime, au lieu de le laisser deviner
+  - le compteur d'acces part desormais du CODE, et couvre les trente-sept adresses depreciees qu'aucune liste ne voyait
+  - les trois portes de profil public transmettent enfin le parametre qui reduit la requete
+  - le manifeste cesse d'annoncer publiques 211 routes qui exigent un jeton
+  - quatre suites de tests redemarrent, et le cliquet couvre aussi ce qui n'est pas un package.json
+  - canonicaliser les langues cibles d'audience de story avant filtre de pivot et dédup (#4485)
+  - deux listes d'administration comptent en base, et la forme d'agregation suit ce que la donnee replie
+  - le compteur qui gouverne le retrait des alias voit enfin les adresses qu'il doit retirer
+  - les langues cibles d'audience de story sont canonicalisées avant filtre de pivot et dédup
+  - le manifeste voit les quatre routes d'administration Socket.IO, et un temoin garde ce qu'il ne voyait pas
+  - le predicat qui decide si un TEXTE peut voyager rejoint son jumeau MEDIA
+  - les six lectures de statistiques comptent en base, et le temoin porte sur les lignes lues
+  - les trois portes de profil annoncent une adresse que le client peut suivre
+  - le limiteur du test de motifs declare son sens de l'echec, au lieu de l'heriter en silence
+  - la collection d'accuses rentre dans son budget, et son alias se redeclare a son site
+  - les portes d'accuses de lecture annoncent leur successeur, et la garde qui l'exigeait cesse de regarder deux fichiers
+  - le limiteur des appels compte enfin le compte qu'il annonce, et son refus cesse de repondre 500
+  - un identifiant de mutation mal forme dit enfin POURQUOI
+  - LocationHandler valide sa frontière socket par Zod et borne la télémétrie diffusée (281) (#4267)
+  - MaintenanceService arme ses tâches périodiques par la forme bénie (non-async + .catch) (#4412)
+  - translation:request valide sa frontière socket par Zod (284i) (#4336)
+  - le plus gros fichier de routes se decoupe, y compris son handler de 1140 lignes
+  - six fichiers de routes hors budget se decoupent par responsabilite
+  - les onze plugins de profil rentrent dans leur budget, derriere une facade
+  - le predicat qui dit si un TEXTE peut voyager quitte le fichier de route
+  - les accuses de lecture passent par une collection unique, et markedCount cesse de nommer deux grandeurs
+  - un motif de mot-cle sain cesse d'etre refuse parce que la machine est chargee
+  - les categories de conversation ont leur adresse canonique sous /me
+  - le cinquieme analyseur de champs rejoint le module, et deux lectures de profil PROUVENT qu'elles ne le peuvent pas
+  - la porte des liens d'une conversation annonce son successeur, et le refus d'un lien clos est enfin ATTESTE
+  - un seul analyseur de champs, et la requete se reduit vraiment
+  - lire ses propres droits ne traverse plus le prefixe d'administration
+  - restaurer une conversation le dit enfin aux autres appareils, et le piege pose par le lot precedent tombe
+  - la liste d'administration des messages cesse de servir le texte, et les cinq medias, d'un message protege
+  - le premier a avoir ete administrateur herite du fil, par UNE loi que les deux portes posent
+  - le premier a avoir ete admin herite du fil — une seule loi pour les deux portes
+  - lire une conversation privee depuis l'administration devient un geste souverain, motive et trace
+  - trois listes de posts rejoignent l'union des scopes, et leurs gardes viennent avec elles
+  - les deux routes d'administration Socket.IO portent enfin la version
+  - l'OpenAPI publie ecrit ses chemins comme le reste du depot
+  - la porte inscrite d'un lien applique enfin la loi d'admission, et la derniere place ne se donne plus deux fois
+  - la jointure par lien ne charge plus la conversation ENTIERE
+  - la fiche cesse de servir a tout membre le fait de moderation que le socket ne diffuse plus
+  - sept lectures cessent de charger ce qu'elles ne servent pas, et une garde empeche la huitieme
+  - le changement de contact vit sous une seule surface, exige le mot de passe, et se compte par NUMERO VISE
+  - une session revoquee ferme aussi les requetes REST, pas seulement le rafraichissement
+  - les quatre dernieres fabriques de debit comptent enfin par compte
+  - un garde-fou de harnais cesse de mesurer la DETTE et mesure enfin l'OUTIL
+  - une seule loi decide qui entre par un lien, et la derniere place ne se donne plus deux fois
+  - un plafond « par compte » pose sans hook compte par adresse partagee
+  - l'enregistrement des routes devient une table de donnees, et un nom d'alias cesse d'etre une identite
+  - les categories de conversation cessent de compter le debit sur l'IP, et un rejeu ne cree plus deux fois
+  - l'import dedouble par la fusion part, et les deux temoins suivent la version retenue
+  - un membre peut enfin lister ses propres liens, et une seule porte les gere
+  - la lecture de son propre compte cesse d'exister en deux exemplaires
+  - la corbeille de conversations montre enfin ce que l'utilisateur a supprime
+  - un code a six chiffres se devine quand personne ne compte les essais
+  - la protection posee sur une porte manquait a sa voisine
+  - la moitie qui ecrit dans la colonne que personne ne lit passe en sursis
+  - l'alias non versionne des pieces jointes DIT qu'il est en sursis
+  - l'ancienne adresse des demandes d'ami cesse de diverger de la nouvelle
+  - un curseur de lecture ne saute plus sur l'horloge d'un fil voisin
+  - une ecriture sociale couteuse ne part plus sans plafond, et la cle est le COMPTE
+  - ce qui se PERSISTE est la cle du media, plus son adresse
+  - le fil socket d'un attachement porte enfin capturedInApp, comme le select et le REST (#4291)
+  - un fil social se lit par une route parametree, et une query invalide se dit
+  - une fenetre de messages ne revele plus l'instant d'un fil voisin
+  - fabriquer un lien de partage exige un rang, et une seule porte l'ecrit
+  - changer son adresse de contact exige de prouver qu'on la possede
+  - chaque route d'admin porte le niveau que la matrice lui donne, pas une permission empruntee
+  - le manifeste cesse d'annoncer PUBLIQUES cinquante et une routes qui exigent un jeton
+  - les cliquets d'inventaire disent ce que ce lot a REPARE, deplace et ajoute
+  - les temoins suivent la forme fusionnee, et la jumelle du manifeste ne part pas
+  - une liste ne rend plus une collection entiere
+  - aucune route ne remonte a la racine par oubli de prefixe
+  - le delta sait rendre les conversations, et se compte par compte
+  - le fil qui coupe un motif explosif ne peut plus emporter la passerelle
+  - le cliquet des schemas ouverts cesse d'etre clé par NUMERO DE LIGNE
+  - la table des routes servies devient un artefact, et elle fait foi
+  - une reponse ne transporte plus un champ que personne n'a declare
+  - une route depreciee le DIT, a un seul endroit
+  - le retrait d'une route se prouve par un compteur, pas par une revue de code
+  - aucune porte morte ne subsiste sur les messages ni sur les liens de partage
+  - le televersement, la voix et le fil social ne montent plus de route sans appelant
+  - les octets d'une piece jointe ne sont plus joignables par deux chemins
+  - quatre routes servaient {"success":true} et rien d'autre
+  - une ligne mal typee ne dort plus des mois — la sonde de derive la compte et le dit
+  - le balayage des enveloppes voit aussi les charges passees par une variable
+  - AttachmentReactionHandler valide sa frontière socket par Zod, comme ses trois jumelles
+  - un profil se lit à UNE adresse, se resserre par expand, et se relit en 304
+  - un profil PUBLIC ne porte plus six champs privés, et les quatre compteurs intimes ne partent qu'à soi
+  - le journal du rattrapage n'ecrit plus de numero de telephone
+  - une ligne corrompue n'arrete plus le rattrapage des 199 autres
+  - le rattrapage des jetons de recherche s'execute enfin
+  - chercher une personne passe par un index, plus par un balayage
+  - `deletedAt: null` n'atteignait aucune ligne, et ecartait tout le monde
+  - la réaction par-pièce-jointe valide son emoji comme sa jumelle
+  - une garde de segment doublé, et la seconde route morte qu'elle trouve
+  - le verrou de connexion existait tout entier — personne ne l'armait
+  - endCall() lève CallAlreadyEndedError aussi sur conflit de version
+  - le nombre de maillons de confiance s'exprime par une fonction
+  - le type de `trustProxy` cesse de casser l'inference de fastify()
+  - retirer un lien de partage retire enfin l'accès à ses invités
+  - le lien « ce n'etait pas moi » mene enfin quelque part
+  - la recherche d'utilisateurs ne sert plus les adresses e-mail
+  - un ADMIN ne peut pas desarmer le second facteur d'un BIGBOSS
+  - reinitialiser son mot de passe par SMS aboutit
+  - un role de membre ne se change que dans sa propre communaute
+  - un limiteur de debit compte enfin les appels qui arrivent par Traefik
+  - une promesse détachée sans .catch arrête la passerelle — quatorze sites, et un cliquet
+  - endCall() devient idempotent — plus de rediffusion sur un appel déjà terminé
+  - supprimer une catégorie de conversations redevient possible (#4129)
+  - supprimer une categorie de conversations redevient possible
+  - la LEGENDE d'un media de post s'ecrit enfin — la colonne cesse d'etre servie sans producteur
+  - l'administrateur de la plateforme agit avec les droits du créateur, aux quatorze points de contrôle
+  - l'hôte d'une conversation est joignable, et la casse d'un rang ne décide plus de rien
+  - un échec d'enrichissement optionnel ne fait plus échouer POST /posts/:id/view
+  - une géolocalisation seule n'est plus rejetée comme message vide
+  - une inscription ne balaie plus le salon global, et la diffusion ne fait plus échouer l'écriture
+  - l'octroi d'historique par date passe par les hôtes, pas la salle
+  - le bypass d'historique administrateur devient un rôle de PLATEFORME
+  - plancher d'historique — plus de copie manuelle ni d'agrégat oublié
+  - la fiche participant dit QUI peut poser l'octroi d'historique
+  - un compte créé par un administrateur rejoint le salon global
+  - normalise la casse de Participant.role en minuscules
+  - hygiène des tokens push — purge par deviceId et désactivation immédiate des raisons APNs permanentes
+  - plus aucun contenu utilisateur dans les logs ZMQ, redactPII répare les Dates, trace perf à DEBUG
+  - snapshot de non-lus tolérant aux orphelins + présence dérivée du compteur de sockets
+  - le balayage éphémère exclut explicitement les échéances null/absentes
+  - l'affinité de langue du reel viewer descend le Prisme jusqu'à la locale appareil
+  - POST /posts/from-attachment cesse de publier un média protégé et de publier en silence (iOS-01/iOS-02)
+  - retire dead AuthTestService + legacy authenticate() path
+  - align call + dashboard participant avatars on resolveParticipantAvatar SSOT
+  - les 7 troncateurs d'aperçu de notification servis coupent sans casser une paire de substituts UTF-16
+  - l'index 2dsphere de Post.geoPoint est posé à CHAQUE boot — il vivait derrière la porte du premier démarrage et manquait en production
+  - le nom d'un contact rejoint le contrat de sa jumelle exportée — coupe UTF-16 sûre et jeu complet de séparateurs de ligne
+  - la porte d'émission appelait `emit` DÉTACHÉ de son objet — tout le temps réel social levait
+  - le favori d'un post cesse d'être invisible — et les catch de posts cessent d'être muets
+  - truncate ne coupe plus au milieu d'une paire de substituts UTF-16 [It. 268]
+  - normalizeDisplayName tient enfin son contrat « une seule ligne » [It. 266b]
+  - un ?limit malformé cesse de rendre HTTP 500 — 14 routes rejoignent le SSOT de pagination [It. 266]
+  - isPrivateIp ne connaissait que l IPv4, une adresse interne IPv6 partait vers un tiers [It. 266]
+  - consolidate reaction-limit guard into assertReactionAllowed [It. 264]
+  - decodeCursor validait la véracité des champs, jamais leur TYPE
+  - repondre par une photo poussait une banniere au corps VIDE
+  - achève la SSOT ObjectId — 3 idiomes rebranchés, +OBJECT_ID_PATTERN
+  - le masque de protection n'avait qu'UN appelant — trois sites servaient le texte nu [cycle 123 bis]
+  - la protection gardait le corps de la banniere, pas le fil [cycle 123]
+  - un consentement ne se prouve plus par deux mains, dont une est celle du client
+  - la borne de longueur d'un emoji admet les emojis RGI valides (SSOT EMOJI_MAX_LENGTH) (#4300)
+  - customDestinationLanguageCode admet un code 639-3 région-taggé (borne .max(6), parité SSOT) (#4307)
+  - le prefixe d'API se CONSTRUIT, et six sites cessent de l'ecrire
+  - un alias hors-prefixe cesse de disputer son nom de catalogue a la route qu'il double
+  - les chemins d'API vivent dans un catalogue DERIVE, plus tape a la main
+  - la garde de parite des mots de passe cesse de citer un fichier supprime
+  - isValidEmoji accepte enfin teint/ZWJ/drapeaux et refuse '1️' — bascule sur \p{RGI_Emoji} [iteration 240]
+  - quatre gardes MIME sur six ignoraient les paramètres, à la frontière accept/reject
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.15.0
+
 ## 1.32.1
 
 ### Patch Changes
