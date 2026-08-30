@@ -111,7 +111,11 @@ apps/web-v3/                     # NOUVEAU package Next — port 3300, assetPref
     (public)/                    # RÔLE PREMIER — jamais d'AuthGuard, RSC par défaut
       layout.tsx                 #   serveur : landmarks <header>/<main>/<nav>, skip-link, i18n statique
       l/[token]/route.ts         #   Route Handler : resolve+click+302+OG. 0 Ko JS.
-      l/[token]/expired/page.tsx
+      l/[token]/expired/route.ts #   Route Handler AUSSI : une PAGE émet 6 requêtes (les 4 chunks
+                                 #   du runtime App Router + la feuille de coquille) là où le § 8.3
+                                 #   en gate 2. Mesuré : 1 requête sous cette forme
+                                 #   (budgets-mesures.json → l_token_expired_requetes).
+                                 #   Le document et la feuille sont ceux de son jumeau ci-dessus.
       stories/[id]/page.tsx      #   + îlot progression/traduction
       posts/[id]/page.tsx        #   post + commentaires
       reels/[id]/page.tsx

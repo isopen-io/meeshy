@@ -8,6 +8,7 @@ import {
   composeVerdictReseau,
   franchissementsReseau,
   mesureIndisponible,
+  mesurePage,
   octetsParType,
   octetsTransferes,
   percentile,
@@ -347,5 +348,65 @@ describe('le budgets.json du dépôt, côté réseau', () => {
     expect(plafondsDuChemin('/stories/abc', reseau).cls).toEqual(
       expect.objectContaining({ valeur: 0.05, statut: 'GATE' }),
     );
+  });
+});
+
+/**
+ * L'agent servi par la mesure — le paramètre qui ferme une JUMELLE.
+ *
+ * `mesurePage` codait l'agent iPhone en dur. Mesurer une route qui ne rend de
+ * pixels QU'À un autre agent — `/l/:token` ne peint que pour un robot d'aperçu,
+ * l'humain recevant une 302 — obligeait alors son appelant à réécrire la session
+ * CDP, l'écoute des trois événements réseau et le bloc `VITALS` chez lui. C'est
+ * ce qu'avait fait `e2e/visual/v3-network-vitals.spec.ts` : trente-cinq lignes
+ * identiques au caractère près, qui auraient divergé au premier plafond ajouté.
+ */
+describe("l'agent que la mesure sert à la page", () => {
+  const navigateurDeSonde = () => {
+    const contextes: { readonly userAgent?: string }[] = [];
+    return {
+      contextes,
+      navigateur: {
+        newContext: async (options: Record<string, unknown>) => {
+          contextes.push(options as { readonly userAgent?: string });
+          return {
+            newPage: async () => ({
+              goto: async () => ({ status: () => 200 }),
+              evaluate: async () => ({ fcp: 12, lcp: 30, cls: 0, ressources: [] }),
+            }),
+            newCDPSession: async () => ({
+              send: async () => undefined,
+              on: () => undefined,
+            }),
+            close: async () => undefined,
+          };
+        },
+      },
+    };
+  };
+
+  it("sert l'iPhone du § 8.3 par défaut — les plafonds sont exprimés sur un téléphone", async () => {
+    const { navigateur, contextes } = navigateurDeSonde();
+
+    const mesure = await mesurePage({ url: 'https://exemple/', commande: COMMANDE, navigateur });
+
+    expect(mesure.statut).toBe('mesuré');
+    expect(contextes[0]?.userAgent).toContain('iPhone');
+  });
+
+  it("sert l'agent demandé quand l'appelant en nomme un, sans réécrire la mesure", async () => {
+    const { navigateur, contextes } = navigateurDeSonde();
+    const robot = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
+    const mesure = await mesurePage({
+      url: 'https://exemple/l/8fz3',
+      commande: COMMANDE,
+      navigateur,
+      userAgent: robot,
+    });
+
+    expect(contextes[0]?.userAgent).toBe(robot);
+    expect(mesure.http).toBe(200);
+    expect(mesure.fcp_ms).toBe(12);
   });
 });

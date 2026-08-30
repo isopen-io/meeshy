@@ -102,6 +102,7 @@ import {
   declaredWorkspaceDependencies,
   escapingRequests,
   filesUnder,
+  runtimeEnvChains,
   splitName,
 } from './lib/v3-disque.mjs';
 
@@ -237,6 +238,7 @@ const readWorld = async (root) => ({
   zone: zoneInventory(root),
   outside: declaredWorkspaceDependencies(root, V3_DIRECTORY),
   escapes: escapingRequests(root, V3_DIRECTORY),
+  envChains: runtimeEnvChains(root, V3_DIRECTORY),
 });
 
 // --- lecture structurée du peu de YAML dont ce garde a besoin ----------------
@@ -714,6 +716,51 @@ const theLegacyRouterKeepsItsFloor = (world) => {
   return failures;
 };
 
+/**
+ * Les variables dont l'ABSENCE du service est SÛRE — nommées ici, une par une,
+ * avec leur raison. Une exemption qui se tait ne se relit pas.
+ */
+const ENV_REPLI_SUR = new Map([
+  ['NODE_ENV', "posée par le Dockerfile (ENV NODE_ENV=production) et par Next lui-même"],
+]);
+
+const environmentOf = (compose, service) => {
+  const block = blockOf(compose, `  ${service}:`);
+  return block === null ? null : listValues(block, '    environment:').map((entry) => entry.split('=')[0]);
+};
+
+// Le CONTRAT D'ENVIRONNEMENT de la zone, gardé comme le sont ses chemins servis.
+//
+// Le défaut qui l'appelle : `/l/:token` est le premier code v3 qui lit
+// l'environnement à l'exécution, et le service n'en déclarait aucune variable.
+// `baseDeLaPasserelle()` retombait donc sur `http://localhost:3000` — dans le
+// conteneur, le conteneur LUI-MÊME —, et la route rendait 503 pour tout le
+// monde. Le manque de `PathPrefix('/l')` le MASQUAIT : le jour où la règle du
+// routeur réclame ce chemin, la route devient joignable et échoue partout, sans
+// qu'aucun autre invariant ne dise pourquoi.
+//
+// La question n'est donc pas « la variable est-elle lue ? » mais « le repli qui
+// s'applique quand elle manque est-il celui du DÉPLOIEMENT ? ». Un repli codé en
+// dur dans une source est, par construction, celui du poste de développement :
+// il ne peut pas répondre pour l'image. D'où la règle — chaque chaîne de replis
+// lue par `app/` ou `lib/` a au moins une variable déclarée sur le service —, et
+// une exemption qui se NOMME plutôt qu'un silence.
+const theV3ServiceDeclaresWhatItsCodeReads = (world) => {
+  const declared = environmentOf(world.prod, V3_ROUTER);
+  if (declared === null) return [];
+  return world.envChains
+    .filter(
+      ({ variables }) =>
+        !variables.some((name) => declared.includes(name) || ENV_REPLI_SUR.has(name)),
+    )
+    .map(
+      ({ file, variables }) =>
+        `${file} lit ${variables.join(' ?? ')} et aucune de ces variables n'est déclarée sur le ` +
+        `service ${V3_ROUTER} de docker-compose.prod.yml : dans le conteneur c'est le repli codé ` +
+        `en dur de la source qui s'applique, c'est-à-dire celui du poste de développement`,
+    );
+};
+
 const theV3ContainerIsDisjointFromTheLegacy = (world) => {
   const block = blockOf(world.prod, `  ${V3_ROUTER}:`);
   if (block === null) return [];
@@ -749,6 +796,7 @@ const CHECKS = [
   ['la production route la v3 derrière son PathPrefix', theProdComposeRoutesTheV3],
   ['le routeur legacy garde son plancher attrape-tout', theLegacyRouterKeepsItsFloor],
   ['le conteneur de la v3 est disjoint du legacy', theV3ContainerIsDisjointFromTheLegacy],
+  ['le service de la v3 déclare ce que son code lit', theV3ServiceDeclaresWhatItsCodeReads],
   ["aucun actif servi à la racine n'échappe à la zone", noRootServedAssetEscapesTheZone],
   ['la règle ne réclame que des chemins servis', theRouterClaimsNothingTheZoneDoesNotServe],
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
@@ -906,15 +954,20 @@ const MUTATIONS = [
     `la règle réclame ${V3_PATH_PREFIX} nu`,
   ],
   [
+    // La sonde portait `/l` — jusqu'à ce que la zone SERVE `/l/:token`, et elle
+    // est devenue muette sans rien dire. Un fusible qui teste un chemin que le
+    // paquet peut se mettre à servir s'éteint le jour où il le sert : il porte
+    // donc un chemin que la zone ne sert PAS encore, et le déplacer fait partie
+    // du lot qui publie ce chemin-là.
     'un chemin humain réclamé avant que la zone ne le serve',
     (world) =>
       replaceIn(
         world,
         'prod',
         `(PathPrefix(\`${V3_ASSET_ZONE}\`))`,
-        `(PathPrefix(\`${V3_ASSET_ZONE}\`) || PathPrefix(\`/l\`))`,
+        `(PathPrefix(\`${V3_ASSET_ZONE}\`) || PathPrefix(\`/stories\`))`,
       ),
-    'la règle réclame /l, que rien dans',
+    'la règle réclame /stories, que rien dans',
   ],
   [
     "une déclaration de types de la v3 emportée par un ignore de la racine",
@@ -959,6 +1012,28 @@ const MUTATIONS = [
         `traefik.http.routers.${LEGACY_ROUTER}.rule=PathPrefix(\`/legacy\`) && Host(\`\${DOMAIN:-localhost}\`)`,
       ),
     'il doit rester attrape-tout',
+  ],
+  [
+    "une variable d'environnement lue par la v3 et déclarée nulle part",
+    (world) =>
+      world.envChains.push({
+        file: `${V3_DIRECTORY}/lib/api/zz.ts`,
+        variables: ['MEESHY_ZZ_URL'],
+      }),
+    "aucune de ces variables n'est déclarée sur le service",
+  ],
+  [
+    'la base de la passerelle retirée du service de production',
+    (world) => replaceIn(world, 'prod', /^ +- MEESHY_GATEWAY_URL=[^\n]*\n/m, ''),
+    'MEESHY_GATEWAY_URL',
+  ],
+  [
+    "l'origine publique retirée du service de production",
+    // Le legacy déclare la MÊME variable, plus haut dans le fichier : une
+    // substitution non globale n'aurait retiré que la sienne, et la sonde
+    // serait passée en croyant avoir désarmé la v3.
+    (world) => replaceIn(world, 'prod', /^ +- NEXT_PUBLIC_FRONTEND_URL=[^\n]*\n/gm, ''),
+    'NEXT_PUBLIC_FRONTEND_URL',
   ],
   [
     'le service v3 servi sur le port du legacy',
