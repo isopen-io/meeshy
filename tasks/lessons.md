@@ -20518,6 +20518,17 @@ Chacun se range dans l'un des trois cas, et le cas décide :
 - **plusieurs consommateurs qui se séparent** → il sort dans un troisième fichier, à son propre nom ;
 - **aucun consommateur déplacé** → il reste, et garde son `private`.
 
+**Et `private(set)` tombe de la même façon, sur un découpage par EXTENSION.** Vérifié le même jour, sur
+le découpage voisin de `StoryViewModel` : `@Published private(set) var activeUploads` limite l'écriture
+au FICHIER de déclaration, et les trois sites qui mutent cette file étaient partis dans
+`+Publication` et `+PublicationUpload`. Le compilateur rend alors « setter is inaccessible » — un
+message qui ne nomme ni le découpage ni le fichier d'origine.
+
+C'est la nuance qui manquait ci-dessus : un découpage par extension ne casse pas `fileprivate` entre
+extensions du même type… mais il casse `private(set)`, parce que le `(set)` est une visibilité de
+FICHIER, pas de type. Le remède est `internal(set)` — et ce n'est pas un relâchement : la protection
+qui compte, « personne hors du module ne l'écrit », reste intacte.
+
 **Pourquoi ce piège est propre au découpage PAR TYPE.** Un découpage par TRANCHE (`Type+Partie.swift`)
 garde tout dans la même unité de compilation logique et ne casse que `private`, jamais `fileprivate`
 — et les extensions du même type continuent de se voir. Un découpage par TYPE change de maison, donc
