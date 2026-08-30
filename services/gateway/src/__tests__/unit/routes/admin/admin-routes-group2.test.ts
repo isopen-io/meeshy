@@ -87,6 +87,7 @@ function makePrismaForAnalytics({
         .mockResolvedValueOnce(groupByConvResult)
         .mockResolvedValueOnce(groupByTypeResult)
         .mockResolvedValueOnce(groupByLangResult),
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
     },
     reaction: {
       count: jest.fn<any>().mockResolvedValue(0),
@@ -103,6 +104,9 @@ function makePrismaForMessages({
   editedMessages = 2,
   groupByTypeResult = [{ messageType: 'text', _count: { id: 10 } }],
   findManyResult = [{ createdAt: new Date(), content: 'hello' }],
+  // #4391 : `GET /stats` tire son histogramme quotidien ET sa longueur moyenne
+  // d'UN `$facet` MongoDB, plus d'un `findMany` sur toute la fenêtre.
+  statsFacet = [{ daily: [], length: [{ _id: null, avg: 5 }] }],
   messagesWithTranslations = 5,
   topSenders = [{ senderId: 'p1', _count: { id: 5 } }],
   participants = [],
@@ -127,6 +131,7 @@ function makePrismaForMessages({
         .mockResolvedValueOnce(topSenders),
       findMany: jest.fn<any>()
         .mockResolvedValue(findManyResult),
+      aggregateRaw: jest.fn<any>().mockResolvedValue(statsFacet),
     },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(participants),
@@ -916,6 +921,7 @@ describe('Admin analytics routes', () => {
             { messageType: 'text', _count: { id: 50 } },
             { messageType: 'image', _count: { id: 50 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -933,6 +939,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { messageType: 'text', _count: { id: 100 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -949,6 +956,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1074,6 +1082,7 @@ describe('Admin analytics routes', () => {
             { originalLanguage: 'fr', _count: { id: 100 } },
             { originalLanguage: 'en', _count: { id: 50 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1094,6 +1103,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1125,6 +1135,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { originalLanguage: null, _count: { id: 30 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1147,6 +1158,7 @@ describe('Admin analytics routes', () => {
             { originalLanguage: 'it', _count: { id: 60 } },
             { originalLanguage: 'pt', _count: { id: 50 } },  // index 5 → colors[5] = undefined → '#6b7280'
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1395,6 +1407,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { messageType: 'text', _count: { id: 10 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1431,6 +1444,7 @@ describe('Admin analytics routes', () => {
         message: {
           count: jest.fn<any>().mockResolvedValueOnce(20),
           groupBy: jest.fn<any>().mockResolvedValueOnce([{ conversationId: 'c1' }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1459,6 +1473,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([{ messageType: 'text', _count: { id: 10 } }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1493,6 +1508,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([{ originalLanguage: 'fr', _count: { id: 50 } }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1575,6 +1591,7 @@ describe('Admin messages routes', () => {
           findMany: jest.fn<any>().mockResolvedValue([
             { createdAt: new Date(), content: 'hello world' },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([
@@ -1608,6 +1625,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1629,6 +1647,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1650,6 +1669,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1674,6 +1694,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1698,6 +1719,7 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 10 } }])
             .mockResolvedValueOnce([{ senderId: 'participant-id-1', _count: { id: 7 } }]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([
@@ -1732,6 +1754,7 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 5 } }])
             .mockResolvedValueOnce([{ senderId: 'unknown-participant-id', _count: { id: 5 } }]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           // returns empty — participant not found in map
@@ -1759,10 +1782,12 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 3 } }])
             .mockResolvedValueOnce([]),
-          findMany: jest.fn<any>().mockResolvedValue([
-            { createdAt: new Date(), content: null },       // null content → length || 0
-            { createdAt: new Date(), content: 'hello' },    // normal content
-          ]),
+          findMany: jest.fn<any>(),
+          // `$facet.length` VIDE : c'est ce que MongoDB rend quand aucun
+          // message de la fenêtre n'a de contenu non vide — le `$match { len:
+          // { $gt: 0 } }` du pipeline écarte désormais, en base, ce que le
+          // `filter(len > 0)` écartait en JavaScript.
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1772,8 +1797,8 @@ describe('Admin messages routes', () => {
       const res = await app.inject({ method: 'GET', url: '/stats' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      // averageLength should be computed only from non-zero lengths
-      expect(body.data.averageLength).toBeGreaterThanOrEqual(0);
+      expect(body.data.averageLength).toBe(0);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
     });
 
     it('skips messages with date outside tracked period (covers dailyMessages false branch)', async () => {
@@ -1789,8 +1814,12 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce(0).mockResolvedValueOnce(0),
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
-          findMany: jest.fn<any>().mockResolvedValue([
-            { createdAt: futureDate, content: 'oops' }, // date outside period window
+          findMany: jest.fn<any>(),
+          // Une tranche que Mongo rend HORS de la fenêtre affichée : le
+          // dépouillement ne la reporte nulle part, exactement comme la boucle
+          // JS ignorait une clé absente de `dailyMessages`.
+          aggregateRaw: jest.fn<any>().mockResolvedValue([
+            { daily: [{ _id: futureDate.toISOString().split('T')[0], count: 7 }], length: [] },
           ]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
@@ -1800,6 +1829,8 @@ describe('Admin messages routes', () => {
 
       const res = await app.inject({ method: 'GET', url: '/stats' });
       expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.data.messagesByPeriod.every((e: { count: number }) => e.count === 0)).toBe(true);
     });
 
     it('returns 500 on DB error', async () => {
@@ -1808,6 +1839,7 @@ describe('Admin messages routes', () => {
           count: jest.fn<any>().mockRejectedValue(new Error('DB error')),
           groupBy: jest.fn<any>().mockResolvedValue([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1987,7 +2019,10 @@ describe('Admin messages routes', () => {
   describe('401 unauthenticated paths (no authContext)', () => {
     it('GET /stats returns 401 when authContext is missing', async () => {
       const prisma: any = {
-        message: { count: jest.fn<any>(), groupBy: jest.fn<any>(), findMany: jest.fn<any>() },
+        message: {
+          count: jest.fn<any>(), groupBy: jest.fn<any>(), findMany: jest.fn<any>(),
+          aggregateRaw: jest.fn<any>(),
+        },
         participant: { findMany: jest.fn<any>() },
       };
       const unauthApp = Fastify({ logger: false });
