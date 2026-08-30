@@ -24,7 +24,7 @@
  * diverger.
  */
 
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../middleware/auth.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import {
@@ -42,9 +42,80 @@ import {
   type ReadStatusesAliasQuery,
   type ReceiptParams,
 } from './conversations/receipts.js';
+import { depreciee, type AdresseDepreciee } from '../utils/deprecation.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
+
+// ── #4423 — QUATRE des cinq portes DISENT enfin qu'elles sont en sursis ───────
+/**
+ * Posée en `onRequest` — donc AVANT `preValidation`/`preHandler`/le débit —
+ * l'annonce part sur TOUTE réponse, succès (200) comme refus
+ * (401/403/404/429) : c'est l'ADRESSE qui est en sursis, pas son seul chemin
+ * heureux (même doctrine que `conversations/sharing.ts`, voir
+ * `conversation-links-deprecation.test.ts`). Aucun `Sunset` : le retrait réel
+ * se décide sur le compteur d'accès (#4275), jamais sur une date posée ici —
+ * même doctrine que `me/permissions` et `me/categories` (livrées la même nuit).
+ *
+ * La CINQUIÈME, `GET /messages/:messageId/read-status`, N'ANNONCE RIEN — voir
+ * son propre doc-comment plus bas (§ « NE PORTE PAS d'annonce ») : c'est la
+ * seule des six portes sans `conversationId` nulle part sur la requête, et un
+ * `Link` en gabarit désinforme plus qu'il n'informe.
+ */
+const DEPUIS_ALIAS_RECEIPTS = '2026-08-30';
+
+/**
+ * Les TROIS écritures dont le `type` d'accusé est enfermé dans le CHEMIN
+ * historique (« mark-as-read », « mark-as-received », « delivery-receipt »)
+ * pointent le MÊME successeur : la collection lit `type` dans le CORPS,
+ * jamais dans l'URL — comme `ANNONCE_ALIAS_FRIENDS.agir` (`routes/friends.ts`)
+ * le fait déjà pour accepter/refuser une demande d'ami. `messageId` (sur
+ * `delivery-receipt`) voyage de même façon, dans `messageIds` du corps.
+ */
+const successeurReceiptsEcriture = (request: FastifyRequest): string =>
+  `/api/v1/conversations/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts`;
+const ANNONCE_RECEIPTS_ECRITURE: AdresseDepreciee = {
+  depuis: DEPUIS_ALIAS_RECEIPTS,
+  successeur: successeurReceiptsEcriture,
+};
+
+/** `detail=summary` est un paramètre de QUERY sur la collection : il voyage dans le `Link`. */
+const ANNONCE_READ_STATUSES: AdresseDepreciee = {
+  depuis: DEPUIS_ALIAS_RECEIPTS,
+  successeur: (request) =>
+    `/api/v1/conversations/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts?detail=summary`,
+};
+
+/**
+ * `GET /messages/:messageId/read-status` NE PORTE PAS d'annonce, et c'est
+ * mesuré, pas oublié (revue #4423, suivi de la garde
+ * `deprecated-alias-headers-guard.test.ts` § « un successeur en gabarit
+ * n'indique aucune migration »).
+ *
+ * Cette porte est la SEULE des six sans `conversationId` — ni dans son
+ * chemin, ni dans une query validée (`MessageIdParamSchema` est `.strict()`,
+ * `messageId` seul), ni dans un en-tête (aucune convention `X-Conversation-*`
+ * dans ce dépôt), ni posé par un hook antérieur (`onRequest` est le PREMIER
+ * hook du cycle Fastify — rien ne s'exécute avant lui). Le résoudre exigerait
+ * une lecture Mongo DANS `onRequest`, sur une route chaude, ce que ce lot
+ * exclut explicitement.
+ *
+ * `AdresseDepreciee.successeur` est REQUIS (`utils/deprecation.ts`,
+ * non optionnel) : `depreciee`/`annoncerDepreciation` composent
+ * INCONDITIONNELLEMENT un en-tête `Link` depuis lui — il n'existe aujourd'hui
+ * AUCUNE forme « `Deprecation` sans `Link` ». Un premier essai a servi
+ * `:conversationId` en clair dans le `Link` (« la collection, filtrée à CE
+ * message, `:conversationId` restant à la charge de l'appelant qui le connaît
+ * déjà ») ; la garde élargie l'a refusé, à raison — un `Link` que le client ne
+ * peut pas suivre tel quel désinforme plus qu'il n'informe (`Deprecation`
+ * SANS successeur suivable serait honnête ; un GABARIT qui a l'air résolu ne
+ * l'est pas). Deux issues restent ouvertes pour qui voudrait annoncer CETTE
+ * porte proprement : élargir `utils/deprecation.ts` pour qu'un
+ * `AdresseDepreciee` sans `successeur` pose `Deprecation` seul (hors
+ * territoire de #4423 — fichier `utils/`), ou constater qu'aucun client ne
+ * l'appelle (mesuré au moment de #4423 : zéro appelant REST dans `apps/`,
+ * `packages/MeeshySDK/`) et la retirer plutôt que l'annoncer.
+ */
 
 export default async function messageReadStatusRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
@@ -82,9 +153,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   const receiptWriteRateLimit = { rateLimit: createReceiptWriteRateLimitConfig() };
 
   /**
-   * GET /messages/:messageId/read-status — ADAPTATEUR.
-   * Agrégat nominatif d'UN message. Successeur : `detail=summary` sur la
-   * collection (#4179 c.9, migration CLIENT — hors territoire de #4349).
+   * GET /messages/:messageId/read-status — ADAPTATEUR, SANS annonce de
+   * dépréciation — décision mesurée, voir le doc-comment ci-dessus (§ « NE
+   * PORTE PAS d'annonce »). `detail=summary` sur la collection reste sa
+   * cible conceptuelle (#4179 c.9, migration CLIENT — hors territoire de
+   * #4349) ; ce lot (#4423) n'a simplement trouvé aucun moyen HONNÊTE de la
+   * faire suivre par un `Link`.
    */
   fastify.get<{ Params: MessageReadStatusAliasParams }>(
     '/messages/:messageId/read-status',
@@ -103,6 +177,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.get<{ Params: ReceiptParams; Querystring: ReadStatusesAliasQuery }>(
     '/conversations/:conversationId/read-statuses',
     {
+      onRequest: depreciee(ANNONCE_READ_STATUSES),
       preValidation: [requiredAuth],
       preHandler: [validateParams(ConversationIdParamSchema), validateQuery(ReadStatusesQuerySchema)],
     },
@@ -116,6 +191,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.post<{ Params: ReceiptParams }>(
     '/conversations/:conversationId/mark-as-read',
     {
+      onRequest: depreciee(ANNONCE_RECEIPTS_ECRITURE),
       config: receiptWriteRateLimit,
       preValidation: [requiredAuth],
       preHandler: [validateParams(ConversationIdParamSchema)],
@@ -130,6 +206,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.post<{ Params: ReceiptParams }>(
     '/conversations/:conversationId/mark-as-received',
     {
+      onRequest: depreciee(ANNONCE_RECEIPTS_ECRITURE),
       config: receiptWriteRateLimit,
       preValidation: [requiredAuth],
       preHandler: [validateParams(ConversationIdParamSchema)],
@@ -151,6 +228,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   fastify.post<{ Params: DeliveryReceiptAliasParams }>(
     '/conversations/:conversationId/messages/:messageId/delivery-receipt',
     {
+      onRequest: depreciee(ANNONCE_RECEIPTS_ECRITURE),
       config: receiptWriteRateLimit,
       preValidation: [requiredAuth],
       preHandler: [validateParams(DeliveryReceiptParamsSchema)],
