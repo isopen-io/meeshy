@@ -318,18 +318,18 @@ describe('AuthService', () => {
         })
       );
       expect(result.success).toBe(true);
-      // `updateTokens(authToken, refreshToken, sessionToken, expiresIn)` — le
-      // serveur ne rend JAMAIS de `refreshToken` (absent de son schéma) ; le
-      // `sessionToken` qu'il rend (même valeur, TTL glissé côté serveur) doit
-      // atterrir dans SON propre créneau, le troisième — jamais dans le second
-      // (c'est exactement le bug que le commentaire d'origine documentait :
-      // « passé troisième il était écrit comme session anonyme »).
-      expect(mockUpdateTokens).toHaveBeenCalledWith(
-        'new-jwt-token',
-        undefined,
-        'new-session-token',
-        3600
-      );
+      // Objet nommé (#4491, miroir de #4450 sur `setCredentials`) : le
+      // serveur ne rend JAMAIS de `refreshToken` (absent de son schéma), donc
+      // le champ est omis — et le `sessionToken` qu'il rend (même valeur, TTL
+      // glissé côté serveur) porte son propre nom. Il n'y a plus de créneau à
+      // confondre (c'est exactement le bug que le commentaire d'origine
+      // documentait : « passé troisième il était écrit comme session
+      // anonyme » — devenu inexprimable).
+      expect(mockUpdateTokens).toHaveBeenCalledWith({
+        authToken: 'new-jwt-token',
+        sessionToken: 'new-session-token',
+        expiresIn: 3600,
+      });
     });
 
     it('should return error when no auth token is available — a sessionToken alone is never enough', async () => {

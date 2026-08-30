@@ -206,12 +206,11 @@ class AuthService {
         // Mettre à jour via AuthManager — le serveur ne rend jamais de
         // refreshToken (absent de son schéma), et le sessionToken qu'il rend
         // est le MÊME que celui envoyé (TTL glissé côté serveur uniquement).
-        authManager.updateTokens(
-          data.data.token,
-          undefined,
-          data.data.sessionToken,
-          data.data.expiresIn
-        );
+        authManager.updateTokens({
+          authToken: data.data.token,
+          sessionToken: data.data.sessionToken,
+          expiresIn: data.data.expiresIn,
+        });
       }
 
       return data;

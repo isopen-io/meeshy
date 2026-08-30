@@ -172,7 +172,7 @@ export function useAuth() {
   const login = useCallback((user: User, token: string, sessionToken?: string, expiresIn?: number) => {
     authManager.setCredentials({ user, authToken: token, sessionToken, expiresIn });
     setUserRef.current(user);
-    setTokensRef.current(token, undefined, sessionToken, expiresIn);
+    setTokensRef.current({ authToken: token, sessionToken, expiresIn });
 
     const newAuthState = {
       isAuthenticated: true,

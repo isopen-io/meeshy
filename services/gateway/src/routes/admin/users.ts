@@ -51,6 +51,38 @@ const resetPasswordSchema = resetPasswordValidationSchema;
 const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
 const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
 
+/**
+ * Le seuil de CHAQUE porte de ce fichier qui lit `Report` (#4157, étendu par
+ * #4494 : deux seuils sur une même donnée, c'est le plus bas qui décide, sur
+ * TOUTES ses portes). Un écart avec `REPORT_PERMISSION_LA_PLUS_HAUTE` se
+ * déclare ICI, en donnée, avec sa raison — jamais en commentaire, que rien ne
+ * confronte au code. Balayage : `__tests__/unit/routes/admin/reported-messages-audit-content-guard.test.ts`.
+ */
+export type PermissionReport = 'canViewUsers' | 'canModerateContent';
+
+export type SeuilReport = {
+  readonly porte: string;
+  readonly permission: PermissionReport;
+  /** Requise dès que `permission` n'est pas `REPORT_PERMISSION_LA_PLUS_HAUTE`. */
+  readonly raisonEcart?: string;
+};
+
+export const REPORT_PERMISSION_LA_PLUS_HAUTE: PermissionReport = 'canModerateContent';
+
+export const SEUILS_REPORT: readonly SeuilReport[] = [
+  {
+    porte: 'GET /admin/users/:userId/reports',
+    permission: REPORT_PERMISSION_LA_PLUS_HAUTE
+  },
+  {
+    porte: 'GET /admin/users/:userId/reported-messages',
+    permission: 'canViewUsers',
+    raisonEcart:
+      "AUDIT garde les métadonnées (son métier : auditer la modération), " +
+      "jamais `content` — retiré par le handler, même motif qu'attachmentProtectionSelect (l. 683)."
+  }
+];
+
 // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
 // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
 // sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
@@ -754,7 +786,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     // contentait de `canViewUsers`, qui admet AUDIT en plus. Deux seuils sur
     // une même donnée, c'est le plus bas qui décide — et le filtre par
     // `reporterId` ne change pas la nature de ce qui est lu.
-    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canModerateContent')]
+    //
+    // #4494 — cette règle vaut pour LES DEUX portes de ce fichier qui lisent
+    // `Report`, pas seulement celle-ci : `reported-messages`, plus bas, reste
+    // à `canViewUsers` — SEUILS_REPORT dit pourquoi ce n'est pas l'oubli que
+    // #4157 a laissé passer ici (AUDIT y garde les métadonnées du signalement,
+    // jamais `content`).
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission(REPORT_PERMISSION_LA_PLUS_HAUTE)]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
@@ -807,7 +845,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * GET /admin/users/:userId/reported-messages - Messages authored by the user
    * that have been reported. Each item is a report joined with its message.
-   * Requires canViewUsers permission.
+   * Requires canViewUsers permission ; `message.content` requires
+   * canModerateContent in addition (#4494 — see SEUILS_REPORT).
    */
   fastify.get<{
     Params: { userId: string };
@@ -816,6 +855,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
+      const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
+      // #4494 — AUDIT franchit `requireUserViewAccess` sans `canModerateContent` :
+      // il garde son métier (auditer), pas le corps du message. Voir SEUILS_REPORT.
+      const canSeeReportedContent = permissionsService.hasPermission(viewerRole, REPORT_PERMISSION_LA_PLUS_HAUTE);
+
       const { userId } = request.params;
       const { offset = '0', limit } = request.query;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
@@ -897,7 +942,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
             take: reportedMessageIds.length
           })
         : [];
-      const messageMap = new Map(messages.map((m) => [m.id, m]));
+      // La ligne reste : un AUDIT doit pouvoir constater qu'un message a été
+      // signalé, par qui, pourquoi. Seul `content` — le texte écrit par
+      // l'utilisateur — tombe à `null` pour qui n'a pas canModerateContent.
+      const messageMap = new Map(
+        messages.map((m) => [m.id, canSeeReportedContent ? m : { ...m, content: null }])
+      );
 
       const data = reports.map((r) => ({ ...r, message: messageMap.get(r.reportedEntityId) ?? null }));
 
