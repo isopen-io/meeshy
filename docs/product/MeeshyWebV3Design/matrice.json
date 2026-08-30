@@ -859,6 +859,139 @@
     "Complétude"
    ],
    "corps_issue": "**Contexte** — P2, hors énoncé de mission. Et point de fuite connu : la directive 2026-08-25 nomme explicitement la co-appartenance à une communauté comme un chemin qui ne donne AUCUN droit sur la présence d'autrui.\n\n**Preuve attendue** — Le test de garde porte sur la charge SERVIE, pas sur l'affichage : le client ne fabrique rien et ne garde pas ce que le serveur retire.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.3 (L7), § 11 question 8 ; CLAUDE.md § User Presence ; `cible/communities.png` ; `vues.json#communities`."
+  },
+  {
+   "vue_id": "sheet:lang",
+   "titre_issue": "Changer la langue d'un contenu change le texte lu, depuis n'importe quel écran",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "(surimpression)",
+   "audience": "les-deux",
+   "depend_de": [],
+   "critere_de_fin": "<dialog> natif, ouvrable au clavier et fermable par Échap ; choisir une langue MUTE le texte rendu (loi « un contrôle existe s'il a un effet ») ; la langue élue passe par resolvePrismTranslation(), jamais par un lookup rang-1.",
+   "dimensions_visees": [
+    "Facilité d'accès",
+    "Simplicité d'usage",
+    "Cohérence de positionnement"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "reelShared",
+   "titre_issue": "Un réel partagé se lit intégralement sans compte, dans la langue du lecteur",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/reels/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Réécrit la résolution rang-1 de apps/web/components/feed/ReelPlayer.tsx:54-85 : preferredLanguages + resolvePrismTranslation() + TranslationToggle monté avec onDisplayedChange câblé. Sortie (chevron) présente. Mêmes gates de poids et de connexions que story.",
+   "dimensions_visees": [
+    "Performance",
+    "Complétude",
+    "Utilité"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "moods",
+   "titre_issue": "Une humeur partagée se lit sans compte, par le même lecteur que les posts",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/moods/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Post.type=STATUS rendu par le MÊME composant lecteur que post/story/reel (aucune jumelle) ; OG dédié vérifié par le crawler simulé.",
+   "dimensions_visees": [
+    "Maintenabilité",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:link",
+   "titre_issue": "Créer un lien de partage : chaque champ de la feuille a un effet",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "links"
+   ],
+   "critere_de_fin": "QR, expiration et « autoriser les anonymes » MUTENT le lien créé ; aucun champ décoratif. <dialog> natif.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:conv",
+   "titre_issue": "Démarrer une conversation depuis la liste, en deux gestes",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "chats"
+   ],
+   "critere_de_fin": "Chemin nominal ≤ 2 gestes ; création optimiste avec repli.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Fluidité"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:attach",
+   "titre_issue": "Joindre un fichier annonce sa limite avant de la faire subir",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "les-deux",
+   "depend_de": [
+    "thread"
+   ],
+   "critere_de_fin": "Limite de 10 Mo APPLIQUÉE et ANNONCÉE avant sélection ; poids affiché après compression.",
+   "dimensions_visees": [
+    "Expérience utilisateur",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:member",
+   "titre_issue": "L'espace membre s'ouvre depuis n'importe quel écran connecté",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Remplace la barre d'onglets absente de la planche (§11) ; atteignable au clavier ; 6 destinations câblées.",
+   "dimensions_visees": [
+    "Cohérence de positionnement",
+    "Facilité d'accès"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
   }
  ]
 }

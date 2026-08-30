@@ -669,7 +669,22 @@ bunx playwright test e2e/visual/v3-lifecycle.spec.ts
 
 **44 lignes** : les 37 vues de `vues.json` + 7 surfaces hors planche (`sheet:lang`, `sheet:link`, `sheet:conv`, `sheet:attach`, `sheet:member`, `reelShared`, `moods`). **Restent au legacy, sans action** : les 23 routes `admin/*` et les 12 routes d'authentification listées au § 4.4.
 
-### 10.2 Le gate d'ordre — `docs/product/MeeshyWebV3Design/ordre-des-ecrans.sh`
+### 10.2 Le gate d'ordre — `docs/product/MeeshyWebV3Design/ordre-des-ecrans.js`
+
+> **Le gate est LIVRÉ, et il est en JavaScript, pas en `awk | tsort`.** L'esquisse shell
+> ci-dessous a servi à établir le besoin ; l'implémentation retenue lit `matrice.json`
+> (donnée structurée) au lieu d'analyser un tableau Markdown, ce qui lui permet de vérifier
+> **quatre** choses au lieu de deux, chacune avec son code de sortie **éprouvé sur une
+> matrice volontairement fausse** : `rc=1` cycle (nommé), `rc=2` dépendance pendante,
+> `rc=3` vue de la planche absente — ou ligne hors planche non déclarée, `rc=4` écran P0
+> qui attend un écran de priorité inférieure. La matrice porte **44 lignes** : les 37 vues
+> de `vues.json` plus 7 surfaces exigées par la mission que la planche ne dessine pas,
+> chacune marquée `hors_planche: true` — le gate impose la **couverture** de la planche,
+> il n'interdit pas d'aller au-delà, mais il refuse qu'on y aille en silence.
+> `ordre.md` est sa sortie, et n'est jamais écrit à la main.
+
+<details><summary>Esquisse shell d'origine (conservée pour mémoire, non utilisée)</summary>
+
 
 ```bash
 #!/usr/bin/env bash
@@ -694,6 +709,8 @@ awk -F'|' '
 - matrice portant `| 5 | rights | ... | #3, #22, #23 |` ⇒ **rc=1**, stderr : `tsort: -: input contains a loop: composer / storyCreate / rights`. **Le gate NOMME le cycle.**
 - cellule ramenée à `#3` ⇒ **rc=0**.
 - cellule pointant `#99` (ligne inexistante) ⇒ **rc=2**, `REF INCONNUE: #5 cite #99` — le cas qu'un tri topologique seul **ne voit pas**.
+
+</details>
 
 **Notes d'implémentation opposables** :
 - L'en-tête est **LU** (colonnes repérées par leur libellé, pas par leur index) : ajouter une colonne ne casse pas le gate. Une matrice sans en-tête `#` / `id` / `Dépendances` sort en rc=2 — **la table doit rester lisible par la machine**, contrainte assumée.

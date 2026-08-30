@@ -9,7 +9,7 @@
  * tri topologique. Il ECHOUE — et casse la CI — si :
  *   rc=1  le graphe porte un cycle (l'interblocage que la revue a trouve) ;
  *   rc=2  une dependance nomme une vue qui n'existe pas ;
- *   rc=3  une vue de vues.json manque a la matrice, ou l'inverse ;
+ *   rc=3  une vue de vues.json manque a la matrice ;
  *   rc=4  un ecran P0 depend d'un ecran de priorite inferieure.
  *
  * La regle de fond, qui a produit le cycle d'origine : un ecran de
@@ -41,13 +41,16 @@ if (ids.size !== m.ecrans.length) {
   echec(3, 'la matrice porte des vue_id en double', dup);
 }
 
-// rc=3 — couverture exacte de la planche.
+// rc=3 — la matrice COUVRE la planche. Elle a le droit d'aller au-dela : la mission
+// exige des surfaces que la planche ne dessine pas (feuilles, reel et humeur partages).
+// Une ligne hors planche le DECLARE, pour qu'aucune ne s'y glisse par accident.
 const attendues = new Set(vues.vues.map(v => v.id));
 const manquantes = [...attendues].filter(i => !ids.has(i));
-const inconnues = [...ids].filter(i => !attendues.has(i));
-if (manquantes.length || inconnues.length) {
-  echec(3, `couverture incorrecte (${ids.size} lignes contre ${attendues.size} vues)`,
-    [...manquantes.map(i => `absente de la matrice : ${i}`), ...inconnues.map(i => `absente de vues.json : ${i}`)]);
+const nonDeclarees = m.ecrans.filter(e => !attendues.has(e.vue_id) && !e.hors_planche).map(e => e.vue_id);
+if (manquantes.length || nonDeclarees.length) {
+  echec(3, `couverture incorrecte (${ids.size} lignes pour ${attendues.size} vues de la planche)`,
+    [...manquantes.map(i => `vue de la planche absente de la matrice : ${i}`),
+     ...nonDeclarees.map(i => `ligne absente de la planche sans hors_planche:true : ${i}`)]);
 }
 
 // rc=2 — toute dependance nomme une vue connue.
@@ -101,17 +104,18 @@ const md = [
   '> `depend_de` de `matrice.json`, produit par `ordre-des-ecrans.js`, qui est aussi le gate CI.',
   '> L\'ETAT de chaque ecran vit dans son issue GitHub, jamais ici.',
   '',
-  `${m.ecrans.length} ecrans, ${m.lots.length} lots, graphe acyclique.`,
+  `${m.ecrans.length} ecrans (${attendues.size} dessines par la planche, ${m.ecrans.filter(e => e.hors_planche).length} exiges par la mission sans etre dessines), ${m.lots.length} lots, graphe acyclique.`,
   '',
   '| # | Vue | Priorite | Lot | Route | Audience | Depend de |',
   '|---:|---|---|---|---|---|---|',
   ...publie.map((id, i) => {
     const e = par.get(id);
-    return `| ${i + 1} | \`${e.vue_id}\` | ${e.priorite} | ${e.lot} | \`${e.route}\` | ${e.audience} | ${(e.depend_de || []).map(d => `\`${d}\``).join(', ') || '—'} |`;
+    return `| ${i + 1} | \`${e.vue_id}\`${e.hors_planche ? ' *(hors planche)*' : ''} | ${e.priorite} | ${e.lot} | \`${e.route}\` | ${e.audience} | ${(e.depend_de || []).map(d => `\`${d}\``).join(', ') || '—'} |`;
   }),
   '',
 ].join('\n');
 fs.writeFileSync(path.join(HERE, 'ordre.md'), md);
 
-process.stdout.write(`[ordre] OK — ${m.ecrans.length} ecrans, ${m.lots.length} lots, graphe acyclique, couverture exacte des ${attendues.size} vues.\n`);
+const hp = m.ecrans.filter(e => e.hors_planche).length;
+process.stdout.write(`[ordre] OK — ${m.ecrans.length} ecrans (${attendues.size} de la planche + ${hp} hors planche), ${m.lots.length} lots, graphe acyclique.\n`);
 process.stdout.write(`[ordre] premiers a implementer : ${publie.slice(0, 8).join(' > ')}\n`);
