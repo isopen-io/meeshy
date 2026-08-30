@@ -54,6 +54,9 @@ import {
   receiptContext,
   receiptHandlers,
 } from './receipts';
+// #4423 — cette porte est un ALIAS DÉPRÉCIÉ (adaptateur, #4349) : elle le dit
+// désormais au client, comme les autres alias du dépôt (#4274).
+import { depreciee } from '../../utils/deprecation';
 import { isBlockedBetween } from '../../utils/blocking';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
@@ -1523,6 +1526,14 @@ export function registerMessagesRoutes(
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:id/mark-read', {
+    // #4423 — annonce de dépréciation : `type: 'read'` voyage dans le CORPS
+    // du successeur, jamais dans son URL (comme `ANNONCE_ALIAS_FRIENDS.agir`,
+    // `routes/friends.ts`, pour accepter/refuser une demande d'ami).
+    onRequest: depreciee({
+      depuis: '2026-08-30',
+      successeur: (request) =>
+        `/api/v1/conversations/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
+    }),
     config: { rateLimit: createReceiptWriteRateLimitConfig() },
     schema: {
       description: 'Mark all messages in a conversation as read for the authenticated user',

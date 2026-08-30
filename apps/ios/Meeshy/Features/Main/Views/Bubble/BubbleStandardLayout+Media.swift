@@ -725,7 +725,7 @@ private struct AttachmentBlurOverlayView: View {
                     .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundStyle(.white)
 
-                Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
+                Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
                     .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white)
 
@@ -736,7 +736,7 @@ private struct AttachmentBlurOverlayView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
         .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
         .onLongPressGesture(minimumDuration: 0.3) {
             onReveal()

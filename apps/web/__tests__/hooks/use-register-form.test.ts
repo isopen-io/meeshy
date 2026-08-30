@@ -48,11 +48,12 @@ describe('useRegisterForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset auth store
+    // `refreshToken` retiré de `AuthState` (#4405, étape 3) — rien ne
+    // produisait jamais de valeur pour ce champ (mesuré).
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
       authToken: null,
-      refreshToken: null,
       sessionToken: null,
       sessionExpiry: null,
       isAuthChecking: false,

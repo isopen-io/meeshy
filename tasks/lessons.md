@@ -19756,7 +19756,6 @@ vue, porte vraiment l'état — le modèle persiste, la vue non).
 Voir la leçon 261 (une énumération de sites porte deux affirmations, dont une presque jamais
 vérifiée) : même famille, autre support — là c'était la LISTE qui mentait par omission, ici c'est sa
 JUSTIFICATION.
----
 
 ## Leçon 336 — une extraction qui perd une capacité de son site d'origine n'est pas une extraction, c'est une réécriture
 
@@ -19924,7 +19923,240 @@ de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça 
   aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
   exportées et importées.
 
-## Leçon 339 — une garde négative posée sur un FICHIER attrape les jumelles innocentes de ce qu'elle vise
+---
+
+## Leçon 339 — Un artefact de DEV n'est pas un artefact de PROD, et la preuve d'un build se prend sur `next start`
+
+Cycle : revue croisée du lot L-0.5 de la v3 web (issue #4396, « Le paquet apps/web-v3 existe et se
+construit »).
+
+Le lot livrait `app/layout.tsx` + `app/theme-script.tsx`, onze témoins verts, `next build` en exit 0,
+et un rapport prouvant `assetPrefix` et `ThemeScript` par une capture du **HTML réellement servi sur
+:3300**. La capture venait de `bun run dev`.
+
+En `bun run build && bun run start`, la MÊME URL rend autre chose : `next build` avec un `layout.tsx`
+**seul** émet **zéro route d'App Router** (`.next/app-build-manifest.json` → `{"pages":{}}`, pas de
+`.next/server/app`). La coquille et son `ThemeScript` sont du **code mort dans l'artefact** ; la seule
+réponse HTML est le 404 anglais du routeur **Pages** — sans `lang`, sans thème, ~101 kB de JS pour
+rendre une chaîne statique. Les onze tests étaient vrais, et vrais de rien qui parte en production.
+
+> **`next dev` compile à la demande ce que `next build` n'émet que s'il est ROUTÉ.** Le dev rend le
+> layout parce qu'on lui demande une URL ; le build ne l'émet que si une route l'atteint. Un fichier
+> qui existe n'est pas un fichier qui SORT. La preuve d'un build se prend donc sur son artefact —
+> `next start`, ou le manifeste — jamais sur le serveur de développement.
+
+**Le piège de second tour, mesuré** : ajouter `app/not-found.tsx` ne change **rien** — le manifeste
+reste vide. `/_not-found` n'est généré que si l'App Router possède au moins une **page**. Un
+correctif « évident » qui ne se vérifie pas sur le manifeste APRÈS l'ajout laisse le défaut entier.
+
+**Deux formes générales, valables hors Next :**
+
+- **Un test qui passe par le rendu ne dit rien de ce qui est DÉPLOYÉ.** `renderToStaticMarkup` prouve
+  que la fonction rend ; il ne prouve pas qu'un chemin de requête l'atteint. La question à poser à
+  toute suite verte sur une coquille : *quelle requête, dans l'artefact, fait exécuter ce code ?*
+  C'est la forme du cycle 122 (« qui AFFICHE ce que le résolveur élit ? ») portée du Prisme au build.
+- **Un gate se pose sur la SORTIE, pas sur la source.** Le correctif durable n'est pas un test de
+  plus sur le layout, c'est `bun run build` = `next build && node scripts/check-app-router-built.mjs`,
+  qui lit le manifeste et sort en 1 s'il est vide. Prouvé rouge en retirant la route.
+
+## Leçon 340 — Une règle de lint se prouve sur la forme d'import RÉELLEMENT utilisée
+
+Même cycle. Le lot posait trois `no-restricted-imports` interdisant `lucide-react`, la fonte
+`@phosphor-icons/web` et `next-themes`. La clé `paths` de cette règle ne matche que le nom **EXACT**
+du module. Or la fonte Phosphor s'installe par un import de sous-chemin CSS —
+`@phosphor-icons/web/regular/style.css`, sa forme documentée — et lucide s'importe couramment icône
+par icône. Un fichier fautif **sur les deux interdits** passait `eslint` en **exit 0**.
+
+C'est la loi 4 (« un contrôle existe s'il a un effet ») appliquée à l'outillage : la règle était
+rendue dans la config, lue en revue, citée dans le rapport — et inerte. Pire qu'absente : un agent
+qui suit la doctrine (« JAMAIS la fonte @phosphor-icons/web ») se croit gardé.
+
+> **Une garde de lint ne se relit pas, elle se SONDE.** Écrire le fichier que la règle est censée
+> refuser, sous la forme que quelqu'un écrirait vraiment, et vérifier que le lint ÉCHOUE. Sans cette
+> sonde en témoin permanent, la garde retombe inerte au premier refactor de la config.
+
+Deux détails qui coûtent du temps si on ne les sait pas : `paths` → `patterns` avec des groupes
+`[root, root/**]` (minimatch : `*` ne traverse pas `/`, `**` si) ; et la sonde ne peut pas tourner
+dans le VM de Jest — le chargeur de config plate d'ESLint 9 fait un `import()` dynamique et rend
+`A dynamic import callback was invoked without --experimental-vm-modules`. On appelle la vraie CLI en
+processus fils (`--stdin --stdin-filename`, `--format json`), ce qui a le mérite d'être exactement ce
+que la CI exécute. `ESLint.lintText` n'exige pas que le fichier existe sur le disque : la sonde ne
+pollue donc pas le dépôt.
+
+## Leçon 341 — Lire le corps ENTIER d'une issue avant de dire qu'un livrable est hors périmètre
+
+Même cycle. La revue reprochait, en majeur, d'avoir livré le moteur de thème sous une issue dont le
+**Critère de fin** est « squelette seul, aucune route requise » — donc en avance sur son lot. Le
+reproche citait ce Critère de fin, la matrice, et les deux clés de thème divergentes du legacy.
+Il était faux : le `## Détail` de la même issue dit, mot pour mot, « `app/layout.tsx` minimal avec
+ThemeScript inline (posé ici car requis dès la première route, mais son contenu détaillé [...] relève
+de L0 ; ce lot ne fait que le brancher) ». Le livrable était **prescrit** par l'issue qu'on invoquait
+pour le refuser.
+
+> **Une issue de ce dépôt a cinq sections, et le périmètre ne vit pas toutes dans la même.** Contexte,
+> Preuve attendue, Critère de fin, Détail, Source. Le Critère de fin dit comment on MESURE la fin ; le
+> Détail dit ce qu'on ÉCRIT. Conclure « hors périmètre » depuis le seul Critère de fin, c'est lire le
+> thermomètre pour connaître le menu.
+
+Ce qui restait vrai dans le reproche méritait quand même une issue, et c'est là que la revue avait
+raison sur le fond : le lot avait figé une clé de stockage (`meeshy-theme` — la **troisième** du
+dépôt) que nul document ne nomme, et le rapport de session la signalait lui-même comme « décision à
+valider ». Une décision produit signalée dans un rapport n'existe pas : elle devient une issue
+`décision-produit` assignée au porteur, ou elle est prise en silence par le code.
+
+**La règle des deux sens** : un constat de revue peut être faux sur sa cause et juste sur son odeur.
+Le réfuter avec sa preuve, puis se demander *qu'est-ce qui a fait sentir quelque chose au relecteur ?*
+— et ouvrir l'issue de ça.
+
+## Leçon 342 — Un garde qui itère la structure DÉRIVÉE est aveugle à ce qui manque à la structure dérivée
+
+Cycle : revue croisée du lot L-0.5 de la v3 web, issue #4397 (« Le lockfile s'aligne sur les
+manifestes »).
+
+Le garde livré avec le lot parcourait `bun.lock → workspaces` — les entrées que le lock connaît
+**déjà** — puis lisait le `package.json` de chacune. Jamais l'inverse. Un manifeste de workspace que
+le lock n'a **jamais vu** n'était donc contrôlé par personne : le sens *manifeste → lock*, celui que
+le titre de l'issue nomme, n'était testé nulle part. Ce n'était pas théorique — `apps/web-v3` était
+exactement dans cet état (absent de `HEAD:bun.lock`, intégralement non suivi), et le garde certifiait
+« aligné » pendant tout ce temps. Sonde du relecteur : un `packages/zz-probe/package.json` créé sans
+relancer `bun install` → **16 tests verts, zéro rouge**.
+
+> **La DIRECTION dans laquelle un garde itère EST la direction de l'invariant qu'il garde.** Itérer
+> `A` pour aller chercher son pendant dans `B` prouve « tout A a son B », jamais « tout B a son A ».
+> Devant un garde de correspondance, nommer les deux ensembles à voix haute et exiger une boucle par
+> sens. Le sens manquant est presque toujours celui où la structure dérivée (lock, index, cache,
+> manifeste généré) fait autorité sur la structure source — c'est-à-dire le sens faux.
+
+**Corollaire d'entrée, trouvé dans le même garde.** Son ensemble de manifestes venait d'un parcours
+récursif du disque depuis la racine. Il ramassait donc `tests/package.json` — que la racine ne
+déclare dans **aucun** glob `workspaces` (`apps/*`, `services/*`, `packages/*`), dont `bun.lock` n'a
+aucune entrée, et qui n'a même pas de `node_modules` — et `packages/shared/prisma/client/package.json`,
+un manifeste **généré et gitignoré**. Deux dégâts d'un coup : l'entrée du garde variait selon qu'un
+`prisma generate` avait tourné (9 manifestes ici, 8 sur un clone propre), et il a fait naître un
+invariant INVENTÉ — « un paquet suivi n'est jamais déclaré sur un plancher différent d'un manifeste à
+l'autre » — au nom duquel un bump de `@playwright/test` a été écrit dans `tests/package.json`, où
+**rien n'est installé** : un changement inerte, présenté dans le rapport comme constitutif du
+résultat.
+
+> **L'entrée d'un garde se calcule depuis la déclaration qui fait AUTORITÉ, jamais par un parcours du
+> disque.** Un `find` trouve des fichiers ; il ne sait pas lesquels appartiennent au graphe que
+> l'outil gouverne. Un garde dont l'entrée déborde ce graphe ne devient pas « plus strict » : il
+> devient faux, et il fabrique du travail sur des fichiers que personne n'installe.
+
+**Et un garde d'infrastructure hébergé par une app ne tourne dans aucune CI.** Celui-ci vivait dans
+`apps/web-v3/__tests__/`, sortait de son workspace (`join(__dirname,'..','..','..')`) et n'était
+appelé par aucun workflow (`grep web-v3 .github/workflows/ci.yml` = rien) : l'invariant n'existait
+que le jour où quelqu'un lançait les tests de la v3. C'est la règle de placement (B) de la conception
+— un composant vit sous la surface qui le rend — appliquée à un garde : sa surface était la RACINE du
+dépôt. Le précédent était déjà là, `scripts/check-type-debt.sh`, appelé par le job `quality`.
+
+**Le lock lui-même n'était pas un artefact de sa tâche.** Sur 138 lignes de diff de `bun.lock`, 29
+citent les quatre paquets suivis ; le seul bloc `"apps/web-v3": {...}` en fait 32, et sa présence
+faisait basculer des résolutions hoistées **sans rapport** (`@emnapi/core` 1.11.1→1.10.0,
+`@next/eslint-plugin-next` 16.3.1→15.5.23, `eslint-plugin-react-hooks` 7.1.1→5.2.0 au premier
+niveau). Le rapport n'en disait rien. Le correctif durable n'est pas une phrase dans un rapport : les
+**deux** sens du garde rendent la divergence impossible en silence — un `bun.lock` commité sans
+l'arbre qu'il décrit rougit, et réciproquement.
+
+**Dernière forme, sur le refus motivé.** Le lot avait REFUSÉ de monter les épingles `overrides` de
+`dompurify`/`postcss`/`uuid` — « ça change ce qui est installé pour tous les consommateurs
+transitifs, c'est une décision de dépendances avec ses propres gates » — tout en montant, dans le même
+bloc et le même commit, celles de `react`/`react-dom`. L'argument était juste ; il ne s'appliquait
+simplement pas qu'aux trois.
+
+> **Un refus motivé se vérifie sur la CLASSE d'acte, pas sur le paquet.** Écrire son refus, puis
+> relire son propre diff en se demandant : *ai-je fait ailleurs exactement ce que je viens de
+> refuser ?* Si oui, l'un des deux est mal classé — et c'est presque toujours celui qu'on n'a pas
+> pris pour une décision. Ici la montée de React était bien la bonne direction (l'issue dit que le
+> LOCK s'aligne, et `apps/web-v3` épingle `19.2.8` exact), mais elle valait une décision assumée et
+> son gate : la suite complète de `apps/web` rejouée sur les paquets réellement installés — 818
+> suites / 14 975 tests verts —, pas un « aucune dépendance du gateway, du translator ni de shared
+> n'a changé » qui omet le seul workspace dont le runtime a changé.
+
+**Addendum (revue croisée suivante, même lot L-0.5) — le garde mal placé avait un FRÈRE, et le
+corriger n'a pas corrigé l'autre.** `apps/web-v3/__tests__/makefile-workspaces.test.ts` gardait le
+`Makefile` de la RACINE depuis le même dossier, avec le même `join(__dirname,'..','..','..')` et la
+même absence de CI. La tâche sœur a livré son garde AVEC son appel dans `ci.yml` (« Lockfile
+alignment guard ») pendant que celle-ci laissait le sien inerte — dans le MÊME arbre de travail, à
+quelques heures d'écart. La règle était donc écrite noir sur blanc, en commentaire, dans le fichier
+que l'autre tâche venait de modifier ; elle n'a pas traversé.
+
+> **Corriger un garde mal placé, c'est chercher ses FRÈRES dans le même lot.** Un défaut de placement
+> naît d'une habitude de session (« mes tests vont dans `__tests__` »), pas d'un accident : elle a
+> produit tout ce que la session a écrit ce jour-là. La requête qui les trouve ne cherche pas le
+> sujet du garde mais sa FORME — un test qui remonte au-dessus de son propre paquet :
+> `grep -rn "'\.\.', *'\.\.'" apps/*/__tests__/`.
+
+**Et « 7/7 rouges avant » n'est pas une preuve.** Le rapport affirmait avoir vu le garde rougir ;
+rien dans le dépôt ne le rejouait. Les quatre `scripts/check-*` appelés par le job `quality` portent
+tous un `--self-test`, celui-ci n'en avait aucun. Le garde porté en
+`scripts/check-makefile-workspaces.mjs` soumet six mutations en mémoire (`structuredClone` du monde
+lu, sans écrire sur le disque) et exige que chacune produise l'échec attendu — la CI vérifie donc à
+chaque passage que le garde SAIT rougir, avant de lui demander s'il est vert.
+
+> **Une affirmation de session meurt avec la session.** « Je l'ai vu rouge » et « le dépôt prouve
+> qu'il rougit » sont deux niveaux de preuve différents ; seul le second survit au commit. Le témoin
+> définitif se cherchait ici dans l'historique : le garde rejoué sur `HEAD` (avant le nettoyage)
+> rend **19 défauts réels**, 0 après — un chiffre qu'un tiers peut refaire en une commande.
+
+---
+
+## Leçon 343 — Un préfixe d'assets ne protège que ce qu'il PRÉFIXE, et une règle de routage publie tout ce qu'elle réclame
+
+**Contexte.** Lot L-0.5 de la v3 web. `apps/web-v3` pose `assetPrefix: '/__v3'`, et le routeur
+Traefik `frontend-v3` (priority=100, devant le `frontend` legacy à priority=1) réclamait
+`PathPrefix('/__v3')`. Le doc-comment du compose affirmait que `/__v3` « est l'adresse des assets de
+la zone » et que sans elle c'est « chunk 404, page blanche ». Vrai — pour les chunks. La revue
+croisée a mesuré les deux moitiés manquantes.
+
+**(a) `assetPrefix` ne préfixe que les URL que Next FABRIQUE pour ses propres bundles.** Mesuré sur
+le serveur standalone que l'image lance : un chunk répond à `/_next/…` ET à `/__v3/_next/…`
+(200/200) ; `public/probe.txt` répond à `/probe.txt` et **pas** à `/__v3/probe.txt` (200/404) ;
+`app/robots.txt` et `app/icon.svg` — les conventions de métadonnées de l'App Router — répondent à
+`/robots.txt` et `/icon.svg`, **pas** sous `/__v3` (200/404). Toute cette classe d'actifs est donc
+servie à la RACINE de l'URL et retombe, derrière Traefik, sur le routeur attrape-tout : **c'est le
+LEGACY qui la sert**. Le sprite d'icônes et les images OG du rôle premier sont exactement de cette
+classe. Deuxième moitié du même angle mort : l'étage runner du `Dockerfile` ne portait aucun
+`COPY /app/public ./public` (le legacy l'a) et `output:'standalone'` ne recopie pas `public/` —
+le jour où le répertoire apparaît, l'image ne l'embarque même pas.
+
+**(b) une règle de routage PUBLIE tout ce qu'elle réclame.** `next build` n'émettait aucune PAGE
+d'App Router (`app-path-routes-manifest.json` = `{"/healthz/route":"/healthz"}`), donc la limite
+`/_not-found` n'existait pas : `/__v3/quoi-que-ce-soit` répondait le **404 anglais du routeur
+Pages**, sans `<html lang>`, sans le script anti-flash de thème, hors design system — et cette page
+était publiquement joignable, PRIORITAIRE sur le legacy. Le dépôt le SAVAIT (le message de
+`check-app-router-built.mjs` le dit mot pour mot) mais l'imprimait avec un `!` non bloquant, et
+personne n'avait relié ce constat au fait que le lot rendait justement ce chemin atteignable.
+
+> **Un préfixe d'assets répond « où sont mes bundles », jamais « où est la frontière de ma zone ».**
+> La question à poser à une zone n'est pas « les chunks arrivent-ils ? » mais **« qu'est-ce que
+> cette application sert à une URL que la règle ne réclame pas — et qu'est-ce que la règle réclame
+> que cette application ne sert pas ? »**. Les deux sens coûtent : le premier fait servir un actif
+> de la v3 par le legacy, le second publie une page d'erreur que personne n'a dessinée. C'est le
+> corollaire déjà écrit dans la conception (« tout chemin absent de la règle est servi par
+> `apps/web` ») appliqué aux ACTIFS et plus seulement aux ROUTES — la moitié qui manquait.
+
+**Ce qui l'attrape** (`scripts/check-v3-pipeline.mjs`, invariants 19-21, chacun sondé par une
+mutation) : l'inventaire de ce que la zone sert se LIT sur le disque (`public/**`, conventions de
+métadonnées, pages, route handlers), les chemins réclamés se LISENT dans la règle, et le garde
+rougit dans les deux sens ; un troisième invariant tient ensemble `public/` et le `COPY` du runner.
+La règle a été réduite à `PathPrefix('/__v3/_next')` — la zone d'assets, et rien d'autre tant
+qu'aucune page n'est émise.
+
+**Corollaire trouvé en passant, même famille — un fichier que le pipeline n'embarque pas.**
+`.gitignore:28` (`**/*/*.d.*`) emportait `apps/web-v3/scripts/check-app-router-built.d.mts`, la
+déclaration écrite à la main qu'importe `__tests__/app-router-build.test.ts`. Mesuré en déplaçant le
+fichier : le type-check de `@meeshy/web-v3` — l'étape que ce lot venait de rendre **BLOQUANTE** —
+tombe en `TS7016`. Le lot livrait donc un gate rouge au premier clone frais. Le garde le dit
+désormais (invariant 22) en discriminant sur la SOURCE de la règle d'ignore : ce que le `.gitignore`
+du paquet demande est voulu, ce qu'une règle de la racine emporte ne l'est pas.
+
+> **Rendre une étape BLOQUANTE, c'est vérifier qu'elle passe sur un CLONE, pas sur son arbre de
+> travail.** Un fichier présent sur le disque et absent du dépôt ne se voit dans aucun `run` local ;
+> il se voit en une commande — `git ls-files --others --ignored --exclude-standard --directory` sur
+> le paquet, puis `git check-ignore -v` sur ce qu'elle rend.
+
+## Leçon 344 — une garde négative posée sur un FICHIER attrape les jumelles innocentes de ce qu'elle vise
 
 **Le fait.** Six titres d'action du SDK étaient des littéraux français en dur ; je les ai fait passer par le
 catalogue, et j'ai écrit la garde qui interdit leur retour :
@@ -19965,3 +20197,160 @@ l'ÉCART entre ses deux verdicts.
 Voir la leçon 335 (le commentaire qui explique une absence) et la 336 (l'extraction qui perd une
 capacité) : trois formes du même angle mort, où ce qui est écrit à côté de la chose corrigée décide de
 la validité du correctif.
+## 268i — vérifier la contrainte qu'on HÉRITE avant de la transmettre
+
+- **Une contrainte plausible, écrite une fois, fige une tâche indéfiniment.**
+  #4308 disait : « mécanique, mais à faire avec un compilateur : 648 littéraux
+  Swift, dont beaucoup contiennent des apostrophes (`J'aime`) et des accents ;
+  une erreur d'échappement casse la compilation ». Je l'ai répétée telle quelle
+  dans deux itérations. **Ni l'apostrophe ni l'accent ne s'échappent dans un
+  littéral Swift** — seuls `"` et `\`. Mesuré : sur 504 divergences, **500 ne
+  demandent aucun échappement** et **zéro** contient un guillemet, un antislash
+  ou un saut de ligne. Le risque énoncé n'existait pas sur ce lot.
+  La question à poser à toute contrainte héritée : **quelle mesure la
+  soutient ?** — et si la réponse est « aucune », la mesurer coûte quelques
+  minutes contre des itérations de blocage.
+
+- **Un remplacement de masse se fait sur des BORNES vérifiées, pas sur une
+  expression régulière.** Les 498 littéraux ont été réécrits aux offsets absolus
+  extraits du segment d'appel à parenthèses équilibrées, chaque borne contrôlée
+  avant écriture (`src[start:end] == inline`), les éditions appliquées de DROITE
+  à GAUCHE pour que les décalages restent valides. Puis trois contrôles par
+  fichier : mêmes clés, mêmes lignes, mêmes appels. Sans le contrôle « mêmes
+  clés », une borne fausse aurait réécrit un identifiant de clé au lieu de son
+  libellé — un défaut que la compile n'attrape pas et que les deux règles ne
+  voient pas.
+
+- **Classer ce qui RESTE par sa NATURE, pas seulement le compter.** Les 34 sites
+  non réconciliables se sont révélés être deux familles distinctes : des clés
+  **absentes du catalogue** (leur `defaultValue` s'affiche partout — il manque une
+  entrée, pas un alignement) et des clés **PLURIELLES**. J'ai d'abord écrit
+  « plurielles » pour les quatre premières et j'allais l'étendre aux 34 : la
+  vérification a montré que la majorité était absente du catalogue. **Un
+  échantillon ne nomme pas une population.**
+
+- **Une garde peut contenir un cas qu'aucune correction ne satisfait.** La règle
+  B compare le littéral à `sourceValues[key]`, lu depuis le `stringUnit` PLAT ;
+  une clé plurielle n'en a pas, la valeur est `nil`, et la comparaison échoue
+  quoi qu'on écrive. Trois fichiers sont donc inépinglables **par construction**,
+  pas par dette. C'est la famille du correctif 226i — qui avait appris la
+  pluralité à `loadTranslations` et l'a oubliée pour `values`. **Quand un
+  correctif enseigne une notion à UN lecteur de catalogue, chercher les autres
+  lecteurs du même catalogue.**
+
+## 269i — un repli qui protège d'une panne peut MASQUER une autre
+
+- **Un `defaultValue` rend INVISIBLE l'absence de sa clé au catalogue.** La garde
+  qui traque les clés non résolues (`test_everyUsedIdentifierKeyResolvesInDevelopmentLanguage`)
+  ne regarde que les appels **sans** `defaultValue` — et c'est justifié : un repli
+  garantit qu'on n'affichera jamais l'identifiant brut à l'écran. Mais cette
+  garantie porte sur le CRASH VISUEL, pas sur la LANGUE. Une clé absente du
+  catalogue n'a aucune localisation : son `defaultValue` s'affiche **tel quel dans
+  les sept locales**. Mesuré : 29 chaînes, dont **sept libellés VoiceOver**, sont
+  servies en français à tous les lecteurs non francophones — et en français NON
+  ACCENTUÉ aux francophones, personne n'ayant relu ce littéral comme du texte
+  affiché. **Demander d'un repli : de quoi protège-t-il exactement, et qu'est-ce
+  que sa présence dispense de vérifier ?**
+
+- **Ne pas produire 102 chaînes de traduction de sa propre autorité.** Sur 26
+  clés absentes, 9 ont déjà leur traduction ailleurs dans le catalogue et se
+  réutilisent sans rien inventer ; les 17 autres demanderaient une traduction
+  neuve en six langues dont l'arabe. C'est du texte expédié à des utilisateurs,
+  invérifiable depuis cet environnement — et **une traduction arabe approximative
+  est un défaut pire que le repli français honnête qu'elle remplacerait**. C'est
+  le principe déjà écrit dans `untranslatableKeys` pour les CGU, appliqué au
+  VOLUME plutôt qu'à la nature du texte. Mesurer, tabuler ce qui se réutilise,
+  et remettre la décision — pas deviner.
+
+- **Un lot qui ne débloque rien peut valoir d'être fait, à condition de le dire.**
+  Les 186 dernières réconciliations ne rendent aucun écran épinglable : leurs 40
+  fichiers sont tous retenus par l'autre règle. Leur valeur est que le code cesse
+  de mentir, et qu'ils basculeront sans repasser par là le jour où leurs
+  traductions arrivent. **Annoncer « zéro gain sur la métrique visible » évite de
+  laisser croire à un gain qu'on n'a pas obtenu.**
+
+## 270i — une carte ne peut pas signaler l'entrée qu'elle n'a pas
+
+**Contexte** — 269i lègue « 29 clés absentes du catalogue ». Le remesurage en rend
+114, dont 22 appartiennent à `MeeshyWidgets`. Or `apps/ios/MeeshyWidgets/Localizable.xcstrings`
+existe depuis que la cible existe : 39 clés, les sept locales. C'est la GARDE qui
+lisait le mauvais catalogue — `catalogByTargetFragment` nommait deux des trois
+catalogues du dépôt.
+
+- **Une table de résolution incomplète ne produit pas d'échec, elle produit une
+  MESURE FAUSSE.** Une cible non mappée retombe silencieusement sur le catalogue
+  de l'app : ses clés y sont absentes, donc comptées non traduites alors qu'elles
+  sont traduites, et ses sources restent inépinglables bien qu'elles passent déjà
+  toutes les règles. Le cliquet portait 22 dettes inexistantes sur 114 et refusait
+  une protection déjà acquise. **Un chiffre qui ne bouge pas n'est pas un chiffre
+  qui est juste.**
+
+- **Un témoin écrit DEPUIS la carte ne peut pas voir ce qui n'y est pas.** Toutes
+  les gardes de la suite consommaient `catalogByTargetFragment` — aucune ne
+  pouvait donc constater son entrée manquante : une table ne se lit que pour les
+  entrées qu'elle a. Le témoin doit venir de la source qui connaît l'INVENTAIRE
+  COMPLET — ici le système de fichiers : « tout `.xcstrings` de l'arbre iOS est
+  soit le catalogue de l'app, soit mappé », plus la direction inverse (aucun
+  mappage mort) et un sondage par fragment (le mappage RÉSOUT vraiment). C'est la
+  forme, appliquée à une table de configuration, de la leçon 261 : une énumération
+  porte deux affirmations — « ces entrées sont justes » (vérifiable) et « ce sont
+  toutes les entrées » (presque jamais vérifiée).
+
+- **Les trous d'un catalogue ne sont pas dispersés : ce sont les VALEURS
+  MANQUANTES de familles par ailleurs traduites.** `DeliveryStatus` a six cas, le
+  compositeur émet une clé par cas, trois sont au catalogue et trois non : un
+  lecteur d'écran arabophone entendait trois états en arabe et trois en français
+  dans la même phrase. La pastille de synchronisation annonce ses 53 opérations en
+  sept langues et ses deux boutons en français. **Le code, lui, a l'air complet —
+  la complétude qu'on vérifie à l'œil est celle du `switch`, pas celle du
+  catalogue.** À une clé absente, demander non seulement « que voit
+  l'utilisateur ? » mais **« quelles sont ses SŒURS, et sont-elles là ? »**
+
+- **Compléter une famille attrape ce qu'un balayage par égalité de chaîne laisse
+  derrière.** Dix des onze clés remplies l'ont été en copiant verbatim une entrée
+  portant déjà le même français ; la onzième, `a11y.delivery.sending`, n'a pas de
+  jumelle textuelle (« en cours d'envoi » vs « Envoi en cours ») et n'aurait été
+  trouvée par aucune recherche d'égalité. Et sa CASSE se déduit sans rien inventer :
+  les trois sœurs déjà au catalogue portent la forme mi-phrase en minuscule dans
+  les six mêmes langues (`gesendet` là où la bulle dit `Gesendet`). **Une famille
+  à moitié traduite documente sa propre convention — c'est la ressource la moins
+  chère et la plus sûre pour remplir l'autre moitié.**
+
+- **Un témoin qui n'a jamais été exécuté est une hypothèse.** Le premier jet de
+  `test_everyPerTargetCatalogIsMapped` élisait les catalogues par leur EXTENSION
+  (`.xcstrings`) et rougissait : deux cibles expédient aussi un
+  `InfoPlist.xcstrings`, qui localise des valeurs d'`Info.plist` lues par le
+  système — pas une table adressable depuis `String(localized:)`. Le critère juste
+  est le NOM DE FICHIER (`Localizable.xcstrings`), la table par défaut. Sans chaîne
+  d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
+  l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
+  évité un cycle CI de cinquante.
+
+- **Un test qui code en dur une chaîne de la langue SOURCE atteste que la chaîne
+  n'est PAS localisée.** `FocalVoiceOverParityTests` cherchait le segment
+  d'accusé de livraison par le littéral `"lu"`, force-unwrappé. Il passait
+  uniquement parce que `a11y.delivery.read` était absente du catalogue : toutes
+  les locales retombaient sur le `defaultValue` français. La clé ajoutée, le
+  simulateur anglais de la CI rend « read », l'index vaut `nil`, `signal trap` —
+  1 échec sur 9 062. **Un tel test est un cliquet à l'envers : il ne rougit pas
+  quand la traduction manque, il rougit quand elle ARRIVE**, et le prix se paie
+  au moment exact où l'on répare le défaut. Corollaire mesuré sur le voisin :
+  `contains("lu")` passait sur un contenu texte « Sa**lu**t » — donc même si le
+  segment gardé avait disparu. Demander sa valeur au CATALOGUE, comme le
+  faisaient déjà tous les tests voisins.
+
+- **« Zéro ligne de production modifiée » n'est pas « zéro changement de
+  comportement ».** Entrer une clé au catalogue change ce que `String(localized:)`
+  rend dans les six autres locales — c'est l'objet même du lot. Avant de conclure
+  qu'un lot de catalogue est inerte, chercher qui COMPARE ces chaînes : tests
+  d'abord, code de production ensuite.
+
+- **« La CI est verte » ne veut rien dire tant qu'on n'a pas lu ce que la CI a
+  EXÉCUTÉ.** Le gate iOS de ce dépôt est un opt-in par mot-clé dans le SUJET du
+  commit de tête (« smoke test » / « run test » / « to test ») ; sans lui, le job
+  macOS compile et saute `Run iOS tests`. Le premier run de la PR 270i est sorti
+  vert sans exécuter un seul test — le workflow le dit dans le NOM du check
+  (« Build app (app + cibles de test) » vs « Build app + tests unitaires »), et
+  c'est la seule chose qui distingue les deux verts. **Lire les étapes du job, pas
+  sa conclusion.** `workflow_dispatch` force la suite complète sans pousser de
+  commit vide.

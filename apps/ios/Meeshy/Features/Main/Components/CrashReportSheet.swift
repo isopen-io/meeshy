@@ -35,7 +35,7 @@ struct CrashReportSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Crash Reports", bundle: .main))
+            .navigationTitle(String(localized: "crash.reports.title", defaultValue: "Rapports de crash", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

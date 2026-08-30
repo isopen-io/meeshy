@@ -110,7 +110,7 @@ struct SupportView: View {
             sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: MeeshyColors.infoHex)
 
             VStack(spacing: 0) {
-                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
+                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email du support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
                 supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
             }
             .background(sectionBackground(tint: MeeshyColors.infoHex))
@@ -121,7 +121,7 @@ struct SupportView: View {
 
     private var reportSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un probleme", bundle: .main), icon: "exclamationmark.bubble.fill", color: MeeshyColors.warningHex)
+            sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un problème", bundle: .main), icon: "exclamationmark.bubble.fill", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
                 supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)

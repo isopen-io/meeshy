@@ -67,7 +67,7 @@ struct TrackingLinksView: View {
 
             Spacer()
 
-            Text(String(localized: "tracking.links.title", defaultValue: "Liens de tracking", bundle: .main))
+            Text(String(localized: "tracking.links.title", defaultValue: "Liens de suivi", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)

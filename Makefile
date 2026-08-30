@@ -85,7 +85,6 @@ PROJECT_PROD := meeshy-prod
 
 # Paths
 WEB_DIR := apps/web
-WEB_V2_DIR := apps/web_v2
 IOS_DIR := apps/ios
 GATEWAY_DIR := services/gateway
 TRANSLATOR_DIR := services/translator
@@ -99,7 +98,6 @@ TRANSLATOR_PID := $(PID_DIR)/translator.pid
 GATEWAY_PID := $(PID_DIR)/gateway.pid
 AGENT_PID := $(PID_DIR)/agent.pid
 WEB_PID := $(PID_DIR)/web.pid
-WEB_V2_PID := $(PID_DIR)/web_v2.pid
 
 # =============================================================================
 # AIDE
@@ -330,8 +328,8 @@ _generate-backend-env: ## Generate backend .env (gateway + translator + agent)
 	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> $(GATEWAY_DIR)/.env
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== CORS =====" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=http://localhost:3100,http://localhost:3200,http://localhost:3000,http://127.0.0.1:3100,http://127.0.0.1:3200" >> $(GATEWAY_DIR)/.env
-	@echo "ALLOWED_ORIGINS=http://localhost:3100,http://localhost:3200,http://localhost:3000" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=http://localhost:3100,http://localhost:3000,http://127.0.0.1:3100" >> $(GATEWAY_DIR)/.env
+	@echo "ALLOWED_ORIGINS=http://localhost:3100,http://localhost:3000" >> $(GATEWAY_DIR)/.env
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== RATE LIMITING =====" >> $(GATEWAY_DIR)/.env
 	@echo "ENABLE_RATE_LIMITING=true" >> $(GATEWAY_DIR)/.env
@@ -1131,7 +1129,7 @@ _generate-env-local: ## Générer les fichiers .env pour le domaine local
 	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
 	@echo "PUBLIC_URL=https://gate.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://$(LOCAL_DOMAIN):3200,https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@# Email config
 	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
@@ -1209,9 +1207,6 @@ _dev-tmux-domain: ## Lancer les services en mode tmux avec HTTPS
 	@sleep 2
 	@tmux new-window -t meeshy -n web \
 		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(LOCAL_DOMAIN) -> :3100)'; $(JS_RUNTIME) run dev:https; read"
-	@sleep 2
-	@tmux new-window -t meeshy -n web_v2 \
-		"cd $(CURDIR)/$(WEB_V2_DIR) && echo '🎨 Web V2 HTTPS ($(LOCAL_DOMAIN) -> :3200)'; $(JS_RUNTIME) run dev:https; read"
 	@echo ""
 	@$(MAKE) _show-domain-urls
 	@echo ""
@@ -1247,7 +1242,6 @@ _show-domain-urls:
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (HTTPS):$(NC)"
 	@echo "   Web:          $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
-	@echo "   Web V2:       $(GREEN)https://$(LOCAL_DOMAIN):3200$(NC)"
 	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 	@echo ""
@@ -1452,7 +1446,7 @@ _generate-env-network:
 	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
 	@echo "PUBLIC_URL=https://$(HOST):3000" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(HOST):3100" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=https://localhost:3100,https://localhost:3200,https://$(HOST_IP):3100,https://$(HOST_IP):3200,https://$(HOST):3100,https://$(HOST):3200,https://$(LOCAL_DOMAIN):3100,https://$(LOCAL_DOMAIN):3200" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://localhost:3100,https://$(HOST_IP):3100,https://$(HOST):3100,https://$(LOCAL_DOMAIN):3100" >> $(GATEWAY_DIR)/.env
 	@# Email config
 	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
@@ -1530,9 +1524,6 @@ dev-tmux-network: ## 🖥️  Lancer les services en mode tmux (réseau)
 	@sleep 2
 	@tmux new-window -t meeshy -n web \
 		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(HOST):3100)'; $(JS_RUNTIME) run dev:https; read"
-	@sleep 2
-	@tmux new-window -t meeshy -n web_v2 \
-		"cd $(CURDIR)/$(WEB_V2_DIR) && echo '🎨 Web V2 HTTPS ($(HOST):3200)'; $(JS_RUNTIME) run dev:https; read"
 	@echo ""
 	@$(MAKE) _show-network-urls
 	@echo ""
@@ -1568,13 +1559,11 @@ _show-network-urls:
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (depuis n'importe quel appareil):$(NC)"
 	@echo "   Web:           $(GREEN)https://$(HOST):3100$(NC)"
-	@echo "   Web V2:        $(GREEN)https://$(HOST):3200$(NC)"
 	@echo "   Gateway API:   $(GREEN)https://$(HOST):3000$(NC)"
 	@echo "   Translator:    $(GREEN)http://$(HOST):8000$(NC)"
 	@echo ""
 	@echo "$(BOLD)🔧 Via domaine local:$(NC)"
 	@echo "   Web:           $(GREEN)https://$(LOCAL_DOMAIN):3100$(NC)"
-	@echo "   Web V2:        $(GREEN)https://$(LOCAL_DOMAIN):3200$(NC)"
 	@echo ""
 	@echo "$(BOLD)📡 Serveur DNS local:$(NC)"
 	@echo "   $(CYAN)$(HOST_IP):53$(NC) (configurez vos appareils pour l'utiliser)"

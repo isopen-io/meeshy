@@ -114,7 +114,7 @@ struct InviteFriendsSheet: View {
                             .font(.system(size: 20)) // toolbar chrome glyph — fixed size (nav bar affordance)
                             .foregroundStyle(.ultraThinMaterial)
                     }
-                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
             }
             .task {
@@ -198,7 +198,7 @@ struct InviteFriendsSheet: View {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text(String(localized: "invite.creatingLink", defaultValue: "Creation du lien..."))
+                            Text(String(localized: "invite.creatingLink", defaultValue: "Création du lien…"))
                                 .font(MeeshyFont.relative(13))
                                 .foregroundColor(theme.textMuted)
                         }
@@ -208,7 +208,7 @@ struct InviteFriendsSheet: View {
 
                     if shareURL != nil {
                         Text(showCopiedFeedback
-                                ? String(localized: "invite.copied", defaultValue: "Copie !")
+                                ? String(localized: "invite.copied", defaultValue: "Copié !")
                                 : String(localized: "invite.copy", defaultValue: "Copier"))
                             .font(MeeshyFont.relative(11, weight: .bold))
                             .foregroundColor(.white)
@@ -231,7 +231,7 @@ struct InviteFriendsSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(shareURL == nil)
-            .accessibilityLabel(String(localized: "invite.a11y.copyLink", defaultValue: "Copy invitation link", bundle: .main))
+            .accessibilityLabel(String(localized: "invite.a11y.copyLink", defaultValue: "Copier le lien d'invitation", bundle: .main))
         }
         .padding(16)
         .background(
@@ -351,7 +351,7 @@ struct InviteFriendsSheet: View {
                 )
             }
             .disabled(isCreating && createdLink == nil)
-            .accessibilityLabel(String(localized: "invite.a11y.shareLink", defaultValue: "Share invitation link", bundle: .main))
+            .accessibilityLabel(String(localized: "invite.a11y.shareLink", defaultValue: "Partager le lien d'invitation", bundle: .main))
 
             if let error = errorMessage {
                 HStack(spacing: 6) {
@@ -382,7 +382,7 @@ struct InviteFriendsSheet: View {
                     .font(MeeshyFont.relative(10, weight: .semibold))
             }
             .foregroundColor(theme.textSecondary)
-            .accessibilityLabel(String(localized: "invite.a11y.customizeOptions", defaultValue: "Customize link options", bundle: .main))
+            .accessibilityLabel(String(localized: "invite.a11y.customizeOptions", defaultValue: "Personnaliser les options du lien", bundle: .main))
         }
     }
 
@@ -391,7 +391,7 @@ struct InviteFriendsSheet: View {
     private var optionsPanel: some View {
         VStack(spacing: 16) {
             // Identity
-            optionSection(title: String(localized: "invite.section.identity", defaultValue: "IDENTITE"), icon: "tag.fill") {
+            optionSection(title: String(localized: "invite.section.identity", defaultValue: "IDENTITÉ"), icon: "tag.fill") {
                 VStack(spacing: 0) {
                     optionTextField(String(localized: "invite.linkName", defaultValue: "Nom du lien"), placeholder: defaultLinkName, text: $linkName)
                 }
@@ -415,7 +415,7 @@ struct InviteFriendsSheet: View {
 
                     optionToggle(
                         String(localized: "invite.limitUses", defaultValue: "Limiter les utilisations"),
-                        subtitle: maxUsesEnabled ? "\(maxUsesValue) max" : String(localized: "invite.unlimited", defaultValue: "Illimite"),
+                        subtitle: maxUsesEnabled ? "\(maxUsesValue) max" : String(localized: "invite.unlimited", defaultValue: "Illimité"),
                         icon: "person.2.fill",
                         iconColor: MeeshyColors.info,
                         isOn: $maxUsesEnabled
@@ -435,7 +435,7 @@ struct InviteFriendsSheet: View {
             }
 
             // Permissions
-            optionSection(title: String(localized: "invite.section.permissions", defaultValue: "PERMISSIONS"), icon: "slider.horizontal.3") {
+            optionSection(title: String(localized: "invite.section.permissions", defaultValue: "Permissions"), icon: "slider.horizontal.3") {
                 VStack(spacing: 0) {
                     optionToggle(String(localized: "invite.perm.messages", defaultValue: "Messages"), subtitle: nil, icon: "bubble.left.fill", iconColor: Color(hex: conversation.accentColor), isOn: $allowMessages)
                     sectionDivider
@@ -448,7 +448,7 @@ struct InviteFriendsSheet: View {
             }
 
             // Access
-            optionSection(title: String(localized: "invite.section.access", defaultValue: "ACCES"), icon: "person.badge.key.fill") {
+            optionSection(title: String(localized: "invite.section.access", defaultValue: "ACCÈS"), icon: "person.badge.key.fill") {
                 VStack(spacing: 0) {
                     optionToggle(String(localized: "invite.access.account", defaultValue: "Compte requis"), subtitle: nil, icon: "person.fill.checkmark", iconColor: Color(hex: conversation.accentColor), isOn: $requireAccount)
                     sectionDivider
@@ -720,10 +720,10 @@ private extension MeeshyConversation.ConversationType {
         switch self {
         case .direct: String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
         case .group: String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: String(localized: "conversation.type.public", defaultValue: "Publique", bundle: .main)
-        case .global: String(localized: "conversation.type.global", defaultValue: "Globale", bundle: .main)
-        case .community: String(localized: "conversation.type.community", defaultValue: "Communaut\u{00e9}", bundle: .main)
-        case .channel: String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .public: String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
+        case .global: String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
+        case .community: String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
+        case .channel: String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
         case .bot: String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
         case .broadcast: String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }

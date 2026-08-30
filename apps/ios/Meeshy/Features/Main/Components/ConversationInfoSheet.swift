@@ -209,7 +209,7 @@ struct ConversationInfoSheet: View {
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                 }
-                .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Reglages de la conversation", bundle: .main))
+                .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Réglages de la conversation", bundle: .main))
             }
 
             Button {
@@ -386,7 +386,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 4) {
                 Image(systemName: "bell.slash.fill")
                     .font(MeeshyFont.relative(10))
-                Text(String(localized: "conversation.info.muted", defaultValue: "Notifications desactivees", bundle: .main))
+                Text(String(localized: "conversation.info.muted", defaultValue: "Notifications désactivées", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .medium))
             }
             .foregroundColor(theme.textMuted)
@@ -508,7 +508,7 @@ struct ConversationInfoSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre...", bundle: .main), text: $memberSearchQuery)
+                TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre…", bundle: .main), text: $memberSearchQuery)
                     .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textPrimary)
                     .autocorrectionDisabled()
@@ -546,7 +546,7 @@ struct ConversationInfoSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
             } else if filteredMembers.isEmpty {
-                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? String(localized: "conversation.info.no-members", defaultValue: "Aucun membre", bundle: .main) : String(localized: "common.no-results", defaultValue: "Aucun resultat", bundle: .main))
+                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? String(localized: "conversation.info.no-members", defaultValue: "Aucun membre", bundle: .main) : String(localized: "common.no-results", defaultValue: "Aucun résultat", bundle: .main))
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredMembers) { participant in
@@ -679,7 +679,7 @@ struct ConversationInfoSheet: View {
     private var mediaSection: some View {
         VStack(spacing: 0) {
             if mediaAttachments.isEmpty {
-                emptyState(icon: "photo.on.rectangle.angled", text: String(localized: "conversation.info.no-media", defaultValue: "Aucun media partage", bundle: .main))
+                emptyState(icon: "photo.on.rectangle.angled", text: String(localized: "conversation.info.no-media", defaultValue: "Aucun média partagé", bundle: .main))
             } else {
                 let columns = [
                     GridItem(.flexible(), spacing: 2),
@@ -746,7 +746,7 @@ struct ConversationInfoSheet: View {
                     }
                     if pinned.count > 2 {
                         HStack(spacing: 4) {
-                            Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages epingles", bundle: .main), pinned.count))
+                            Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages épinglés", bundle: .main), pinned.count))
                                 .font(MeeshyFont.relative(11, weight: .semibold))
                                 .foregroundColor(accent)
                             Image(systemName: "chevron.forward")
@@ -823,7 +823,7 @@ struct ConversationInfoSheet: View {
                 .padding(.top, 8)
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages epingles", bundle: .main))
+            .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages épinglés", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -953,7 +953,7 @@ struct ConversationInfoSheet: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "conversation.encryption.menu.title",
-                                    defaultValue: "End-to-End Encryption",
+                                    defaultValue: "Chiffrement de bout en bout",
                                     bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
@@ -1121,21 +1121,21 @@ struct ConversationInfoSheet: View {
 
     private var conversationTypeLabel: String {
         switch conversation.type {
-        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Conversation privee", bundle: .main)
+        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
         case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
         case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
         case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
         case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
         case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
-        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Broadcast", bundle: .main)
+        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 
     private func tabLabel(for tab: InfoTab) -> String {
         switch tab {
         case .members: return String(localized: "conversation.info.tab.members", defaultValue: "Membres", bundle: .main)
-        case .media: return String(localized: "conversation.info.tab.media", defaultValue: "Medias", bundle: .main)
+        case .media: return String(localized: "conversation.info.tab.media", defaultValue: "Médias", bundle: .main)
         case .plus: return String(localized: "conversation.info.tab.stats", defaultValue: "Stats", bundle: .main)
         case .preferences: return String(localized: "conversation.info.tab.options", defaultValue: "Options", bundle: .main)
         }
@@ -1157,7 +1157,7 @@ struct ConversationInfoSheet: View {
     private func roleBadgeLabel(_ role: String) -> String {
         switch role.lowercased() {
         case "admin", "creator": return String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .main)
-        case "moderator": return String(localized: "conversation.role.moderator", defaultValue: "Mod", bundle: .main)
+        case "moderator": return String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .main)
         default: return role.capitalized
         }
     }
@@ -1243,7 +1243,7 @@ struct ConversationInfoSheet: View {
             do {
                 try await blockService?.blockUser(userId: userId)
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloque", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloqué", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()

@@ -28,8 +28,7 @@ const path = require('path');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
-const CACHE = path.join(ROOT, '.cache/dc-vendor');
-const NM = path.join(CACHE, 'node_modules');
+const { chromiumPath, vendorRequire } = require(path.join(ROOT, 'scripts/lib/navigateur.cjs'));
 const CIBLE = path.join(HERE, 'cible');
 const RENDU = path.join(HERE, 'rendu');
 
@@ -46,13 +45,6 @@ const BUDGET = {
   'role-premier': { octets: 120 * 1024, requetes: 12 },
   defaut: { octets: 300 * 1024, requetes: 30 },
 };
-
-function chromiumPath() {
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
-  const cands = [process.env.CHROMIUM_PATH, path.join(base, 'chromium/chrome-linux/chrome'), path.join(base, 'chromium')];
-  for (const c of cands) { try { if (c && fs.statSync(c).isFile()) return c; } catch { /* suivant */ } }
-  throw new Error(`Aucun Chromium trouve sous ${base}`);
-}
 
 /**
  * Profil d'ENCRE : par ligne, la fraction de pixels qui s'ecartent du fond de
@@ -111,9 +103,9 @@ function ecartStructurel(a, b) {
 }
 
 (async () => {
-  const { chromium } = require(path.join(NM, 'playwright-core'));
-  const { PNG } = require(path.join(NM, 'pngjs'));
-  const pixelmatch = require(path.join(NM, 'pixelmatch')).default || require(path.join(NM, 'pixelmatch'));
+  const { chromium } = vendorRequire('playwright-core');
+  const { PNG } = vendorRequire('pngjs');
+  const pixelmatch = vendorRequire('pixelmatch');
 
   const index = JSON.parse(fs.readFileSync(path.join(HERE, 'vues.json'), 'utf8'));
   let vues = index.vues.filter(v => !/:/.test(v.route));

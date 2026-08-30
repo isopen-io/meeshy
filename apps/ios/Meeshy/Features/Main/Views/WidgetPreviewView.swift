@@ -130,7 +130,7 @@ struct WidgetPreviewView: View {
                     .contentTransition(.numericText())
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
-                    Text(String(localized: "widget.preview.messages", defaultValue: "messages", bundle: .main))
+                    Text(String(localized: "widget.preview.messages", defaultValue: "Messages", bundle: .main))
                         .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                     Text(String(localized: "widget.preview.unread", defaultValue: "non lus", bundle: .main))
@@ -182,7 +182,7 @@ struct WidgetPreviewView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
-                Text(String(localized: "widget.preview.recentConversations", defaultValue: "Conversations r\u{00e9}centes", bundle: .main))
+                Text(String(localized: "widget.preview.recentConversations", defaultValue: "Conversations récentes", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -434,7 +434,7 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: String(localized: "widget.preview.tracking", defaultValue: "Tracking", bundle: .main),
+                        title: String(localized: "widget.preview.tracking", defaultValue: "Suivi", bundle: .main),
                         icon: "chart.bar.fill",
                         color: MeeshyColors.purple500Hex,
                         stat1: String(localized: "widget.preview.linkCountTracking", defaultValue: "\(trackingStats?.totalLinks ?? 0) lien(s)", bundle: .main),
@@ -447,7 +447,7 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: String(localized: "widget.preview.community", defaultValue: "Communaut\u{00e9}", bundle: .main),
+                        title: String(localized: "widget.preview.community", defaultValue: "Communauté", bundle: .main),
                         icon: "person.3.fill",
                         color: MeeshyColors.warningHex,
                         stat1: String(localized: "widget.preview.groupCount", defaultValue: "\(communityLinks.count) groupe(s)", bundle: .main),

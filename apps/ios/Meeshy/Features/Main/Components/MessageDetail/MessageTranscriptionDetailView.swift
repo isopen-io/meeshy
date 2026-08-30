@@ -153,7 +153,7 @@ struct MessageTranscriptionDetailView: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.6))
                             .accessibilityHidden(true)
-                        Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
+                        Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs détectés", bundle: .main), speakerCount))
                             .font(.caption.weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }

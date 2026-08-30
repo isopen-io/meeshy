@@ -294,18 +294,6 @@ const DETTE: readonly { readonly cle: string; readonly issue: string }[] = [
   { cle: 'users/blocking.ts POST /users/:userId/block', issue: '#4164' },
   { cle: 'users/blocking.ts DELETE /users/:userId/block', issue: '#4164' },
   { cle: 'users/blocking.ts GET /users/me/blocked-users', issue: '#4164' },
-  // #4349 a fait des six portes d'accusés des ADAPTATEURS MINCES (même
-  // référence de gestionnaire, aucun corps dupliqué) vers la collection
-  // `/conversations/:conversationId/receipts`. Leur ANNONCE est un lot à part
-  // (#4423) : poser un en-tête sur cinq routes vivantes qu'appellent trois
-  // clients ne se décide pas en fin d'intégration. Ce sont bien des alias —
-  // c'est pourquoi ils sont ici et non dans la liste des SUCCESSEURS.
-  { cle: 'conversations/messages.ts POST /conversations/:id/mark-read', issue: '#4423' },
-  { cle: 'message-read-status.ts GET /messages/:messageId/read-status', issue: '#4423' },
-  { cle: 'message-read-status.ts GET /conversations/:conversationId/read-statuses', issue: '#4423' },
-  { cle: 'message-read-status.ts POST /conversations/:conversationId/mark-as-read', issue: '#4423' },
-  { cle: 'message-read-status.ts POST /conversations/:conversationId/mark-as-received', issue: '#4423' },
-  { cle: 'message-read-status.ts POST /conversations/:conversationId/messages/:messageId/delivery-receipt', issue: '#4423' },
 ];
 
 /**
@@ -373,17 +361,56 @@ const SUCCESSEURS: readonly { readonly cle: string; readonly issue: string }[] =
   },
 ];
 
+/**
+ * Les SILENCES ASSUMÉS — DISTINCTS de `DETTE`.
+ *
+ * `DETTE` promet une réparation : « alias déclaré qui n'annonce pas ENCORE ».
+ * Une entrée ci-dessous ne porte AUCUNE promesse — elle mesure une
+ * IMPOSSIBILITÉ : `depreciee`/`annoncerDepreciation` (`utils/deprecation.ts`)
+ * composent un `Link` INCONDITIONNELLEMENT depuis `successeur`, requis, sans
+ * forme « `Deprecation` seul » ; et la route n'a, mesuré, AUCUNE source
+ * DB-free pour composer un successeur suivable. Un `Link` en gabarit
+ * désinforme plus qu'il n'informe (`deprecated-alias-headers-guard.test.ts`
+ * § « un successeur en gabarit n'indique aucune migration », qui a refusé un
+ * premier essai sur CETTE porte). Voir le doc-comment de site
+ * (`message-read-status.ts` § « NE PORTE PAS d'annonce ») pour les deux
+ * issues qui en sortiraient : élargir le helper (hors territoire de #4423),
+ * ou retirer la porte si aucun appelant ne la tient.
+ *
+ * Une entrée ne quitte cette liste QUE si une nouvelle source apparaît —
+ * jamais par lassitude. Le témoin ci-dessous vérifie les deux sens : la route
+ * existe encore, ET elle reste réellement MUETTE (sinon quelqu'un l'a
+ * annoncée sans retirer sa ligne ici — le mensonge inverse de `DETTE`).
+ */
+const SILENCES_ASSUMES: readonly { readonly cle: string; readonly issue: string }[] = [
+  {
+    cle: 'message-read-status.ts GET /messages/:messageId/read-status',
+    issue: '#4423 — aucun conversationId sans base ; voir deprecated-alias-headers-guard.test.ts',
+  },
+];
+
 describe('Une adresse qui se déclare alias le DIT au client', () => {
-  it("n'admet aucun alias muet hors de la dette nommée", () => {
+  it("n'admet aucun alias muet hors de la dette nommée et des silences assumés", () => {
     const enDette = new Set(DETTE.map((d) => d.cle));
     const successeurs = new Set(SUCCESSEURS.map((s) => s.cle));
+    const silencesAssumes = new Set(SILENCES_ASSUMES.map((s) => s.cle));
     const muets = balayer()
       .filter((e) => e.declare && !e.annonce)
       .map(cle)
-      .filter((c) => !enDette.has(c) && !successeurs.has(c));
+      .filter((c) => !enDette.has(c) && !successeurs.has(c) && !silencesAssumes.has(c));
 
     expect(muets).toEqual([]);
   });
+
+  it.each(SILENCES_ASSUMES.map((s) => [s.cle, s.issue] as const))(
+    '%s reste un silence ASSUMÉ (%s) — sinon retirer sa ligne',
+    (cle) => {
+      const trouvee = balayer().find((e) => `${e.fichier} ${e.verbe} ${e.chemin}` === cle);
+      expect(trouvee).toBeDefined();
+      expect(trouvee?.declare).toBe(true);
+      expect(trouvee?.annonce).toBe(false);
+    }
+  );
 
   it('chaque SUCCESSEUR nommé désigne encore une route réelle du balayage', () => {
     // Sans ce témoin, la liste ci-dessus deviendrait une dispense permanente :

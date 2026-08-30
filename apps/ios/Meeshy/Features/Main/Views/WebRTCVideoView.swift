@@ -72,7 +72,7 @@ struct CallVideoView: View {
     var body: some View {
         if let rtcTrack = track as? RTCVideoTrack {
             WebRTCVideoView(track: rtcTrack, mirror: mirror, contentMode: contentMode)
-                .accessibilityLabel(String(localized: "call.video.active", defaultValue: "Video en direct", bundle: .main))
+                .accessibilityLabel(String(localized: "call.video.active", defaultValue: "Vidéo en direct", bundle: .main))
         } else {
             if let unexpected = track {
                 let _ = videoLogger.error("CallVideoView: unexpected track type \(type(of: unexpected)) — expected RTCVideoTrack")
@@ -83,7 +83,7 @@ struct CallVideoView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.white.opacity(0.3))
                 )
-                .accessibilityLabel(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
+                .accessibilityLabel(String(localized: "call.video.unavailable", defaultValue: "Vidéo non disponible", bundle: .main))
         }
     }
 }
@@ -100,7 +100,7 @@ struct CallVideoView: View {
     var body: some View {
         Color.black
             .overlay(
-                Text(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
+                Text(String(localized: "call.video.unavailable", defaultValue: "Vidéo non disponible", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
                     .font(.footnote.weight(.medium))
             )

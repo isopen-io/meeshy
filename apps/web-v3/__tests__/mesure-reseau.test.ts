@@ -1,0 +1,351 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import {
+  agregeExecutions,
+  cheminDe,
+  composeMesure,
+  composeVerdictReseau,
+  franchissementsReseau,
+  mesureIndisponible,
+  octetsParType,
+  octetsTransferes,
+  percentile,
+  plafondsDuChemin,
+  requetesAvantPremierPixel,
+  requetesPendantes,
+} from '../scripts/mesure-reseau.mjs';
+import type { BudgetReseau, Mesure } from '../scripts/mesure-reseau.mjs';
+
+const COMMANDE = 'node apps/web-v3/scripts/mesure-reseau.mjs https://exemple/';
+
+describe('ce que le réseau a réellement coûté', () => {
+  it("totalise les octets ENCODÉS, pas la taille décompressée", () => {
+    expect(
+      octetsTransferes([
+        { requestId: '1', encodedDataLength: 4096 },
+        { requestId: '2', encodedDataLength: 1024 },
+      ]),
+    ).toBe(5120);
+  });
+
+  it('range les octets par type de ressource', () => {
+    const table = octetsParType(
+      [
+        { requestId: '1', type: 'Document' },
+        { requestId: '2', type: 'Script' },
+        { requestId: '3', type: 'Script' },
+      ],
+      [
+        { requestId: '1', encodedDataLength: 4096 },
+        { requestId: '2', encodedDataLength: 1024 },
+        { requestId: '3', encodedDataLength: 1024 },
+      ],
+    );
+
+    expect(table).toEqual({
+      Document: { requetes: 1, octets: 4096 },
+      Script: { requetes: 2, octets: 2048 },
+    });
+  });
+
+  it("range dans « autre » un chargement dont aucune réponse ne dit le type", () => {
+    expect(octetsParType([], [{ requestId: '9', encodedDataLength: 512 }])).toEqual({
+      autre: { requetes: 1, octets: 512 },
+    });
+  });
+});
+
+describe('ce que le visiteur attend AVANT de voir quelque chose', () => {
+  it('compte les ressources parties avant le premier pixel, document compris', () => {
+    const ressources = [{ startTime: 10 }, { startTime: 120 }, { startTime: 900 }];
+
+    expect(requetesAvantPremierPixel(ressources, 600)).toBe(3);
+  });
+
+  it("compte le document seul quand rien d'autre n'est parti avant le premier pixel", () => {
+    expect(requetesAvantPremierPixel([{ startTime: 900 }], 600)).toBe(1);
+  });
+
+  it("ne prétend rien quand le premier pixel n'a pas été observé", () => {
+    expect(requetesAvantPremierPixel([{ startTime: 10 }], null)).toBeNull();
+  });
+});
+
+describe("une mesure dit toujours d'où elle vient", () => {
+  it('porte la commande qui la rejoue', () => {
+    const mesure = composeMesure({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      http: 200,
+      dureeMs: 1200,
+      requetesEmises: 1,
+      reponses: [{ requestId: '1', type: 'Document' }],
+      chargements: [{ requestId: '1', encodedDataLength: 4096 }],
+      ressources: [],
+      fcpMs: 800,
+      lcpMs: 1100,
+      cls: 0.01,
+    });
+
+    expect(mesure.commande).toBe(COMMANDE);
+    expect(mesure.statut).toBe('mesuré');
+    expect(mesure.octets_transferes).toBe(4096);
+    expect(mesure.requetes).toBe(1);
+    expect(mesure.requetes_avant_premier_pixel).toBe(1);
+    expect(mesure.lcp_ms).toBe(1100);
+  });
+
+  it("marque « à établir » — et non zéro — ce qu'elle n'a pas pu mesurer", () => {
+    const mesure = mesureIndisponible({
+      url: 'https://meeshy.me/',
+      commande: COMMANDE,
+      raison: "403 du proxy sortant sur CONNECT meeshy.me:443",
+    });
+
+    expect(mesure.statut).toBe('à établir');
+    expect(mesure.raison).toContain('403');
+    expect(mesure.octets_transferes).toBeNull();
+    expect(mesure.requetes).toBeNull();
+    expect(mesure.requetes_avant_premier_pixel).toBeNull();
+    expect(mesure.lcp_ms).toBeNull();
+    expect(mesure.commande).toBe(COMMANDE);
+  });
+
+  it('donne les mêmes clés dans les deux cas — un rapport ne change pas de forme selon son issue', () => {
+    const mesuree = composeMesure({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      http: 200,
+      dureeMs: 1,
+      requetesEmises: 0,
+      reponses: [],
+      chargements: [],
+      ressources: [],
+      fcpMs: null,
+      lcpMs: null,
+      cls: null,
+    });
+    const absente = mesureIndisponible({ url: 'https://exemple/', commande: COMMANDE, raison: 'x' });
+
+    expect(Object.keys(mesuree).sort()).toEqual(Object.keys(absente).sort());
+  });
+});
+
+describe('les connexions TENUES après le premier pixel — le GATE neuf du § 8.3', () => {
+  it('soustrait ce qui est terminé de ce qui est parti', () => {
+    expect(requetesPendantes(9, 8)).toBe(1);
+    expect(requetesPendantes(8, 8)).toBe(0);
+  });
+
+  it('ne rend jamais un nombre négatif de connexions tenues', () => {
+    expect(requetesPendantes(3, 5)).toBe(0);
+  });
+
+  it('porte le chiffre dans la mesure, à côté de ceux qui le composent', () => {
+    const mesure = composeMesure({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      http: 200,
+      dureeMs: 10,
+      requetesEmises: 4,
+      requetesTerminees: 3,
+      reponses: [],
+      chargements: [],
+      ressources: [],
+      fcpMs: 100,
+      lcpMs: 200,
+      cls: 0,
+    });
+
+    expect(mesure.requetes_pendantes).toBe(1);
+  });
+});
+
+describe('un p75, pas une exécution', () => {
+  const execution = (octets: number, lcp: number): Mesure =>
+    composeMesure({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      http: 200,
+      dureeMs: lcp,
+      requetesEmises: 3,
+      requetesTerminees: 3,
+      reponses: [{ requestId: '1', type: 'Stylesheet' }],
+      chargements: [{ requestId: '1', encodedDataLength: octets }],
+      ressources: [],
+      fcpMs: 100,
+      lcpMs: lcp,
+      cls: 0.01,
+    });
+
+  it('rend le percentile demandé, pas la moyenne ni le meilleur essai', () => {
+    expect(percentile([100, 200, 300, 400, 5000], 75)).toBe(400);
+    expect(percentile([], 75)).toBeNull();
+  });
+
+  it('agrège les exécutions et dit combien il en a fallu', () => {
+    const agregee = agregeExecutions({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      executions: [execution(100, 900), execution(200, 1000), execution(300, 3000)],
+      rang: 75,
+    });
+
+    expect(agregee.statut).toBe('mesuré');
+    expect(agregee.executions).toBe(3);
+    expect(agregee.percentile).toBe(75);
+    expect(agregee.lcp_ms).toBe(3000);
+    expect(agregee.octets_transferes).toBe(300);
+  });
+
+  it("ne prétend rien quand une seule exécution n'a pas abouti", () => {
+    const agregee = agregeExecutions({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      executions: [
+        execution(100, 900),
+        mesureIndisponible({ url: 'https://exemple/', commande: COMMANDE, raison: 'timeout' }),
+      ],
+      rang: 75,
+    });
+
+    expect(agregee.statut).toBe('à établir');
+    expect(agregee.raison).toContain('timeout');
+    expect(agregee.lcp_ms).toBeNull();
+  });
+});
+
+describe('les seuils du § 8.3, comparés — et non seulement mesurés', () => {
+  const reseau: BudgetReseau = {
+    transverses: { css_ko: { valeur: 20, statut: 'GATE' } },
+    ecrans: [
+      {
+        motifs: ['/stories/*'],
+        plafonds: {
+          requetes_avant_premier_pixel: { valeur: 3, statut: 'GATE' },
+          requetes_pendantes: { valeur: 0, statut: 'GATE' },
+          lcp_ms: { valeur: 2000, statut: 'CIBLE' },
+        },
+      },
+      { motifs: ['/*'], plafonds: { requetes_avant_premier_pixel: { valeur: 10, statut: 'GATE' } } },
+    ],
+  };
+
+  const mesure = (attributs: Partial<Mesure>): Mesure => ({
+    ...composeMesure({
+      url: 'http://127.0.0.1:3300/stories/abc',
+      commande: COMMANDE,
+      http: 200,
+      dureeMs: 10,
+      requetesEmises: 3,
+      requetesTerminees: 3,
+      reponses: [],
+      chargements: [],
+      ressources: [],
+      fcpMs: 100,
+      lcpMs: 500,
+      cls: 0,
+    }),
+    ...attributs,
+  });
+
+  it("lit le chemin de l'url, et retient le motif le plus précis", () => {
+    expect(cheminDe('http://127.0.0.1:3300/stories/abc?x=1')).toBe('/stories/abc');
+    expect(
+      plafondsDuChemin('/stories/abc', reseau).requetes_avant_premier_pixel?.valeur,
+    ).toBe(3);
+    expect(plafondsDuChemin('/autre', reseau).requetes_avant_premier_pixel?.valeur).toBe(10);
+  });
+
+  it('applique aussi les seuils TRANSVERSES du § 8.5', () => {
+    expect(plafondsDuChemin('/stories/abc', reseau).css_ko?.valeur).toBe(20);
+  });
+
+  it('rougit sur une requête de trop avant le premier pixel', () => {
+    const franchis = franchissementsReseau(mesure({ requetes_avant_premier_pixel: 5 }), reseau);
+
+    expect(franchis).toHaveLength(1);
+    expect(franchis[0]?.statut).toBe('GATE');
+    expect(franchis[0]?.texte).toContain('requetes_avant_premier_pixel : 5 > 3');
+  });
+
+  it('rougit sur UNE connexion tenue après le premier pixel', () => {
+    expect(
+      franchissementsReseau(mesure({ requetes_pendantes: 1 }), reseau).map((f) => f.mesure),
+    ).toEqual(['requetes_pendantes']);
+  });
+
+  it('rougit sur un CSS au-dessus du plafond transverse', () => {
+    const franchis = franchissementsReseau(
+      mesure({ octets_par_type: { Stylesheet: { requetes: 1, octets: 30 * 1024 } } }),
+      reseau,
+    );
+
+    expect(franchis.map((f) => f.mesure)).toEqual(['css_ko']);
+  });
+
+  it("signale sans casser un LCP au-dessus d'une CIBLE", () => {
+    const verdict = composeVerdictReseau([mesure({ lcp_ms: 2500 })], reseau);
+
+    expect(verdict.depassements).toEqual([]);
+    expect(verdict.avertissements).toHaveLength(1);
+    expect(verdict.rc).toBe(0);
+  });
+
+  it("ne compare RIEN d'une mesure qui n'a pas abouti — et rougit quand même", () => {
+    const verdict = composeVerdictReseau(
+      [mesureIndisponible({ url: 'http://127.0.0.1:3300/stories/abc', commande: COMMANDE, raison: 'ECONNREFUSED' })],
+      reseau,
+    );
+
+    expect(verdict.depassements).toEqual([]);
+    expect(verdict.non_mesurees).toHaveLength(1);
+    expect(verdict.rc).toBe(1);
+  });
+
+  it('rend rc=0 quand tout tient sous les seuils', () => {
+    expect(composeVerdictReseau([mesure({})], reseau).rc).toBe(0);
+  });
+});
+
+describe('le budgets.json du dépôt, côté réseau', () => {
+  const budgets: { readonly reseau?: BudgetReseau } = JSON.parse(
+    readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8'),
+  );
+  const reseau = budgets.reseau;
+
+  it('déclare le profil 3G que le § 8.3 suppose, et le percentile', () => {
+    expect(reseau?.profil?.download_bps).toEqual(expect.any(Number));
+    expect(reseau?.profil?.latence_ms).toBeGreaterThan(0);
+    expect(reseau?.profil?.percentile).toBe(75);
+    expect(reseau?.profil?.repetitions).toBeGreaterThan(1);
+  });
+
+  it('porte les seuils GATE de requêtes avant le premier pixel du § 8.3', () => {
+    const pour = (chemin: string) =>
+      plafondsDuChemin(chemin, reseau).requetes_avant_premier_pixel;
+
+    expect(pour('/l/abc')?.valeur).toBe(1);
+    expect(pour('/l/abc/expired')?.valeur).toBe(2);
+    expect(pour('/stories/abc')?.valeur).toBe(3);
+    expect(pour('/chats/abc')?.valeur).toBe(4);
+    expect(pour('/settings/profil')?.valeur).toBe(10);
+    [pour('/l/abc'), pour('/stories/abc'), pour('/chats/abc')].forEach((p) =>
+      expect(p?.statut).toBe('GATE'),
+    );
+  });
+
+  it('porte le GATE « 0 connexion tenue » sur la lecture partagée', () => {
+    expect(plafondsDuChemin('/stories/abc', reseau).requetes_pendantes).toEqual(
+      expect.objectContaining({ valeur: 0, statut: 'GATE' }),
+    );
+  });
+
+  it('porte les gates transverses du § 8.5', () => {
+    expect(plafondsDuChemin('/stories/abc', reseau).css_ko?.valeur).toBe(20);
+    expect(plafondsDuChemin('/stories/abc', reseau).cls).toEqual(
+      expect.objectContaining({ valeur: 0.05, statut: 'GATE' }),
+    );
+  });
+});

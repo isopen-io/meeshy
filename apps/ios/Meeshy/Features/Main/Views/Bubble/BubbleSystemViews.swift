@@ -22,7 +22,7 @@ struct BubbleDeletedView: View, Equatable {
                 Image(systemName: "nosign")
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
-                Text(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
+                Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -38,7 +38,7 @@ struct BubbleDeletedView: View, Equatable {
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }
@@ -59,7 +59,7 @@ struct BubbleBurnedView: View, Equatable {
                 Image(systemName: "flame.fill")
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.warning)
-                Text(String(localized: "bubble.system.burned", defaultValue: "Seen and deleted", bundle: .main))
+                Text(String(localized: "bubble.system.burned", defaultValue: "Vu et supprimé", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -75,7 +75,7 @@ struct BubbleBurnedView: View, Equatable {
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message seen and deleted", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message vu et supprimé", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }

@@ -63,18 +63,18 @@ struct EffectsPickerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     effectSection(title: String(localized: "effects.section.behavior", defaultValue: "Comportement", bundle: .main), items: [
-                        (.ephemeral, "hourglass", String(localized: "effects.ephemeral", defaultValue: "\u{00C9}ph\u{00E9}m\u{00E8}re", bundle: .main)),
+                        (.ephemeral, "hourglass", String(localized: "effects.ephemeral", defaultValue: "Éphémère", bundle: .main)),
                         (.blurred, "eye.slash", String(localized: "effects.blurred", defaultValue: "Flou", bundle: .main)),
                         (.viewOnce, "1.circle", String(localized: "effects.view-once", defaultValue: "Vue unique", bundle: .main)),
                     ])
 
-                    effectSection(title: String(localized: "effects.section.entry", defaultValue: "Animation d'entr\u{00E9}e", bundle: .main), items: [
+                    effectSection(title: String(localized: "effects.section.entry", defaultValue: "Animation d'entrée", bundle: .main), items: [
                         (.shake, "waveform", String(localized: "effects.shake", defaultValue: "Secousse", bundle: .main)),
                         (.zoom, "arrow.up.left.and.arrow.down.right", String(localized: "effects.zoom", defaultValue: "Zoom", bundle: .main)),
                         (.explode, "rays", String(localized: "effects.explode", defaultValue: "Explosion", bundle: .main)),
-                        (.confetti, "party.popper", String(localized: "effects.confetti", defaultValue: "Confetti", bundle: .main)),
+                        (.confetti, "party.popper", String(localized: "effects.confetti", defaultValue: "Confettis", bundle: .main)),
                         (.fireworks, "sparkles", String(localized: "effects.fireworks", defaultValue: "Feux d'artifice", bundle: .main)),
-                        (.waoo, "star.fill", String(localized: "effects.waoo", defaultValue: "Waoo", bundle: .main)),
+                        (.waoo, "star.fill", String(localized: "effects.waoo", defaultValue: "Waouh", bundle: .main)),
                     ])
 
                     effectSection(title: String(localized: "effects.section.permanent", defaultValue: "Effet permanent", bundle: .main), items: [
@@ -123,7 +123,7 @@ struct EffectsPickerView: View {
 
     private var ephemeralDurationPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "effects.ephemeral-duration", defaultValue: "Dur\u{00E9}e \u{00E9}ph\u{00E9}m\u{00E8}re", bundle: .main))
+            Text(String(localized: "effects.ephemeral-duration", defaultValue: "Durée éphémère", bundle: .main))
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.secondary)
             HStack(spacing: 8) {
@@ -144,7 +144,7 @@ struct EffectsPickerView: View {
                                              : .secondary)
                             .clipShape(Capsule())
                     }
-                    .accessibilityLabel(String(format: String(localized: "effects.duration-a11y", defaultValue: "Dur\u{00E9}e %@", bundle: .main), duration.label))
+                    .accessibilityLabel(String(format: String(localized: "effects.duration-a11y", defaultValue: "Durée %@", bundle: .main), duration.label))
                     .accessibilityAddTraits(effects.ephemeralDuration == duration.rawValue ? .isSelected : [])
                 }
             }

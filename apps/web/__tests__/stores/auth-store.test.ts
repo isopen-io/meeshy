@@ -10,6 +10,9 @@ import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { User } from '@meeshy/shared/types';
 
 // Mock the auth-manager.service
+// `getRefreshToken` n'existe plus (#4405, étape 3) — le store ne le
+// consulte plus dans `initializeAuth()`, et le retirer du mock l'aligne
+// sur la surface RÉELLE d'AuthManager.
 jest.mock('../../services/auth-manager.service', () => ({
   authManager: {
     clearAllSessions: jest.fn(),
@@ -18,7 +21,6 @@ jest.mock('../../services/auth-manager.service', () => ({
     getAnonymousSession: jest.fn(() => null),
     updateTokens: jest.fn(),
     getCurrentUser: jest.fn(() => null),
-    getRefreshToken: jest.fn(() => null),
   },
 }));
 
@@ -64,7 +66,6 @@ describe('AuthStore', () => {
         isAuthenticated: false,
         isAuthChecking: true,
         authToken: null,
-        refreshToken: null,
         sessionToken: null,
         sessionExpiry: null,
       });
@@ -81,8 +82,10 @@ describe('AuthStore', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isAuthChecking).toBe(true);
       expect(state.authToken).toBeNull();
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
+      // Le champ d'état réactif `refreshToken` a été retiré (#4405, étape 3)
+      // — rien ne produisait jamais de valeur pour lui (mesuré).
+      expect(state).not.toHaveProperty('refreshToken');
     });
   });
 
@@ -140,25 +143,29 @@ describe('AuthStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('test-auth-token');
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
     });
 
-    it('should set both auth and refresh tokens', () => {
+    // Le 2e créneau (`refreshToken`) reste ACCEPTÉ positionnellement —
+    // `hooks/use-auth.ts:175`, hors territoire de ce lot, l'appelle encore —
+    // mais n'a plus de contrepartie en état réactif (#4405, étape 3) : rien
+    // ne produisait jamais de valeur pour lui (mesuré). Une valeur qui y
+    // transite ne doit apparaître NULLE PART dans l'état.
+    it('drops the (now inert) second positional slot — it never surfaces in state', () => {
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token');
+        useAuthStore.getState().setTokens('test-auth-token', 'legacy-value-that-must-be-dropped');
       });
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('test-auth-token');
-      expect(state.refreshToken).toBe('test-refresh-token');
+      expect(state).not.toHaveProperty('refreshToken');
     });
 
     it('should calculate session expiry when expiresIn is provided', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', undefined, 3600);
+        useAuthStore.getState().setTokens('test-auth-token', undefined, undefined, 3600);
       });
 
       const state = useAuthStore.getState();
@@ -169,20 +176,22 @@ describe('AuthStore', () => {
       expect(state.sessionExpiry!.getTime()).toBeLessThanOrEqual(afterTime + 3600 * 1000);
     });
 
-    it('should preserve existing refresh token if not provided', () => {
-      // First set both tokens
+    // Miroir de l'ancien "should preserve existing refresh token if not
+    // provided" (#4405) : le champ `refreshToken` a disparu, mais le MÊME
+    // mécanisme de repli (`sessionToken || get().sessionToken`) reste vivant
+    // pour `sessionToken` — c'est lui qui garde la couverture de cette logique.
+    it('should preserve existing session token if not provided', () => {
       act(() => {
-        useAuthStore.getState().setTokens('token-1', 'refresh-1');
+        useAuthStore.getState().setTokens('token-1', undefined, 'session-1');
       });
 
-      // Then update only the auth token
       act(() => {
         useAuthStore.getState().setTokens('token-2');
       });
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('token-2');
-      expect(state.refreshToken).toBe('refresh-1');
+      expect(state.sessionToken).toBe('session-1');
     });
   });
 
@@ -203,7 +212,6 @@ describe('AuthStore', () => {
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.authToken).toBeNull();
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
       expect(state.isAuthChecking).toBe(false);
     });
@@ -489,22 +497,26 @@ describe('AuthStore', () => {
   });
 
   describe('Persistence', () => {
-    it('should persist user, tokens, and sessionExpiry', () => {
+    it('should persist user, authToken, sessionToken, and sessionExpiry', () => {
       const sessionExpiry = new Date(Date.now() + 3600000);
 
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        useAuthStore.getState().setTokens('auth-token', 'refresh-token');
+        // Le 2e argument (créneau `refreshToken`, désormais inerte, #4405)
+        // ne doit atterrir NULLE PART — ni en état, ni dans ce que
+        // `partialize` retient pour la persistance.
+        useAuthStore.getState().setTokens('auth-token', 'legacy-refresh-slot-value');
         useAuthStore.setState({ sessionExpiry });
       });
 
       // Verify the persistence partialize function
       const state = useAuthStore.getState();
-      const persistedKeys = ['user', 'authToken', 'refreshToken', 'sessionExpiry'];
+      const persistedKeys = ['user', 'authToken', 'sessionToken', 'sessionExpiry'];
 
       persistedKeys.forEach(key => {
         expect(state).toHaveProperty(key);
       });
+      expect(state).not.toHaveProperty('refreshToken');
     });
   });
 });

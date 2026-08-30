@@ -2,6 +2,357 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
+> ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /
+> Contacts / Groups / Calls / Translations / System (or Unread)** (slice `notification-center-category-filter`,
+> feature-parity §M "Notification center with category filters" `[ ]`→`[x]`). iOS keeps the filter in a pure
+> `NotificationCategory` enum (`MeeshyUI/Notifications/NotificationListView.swift`) — 11 cases, each with a
+> `matchingTypes: Set<MeeshyNotificationType>` + `matches(_:)`, and `NotificationListViewModel.filteredNotifications`
+> projecting the loaded list. Android's `NotificationsViewModel` had NO category filter at all — the list showed
+> every type, every read state, with no way to narrow it (a dimension-13 Complétude gap vs iOS + a dimension-7
+> Facilité-d'usage gap: no fast path to "just my mentions").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4412/#4390/#4368/#4336/#4267 (all
+> jcnm: gateway/web), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`global-search-query-cache`) is on `main` (#4408, commit 64ad19c1). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` =
+> 0/0).
+>
+> **The change — one pure filter + ViewModel projection + Compose chip bar.** (1) New pure `:core:model`
+> `NotificationFilterCategory` (11 enum entries in iOS display order) + `NotificationTypeVocabulary`
+> (`me.meeshy.sdk.model`): each chip owns its accepted backend-`type` strings (both the lowercase wire form and
+> the legacy uppercase alias — `new_message`/`NEW_MESSAGE`) and `matches(type)`; `filter(list)` is a faithful port
+> of iOS `filteredNotifications` — `ALL` keeps every row, `UNREAD` keeps only unread rows of ANY type, every other
+> chip keeps rows whose type matches READ-OR-NOT. `NotificationTypeVocabulary.canonical(type)` reproduces iOS's
+> decode-then-fallback (`MeeshyNotificationType(rawValue:) ?? .system`): an UNKNOWN wire type collapses onto
+> `system` (→ matches SYSTEM), while the 9 KNOWN-but-uncategorised types (`comment_reaction`, `friend_new_post`, …)
+> keep their identity and surface only under ALL — exactly iOS. `KNOWN_TYPES` (81 raw values) is DERIVED from the
+> chip sets + the uncategorised set (no duplicated master list to drift). Each chip also carries iOS's per-category
+> `accentHex`. (2) `NotificationsViewModel` gains `selectedCategory` + a pure `filteredNotifications` projection on
+> the UiState + `selectCategory` intent (re-select is inert, no refetch — the chip is a client-side projection over
+> the single-source list; badge/pagination/socket-prepend all still read the full `notifications`). `loadMore` is
+> ALL-gated (iOS paginates only under ALL). (3) `NotificationsScreen` renders a horizontally-scrollable 11-`FilterChip`
+> bar (accent-coherent selected state) and the filtered rows, with a per-category empty state. **SOTA over iOS:** the
+> per-chip type sets are immutable statics built once (iOS rebuilds a `Set` on every `matchingTypes` access inside a
+> `switch`), and the unknown→system collapse is an explicit unit-tested step, not an implicit enum-decode side effect.
+> Blast radius: `NotificationFilterCategory` all-new; `NotificationsViewModel` +1 state field + 1 derived projection +
+> 1 intent + a loadMore guard; `NotificationsScreen` +chip bar; +12 strings ×4 locales. Deliberately EXCLUDED
+> (faithful boundary): the per-category SWR cache key (iOS loads `"all"` only, pagination is ALL-only — Android already
+> matches) and the collapsible-header scroll glue (a Compose-only cosmetic).
+>
+> **Tests: +25, RED-proven.** `NotificationFilterCategoryTest` +18 (KNOWN_TYPES size 81; canonical keeps known /
+> collapses unknown+blank→system; matches per chip incl. the China-region `"call"` alias, both case forms, and the
+> unknown→SYSTEM-only / known-uncategorised→no-chip distinctions; ALL/UNREAD match everything; filter ALL=identity,
+> UNREAD=unread-any-type, chip=matching-read-or-not + order-preserving + empty-safe; 11-chip order; accentHex parity;
+> every chip type ⊆ KNOWN_TYPES). `NotificationsViewModelTest` +7 (default ALL; a chip narrows by type only — a read
+> message still shows; UNREAD keeps unread of any type; the full list stays intact under a filter; re-select is the
+> same instance; loadMore suppressed under a non-ALL chip; loadMore resumes on returning to ALL). **RED:** flipping the
+> canonical fallback (unknown→itself instead of →"system") fails exactly the system-absorbs-unknown test; dropping the
+> loadMore ALL-gate fails exactly the suppression test.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) + `platforms;android-35`/
+> `android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` resolved via the `android-37 →
+> android-37.0` symlink. Kept `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 2 core files + 3 feature files + 4 locale strings +
+> tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block with no android.*, orchestration
+> in the `:feature` ViewModel, chip bar in the screen; SSOT — one `NotificationFilterCategory`, no re-implementation of
+> the type→category mapping; instant-app — filtering is a pure client-side projection, no refetch/spinner on chip
+> switch; UDF — immutable `StateFlow`, pure transitions; no tautological tests; no coverage floor lowered — new pure
+> logic with near-total branch coverage, RED-proven).
+>
+> **Next**: render `MessageTextParser.highlightRanges` in the global-search RESULT rows (iOS `highlightedText`) is
+> still open (§N Compose-glue); the notification TOAST (§M, iOS `NotificationCoordinator` dedup-window) and the
+> per-category SWR cache key are the next §M pieces. For a pure-core next slice, consider a Chat/Feed value type. Read
+> the chosen box's iOS audit part read-only before branching.
+
+
+> On 2026-08-30 **global search became cache-first — a repeated query in the TTL window serves from an
+> in-memory LRU with no network and no spinner, and a socket data-change invalidates it** (slice
+> `global-search-query-cache`, feature-parity §N "Global search … with recent searches"). iOS keeps a 5-entry /
+> 120 s `messageQueryCache` in `GlobalSearchViewModel` plus `setupSocketInvalidation` (clear on
+> `conversation:updated`/`conversation:deleted`); Android's `GlobalSearchViewModel` had NO query cache — every
+> debounced keystroke past the 2-char floor re-fetched all three tabs, and no socket event ever freshened stale
+> results (dimension 2 Performance gap, dimension 13 Complétude gap vs iOS).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4390/#4368/#4336/#4267 (all jcnm:
+> web/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to
+> merge. Prior slice (`search-accent-fold-highlight`) is on `main` (#4385, commit 892aa83f). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` =
+> 0/0). Diff verified `apps/android` only (1 new main + 1 new test + 1 edited main + 1 edited test, no
+> `local.properties`).
+>
+> **The change — one pure LRU+TTL cache + cache-first ViewModel wiring.** (1) New pure `:core:model`
+> `SearchQueryCache<V>` (`me.meeshy.sdk.model.search`): an immutable, generic, capacity-bounded (default 5) +
+> TTL-bounded (default 120_000 ms — exact iOS parity) cache keyed by a normalised query (`normalize` = trim +
+> lowercase, exposed as the shared key SSOT). `get(query, nowMillis)` is a PURE read — an expired entry
+> (`now - cachedAt >= ttl`, boundary exclusive like iOS `< staleTTL`) is a MISS and never mutates; a blank query
+> always misses. `put` replaces an existing key in place (no extra slot on re-put), evicts the OLDEST past
+> capacity, and is a no-op returning the same instance on a blank key. `invalidate` clears all (same instance if
+> already empty). `@ConsistentCopyVisibility` + private constructor, matching the `UserCategoryCatalog` precedent.
+> (2) `GlobalSearchViewModel` gains `MessageSocketManager` + `CacheClock` deps: the debounced search now checks the
+> cache first (HIT → serve instantly, `isSearching=false`, record the recent search, no `repository.search`),
+> caches every real fetch, and `invalidateSearchCache()` (public, also the socket path) dumps it; init subscribes
+> to `conversationUpdated`/`conversationDeleted` → invalidate. **SOTA over iOS:** the cache is a pure immutable
+> value type with no clock/socket knowledge (iOS mutates an array in the ViewModel), so every branch is
+> JVM-testable and the "when" (clock, socket) stays entirely in the orchestration layer. Blast radius:
+> `SearchQueryCache` all-new; `GlobalSearchViewModel` +2 ctor deps (Hilt-provided, only call site is
+> `hiltViewModel()` so no call-site churn) + cache-first branch + 3 init collectors. Deliberately EXCLUDED
+> (faithful boundary): the local FTS leg (Room, device-bound) and rendering `highlightRanges` in the result rows
+> (a Compose-glue follow-up, noted in §N).
+>
+> **Tests: +25, RED-proven.** `SearchQueryCacheTest` +20 (put/get in TTL; trim+lowercase key on both sides; TTL
+> boundary miss + one-ms-before hit; get-is-pure-no-mutate; unknown miss; blank never stored + always miss; replace
+> existing; evict oldest past capacity; re-put evicts no other key; invalidate clears; invalidate-empty same
+> instance; put-blank same instance; put returns new instance; capacity/ttl guards reject non-positive; defaults =
+> cap 5 / TTL 120 s + evict at cap 5; normalize SSOT). `GlobalSearchViewModelTest` +5 (cached query in TTL skips the
+> network; TTL-expiry re-fetches; `invalidateSearchCache` re-fetches; `conversation:updated` invalidates;
+> `conversation:deleted` invalidates) — driven through a controllable `CacheClock` fake and real `MutableSharedFlow`
+> socket seams (mirroring `ConversationListViewModelTest`'s established socket-mock pattern). **RED:** mutating the
+> pure TTL comparison `>=`→`>` flips the boundary MISS to a HIT, failing exactly the boundary test (verified via the
+> embeddable-kotlinc harness).
+>
+> **SDK bootstrap WORKED this run** (contra the 2026-08-30 `search-accent-fold-highlight` note): `dl.google.com`
+> reachable; cmdline-tools (11076708) + `platforms;android-37.0`/`android-35` + `build-tools;35.0.0` +
+> `platform-tools`; the `android-37 → android-37.0` symlink resolved cleanly for AGP this time — `compileSdk = 37`
+> built without the `Failed to find target hash string 'android-37'` failure the prior note documented. Kept
+> `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> **BUILD SUCCESSFUL in 3m 58s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff `apps/android` only —
+> 2 main + 2 test, no `local.properties`; SDK purity — pure `:core:model` building block with no clock/socket,
+> orchestration in the `:feature` ViewModel; SSOT — one `SearchQueryCache`, no re-implementation; instant-app —
+> cache-first, no spinner on a hit; UDF — immutable `StateFlow`; no tautological tests; no coverage floor lowered —
+> new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: render `MessageTextParser.highlightRanges` in the global-search RESULT rows (iOS `highlightedText`,
+> error hue + bold on the first/every match — a Compose-glue slice) closes another §N clause; the local FTS +
+> network-merge leg is Room-device-bound. For a pure-core next slice, consider a Conversations/Chat value type or an
+> Auth glue follow-up. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-30 **search-highlight became accent-insensitive — iOS `.diacriticInsensitive` parity, closing a real
+> gap in the in-conversation search bubble** (slice `search-accent-fold-highlight`, feature-parity §C "Rich text
+> rendering … search highlight"). iOS highlights search matches with `.folding(options: [.diacriticInsensitive,
+> .caseInsensitive])` (`GlobalSearchView.swift:741`, `SoundLibraryService`), so searching "cafe" highlights "café".
+> Android's `MessageTextParser.highlightRanges` only `.lowercase()`d — a query typed without accents highlighted
+> NOTHING in accented text (`RichMessageText` in the chat bubble is the live consumer via `ChatViewModel.highlightTerm`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4368/#4336/#4267 (all web/gateway), none a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-canvas-reprojection`) is on `main` (#4369). Branched off freshly-fetched `origin/main`; local HEAD ==
+> origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (1 new main
+> + 1 new test + 1 edited main + 1 edited test + tracking docs, no `local.properties`).
+>
+> **The change — one pure folder + one rewritten resolver.** (1) New pure `:core:model` `SearchTextFolder`
+> (`me.meeshy.sdk.model.search`): `fold(text)` NFD-decomposes, drops `\p{Mn}` combining marks, lowercases — the
+> Android port of iOS `.diacriticInsensitive`/`.caseInsensitive`. `foldWithMap(text)` additionally returns, per
+> folded char, the SOURCE char index in the original string (`FoldedText`), so a match found in folded space projects
+> back to ORIGINAL indices even when folding changes the length (accents dropped). Folding is done per source char so
+> the index map stays exact, and `fold` is the folded projection of `foldWithMap` — one code path. (2)
+> `MessageTextParser.highlightRanges` now folds both text (via `foldWithMap`) and term (via `fold`), matches in
+> folded space, and maps each hit back: `originStart = sourceIndexOf[idx]`, `originEndExclusive =
+> sourceIndexOf[endFolded]` (or `text.length` at the tail) — which naturally extends the range over a decomposed
+> grapheme's trailing combining marks so no half-grapheme is highlighted. A term that folds to nothing (only combining
+> marks) yields no ranges. **SOTA over iOS:** the range is computed on ORIGINAL char indices with an exact source
+> map, so a decomposed "e"+U+0301 is highlighted as one unit — Foundation's grapheme handling gives iOS the same,
+> but Android now matches it deterministically without relying on ICU grapheme walking. Blast radius: `SearchTextFolder`
+> all-new; `highlightRanges` internals rewritten, signature and every existing test unchanged (fold is a superset of
+> lowercase, so case-only tests still pass). Deliberately EXCLUDED (faithful boundary): no BM25/FTS ranking (that is
+> SQLite-provided on iOS, not a pure port), no local search-index leg (Room FTS is device-bound).
+>
+> **Tests: +17, proven against the exact production logic.** `SearchTextFolderTest` +13 (ascii lowercase; precomposed
+> é stripped; DECOMPOSED e+U+0301 stripped; uppercase-accent lowered+stripped together; empty; only-combining-marks →
+> empty; non-latin untouched; `foldWithMap.folded == fold`; identity map for ascii; precomposed → 1:1 map; a decomposed
+> mark skipped so the next char maps past it (0,1,2,3,5); map length == folded length). `MessageTextParserTest` +4
+> highlight (unaccented term matches precomposed accented text 0..3; decomposed grapheme range covers the trailing
+> mark 0..4; accented term matches plain text; term folding to nothing → no ranges) — all accented literals built from
+> explicit `\u` code points so precomposed vs decomposed is unambiguous in source (verified byte-for-byte:
+> é=U+00E9, e+U+0301, É=U+00C9, U+0301). **RED direction:** the four accent tests fail on the old lowercase-only impl
+> ("cafe".indexOf in "café" → not found → empty), the case-only tests keep passing.
+>
+> **Verification — local Android gate UNAVAILABLE (not skipped); pure logic proven standalone + Android CI is the gate.**
+> `dl.google.com` IS reachable here, but AGP 8.13 cannot resolve `compileSdk = 37`: the only published platform is the
+> preview `platforms;android-37.0`, whose target hash never satisfies the `android-37` AGP demands — reproduced on a
+> PRISTINE install, a symlink, and a fully-normalized copy (api-level/path/build.prop all forced to `37`); the copy even
+> registered as `platforms;android-37` yet `Failed to find target with hash string 'android-37'` persisted. This is an
+> AGP/preview-SDK incompatibility, NOT my diff, and NOT the `dl.google.com`-denied case the routine names — the outcome
+> is the same (no local Gradle task can run). To de-risk anyway, the EXACT production logic (`SearchTextFolder` +
+> `highlightRanges`, copied verbatim) was compiled with `kotlinc` (embeddable 2.0.21) and run against all 23 assertions
+> (the 17 new + 5 existing highlight + 1 fold-equality): **ALL PASS**. Prior `apps/android` slices merged green on the
+> **Android** CI check with this same `compileSdk = 37` (e.g. #4369, #4355), so CI is a reliable compiler here — the PR's
+> **Android** check is the merge gate. Reviewer **PASS** pending green CI (diff `apps/android` only; SDK purity — a pure
+> stateless `:core:model` building block, no `android.*`, no orchestration; SSOT — faithful port of iOS `.folding`, and
+> `highlightRanges` reuses it rather than re-implementing folding; no tautological tests; no coverage floor lowered —
+> new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the remaining search pieces are the local FTS/network-merge leg (`GlobalSearchRepository` already merges the
+> remote message batches; a cache-first LOCAL leg needs Room FTS, device-bound) and `SearchTextFolder` reuse in a
+> future sound-library / user filter. For a pure-core next slice, consider another Chat/Feed value type or the
+> Auth/Conversations areas. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-30 **the pure canvas-reprojection core landed — the JVM-testable heart of reposting a story's
+> canvas into a post of a different aspect ratio** (slice `story-canvas-reprojection`, feature-parity §F
+> "Quote / repost posts … canvas reprojection + 'items repositioned' banner" `[ ]`→`[~]`). Android had NO
+> reprojection at all; iOS keeps the geometry in a pure `CanvasReprojector` (`MeeshyUI/Story/Canvas`)
+> precisely so it is unit-testable without a live canvas — only the PencilKit `PKDrawing` reprojection and
+> the composer banner glue are device-bound. So the reprojector is a pure `:feature:stories` value type
+> (the established home of the Story pure resolvers — `StoryKeyframeResolver`, `StoryClipTransitionResolver`,
+> `StoryMediaFadeResolver`), not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4360/#4336/#4267 (all jcnm:
+> web/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`story-drawing-strokes-wire`) is on `main` (#4355). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (1 new main + 1 new test + tracking docs, no `local.properties`).
+>
+> **The change — one pure reprojector, center-anchored.** `:feature:stories` `CanvasReprojector(source,
+> target)` reprojects normalized `[0,1]` positions center-anchored (`(0.5,0.5)` a fixed point, scaled by
+> `source/target` per axis), clamps out-of-bounds back into `[0,1]` and reports each with a
+> `ReprojectionWarning.Clamped(originalX, originalY)` (the ORIGINAL coords, not the clamped ones — the banner
+> hint targets the pre-move position). `reproject(text/media/sticker)` mutate only the position (scale/aspect/
+> rotation invariant); `reproject(audio)` is identity (no spatial position). Batch `reprojectAll(CanvasObjects)
+> → RepostReprojection{objects, warnings}` walks text→media→sticker→audio, collecting warnings in encounter
+> order and exposing `repositionedCount`/`hasClampedItems` — the pure decision the "N item(s) repositioned for
+> the new aspect ratio" banner reads (iOS `RepostReprojectionResult`). **SOTA over iOS:** a degenerate target
+> (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an identity
+> reprojection — a malformed canvas size can never corrupt coordinates. Blast radius: all-new files, zero
+> existing call sites touched. Deliberately EXCLUDED (out of scope, faithful boundary): the `RepostPayload`
+> extractor + its source-aspect→size mapping, drawing-stroke reprojection (Android's pure `StoryDrawingStroke`
+> model ≠ iOS's PencilKit blob), `StoryLocationObject` (no Android model), and the Compose banner glue.
+>
+> **Tests: +15, RED-proven.** `CanvasReprojectorTest`: centered-stays-centered (9:16→1:1), width-match keeps x
+> fixed, bottom item clamps to 1 with warning, top item clamps to 0, warning reports ORIGINAL coords, a taller
+> target pulls an off-center item toward center (no clamp), an in-bounds item is still moved on aspect change,
+> media aspect-ratio invariant, sticker rotation invariant, audio identity (same instance, no warning),
+> degenerate target → identity (never NaN), and three `reprojectAll` banner cases (counts every clamp across
+> families / all-centered → 0 / empty set → empty). **RED**: suppressing the clamp warning (`… else null` →
+> `null`) → BUILD FAILED on EXACTLY the 4 warning/count tests (bottom-clamp, top-clamp, original-coords,
+> reprojectAll-count), the other 10 stay green (value-clamp via `coerceIn` is independent of the warning).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 4m 38s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 1 main + 1 test + tracking docs, no `local.properties`; SDK purity — pure
+> `:feature:stories` reducer, no `android.*`, no orchestration, no shared Meeshy singletons; SSOT — a faithful
+> port of iOS `CanvasReprojector`, no re-implementation; no tautological tests; no coverage floor lowered — new
+> pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the repost-canvas feature's remaining pieces are all extractor/device/Compose-bound — the
+> `RepostPayload` extractor + source-aspect→size mapping (needs `StoryEffects.canvasAspect` confirmed on the
+> wire), drawing-stroke reprojection (once the `StoryDrawingStroke` coordinate space is confirmed), and the
+> Compose banner + `UnifiedPostComposer` import wiring — the latter wait for a Compose-instrumented run. For a
+> pure-core next slice, consider another Feed/Stories reducer or an earlier build-order area
+> (Auth→Conversations→Chat) value type. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-30 **the drawing-stroke wire model reached `:core:model` and the v3 `drawing` object now
+> projects — the JVM-testable serialization half the prior run named as next** (slice
+> `story-drawing-strokes-wire`, feature-parity §Stories "Freehand drawing layer" line: the "Wire
+> serialization done" block). Android decoded every v3 family EXCEPT `drawing`, which
+> `CanvasV3Projection` explicitly dropped, and `StoryEffects` had no `drawingStrokes` field at all — so a
+> published story's freehand strokes were invisible on Android whichever wire form the gateway served.
+> iOS keeps ONE `StoryDrawingStroke` (in SDK core, `MeeshySDK/Models/`) shared by both its `StoryEffects`
+> wire and its editor ViewModel; Android's prior slice had placed the twin in `:feature:stories`, which
+> both blocked the wire (a `:core:model` `StoryEffects` field can't reference a `:feature` type) and
+> risked a divergent twin.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4336/#4267 (both jcnm: gateway),
+> neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge.
+> Prior slice (`story-drawing-board`) is on `main` (#4331). Branched off freshly-fetched `origin/main`;
+> local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (5 modified + 2 new files, no `local.properties`).
+>
+> **The change — one promotion, one field, one projection branch.** (1) Moved the four wire types
+> (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/`StrokeTool`/`StrokeSmoothing`) from `:feature:stories`
+> into a new `:core:model` `StoryDrawingStroke.kt`, now `@Serializable` with `@SerialName` = the exact
+> gateway strings (`pen`/`marker`/`eraser`, `raw`/`curve`/`line`) mirrored beside the existing `.wire`
+> accessor the board test pins; `StoryDrawingBoard` re-imports them (behaviour identical, board's 27 tests
+> unchanged). (2) Added `StoryEffects.drawingStrokes: List<StoryDrawingStroke>? = null`. (3) `CanvasV3Projection`
+> gained a `kind:"drawing"` branch → `asDrawingStrokes()` reads `payload.strokes` (mapNotNull decodeWire,
+> empty/absent → `null`, last drawing object wins as iOS assigns), ignoring the legacy `payload.data`
+> PKDrawing blob. `createdAt` became an optional `Double?` passthrough (round-trip fidelity; reducer still
+> never reads it). SSOT win: the reducer and the wire now share ONE type. Blast radius: `:core:model` all
+> additive; the two `:feature:stories` touches are the type move + one import.
+>
+> **Tests: +9, RED-proven.** `CanvasV3ProjectionTest` +5: strokes project from the shared `v1-legacy-rich`
+> v1/v3 fixture pair (structural equality) + a value-pinning test (tool/smoothing/pressure/width/
+> captureVersion/createdAt), `data`-only object → null, present-but-empty `strokes` → null (distinct
+> `takeIf` branch), unknown payload key on a stroke tolerated. `StoryDrawingStrokeWireTest` +4: the enum
+> wire strings, a full round-trip, minimal-stroke defaults + `createdAt` as a number. **RED**: neutering
+> the projection branch (`drawingStrokes = null`) → BUILD FAILED on EXACTLY the 3 strokes-projection tests,
+> no collateral (the `data`-only/empty tests still pass, correctly null→null; the wire test is
+> projection-independent).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL** (0 failed). Reviewer **PASS** (diff `apps/android` only — 5
+> modified + 2 new, no `local.properties`; SDK purity — the wire model + projection are stateless
+> `:core:model` building blocks, the reducer stays in `:feature:stories`; SSOT — ONE `StoryDrawingStroke`
+> now, the feature twin removed; behaviour over implementation — decode asserted through the production
+> `StoryEffectsWireSerializer` path against the shared cross-platform fixture oracle; no tautological
+> tests; no coverage floor lowered — new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the drawing layer's only remaining pieces are all device/Compose-bound — the Compose capture
+> surface (`detectDragGestures`/`Canvas` overlay, pressure → variable-width render, eraser hit-test) and
+> composer VM wiring holding a `StoryDrawingBoard` per slide, which decode/encode via `StoryEffects.drawingStrokes`
+> now that the wire is in place. Those wait for a Compose-instrumented or device-capable run. For a pure-core
+> next slice, consider another Feed/Stories reducer or an earlier build-order area (Auth→Conversations→Chat)
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **the pure freehand-drawing board landed — the JVM-testable heart of the Stories drawing
+> layer** (slice `story-drawing-board`, feature-parity §Stories "Freehand drawing layer (pen/marker/eraser,
+> colour, width, undo/redo/clear)" `[ ]`→`[~]`). Android had NO drawing model at all; iOS keeps the
+> committed-strokes state + undo/redo/clear/delete/select/recolour/resize/smooth in a pure reducer
+> (`StoryComposerViewModel+DrawingEditing`) precisely so it is unit-testable without a live PencilKit canvas.
+> So the board is a pure `:feature:stories` value type, not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4326/#4267 (both jcnm: web/gateway),
+> none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior
+> slice (`thumbhash-source-plan`) is on `main` (#4321). Branched off freshly-fetched `origin/main`; local HEAD
+> == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only
+> (1 new main file + 1 new test file + tracking docs).
+>
+> **The change — one immutable value type + a pure reducer.** `:feature:stories` `StoryDrawingBoard(strokes,
+> redoStack, selectedStrokeId)` with `commit` (append + clear redo), `undo` (last stroke → redo stack;
+> deselect if it was selected), `redo` (LIFO re-append; selection untouched), `clear` (empty both + deselect),
+> `delete(id)` (remove + clear redo + deselect; a genuine no-op on an absent id), `select(id?)` (inert on an
+> unknown id, matching iOS), and per-stroke `recolorSelected`/`resizeSelected`/`smoothSelected` (mutate the
+> selected stroke, redo untouched — a property tweak is not a new stroke). `StoryDrawingStroke` /
+> `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line) mirror the
+> iOS models with the exact gateway wire strings. `createdAt` deliberately omitted (reducer never reads it →
+> clock-free). Two deliberate improvements over iOS: no-ops return the same board; `delete` of an absent id
+> keeps redo (iOS clears it unconditionally). Blast radius: all-new files, zero existing call sites touched.
+>
+> **Tests: +33, RED-proven.** `StoryDrawingBoardTest`: model defaults + wire strings; fresh-board emptiness;
+> commit order + redo-invalidation; undo (move-to-redo, empty no-op, selected-deselect, non-selected-keep);
+> redo (LIFO re-append, empty no-op, undo↔redo round-trip, multi-undo/multi-redo order); clear (empties both +
+> deselect); delete (remove + redo-invalidate, selected-deselect, non-selected-keep, unknown-id no-op keeps
+> redo); select (mark, null-deselect, unknown-id inert); per-stroke edits (recolour/resize/smooth only the
+> selected, inert when nothing selected, redo untouched). **RED**: dropping `commit`'s `redoStack = emptyList()`
+> → BUILD FAILED on EXACTLY the "commit invalidates the redo stack" test, no collateral (9s incremental rerun).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL** (0 failed). Reviewer **PASS** (diff `apps/android` only — 1 main +
+> 1 test + tracking docs, no `local.properties`; SDK purity — pure `:feature:stories` reducer, no `android.*`,
+> no orchestration; SSOT — the board is the single home for the drawing edit-state the composer VM will hold,
+> no re-implementation; no tautological tests; no coverage floor lowered — new pure logic, near-total branch
+> coverage, RED-proven).
+>
+> **Next**: the drawing layer's remaining pieces are `StoryEffects.drawingStrokes` wire serialization (needs
+> the gateway drawing-object wire shape confirmed + `CanvasV3Projection` plumbing) and the Compose capture
+> surface (a `detectDragGestures`/`Canvas` drawing overlay with pressure → variable-width render, an eraser
+> hit-test, and composer VM wiring holding a `StoryDrawingBoard` per slide) — the latter device/Compose-bound,
+> so it waits for a Compose-instrumented or device-capable run. Other pure-core Stories candidates: the
+> `StoryEffects.drawingStrokes` serialization is JVM-testable and could be the next slice (a `toWire()` on the
+> board + `CanvasV3Projection` drop-in). Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **the pure ThumbHash source-downscale planner landed — the JVM-testable half of the story
 > thumbHash write-path the prior run named as next** (slice `thumbhash-source-plan`, feature-parity
 > "thumbHash blur-placeholder per slide" `[~]` line, and the media `[~]` line at §P). `ThumbHash.encode`

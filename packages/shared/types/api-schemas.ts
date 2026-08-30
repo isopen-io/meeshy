@@ -10,6 +10,8 @@
  * @module @meeshy/shared/types/api-schemas
  */
 
+import { EMOJI_MAX_LENGTH } from './reaction.js';
+
 // =============================================================================
 // USER SCHEMAS
 // =============================================================================
@@ -2101,7 +2103,7 @@ export const addReactionRequestSchema = {
     emoji: {
       type: 'string',
       minLength: 1,
-      maxLength: 10,
+      maxLength: EMOJI_MAX_LENGTH,
       description: 'Emoji to add as reaction'
     }
   }

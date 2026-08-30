@@ -225,7 +225,7 @@ struct FloatingCallPillView: View {
         // measures via the label and expose the running time as the value;
         // pre-connection states keep their spoken status ("Sonnerie…").
         .accessibilityLabel(pillStatus.isConnected
-            ? String(localized: "a11y.call.pill.duration", defaultValue: "Dur\u{00E9}e d'appel", bundle: .main)
+            ? String(localized: "a11y.call.pill.duration", defaultValue: "Durée d'appel", bundle: .main)
             : pillStatus.label)
         .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
         .accessibilityAddTraits(.updatesFrequently)

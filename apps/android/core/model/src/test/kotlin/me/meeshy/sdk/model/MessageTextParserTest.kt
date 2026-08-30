@@ -238,6 +238,33 @@ class MessageTextParserTest {
         assertThat(T.highlightRanges("aAaA", "aa")).containsExactly(0..1, 2..3).inOrder()
     }
 
+    // ----- highlightRanges: accent-insensitive (iOS `.diacriticInsensitive` parity) -----
+
+    @Test
+    fun highlight_unaccented_term_matches_precomposed_accented_text() {
+        // "café" with a precomposed é (U+00E9) — searching "cafe" highlights all 4 chars.
+        assertThat(T.highlightRanges("café", "cafe")).containsExactly(0..3)
+    }
+
+    @Test
+    fun highlight_range_covers_a_trailing_combining_mark_of_a_decomposed_grapheme() {
+        // "caf" + "e" + combining acute (U+0301) — the mark is part of the grapheme,
+        // so the highlight extends over it (indices 0..4, not 0..3).
+        assertThat(T.highlightRanges("café", "cafe")).containsExactly(0..4)
+    }
+
+    @Test
+    fun highlight_accented_term_matches_plain_text() {
+        // Searching with an accent still matches unaccented text.
+        assertThat(T.highlightRanges("cafe", "café")).containsExactly(0..3)
+    }
+
+    @Test
+    fun highlight_term_that_folds_to_nothing_yields_no_ranges() {
+        // A term of only combining marks folds away to empty — nothing to highlight.
+        assertThat(T.highlightRanges("hello", "́")).isEmpty()
+    }
+
     // ----- extractUrls -----
 
     @Test

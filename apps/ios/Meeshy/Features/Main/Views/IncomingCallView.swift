@@ -59,7 +59,7 @@ struct IncomingCallView: View {
 
             // Call type label
             Text(callManager.isVideoEnabled
-                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
+                ? String(localized: "call.incoming.video", defaultValue: "Appel vidéo entrant", bundle: .main)
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
                 .font(.callout.weight(.medium))
                 .foregroundColor(.white.opacity(0.7))
@@ -79,7 +79,7 @@ struct IncomingCallView: View {
             let callerName = callManager.remoteUsername
                 ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
             let callTypeLabel = callManager.isVideoEnabled
-                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
+                ? String(localized: "call.incoming.video", defaultValue: "Appel vidéo entrant", bundle: .main)
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main)
             UIAccessibility.post(
                 notification: .screenChanged,
@@ -181,7 +181,7 @@ struct IncomingCallView: View {
         CallTypeBadgeView(
             isVideo: callManager.isVideoEnabled,
             label: callManager.isVideoEnabled
-                ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
+                ? String(localized: "call.incoming.badge.video", defaultValue: "Vidéo", bundle: .main)
                 : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main)
         )
     }

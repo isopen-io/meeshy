@@ -2095,7 +2095,7 @@ struct RootView: View {
             // L'appui long lance les Réels : un geste que rien ne signale à l'écran
             // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
             // ne peut pas le découvrir par tâtonnement.
-            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité. Appui long : les Réels.", bundle: .main),
+            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
             rightA11yValue: notificationManager.unreadCount > 0
                 ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
