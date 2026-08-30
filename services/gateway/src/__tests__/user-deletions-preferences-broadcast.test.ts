@@ -244,22 +244,37 @@ describe('user-deletions routes — multi-device preference broadcast', () => {
     expect(prefEmissions()).toHaveLength(0);
   });
 
-  it('restore-for-me reactivates the participant Participant.deletedForMe writes, though it does not (yet) broadcast to other devices — a documented gap, not #4332\'s scope', async () => {
+  it('restore-for-me tells the user other devices the conversation is back (#4344 — via CONVERSATION_RESTORED, the exact mirror of CONVERSATION_DELETED)', async () => {
     const deleteRes = await deleteForMe();
     expect(deleteRes.statusCode).toBe(200);
-    const emitsAfterDelete = env.emits.length;
 
     const res = await restoreForMe();
     expect(res.statusCode).toBe(200);
 
-    // #4332 corrige la LECTURE/ÉCRITURE (`Participant.deletedForMe`) : c'est
-    // le défaut nommé par l'issue. La diffusion multi-appareil de la
-    // restauration exigerait un événement socket NOMMÉ que
-    // `packages/shared/types/socketio-events.ts` (fichier-carrefour) ne
-    // déclare pas encore — hors territoire de ce lot. Ce témoin fige
-    // l'absence ACTUELLE de diffusion pour qu'elle reste un suivi VISIBLE,
-    // jamais une régression supposée résolue en silence.
-    expect(env.emits.length).toBe(emitsAfterDelete);
+    // #4332 avait corrigé la LECTURE/ÉCRITURE (`Participant.deletedForMe`) et
+    // LAISSÉ la diffusion, faute d'un événement nommé dans le fichier-carrefour
+    // `packages/shared/types/socketio-events.ts`. Ce témoin FIGEAIT cette
+    // absence — `expect(env.emits.length).toBe(emitsAfterDelete)` — en disant
+    // sur place pourquoi : « pour qu'elle reste un suivi VISIBLE, jamais une
+    // régression supposée résolue en silence ».
+    //
+    // #4344 déclare `CONVERSATION_RESTORED` et le diffuse. Le piège a donc
+    // fonctionné comme prévu : il est tombé le jour où le trou s'est refermé,
+    // et il a obligé ce lot à le constater plutôt qu'à croire à une
+    // régression. Il bascule ici du NÉGATIF au POSITIF, et devient le miroir
+    // exact du témoin `delete-for-me` ci-dessus — même room, même forme de
+    // charge, sens inverse.
+    expect(env.rooms).toContain(ROOMS.user(USER_ID));
+
+    const restoredEmission = env.emits.find((e) => e.event === SERVER_EVENTS.CONVERSATION_RESTORED);
+    expect(restoredEmission).toBeDefined();
+    expect(restoredEmission?.payload).toEqual({ userId: USER_ID, conversationId: CONV_ID });
+
+    // La restauration ne passe PAS par un instantané de préférences, pour la
+    // raison exacte qui vaut à la suppression (cf. témoin précédent) : la
+    // colonne que la corbeille lit est `Participant.deletedForMe`, et c'est
+    // l'événement nommé qui la porte — jamais `USER_PREFERENCES_UPDATED`.
+    expect(prefEmissions()).toHaveLength(0);
   });
 
   it('clear-history broadcasts the cutoff the other devices must hide behind', async () => {
