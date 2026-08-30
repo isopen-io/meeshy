@@ -86,7 +86,7 @@ describe('ROUTE_TABLE (#4278)', () => {
     }
   });
 
-  it('a exactement 59 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
+  it('a exactement 60 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
     // Compte ancré au 2026-08-30 sur les 65 actes d'enregistrement de
     // `route-registration.ts` moins les 8 montages qui exigent PLUS qu'un
     // {module, prefix} (traduction, userDeletions, conversationRoutes,
@@ -113,7 +113,16 @@ describe('ROUTE_TABLE (#4278)', () => {
     // renommée). Les six adresses `/me/preferences/categories` gardent leur
     // entrée : elles restent SERVIES en alias annoncé, ce qui rend l'écart de
     // +1 sur la table (et non 0) attendu.
-    expect(ROUTE_TABLE.length).toBe(59);
+    //
+    // 59 → 60 le 2026-08-30 (#4349) : entrée `conversation-receipts`, les DEUX
+    // adresses de la COLLECTION d'accusés (`POST` et `GET
+    // /api/v1/conversations/:conversationId/receipts`). Les six portes
+    // historiques gardent leurs entrées — elles restent SERVIES, devenues des
+    // adaptateurs de ce module, ce qui rend l'écart de +1 sur la table (et +2
+    // sur le manifeste) attendu. Le manifeste et
+    // `packages/shared/api/endpoints.ts` sont DÉRIVÉS et régénérés par
+    // l'intégrateur, hors territoire de l'issue.
+    expect(ROUTE_TABLE.length).toBe(60);
   });
 });
 

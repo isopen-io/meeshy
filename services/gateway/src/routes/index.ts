@@ -140,6 +140,7 @@ import { maintenanceRoutes } from './maintenance';
 // Namespace — voir « Les trois collisions d'import DISPARAISSENT » ci-dessus.
 import * as MessagesModule from './messages';
 import messageReadStatusRoutes from './message-read-status';
+import { conversationReceiptsRoutes } from './conversations/receipts';
 import mentionRoutes from './mentions';
 import reactionRoutes from './reactions';
 import { notificationRoutes } from './notifications';
@@ -176,9 +177,9 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 59 entrées (#4359 en ajoute une, `me-categories`), réparties en QUATRE
- * segments plutôt qu'une liste plate — et ce n'est pas une préférence de
- * mise en page.
+ * 60 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
+ * `conversation-receipts`), réparties en QUATRE segments plutôt qu'une liste
+ * plate — et ce n'est pas une préférence de mise en page.
  *
  * ## Pourquoi quatre tables, et pas une
  *
@@ -281,6 +282,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // ── Messages ──────────────────────────────────────────────────────────
   { name: 'messages', prefix: API_PREFIX, module: MessagesModule.default },
   { name: 'message-read-status', prefix: API_PREFIX, module: messageReadStatusRoutes },
+  // La COLLECTION unique d'accusés (#4349, suivi de #4179) : deux adresses,
+  // `POST` et `GET /conversations/:conversationId/receipts`. Montage AUTONOME
+  // au même préfixe que `message-read-status` juste au-dessus, dont les quatre
+  // portes historiques sont devenues des adaptateurs de ce module — même patron
+  // que `me-categories` face à `me-preferences` (#4359).
+  { name: 'conversation-receipts', prefix: API_PREFIX, module: conversationReceiptsRoutes },
   { name: 'mentions', prefix: API_PREFIX, module: mentionRoutes },
 ] as const;
 
@@ -319,7 +326,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 59 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 60 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

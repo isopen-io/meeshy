@@ -287,10 +287,10 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     expect(categoriesEntry.module).toBe(meCategoriesRoutes);
   });
 
-  it('ROUTE_TABLE compte désormais 59 entrées (58 + `me-categories`, #4359)', () => {
+  it('ROUTE_TABLE compte désormais 60 entrées (59 + `conversation-receipts`, #4349)', () => {
     // Ce compte est SIGNALÉ à l'intégrateur, jamais régénéré ici :
     // `route-manifest.json` / `packages/shared/api/endpoints.ts` sont des
-    // artefacts DÉRIVÉS, hors territoire de #4359.
-    expect(ROUTE_TABLE.length).toBe(59);
+    // artefacts DÉRIVÉS, hors territoire de #4359 comme de #4349.
+    expect(ROUTE_TABLE.length).toBe(60);
   });
 });
