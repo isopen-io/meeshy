@@ -242,7 +242,10 @@ struct ConnectionBanner: View {
                     label: "@\(username)",
                     iconName: nil,
                     dotStyle: .brand,
-                    source: .conversation(id: conversationId),
+                    // #4027 — la frappe mène à la CONVERSATION, sans ancre :
+                    // « X écrit » ne désigne aucun message, il n'y en a pas
+                    // encore. `nil` est ici le verdict juste, pas un trou.
+                    source: .conversation(id: conversationId, messageId: nil),
                     showsActivityDots: true
                 )
             }
