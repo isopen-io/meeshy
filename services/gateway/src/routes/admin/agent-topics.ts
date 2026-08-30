@@ -100,31 +100,121 @@ function refuseUnsafePatterns(reply: FastifyReply, refusals: readonly PatternRef
 }
 
 /**
- * Débit de `POST /topics/:id/test` : 10 par minute et PAR UTILISATEUR.
+ * `userId` SENTINELLE de `createUnauthenticatedContext()` (`middleware/auth.ts`)
+ * — modèle : `middleware/rate-limit.ts`, `VISITEUR_SANS_COMPTE`.
+ *
+ * Un visiteur sans justificatif reçoit un `authContext` COMPLET dont le
+ * `userId` vaut la chaîne `'anonymous'` — une valeur VRAIE. Un générateur qui
+ * se contente de `userId ?? repli` la prend donc pour un compte et range TOUS
+ * les visiteurs de la planète dans UN seul seau. Cette route ne peut être
+ * atteinte QUE par un compte BIGBOSS/ADMIN (§ ci-dessous) : la sentinelle n'y
+ * est jamais exercée aujourd'hui. Elle reste gardée en défense — le jour où
+ * cette route, ou une copie de son `keyGenerator`, admettrait l'anonyme, le
+ * piège se refermerait en silence sans elle.
+ */
+const VISITEUR_SANS_COMPTE = 'anonymous';
+
+/**
+ * Identité de débit de l'appelant, avec des préfixes DISJOINTS par
+ * population — modèle : `middleware/rate-limit.ts` l. 148-158
+ * (`resolveCallerKey`). `acct:` et `ip:` ne peuvent pas se confondre : sans
+ * préfixe côté compte, un `userId` qui ressemblerait à `ip:1.2.3.4`
+ * partagerait le seau d'un visiteur — impossible aujourd'hui (un `userId` de
+ * compte est un ObjectId Mongo, jamais de cette forme), mais la règle ne
+ * dépend pas de cette coïncidence.
+ */
+function resolveAgentTopicsTestCallerKey(request: FastifyRequest): string {
+  const authContext = (request as UnifiedAuthRequest).authContext;
+  const userId = authContext?.userId;
+  if (userId && userId !== VISITEUR_SANS_COMPTE) {
+    return `acct:${userId}`;
+  }
+  return `ip:${request.ip}`;
+}
+
+/**
+ * Débit de `POST /topics/:id/test` : 10 par minute et PAR COMPTE ADMIN.
  *
  * La route reste la plus chère du fichier même après le déport hors boucle
  * d'événements — chaque appel démarre un fil de travail et lui donne un
  * budget de temps. Sans plafond, dix appels concurrents deviennent dix fils,
  * et le déport se contente de déplacer la saturation d'un fil vers la machine.
  *
- * Le `keyGenerator` EXPLICITE est capital, et pour une raison plus brutale que
- * la seule propreté : `mergeParams` du plugin est un `Object.assign`, donc une
- * config de route qui n'en pose pas HÉRITE de celui du limiteur global —
- * `global:${request.ip}`, LA MÊME CLÉ que les 300/min de toute la plateforme
- * (`middleware/rate-limiter.ts`). Un `max: 10` posé sur ce seau-là ne borne pas
- * cette route : il RABAISSE à 10/min tout ce que cette adresse demande au
- * gateway. Le seau est donc nommé (`agent-topics:test:`) et compté par COMPTE,
- * là où l'appelant est enfin connu — même forme que
- * `createPostRouteRateLimitConfig`.
+ * ## La garde réelle de la route, MESURÉE — pas supposée d'un préfixe `/admin`
+ *
+ * `onRequest: [fastify.authenticate, requireAgentAdmin]` (route ci-dessous).
+ * `fastify.authenticate` (`server.ts`, décoré par
+ * `createUnifiedAuthMiddleware(prisma, { requireAuth: true, allowAnonymous: false })`)
+ * répond 401 à tout visiteur sans JWT et 403 à tout invité de lien partagé
+ * (`type !== 'user'`) — dans les deux cas AVANT de poser `authContext` sur la
+ * requête. `requireAgentAdmin` (`requirePermission('canManageAgent')`,
+ * `middleware/authorize.ts`) répond ensuite 403 à tout compte enregistré qui
+ * n'a pas `canManageAgent` — BIGBOSS et ADMIN seulement
+ * (`services/admin/permissions.service.ts`). **Seul un compte BIGBOSS/ADMIN
+ * atteint donc jamais le handler** : ni un visiteur, ni un invité anonyme de
+ * lien partagé (dont `authContext.userId` porterait un `Participant.id`, pas
+ * un `User.id` — rappel du dépôt qui ne s'applique donc PAS ici), ni un
+ * simple USER.
+ *
+ * ## `hook: 'preHandler'` — explicite, pas un correctif de bug OBSERVÉ ici
+ *
+ * Contrairement à `routes/calls.ts` (garde en `preValidation`) et aux cinq
+ * fabriques de `middleware/rate-limiter.ts` (garde en `preValidation`/`preHandler`
+ * selon la route), la garde de CETTE route vit en `onRequest` — la MÊME phase
+ * où `config.rateLimit` s'évalue par défaut. Mesuré sur le vrai plugin
+ * (`addRouteRateHook`, `@fastify/rate-limit/index.js`) : sans `hook` déclaré,
+ * il pousse son propre hook à la FIN du tableau `onRequest` déjà posé par la
+ * route — donc après `fastify.authenticate` ET `requireAgentAdmin`, qui l'y
+ * ont précédé dans le même littéral. `authContext` était donc déjà LISIBLE
+ * ici avant ce lot, contrairement à `calls.ts` où la garde vit en
+ * `preValidation`, une phase PLUS TARDIVE que l'`onRequest` par défaut du
+ * plugin — c'est cette différence de phase, pas la présence du hook, qui
+ * décidait. Témoin AVANT/APRÈS retrait du hook :
+ * `agent-topics-test-route-counts-the-account.test.ts`.
+ *
+ * Le hook est posé quand même, pour deux raisons qui ne sont pas la
+ * disparition d'un défaut observé : (1) ne plus DÉPENDRE d'un ordre de
+ * tableau accidentel — un futur refactor qui déplacerait cette garde en
+ * `preValidation` (à la `calls.ts`) romprait silencieusement le comptage par
+ * compte si le hook restait implicite ; (2) aligner la forme sur le reste du
+ * dépôt (`GARDES_DE_CLE`, `createRateLimitConfig`), dont ce fichier prétendait
+ * suivre le patron sans le faire — le doc-comment d'origine affirmait « même
+ * forme que `createPostRouteRateLimitConfig` » en la NOMMANT : c'était
+ * l'exact procédé qui a tenu #4347 hors de ce fichier pendant tout ce temps.
+ *
+ * ## Le sens de l'échec : FERMÉ — et ce n'est PAS celui des routes d'appels
+ *
+ * `registerGlobalRateLimiter` (le plugin réellement monté, `server.ts:560`)
+ * pose `skipOnError: true` ; `mergeParams` du plugin (`Object.assign`) le
+ * fait HÉRITER par toute config de route qui ne le redéclare pas — c'est le
+ * défaut que ce fichier portait : `TEST_ROUTE_RATE_LIMIT` ne déclarait aucun
+ * `skipOnError`, donc une panne du magasin de compteurs (Redis) ouvrait ce
+ * plafond en grand, SILENCIEUSEMENT, sans que personne l'ait décidé — mesuré
+ * dans le même témoin que ci-dessus.
+ *
+ * Le lot voisin (`middleware/rate-limit.ts`, `ROUTE_RATE_LIMITS`) choisit
+ * OUVERT pour les routes d'appels parce qu'elles couvrent RACCROCHER et
+ * QUITTER : refuser pendant la panne enfermerait l'appelant dans un appel
+ * qu'il ne peut plus quitter — un dommage produit certain contre un abus
+ * hypothétique. L'arbitrage n'est pas le même ici. Cette route exécute des
+ * expressions régulières D'APPELANT — le motif même qui a figé le gateway
+ * entier avant `certifyPatterns`/`countMatchesOffLoop` (cf. commentaires
+ * plus bas) — et son plafond protège un budget de FILS/CPU, pas seulement un
+ * flot de requêtes. Pendant une panne Redis, laisser passer transforme
+ * l'indisponibilité du compteur en invitation à saturer le pool de fils au
+ * moment précis où l'infrastructure est déjà sous tension ; refuser ne prive
+ * qu'un BIGBOSS/ADMIN d'un test de motif pendant quelques minutes. FERMÉ
+ * (`skipOnError: false`) : la panne du magasin répond alors 500 — jamais un
+ * 429 propre, le plugin laissant remonter l'erreur du magasin — ce qui reste
+ * préférable à laisser saturer le processus.
  */
-const TEST_ROUTE_RATE_LIMIT = {
+export const TEST_ROUTE_RATE_LIMIT = {
   max: 10,
   timeWindow: '1 minute',
-  keyGenerator: (request: FastifyRequest) => {
-    const authContext = (request as UnifiedAuthRequest).authContext;
-    const id = authContext?.userId ?? `ip:${request.ip}`;
-    return `agent-topics:test:${id}`;
-  },
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) =>
+    `agent-topics:test:${resolveAgentTopicsTestCallerKey(request)}`,
   errorResponseBuilder: () => ({
     success: false,
     error: 'Trop de tests de motifs (agent-topics/test). Veuillez patienter.',
