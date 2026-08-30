@@ -16182,7 +16182,7 @@ Deux conséquences :
   que l'outil confond**, pas de trier 355 entrées à la main. Ici la réponse
   tenait en deux `grep` : un `protocol` et un `DropDelegate`.
 
-## Leçon 288 — un double qui n'émet JAMAIS laisse le FIL d'un sink hors de toute mesure ; et un invariant logé derrière la porte du premier boot ne s'applique jamais à une base peuplée (2026-08-26, crash « Find nearby »)
+## Leçon 288 quater — un double qui n'émet JAMAIS laisse le FIL d'un sink hors de toute mesure ; et un invariant logé derrière la porte du premier boot ne s'applique jamais à une base peuplée (2026-08-26, crash « Find nearby »)
 
 **Le crash.** Sur l'iPhone comme au simulateur, l'écran « À proximité » mourait
 quelques secondes après le tap : `SIGTRAP` dans `_dispatch_assert_queue_fail`,
@@ -16257,7 +16257,7 @@ suffira qu'avec un PAT `MATCH_GIT_BASIC_AUTHORIZATION` ou le retour des deploy k
 deux gestes du user.
 ---
 
-## Leçon 288 — j'ai publié un mécanisme faux en croyant avoir mesuré (2026-08-25, itération 246i, correction de 245i)
+## Leçon 288 bis — j'ai publié un mécanisme faux en croyant avoir mesuré (2026-08-25, itération 246i, correction de 245i)
 
 245i a conclu que les 355 signalements de la garde d'atteignabilité étaient
 « dominés par des faux positifs structurels », et a nommé les **exigences de
@@ -16306,7 +16306,7 @@ Et un corollaire de conception, gagné au passage : **le bucket « appelée
 seulement par un test » ne doit pas être EXCLU mais CLASSÉ.** Une garde qui
 l'exclut jette son meilleur résultat ; une garde qui le nomme rend un inventaire
 exploitable.
-## Leçon 288 — un témoin de parité doit couvrir les N miroirs, pas N−1 (2026-08-25, itération 269)
+## Leçon 288 ter — un témoin de parité doit couvrir les N miroirs, pas N−1 (2026-08-25, itération 269)
 
 La table de réduction de langue (`ISO_639_3_TO_1` + `LEGACY_ISO_639_1`) vit en
 TROIS exemplaires, un par client : TS (SSOT), Swift (iOS/SDK), Kotlin (Android).
