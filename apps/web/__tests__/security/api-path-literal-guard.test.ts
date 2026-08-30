@@ -123,6 +123,7 @@ import { describe, it, expect } from '@jest/globals';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 const WEB_ROOT = path.resolve(__dirname, '../..');
 const API_ROOT = path.join(WEB_ROOT, 'app/api');
@@ -312,6 +313,44 @@ function isSourceFile(name: string): boolean {
   return /\.(ts|tsx)$/.test(name) && !/\.(test|spec|stories|d)\.(ts|tsx)$/.test(name);
 }
 
+/**
+ * Ce que git IGNORE ne fait pas partie du dépôt, donc ne peut pas faire rougir
+ * une garde de dépôt.
+ *
+ * Le balayage lisait le DISQUE. Il tombait donc sur des fichiers présents
+ * localement et invisibles à la CI — `apps/web/components/debug/` est ignoré
+ * par `.gitignore:313`, et son panneau de mise au point appelle
+ * `buildApiUrl('/notifications')`. La garde était rouge chez quiconque a ce
+ * dossier et verte partout ailleurs : la pire divergence pour une garde,
+ * parce qu'AUCUN commit ne peut la refermer. Une garde qu'on ne peut pas
+ * rendre verte est une garde qu'on finit par désactiver — et le dépôt a déjà
+ * 464 témoins passés au vert en perdant leur protection.
+ *
+ * `git ls-files` est la seule réponse autoritative à « que contient le
+ * dépôt ? ». Le repli sur le balayage disque couvre le cas où git est
+ * indisponible : mieux vaut une garde trop large qu'aucune garde.
+ */
+function trackedSourceFiles(root: string): string[] | null {
+  try {
+    const sortie = execFileSync('git', ['ls-files', '-z', '--', '*.ts', '*.tsx'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    const relatifs = sortie.split('\0').filter(Boolean);
+    if (relatifs.length === 0) return null;
+    return relatifs
+      .filter((rel) => {
+        const segments = rel.split('/');
+        if (segments.some((seg) => IGNORED_DIRS.has(seg))) return false;
+        return isSourceFile(segments[segments.length - 1] ?? '');
+      })
+      .map((rel) => path.join(root, rel));
+  } catch {
+    return null;
+  }
+}
+
 function walkSourceFiles(dir: string, acc: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -323,11 +362,16 @@ function walkSourceFiles(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
+/** Les fichiers du DÉPÔT sous `apps/web/`, jamais ceux du seul disque. */
+function sourceFilesUnderWeb(webRoot: string): string[] {
+  return trackedSourceFiles(webRoot) ?? walkSourceFiles(webRoot);
+}
+
 /** Le balayage complet : chaque fichier source de `apps/web/`, catalogue exclu. */
 export function sweepApiPathLiterals(webRoot: string): ApiLiteralSite[] {
   const prefixes = nextLocalApiPrefixes(path.join(webRoot, 'app/api'));
   const sites: ApiLiteralSite[] = [];
-  for (const file of walkSourceFiles(webRoot)) {
+  for (const file of sourceFilesUnderWeb(webRoot)) {
     if (CATALOG_DEFINITION_FILES.has(file)) continue;
     const source = fs.readFileSync(file, 'utf8');
     sites.push(...scanApiPathLiterals(source, path.relative(webRoot, file), prefixes));
