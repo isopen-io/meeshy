@@ -151,10 +151,14 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(compose, save + 1)
     }
 
-    /// **Le cas qui SÉPARE composabilité et publiabilité : l'AUDIO.** Une note
-    /// vocale s'enregistre (`saveableAttachmentCount == 1`) et ne se compose
-    /// pas — la graine ne sait pas la poser sur un canvas.
-    func test_primaryActions_audioOnly_offersSave_butNeverCompose() {
+    /// **Le résolveur ne connaît QUE le fait, jamais le mime.** Ce témoin
+    /// s'appelait « l'audio s'enregistre et ne se compose jamais » ; le #4461 a
+    /// levé ce refus au niveau de la RÈGLE (`ComposableAttachment.form`), pas
+    /// ici. Ce qu'il vérifie survit intact et se nomme désormais pour ce qu'il
+    /// est : `canComposeMedia == false` retire « Composer », quelle que soit la
+    /// raison du refus — c'est précisément parce que le résolveur ne la connaît
+    /// pas qu'il n'a pas eu à changer.
+    func test_primaryActions_whenTheRuleRefuses_composeIsAbsent() {
         let a = MessageActionResolver.primaryActions(
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: false))
@@ -259,16 +263,32 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(ComposableAttachment.form(mimeType: "video/quicktime"), .video)
     }
 
-    /// Chaque refus vaut par sa RAISON, pas par la liste : l'audio parce que
-    /// l'atelier n'a pas de place pour lui, le lieu parce qu'`AttachmentKind` le
-    /// range en `.other` — ce qui tient la garde O13 « jamais `.location` »
-    /// GRATUITEMENT, sans condition qu'on puisse oublier de recopier.
-    func test_composableForm_refusesAudioLocationAndDocuments() {
-        for mime in ["audio/m4a", "audio/mpeg", "application/x-location",
+    /// Chaque refus vaut par sa RAISON, pas par la liste : le lieu parce
+    /// qu'`AttachmentKind` le range en `.other` — ce qui tient la garde O13
+    /// « jamais `.location` » GRATUITEMENT, sans condition qu'on puisse oublier
+    /// de recopier —, les documents parce qu'il n'y a rien à en poser.
+    ///
+    /// **L'AUDIO a quitté cette liste au #4461**, et c'est un retournement, pas
+    /// une suppression : son refus venait de ce que la graine ne savait poser
+    /// que des bitmaps et des pistes vidéo. `StoryComposerSeed.audio` a levé ce
+    /// refus de TRANSPORT en empruntant le chemin du collage
+    /// (`attachPastedAudio`) — le son devient le SON de la scène. Son
+    /// acceptation est désormais vérifiée par le témoin ci-dessous.
+    func test_composableForm_refusesLocationAndDocuments() {
+        for mime in ["application/x-location",
                      "application/pdf", "application/msword", "text/plain",
                      "application/zip", "text/csv", "application/json", ""] {
             XCTAssertNil(ComposableAttachment.form(mimeType: mime), mime)
         }
+    }
+
+    /// #4461 — le son est une forme À PART ENTIÈRE, distincte de l'image et de
+    /// la vidéo : il ne se pose pas sur le canvas, il devient la piste sonore.
+    /// Le distinguer ici est ce qui permet à la porte de le router sans
+    /// interroger le mime une seconde fois.
+    func test_composableForm_acceptsAudioAsItsOwnForm() {
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "audio/m4a"), .audio)
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "audio/mpeg"), .audio)
     }
 
     // MARK: - moreSections : « Sélectionner » (#4005) — toujours offert, en fin de liste

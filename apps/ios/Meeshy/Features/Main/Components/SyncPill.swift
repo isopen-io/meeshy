@@ -76,6 +76,26 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     }
 }
 
+/// **Les contextes auxquels la pastille CÈDE, en un seul endroit** (#4028).
+///
+/// La règle était écrite en morceaux : le viewer de story dans la bannière, les
+/// réels chez l'hôte iPhone, rien chez l'iPad. Trois écritures d'une même
+/// question sont trois occasions de diverger — et c'est arrivé, l'iPad n'ayant
+/// jamais reçu la garde des réels (pour une raison documentée, mais que rien ne
+/// distinguait d'un oubli).
+///
+/// Elle applique la doctrine du #4051 : **un contenu qui prend le haut de
+/// l'écran est un contexte à lui, et le chrome lui cède.** Une notification
+/// in-app en est un — et l'ordre de rendu ne pouvait de toute façon pas les
+/// départager, la pastille étant un `.overlay` appliqué APRÈS le `ZStack` qui
+/// porte le toast : aucun `zIndex` interne ne pouvait la passer.
+nonisolated enum SyncPillVisibility {
+    static func isVisible(storyViewerPresenting: Bool,
+                          inAppNoticePresenting: Bool) -> Bool {
+        !storyViewerPresenting && !inAppNoticePresenting
+    }
+}
+
 /// Inline rotating pill that lists every signal the user might care about
 /// from the top of the screen — connection state, queued offline ops, and
 /// stuck inflight work — in a single discreet chip. Matches the legacy
@@ -88,6 +108,32 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
 /// - Tap on an entry with `source != nil` invokes `onTap(source)` so the
 ///   caller can route to the conversation / post / story where the
 ///   operation is taking place.
+///
+/// ## Où elle s'affiche — et où elle ne s'affiche PAS (#4051, tranché 2026-08-30)
+///
+/// **La pastille ne traverse pas une présentation modale.** Une `sheet` ou un
+/// `fullScreenCover` est posé par le système AU-DESSUS de la vue présentante,
+/// overlays compris : tant qu'une feuille est ouverte, la pastille existe, se
+/// met à jour, et personne ne la voit. Y échapper demanderait une `UIWindow`
+/// dédiée — scène, rotation, multi-fenêtres iPad, hit-testing, ordre VoiceOver.
+///
+/// Ce coût permanent n'est pas payé, et la raison est un FAIT sur ce que cette
+/// pastille porte : **toutes ses entrées sont des ÉTATS, jamais des
+/// événements** — hors ligne, reconnexion, synchronisation, file en attente,
+/// quelqu'un qui écrit. Aucune n'expire sans avoir été vue (`entries` est
+/// recalculée à chaque rendu, donc à la fermeture de la feuille la pastille dit
+/// la vérité du moment, jamais un retard), et aucune n'est ACTIONNABLE depuis
+/// une feuille — on n'y répond pas à une frappe, on n'y relance pas un envoi.
+///
+/// Ce n'est donc pas « ne rien faire » : c'est la MÊME règle que ses deux
+/// points de montage appliquent déjà en l'éteignant sous le viewer de story
+/// (`isStoryViewerPresenting`) et sous les réels (`reelsPresenter.launch`). Un
+/// contenu qui prend tout l'écran est un contexte à lui, et le chrome lui cède.
+/// Une feuille modale en est un.
+///
+/// Condition de levée : si une entrée FUTURE devenait un ÉVÉNEMENT — quelque
+/// chose qui passe et ne revient pas — l'arbitrage change, et c'est l'option
+/// `UIWindow` qu'il faudrait alors peser.
 struct SyncPill: View {
     let entries: [SyncPillEntry]
     /// Invoked when the user taps the pill and the currently visible

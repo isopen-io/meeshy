@@ -145,6 +145,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         switch try XCTUnwrap(imageSeed).payload {
         case .image: break
         case .video: XCTFail("Une image reçue doit devenir un BITMAP : le fond de slide n'accepte rien d'autre.")
+        case .audio: XCTFail("Une image reçue n'est pas un son — la forme est élue par le mime, une seule fois.")
         case .none: XCTFail("Une image reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
 
@@ -156,6 +157,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         switch try XCTUnwrap(videoSeed).payload {
         case .video: break
         case .image: XCTFail("Une vidéo reçue doit rester un FICHIER : décoder une piste vidéo en bitmap perdrait le son et le mouvement.")
+        case .audio: XCTFail("Une vidéo n'est pas une piste sonore : elle se pose sur le canvas, le son ne s'y pose pas.")
         case .none: XCTFail("Une vidéo reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
     }
@@ -167,14 +169,26 @@ final class ConversationMediaDoorTests: XCTestCase {
     /// « Composer » sur une note vocale que la graine ne sait pas poser, et
     /// l'atelier ouvrirait sur une couche sans actif chargé — « invisible aux
     /// lecteurs », dit le log de l'upload.
-    func test_unAudio_neSeSemeDANS_aucuneGraine() async throws {
+    /// **RETOURNÉ au #4461.** Ce témoin exigeait qu'un son ne sème RIEN, et sa
+    /// raison — « l'atelier ouvrirait sur une couche sans actif chargé » — était
+    /// juste tant que la graine ne savait poser que des bitmaps et des pistes
+    /// vidéo. `StoryComposerSeed.audio` emprunte désormais le chemin du collage
+    /// (`attachPastedAudio`), qui charge l'actif : la couche n'est plus vide,
+    /// donc le refus n'a plus d'objet.
+    ///
+    /// Il est retourné et non supprimé : ce qu'il garde maintenant est que le
+    /// son sème bien une charge SONORE — pas une image, pas une vidéo, pas
+    /// `nil`.
+    func test_unAudio_semeUneCharge_SONORE() async throws {
         let resolver = StubMediaResolver()
         resolver.result = .success(try makeFile(named: "note.m4a"))
 
         let seed = await ConversationMediaSeeding.seed(
             for: plan(attachment(mimeType: "audio/m4a")), resolver: resolver)
 
-        XCTAssertNil(seed)
+        guard case .audio? = seed?.payload else {
+            return XCTFail("un son doit semer une charge sonore, pas \(String(describing: seed?.payload))")
+        }
     }
 
     /// Un LIEU (`application/x-location`), un PDF, un document : `AttachmentKind`

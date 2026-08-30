@@ -196,8 +196,18 @@ async function main() {
   }
 
   // ================== CRÉER 7 UTILISATEURS MULTILINGUES ==================
-  
-  
+
+  // #4348 — le court-circuit `NODE_ENV === 'development'` de
+  // `ConsentValidationService.getConsentStatus` est SUPPRIMÉ : un
+  // consentement se prouve par une donnée, jamais par la variable
+  // d'environnement. Les sept comptes de développement reçoivent donc un
+  // VRAI consentement horodaté sur les quatre colonnes `User.*ConsentAt`
+  // (`dataProcessingConsentAt`, `voiceDataConsentAt`, `voiceProfileConsentAt`,
+  // `voiceCloningEnabledAt`) — c'est ce que le court-circuit rendait pour
+  // rien avant ce lot, désormais écrit par le seed comme tout autre
+  // consentement (`POST /voice/profile/consent`, `PUT /me/consents/{purpose}`).
+  const seedConsentAt = new Date();
+
   // 1. Utilisateur français (Admin) - Primary language: English (admin default)
   const alice = await prisma.user.create({
     data: {
@@ -210,7 +220,10 @@ async function main() {
       isActive: true,
       systemLanguage: 'en',  // Admin default: English
       regionalLanguage: 'fr',
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -227,7 +240,10 @@ async function main() {
       systemLanguage: 'en',
       regionalLanguage: 'es',
       customDestinationLanguage: 'fr', // Correction pour le champ régional
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -243,7 +259,10 @@ async function main() {
       isActive: true,
       systemLanguage: 'es',
       regionalLanguage: 'en',
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -259,7 +278,10 @@ async function main() {
       isActive: true,
       systemLanguage: 'de',
       regionalLanguage: 'fr',
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -276,7 +298,10 @@ async function main() {
       systemLanguage: 'zh',
       regionalLanguage: 'en',
       customDestinationLanguage: 'fr', // Correction pour le champ régional
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -293,7 +318,10 @@ async function main() {
       systemLanguage: 'ja',
       regionalLanguage: 'fr',
       customDestinationLanguage: 'ru', // Correction pour le champ régional
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 
@@ -309,7 +337,10 @@ async function main() {
       isActive: true,
       systemLanguage: 'pt',
       regionalLanguage: 'ar',
-      autoTranslateEnabled: true,
+      dataProcessingConsentAt: seedConsentAt,
+      voiceDataConsentAt: seedConsentAt,
+      voiceProfileConsentAt: seedConsentAt,
+      voiceCloningEnabledAt: seedConsentAt,
     }
   });
 

@@ -76,15 +76,28 @@ describe('ConsentValidationService', () => {
       await expect(makeSut(prisma).getConsentStatus('missing')).rejects.toThrow('User not found');
     });
 
-    it('returns all-true status in development mode', async () => {
+    it('NODE_ENV=development n’accorde plus rien tout seul — supprimé par #4348', async () => {
+      // Le court-circuit est retiré : une base VIDE rend `false` partout,
+      // développement compris. Les comptes de développement passent
+      // désormais la garde par une vraie graine (`packages/shared/seed.ts`),
+      // jamais par la variable d'environnement.
       process.env.NODE_ENV = 'development';
 
       const sut = makeSut();
       const status = await sut.getConsentStatus('any-user');
 
+      expect(status.hasDataProcessingConsent).toBe(false);
+      expect(status.canUseVoiceCloning).toBe(false);
+      expect(status.canGenerateTranslatedAudio).toBe(false);
+    });
+
+    it('NODE_ENV=development lit la vraie colonne quand elle est posée, comme tout autre environnement', async () => {
+      process.env.NODE_ENV = 'development';
+
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW }));
+      const status = await sut.getConsentStatus('any-user');
+
       expect(status.hasDataProcessingConsent).toBe(true);
-      expect(status.canUseVoiceCloning).toBe(true);
-      expect(status.canGenerateTranslatedAudio).toBe(true);
     });
 
     it('returns all-false when user has no consents', async () => {
@@ -271,8 +284,19 @@ describe('ConsentValidationService', () => {
     });
 
     it('returns no violations when all consents are present', async () => {
-      process.env.NODE_ENV = 'development';
-      const sut = makeSut(makePrisma());
+      // #4348 — plus de court-circuit `NODE_ENV`. Le zéro-violation se
+      // prouve désormais par une VRAIE chaîne de consentements en base,
+      // jusqu'à la feuille (`voiceCloningEnabledAt`) : `voiceProfileEnabled`
+      // seul déclenche la garde `voiceCloneQuality` si `canUseVoiceCloning`
+      // est faux (cf. `ConsentValidationService.validateAudioPreferences`).
+      const sut = makeSut(
+        makePrisma({
+          dataProcessingConsentAt: NOW,
+          voiceDataConsentAt: NOW,
+          voiceProfileConsentAt: NOW,
+          voiceCloningEnabledAt: NOW,
+        })
+      );
 
       const violations = await sut.validateAudioPreferences('u1', {
         transcriptionEnabled: true,
@@ -333,8 +357,9 @@ describe('ConsentValidationService', () => {
     });
 
     it('returns no violations when dataProcessingConsent is present', async () => {
-      process.env.NODE_ENV = 'development';
-      const sut = makeSut(makePrisma());
+      // #4348 — plus de court-circuit `NODE_ENV` : le consentement vient
+      // d'une vraie colonne, pas de l'environnement d'exécution.
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW }));
 
       const violations = await sut.validatePrivacyPreferences('u1', {
         allowAnalytics: true,

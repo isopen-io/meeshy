@@ -57,7 +57,12 @@ describe('ConsentValidationService', () => {
       await expect(svc.getConsentStatus(userId)).rejects.toThrow('User not found');
     });
 
-    it('returns all-true in development mode regardless of DB state', async () => {
+    it('NODE_ENV=development n’accorde plus rien tout seul — un consentement se prouve par une donnée (#4348)', async () => {
+      // Le court-circuit `NODE_ENV === 'development'` de #4348 est SUPPRIMÉ :
+      // une base sans aucun consentement rend `false` partout, MÊME en
+      // développement. Les comptes de développement passent désormais la
+      // garde parce qu'ils ont une VRAIE colonne horodatée — voir
+      // `packages/shared/seed.ts` (les sept comptes seed).
       process.env.NODE_ENV = 'development';
       const prisma = makePrisma({
         dataProcessingConsentAt: null,
@@ -69,17 +74,33 @@ describe('ConsentValidationService', () => {
       const status = await svc.getConsentStatus(userId);
 
       expect(status).toEqual({
-        hasDataProcessingConsent: true,
-        hasVoiceDataConsent: true,
-        hasVoiceProfileConsent: true,
-        hasVoiceCloningConsent: true,
-        hasThirdPartyServicesConsent: true,
-        canTranscribeAudio: true,
-        canTranslateText: true,
-        canTranslateAudio: true,
-        canGenerateTranslatedAudio: true,
-        canUseVoiceCloning: true,
+        hasDataProcessingConsent: false,
+        hasVoiceDataConsent: false,
+        hasVoiceProfileConsent: false,
+        hasVoiceCloningConsent: false,
+        hasThirdPartyServicesConsent: false,
+        canTranscribeAudio: false,
+        canTranslateText: false,
+        canTranslateAudio: false,
+        canGenerateTranslatedAudio: false,
+        canUseVoiceCloning: false,
       });
+    });
+
+    it('NODE_ENV=development lit la VRAIE colonne quand elle est posée — comme tout autre environnement', async () => {
+      process.env.NODE_ENV = 'development';
+      const now = new Date();
+      const prisma = makePrisma({
+        dataProcessingConsentAt: now,
+        voiceDataConsentAt: now,
+        voiceProfileConsentAt: now,
+        voiceCloningEnabledAt: now,
+      });
+      const svc = new ConsentValidationService(prisma);
+      const status = await svc.getConsentStatus(userId);
+
+      expect(status.hasDataProcessingConsent).toBe(true);
+      expect(status.canUseVoiceCloning).toBe(true);
     });
 
     it('returns all-false when user has no consents and no preferences', async () => {

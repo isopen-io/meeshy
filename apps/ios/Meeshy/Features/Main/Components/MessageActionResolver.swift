@@ -115,13 +115,25 @@ nonisolated enum ComposableAttachment {
     /// composable, ce qui écarte GRATUITEMENT le lieu (`AttachmentKind` range
     /// `application/x-location` en `.other`) : la garde O13 « jamais
     /// `.location` » n'a donc aucune condition propre à oublier.
-    enum Form: Equatable { case image, video }
+    enum Form: Equatable { case image, video, audio }
 
+    /// **Le son est entré au vocabulaire au #4461**, et le doc ci-dessus dit
+    /// pourquoi il en était exclu : « offrir Composer sur un audio ouvrirait un
+    /// atelier où l'objet posé n'aurait aucun actif chargé ». C'était exact tant
+    /// que la graine ne savait poser que des bitmaps et des pistes vidéo.
+    ///
+    /// Ce qu'un son sait ÊTRE dans un atelier, le dépôt le savait déjà
+    /// ailleurs : `ComposerAudioPlacement` gouverne le collage d'un son depuis
+    /// le #4378, et `attachPastedAudio` le pose. `StoryComposerSeed.audio`
+    /// emprunte ce chemin — le son devient le SON de la scène, jamais un objet
+    /// de canvas. Le refus levé était donc un refus de TRANSPORT, pas de
+    /// produit.
     static func form(mimeType: String) -> Form? {
         switch AttachmentKind(mimeType: mimeType) {
         case .image: return .image
         case .video: return .video
-        case .audio, .pdf, .spreadsheet, .document, .presentation,
+        case .audio: return .audio
+        case .pdf, .spreadsheet, .document, .presentation,
              .archive, .code, .text, .other:
             return nil
         }

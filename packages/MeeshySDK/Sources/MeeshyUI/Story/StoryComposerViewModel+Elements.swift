@@ -422,12 +422,18 @@ extension StoryComposerViewModel {
     /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
     /// exactement au même point.
     @discardableResult
-    public func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
+    /// - Parameter scale: l'échelle de POSE. `nil` garde le défaut du modèle
+    ///   (taille de référence) ; les surfaces qui posent sur une scène passent
+    ///   `StorySticker.posedScale`, à laquelle le sticker se voit d'emblée.
+    public func addSticker(emoji: String,
+                           provider: String? = nil,
+                           scale: Double? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, provider: provider,
+        var sticker = StorySticker(emoji: emoji, provider: provider,
                                    sourceLanguage: declaredContentLanguage,
                                    x: 0.5 + offset, y: 0.5 + offset)
+        if let scale { sticker.scale = scale }
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -451,8 +457,11 @@ extension StoryComposerViewModel {
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
     @discardableResult
-    public func addSticker(image: UIImage, provider: String) -> StorySticker {
-        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji, provider: provider)
+    public func addSticker(image: UIImage,
+                           provider: String,
+                           scale: Double? = nil) -> StorySticker {
+        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
+                                 provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
         return sticker
     }

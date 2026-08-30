@@ -154,4 +154,44 @@ final class SyncPillTimerStateTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - #4028 — à quels contextes la pastille CÈDE
+
+    /// **La règle nomme les contextes auxquels le chrome cède**, et elle est
+    /// UNE — les deux hôtes (iPhone, iPad) la consultaient auparavant par des
+    /// conditions écrites séparément, ce qui est la façon la plus sûre de les
+    /// faire diverger.
+    ///
+    /// Au repos, la pastille se montre : sans ce contrôle positif, une règle
+    /// qui refuserait TOUT passerait pour la bonne.
+    func test_visibilite_auRepos_laPastilleSeMontre() {
+        XCTAssertTrue(SyncPillVisibility.isVisible(storyViewerPresenting: false,
+                                                   inAppNoticePresenting: false))
+    }
+
+    /// Le viewer de story : garde existante, conservée telle quelle — le
+    /// `fullScreenCover` du root ne supprime pas les overlays du parent, et la
+    /// pastille restait visible par-dessus l'en-tête de la story.
+    func test_visibilite_sousLeViewerDeStory_laPastilleSEfface() {
+        XCTAssertFalse(SyncPillVisibility.isVisible(storyViewerPresenting: true,
+                                                    inAppNoticePresenting: false))
+    }
+
+    /// **Le cas neuf.** Une notification in-app occupe le même haut d'écran et
+    /// PRIME visuellement (#4028). L'ordre de rendu ne pouvait pas les
+    /// départager : la pastille est un `.overlay` appliqué APRÈS le `ZStack` qui
+    /// porte le toast, si bien qu'aucun `zIndex` interne ne pouvait la passer.
+    /// La pastille cède donc, plutôt que de lutter pour un pixel.
+    func test_visibilite_sousUneNotificationInApp_laPastilleCede() {
+        XCTAssertFalse(SyncPillVisibility.isVisible(storyViewerPresenting: false,
+                                                    inAppNoticePresenting: true))
+    }
+
+    /// Les deux à la fois restent un refus — le témoin qui interdit qu'une
+    /// future écriture en `!=` ou en `^` transforme deux raisons de céder en
+    /// une raison de se montrer.
+    func test_visibilite_lesDeuxContextes_restentUnRefus() {
+        XCTAssertFalse(SyncPillVisibility.isVisible(storyViewerPresenting: true,
+                                                    inAppNoticePresenting: true))
+    }
 }
