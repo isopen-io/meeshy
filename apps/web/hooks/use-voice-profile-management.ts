@@ -165,14 +165,21 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
   }, [loadProfile]);
 
   const grantVoiceCloningConsent = useCallback(async () => {
-    // #4348 (critère 8) — écrit d'abord vers la surface UNIFIÉE
-    // `PUT /me/consents/voice-cloning` (best-effort, voir le
-    // commentaire de `pushUnifiedVoiceConsent` en tête de fichier), puis
-    // vers l'écrivain historique ci-dessous, encore AUTORITAIRE pour
-    // l'état affiché. Les deux ne partent QUE depuis ce geste explicite de
-    // l'utilisateur (le bouton bascule de `VoiceProfileConsent`) — jamais
-    // depuis `loadProfile` ni au montage.
-    await pushUnifiedVoiceConsent(true);
+    // #4348 (critère 8) — l'écrivain AUTORITAIRE d'abord, la surface unifiée
+    // ensuite, et seulement s'il a RÉUSSI.
+    //
+    // L'ordre inverse a été écrit puis corrigé, et la raison mérite d'être
+    // dite : `pushUnifiedVoiceConsent(true)` partait en premier, sans
+    // condition. Quand l'appel autoritaire échouait derrière, l'écran
+    // affichait « Failed to enable voice cloning » pendant que le serveur
+    // avait DÉJÀ persisté `voiceCloningEnabledAt` — plus les trois ancêtres
+    // que la cascade pose (`data-processing`, `voice-data`, `voice-profile`),
+    // que l'utilisateur n'a jamais vu accorder. Un geste juridiquement
+    // significatif enregistré comme accordé sous un message d'échec.
+    //
+    // Une écriture MIROIR se fait après celle qui fait foi, jamais avant :
+    // c'est la seule position où son échec ne peut rien affirmer de faux, et
+    // où le succès de l'autre est déjà acquis.
     try {
       // #4180 — `/voice/voice-cloning-consent` n'existe pas davantage : le
       // web n'avait AUCUN moyen d'accorder le clonage vocal (404 muet, pas
@@ -185,6 +192,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
       const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: true };
       const res = await apiService.post<{ success: boolean }>('/voice/profile/consent', payload);
       if (res.success) {
+        await pushUnifiedVoiceConsent(true);
         setHasVoiceCloningConsent(true);
         toast.success('Voice cloning enabled');
         await loadProfile();
@@ -196,11 +204,16 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
   }, [loadProfile]);
 
   const revokeVoiceCloningConsent = useCallback(async () => {
-    // #4348 (critère 8) — même surface unifiée que grantVoiceCloningConsent
-    // ci-dessus, avec `granted: false` : la RÉVOCATION emprunte le MÊME
-    // écrivain que l'octroi, jamais un chemin séparé qui laisserait le
-    // défaut d'un côté ne pas bouger de l'autre.
-    await pushUnifiedVoiceConsent(false);
+    // #4348 (critère 8) — même surface unifiée que grantVoiceCloningConsent,
+    // avec `granted: false`, et dans le MÊME ordre : l'autoritaire d'abord,
+    // le miroir après son succès.
+    //
+    // La symétrie n'est pas cosmétique. Sur la révocation, l'ordre inverse
+    // avait le défaut opposé et tout aussi grave : le miroir enregistrait un
+    // RETRAIT que l'écrivain autoritaire pouvait ensuite ne pas appliquer —
+    // l'utilisateur croyait avoir retiré son consentement, une source disait
+    // « retiré », l'autre « accordé », et c'est la seconde qui gouverne le
+    // pipeline vocal.
     try {
       // #4180 — même route que ci-dessus. `voiceCloningConsent: false` fait
       // écrire `User.voiceCloningEnabledAt = null` côté serveur
@@ -210,6 +223,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
       const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: false };
       const res = await apiService.post<{ success: boolean }>('/voice/profile/consent', payload);
       if (res.success) {
+        await pushUnifiedVoiceConsent(false);
         setHasVoiceCloningConsent(false);
         toast.success('Voice cloning disabled');
         await loadProfile();

@@ -337,6 +337,11 @@ describe('useVoiceProfileManagement', () => {
     // main. Le corps ne porte QUE `{ granted, policyVersion }` — aucun champ
     // de date : le serveur horodate seul (contrat #4335/#4348).
     it('also PUTs the granted purpose to the catalogue-addressed unified /me/consents surface', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
       const { result } = renderHook(() => useVoiceProfileManagement());
       await act(async () => {
         await result.current.grantVoiceCloningConsent();
@@ -397,9 +402,49 @@ describe('useVoiceProfileManagement', () => {
 
       expect(mockToastError).toHaveBeenCalledWith('Failed to enable voice cloning');
     });
+
+    /**
+     * #4348 — l'écriture MIROIR ne part pas quand l'AUTORITAIRE échoue.
+     *
+     * L'ordre inverse a été écrit puis corrigé à la revue : le `PUT
+     * /me/consents` partait en premier, sans condition. Quand l'appel
+     * autoritaire échouait derrière, l'écran affichait « Failed to enable
+     * voice cloning » pendant que le serveur avait déjà persisté
+     * `voiceCloningEnabledAt` ET les trois ancêtres que la cascade pose —
+     * que l'utilisateur n'a jamais vu accorder. Un geste juridiquement
+     * significatif, enregistré comme accordé sous un message d'échec.
+     *
+     * Le témoin assert sur l'ABSENCE d'appel : c'est la seule forme qui
+     * tombe si quelqu'un remet le miroir en tête.
+     */
+    it("n'écrit RIEN vers la surface unifiée quand l'écrivain autoritaire échoue", async () => {
+      mockPost.mockRejectedValueOnce(new Error('gateway down'));
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.grantVoiceCloningConsent();
+      });
+
+      expect(mockPut).not.toHaveBeenCalled();
+      expect(result.current.hasVoiceCloningConsent).toBe(false);
+      expect(mockToastError).toHaveBeenCalledWith('Failed to enable voice cloning');
+    });
   });
 
   describe('revokeVoiceCloningConsent', () => {
+    /** Miroir exact du témoin d'octroi ci-dessus, côté RETRAIT. */
+    it("n'écrit RIEN vers la surface unifiée quand la révocation autoritaire échoue", async () => {
+      mockPost.mockRejectedValueOnce(new Error('gateway down'));
+
+      const { result } = renderHook(() => useVoiceProfileManagement());
+      await act(async () => {
+        await result.current.revokeVoiceCloningConsent();
+      });
+
+      expect(mockPut).not.toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith('Failed to disable voice cloning');
+    });
+
     it('revokes voice cloning consent and reloads profile', async () => {
       // Revoke directly (no need to pre-grant in test)
       mockPost.mockResolvedValueOnce({ success: true });
@@ -427,6 +472,11 @@ describe('useVoiceProfileManagement', () => {
     // seulement l'octroi : la même surface `PUT /me/consents/{purpose}`
     // reçoit `granted: false`, jamais un défaut figé à `true`.
     it('also PUTs granted:false to the unified /me/consents surface — the revocation itself leaves', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
       const { result } = renderHook(() => useVoiceProfileManagement());
       await act(async () => {
         await result.current.revokeVoiceCloningConsent();
@@ -494,6 +544,11 @@ describe('useVoiceProfileManagement', () => {
     });
 
     it('sends the flipped boolean on each explicit gesture — granting then revoking are two distinct payloads, not a stale default', async () => {
+      // #4348 — l'écrivain AUTORITAIRE doit RÉUSSIR pour que le miroir parte :
+      // depuis la revue, `PUT /me/consents` est conditionné à son succès. Ce
+      // témoin le pose donc explicitement, au lieu de dépendre d'un ordre où
+      // le miroir partait quoi qu'il arrive.
+      mockPost.mockResolvedValue({ success: true });
       const { result } = renderHook(() => useVoiceProfileManagement());
 
       await act(async () => {
