@@ -152,14 +152,15 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
             ComposerDocumentTool.canonicalRow,
-            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · mention · document · lieu · micro "
+            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · doc · lieu · micro · mention "
                 + "— jamais d'une liste à part."
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .mention, .document, .place, .microphone],
-            "La rangée servie doit couvrir la rangée canonique dans l'ordre exact que les doigts "
-                + "connaissent depuis la feuille historique. `.mention` se range à côté de l'emoji : "
+            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
+            "La rangée servie doit couvrir la rangée canonique dans l'ordre de la maquette `1a` "
+                + "(#4071). `.mention` est passé en queue parce qu'au 4e rang il poussait trois "
+                + "outils hors champ, et qu'il est le seul à avoir une seconde porte — taper `@` : "
                 + "les deux seuls outils dont la destination est le TEXTE, pas une pièce jointe."
         )
     }

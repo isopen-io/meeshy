@@ -12,6 +12,68 @@ import MeeshyUI
 /// La conséquence la plus contre-intuitive de cette loi est ici : un éventail
 /// qui n'offre qu'UN format ne s'affiche pas du tout. Un chip unique serait une
 /// affordance sans choix — l'UI morte que la loi 4 nomme.
+/// **Ce que l'éventail montre, et ce qu'il laisse choisir — deux questions
+/// distinctes (#4030, arbitrage posé).**
+///
+/// L'arbitrage produit du milestone dit, pour les vues `1a` `2a` `2k` `3a` `4f` :
+/// **un profil impossible est GRISÉ AVEC SA RAISON, jamais absent.** C'est
+/// l'exception nommée à la loi 4, et la doctrine de la vue `2a` en donne le
+/// motif en une phrase — « l'utilisateur apprend la règle au lieu de la
+/// deviner ».
+///
+/// Mesuré au simulateur le 2026-08-30, depuis l'entrée Post : l'éventail
+/// n'offrait que **Post** et **Story**. « Réel » et « Mood » n'y figuraient pas
+/// du tout, et rien ne disait pourquoi — la bascule semblait ne pas exister.
+/// Les montrer éteints avec « demande une vidéo » et « ne porte que du texte »
+/// enseigne d'un coup d'œil ce qu'il faut apporter pour y aller.
+///
+/// La frontière avec la loi 4 tient en une phrase : **un CONTRÔLE sans effet
+/// est absent ; un FORMAT qu'on ne peut pas encore prendre est une règle du
+/// produit qu'il faut apprendre à l'auteur.** Le premier n'a rien à dire, le
+/// second a tout à dire.
+nonisolated enum ComposerFormatAvailability {
+
+    struct Verdict: Equatable {
+        let format: ComposerFormat
+        let isChoosable: Bool
+        /// `nil` quand le format est choisissable — une raison n'a de sens que
+        /// pour un refus.
+        let reason: String?
+    }
+
+    /// L'ordre rendu est celui des CANDIDATS, jamais celui de l'offre : un
+    /// format qui devient choisissable ne doit pas sauter de place sous le
+    /// doigt de quelqu'un qui vient d'ajouter une vidéo.
+    static func verdicts(candidates: [ComposerFormat],
+                         offered: [ComposerFormat]) -> [Verdict] {
+        candidates.map { format in
+            offered.contains(format)
+                ? Verdict(format: format, isChoosable: true, reason: nil)
+                : Verdict(format: format, isChoosable: false, reason: reason(for: format))
+        }
+    }
+
+    /// **Chaque refus a sa propre phrase.** Deux formats qui refusent pour le
+    /// même motif n'enseignent rien : l'auteur apprend « non », pas « quoi
+    /// faire ».
+    static func reason(for format: ComposerFormat) -> String {
+        switch format {
+        case .reel:
+            return String(localized: "composer.format.denied.reel",
+                          defaultValue: "Demande une vidéo", bundle: .main)
+        case .status:
+            return String(localized: "composer.format.denied.mood",
+                          defaultValue: "Ne porte que du texte", bundle: .main)
+        case .story:
+            return String(localized: "composer.format.denied.story",
+                          defaultValue: "Indisponible depuis cette porte", bundle: .main)
+        case .post:
+            return String(localized: "composer.format.denied.post",
+                          defaultValue: "Indisponible pour ce contenu", bundle: .main)
+        }
+    }
+}
+
 nonisolated enum ComposerFormatFanPolicy {
 
     /// « Un éventail à une seule entrée ne montre donc aucun sélecteur »
@@ -185,11 +247,22 @@ nonisolated enum ComposerFormatFanPalette {
 struct ComposerFormatFan: View {
 
     let offeredFormats: [ComposerFormat]
+    /// **Tout ce que la porte peut MONTRER**, offert ou non. Vide ⇒ les
+    /// candidats sont les offerts, ce qui laisse inchangé tout appelant qui ne
+    /// se prononce pas.
+    var candidateFormats: [ComposerFormat] = []
     @Binding var selection: ComposerFormat
+
+    private var candidates: [ComposerFormat] {
+        candidateFormats.isEmpty ? offeredFormats : candidateFormats
+    }
 
     var body: some View {
         Group {
-            if ComposerFormatFanPolicy.isVisible(offeredFormats: offeredFormats) {
+            // La visibilité se juge sur les CANDIDATS : un menu qui montre un
+            // format choisissable et trois éteints avec leur raison enseigne
+            // plus qu'un sélecteur absent (#4030).
+            if ComposerFormatFanPolicy.isVisible(offeredFormats: candidates) {
                 fan
             }
         }
@@ -220,16 +293,24 @@ struct ComposerFormatFan: View {
     /// composer tourne d'iOS 16 à 26, et l'API n'existe qu'à partir de 26.
     private var fan: some View {
         Menu {
-            ForEach(Array(offeredFormats.enumerated()), id: \.offset) { entry in
-                let format = entry.element
+            ForEach(Array(ComposerFormatAvailability.verdicts(
+                candidates: candidates, offered: offeredFormats).enumerated()), id: \.offset) { entry in
+                let verdict = entry.element
                 Button {
-                    selection = format
+                    selection = verdict.format
                 } label: {
+                    // **Le refus porte sa RAISON dans le libellé** (#4030) : un
+                    // `SwiftUI.Menu` n'expose pas de sous-titre, et un item
+                    // éteint SANS raison ne vaut pas mieux qu'un item absent —
+                    // il dit « non » sans dire quoi faire.
                     Label(
-                        ComposerFormatCopy.label(format),
-                        systemImage: format == selection ? "checkmark" : ""
+                        verdict.isChoosable
+                            ? ComposerFormatCopy.label(verdict.format)
+                            : "\(ComposerFormatCopy.label(verdict.format)) — \(verdict.reason ?? "")",
+                        systemImage: verdict.format == selection ? "checkmark" : ""
                     )
                 }
+                .disabled(!verdict.isChoosable)
             }
         } label: {
             // **Premier plan ADAPTATIF depuis #4124.** Les deux couleurs étaient

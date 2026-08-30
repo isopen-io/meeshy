@@ -272,6 +272,58 @@ nonisolated enum ComposerChromeOwnership {
     }
 }
 
+/// **La bande-son de la PUBLICATION, au socle (#4071 — vues `1a` et `1b`).**
+///
+/// La maquette la range « parmi ce qui décide de l'envoi », avec l'audience,
+/// l'aperçu et Publier — pas dans les outils qui font entrer de la matière sur
+/// la scène. C'est cohérent avec ce qu'elle EST : un son de fond appartient à
+/// la publication entière, pas à la slide courante.
+///
+/// **Ce que cette place répare.** La porte son existait et sa feuille était
+/// complète — enregistreur, rôle de mixage, bibliothèque, fichier. La
+/// vérification au simulateur du 2026-08-30 a montré qu'aucun écran du parcours
+/// réel n'y menait depuis le document : le chemin manquait, pas la surface.
+///
+/// Une place, DEUX états — l'invitation quand rien n'est posé, le crédit dès
+/// qu'un son l'est. La pastille ne change pas de rôle entre les deux : elle
+/// ouvre la même porte, elle dit seulement ce qui joue.
+nonisolated enum ComposerSocleSound {
+
+    /// Le Mood en est exclu, et ce n'est pas un oubli : la vue `2k` dit « le
+    /// profil RETIRE, il n'ajoute pas » — texte seul, une heure. Son socle est
+    /// d'ailleurs vide de toute zone.
+    static func isServed(surface: ComposerSurfaceKind) -> Bool {
+        switch surface {
+        case .document, .scene: return true
+        case .mood: return false
+        }
+    }
+
+    static var emptyLabel: String {
+        String(localized: "composer.socle.sound.add",
+               defaultValue: "Ajouter un son", bundle: .main)
+    }
+
+    /// **Le crédit ne se fabrique jamais.** Il tient à `soundAuthorUsername`,
+    /// que seul l'EMPRUNT renseigne ; un vocal mis en fond porte le bon mixage
+    /// et aucun auteur, et lui en inventer un serait mentir sur la provenance.
+    /// De même une durée inconnue ne devient pas « 0:00 » — un compteur faux se
+    /// lit comme une piste vide.
+    static func label(for sound: StoryAudioPlayerObject?) -> String {
+        guard let sound else { return emptyLabel }
+        var morceaux: [String] = []
+        morceaux.append(sound.name?.isEmpty == false ? sound.name! : emptyLabel)
+        if let auteur = sound.soundAuthorUsername, !auteur.isEmpty {
+            morceaux.append("@\(auteur)")
+        }
+        if let secondes = sound.duration, secondes > 0 {
+            let total = Int(secondes.rounded())
+            morceaux.append(String(format: "%d:%02d", total / 60, total % 60))
+        }
+        return morceaux.joined(separator: " · ")
+    }
+}
+
 /// **Ce que le `⋯` de la barre haute a le droit d'offrir (#4047).**
 ///
 /// Une RÈGLE pure, du même patron que `ComposerChromeOwnership` : ce qui décide

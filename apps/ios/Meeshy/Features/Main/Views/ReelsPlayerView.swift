@@ -547,13 +547,13 @@ struct ReelPageView: View {
     /// Avatar tap → story (if active) else profile.
     var onTapAvatar: () -> Void
 
-    @State private var descriptionExpanded = false
+    @State var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
-    @State private var reelFullscreenPlace: BubbleFullscreenPlace?
+    @State var reelFullscreenPlace: BubbleFullscreenPlace?
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
-    @State private var selectedLanguage: String?
+    @State var selectedLanguage: String?
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -563,16 +563,16 @@ struct ReelPageView: View {
     /// transcript (`ReelAudioView` → `MediaTranscriptionView`) so the karaoke
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
     /// page; only the active audio reel ever plays.
-    @StateObject private var audioPlayer = AudioPlaybackManager()
+    @StateObject var audioPlayer = AudioPlaybackManager()
     /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
-    private var accentColor: String { reel.authorColor }
+    var accentColor: String { reel.authorColor }
 
     /// Description text for the currently-explored language (Prisme): preferred
     /// by default, the original when the translate toggle is on, or a specific
     /// available translation when a flag is tapped.
-    private var displayedDescription: String {
+    var displayedDescription: String {
         guard let sel = selectedLanguage?.lowercased() else { return reel.displayContent }
         if sel == reel.originalLanguage?.lowercased() { return reel.content }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
@@ -589,7 +589,7 @@ struct ReelPageView: View {
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
-    private var audioMedia: FeedMedia? {
+    var audioMedia: FeedMedia? {
         guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
         return media
     }
@@ -600,7 +600,7 @@ struct ReelPageView: View {
     /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
     /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
     /// par cette page.
-    private var borrowedSoundTrack: StoryAudioPlayerObject? {
+    var borrowedSoundTrack: StoryAudioPlayerObject? {
         guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
         let track = effects.resolvedBackgroundAudio
             ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
@@ -611,7 +611,7 @@ struct ReelPageView: View {
     /// The "original" language for the meta-row flag strip: the audio
     /// transcription language for an audio reel, else the post's original
     /// language. Listed first in the strip.
-    private var metaOriginalLanguage: String? {
+    var metaOriginalLanguage: String? {
         if let audioMedia { return audioMedia.transcription?.language ?? reel.originalLanguage }
         return reel.originalLanguage
     }
@@ -619,7 +619,7 @@ struct ReelPageView: View {
     /// The translation languages for the meta-row flag strip: the translated
     /// audio (TTS) target languages for an audio reel, else the post-body
     /// translation languages.
-    private var metaTranslationLanguages: [String] {
+    var metaTranslationLanguages: [String] {
         if let audioMedia { return audioMedia.translatedAudios.map(\.targetLanguage) }
         return Array(reel.translations?.keys ?? Dictionary<String, PostTranslation>().keys)
     }
@@ -929,7 +929,7 @@ struct ReelPageView: View {
 
     /// True when the signed-in user authored this reel — gates the private reach
     /// stats (impressions + views) shown only to the author.
-    private var isAuthor: Bool {
+    var isAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == reel.authorId
     }
@@ -937,177 +937,6 @@ struct ReelPageView: View {
     /// Username, then (AUTHOR ONLY) impressions then views, middle-dot separated:
     /// "@pseudo · 📊 1.2k · 👁 3.4k". Mirrors the feed reel card.
     @ViewBuilder
-    private var authorMetaLine: some View {
-        HStack(spacing: 5) {
-            if let username = reel.authorUsername, !username.isEmpty {
-                Text("@\(username)").font(.caption).foregroundColor(.white.opacity(0.7))
-            }
-            if isAuthor {
-                if reel.authorUsername?.isEmpty == false { metaDot }
-                statInline(icon: "chart.bar.fill", count: reel.impressionCount,
-                           a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                metaDot
-                statInline(icon: "eye.fill", count: reel.viewCount,
-                           a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
-            }
-
-            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
-            // carte de post et le viewer story (E1) — BackgroundSoundBadge
-            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
-            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
-            // seul prédicat, jamais une seconde résolution qui pourrait
-            // diverger.
-            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
-            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
-                .equatable()
-
-            // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
-            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
-            // false`, non touché ici). Gate renforcée (correctif revue DoD,
-            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
-            // existe réellement pour le piloter (`borrowedSoundTrack`,
-            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
-            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
-            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
-            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
-            // conservée) — l'icône et le libellé a11y suivent
-            // `audioPlayer.isPlaying`, jamais un état local séparé qui
-            // pourrait diverger du son réellement audible.
-            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
-                Button {
-                    audioPlayer.togglePlayPause()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(audioPlayer.isPlaying
-                    ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
-                    : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
-            }
-        }
-    }
-
-    private var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
-    }
-
-    private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        ReachMetricLabel(
-            icon: icon,
-            count: count,
-            label: a11yLabel,
-            tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
-        )
-    }
-
-    /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
-    /// et `#hashtag`. Fond TOUJOURS sombre (vidéo plein écran) : on épingle les
-    /// variantes `isDark: true` plutôt que de suivre le thème de l'app — les
-    /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
-    /// Les URLs restent blanches + soulignées (convention plein écran).
-    private var reelDescriptionText: some View {
-        MessageTextRenderer.render(
-            displayedDescription,
-            fontSize: 15,
-            color: .white,
-            mentionColor: MeeshyColors.mentionColor(isDark: true),
-            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-            accentColor: .white,
-            usesRelativeFont: true
-        )
-        .tint(.white)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var infoOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                // Avatar tap → author's story (if active) else profile.
-                Button(action: onTapAvatar) {
-                    MeeshyAvatar(
-                        name: reel.author,
-                        context: .postAuthor,
-                        accentColor: accentColor,
-                        avatarURL: reel.authorAvatarURL
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "reels.author.avatar", defaultValue: "Story de l'auteur", bundle: .main))
-
-                // Name tap → author profile.
-                Button(action: onTapAuthorName) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(reel.author)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
-                        authorMetaLine
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
-            }
-
-            // Audio reels show the post caption only when it adds something
-            // beyond the transcript hero; text/image reels always show it.
-            // Collapsed: 3 lines + tap to expand. Expanded: a height-bounded
-            // ScrollView so a long caption stays fully readable AND scrollable
-            // instead of overflowing off the top of the screen (the previous
-            // `lineLimit(nil)` + `fixedSize` grew unbounded and clipped).
-            if audioMedia == nil, !displayedDescription.isEmpty {
-                if descriptionExpanded {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        reelDescriptionText
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 240)
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                    }
-                } else {
-                    reelDescriptionText
-                        .lineLimit(3)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                        }
-                }
-            }
-
-            // Indicateur de position type sticker (constat user 2026-07-30) —
-            // même pill que la story/le feed, cliquable → carte plein écran.
-            if let place = reel.location {
-                FeedPostLocationSticker(place: place) {
-                    reelFullscreenPlace = BubbleFullscreenPlace(place: place)
-                }
-            }
-
-            // Prisme Linguistique — meta row mirroring the message-bubble footer:
-            // timestamp, then the translate toggle, then the available-language
-            // flag pills (tap a flag to read that language; the active one is
-            // underlined). Inline next to the date, as in conversation bubbles.
-            // For an AUDIO reel the flags switch the AUDIO (transcript + TTS) —
-            // the original transcription language + every translated-audio target
-            // language — instead of the post-body text. For text/image reels they
-            // switch the post-body translation.
-            ReelMetaRow(
-                timestamp: RelativeTimeFormatter.shortString(for: reel.timestamp),
-                originalLanguage: metaOriginalLanguage,
-                translationLanguages: metaTranslationLanguages,
-                selectedLanguage: selectedLanguage,
-                onSelectLanguage: { code in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedLanguage = (selectedLanguage?.lowercased() == code.lowercased()) ? nil : code
-                    }
-                }
-            )
-        }
-        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     // MARK: Action rail
 
@@ -1356,7 +1185,7 @@ private struct ReelActionButton: View {
 /// The translate toggle flips between the viewer's preferred translation and the
 /// original. (Per-language is a LOCAL switch over the post's pre-loaded
 /// translations — iOS has no on-demand post-translation request path.)
-private struct ReelMetaRow: View {
+struct ReelMetaRow: View {
     let timestamp: String
     let originalLanguage: String?
     let translationLanguages: [String]

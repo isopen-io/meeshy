@@ -42,6 +42,7 @@ extension MeeshyComposerHost {
 
     var socle: some View {
         HStack(spacing: 10) {
+            if ComposerSocleSound.isServed(surface: mountedSurface) { soundChip }
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
             if paintedSocleZones.contains(.preview) { previewButton }
@@ -53,6 +54,54 @@ extension MeeshyComposerHost {
         .padding(.bottom, 12)
     }
 
+
+    /// **La bande-son de la publication (#4071 — vues `1a` et `1b`).**
+    ///
+    /// Elle vit au socle parce que c'est là qu'est ce qui décide de l'ENVOI :
+    /// un son de fond appartient à la publication entière, pas à la slide
+    /// courante. La maquette la place à gauche, avant tout le reste.
+    ///
+    /// **Elle rend la porte son ATTEIGNABLE depuis le document.** La feuille
+    /// existait, complète — enregistreur, rôle de mixage, bibliothèque,
+    /// fichier — et la vérification simulateur du 2026-08-30 a établi qu'aucun
+    /// écran du parcours réel n'y menait de ce côté. C'était un défaut de
+    /// chemin, pas de surface, et c'est exactement le motif que la refonte
+    /// cherche à fermer.
+    ///
+    /// Une pastille, DEUX états : l'invitation quand rien n'est posé, le crédit
+    /// dès qu'un son l'est. Le mot vient d'une règle pure (`ComposerSocleSound`)
+    /// pour que « quel crédit afficher » s'éprouve sans monter la vue.
+    @ViewBuilder
+    var soundChip: some View {
+        let fond = viewModel.currentEffects.resolvedBackgroundAudio
+        Button {
+            presentedPortal = .sound
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "music.note")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                if socleShowsLabels {
+                    Text(ComposerSocleSound.label(for: fond))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .overlay(
+                Capsule().strokeBorder(
+                    MeeshyColors.textSecondary(isDark: true).opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        // La pastille peut porter un titre long ; elle cède la place au reste
+        // du socle plutôt que de pousser « Publier » hors de l'écran.
+        .layoutPriority(0)
+        .accessibilityLabel(Text(ComposerSocleSound.label(for: fond)))
+    }
 
     /// **Annuler et rétablir, au SOCLE** (directive porteur 2026-08-30).
     ///

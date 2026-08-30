@@ -428,21 +428,29 @@ struct ComposerDocumentSurface: View {
             // côtés, avec des outils qu'aucun geste n'atteignait.
             HStack(spacing: 16) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    // 8 pt entre TUILES, pas 16 : depuis #4071 chaque entree porte son mot,
-                    // donc elle est deux fois plus large qu'un glyphe nu. Garder
-                    // l'ecart des glyphes aurait fait defiler la rangee au bout de
-                    // trois entrees.
-                    HStack(spacing: 8) {
+                    // L'ecart et la largeur de tuile viennent de
+                    // `ComposerDocumentToolRowFit`, qui porte la MESURE : a
+                    // 52 pt et 8 pt d'ecart, trois entrees sur sept ne rendaient
+                    // aucun pixel a taille nominale sur 402 pt (#4071). Resserrer
+                    // ne fait pas tout tenir — rien ne le pourrait sans passer
+                    // sous la cible tactile — mais fait PARAITRE la derniere,
+                    // et c'est le signal qui manquait.
+                    HStack(spacing: ComposerDocumentToolRowFit.spacing) {
                         if let toolRowLeadingAccessory {
                             toolRowLeadingAccessory
                         }
                         ForEach(tools, id: \.rawValue) { tool in
                             toolButton(tool)
-                            // Icône « couleur de fond » JUSTE APRÈS l'emoji
-                            // (#4031) : elle replie/déplie la palette.
-                            if tool == .emoji, onPickBackground != nil {
-                                backgroundColorToggle
-                            }
+                        }
+                        // **La bascule de fond passe en QUEUE (#4071).** Elle
+                        // vivait juste après l'emoji, au 4e rang : elle y
+                        // poussait « Fichier », « Position » et « Vocal » hors
+                        // champ, trois outils que la maquette nomme et dont
+                        // aucun pixel ne paraissait. C'est un ajout de l'app,
+                        // pas de la cible — il reste (loi 1), il ne passe plus
+                        // devant.
+                        if onPickBackground != nil {
+                            backgroundColorToggle
                         }
                     }
                     // Le padding vertical vit ICI, dans le contenu défilant :
@@ -513,7 +521,7 @@ struct ComposerDocumentSurface: View {
                     .minimumScaleFactor(0.75)
             }
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 52)
+            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(
@@ -542,7 +550,7 @@ struct ComposerDocumentSurface: View {
                 Image(systemName: "paintpalette")
                     .font(.title3)
                     .symbolRenderingMode(.hierarchical)
-                Text(ComposerDocumentCopy.background)
+                Text(ComposerDocumentCopy.backgroundShort)
                     .font(.caption2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -550,7 +558,7 @@ struct ComposerDocumentSurface: View {
             .foregroundColor(showColorPalette
                 ? Color(hex: MeeshyColors.brandPrimaryHex)
                 : MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 52)
+            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(

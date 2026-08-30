@@ -848,6 +848,12 @@ extension MeeshyComposerHost {
     var formatChip: some View {
         ComposerFormatFan(
             offeredFormats: profile.offeredFormats,
+            // **Les QUATRE formats restent au menu** (#4030) : ceux que la
+            // composition ne permet pas encore s'y montrent éteints avec leur
+            // raison, au lieu de disparaître. Mesuré au simulateur le
+            // 2026-08-30 : depuis l'entrée Post, l'éventail n'offrait que Post
+            // et Story — la bascule vers Réel et Mood semblait ne pas exister.
+            candidateFormats: ComposerFormat.allComposable,
             selection: formatSelection
         )
         .font(.footnote.weight(.semibold))

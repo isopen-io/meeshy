@@ -558,8 +558,13 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as TranslationListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
-      // Construire les filtres
-      const where: any = {};
+      // `deletedAt: null` — le même régime que partout ailleurs (#4386).
+      // Ce `where` partait NU : `GET /admin/translations` servait le texte
+      // d'un message SUPPRIMÉ, en clair et dans les deux langues, alors que sa
+      // jumelle `GET /admin/messages`, trente lignes plus haut dans ce fichier,
+      // porte ce filtre depuis toujours. Aucune finalité de traduction ne
+      // demande de relire un message effacé.
+      const where: any = { deletedAt: null };
 
       if (sourceLanguage) {
         where.originalLanguage = sourceLanguage;
@@ -599,6 +604,11 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           originalLanguage: true,
           translations: true,
           createdAt: true,
+          // Le select ASSOCIÉ à `messageContentIsProtected` (#4388). Sans lui,
+          // le prédicat répondrait « non protégé » sur TOUT message : un champ
+          // de protection présent au modèle et absent de la requête est un
+          // piège armé — la garde ne PEUT pas s'appliquer, même écrite.
+          ...messageContentProtectionSelect,
           sender: {
             select: {
               id: true,
@@ -645,7 +655,29 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
       const allTranslations: FlatTranslation[] = [];
 
+      // **ARBITRAGE (b) : une ligne dont le message est PROTÉGÉ n'entre pas
+      // dans la console** (#4386) — vue unique, flou, éphémère expiré, chiffré.
+      //
+      // L'option (a) — masquer le texte et garder la ligne — est la forme
+      // retenue par #4333 et #4384 sur `/admin/messages`. Elle ne convient pas
+      // ICI, et la raison tient à ce que chaque console sert à faire : on
+      // MODÈRE une ligne sans la lire (un signalement, un auteur, une date
+      // suffisent), on ne peut pas JUGER une traduction sans les deux textes.
+      // Une ligne de console de traduction sans son texte est inexploitable —
+      // ni la qualité ni la correction ne sont possibles. Le masquage y vide
+      // la feature de son sens au lieu de la préserver.
+      //
+      // (b) est aussi la réponse honnête à la finalité : on ne traduit pas ce
+      // qu'on n'a pas le droit de lire.
+      //
+      // Conséquence ASSUMÉE, écrite pour qu'on ne la redécouvre pas : la
+      // console SOUS-DÉCLARE, sans le dire. Un indicateur « N lignes écartées »
+      // demanderait d'étendre `ResponseMeta` — un type PARTAGÉ par toute l'API
+      // — pour le besoin d'une seule route, et personne n'a mesuré que la
+      // console en avait besoin. Il viendra le jour où quelqu'un le demandera,
+      // pas avant.
       messages.forEach(msg => {
+        if (messageContentIsProtected(msg)) return;
         const translations = msg.translations as unknown as Record<string, any>;
         if (translations) {
           Object.entries(translations).forEach(([targetLang, transData]: [string, any]) => {

@@ -1613,16 +1613,31 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     // MARK: - La rangée d'outils
 
-    /// L'ordre n'est pas décoratif : c'est la position que les doigts
-    /// connaissent depuis des mois sur `FeedComposerSheet`. Le réordonner
-    /// déplacerait six affordances d'un coup, sans que personne l'ait demandé.
-    func test_rangCanonique_miroiteLaFeuilleHistorique_dansSonOrdre() {
+    /// **L'ordre suit la maquette `1a`, et il a CHANGÉ au #4071.**
+    ///
+    /// Il miroitait la feuille historique, où `@` se rangeait à côté de l'emoji
+    /// — les deux seuls outils dont la destination est le TEXTE et non une
+    /// pièce jointe. C'était élégant, et ça coûtait trois outils.
+    ///
+    /// Mesuré au simulateur `Meeshy-iOS26`, taille nominale, écran de 402 pt :
+    /// quatre tuiles visibles sur sept. `.mention` au 4e rang poussait
+    /// `.document`, `.place` et `.microphone` ENTIÈREMENT hors champ — trois
+    /// chaînes complètes jusqu'au brouillon et au publieur, dont aucun pixel ne
+    /// paraissait. La rangée déborde de toute façon (sept tuiles nommées ne
+    /// tiennent pas sur 402 pt sans passer sous la cible tactile de 44 pt) : la
+    /// seule question est CE QUI déborde, et ce sont les ajouts de l'app, pas
+    /// les six outils que la maquette nomme.
+    ///
+    /// `.mention` perd le moins à ce déplacement : c'est le seul outil de la
+    /// rangée à avoir une SECONDE porte — taper `@` dans le texte ouvre la même
+    /// bande de suggestions.
+    func test_rangCanonique_suitLOrdreDeLaMaquette() {
         XCTAssertEqual(
             ComposerDocumentTool.canonicalRow,
-            [.photo, .camera, .emoji, .mention, .document, .place, .microphone],
-            "photo · caméra · emoji · mention · document · lieu · micro — l'ordre de la feuille "
-                + "absorbée, où `@` se range à côté de l'emoji : les deux seuls outils dont la "
-                + "destination n'est pas une pièce jointe."
+            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
+            "photo · caméra · emoji · doc · lieu · micro — les six de la maquette d'abord, "
+                + "puis ce que l'app ajoute en propre (loi 1 : ce qui dépasse RESTE, mais ne "
+                + "passe pas devant)."
         )
     }
 
@@ -1659,7 +1674,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertFalse(visibles.contains(.camera), "Une capture refusée retire l'outil, elle ne le grise pas.")
         XCTAssertEqual(
-            visibles, [.photo, .emoji, .mention, .document, .place, .microphone],
+            visibles, [.photo, .emoji, .document, .place, .microphone, .mention],
             "Les autres gardent leur ordre : le retrait ne réorganise pas la rangée."
         )
     }
