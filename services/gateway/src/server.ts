@@ -47,6 +47,7 @@ import { MutationLogService } from './services/MutationLogService';
 // ce fichier) — nécessaire pour que le test de garde des routes puisse
 // l'importer sans déclencher `meeshyServer.start()`.
 import { registerAllRoutes } from './route-registration';
+import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -523,7 +524,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       },
       staticCSP: true,
       transformStaticCSP: (header) => header,
-      transformSpecification: (swaggerObject) => swaggerObject,
+      // #4372 — l'OpenAPI publié écrit ses chemins comme les deux AUTRES
+      // descriptions de la même API : sans barre finale. `@fastify/swagger`
+      // émet la forme DÉCLARÉE, si bien qu'un module monté au préfixe
+      // `/api/v1/me` déclarant sa route en `'/'` publiait `/api/v1/me/` —
+      // quinze chemins dans ce cas, quand le manifeste (430) et le catalogue
+      // client (416) n'en portent aucun. Le serveur sert les deux formes, donc
+      // rien ne cassait ; mais toute comparaison entre l'OpenAPI et l'une des
+      // deux autres sources rendait quinze faux négatifs.
+      //
+      // Ici, et pas dans les huit modules concernés : déclarer `''` au lieu de
+      // `'/'` chez chacun marcherait, et laisserait le neuvième arriver. C'est
+      // le seul point par lequel la spec atteint un consommateur — vérifié,
+      // `fastify.swagger()` n'est appelée nulle part ailleurs.
+      transformSpecification: (swaggerObject) => {
+        const { spec, collisions } = canonicaliserCheminsOpenApi(swaggerObject as never);
+        if (collisions.length > 0) {
+          // Une collision n'est pas résolue en silence : la forme canonique
+          // l'emporte, mais on DIT ce qui n'a pas pu être fusionné.
+          logger.warn('OpenAPI : verbes en collision après canonisation des chemins', { collisions });
+        }
+        return spec as never;
+      },
       transformSpecificationClone: true
     });
 
