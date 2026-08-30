@@ -46,6 +46,10 @@ let capturedUnreadUpdatedListener: ((data: any) => void) | null = null;
 // rejoue pas pour reessayer. Le wrapper detient un Set que
 // `setupEventListeners(socket)` rebranche a chaque socket.
 let capturedConversationRestoredListener: ((data: { userId: string; conversationId: string }) => void) | null = null;
+// Capture listeners for the three downward transitions (grille CLOSE)
+let capturedConversationDeletedListener: ((data: { userId: string; conversationId: string }) => void) | null = null;
+let capturedConversationParticipantLeftListener: ((data: any) => void) | null = null;
+let capturedConversationParticipantBannedListener: ((data: any) => void) | null = null;
 const mockSocketOn = jest.fn();
 const mockSocketOff = jest.fn();
 const mockSocket = { on: mockSocketOn, off: mockSocketOff };
@@ -101,11 +105,20 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
     onConversationNew: jest.fn(() => () => {}),
-    onConversationDeleted: jest.fn(() => () => {}),
+    onConversationDeleted: jest.fn((listener: (data: { userId: string; conversationId: string }) => void) => {
+      capturedConversationDeletedListener = listener;
+      return () => { capturedConversationDeletedListener = null; };
+    }),
     onConversationUpdated: jest.fn(() => () => {}),
     onConversationParticipantJoined: jest.fn(() => () => {}),
-    onConversationParticipantLeft: jest.fn(() => () => {}),
-    onConversationParticipantBanned: jest.fn(() => () => {}),
+    onConversationParticipantLeft: jest.fn((listener: (data: any) => void) => {
+      capturedConversationParticipantLeftListener = listener;
+      return () => { capturedConversationParticipantLeftListener = null; };
+    }),
+    onConversationParticipantBanned: jest.fn((listener: (data: any) => void) => {
+      capturedConversationParticipantBannedListener = listener;
+      return () => { capturedConversationParticipantBannedListener = null; };
+    }),
     onConversationParticipantUnbanned: jest.fn(() => () => {}),
     onConversationClosed: jest.fn(() => () => {}),
     onCategoryChanged: jest.fn(() => () => {}),
@@ -1711,14 +1724,153 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
 });
 
 /**
+ * Issue #4407 — unify the four downward/upward transitions of the grille CLOSE.
+ *
+ * `conversation:deleted`, `conversation:participant-left`, and
+ * `conversation:participant-banned` all remove the conversation from the
+ * infinite list and clear its detail cache. This is the only witness that
+ * proves `handleConversationDeleted` CALLS `dropConversationFromCache` instead
+ * of COPYING its body — both read the same from the cache, so a behaviourally
+ * correct copy passes all structural tests until we measure the EFFECT.
+ *
+ * The four transitions form a pair (down: deleted/left/banned; up: restored):
+ * - DOWN: conversation no longer mine (removal)
+ * - UP: conversation mine again (fetch into cache)
+ *
+ * All three DOWN paths must use the same gesture (`dropConversationFromCache`).
+ * Test uses valid 24-char ObjectIds to avoid format guards short-circuiting.
+ */
+describe('useSocketCacheSync — grille CLOSE (issue #4407)', () => {
+  const ACTIVE_CONVERSATION_ID = '507f1f77bcf86cd799439011';
+  const DROPPED_CONVERSATION_ID = '665f1a2b3c4d5e6f7a8b9c0d';
+
+  beforeEach(() => {
+    capturedConversationDeletedListener = null;
+    capturedConversationParticipantLeftListener = null;
+    capturedConversationParticipantBannedListener = null;
+    jest.clearAllMocks();
+  });
+
+  describe('conversation:deleted handler', () => {
+    it('removes conversation from infinite list and clears detail cache', async () => {
+      const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+      seedConversations(queryClient, [
+        { id: DROPPED_CONVERSATION_ID, type: 'group', lastMessage: 'test' } as unknown as Conversation,
+        { id: ACTIVE_CONVERSATION_ID, type: 'group', lastMessage: 'active' } as unknown as Conversation,
+      ]);
+      // Seed the detail cache so we can verify it gets cleared
+      queryClient.setQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID), {
+        id: DROPPED_CONVERSATION_ID,
+        type: 'group',
+        lastMessage: 'test',
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+      expect(capturedConversationDeletedListener).not.toBeNull();
+
+      act(() => {
+        capturedConversationDeletedListener!({
+          userId: 'current-user',
+          conversationId: DROPPED_CONVERSATION_ID,
+        });
+      });
+
+      // Verify conversation is removed from list
+      await waitFor(() => {
+        const ids = cachedConversations(queryClient).map((c) => c.id);
+        expect(ids).not.toContain(DROPPED_CONVERSATION_ID);
+        expect(ids).toContain(ACTIVE_CONVERSATION_ID);
+      });
+
+      // Verify detail cache is cleared
+      const detailData = queryClient.getQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID));
+      expect(detailData).toBeUndefined();
+    });
+  });
+
+  describe('conversation:participant-left handler', () => {
+    it('removes conversation from infinite list when namesMe is true', async () => {
+      const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+      seedConversations(queryClient, [
+        { id: DROPPED_CONVERSATION_ID, type: 'group', lastMessage: 'test' } as unknown as Conversation,
+        { id: ACTIVE_CONVERSATION_ID, type: 'group', lastMessage: 'active' } as unknown as Conversation,
+      ]);
+      queryClient.setQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID), {
+        id: DROPPED_CONVERSATION_ID,
+        type: 'group',
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+      expect(capturedConversationParticipantLeftListener).not.toBeNull();
+
+      act(() => {
+        capturedConversationParticipantLeftListener!({
+          conversationId: DROPPED_CONVERSATION_ID,
+          userId: 'current-user', // namesMe = true
+          participantId: undefined,
+          displayName: 'Me',
+          leftAt: new Date().toISOString(),
+        });
+      });
+
+      await waitFor(() => {
+        const ids = cachedConversations(queryClient).map((c) => c.id);
+        expect(ids).not.toContain(DROPPED_CONVERSATION_ID);
+      });
+
+      const detailData = queryClient.getQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID));
+      expect(detailData).toBeUndefined();
+    });
+  });
+
+  describe('conversation:participant-banned handler', () => {
+    it('removes conversation from infinite list when namesMe is true', async () => {
+      const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+      seedConversations(queryClient, [
+        { id: DROPPED_CONVERSATION_ID, type: 'group', lastMessage: 'test' } as unknown as Conversation,
+        { id: ACTIVE_CONVERSATION_ID, type: 'group', lastMessage: 'active' } as unknown as Conversation,
+      ]);
+      queryClient.setQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID), {
+        id: DROPPED_CONVERSATION_ID,
+        type: 'group',
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+      expect(capturedConversationParticipantBannedListener).not.toBeNull();
+
+      act(() => {
+        capturedConversationParticipantBannedListener!({
+          conversationId: DROPPED_CONVERSATION_ID,
+          userId: 'current-user', // namesMe = true
+          participantId: undefined,
+          bannedBy: { id: 'admin-id' },
+          bannedAt: new Date().toISOString(),
+        });
+      });
+
+      await waitFor(() => {
+        const ids = cachedConversations(queryClient).map((c) => c.id);
+        expect(ids).not.toContain(DROPPED_CONVERSATION_ID);
+      });
+
+      const detailData = queryClient.getQueryData(queryKeys.conversations.detail(DROPPED_CONVERSATION_ID));
+      expect(detailData).toBeUndefined();
+    });
+  });
+});
+
+/**
  * Issue #4389 — "Aucun client n'écoute conversation:restored" (volet web).
  *
  * `conversation:restored` is the missing UPWARD half of the deleted/restored
  * pair in apps/web/CLAUDE.md's "grille CLOSE" (§ Appartenance à une
  * conversation) : the DOWNWARD transition (`conversation:deleted` →
- * `dropConversationFromCache`, tested above) already existed; this closes
- * the pair with its exact mirror gesture, `fetchConversationIntoCache` — the
- * SAME bounded `GET /conversations/:id` already used by `conversation:new`
+ * `dropConversationFromCache`) is tested by the grille CLOSE suite above; this
+ * closes the pair with its exact mirror gesture, `fetchConversationIntoCache` —
+ * the SAME bounded `GET /conversations/:id` already used by `conversation:new`
  * and a lifted ban, never a replay of `conversations.infinite()`.
  *
  * IDs below are 24-char hex strings on purpose: `fetchConversationIntoCache`

@@ -1671,13 +1671,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for conversation:deleted — user removed the conversation for themselves.
+    // Same gesture as conversation:participant-left and conversation:participant-banned.
     const handleConversationDeleted = (data: { userId: string; conversationId: string }) => {
-      const { conversationId: deletedId } = data;
-      if (!deletedId) return;
-      updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.filter((c) => c.id !== deletedId)
-      );
-      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(deletedId) });
+      dropConversationFromCache(data.conversationId);
     };
 
     // Handler for conversation:restored — inverse of conversation:deleted: the
