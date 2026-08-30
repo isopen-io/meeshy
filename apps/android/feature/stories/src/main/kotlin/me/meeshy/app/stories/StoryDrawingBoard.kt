@@ -1,60 +1,7 @@
 package me.meeshy.app.stories
 
-/**
- * The active brush at capture time — parity with the iOS `StrokeTool`. `ERASER` is
- * never persisted onto an existing stroke: it is a capture-side action that removes
- * the strokes it hits. [wire] is the exact gateway string, so no surface hardcodes
- * the literal.
- */
-enum class StrokeTool(val wire: String) {
-    PEN("pen"),
-    MARKER("marker"),
-    ERASER("eraser"),
-}
-
-/**
- * The smoothing applied when a stroke is rendered — parity with the iOS
- * `StrokeSmoothing`: `RAW` renders the captured points as-is, `CURVE` interpolates
- * (Catmull-Rom), `LINE` simplifies to straight segments. [wire] is the exact gateway
- * string.
- */
-enum class StrokeSmoothing(val wire: String) {
-    RAW("raw"),
-    CURVE("curve"),
-    LINE("line"),
-}
-
-/**
- * A single captured point along a stroke — parity with iOS `StoryDrawingStrokePoint`.
- * [pressure] comes from a stylus when available (1.0 for finger input); the renderer
- * can modulate width along the stroke from it. Coordinates live in the canonical
- * design space (1080×1920) so a stroke stays portable across screen sizes.
- */
-data class StoryDrawingStrokePoint(
-    val x: Double,
-    val y: Double,
-    val pressure: Double = 1.0,
-)
-
-/**
- * A single freehand stroke — parity with iOS `StoryDrawingStroke`. Points live in the
- * canonical design space; [width] is in design-pixels (the renderer projects to the
- * real display size). [captureVersion] `0` = legacy constant-width render, `≥1` = each
- * point carries a real pressure driver (variable-width render).
- *
- * `createdAt` from iOS is intentionally omitted: the reducer never reads it (draw
- * order is already the strokes-list order), so keeping it out keeps the value type
- * pure and its tests clock-free.
- */
-data class StoryDrawingStroke(
-    val id: String,
-    val points: List<StoryDrawingStrokePoint> = emptyList(),
-    val colorHex: String,
-    val width: Double,
-    val tool: StrokeTool = StrokeTool.PEN,
-    val smoothing: StrokeSmoothing = StrokeSmoothing.RAW,
-    val captureVersion: Int = 0,
-)
+import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.StrokeSmoothing
 
 /**
  * The pure, immutable freehand-drawing state of one slide — the committed [strokes],
