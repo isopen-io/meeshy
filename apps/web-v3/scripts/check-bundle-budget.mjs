@@ -355,7 +355,7 @@ const main = () => {
     const contenu = {
       ...(enregistrees ?? {}),
       role:
-        'Les valeurs MESURÉES par check-bundle-budget.mjs. § 8.3 : tant qu’un plafond est CIBLE, le gate interdit toute croissance SILENCIEUSE — la faire monter exige ce fichier, donc un diff relu.',
+        'Les valeurs MESURÉES de la v3 — jamais des plafonds (ceux-là vivent dans budgets.json). Ce fichier a PLUSIEURS producteurs : chaque section porte la commande qui la rejoue ; les clés ci-dessous (groupes) sont celles de check-bundle-budget.mjs. § 8.3 : tant qu’un plafond est CIBLE, le gate interdit toute croissance SILENCIEUSE — la faire monter exige ce fichier, donc un diff relu.',
       produit_par: 'cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs --ratchet',
       date: new Date().toISOString().slice(0, 10),
       groupes: mesuresDepuisLignes(rapport.groupes),

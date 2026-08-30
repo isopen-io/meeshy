@@ -1,0 +1,22 @@
+{
+  "name": "@meeshy/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LA table de jetons CSS de la v3 web — trois feuilles, aucune valeur ailleurs.",
+  "style": "./tokens.css",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "tokens.css",
+    "dark.css",
+    "light.css",
+    "README.md"
+  ],
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./dark.css": "./dark.css",
+    "./light.css": "./light.css",
+    "./package.json": "./package.json"
+  }
+}

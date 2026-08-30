@@ -1,0 +1,25 @@
+{
+  "name": "@meeshy/icons",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LE sprite Phosphor de la v3 web — 72 <symbol> commités, générés depuis @phosphor-icons/core.",
+  "sideEffects": false,
+  "files": [
+    "sprite.svg",
+    "critical.svg",
+    "critique.json",
+    "scripts",
+    "README.md"
+  ],
+  "exports": {
+    "./sprite.svg": "./sprite.svg",
+    "./critical.svg": "./critical.svg",
+    "./critique.json": "./critique.json",
+    "./build-sprite": "./scripts/build-sprite.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "sprite": "node scripts/build-sprite.ts",
+    "verifie": "node scripts/build-sprite.ts --verifie"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "role": "Les glyphes du SOUS-SPRITE CRITIQUE — ceux que le § 8.5 autorise à inliner dans app/layout.tsx parce qu'ils sont rendus au-dessus de la ligne de flottaison, avant que le sprite externe soit arrivé. Le reste attend le fichier.",
+  "plafond": "≤ 8 glyphes (conception § 8.5). Le plafond est dans apps/web-v3/budgets.json → actifs.plafonds.critical_glyphes ; cette liste ne le redéclare pas.",
+  "lu_par": "packages/icons/scripts/build-sprite.ts — seul producteur de critical.svg",
+  "revise_par": "l'écran qui inline ce sous-sprite : L0 pose le layout, L1 (linkRedirect, linkExpired) et L3 (story, comments, reelShared, moods) rendent les premières icônes. Cette liste est DÉCLARÉE depuis les vues P0 de la planche ; elle se corrige à la première capture réelle, jamais par intuition.",
+  "source": "docs/product/MeeshyWebV3Design/MeeshyWebV3.dc.html (BLANKS, MAP) et matrice.json, lignes de priorité P0",
+  "glyphes": [
+    {
+      "nom": "ph-arrows-clockwise",
+      "pourquoi": "L'unique icône du HTML de repli de /l/:token — l'état « Ouverture du lien » (planche, BLANKS.linkRedirect.icon). Cette page ne charge aucun script : si elle attend le sprite externe, elle n'affiche rien."
+    },
+    {
+      "nom": "ph-warning-circle",
+      "pourquoi": "L'icône de l'état vide de /l/:token/expired (planche, BLANKS.linkExpired.icon), première et souvent seule icône de la page. Même raison : la page est RSC pur."
+    },
+    {
+      "nom": "ph-link-simple",
+      "pourquoi": "L'en-tête de l'aperçu de lien /chats/:key non rejoint (vue join, MAP « ENTRÉE PUBLIQUE ») — rendu avant tout contenu de conversation."
+    },
+    {
+      "nom": "ph-ghost",
+      "pourquoi": "Le badge « invité » de la vue rights et de l'en-tête d'une conversation rejointe sans compte : il dit au lecteur anonyme ce qu'il est, et arriver en retard change le sens de l'écran."
+    },
+    {
+      "nom": "ph-caret-left",
+      "pourquoi": "Le retour, premier contrôle de l'en-tête de thread, media, comments et story. Un bouton de retour qui apparaît après coup déplace la cible du doigt (dimension 4)."
+    },
+    {
+      "nom": "ph-translate",
+      "pourquoi": "La pastille du Prisme, rendue au niveau du titre sur CHAQUE écran de lecture partagée (conception § 2) : elle annonce la langue servie, donc elle est au-dessus de la ligne de flottaison partout."
+    },
+    {
+      "nom": "ph-sparkle",
+      "pourquoi": "L'en-tête de la vue story et l'icône de son état vide storyFail (planche, BLANKS.storyFail.icon) — la première route du rôle premier après le lien."
+    },
+    {
+      "nom": "ph-x",
+      "pourquoi": "La fermeture des surimpressions (sheet:lang) et du lecteur plein écran (story, reelShared) : par construction au-dessus de la ligne de flottaison, et sans elle le lecteur est enfermé."
+    }
+  ]
+}

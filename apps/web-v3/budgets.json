@@ -2,7 +2,8 @@
   "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4 et § 8.5",
   "lu_par": [
     "apps/web-v3/scripts/check-bundle-budget.mjs (groupes, routes)",
-    "apps/web-v3/scripts/mesure-reseau.mjs (reseau)"
+    "apps/web-v3/scripts/mesure-reseau.mjs (reseau)",
+    "packages/icons/scripts/build-sprite.ts (actifs)"
   ],
   "note": "Un plafond « À ÉTABLIR » n'est comparé à rien : la conception ne le donne pas, et un chiffre qu'on n'a pas mesuré ne s'invente pas. Il se remplit par la première mesure de l'écran qui le porte, dans le commit de cet écran. Les valeurs MESURÉES vivent dans budgets-mesures.json — ce fichier-ci ne porte que des PLAFONDS.",
   "motifs": "Un motif s'écrit contre l'URL servie (« /stories/* »). Next conserve pourtant le segment de groupe dans la clé du manifeste (« /(public)/stories/[id]/page ») : le gate normalise donc la clé avant de la classer. Un motif qui porte lui-même un segment « (…) » est, lui, comparé à la clé BRUTE — seule façon de distinguer (public)/page de (connected)/page.",
@@ -17,6 +18,22 @@
       "temoin": "apps/web-v3/__tests__/bundle-budget.test.ts § « le plancher mesuré contre le plafond du rôle premier »"
     }
   ],
+  "actifs_note": "Les plafonds du § 8.5 qui portent sur un ACTIF commité, et qu'aucun manifeste de build ne rend : ils se lisent sur le fichier lui-même. Le sous-sprite critique est borné par son NOMBRE de glyphes et non par un poids — le § 8.5 ne lui en donne aucun, et un poids non mesuré ne s'invente pas ; ses octets sont MESURÉS dans budgets-mesures.json → sprite_phosphor.",
+  "actifs": {
+    "role": "sprite d'icônes de packages/icons — servi EXTERNE, même origine, dans la zone (§ 8.5)",
+    "plafonds": {
+      "sprite_ko": {
+        "valeur": 12,
+        "statut": "GATE",
+        "source": "§ 8.5 — « sprite externe ≤ 12 Ko gzip, 1 requête, cache immuable »"
+      },
+      "critical_glyphes": {
+        "valeur": 8,
+        "statut": "GATE",
+        "source": "§ 8.5 — « un sous-sprite critique de ≤ 8 glyphes au-dessus de la ligne de flottaison est inliné dans le layout »"
+      }
+    }
+  },
   "groupes_unite": "Ko gzip de JS client",
   "groupes": [
     {

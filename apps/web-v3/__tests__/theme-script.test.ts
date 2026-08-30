@@ -36,7 +36,6 @@ describe('le script de thème inline', () => {
 
     expect(rootClasses()).toContain('dark');
     expect(rootClasses()).not.toContain('light');
-    expect(document.documentElement.style.colorScheme).toBe('dark');
   });
 
   it('applique la préférence explicite claire même si le système est sombre', () => {
@@ -47,7 +46,6 @@ describe('le script de thème inline', () => {
 
     expect(rootClasses()).toContain('light');
     expect(rootClasses()).not.toContain('dark');
-    expect(document.documentElement.style.colorScheme).toBe('light');
   });
 
   it('suit le système quand aucune préférence n\'est enregistrée', () => {
@@ -65,7 +63,6 @@ describe('le script de thème inline', () => {
     runThemeScript();
 
     expect(rootClasses()).toContain('light');
-    expect(document.documentElement.style.colorScheme).toBe('light');
   });
 
   it('ne lit aucune des deux clés divergentes du legacy', () => {
@@ -89,6 +86,16 @@ describe('le script de thème inline', () => {
     expect(rootClasses()).toContain('dark');
 
     window.Storage.prototype.getItem = getItem;
+  });
+
+  it('ne pose PLUS color-scheme en style inline — la table le porte, donc sans JS aussi', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(document.documentElement.getAttribute('style')).toBeNull();
+    expect(themeScriptSource).not.toContain('colorScheme');
   });
 
   it('tient dans le budget de 400 octets inline', () => {

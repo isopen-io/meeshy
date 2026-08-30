@@ -1,5 +1,5 @@
 {
- "role": "Les valeurs MESURÉES par check-bundle-budget.mjs — jamais des plafonds (ceux-là vivent dans budgets.json). § 8.3 attache au statut CIBLE un ratchet : « le gate enregistre la valeur mesurée et interdit toute régression ». Ce que le ratchet livré interdit exactement, c'est la croissance SILENCIEUSE : toute valeur au-dessus de celle enregistrée ici rend rc=1, et la faire monter exige --ratchet, donc un diff relu. Un ratchet strictement décroissant serait ininstallable pendant L1 — un écran neuf pèse par construction plus que pas d'écran.",
+ "role": "Les valeurs MESURÉES de la v3 — jamais des plafonds (ceux-là vivent dans budgets.json). Ce fichier a PLUSIEURS producteurs : chaque section porte la commande qui la rejoue (groupes ⇐ check-bundle-budget.mjs, sprite_phosphor ⇐ packages/icons/scripts/build-sprite.ts). § 8.3 attache au statut CIBLE un ratchet : « le gate enregistre la valeur mesurée et interdit toute régression ». Ce que le ratchet livré interdit exactement, c'est la croissance SILENCIEUSE : toute valeur au-dessus de celle enregistrée ici rend rc=1, et la faire monter exige --ratchet, donc un diff relu. Un ratchet strictement décroissant serait ininstallable pendant L1 — un écran neuf pèse par construction plus que pas d'écran.",
  "produit_par": "cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs --ratchet",
  "date": "2026-08-30",
  "plancher_next_ko": 99.6,
@@ -17,5 +17,21 @@
   "next": "15.5.23",
   "consequence": "99,6 Ko > 95 Ko — le plancher dépasse le plafond du RÔLE PREMIER (§ 8.3, lecture partagée) avant tout code produit. Déclaré en question ouverte : budgets.json → questions_ouvertes, conception § 11 question 12."
  },
- "groupes": {}
+ "groupes": {},
+ "sprite_phosphor": {
+  "quoi": "Les octets des deux actifs commités de packages/icons — le sprite externe servi en une requête à cache immuable, et le sous-sprite critique inliné dans le layout (§ 8.5).",
+  "source": "@phosphor-icons/core@2.1.1, assets/regular + assets/fill",
+  "commande": "node packages/icons/scripts/build-sprite.ts",
+  "date": "2026-08-30",
+  "sprite_svg": {
+   "brut": 31682,
+   "gzip": 8911
+  },
+  "critical_svg": {
+   "brut": 3595,
+   "gzip": 1313
+  },
+  "glyphes": 72,
+  "glyphes_critiques": 8
+ }
 }

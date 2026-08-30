@@ -34,6 +34,11 @@ backend/node_modules/
 # le fichier : `bun run type-check` passe de 0 à 1 erreur.
 !apps/web-v3/scripts/*.d.mts
 !apps/web-v3/scripts/lib/*.d.mts
+# Même cause, même effet pour `apps/web-v3/types/css.d.ts` : il déclare l'import
+# à effet de bord de `app/globals.css`, qui porte la table de jetons. Ignoré, il
+# manque au clone et le type-check BLOQUANT tombe en « TS2882: Cannot find module
+# or type declarations for side-effect import ». Mesuré en déplaçant le fichier.
+!apps/web-v3/types/*.d.ts
 **/*/build/
 **/*/dist/
 **/*/*.*.map

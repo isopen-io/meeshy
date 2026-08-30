@@ -6,7 +6,7 @@
     "dev": "next dev -p 3300",
     "build": "next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
     "start": "next start -p 3300 -H 0.0.0.0",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-jetons.mjs",
     "type-check": "tsc --noEmit",
     "test": "jest --maxWorkers=50%",
     "test:watch": "jest --watch",
@@ -15,6 +15,8 @@
     "baseline": "node scripts/baseline.mjs"
   },
   "dependencies": {
+    "@meeshy/design-tokens": "workspace:*",
+    "@meeshy/icons": "workspace:*",
     "next": "15.5.23",
     "react": "19.2.8",
     "react-dom": "19.2.8"

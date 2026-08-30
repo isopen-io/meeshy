@@ -1,0 +1,52 @@
+/* La feuille racine de la v3. Elle IMPORTE la table de jetons et ne déclare
+   aucune valeur : toute couleur, tout rayon, toute police vient de
+   packages/design-tokens (conception § 3.2, corollaire 2).
+   Gate : scripts/check-jetons.mjs.
+
+   L'import se fait par SPÉCIFICATEUR de paquet, jamais par chemin relatif.
+   `../../../packages/design-tokens/tokens.css` traversait la frontière de
+   paquet par le disque : mesuré, l'étage builder de `apps/web-v3/Dockerfile`
+   ne copie que `apps/web-v3/`, donc `packages/` n'entre pas dans l'image et
+   `next build` rendait « Module not found » dès qu'une PAGE existe (aucune
+   aujourd'hui, d'où l'invisibilité du défaut). Un spécificateur oblige à
+   DÉCLARER la dépendance dans le manifeste ; le Dockerfile installe alors le
+   paquet comme le legacy installe `@meeshy/shared`, et
+   `scripts/check-v3-pipeline.mjs` garde l'appariement. */
+@import '@meeshy/design-tokens/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '..');
@@ -35,10 +36,21 @@ const FORBIDDEN_FORMS: readonly (readonly [string, string])[] = [
   ['la fonte @phosphor-icons/web par sa racine', "import '@phosphor-icons/web';"],
   ['lucide-react icône par icône', "import { House } from 'lucide-react/dist/esm/icons/house';"],
   ['lucide-react par sa racine', "import { List } from 'lucide-react';"],
+  // Les deux formes que l'ABSENCE ne bloque pas : `@phosphor-icons/core` est une
+  // devDependency de la RACINE, donc RÉSOLVABLE depuis apps/web-v3 (contrairement
+  // à lucide-react, qui n'est déclaré nulle part). Sans ces lignes, un fichier de
+  // la v3 court-circuite le sprite, une requête par icône, et tous les gates
+  // restent verts. `@phosphor-icons/react` est barré d'avance : la conception le
+  // rejette nommément, et son installation ne doit pas rouvrir la porte.
+  [
+    'les tracés source @phosphor-icons/core, que le sprite a déjà payés',
+    "import play from '@phosphor-icons/core/assets/regular/play.svg';",
+  ],
+  ['@phosphor-icons/react, qui bundle les 6 poids par icône', "import { Play } from '@phosphor-icons/react';"],
   ['un second moteur de thème par un sous-chemin', "import 'next-themes/dist/index.js';"],
 ];
 
-const PROBE_SOURCE = `${FORBIDDEN_FORMS.map(([, line]) => line).join('\n')}\nexport const probe = [House, List];\n`;
+const PROBE_SOURCE = `${FORBIDDEN_FORMS.map(([, line]) => line).join('\n')}\nexport const probe = [House, List, play, Play];\n`;
 
 jest.setTimeout(120_000);
 
@@ -51,6 +63,20 @@ describe('les lints de zone de la v3', () => {
       expect(refused.map((message) => message.line)).toContain(line);
     },
   );
+
+  // Un témoin qui n'énumère PAS ce que la config interdit ne mord pas : on
+  // ajoute un `root` au lint, aucune sonde ne le couvre, et la suite reste
+  // verte. Le compte se dérive de la config plutôt que d'être recopié — un
+  // nombre en dur serait la jumelle de la liste qu'il prétend garder.
+  it('sonde CHAQUE forme que la config interdit — aucune ajoutée sans témoin', () => {
+    const config = readFileSync(join(ROOT, 'eslint.config.mjs'), 'utf8');
+    const roots = [...config.matchAll(/\{\s*root:\s*'([^']+)'/g)].map(([, root]) => root);
+
+    expect(roots).toHaveLength(5);
+    roots.forEach((root) =>
+      expect(FORBIDDEN_FORMS.some(([, ligne]) => ligne.includes(`'${root}`))).toBe(true),
+    );
+  });
 
   it("dit POURQUOI un import est refusé, jamais seulement qu'il l'est", () => {
     expect(refused.filter((m) => m.message.includes('sprite')).length).toBeGreaterThan(0);

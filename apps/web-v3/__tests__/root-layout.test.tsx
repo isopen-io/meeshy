@@ -4,7 +4,7 @@ import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 
 import { DOCUMENT_LANGUAGE } from '../app/document-language';
 import RootLayout from '../app/layout';
-import { themeScriptSource } from '../app/theme-script';
+import { THEME_PAR_DEFAUT, themeScriptSource } from '../app/theme-script';
 
 const markup = (): string => renderToStaticMarkup(<RootLayout>{null}</RootLayout>);
 
@@ -46,6 +46,10 @@ describe('la coquille racine de la v3', () => {
     );
   });
 
+  it('rend la classe de thème par DÉFAUT côté serveur — sans JS, Tailwind reste gouverné', () => {
+    expect(markup()).toContain(`<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}"`);
+  });
+
   it('ne charge aucun script externe dans la coquille', () => {
     expect(markup()).not.toContain('<script src=');
   });
@@ -77,7 +81,7 @@ describe("la coquille racine face à l'hydratation", () => {
     hydrateOverServerMarkup();
 
     expect(Array.from(document.documentElement.classList)).toContain('dark');
-    expect(document.documentElement.style.colorScheme).toBe('dark');
+    expect(document.documentElement.getAttribute('style')).toBeNull();
   });
 
   it("n'avertit d'aucune divergence sur la racine que le ThemeScript vient de muter", () => {

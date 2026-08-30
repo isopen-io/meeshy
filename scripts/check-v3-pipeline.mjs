@@ -59,20 +59,51 @@
 //
 // Les deux sens se mesurent sur le DISQUE (ce que `apps/web-v3/` contient) et
 // sur le TEXTE de la règle — jamais sur une intention.
+//
+// POURQUOI CE QUE LA V3 IMPORTE HORS D'ELLE-MÊME EST GARDÉ ICI
+//
+// `apps/web-v3/app/globals.css` a importé la table de jetons par CHEMIN RELATIF
+// (`../../../packages/design-tokens/tokens.css`). L'étage builder ne copie que
+// `COPY apps/web-v3/ ./` : `packages/` n'entre pas dans l'image, et `next build`
+// y rend « Module not found ». Le défaut était INVISIBLE pour deux raisons qui
+// se renforcent — la v3 n'émet aucune PAGE, donc webpack ne compile jamais
+// `globals.css` ; et la mesure de l'implémenteur avait été faite en local,
+// monorepo intact, c'est-à-dire dans la SEULE disposition où elle ne peut pas
+// échouer. La disposition qui EXPÉDIE est celle de l'image.
+//
+// Symétriquement, une dépendance inter-paquets crée une entrée de build que la
+// chaîne de publication doit connaître : `docker.yml` ne déclenchait `web_v3`
+// que sur `apps/web-v3/**` et `packages/shared/**`. Une correction de la table
+// ne reconstruisait AUCUNE image et la production continuait de servir
+// l'ancienne feuille, sans témoin. « Un champ ajouté en amont et pas relayé ».
+//
+// D'où trois invariants, dans cet ordre de sévérité :
+//   (i)   aucun fichier de la v3 n'atteint le disque hors de `apps/web-v3/` par
+//         un chemin RELATIF — un franchissement de frontière se DÉCLARE dans le
+//         manifeste, où le reste de la chaîne peut le lire ;
+//   (ii)  tout paquet de workspace que le manifeste déclare est COPIÉ par le
+//         Dockerfile — sinon l'image ne le contient pas ;
+//   (iii) tout paquet de workspace que le manifeste déclare DÉCLENCHE l'image
+//         de la v3, filtre `paths:` compris — sinon un correctif de ce paquet
+//         ne sort jamais.
+// Les trois se mesurent sur le disque et sur le déroulement réel du détecteur ;
+// aucun `next build` local ne pouvait les rendre.
 
 import { execFileSync } from 'node:child_process';
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// La lecture du disque vit à côté : ce fichier tient les LOIS, pas la façon de
+// les mesurer (voir le doc-comment de scripts/lib/v3-disque.mjs).
+import {
+  declaredWorkspaceDependencies,
+  escapingRequests,
+  filesUnder,
+  splitName,
+} from './lib/v3-disque.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -112,23 +143,6 @@ const GENERATED_METADATA_URL = {
 };
 
 const GENERATED_EXTENSIONS = new Set(['ts', 'tsx', 'js', 'jsx']);
-
-const filesUnder = (directory, prefix = '') =>
-  existsSync(directory)
-    ? readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-        const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-        return entry.isDirectory()
-          ? filesUnder(join(directory, entry.name), relative)
-          : [relative];
-      })
-    : [];
-
-const splitName = (name) => {
-  const dot = name.lastIndexOf('.');
-  return dot === -1
-    ? { stem: name, extension: '' }
-    : { stem: name.slice(0, dot), extension: name.slice(dot + 1) };
-};
 
 // `(groupe)` et `@slot` ne produisent pas de segment d'URL ; un dossier `_privé`
 // sort entièrement du routage.
@@ -212,6 +226,7 @@ const zoneInventory = (root) => ({
   gitIgnoredSources: gitIgnoredSources(root),
 });
 
+
 const readWorld = async (root) => ({
   root,
   ci: await readFile(join(root, '.github/workflows/ci.yml'), 'utf8'),
@@ -220,6 +235,8 @@ const readWorld = async (root) => ({
   typeDebt: await readFile(join(root, 'scripts/check-type-debt.sh'), 'utf8'),
   dockerfile: await readFile(join(root, `${V3_DIRECTORY}/Dockerfile`), 'utf8'),
   zone: zoneInventory(root),
+  outside: declaredWorkspaceDependencies(root, V3_DIRECTORY),
+  escapes: escapingRequests(root, V3_DIRECTORY),
 });
 
 // --- lecture structurée du peu de YAML dont ce garde a besoin ----------------
@@ -469,6 +486,52 @@ const theLegacyDispatchLeavesTheV3Alone = (world) =>
 const theAllDispatchBuildsTheV3 = (world) =>
   expectSelection('un dispatch « all »', detectOnDispatch(world, 'all'), { web_v3: true });
 
+// (i) — un franchissement de frontière se DÉCLARE, il ne se traverse pas par le
+// disque. C'est le seul témoin qui pouvait rougir sur le défaut d'origine :
+// `next build` en local ne le peut pas, le monorepo y étant intact.
+const noV3SourceReachesOutsideItsPackage = (world) =>
+  world.escapes.map(
+    ({ file, request, target }) =>
+      `${file} atteint ${target} par le chemin relatif « ${request} » : ` +
+      `hors de ${V3_DIRECTORY}/, donc absent de l'image (l'étage builder ne copie que ` +
+      `${V3_DIRECTORY}/). Déclarer le paquet dans ${V3_DIRECTORY}/package.json et l'importer ` +
+      `par spécificateur`,
+  );
+
+const escapeRegExp = (texte) => texte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// (ii) — ce que le manifeste déclare voyage dans l'image.
+const everyDeclaredPackageTravelsInTheImage = (world) =>
+  world.outside.flatMap(({ name, directory }) => {
+    if (directory === null) {
+      return [`${V3_DIRECTORY} déclare ${name} en workspace, qu'aucun glob de la racine ne rend`];
+    }
+    return new RegExp(`^COPY\\s+${escapeRegExp(directory)}/`, 'm').test(world.dockerfile)
+      ? []
+      : [
+          `${V3_DIRECTORY}/Dockerfile ne copie pas ${directory}/ : ${name} est déclaré mais ` +
+            `n'entre jamais dans l'image, et le build y échoue au premier fichier qui l'importe`,
+        ];
+  });
+
+// (iii) — et une correction de ce paquet reconstruit bien l'image de la v3.
+const everyDeclaredPackageRebuildsTheV3Image = (world) => {
+  const paths = listValues(world.docker, '    paths:');
+  return world.outside.flatMap(({ name, directory }) => {
+    if (directory === null) return [];
+    const failures = paths.includes(`${directory}/**`)
+      ? []
+      : [`le filtre paths de docker.yml ne couvre pas ${directory}/** (dépendance ${name} de la v3)`];
+    return failures.concat(
+      expectSelection(
+        `un push ne touchant que ${directory}/`,
+        detectOnPush(world, [`${directory}/tokens.css`]),
+        { web_v3: true },
+      ),
+    );
+  });
+};
+
 const everyDispatchOptionSelectsAService = (world) =>
   dispatchOptions(world)
     .filter((option) =>
@@ -671,6 +734,9 @@ const CHECKS = [
   ['le ratchet de dette ne connaît pas la v3', theDebtRatchetIgnoresTheV3],
   ['la matrice de tests porte la v3', theTestMatrixCarriesTheV3],
   ['le filtre de chemins de docker.yml couvre les deux zones', theDockerPathFilterCoversBothZones],
+  ["aucune source de la v3 n'atteint le disque hors de son paquet", noV3SourceReachesOutsideItsPackage],
+  ["tout paquet déclaré par la v3 voyage dans son image", everyDeclaredPackageTravelsInTheImage],
+  ["tout paquet déclaré par la v3 reconstruit son image", everyDeclaredPackageRebuildsTheV3Image],
   ['un push sur la v3 construit la v3, et elle seule', aV3CommitBuildsOnlyTheV3],
   ['un push sur le legacy construit le legacy, et lui seul', aLegacyCommitBuildsOnlyTheLegacy],
   ['un push sur packages/shared construit les deux zones', aSharedCommitBuildsBothZones],
@@ -756,6 +822,31 @@ const MUTATIONS = [
     'le glob de la v3 retiré des paths de docker.yml',
     (world) => replaceIn(world, 'docker', "      - 'apps/web-v3/**'\n", ''),
     'le filtre paths de docker.yml ne couvre pas la v3',
+  ],
+  [
+    'la table de jetons ré-importée par chemin relatif hors du paquet',
+    (world) =>
+      world.escapes.push({
+        file: `${V3_DIRECTORY}/app/globals.css`,
+        request: '../../../packages/design-tokens/tokens.css',
+        target: 'packages/design-tokens/tokens.css',
+      }),
+    'par le chemin relatif',
+  ],
+  [
+    'le paquet déclaré retiré du Dockerfile',
+    (world) => replaceIn(world, 'dockerfile', /^COPY packages\/[^\n]*\n/m, ''),
+    "n'entre jamais dans l'image",
+  ],
+  [
+    'le paquet déclaré retiré des paths de docker.yml',
+    (world) => replaceIn(world, 'docker', /^ +- 'packages\/design-tokens\/\*\*'\n/m, ''),
+    'le filtre paths de docker.yml ne couvre pas packages/design-tokens/**',
+  ],
+  [
+    'le détecteur de push aveugle au paquet déclaré',
+    (world) => replaceIn(world, 'docker', /\*"packages\/design-tokens\/"\*/g, '*"packages/zz/"*'),
+    'un push ne touchant que packages/design-tokens/',
   ],
   [
     'le détecteur de push aveugle à la v3',

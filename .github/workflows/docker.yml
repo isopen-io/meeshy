@@ -23,6 +23,8 @@ on:
     paths:
       - 'apps/web/**'
       - 'apps/web-v3/**'
+      - 'packages/design-tokens/**'
+      - 'packages/icons/**'
       - 'services/gateway/**'
       - 'services/translator/**'
       - 'services/agent/**'
@@ -158,7 +160,7 @@ jobs:
           else
             CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT

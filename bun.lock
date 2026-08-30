@@ -6,6 +6,7 @@
       "name": "meeshy",
       "devDependencies": {
         "@changesets/cli": "^2.31.0",
+        "@phosphor-icons/core": "2.1.1",
         "@playwright/test": "^1.62.1",
         "concurrently": "^9.2.1",
         "dotenv": "^17.4.2",
@@ -129,6 +130,8 @@
       "name": "@meeshy/web-v3",
       "version": "0.0.0",
       "dependencies": {
+        "@meeshy/design-tokens": "workspace:*",
+        "@meeshy/icons": "workspace:*",
         "next": "15.5.23",
         "react": "19.2.8",
         "react-dom": "19.2.8",
@@ -156,6 +159,14 @@
         "jest-environment-jsdom": "^30.4.1",
         "typescript": "^6.0.3",
       },
+    },
+    "packages/design-tokens": {
+      "name": "@meeshy/design-tokens",
+      "version": "0.0.0",
+    },
+    "packages/icons": {
+      "name": "@meeshy/icons",
+      "version": "0.0.0",
     },
     "packages/shared": {
       "name": "@meeshy/shared",
@@ -992,7 +1003,11 @@
 
     "@meeshy/agent": ["@meeshy/agent@workspace:services/agent"],
 
+    "@meeshy/design-tokens": ["@meeshy/design-tokens@workspace:packages/design-tokens"],
+
     "@meeshy/gateway": ["@meeshy/gateway@workspace:services/gateway"],
+
+    "@meeshy/icons": ["@meeshy/icons@workspace:packages/icons"],
 
     "@meeshy/shared": ["@meeshy/shared@workspace:packages/shared"],
 
@@ -1069,6 +1084,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.139.0", "", {}, "sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw=="],
 
     "@parse/node-apn": ["@parse/node-apn@8.1.0", "", { "dependencies": { "debug": "4.4.3", "jsonwebtoken": "9.0.3", "node-forge": "1.4.0", "verror": "1.10.1" } }, "sha512-LowcdkKPDikbbzIr3zwEdoFW5wfEbbTzpYQeen3S8kKLePG0AQK586Li+OLC7bonyLmlk//Yk3smHZOLSV6TZA=="],
+
+    "@phosphor-icons/core": ["@phosphor-icons/core@2.1.1", "", {}, "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ=="],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 

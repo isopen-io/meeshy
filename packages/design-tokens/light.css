@@ -1,0 +1,78 @@
+/* Schéma CLAIR — DÉRIVÉ, jamais mesuré : la planche de la v3 n'a pas de vue
+   claire (voir README § « D'où viennent les valeurs »). Les rôles sont ceux du
+   schéma sombre, la rampe neutre est retournée (400 = le plus contrasté,
+   900 = le plus proche du fond) et les couleurs d'état sont assombries pour
+   tenir 4,5:1 sur le fond clair le plus SOMBRE (`--color-bg-sunken`), qui est
+   le cas contraignant pour une encre foncée.
+
+   Porté par .light UNIQUEMENT : la classe est posée par la coquille racine puis
+   corrigée par le moteur de thème, jamais par une requête de média. La
+   spécificité de :root.light l'emporte sur :root quel que soit l'ordre des
+   imports.
+
+   RETOURNER LA RAMPE NE RETOURNE PAS LES RÔLES. `--color-surface-raised` veut
+   dire « au-dessus » : le prendre dans la rampe retournée le peignait #edeef6,
+   donc PLUS SOMBRE que `--color-surface` (#ffffff) et indiscernable de
+   `--color-bg-sunken` (1,00:1). Les quatre plans sont désormais une échelle
+   strictement croissante en luminance, gardée par le contrôle d'ORDRE de
+   scripts/check-jetons.mjs — une parité de CLÉS ne dit rien d'une palette. */
+:root.light {
+  color-scheme: light;
+
+  --color-bg: #f1f3f9;
+  --color-bg-sunken: #e6e9f2;
+  --color-surface: #f9fafd;
+  --color-surface-raised: #ffffff;
+  --color-text: #12131d;
+
+  --color-neutral-400: #3a3d52;
+  --color-neutral-500: #575b73;
+  --color-neutral-600: #666a80;
+  --color-neutral-700: #a9adbf;
+  --color-neutral-800: #d7d9e4;
+  --color-neutral-900: #edeef6;
+
+  --color-text-muted: var(--color-neutral-500);
+  /* HORS de la rampe, symétriquement au sombre : `--color-neutral-600`
+     (#666a80) rend 4,39:1 sur `--color-bg-sunken`, sous les 4,5:1 du texte. */
+  --color-text-subtle: #5f6379;
+  --color-border: var(--color-neutral-800);
+  --color-border-strong: var(--color-neutral-700);
+  /* 3:1 sur les quatre plans clairs — voir le doc-comment de dark.css. */
+  --color-border-interactive: #767b94;
+
+  --color-accent-200: #3730a3;
+  --color-accent-300: #4338ca;
+  --color-accent-400: #4f46e5;
+  --color-primary: var(--color-accent-400);
+  --color-primary-strong: var(--color-accent-300);
+  --color-primary-soft: #6366f1;
+  --color-primary-softer: #818cf8;
+  --color-on-primary: #ffffff;
+
+  --color-success: #047857;
+  --color-success-soft: #10b981;
+  /* #b45309 rendait 4,14:1 sur `--color-bg-sunken` : assombri d'un cran. */
+  --color-warning: #a84e08;
+  /* #dc2626 rendait 3,98:1 sur `--color-bg-sunken` : assombri d'un cran. */
+  --color-danger: #c81e1e;
+  --color-danger-soft: #ef4444;
+  --color-on-status: #ffffff;
+
+  /* La présence est une famille DE SCHÉMA, pas une famille hors schéma. Les
+     valeurs citées de CLAUDE.md (#34D399 / #FBBF24 / #9CA3AF) sont fixées pour
+     des surfaces NOCTURNES : servies telles quelles sur un fond clair elles
+     rendent 1,80 / 1,56 / 2,37 contre `--color-bg`. Or une pastille de
+     présence porte SEULE son information (aucun libellé sur un avatar), donc
+     WCAG 1.4.11 lui demande 3:1. Mêmes rôles, mêmes teintes, assombries. */
+  --color-presence-online: #059669;
+  --color-presence-away: #b45309;
+  --color-presence-idle: #6b7280;
+  --color-presence-offline: #6b7280;
+
+  --color-overlay: rgb(13 14 22 / 0.45);
+
+  --shadow-sm: 0 6px 20px rgb(19 21 34 / 0.1);
+  --shadow-lg: 0 20px 60px rgb(19 21 34 / 0.16);
+  --shadow-primary: 0 10px 26px rgb(79 70 229 / 0.25);
+}
