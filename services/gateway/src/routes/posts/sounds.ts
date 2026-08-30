@@ -156,6 +156,10 @@ export async function chargerPostsParSon(
     curseurCourant = usages[usages.length - 1].createdAt.toISOString();
 
     const aChercher = [...new Set(usages.map((u) => u.postId))].filter((id) => !postsDejaVus.has(id));
+    // Déjà borné IMPLICITEMENT : `aChercher` dérive de `usages`, dont le
+    // `take: TAILLE_LOT` est posé ci-dessus. `take` explicite quand même
+    // (#4165, même motif qu'`admin/users.ts`) — la borne ne doit pas dépendre
+    // d'un raisonnement à distance sur la taille d'un tableau amont.
     const posts = aChercher.length === 0 ? [] : await prisma.post.findMany({
       where: {
         id: { in: aChercher },
@@ -171,6 +175,7 @@ export async function chargerPostsParSon(
         author: { select: authorSelect },
         media: { select: { id: true, mimeType: true, thumbnailUrl: true, thumbHash: true }, take: 1 },
       },
+      take: aChercher.length,
     });
     const postsById = new Map(posts.map((post) => [post.id, post]));
 
