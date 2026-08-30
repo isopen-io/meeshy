@@ -112,7 +112,9 @@ extension StoryComposerViewModel {
         }
     }
 
-    var isDrawingActive: Bool { activeTool == .drawing }
+    /// `public` : l'hôte lit ce drapeau pour DEUX décisions distinctes — monter
+    /// ou non la surface de capture, et savoir dans quel sens la porte bascule.
+    public var isDrawingActive: Bool { activeTool == .drawing }
 
     func saveBackgroundTransform() {
         guard let id = slides[safe: currentSlideIndex]?.id else { return }
@@ -413,7 +415,7 @@ extension StoryComposerViewModel {
     /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
     /// exactement au même point.
     @discardableResult
-    func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
+    public func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
         let sticker = StorySticker(emoji: emoji, provider: provider,
@@ -442,7 +444,7 @@ extension StoryComposerViewModel {
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
     @discardableResult
-    func addSticker(image: UIImage, provider: String) -> StorySticker {
+    public func addSticker(image: UIImage, provider: String) -> StorySticker {
         let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji, provider: provider)
         registerLoadedImage(image, for: sticker.id)
         return sticker
@@ -603,7 +605,13 @@ extension StoryComposerViewModel {
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
     @discardableResult
-    func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
+    /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
+    /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
+    /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
+    /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
+    /// pose le premier.
+    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         let obj = StoryAudioPlayerObject(

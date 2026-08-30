@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { sendNotFound } from '../../utils/response';
+import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { gateProfilePresence } from './presence-gate';
 
 /**
@@ -15,11 +16,13 @@ import { gateProfilePresence } from './presence-gate';
  * sortant par un `additionalProperties: true`, un `autoTranslateEnabled` écrit
  * en dur, et aucun cache conditionnel.
  *
- * Ce module tient ENSEMBLE les quatre décisions qui doivent voyager ensemble :
- * ce qui est CHARGÉ (`publicUserSelect`), ce qui est DÉCLARÉ
- * (`publicProfileSchema`), ce qui est COMPOSÉ (`buildPublicProfile`) et
- * comment on le SERT (`servirProfilPublic`). Un champ ajouté à l'un sans
- * l'autre est soit chargé et supprimé, soit déclaré et absent.
+ * Ce module tient ENSEMBLE les cinq décisions qui doivent voyager ensemble :
+ * ce qui est CHARGÉ (`publicUserSelect`), ce que chaque clé servie y COÛTE
+ * (`publicProfilePlan`, #4356), ce qui est DÉCLARÉ (`publicProfileSchema`), ce
+ * qui est COMPOSÉ (`buildPublicProfile`) et comment on le SERT
+ * (`servirProfilPublic`). Un champ ajouté à l'un sans l'autre est soit chargé
+ * et supprimé, soit déclaré et absent — et depuis que `?fields=` gouverne le
+ * `select`, un champ oublié du PLAN est demandé par un client et jamais chargé.
  */
 
 // Shared Prisma select fragment for a user's public voice profile.
@@ -149,6 +152,42 @@ export const publicUserSelect = {
 } as const;
 
 /**
+ * Ce que chaque clé SERVIE coûte en colonnes — la CINQUIÈME décision du module,
+ * et elle voyage avec les quatre autres (#4356).
+ *
+ * `publicUserSelect` était un `select` FIXE : `?fields=username` servait un
+ * champ et en chargeait quatorze, jointure `voiceModel` comprise. Ce plan
+ * traduit la liste demandée en `select`, sans jamais rien y ajouter que le
+ * littéral ne déclare (voir `selectForFields`).
+ *
+ * **Quatre colonnes sont ÉPINGLÉES, et pour deux raisons distinctes.**
+ * `id` identifie la ligne — sans lui la réponse ne dit plus de qui elle parle,
+ * et `directory/person.ts` en fait la cible de ses expansions. Les trois autres
+ * sont la MATIÈRE du gate de présence (`gateProfilePresence` lit `isOnline`,
+ * `lastActiveAt` et `deactivatedAt`) : une garde de confidentialité ne peut pas
+ * dépendre d'un paramètre que l'appelant choisit, sinon l'omettre la lèverait.
+ * Un `?fields=` qui les retirerait ferait masquer la loi par IGNORANCE — même
+ * verdict apparent, jusqu'au jour où elle doit dire « oui ».
+ *
+ * Les quatre champs de VOIX viennent tous de la même relation : les nommer
+ * ensemble ne l'ouvre qu'une fois, n'en nommer aucun ne l'ouvre pas.
+ * `isAnonymous` / `isMeeshyer` sont FABRIQUÉS par {@link buildPublicProfile} —
+ * tableau vide, ils ne coûtent aucune colonne.
+ */
+export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
+  full: publicUserSelect,
+  pinned: ['id', 'isOnline', 'lastActiveAt', 'deactivatedAt'],
+  columns: {
+    voicePublic: ['voiceModel'],
+    voiceSampleUrl: ['voiceModel'],
+    voiceSampleDurationMs: ['voiceModel'],
+    voiceQuality: ['voiceModel'],
+    isAnonymous: [],
+    isMeeshyer: [],
+  },
+};
+
+/**
  * La composition PUBLIQUE d'un profil — voix dérivée, drapeaux d'identité.
  *
  * GÉNÉRIQUE, comme `withVoiceFields`, et pour la même raison : un paramètre
@@ -192,18 +231,32 @@ export function buildPublicProfile<T extends { voiceModel?: VoiceModelFields | n
  *
  * Rend `null` quand la personne n'existe pas ET a déjà répondu 404 : l'appelant
  * n'a plus qu'à propager.
+ *
+ * ## `fields` réduit la REQUÊTE, pas seulement la réponse (#4356)
+ *
+ * `fields` est la liste de `?fields=` déjà analysée (`parseFieldList`), et elle
+ * traverse jusqu'au `select` : un appelant qui demande un pseudo ne paie plus
+ * quatorze colonnes ni la jointure `voiceModel`. `undefined` — le cas des trois
+ * ALIAS, qui n'exposent pas ce paramètre — vaut `null` : le `select` complet,
+ * rendu par IDENTITÉ, donc un chemin nominal strictement inchangé.
+ *
+ * Les colonnes que le plan n'épingle pas peuvent être absentes de la ligne ; ce
+ * n'est jamais un problème ici, parce que la MÊME liste filtre ensuite la
+ * réponse chez l'appelant. La composition les traite déjà comme absentes
+ * possibles (`?? null`, déstructuration).
  */
 export async function servirProfilPublic(
   fastify: FastifyInstance,
   request: FastifyRequest,
   reply: FastifyReply,
-  handle: string
+  handle: string,
+  fields: FieldSet = null
 ): Promise<Record<string, unknown> | null> {
   const user = await fastify.prisma.user.findFirst({
     where: isValidObjectId(handle)
       ? { id: handle }
       : { username: { equals: handle, mode: 'insensitive' } },
-    select: publicUserSelect,
+    select: selectForFields(publicProfilePlan, fields),
   });
 
   if (!user) {

@@ -49,7 +49,7 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
 
 const mockPrisma: any = {
   participant: { findFirst: jest.fn(), findMany: jest.fn() },
-  message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
+  message: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
     updateMany: jest.fn(),
@@ -114,6 +114,19 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     mockPrisma.participant.findMany.mockImplementation(async (args: any) => {
       if (args?.select?.userId) return [{ userId: RECIPIENT_USER_ID }];
       return [{ id: PARTICIPANT_ID }];
+    });
+    // #4349 — la garde d'appartenance de la COLLECTION (l'anti-spoof de CETTE
+    // porte, généralisé aux cinq écritures) lit les ids RAPPORTÉS par
+    // `message.findMany`, là où la porte d'avant lisait `findUnique`. Ce double
+    // rejoue la MÊME ligne que `findUnique` décrit, en appliquant le filtre
+    // Prisma que la garde pose — chaque cas ci-dessous continue donc de piloter
+    // le verdict par `findUnique`, comme avant.
+    mockPrisma.message.findMany.mockImplementation(async (args: any) => {
+      const ids: string[] = args?.where?.id?.in ?? [];
+      if (ids.length === 0) return [];
+      const row = await mockPrisma.message.findUnique();
+      if (!row || row.deletedAt || row.conversationId !== args?.where?.conversationId) return [];
+      return ids.map((id) => ({ id, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }));
     });
   });
 

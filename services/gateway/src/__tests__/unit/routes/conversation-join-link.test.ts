@@ -248,6 +248,47 @@ describe('POST /conversations/join/:linkId — conversation close', () => {
     expect(res.statusCode).toBe(200);
     expect((app as any).prisma.participant.create).toHaveBeenCalledTimes(1);
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // #4351 — LE MOTIF, pas seulement le statut. Les deux témoins ci-dessus (et
+  // leur pendant `symétrie` plus bas) n'assertaient que `statusCode` ou une
+  // ÉGALITÉ mutuelle entre invité/inscrit — jamais la VALEUR littérale que
+  // `sendError(reply, result.refusal.status, result.refusal.code, {message})`
+  // sert. Deux refus IDENTIQUEMENT vides passeraient les deux témoins
+  // existants. C'est exactement ce que le critère 5 de #4351 reproche côté
+  // invité : « le refus ne dit pas pourquoi ». Ici, il le prouve OU le
+  // dément — pour l'appelant INSCRIT de CETTE porte, qui délègue déjà à
+  // `performLinkJoin`/`admitLinkEntry` (#4353).
+  // ───────────────────────────────────────────────────────────────────────────
+
+  it('410 — le corps nomme la RAISON : code CONVERSATION_CLOSED et message clair (closedAt)', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { ...mockShareLink.conversation, isActive: false, closedAt: new Date('2026-03-01') },
+    });
+
+    const res = await postJoin(app);
+    const body = res.json();
+
+    expect(res.statusCode).toBe(410);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('CONVERSATION_CLOSED');
+    expect(body.message).toBe('Cette conversation est terminée');
+  });
+
+  it('410 — même motif quand seul `isActive: false` porte la clôture (pas de `closedAt`)', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { ...mockShareLink.conversation, isActive: false, closedAt: null },
+    });
+
+    const res = await postJoin(app);
+    const body = res.json();
+
+    expect(res.statusCode).toBe(410);
+    expect(body.error).toBe('CONVERSATION_CLOSED');
+    expect(body.message).toBe('Cette conversation est terminée');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

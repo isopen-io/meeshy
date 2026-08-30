@@ -44,12 +44,31 @@ import { Worker } from 'node:worker_threads';
  *
  * ## Le SENS de la panne
  *
- * Si le fil de travail ne peut pas démarrer (runtime sans `worker_threads`),
- * ce module REFUSE — il ne retombe jamais sur une exécution en boucle
- * d'événements. Le repli « au pire on l'exécute ici » serait exactement le
- * défaut qu'on corrige, ressuscité au moment le plus défavorable. Une
- * création de sujet qui échoue coûte un message d'erreur à un administrateur ;
- * un gateway figé coûte le service à tout le monde.
+ * Si le fil de travail ne peut pas démarrer (runtime sans `worker_threads`,
+ * ou naissance plus longue que `DEFAULT_STARTUP_BUDGET_MS`), ce module REFUSE
+ * — il ne retombe jamais sur une exécution en boucle d'événements. Le repli
+ * « au pire on l'exécute ici » serait exactement le défaut qu'on corrige,
+ * ressuscité au moment le plus défavorable. Une création de sujet qui échoue
+ * coûte un message d'erreur à un administrateur ; un gateway figé coûte le
+ * service à tout le monde.
+ *
+ * ## Le sens de la panne ne dispense pas de dire la VÉRITÉ sur sa cause (#4420)
+ *
+ * Refuser est juste ; refuser en accusant le motif ne l'est pas. Trois
+ * situations, trois verdicts, et il a fallu deux d'entre elles pour les
+ * distinguer :
+ *
+ * | ce qui s'est passé | code servi |
+ * |---|---|
+ * | le motif a brûlé son délai sur un texte adverse | `BACKTRACKING_BUDGET` (« retour arrière catastrophique ») |
+ * | un motif VOISIN a figé le fil avant celui-ci | `BACKTRACKING_BUDGET` (« non certifié ») |
+ * | le fil n'a jamais parlé — la machine, pas le motif | `UNSUPPORTED_RUNTIME` |
+ *
+ * La troisième ligne se confondait avec la deuxième : le délai courant depuis
+ * `new Worker`, une machine chargée épuisait le budget AVANT toute annonce, et
+ * la boucle de verdict refusait des motifs parfaitement sains en leur
+ * attribuant l'explosion d'un voisin qui n'avait jamais couru. Un
+ * administrateur qui lit ce message va réécrire un mot-clé qui n'a rien.
  */
 
 /** Pourquoi un motif est refusé — le code voyage jusqu'au client. */
@@ -77,11 +96,38 @@ const MAX_REPETITION = 64;
 /** Produit de répétitions bornées imbriquées toléré : `(x{8}){8}`. */
 const MAX_REPETITION_PRODUCT = 1024;
 
-/** Délai maximal d'une session de sonde (tous motifs d'une requête). */
+/**
+ * Délai maximal SANS PROGRÈS d'une session de sonde.
+ *
+ * « Sans progrès », et non « de la session » : le minuteur se réarme à chaque
+ * message du fil de travail. Un motif sain avance — il annonce, il rend son
+ * compte — et n'est donc jamais interrompu ; un motif qui part en retour
+ * arrière se tait après son annonce, et c'est ce SILENCE que le délai mesure.
+ * La formulation précédente (« délai d'une session, tous motifs d'une
+ * requête ») punissait un motif pour le temps qu'avaient pris ses voisins,
+ * alors qu'ils l'avaient pris HONNÊTEMENT (#4420).
+ */
 export const DEFAULT_PROBE_BUDGET_MS = 250;
 
-/** Délai maximal d'une session d'exécution sur le texte de l'appelant. */
+/** Délai maximal sans progrès d'une exécution sur le texte de l'appelant. */
 export const DEFAULT_MATCH_BUDGET_MS = 500;
+
+/**
+ * Délai accordé au fil de travail pour NAÎTRE — distinct des deux ci-dessus,
+ * et c'est tout l'objet de #4420.
+ *
+ * `new Worker(source, { eval: true })` compile la source et lève un isolate
+ * V8 : une dizaine de millisecondes sur une machine au repos, bien davantage
+ * quand elle est chargée. Tant que ce coût courait sur le budget d'exécution,
+ * une machine occupée faisait refuser `\bfilm\b` — sous le code d'un motif
+ * dangereux, qui plus est, alors qu'aucun motif n'avait été exécuté.
+ *
+ * Il est GÉNÉREUX à dessein : pendant le démarrage, aucun motif d'appelant ne
+ * court, donc rien de dangereux ne se prolonge. Le seul coût d'une valeur
+ * haute est la latence d'une requête d'administration sur une machine déjà à
+ * genoux ; le coût d'une valeur basse est un refus faux.
+ */
+export const DEFAULT_STARTUP_BUDGET_MS = 2000;
 
 const refusal = (pattern: string, code: PatternRefusalCode, message: string): PatternRefusal =>
   ({ pattern, code, message });
@@ -348,8 +394,22 @@ type OffLoopOutcome = {
   readonly invalid: ReadonlySet<number>;
   /** index du motif en cours quand le délai maximal est tombé, s'il y en a un */
   readonly hungIndex: number | null;
-  /** le fil de travail n'a pas pu démarrer — aucune exécution n'a eu lieu */
+  /**
+   * Le fil de travail n'a pas pu démarrer — aucune exécution n'a eu lieu.
+   *
+   * Deux causes, une seule conclusion : `new Worker` a levé SYNCHRONEMENT
+   * (runtime sans `worker_threads`), ou il n'a rien annoncé dans son délai de
+   * démarrage (#4420). Les deux disent la même chose — « nous n'avons rien
+   * mesuré » — et surtout PAS « ce motif est dangereux ».
+   */
   readonly unsupported: boolean;
+};
+
+type OffLoopBudgets = {
+  /** délai sans progrès, une fois le fil vivant */
+  readonly budgetMs: number;
+  /** délai accordé au fil pour ANNONCER son premier motif */
+  readonly startupBudgetMs: number;
 };
 
 /**
@@ -388,11 +448,14 @@ type WorkerMessage =
   | { type: 'result'; index: number; count: number }
   | { type: 'done' };
 
-async function runOffLoop(job: OffLoopJob, budgetMs: number): Promise<OffLoopOutcome> {
+async function runOffLoop(job: OffLoopJob, budgets: OffLoopBudgets): Promise<OffLoopOutcome> {
   const counts = new Map<number, number>();
   const invalid = new Set<number>();
   let started: number | null = null;
   let finished = false;
+  // Le fil a-t-il seulement PARLÉ ? Tant que non, rien n'a été mesuré, et son
+  // silence n'accuse aucun motif — il accuse la machine (#4420).
+  let vivant = false;
 
   let worker: Worker;
   try {
@@ -402,7 +465,18 @@ async function runOffLoop(job: OffLoopJob, budgetMs: number): Promise<OffLoopOut
   }
 
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => { settle(); }, budgetMs);
+    // DEUX délais, jamais un seul, et c'est la correction de #4420 : le
+    // premier borne la NAISSANCE du fil, le second son SILENCE une fois
+    // vivant. Un minuteur unique armé ici mesurerait les deux ensemble et
+    // ferait refuser un motif sain pour le temps qu'a pris un isolate V8.
+    let timer = setTimeout(() => { settle(); }, budgets.startupBudgetMs);
+
+    /** Le fil vient de parler : le délai reprend à zéro. */
+    const relancer = (): void => {
+      vivant = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => { settle(); }, budgets.budgetMs);
+    };
 
     const settle = (): void => {
       clearTimeout(timer);
@@ -424,6 +498,7 @@ async function runOffLoop(job: OffLoopJob, budgetMs: number): Promise<OffLoopOut
     };
 
     worker.on('message', (message: WorkerMessage) => {
+      relancer();
       if (message.type === 'begin') { started = message.index; return; }
       if (message.type === 'invalid') { invalid.add(message.index); started = null; return; }
       if (message.type === 'result') { counts.set(message.index, message.count); started = null; return; }
@@ -433,6 +508,10 @@ async function runOffLoop(job: OffLoopJob, budgetMs: number): Promise<OffLoopOut
     worker.on('error', () => { settle(); });
     worker.on('exit', () => { settle(); });
   });
+
+  // Un fil qui n'a JAMAIS parlé n'a rien mesuré : c'est la même situation
+  // qu'un runtime sans `worker_threads`, et elle se dit avec le même mot.
+  if (!vivant) return { counts, invalid, hungIndex: null, unsupported: true };
 
   return { counts, invalid, hungIndex: finished ? null : started, unsupported: false };
 }
@@ -501,7 +580,7 @@ function adversarialCorpus(source: string): string[] {
  */
 export async function certifyPatterns(
   patterns: readonly string[],
-  options: { budgetMs?: number } = {}
+  options: { budgetMs?: number; startupBudgetMs?: number } = {}
 ): Promise<PatternRefusal[]> {
   if (patterns.length === 0) return [];
 
@@ -516,7 +595,10 @@ export async function certifyPatterns(
 
   const outcome = await runOffLoop(
     { patterns: survivors, flags: 'gi', texts: survivors.map(adversarialCorpus) },
-    options.budgetMs ?? DEFAULT_PROBE_BUDGET_MS
+    {
+      budgetMs: options.budgetMs ?? DEFAULT_PROBE_BUDGET_MS,
+      startupBudgetMs: options.startupBudgetMs ?? DEFAULT_STARTUP_BUDGET_MS,
+    }
   );
 
   if (outcome.unsupported) {
@@ -568,7 +650,7 @@ export type MatchReport = {
 export async function countMatchesOffLoop(
   patterns: readonly string[],
   sampleText: string,
-  options: { budgetMs?: number } = {}
+  options: { budgetMs?: number; startupBudgetMs?: number } = {}
 ): Promise<MatchReport> {
   const matches: Record<string, number> = {};
   const refused: PatternRefusal[] = [];
@@ -576,7 +658,10 @@ export async function countMatchesOffLoop(
 
   const outcome = await runOffLoop(
     { patterns, flags: 'gi', texts: patterns.map(() => [sampleText]) },
-    options.budgetMs ?? DEFAULT_MATCH_BUDGET_MS
+    {
+      budgetMs: options.budgetMs ?? DEFAULT_MATCH_BUDGET_MS,
+      startupBudgetMs: options.startupBudgetMs ?? DEFAULT_STARTUP_BUDGET_MS,
+    }
   );
 
   if (outcome.unsupported) {

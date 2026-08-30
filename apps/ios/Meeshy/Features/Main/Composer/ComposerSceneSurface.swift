@@ -47,6 +47,15 @@ struct ComposerSceneSurface: View {
     var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
+    /// L'historique, en PRIMITIVES — voir `ComposerTopBar.canUndo` pour le
+    /// pourquoi du choix. La scène est la seule surface qui le sert
+    /// (`ComposerHistoryService`), parce qu'elle est la seule où les gestes ne
+    /// se défont par rien d'autre.
+    var canUndo: Bool = false
+    var canRedo: Bool = false
+    var onUndo: (() -> Void)?
+    var onRedo: (() -> Void)?
+
     // MARK: - La scène
 
     @Binding var slide: StorySlide
@@ -78,6 +87,19 @@ struct ComposerSceneSurface: View {
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
+    /// L'effet d'ouverture, servi par la même bande que les couleurs — c'est
+    /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
+    var bandOpeningEffect: StoryTransitionEffect?
+    var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
+
+    /// La bande de réglages du pinceau, montée par l'hôte (#4092).
+    var drawingBand: AnyView?
+
+    /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
+    /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
+    /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
+    var drawingSurface: AnyView?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -94,7 +116,11 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 onRemoveMedia: onRemoveMedia,
-                onSelectMedia: onSelectMedia
+                onSelectMedia: onSelectMedia,
+                canUndo: canUndo,
+                canRedo: canRedo,
+                onUndo: onUndo,
+                onRedo: onRedo
             )
 
             VStack(spacing: 8) {
@@ -105,9 +131,18 @@ struct ComposerSceneSurface: View {
                     onItemTapped: onItemTapped,
                     onBackgroundTapped: onBackgroundTapped,
                     loadedImages: sceneImages,
-                    loadedImagesVersion: sceneImagesVersion
+                    loadedImagesVersion: sceneImagesVersion,
+                    // Le canvas retire son calque de dessin persisté pendant
+                    // qu'une surface live est posée dessus — sinon le trait
+                    // s'affiche deux fois, à deux endroits (défaut 2026-05-27).
+                    isDrawingOverlayActive: drawingSurface != nil
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le canvas cesse de recevoir les touches pendant le
+                // dessin.** Sans cela, le doigt qui trace déplacerait aussi
+                // l'objet sous lui : deux gestes pour un seul mouvement.
+                .allowsHitTesting(drawingSurface == nil)
+                .overlay { drawingSurface }
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
                 // un goût de marge mais une conséquence — cible tactile 44 pt,
@@ -151,7 +186,10 @@ struct ComposerSceneSurface: View {
                 if let band {
                     ComposerSceneBandView(band: band,
                                           colors: bandColors,
-                                          onPickColor: onPickBandColor)
+                                          onPickColor: onPickBandColor,
+                                          openingEffect: bandOpeningEffect,
+                                          onPickOpening: onPickBandOpening,
+                                          drawingBand: drawingBand)
                 }
 
             }

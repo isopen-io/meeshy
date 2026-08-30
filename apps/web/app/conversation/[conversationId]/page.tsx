@@ -6,6 +6,7 @@ import { isValidObjectId } from '@/utils/conversation-id-utils';
 import RedirectMessage from './RedirectMessage';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';
+import { ogImageUrl } from '@/lib/og-image-params';
 
 interface ConversationPageProps {
   params: Promise<{ conversationId: string }>;
@@ -49,7 +50,7 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
           userName: creatorName,
         });
 
-        const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
+        const dynamicImageUrl = ogImageUrl(frontendUrl, imageParams);
 
         return composeMetadata({
           locale,

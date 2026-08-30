@@ -8,6 +8,7 @@ import { TranslationToggle } from './TranslationToggle';
 import type { TranslationItem } from './TranslationToggle';
 import { MessageEffects } from '@/components/common/MessageEffects';
 import type { PostComment } from '@meeshy/shared/types/post';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 export interface CommentItemProps {
   comment: PostComment;
@@ -81,6 +82,23 @@ function CommentItem({
   const translationItems = translationsToItems(comment.translations);
   const hasTranslations = translationItems.length > 0;
   const indentPx = Math.min(depth * 24, 72);
+
+  // Accent du commentaire — MÊME graine qu'iOS : c'est lui qui trace le
+
+  // contour d'un like que le lecteur a lui-même posé. Sans lui, un
+
+  // commentaire que j'avais aimé portait la teinte d'un commentaire aimé
+
+  // par d'autres.
+
+  const commentAccent = authorAccentColor(
+
+    comment.authorId,
+
+    comment.author?.displayName ?? comment.author?.username ?? '',
+
+  );
+
 
   const handleLikeToggle = useCallback(() => {
     if (isLiked) {
@@ -165,13 +183,14 @@ function CommentItem({
               key={isLiked ? 'liked' : 'unliked'}
               className="w-3.5 h-3.5"
               fill={isLiked ? 'currentColor' : 'none'}
-              stroke="currentColor"
+              stroke={isLiked ? commentAccent : 'currentColor'}
+              strokeWidth={isLiked ? 2.5 : 2}
               viewBox="0 0 24 24"
               initial={reduceMotion ? false : { scale: 0.6 }}
               animate={{ scale: 1 }}
               transition={heartSpring}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </motion.svg>
             {comment.likeCount > 0 && <span>{comment.likeCount}</span>}
           </button>

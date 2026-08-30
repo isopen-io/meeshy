@@ -10,14 +10,31 @@ import MeeshySDK
 /// Une seule UI, une seule source de vérité : `viewModel.openingEffect` —
 /// la persistance passe par la chaîne `granularCanvasSync` (pas de callback
 /// de sync à câbler par surface).
-struct OpeningEffectChips: View {
+/// **`public` parce que le composer unifié monte la MÊME vue** (#4403).
+///
+/// Le panneau « Fond » de l'atelier porte deux choses — les couleurs ET cette
+/// rangée. La bande de fond du plateau ne portait que les couleurs : l'effet
+/// d'ouverture d'une scène y était inatteignable, et le manque ne se voyait
+/// pas en composant, puisque cet effet ne se joue qu'à la LECTURE.
+///
+/// L'emprunt se fait par EXTRACTION, jamais par copie — règle du #4035 : un
+/// corps, deux montages. Cette vue s'y prêtait déjà sans rien changer, ses
+/// deux entrées étant opaques (`selection`, `onSelect`) : elle ne connaît ni
+/// le ViewModel, ni la surface qui la monte.
+public struct OpeningEffectChips: View {
     let selection: StoryTransitionEffect?
     let onSelect: (StoryTransitionEffect?) -> Void
+
+    public init(selection: StoryTransitionEffect?,
+                onSelect: @escaping (StoryTransitionEffect?) -> Void) {
+        self.selection = selection
+        self.onSelect = onSelect
+    }
     // Les chips s'affichent sur le band opaque (blanc@92% en clair) : sans
     // adaptation, un label blanc y était invisible en light mode.
     @Environment(\.colorScheme) private var colorScheme
 
-    var body: some View {
+    public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip(nil)

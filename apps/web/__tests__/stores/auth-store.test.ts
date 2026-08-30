@@ -5,6 +5,8 @@
 
 import { act } from '@testing-library/react';
 import { useAuthStore } from '../../stores/auth-store';
+import { buildApiUrl } from '../../lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { User } from '@meeshy/shared/types';
 
 // Mock the auth-manager.service
@@ -63,6 +65,7 @@ describe('AuthStore', () => {
         isAuthChecking: true,
         authToken: null,
         refreshToken: null,
+        sessionToken: null,
         sessionExpiry: null,
       });
     });
@@ -239,7 +242,7 @@ describe('AuthStore', () => {
   });
 
   describe('refreshSession', () => {
-    it('should return false if no tokens exist', async () => {
+    it('should return false and never call fetch when no authToken exists', async () => {
       let result: boolean = false;
 
       await act(async () => {
@@ -247,23 +250,80 @@ describe('AuthStore', () => {
       });
 
       expect(result).toBe(false);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('should call refresh endpoint and update tokens on success', async () => {
-      const mockResponse = {
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-        expiresIn: 3600,
-      };
-
+    // #4338 — le bug mesuré : `refreshSession` postait `fetch('/api/auth/refresh', …)`
+    // À LA MAIN, un chemin RELATIF sans `/v1` qui frappe le serveur Next (aucune
+    // route `app/api/auth/refresh` n'existe) plutôt que le gateway. La correction
+    // fait passer le store par `authService.refreshToken()` — déjà câblé sur
+    // `buildApiUrl(API_ENDPOINTS.auth.refresh)` — au lieu de dupliquer un second
+    // `fetch`. Ce témoin assert sur l'URL RÉELLEMENT passée à `fetch`, calculée par
+    // le MÊME catalogue partagé que la production, jamais un littéral recopié.
+    it("vise l'adresse SERVIE (catalogue partagé + gateway), jamais un chemin relatif du serveur Next", async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', expiresIn: 3600 },
+        }),
       });
 
-      // Set initial tokens
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
+      });
+
+      await act(async () => {
+        await useAuthStore.getState().refreshSession();
+      });
+
+      const [calledUrl] = (global.fetch as jest.Mock).mock.calls[0] ?? [];
+      expect(calledUrl).toBe(buildApiUrl(API_ENDPOINTS.auth.refresh));
+    });
+
+    // Le schéma serveur (`AuthSchemas.refreshToken`,
+    // services/gateway/src/routes/auth/magic-link.ts) exige `token` et n'a AUCUN
+    // champ `refreshToken` — le corps que l'ancien store envoyait
+    // (`{ refreshToken }`, sans `token`) aurait été refusé (400, `token` manquant).
+    // `sessionToken` est le nom réel du second champ, optionnel.
+    it("envoie le corps que /auth/refresh exige (token requis, sessionToken optionnel — jamais 'refreshToken')", async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', sessionToken: 'same-session-token', expiresIn: 3600 },
+        }),
+      });
+
+      act(() => {
+        useAuthStore.getState().setTokens('store-jwt', undefined, 'store-session-token');
+      });
+
+      await act(async () => {
+        await useAuthStore.getState().refreshSession();
+      });
+
+      const [, calledInit] = (global.fetch as jest.Mock).mock.calls[0] ?? [];
+      expect(JSON.parse((calledInit as RequestInit).body as string)).toEqual({
+        token: 'manager-jwt',
+        sessionToken: 'store-session-token',
+      });
+    });
+
+    it('should update authToken and sessionToken and return true on successful refresh', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', sessionToken: 'same-session-token', expiresIn: 3600 },
+        }),
+      });
+
+      act(() => {
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;
@@ -273,27 +333,23 @@ describe('AuthStore', () => {
       });
 
       expect(result).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer old-token',
-        },
-        body: JSON.stringify({ refreshToken: 'old-refresh' }),
-      });
-
       const state = useAuthStore.getState();
-      expect(state.authToken).toBe('new-access-token');
-      expect(state.refreshToken).toBe('new-refresh-token');
+      expect(state.authToken).toBe('new-jwt');
+      expect(state.sessionToken).toBe('same-session-token');
     });
 
-    it('should return false on refresh failure', async () => {
+    it('should return false when the server refuses the refresh', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
+        json: () => Promise.resolve({
+          success: false,
+          error: 'Session révoquée — veuillez vous reconnecter',
+        }),
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;
@@ -306,10 +362,12 @@ describe('AuthStore', () => {
     });
 
     it('should return false on network error', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;

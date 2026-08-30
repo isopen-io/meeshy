@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, pageArray, pageString } from '@/lib/i18n/metadata';
+import { ogImageUrl } from '@/lib/og-image-params';
 
 interface AffiliateLayoutProps {
   children: ReactNode;
@@ -21,7 +22,7 @@ export async function generateMetadata({ params }: AffiliateLayoutProps): Promis
     userName: pageString(meta, 'imageUserName'),
   });
 
-  const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
+  const dynamicImageUrl = ogImageUrl(frontendUrl, imageParams);
 
   return composeMetadata({
     locale,

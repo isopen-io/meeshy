@@ -113,6 +113,9 @@ describe('magicLinkService.validateMagicLink', () => {
 
   it('calls authManager.setCredentials on success when no 2FA required', async () => {
     const user = { id: 'u1', username: 'alice' };
+    // Forme RÉELLE de POST /auth/magic-link/validate (`services/gateway/src/routes/magic-link.ts`) :
+    // `{ user, token, sessionToken, session, expiresIn }` — AUCUN `refreshToken`
+    // (mesuré, #4405).
     const data = {
       success: true,
       data: {
@@ -127,8 +130,36 @@ describe('magicLinkService.validateMagicLink', () => {
 
     await magicLinkService.validateMagicLink('tok-abc');
 
+    // setCredentials(user, authToken, refreshToken?, sessionToken?, expiresIn?)
+    // — le défaut mesuré (#4404) décalait `sessionToken` dans le créneau
+    // `refreshToken`, et `expiresIn` dans celui de `sessionToken` : un DOUBLE
+    // décalage. `refreshToken` est `undefined` (jamais rendu par cette route).
     expect(mockAuthManager.setCredentials).toHaveBeenCalledWith(
-      user, 'jwt-token', 'sess-token', 3600
+      user, 'jwt-token', undefined, 'sess-token', 3600
+    );
+  });
+
+  // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
+  // arrivait un jour du serveur, il doit toujours atterrir dans SON créneau.
+  it('threads a refreshToken through to its own slot when the server does send one', async () => {
+    const user = { id: 'u1', username: 'alice' };
+    const data = {
+      success: true,
+      data: {
+        user,
+        token: 'jwt-token',
+        refreshToken: 'refresh-token-xyz',
+        sessionToken: 'sess-token',
+        expiresIn: 3600,
+        requires2FA: false,
+      },
+    };
+    (global.fetch as jest.Mock).mockResolvedValue(makeResponse(data));
+
+    await magicLinkService.validateMagicLink('tok-abc');
+
+    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith(
+      user, 'jwt-token', 'refresh-token-xyz', 'sess-token', 3600
     );
   });
 

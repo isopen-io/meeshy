@@ -33,6 +33,21 @@ nonisolated enum ComposerRailLevel: Equatable {
     case slide
     /// Un objet de la scène.
     case object
+    /// **La SCÈNE elle-même** — ni la publication, ni une slide, ni un objet
+    /// (#4092).
+    ///
+    /// Le dessin a exigé ce niveau : ses traits vivent dans
+    /// `slide.effects.drawingStrokes`, donc le ranger en `.slide` était
+    /// tentant. Mais `.slide` est le niveau des portes qui survivent à un
+    /// format SANS scène — c'est ce que `offered` en déduit —, et dessiner sur
+    /// un `status` n'a aucun sens : il n'y a pas de toile.
+    ///
+    /// Le classer `.object` aurait été faux dans l'autre sens : un dessin n'est
+    /// pas un objet sélectionnable, empilable et minutable, et le rail
+    /// *trailing* lui proposerait des contrôleurs qui ne s'appliquent pas.
+    /// (#4092 veut qu'il le DEVIENNE ; ce niveau disparaîtra alors, et sa
+    /// disparition sera le témoin que la promesse est tenue.)
+    case scene
 }
 
 nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
@@ -73,6 +88,11 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// publication (d'où l'on publie), qui vit au socle.
     case place
 
+    /// **Le DESSIN** — le premier outil de la vue `3b`, et le seul qui n'ajoute
+    /// rien : il ouvre un MODE. Tant qu'il est actif, le doigt trace au lieu de
+    /// déplacer.
+    case drawing
+
     /// Le niveau du modèle sur lequel la porte agit.
     ///
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
@@ -83,6 +103,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .description:                    return .slide
         case .mention:                        return .publication
         case .media, .sound, .sticker, .place: return .object
+        case .drawing:                        return .scene
         }
     }
 
@@ -90,7 +111,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .sticker, .mention, .place
+        .description, .media, .sound, .drawing, .sticker, .mention, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -104,6 +125,9 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .sticker:     return "face.smiling"
         case .mention:     return "at"
         case .place:       return "mappin.and.ellipse"
+        // `scribble.variable` plutôt qu'un `pencil` générique : ce n'est pas
+        // « éditer », c'est TRACER — et le glyphe DIT le verbe (loi 7).
+        case .drawing:     return "scribble.variable"
         }
     }
 
@@ -136,7 +160,9 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         let sceneExists = format != .status
         return canonicalRail.filter { porte in
             guard served.contains(porte) else { return false }
-            guard porte.level == .object else { return true }
+            // Les deux niveaux qui EXIGENT une toile. Un `status` n'a pas de
+            // scène : ni objet à poser, ni surface où tracer.
+            guard porte.level == .object || porte.level == .scene else { return true }
             return sceneExists
         }
     }

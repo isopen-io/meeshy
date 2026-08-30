@@ -1244,6 +1244,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage, pas une
     /// seule fois. Fire & forget : l'échec réseau est loggé, jamais toasté (bruit de fond).
     func recordStoryImpression(storyId: String) {
+        // #4044 — même frontière que `markViewed` ci-dessous, et pour la même
+        // raison : `POST /posts/:id/impression` fait lever Prisma sur un
+        // identifiant local. Ici l'appel est fire-and-forget, donc rien ne
+        // s'accumule — mais laisser partir la moitié jumelle reviendrait à
+        // corriger le symptôme (la file) en gardant la cause (un id local qui
+        // atteint le serveur). Doctrine : `MeeshyObjectID`.
+        guard MeeshyObjectID.isValid(storyId) else { return }
         Task { [postService] in
             do {
                 try await postService.recordImpression(postId: storyId, source: "story")
@@ -1260,13 +1267,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // fond, pas une action utilisateur attendant un feedback — un toast serait du
         // bruit), mais il est désormais LOGGÉ (avant : catch vide → échec invisible,
         // ring « vu » localement mais jamais côté serveur → revert au prochain fetch).
-        Task { [markViewedOutboxEnqueuer] in
-            do {
-                try await markViewedOutboxEnqueuer(storyId)
-            } catch {
-                Logger.stories.error(
-                    "markViewed enqueue failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        // #4044 — un identifiant LOCAL (`pending_<uuid>`, story encore en file
+        // de publication) n'entre pas dans la file durable : le serveur ne peut
+        // pas l'adresser, la ligne y pourrit en 500 jusqu'à `.exhausted`.
+        // Doctrine complète : `MeeshyObjectID`. Ne gouverne QUE l'envoi — l'état
+        // « vu » local ci-dessous reste posé.
+        if MeeshyObjectID.isValid(storyId) {
+            Task { [markViewedOutboxEnqueuer] in
+                do {
+                    try await markViewedOutboxEnqueuer(storyId)
+                } catch {
+                    Logger.stories.error(
+                        "markViewed enqueue failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
+        } else {
+            Logger.stories.info(
+                "markViewed: identifiant non adressable, vu gardé en local — \(storyId, privacy: .public)")
         }
 
         // Update local state — `isViewed` est un `var` : on le flippe EN PLACE.

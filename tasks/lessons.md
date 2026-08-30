@@ -19712,9 +19712,224 @@ deuxième s'est propagée dans quatre messages de commit, trois commentaires et 
 rattrapée. **Le coût d'une vérification de prémisse est de quelques minutes ; celui de sa propagation
 se paie en rectifications publiques.**
 
+## Leçon 335 — un commentaire qui explique une ABSENCE est la seule espèce de commentaire que rien ne fait rougir
+
+**Le fait.** Le plateau du composer unifié ne servait ni la porte `sticker` ni les deux actions
+d'empilement. Les deux absences étaient DOCUMENTÉES, à l'endroit exact où on les aurait cherchées,
+dans le style du dépôt :
+
+> « `sticker` en est absente : aucun chemin ne pose un objet de ce kind. »
+> « L'empilement ne vit que sur la `StoryCanvasUIView`, dont le meuble n'a aucune référence. »
+
+**Les deux étaient fausses.** `addSticker(emoji:)` existe depuis C13, `StickerPickerView` est
+publique depuis C8, et le meuble injecte déjà « Mes stickers » **une ligne au-dessus du rail**.
+`bringForward` / `sendBackward` vivent sur le MODÈLE et y persistent leur `zIndex` dans la slide —
+donc jusqu'au reader et à la publication, ce qu'un empilement de vue n'aurait jamais fait. Ce qui
+manquait, dans les deux cas, était le mot `public`.
+
+**Pourquoi ça tient si longtemps.** Un commentaire qui explique une PRÉSENCE se fait contredire par
+le code qu'il surplombe : la ligne d'en dessous ment ou ne ment pas. Un commentaire qui explique une
+absence ne surplombe rien. Il n'y a aucun code à contredire, aucun test ne s'écrit « ce bouton
+n'existe pas parce que X », et le lecteur suivant hérite d'un motif qui a l'air mesuré. **Pire dans
+ce dépôt qu'ailleurs** : on y écrit ses absences avec la loi 4 (« un contrôle sans effet est
+ABSENT »), si bien que la phrase emprunte l'autorité d'une RÈGLE à ce qui n'est qu'un constat daté.
+
+> **Un `internal` ressemble, vu du site d'appel, à une règle produit.** Une primitive non exposée et
+> une primitive inexistante rendent la même erreur de compilation. La question à poser avant d'écrire
+> « le chemin n'existe pas » est donc **« où vit la primitive ? »**, jamais « puis-je l'appeler
+> d'ici ? » — la seconde a la même réponse dans les deux cas.
+
+**Le témoin qui l'attrape, et pourquoi il n'existait pas.** Les deux ensembles SERVIS vivaient en
+`Set` littéraux dans le corps de `sceneSurface`. Un littéral posé dans un `some View` ne
+s'interroge qu'à la garde de source — et une garde de source sur un littéral meurt à la première
+réécriture. Sortis en règle pure (`ComposerSceneCapabilities`), ils se demandent : « la porte sticker
+est-elle servie ? », et la réponse est une VALEUR, pas une sous-chaîne. Une garde négative
+(`served:[.` interdit dans l'unité du meuble) interdit le retour du littéral ; rejouée sur `HEAD~`,
+elle rougit — comme les cinq positives.
+
+**Généralisation.** Ce n'est pas propre aux capacités d'un composer. Partout où l'on écrit « X n'est
+pas fait parce que Y », **Y est une affirmation non testée, et c'est la seule partie du commentaire
+que personne ne relira**. Les deux formes à traiter comme suspectes : « la primitive n'existe pas »
+(→ vérifier le niveau d'accès) et « ça vit ailleurs » (→ vérifier lequel des deux niveaux, modèle ou
+vue, porte vraiment l'état — le modèle persiste, la vue non).
+
+Voir la leçon 261 (une énumération de sites porte deux affirmations, dont une presque jamais
+vérifiée) : même famille, autre support — là c'était la LISTE qui mentait par omission, ici c'est sa
+JUSTIFICATION.
+
+## Leçon 335 bis — un gate de TEST ne peut pas voir ce que son compilateur AMNISTIE
+
+> Numérotée « bis » : cette entrée portait 335 sur `origin/dev` au moment du merge du lot L-0.5 de
+> la v3 web, en collision avec la leçon précédente. Renumérotation mécanique à trancher par une
+> passe dédiée si le dépôt veut une séquence strictement continue ; le contenu n'a pas bougé.
+
+Le lot #4359 a livré cinq routes canoniques sous `/me/categories`. Son agent a joué ses témoins
+ciblés (25/25) puis sept suites de non-régression (55/55) : **tout vert**. Le gate complet du gateway
+l'était aussi — **1028 suites, 21627 témoins, zéro échec**.
+
+`npx tsc --noEmit` rendait **EXIT=2**, sur quatre `TS2345` dans le fichier neuf.
+
+Les quatre montages canoniques omettaient les **génériques de route** que leur alias déclare
+(`fastify.post<{ Body: CategoryBody }>(…)`). Sans eux, Fastify infère `RouteGenericInterface`, et le
+gestionnaire typé n'est plus assignable au paramètre attendu. Le code sort **avant même** de tourner.
+
+### Pourquoi aucun témoin ne pouvait le voir
+
+`jest.config.json` du gateway porte `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]`.
+**`TS2345` est dans la liste.** `ts-jest` compile donc le fichier fautif, avale l'erreur, et exécute
+un code que `tsc` refuse. Un témoin — ciblé, complet, ou les deux — est **structurellement incapable**
+de rougir sur cette classe.
+
+Et l'étape « Type-check » de la CI est **BLOQUANTE** pour `gateway` depuis le cycle 105 bis. Le lot
+serait donc parti vert en local et rouge en CI, sur une erreur qu'aucun test n'aurait localisée.
+
+> **Un gate ne garde que ce que son outil REGARDE.** `services/gateway/CLAUDE.md` le dit déjà, à
+> propos des couples `(événement, charge)` : *« noter les codes IGNORÉS par ts-jest : 2322 et 2345
+> sont exactement ceux qu'un couple dépareillé produit — un témoin ne peut donc pas servir de cliquet
+> pour ces deux-là »*. La règle était écrite. Elle vaut au-delà des événements : **elle vaut pour
+> toute assignabilité**, et donc pour tout montage Fastify typé.
+
+### La règle de manœuvre
+
+**`npx tsc --noEmit` se joue SÉPARÉMENT de `jest`, et son code de sortie se lit.** Les deux ne sont
+pas redondants : ils regardent des choses disjointes, et l'un amnistie précisément ce que l'autre
+bloque. Un lot qui ajoute un **montage de route** ou touche une **signature partagée** est
+exactement le cas où l'écart s'ouvre.
+
+Corollaire de brief : un sous-agent à qui l'on interdit le gate complet (à raison — un run parasite
+rend les mesures inattribuables) **ne peut pas découvrir cette classe**. C'est donc à l'intégrateur
+de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça compile ».
+
+### Deux corollaires de forme, tirés du correctif
+
+- **Le générique se recopie de l'ALIAS, jamais réinventé.** Le module d'origine déclarait déjà les
+  six formes exactes ; le canonique en omettait quatre.
+- **Un type nommé par un générique doit être EXPORTÉ, pas redéclaré.** `CategoryBody` et
+  `CategoryIdParams` étaient `interface` privées du module d'origine. Les redéclarer côté canonique
+  aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
+  exportées et importées.
+
+## Leçon 336 — une extraction qui perd une capacité de son site d'origine n'est pas une extraction, c'est une réécriture
+
+**Le fait.** Le composer unifié avait besoin de la surface de dessin de l'atelier. La règle du dépôt est
+écrite : « un contrôle venu d'un panneau privé s'emprunte par EXTRACTION — son corps sort dans une vue
+partagée publique, et l'ancien panneau consomme la vue extraite lui aussi » (#4035). J'ai sorti le corps :
+trois vues, sept lectures de ViewModel, un `ZStack` de soixante-quatre lignes.
+
+**Ce que la première extraction perdait.** La couche de capture de l'atelier reçoit un rappel de plus que
+les autres — `onViewportPinch` —, qui permet de zoomer d'inspection PENDANT le dessin. Il ne participe à
+rien de ce que la vue extraite « est » : ni à la capture du trait, ni à son rendu, ni à la gomme. Il ne
+figurait donc dans aucune des sept lectures que j'avais recensées pour composer la nouvelle vue, et la
+vue extraite compilait, et l'atelier compilait, et rien n'aurait rougi.
+
+> **Le test d'une extraction n'est pas « le nouveau site marche-t-il ? » mais « l'ANCIEN site a-t-il
+> encore tout ce qu'il avait ? »** — et il se répond en comparant les ENTRÉES du bloc extrait, une à une,
+> pas en relisant ce qu'il produit. Un rappel qu'aucune des deux surfaces ne partage est justement celui
+> qu'on oublie : il n'appartient pas au dénominateur commun, donc il disparaît quand on cherche le
+> dénominateur commun.
+
+Le remède est petit — la vue extraite REÇOIT le rappel en optionnel et le relaie sans le décider — mais il
+fallait le voir. Ce qui l'a fait voir : relire le bloc supprimé ligne à ligne AVANT de l'écraser, et non
+la vue neuve après l'avoir écrite. Le diff d'une extraction se lit dans le sens de la SUPPRESSION.
+
+**Corollaire de placement, tiré du même lot.** La bande de réglages du pinceau pouvait vivre côté app,
+dans la bande de la scène. Elle vit côté SDK, avec la surface, pour une raison mesurable : ses six
+entrées sont des `@Published` INTERNES. Les publier pour qu'une vue de l'app les lise, c'est **six accès
+ouverts pour un seul écran**, et chaque `public` posé sur un réglage est une promesse de stabilité que ce
+réglage n'a pas. Loger la vue là où vit son état n'a rien coûté à la pureté du SDK — cette bande ne décide
+de rien, elle rend des réglages et les repose.
+
+> **Quand une vue et son état ne sont pas du même côté d'une frontière de module, déplacer la VUE coûte
+> presque toujours moins que publier l'ÉTAT.** Une vue publiée expose une forme ; six réglages publiés
+> exposent six libertés d'évolution.
+
+Le compilateur a d'ailleurs tranché la partie qui restait : le MODE (`isDrawingActive`,
+`enterDrawingEditingMode`, `exitDrawingEditingMode`) devait, lui, franchir la frontière — c'est l'hôte
+qui décide QUAND on dessine. Trois accès, pas neuf. La ligne de partage n'est pas « SDK ou app » mais
+**« qui décide » contre « qui rend »**.
+
+Voir la leçon 335 (un commentaire qui explique une absence est le seul que rien ne fait rougir) : cinq
+fois dans la même session, seul un niveau d'accès retenait un geste. Ici, pour la première fois, en poser
+un de plus aurait été le mauvais correctif.
+
+## Leçon 337 — un FLAKE de charge et un défaut SENSIBLE à la charge ont le même symptôme ; seul le second gate les sépare
+
+**Contexte (2026-08-30, boucle d'intégration, #4420).** Le gate gateway complet, lancé sur un
+arbre, rend **24 suites rouges** en 4 254 s. Le dépôt a une règle pour ça, et elle est juste :
+« ensembles d'échec DISJOINTS sur un code identique = flake prouvé » — les suites passent en
+isolation, la machine était saturée, on relance.
+
+Relancé sur le MÊME code, le gate rend **2 suites rouges** en 635 s. Vingt-deux avaient bien été
+des flakes de charge. **Les deux dernières aussi passaient en isolation**, et c'est là que la règle
+cesse de s'appliquer : elles étaient rouges aux DEUX passes.
+
+### Ce qu'elles disaient
+
+```
+● POST /topics › returns 400 with "Slug déjà existant" on P2002 error
+    Received: "keywordPatterns: motif refusé — \bfilm\b → [BACKTRACKING_BUDGET]
+               Motif non certifié : la sonde a été interrompue par un motif voisin"
+```
+
+`\bfilm\b` n'a aucun retour arrière. Le motif le plus sain qu'on puisse écrire était refusé sous
+le code d'un motif dangereux — **et ce n'était pas un artefact de test : c'était le comportement
+SERVI.** Un administrateur sur une machine chargée se voyait refuser ses mots-clés, avec un message
+l'envoyant réécrire un motif qui n'avait rien.
+
+### La cause, et pourquoi elle était invisible
+
+`runOffLoop` armait son délai maximal **à la création du `Worker`** :
+
+```ts
+worker = new Worker(WORKER_SOURCE, { eval: true, workerData: job });
+await new Promise((resolve) => {
+  const timer = setTimeout(() => { settle(); }, budgetMs);   // ← court AVANT que le fil existe
+```
+
+`DEFAULT_PROBE_BUDGET_MS = 250` était donc un budget **démarrage + exécution**, alors qu'il est
+écrit, documenté et testé comme un budget d'exécution. Mesuré : lever un isolate V8 en `eval: true`
+coûte 29-37 ms au repos, bien davantage sous charge. Quand le démarrage mangeait les 250 ms, aucun
+motif n'avait été annoncé — `counts` vide, `started` à `null` — et la boucle de verdict refusait
+tout le monde.
+
+> **Le discriminant n'est pas « la suite passe-t-elle en isolation ? » — les deux familles y
+> passent.** C'est **« le même ensemble tombe-t-il à la seconde passe ? »**. Un flake se déplace ;
+> un défaut sensible à la charge revient à la même adresse. Relancer le gate n'est donc pas une
+> concession au bruit, c'est la MESURE qui sépare les deux.
+
+### Trois corollaires, tous payés dans ce lot
+
+**1. Un champ de service qui DÉCLARE une indisponibilité doit être atteignable pour toutes ses
+causes.** Le module distinguait déjà « nous n'avons rien mesuré » (`unsupported` →
+`UNSUPPORTED_RUNTIME`, fail-closed, doc-comment à l'appui). Ce chemin ne couvrait que l'échec
+**synchrone** de `new Worker` ; un démarrage simplement LENT tombait dans l'autre branche et
+accusait le motif. Le sens de la panne était juste, la VÉRITÉ du refus ne l'était pas — et c'est
+elle que l'opérateur lit.
+
+**2. Un budget qui borne une SESSION punit un membre pour ses voisins.** Le correctif ne s'est pas
+arrêté à séparer démarrage et exécution : le délai d'exécution se **réarme à chaque message** du
+fil, donc il mesure l'ABSENCE DE PROGRÈS. Un motif sain avance et n'est jamais interrompu ; un
+motif en retour arrière se tait après son annonce, et c'est ce silence-là qu'on veut mesurer. La
+formulation d'origine punissait un motif pour le temps qu'avaient pris ses voisins **alors qu'ils
+l'avaient pris honnêtement**.
+
+**3. Un témoin ne peut pas toujours être une DURÉE, et s'en apercevoir fait partie du travail.**
+Le premier témoin écrit pour ce lot exigeait qu'un budget de 20 ms suffise à certifier un motif
+sain, en pariant que le démarrage dépasse 20 ms. Il a mesuré 11 ms et n'a pas rougi. Le défaut ne
+se manifeste que lorsque la naissance dépasse le budget — ce qui dépend de la charge et **ne se
+reproduit pas à volonté**. Ce qui se prouve, et qui suffit à interdire le retour du défaut, est que
+les deux délais sont SÉPARÉS : sous `startupBudgetMs: 0`, le module rendait `[]` là où il rend
+`['UNSUPPORTED_RUNTIME']`. **Quand un témoin de durée ne rougit pas, la réponse n'est pas de
+choisir un autre seuil — c'est de trouver la propriété STRUCTURELLE dont la durée n'était qu'un
+symptôme.**
+
+Sites : `services/gateway/src/utils/safe-regex.ts` (`DEFAULT_STARTUP_BUDGET_MS`, `OffLoopBudgets`,
+`relancer`), témoin dans `__tests__/unit/routes/admin/agent-topics-safe-regex.test.ts`.
+Gate après correctif : 1028 suites, 21 628 tests, exit 0.
+
 ---
 
-## Leçon 335 — Un artefact de DEV n'est pas un artefact de PROD, et la preuve d'un build se prend sur `next start`
+## Leçon 338 — Un artefact de DEV n'est pas un artefact de PROD, et la preuve d'un build se prend sur `next start`
 
 Cycle : revue croisée du lot L-0.5 de la v3 web (issue #4396, « Le paquet apps/web-v3 existe et se
 construit »).
@@ -19748,7 +19963,7 @@ correctif « évident » qui ne se vérifie pas sur le manifeste APRÈS l'ajout 
   plus sur le layout, c'est `bun run build` = `next build && node scripts/check-app-router-built.mjs`,
   qui lit le manifeste et sort en 1 s'il est vide. Prouvé rouge en retirant la route.
 
-## Leçon 336 — Une règle de lint se prouve sur la forme d'import RÉELLEMENT utilisée
+## Leçon 339 — Une règle de lint se prouve sur la forme d'import RÉELLEMENT utilisée
 
 Même cycle. Le lot posait trois `no-restricted-imports` interdisant `lucide-react`, la fonte
 `@phosphor-icons/web` et `next-themes`. La clé `paths` de cette règle ne matche que le nom **EXACT**
@@ -19772,7 +19987,7 @@ processus fils (`--stdin --stdin-filename`, `--format json`), ce qui a le mérit
 que la CI exécute. `ESLint.lintText` n'exige pas que le fichier existe sur le disque : la sonde ne
 pollue donc pas le dépôt.
 
-## Leçon 337 — Lire le corps ENTIER d'une issue avant de dire qu'un livrable est hors périmètre
+## Leçon 340 — Lire le corps ENTIER d'une issue avant de dire qu'un livrable est hors périmètre
 
 Même cycle. La revue reprochait, en majeur, d'avoir livré le moteur de thème sous une issue dont le
 **Critère de fin** est « squelette seul, aucune route requise » — donc en avance sur son lot. Le
@@ -19797,7 +20012,7 @@ valider ». Une décision produit signalée dans un rapport n'existe pas : elle 
 Le réfuter avec sa preuve, puis se demander *qu'est-ce qui a fait sentir quelque chose au relecteur ?*
 — et ouvrir l'issue de ça.
 
-## Leçon 338 — Un garde qui itère la structure DÉRIVÉE est aveugle à ce qui manque à la structure dérivée
+## Leçon 341 — Un garde qui itère la structure DÉRIVÉE est aveugle à ce qui manque à la structure dérivée
 
 Cycle : revue croisée du lot L-0.5 de la v3 web, issue #4397 (« Le lockfile s'aligne sur les
 manifestes »).
@@ -19890,7 +20105,7 @@ chaque passage que le garde SAIT rougir, avant de lui demander s'il est vert.
 
 ---
 
-## Leçon 339 — Un préfixe d'assets ne protège que ce qu'il PRÉFIXE, et une règle de routage publie tout ce qu'elle réclame
+## Leçon 342 — Un préfixe d'assets ne protège que ce qu'il PRÉFIXE, et une règle de routage publie tout ce qu'elle réclame
 
 **Contexte.** Lot L-0.5 de la v3 web. `apps/web-v3` pose `assetPrefix: '/__v3'`, et le routeur
 Traefik `frontend-v3` (priority=100, devant le `frontend` legacy à priority=1) réclamait

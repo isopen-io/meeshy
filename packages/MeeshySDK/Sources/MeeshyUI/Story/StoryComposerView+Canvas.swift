@@ -1404,70 +1404,39 @@ extension StoryComposerView {
                 // rendu live des traits éditables (avec halo sélection). Le canvas
                 // sous-jacent suppress son propre drawingLayer pendant ce temps
                 // (`suppressDrawingOverlay`), donc pas de double rendu.
-                ZStack {
-                    MeeshyStrokeCanvas(
-                        strokes: viewModel.drawingStrokes,
-                        selectedId: viewModel.drawingEditingMode.selectedStrokeId
-                    )
-                    .equatable()
-                    // Aperçu WYSIWYG du trait en cours (C4) : rendu PAR-DESSUS les
-                    // traits commités, par notre moteur largeur-variable, donc identique
-                    // au trait finalement commité au lift-up.
-                    if let preview = viewModel.activeStrokePreview {
-                        MeeshyStrokeCanvas(strokes: [preview], selectedId: nil)
-                    }
-                    StrokeCaptureLayer(
-                        activeTool: viewModel.activeBrushTool,
-                        activeColorHex: DrawingEditToolOptions.hex(of: viewModel.drawingColor),
-                        activeWidth: Double(viewModel.drawingWidth),
-                        activeSmoothing: viewModel.activeBrushSmoothing,
-                        onStrokeInProgress: { viewModel.activeStrokePreview = $0 },
-                        onStrokeCommitted: { stroke in
-                            // `commitStroke` ajoute le trait ET vide la pile de redo
-                            // (un nouveau trait rend le « rétablir » caduc).
-                            viewModel.commitStroke(stroke)
-                            viewModel.activeStrokePreview = nil
-                        },
-                        onEraseGesture: { points in
-                            eraseStrokes(near: points)
-                            viewModel.activeStrokePreview = nil
-                        },
-                        onViewportPinch: { scale, translation, state in
-                            // Zoom/pan d'inspection PENDANT le dessin (pinch
-                            // 2 doigts sur la couche de capture) — même
-                            // pipeline que le pinch 3 doigts hors dessin
-                            // (`onCanvasZoomScaleChanged` ci-dessus). Le zoom
-                            // est ramené à 1 en sortant du mode
-                            // (`exitDrawingEditingMode`).
-                            switch state {
-                            case .began, .changed:
-                                viewportPinchDelta = scale
-                                drawingViewportPanDelta = translation
-                            case .ended:
-                                let newScale = CanvasViewportZoomPolicy.settledScale(
-                                    current: viewModel.canvasScale,
-                                    gestureScale: scale
-                                )
-                                withAnimation(.spring(response: 0.2)) {
-                                    viewModel.canvasScale = newScale
-                                    if newScale <= 1.0 {
-                                        viewModel.canvasOffset = .zero
-                                    } else {
-                                        viewModel.canvasOffset = CGSize(
-                                            width: viewModel.canvasOffset.width + translation.width,
-                                            height: viewModel.canvasOffset.height + translation.height
-                                        )
-                                    }
-                                }
-                                viewportPinchDelta = 1.0
-                                drawingViewportPanDelta = .zero
-                            default:
-                                viewportPinchDelta = 1.0
-                                drawingViewportPanDelta = .zero
-                            }
+                // **La surface de dessin est EXTRAITE** (#4092) : ce bloc fut
+                // cinq vues et sept lectures de ViewModel, écrites ici. Le
+                // composer unifié en avait besoin à l'identique ; les recopier
+                // aurait produit deux surfaces de dessin à faire diverger au
+                // premier réglage ajouté. Un corps, deux montages — règle
+                // d'emprunt du #4035, qui exige que l'ancien site consomme la
+                // vue extraite LUI AUSSI.
+                //
+                // Le pincement d'inspection reste servi par l'atelier, seul à
+                // posséder un viewport à déplacer : la surface le RELAIE sans
+                // le décider. Une extraction qui perd une capacité de son site
+                // d'origine n'est pas une extraction, c'est une réécriture.
+                MeeshyDrawingSurface(
+                    viewModel: viewModel,
+                    onViewportPinch: { scale, translation, state in
+                        switch state {
+                        case .began, .changed:
+                            viewportPinchDelta = scale
+                            drawingViewportPanDelta = translation
+                        case .ended:
+                            let newScale = CanvasViewportZoomPolicy.settledScale(
+                                current: viewModel.canvasScale,
+                                gestureScale: scale
+                            )
+                            viewModel.canvasScale = newScale
+                            viewportPinchDelta = 1
+                            drawingViewportPanDelta = .zero
+                        default:
+                            viewportPinchDelta = 1
+                            drawingViewportPanDelta = .zero
                         }
-                    )
-                }
+                    }
+                )
             }
         }
         .overlay { audioForegroundOverlay }
@@ -1774,28 +1743,6 @@ extension StoryComposerView {
         )
     }
 
-    /// Gomme par hit-test : supprime tout trait dont un point de rendu (espace
-    /// design) tombe dans le rayon du geste de gomme. Pas d'effacement pixel-par-pixel
-    /// (le modèle est vectoriel) — on supprime le trait entier croisé, UX acceptable
-    /// (cf. Risque #2 du plan).
-    func eraseStrokes(near erasePoints: [CGPoint]) {
-        guard !erasePoints.isEmpty else { return }
-        let eraseRadius: CGFloat = 28  // design px
-        let survivors = viewModel.drawingStrokes.filter { stroke in
-            let reach = CGFloat(stroke.width) / 2 + eraseRadius
-            let points = StrokePathBuilder.renderPoints(for: stroke)
-            for sp in points {
-                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
-                    return false
-                }
-            }
-            return true
-        }
-        if survivors.count != viewModel.drawingStrokes.count {
-            viewModel.drawingStrokes = survivors
-            HapticFeedback.light()
-        }
-    }
 }
 
 // MARK: - Amorces de page blanche : surface d'accueil et libellé partagé

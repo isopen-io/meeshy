@@ -46,6 +46,13 @@
  *
  * ## `fields` / `expand` — ce qui est fait, ce qui ne l'est pas
  *
+ * La GRAMMAIRE des deux paramètres est celle de `utils/sparse-fieldset.ts`
+ * (#4356) ; seul le vocabulaire est local. Et il n'y a RIEN à réduire côté
+ * base ici — la forme enregistrée se compose depuis `authContext.registeredUser`,
+ * déjà en mémoire (§ « Forme ENREGISTRÉE ») : cette route n'ouvre aucune requête
+ * pour composer le compte, donc `?fields=` n'y allège que le fil. C'est mesuré
+ * par un témoin (`sparse-fieldset-wiring.test.ts`), pas supposé.
+ *
  * `?fields=` filtre les clés de PREMIER NIVEAU de `user` — silencieusement
  * (une clé inconnue est ignorée, jamais un 400 : la route ne connaît pas
  * d'avance tous les champs qu'un futur client demandera, et un filtre qui
@@ -84,6 +91,7 @@ import { servedUserPermissions } from '../../services/admin/served-permissions';
 import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
 import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
 import { formatUserResponse, type UserResponseData } from '../auth/types';
+import { parseFieldList, parseTokenList, restrictFields } from '../../utils/sparse-fieldset';
 import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 
 // ─── `?expand=` ────────────────────────────────────────────────────────────
@@ -93,47 +101,42 @@ export type ExpandOption = 'security' | 'preferences' | 'stats';
 
 const KNOWN_EXPAND_OPTIONS: readonly ExpandOption[] = ['security', 'preferences', 'stats'];
 
-/** `undefined`/`''` ⇒ aucune expansion demandée. Jetons inconnus ignorés (silencieux, § doc-comment). */
+/**
+ * `undefined`/`''` ⇒ aucune expansion demandée. Jetons inconnus ignorés
+ * (silencieux, § doc-comment).
+ *
+ * Le DÉCOUPAGE vit désormais dans `utils/sparse-fieldset.ts` (#4356) : quatre
+ * analyseurs portaient la même grammaire avec quatre jeux de bornes. Ce fichier
+ * ne garde que son VOCABULAIRE — les trois jetons que cette route reconnaît —
+ * et le nom sous lequel la route le désigne.
+ */
 export function parseExpandParam(raw: unknown): ExpandOption[] {
-  if (typeof raw !== 'string' || raw.length === 0) return [];
-  const requested = raw
-    .split(',')
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
-  return requested.filter((token): token is ExpandOption =>
-    (KNOWN_EXPAND_OPTIONS as readonly string[]).includes(token)
-  );
+  return [...parseTokenList(raw, KNOWN_EXPAND_OPTIONS)];
 }
 
 // ─── `?fields=` ────────────────────────────────────────────────────────────
 
 /** `undefined`/`''` ⇒ aucun filtre (toutes les clés servies). */
 export function parseFieldsParam(raw: unknown): string[] | undefined {
-  if (typeof raw !== 'string' || raw.length === 0) return undefined;
-  const requested = raw
-    .split(',')
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
-  return requested.length > 0 ? requested : undefined;
+  const champs = parseFieldList(raw);
+  return champs === null ? undefined : [...champs];
 }
 
 /**
  * Filtre les clés de PREMIER NIVEAU de `obj`. Sans `fields`, `obj` est rendu
  * TEL QUEL (même référence) — c'est le chemin nominal, sans copie inutile.
+ *
+ * Aucune clé n'est ÉPINGLÉE ici, contrairement à `GET /directory/people/:handle`
+ * qui retient toujours `id` : sur une lecture de SOI, l'appelant sait déjà de
+ * qui la réponse parle. La différence est un choix de contrat, pas un oubli, et
+ * c'est la raison pour laquelle l'épinglage est un PARAMÈTRE du module partagé
+ * plutôt qu'une règle qu'il imposerait.
  */
 export function pickFields<T extends Record<string, unknown>>(
   obj: T,
   fields: readonly string[] | undefined
 ): Partial<T> {
-  if (!fields || fields.length === 0) return obj;
-  const requested = new Set(fields);
-  const picked = {} as Partial<T>;
-  for (const [key, value] of Object.entries(obj)) {
-    if (requested.has(key)) {
-      (picked as Record<string, unknown>)[key] = value;
-    }
-  }
-  return picked;
+  return restrictFields(obj, fields && fields.length > 0 ? new Set(fields) : null);
 }
 
 // ─── `expand=security` ─────────────────────────────────────────────────────

@@ -36,6 +36,11 @@ nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
     case palette
     case timeline
     case textStyles
+    /// **Les réglages du pinceau** — couleurs, épaisseur, gomme (#4092, vue
+    /// `3b`). Elle appartient au critère par la COMPARAISON latérale : on
+    /// choisit une couleur en la voyant à côté des autres, exactement comme un
+    /// fond.
+    case drawing
 
     /// **La bande réellement OUVERTE — `nil` ⇒ le bas ne porte que le socle.**
     ///
@@ -70,10 +75,31 @@ struct ComposerSceneBandView: View {
     let colors: [String]
     var onPickColor: ((String) -> Void)?
 
+    /// **L'effet d'OUVERTURE de la scène** (#4403). Le panneau « Fond » de
+    /// l'atelier porte deux choses — les couleurs et cette rangée — et la
+    /// bande n'en portait qu'une : l'effet était inatteignable depuis le
+    /// plateau.
+    ///
+    /// Le manque ne se voyait pas en composant, et c'est ce qui l'a laissé
+    /// passer : un effet d'ouverture ne se joue qu'à la LECTURE. Une absence
+    /// dont le symptôme n'apparaît pas sur l'écran qui la contient est la plus
+    /// difficile à remarquer.
+    var openingEffect: StoryTransitionEffect?
+    var onPickOpening: ((StoryTransitionEffect?) -> Void)?
+
+    /// La bande de dessin est une vue du SDK montée telle quelle — elle vit là
+    /// où vivent les six réglages de pinceau qu'elle rend (#4092). `nil` ⇒ la
+    /// bande `drawing` n'a pas de contenu, donc l'hôte ne la sert pas.
+    var drawingBand: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
             palette
+        case .drawing:
+            // Montée telle quelle : la bande de dessin est un atome du SDK,
+            // et cette vue n'a rien à décider de ses réglages.
+            drawingBand
         case .timeline, .textStyles:
             // Aucun contenu : ces deux contextes appartiennent au critère mais
             // n'ont pas d'hôte ici (la timeline vit dans l'atelier ; les 18
@@ -101,8 +127,21 @@ struct ComposerSceneBandView: View {
     /// répété sur chaque bouton. Un commentaire ne fait pas d'une copie une
     /// source unique (leçon 248i). `BackgroundColorPalette` l'est.
     private var palette: some View {
-        BackgroundColorPalette(colors: colors) { hex in
-            onPickColor?(hex)
+        VStack(alignment: .leading, spacing: 8) {
+            BackgroundColorPalette(colors: colors) { hex in
+                onPickColor?(hex)
+            }
+            // **La rangée d'ouverture n'est montée que si l'hôte la sert**
+            // (loi 4). Sans le rappel, choisir un effet ne mènerait nulle
+            // part : mieux vaut ne pas la peindre que peindre un choix inerte.
+            //
+            // Elle est SOUS les couleurs, comme dans le panneau de l'atelier —
+            // le fond d'abord, ce qu'il fait en apparaissant ensuite. L'ordre
+            // suit la décision, pas la mise en page.
+            if let onPickOpening {
+                OpeningEffectChips(selection: openingEffect, onSelect: onPickOpening)
+                    .padding(.horizontal, 2)
+            }
         }
     }
 }

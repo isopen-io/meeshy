@@ -2040,6 +2040,39 @@ final class MessagePersistenceActorTests: XCTestCase {
             "recent exhausted (still retriable) + old non-terminal rows must survive")
     }
 
+    /// #4044 — **la purge ne connaît AUCUN kind, et c'est ce qu'il faut prouver.**
+    ///
+    /// Le témoin voisin n'exerce que `.blockUser` : il resterait vert si
+    /// quelqu'un ajoutait un jour une liste blanche de kinds à
+    /// `purgeExhaustedOlderThan`, et les lignes laissées dehors
+    /// s'accumuleraient sans que rien ne rougisse. C'est exactement le
+    /// scénario relevé sur appareil réel — 19 lignes `markStoryViewed`
+    /// épuisées sur un 500 permanent, qui alimentaient le bruit de la
+    /// pastille de synchro.
+    ///
+    /// Le kind du terrain est donc nommé ICI, aux côtés de deux autres, pour
+    /// que la propriété testée soit « la purge est AVEUGLE au kind » et non
+    /// « la purge traite ce kind-là ».
+    func test_purgeExhaustedOlderThan_isKindAgnostic_reclaimsMarkStoryViewedToo() async throws {
+        let old = Date().addingTimeInterval(-10 * 86_400)
+        let kinds: [OutboxKind] = [.markStoryViewed, .markAsRead, .blockUser]
+        try await dbQueue.write { db in
+            for (i, kind) in kinds.enumerated() {
+                try OutboxRecord(id: "ex_\(kind.rawValue)", kind: kind, conversationId: "c",
+                                 clientMessageId: "c\(i)", payload: Data(), status: .exhausted,
+                                 attempts: 5, lastError: "server(statusCode: 500)",
+                                 createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            }
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, kinds.count,
+            "la purge doit reclaimer toute ligne terminale périmée, quel que soit son kind")
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).count }
+        XCTAssertEqual(remaining, 0, "aucune ligne épuisée périmée ne doit survivre à la purge")
+    }
+
     // MARK: - appendReaction authoritative cap (own-reaction echo double-count)
 
     private func reactions(in conv: String) throws -> [MeeshyReaction] {

@@ -33,6 +33,7 @@ let messageRestoredForMeCallback:
   | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
+let conversationRestoredCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
 let conversationJoinedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) | null = null;
@@ -163,6 +164,17 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onConversationNew: jest.fn(() => jest.fn()),
     onConversationDeleted: (callback: (data: { userId: string; conversationId: string }) => void) => {
       conversationDeletedCallback = callback;
+      return jest.fn();
+    },
+    // #4389 — la MONTANTE du couple. Ce double est PARTIEL (il enumere les
+    // methodes a la main) : sans cette entree, le hook appelle `undefined` et
+    // les 96 temoins du fichier tombent sur « is not a function », pour une
+    // raison qui n'a rien a voir avec ce qu'ils gardent. C'est le piege que le
+    // depot documente sous « un double PARTIEL d'un module perd en silence
+    // tout ce que le module GAGNE » -- prolonger le double a chaque methode
+    // ajoutee au service fait partie du lot qui l'ajoute.
+    onConversationRestored: (callback: (data: { userId: string; conversationId: string }) => void) => {
+      conversationRestoredCallback = callback;
       return jest.fn();
     },
     onConversationUpdated: (callback: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) => {

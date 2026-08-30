@@ -1,5 +1,6 @@
 import { canUserConsumePost, loadPostAcl, type PostAclPrisma, type PostVisibilityRecord } from '../../services/posts/postVisibility';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 /**
  * La porte d'audience des points d'entrée qui TOUCHENT un post sans le rendre :
@@ -57,6 +58,14 @@ export async function mayConsumePost(
   postId: string,
   userId: string,
 ): Promise<boolean> {
+  // #4044 — un identifiant MALFORMÉ est le quatrième membre de la famille
+  // décrite juste au-dessus, et c'était le seul à en sortir : Mongo n'ignore
+  // pas une clé qui n'est pas un ObjectId, il LÈVE (`P2023`) avant qu'aucune
+  // règle d'audience ne se prononce, et la route rend alors un 500 là où elle
+  // devait rendre un 404. Répondre `false` ici ne relâche rien — un tel
+  // identifiant ne peut désigner aucun document — et rend au module l'unique
+  // porte de sortie qu'il déclare.
+  if (!isValidObjectId(postId)) return false;
   const post = await loadPostAcl(prisma, postId);
   if (!post) return false;
   return canUserConsumePost(prisma, post, userId);
@@ -81,7 +90,14 @@ export async function filterConsumablePostIds(
   postIds: readonly string[],
   userId: string,
 ): Promise<ReadonlySet<string>> {
-  const distinctIds = [...new Set(postIds)];
+  // #4044 — le filtrage est ici, AVANT la requête, et c'est le cas le plus
+  // grave des deux : le `findMany` ci-dessous est borné par `{ id: { in: [...] } }`,
+  // donc UN identifiant malformé faisait lever la requête ENTIÈRE — cinquante
+  // impressions de défilement perdues parce qu'une seule story était encore en
+  // cours de publication. Un id écarté ici sort de l'ensemble par la même porte
+  // qu'un id inconnu, supprimé ou refusé : c'est exactement la propriété que
+  // l'en-tête de cette fonction demande de garantir.
+  const distinctIds = [...new Set(postIds)].filter(isValidObjectId);
   if (distinctIds.length === 0) return new Set<string>();
 
   const posts = await prisma.post.findMany({

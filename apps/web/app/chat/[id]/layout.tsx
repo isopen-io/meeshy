@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { getServerLocale } from '@/lib/i18n/server-locale';
+import { ogImageUrl } from '@/lib/og-image-params';
 import {
   buildPageMetadata,
   composeMetadata,
@@ -92,7 +93,7 @@ export async function generateMetadata({ params }: SharedChatLayoutProps): Promi
             title: conversationTitle,
           }),
       url: `${frontendUrl}/chat/${id}`,
-      image: `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`,
+      image: ogImageUrl(frontendUrl, imageParams),
       imageAlt: interpolate(pageString(meta, 'ogImageAlt'), { title: conversationTitle }),
       canonical: `${frontendUrl}/chat/${id}`,
     });

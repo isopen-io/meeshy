@@ -120,6 +120,7 @@ import { routeUsageAdminRoutes } from './admin/route-usage';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
+import { meCategoriesRoutes } from './me/categories';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -139,6 +140,7 @@ import { maintenanceRoutes } from './maintenance';
 // Namespace — voir « Les trois collisions d'import DISPARAISSENT » ci-dessus.
 import * as MessagesModule from './messages';
 import messageReadStatusRoutes from './message-read-status';
+import { conversationReceiptsRoutes } from './conversations/receipts';
 import mentionRoutes from './mentions';
 import reactionRoutes from './reactions';
 import { notificationRoutes } from './notifications';
@@ -175,8 +177,9 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 58 entrées, réparties en QUATRE segments plutôt qu'une liste plate — et ce
- * n'est pas une préférence de mise en page.
+ * 60 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
+ * `conversation-receipts`), réparties en QUATRE segments plutôt qu'une liste
+ * plate — et ce n'est pas une préférence de mise en page.
  *
  * ## Pourquoi quatre tables, et pas une
  *
@@ -252,6 +255,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'users', prefix: API_PREFIX, module: userRoutes },
   { name: 'me-preferences', prefix: `${API_PREFIX}/me`, module: meRoutes },
   { name: 'me-permissions', prefix: `${API_PREFIX}/me`, module: mePermissionsRoutes },
+  // Cinq routes déplacées de `/me/preferences/categories` (#4359, suivi de
+  // #4182) — même patron que `me-permissions` juste au-dessus : montage
+  // AUTONOME au même préfixe, l'ancienne adresse restant servie comme alias
+  // déprécié depuis `routes/me/preferences/categories.ts`.
+  { name: 'me-categories', prefix: `${API_PREFIX}/me`, module: meCategoriesRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },
@@ -274,6 +282,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // ── Messages ──────────────────────────────────────────────────────────
   { name: 'messages', prefix: API_PREFIX, module: MessagesModule.default },
   { name: 'message-read-status', prefix: API_PREFIX, module: messageReadStatusRoutes },
+  // La COLLECTION unique d'accusés (#4349, suivi de #4179) : deux adresses,
+  // `POST` et `GET /conversations/:conversationId/receipts`. Montage AUTONOME
+  // au même préfixe que `message-read-status` juste au-dessus, dont les quatre
+  // portes historiques sont devenues des adaptateurs de ce module — même patron
+  // que `me-categories` face à `me-preferences` (#4359).
+  { name: 'conversation-receipts', prefix: API_PREFIX, module: conversationReceiptsRoutes },
   { name: 'mentions', prefix: API_PREFIX, module: mentionRoutes },
 ] as const;
 
@@ -312,7 +326,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 58 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 60 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

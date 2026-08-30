@@ -270,6 +270,17 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // **L'historique n'est servi QUE par la scène**
+            // (`ComposerHistoryService`) : c'est la seule surface où les gestes
+            // — poser un sticker, avancer un objet, changer le fond — ne se
+            // défont par rien d'autre. Sur le document, le dernier geste est
+            // presque toujours du texte, que le clavier annule déjà.
+            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canUndoGlobal,
+            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canRedoGlobal,
+            onUndo: { performHistoryUndo() },
+            onRedo: { performHistoryRedo() },
             slide: Binding(
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
@@ -283,9 +294,18 @@ extension MeeshyComposerHost {
                 selectedSceneItemKind = kind
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
-            // Les portes que CE meuble sert. `sticker` en est absente : aucun
-            // chemin ne pose un objet de ce kind — `showsEmojiPicker` insère
-            // dans le TEXTE, ce qui n'est pas la même chose.
+            // Les portes que CE meuble sert — l'ensemble vit dans
+            // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
+            // écrit dans un corps de vue ne s'interroge qu'à la garde de
+            // source, et une garde de source sur un littéral passe au vert dès
+            // qu'on réécrit la liste autrement.
+            //
+            // **`sticker` y est entrée le 2026-08-30.** Son absence était
+            // motivée par « aucun chemin ne pose un objet de ce kind » — motif
+            // faux : `addSticker(emoji:)` existe depuis C13 et
+            // `StickerPickerView` depuis C8. Seul le niveau d'ACCÈS de la
+            // primitive manquait, et un `internal` ressemble, vu d'ici, à une
+            // règle produit.
             //
             // **`description` y entre le 2026-08-30**, et c'est ce qui rend le
             // retrait du champ permanent possible : la porte devient le SEUL
@@ -294,26 +314,33 @@ extension MeeshyComposerHost {
             // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
             // meuble qui le fait désormais, en ouvrant sa zone basse.
             railDoors: ComposerRailDoor.offered(
-                served: [.description, .media, .sound, .place, .mention],
+                served: ComposerSceneCapabilities.doors,
                 format: selectedFormat,
                 allowsCapture: profile.allowsCapture
             ),
             onRailDoor: { door in handleRailDoor(door) },
-            // Les contrôleurs que CE meuble sert. L'empilement ne vit que sur la
-            // `StoryCanvasUIView`, dont le meuble n'a aucune référence.
+            // Les contrôleurs que CE meuble sert — même règle, même raison.
+            //
+            // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
+            // vivait ici l'attribuait à la `StoryCanvasUIView` « dont le meuble
+            // n'a aucune référence » : `bringForward` / `sendBackward` vivent
+            // en fait sur le MODÈLE (`StoryComposerViewModel+ZOrder`), et
+            // persistent leur `zIndex` dans la slide — donc au reader et à la
+            // publication, ce qu'un empilement de vue n'aurait jamais fait.
             trailingActions: ComposerTrailingRailPolicy.actions(
                 slide: viewModel.currentSlide,
                 selectedId: selectedSceneItemId,
-                served: [.duplicate, .delete],
+                served: ComposerSceneCapabilities.controllers,
                 hasEditor: false,
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
-            // **Les bandes SERVIES par ce meuble** (#4064) — `palette` seule.
-            // La timeline vit dans l'atelier et les 18 styles exigent un objet
-            // `text` sélectionné, qu'aucune porte de cette surface ne pose :
-            // les servir peindrait une bande vide.
-            band: ComposerSceneBand.opened(requestedSceneBand, served: [.palette]),
+            // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
+            // deux rails, et pour la même raison : la capacité s'interroge,
+            // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
+            // vit avec l'ensemble, dans `ComposerSceneCapabilities.bands`.
+            band: ComposerSceneBand.opened(requestedSceneBand,
+                                           served: ComposerSceneCapabilities.bands),
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
@@ -323,6 +350,30 @@ extension MeeshyComposerHost {
                 // l'espace pour montrer ce que l'écran montre déjà.
                 requestedSceneBand = nil
             },
+            bandOpeningEffect: viewModel.openingEffect,
+            // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
+            // la différence avec la couleur juste au-dessus : une couleur se
+            // voit sur la scène dès qu'elle est posée, un effet d'ouverture ne
+            // se joue qu'à la LECTURE. Refermer laisserait l'auteur sans aucun
+            // retour sur ce qu'il vient de choisir ; la rangée reste ouverte,
+            // avec sa puce sélectionnée pour tout témoin.
+            onPickBandOpening: { effect in
+                viewModel.openingEffect = effect
+                HapticFeedback.light()
+            },
+            // **Les deux montages du dessin** (#4092). La bande porte les
+            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
+            // la bande est ouverte par la même porte qui entre dans le mode —
+            // mais elles sont montées à deux endroits distincts, parce qu'elles
+            // ne vivent pas au même niveau : l'une sous la scène, l'autre
+            // dessus.
+            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
+            // reste : le canvas garde son calque persisté, il continue de
+            // recevoir les touches, et aucune surface ne se pose dessus.
+            drawingSurface: viewModel.isDrawingActive
+                ? AnyView(MeeshyDrawingSurface(viewModel: viewModel))
+                : nil,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
