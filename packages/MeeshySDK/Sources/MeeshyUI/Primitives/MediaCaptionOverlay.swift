@@ -30,21 +30,38 @@ import SwiftUI
 /// notamment SUSPENDRE la lecture, qui est une décision d'hôte, pas d'atome.
 public struct MediaCaptionOverlay: View {
 
-    /// Le seuil du porteur : « uniquement les 10 premiers mots ».
-    public static let defaultWordLimit = 10
+    /// **Le SEUIL et la TÊTE sont deux nombres, pas un** (directive 2026-08-30).
+    ///
+    /// La règle du porteur est : « on affiche les 15 premiers mots si le texte
+    /// fait plus de 30 mots ; sinon on affiche tout, une fois ». Le seuil qui
+    /// DÉCIDE de replier (30) et la longueur de ce qu'on montre alors (15) sont
+    /// distincts — les confondre, comme le faisait le seuil unique de 10, replie
+    /// une légende de douze mots pour n'en cacher que deux : le geste « voir
+    /// plus » coûte alors plus cher que le texte qu'il révèle.
+    ///
+    /// Entre les deux nombres il y a une bande — de 16 à 30 mots — où la légende
+    /// sort ENTIÈRE bien qu'elle dépasse la tête. C'est voulu : replier n'a de
+    /// sens que si le repli fait gagner de la place.
+    public static let defaultWordThreshold = 30
+
+    /// Ce qu'on montre quand on replie. Toujours ≤ `defaultWordThreshold`.
+    public static let defaultWordHead = 15
 
     private let caption: String
     private let isExpanded: Bool
-    private let wordLimit: Int
+    private let wordThreshold: Int
+    private let wordHead: Int
     private let onToggle: () -> Void
 
     public init(caption: String,
                 isExpanded: Bool,
-                wordLimit: Int = MediaCaptionOverlay.defaultWordLimit,
+                wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
+                wordHead: Int = MediaCaptionOverlay.defaultWordHead,
                 onToggle: @escaping () -> Void) {
         self.caption = caption
         self.isExpanded = isExpanded
-        self.wordLimit = wordLimit
+        self.wordThreshold = wordThreshold
+        self.wordHead = wordHead
         self.onToggle = onToggle
     }
 
@@ -57,14 +74,23 @@ public struct MediaCaptionOverlay: View {
     /// réels, pas ses séparateurs. Un texte sans blanc — japonais, chinois — ne
     /// compte qu'UN mot et sort donc entier : le rogner à un nombre de mots qui
     /// n'existe pas dans sa langue le couperait au hasard.
-    public static func collapse(_ text: String, words: Int) -> (head: String, isTruncated: Bool) {
+    public static func collapse(_ text: String,
+                                threshold: Int,
+                                head: Int) -> (head: String, isTruncated: Bool) {
         let mots = text.split(whereSeparator: \.isWhitespace)
-        guard mots.count > words, words > 0 else { return (text, false) }
-        return (mots.prefix(words).joined(separator: " "), true)
+        guard mots.count > threshold, head > 0 else { return (text, false) }
+        return (mots.prefix(head).joined(separator: " "), true)
+    }
+
+    /// Le cas DÉGÉNÉRÉ où seuil et tête se confondent — replier dès le premier
+    /// mot de trop. Conservé pour les appelants qui veulent exactement ça ; la
+    /// règle du produit passe par la forme à deux nombres ci-dessus.
+    public static func collapse(_ text: String, words: Int) -> (head: String, isTruncated: Bool) {
+        collapse(text, threshold: words, head: words)
     }
 
     private var collapsed: (head: String, isTruncated: Bool) {
-        Self.collapse(caption, words: wordLimit)
+        Self.collapse(caption, threshold: wordThreshold, head: wordHead)
     }
 
     // MARK: - Corps
