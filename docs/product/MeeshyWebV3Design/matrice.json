@@ -4,7 +4,7 @@
   {
    "id": "L-0.5",
    "titre": "La v3 est joignable et sa conformité se mesure",
-   "resultat_attendu": "apps/web-v3 existe, se construit, se déploie derrière PathPrefix('/__v3') avec assetPrefix:'/__v3' (aucun basePath), tourne en dev sur le port 3300, entre dans docker.yml et ci.yml (type-check BLOQUANT, jamais le ratchet), et la machine de vérification rend un rapport chiffré : gate d'ordre (rc=0/1/2), diff par région, axe, poids réseau CDP, budget de bundle et baseline.json mesurée sur la prod actuelle. Le Makefile est nettoyé de son précédent mort apps/web_v2 (port 3200 déjà pris) et le lockfile s'aligne sur les manifestes.",
+   "resultat_attendu": "apps/web-v3 existe, se construit, se déploie derrière PathPrefix('/__v3/_next') avec assetPrefix:'/__v3' (aucun basePath ; la règle ne réclame que la zone d'assets tant qu'aucune page d'App Router n'est émise, et aucun actif de la v3 n'est servi à la racine de l'URL), tourne en dev sur le port 3300, entre dans docker.yml et ci.yml (type-check BLOQUANT, jamais le ratchet), et la machine de vérification rend un rapport chiffré : gate d'ordre (rc=0/1/2), diff par région, axe, poids réseau CDP, budget de bundle et baseline.json mesurée sur la prod actuelle. Le Makefile est nettoyé de son précédent mort apps/web_v2 (port 3200 déjà pris) et le lockfile s'aligne sur les manifestes.",
    "echeance_relative": "J+3",
    "depend_de": []
   },

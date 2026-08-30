@@ -26,6 +26,14 @@ backend/node_modules/
 # production
 /build
 **/*/*.d.*
+# ... sauf les déclarations ÉCRITES À LA MAIN, qui sont des sources.
+# `apps/web-v3/scripts/check-app-router-built.d.mts` type le gate de build que
+# `__tests__/app-router-build.test.ts` importe : ignoré, il manque au clone, et
+# le type-check de `@meeshy/web-v3` — l'étape BLOQUANTE de `ci.yml` — tombe en
+# « TS7016: Could not find a declaration file for module ». Mesuré en déplaçant
+# le fichier : `bun run type-check` passe de 0 à 1 erreur.
+!apps/web-v3/scripts/*.d.mts
+!apps/web-v3/scripts/lib/*.d.mts
 **/*/build/
 **/*/dist/
 **/*/*.*.map

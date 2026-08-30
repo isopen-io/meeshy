@@ -24,59 +24,23 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const { execFileSync } = require('child_process');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
 const DOC = 'MeeshyWebV3.dc.html';
 const OUT = process.argv[2] || path.join(HERE, 'cible');
-const CACHE = path.join(ROOT, '.cache/dc-vendor');
+const { CACHE, NODE_MODULES: NM, ensureVendor, chromiumPath, vendorRequire } =
+  require(path.join(ROOT, 'scripts/lib/navigateur.cjs'));
 
 const VENDOR = {
   'react@18.3.1/umd/react.production.min.js': 'react/umd/react.production.min.js',
   'react-dom@18.3.1/umd/react-dom.production.min.js': 'react-dom/umd/react-dom.production.min.js',
   '@babel/standalone@7.29.0/babel.min.js': '@babel/standalone/babel.min.js',
 };
-const PKGS = ['react@18.3.1', 'react-dom@18.3.1', '@babel/standalone@7.29.0', '@phosphor-icons/web@2.1.1', '@fontsource/inter@5.2.8', 'playwright-core@1.62.1'];
 const INTER_WEIGHTS = [400, 500, 600, 700];
 
 const MIME = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
 const mime = p => MIME[path.extname(p)] || 'application/octet-stream';
-
-function ensureVendor() {
-  const marker = path.join(CACHE, 'node_modules/.vendor-ok');
-  if (fs.existsSync(marker)) return;
-  fs.mkdirSync(CACHE, { recursive: true });
-  if (!fs.existsSync(path.join(CACHE, 'package.json'))) {
-    fs.writeFileSync(path.join(CACHE, 'package.json'), JSON.stringify({ name: 'dc-vendor', private: true, version: '0.0.0' }));
-  }
-  process.stderr.write(`[capture] cache absent — npm i ${PKGS.join(' ')} dans ${CACHE}\n`);
-  execFileSync('npm', ['i', '--no-audit', '--no-fund', '--loglevel', 'error', ...PKGS], { cwd: CACHE, stdio: 'inherit' });
-  fs.writeFileSync(marker, '');
-}
-
-function chromiumPath() {
-  const direct = process.env.CHROMIUM_PATH;
-  if (direct && fs.existsSync(direct)) return direct;
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
-  const candidates = [
-    path.join(base, 'chromium/chrome-linux/chrome'),
-    path.join(base, 'chromium'),
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  ];
-  for (const c of candidates) {
-    try { if (fs.statSync(c).isFile()) return c; } catch { /* suivant */ }
-  }
-  if (fs.existsSync(base)) {
-    const hit = fs.readdirSync(base).find(d => d.startsWith('chromium-'));
-    if (hit) {
-      const p = path.join(base, hit, 'chrome-linux/chrome');
-      if (fs.existsSync(p)) return p;
-    }
-  }
-  throw new Error(`Aucun Chromium trouve (cherche sous ${base}). Poser CHROMIUM_PATH.`);
-}
 
 function serve() {
   const server = http.createServer((req, res) => {
@@ -112,9 +76,8 @@ function serve() {
 }
 
 (async () => {
-  ensureVendor();
-  const NM = path.join(CACHE, 'node_modules');
-  const { chromium } = require(path.join(NM, 'playwright-core'));
+  ensureVendor(m => process.stderr.write(m));
+  const { chromium } = vendorRequire('playwright-core');
   const executablePath = chromiumPath();
   fs.mkdirSync(OUT, { recursive: true });
 
