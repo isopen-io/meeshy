@@ -2171,7 +2171,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
       `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
-      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      URLs; plus `highlightRanges` (accent- **and** case-insensitive/non-overlapping — `search-accent-fold-highlight`
+      2026-08-30, iOS `.diacriticInsensitive`/`.caseInsensitive` parity via pure `SearchTextFolder`, ranges mapped
+      back to original indices even when folding changes length, decomposed graphemes highlighted whole),
+      `extractUrls` (meeshy→mention→http),
       `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.

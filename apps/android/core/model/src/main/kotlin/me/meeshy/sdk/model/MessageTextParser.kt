@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.search.SearchTextFolder
+
 /**
  * The four inline emphasis treatments a text run can carry. Immutable; markdown
  * nesting unions them (e.g. `**a *b* c**` → the `b` run is bold + italic).
@@ -54,21 +56,31 @@ object MessageTextParser {
         parseInternal(text, TextStyles.None, mentionDisplayNames)
 
     /**
-     * All case-insensitive, non-overlapping occurrences of [term] in [text], as
-     * char-index ranges suitable for highlight spans. Empty [term] → no ranges.
+     * All accent- and case-insensitive, non-overlapping occurrences of [term] in
+     * [text], as char-index ranges into the ORIGINAL [text] suitable for highlight
+     * spans — iOS `.diacriticInsensitive`/`.caseInsensitive` parity, so a query
+     * typed without accents ("cafe") still highlights accented text ("café"), and
+     * vice versa. Empty [term], or a [term] that folds away to nothing (only
+     * combining marks), → no ranges. When the match lands on a decomposed grapheme,
+     * the range extends over its trailing combining marks so no half-grapheme is
+     * highlighted.
      */
     fun highlightRanges(text: String, term: String): List<IntRange> {
         if (term.isEmpty()) return emptyList()
-        val lowered = text.lowercase()
-        val needle = term.lowercase()
+        val needle = SearchTextFolder.fold(term)
+        if (needle.isEmpty()) return emptyList()
+        val haystack = SearchTextFolder.foldWithMap(text)
         val ranges = mutableListOf<IntRange>()
         var start = 0
         while (true) {
-            val idx = lowered.indexOf(needle, start)
+            val idx = haystack.folded.indexOf(needle, start)
             if (idx < 0) break
-            val end = idx + needle.length
-            if (end <= text.length) ranges.add(idx until end)
-            start = end
+            val endFolded = idx + needle.length
+            val originStart = haystack.sourceIndexOf[idx]
+            val originEndExclusive =
+                if (endFolded < haystack.folded.length) haystack.sourceIndexOf[endFolded] else text.length
+            ranges.add(originStart until originEndExclusive)
+            start = endFolded
         }
         return ranges
     }

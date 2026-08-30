@@ -5,6 +5,33 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — AGP 8.13 + `compileSdk = 37` can't resolve locally; the symlink recipe no longer holds (slice `search-accent-fold-highlight`)
+`dl.google.com` was reachable, but the ONLY publishable API-37 platform is the preview `platforms;android-37.0`,
+and AGP 8.13 demands target hash `android-37`. That hash is never satisfied — reproduced on (a) a pristine
+`android-37.0`, (b) the ROUTINE's documented `android-37 → android-37.0` symlink, and (c) a fully-normalized COPY
+where `source.properties` ApiLevel, `package.xml` `<api-level>`/path id, and `build.prop` `sdk_full` were all
+forced to `37`. The copy even registered as `platforms;android-37` in AGP's `--info` output, yet
+`Failed to find target with hash string 'android-37'` persisted (AGP builds the hash from the AndroidVersion it
+constructs, not the package id). **So the symlink line in `ROUTINE.md` §Environment recipe is stale for this
+platform revision — don't burn a run chasing it.** When you hit this: don't treat it as `dl.google.com`-denied
+and don't merge on faith. De-risk the PURE logic instead — copy the exact production functions into a standalone
+`.kt`, compile with the embeddable compiler already on disk (`java -cp /opt/gradle-*/lib/'*'
+org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -cp <kotlin-stdlib.jar> Verify.kt -d out`, run
+`java -cp "out:<stdlib>" VerifyKt`), and run every test assertion in a `main()`. That proves the algorithm; the
+**Android** CI check (which DOES build `compileSdk = 37` — prior slices merged green there) is then the real gate.
+A slice verified this way is a PASS only once its Android CI check is green.
+
+## 2026-08-30 — a highlight that folds accents must map ranges back to ORIGINAL indices (slice `search-accent-fold-highlight`)
+Making `highlightRanges` accent-insensitive (iOS `.diacriticInsensitive` parity) is not just "fold both sides then
+`indexOf`": NFD-decomposing + dropping combining marks CHANGES the string length, so a match position in folded
+space is the WRONG index into the original text. The fix is `foldWithMap`: fold per source char and record, for
+each folded char, the source index it came from. A match `[a, b)` in folded space → original range
+`sourceIndexOf[a] until (if b<len sourceIndexOf[b] else text.length)`. That end rule falls out for free: a
+combining mark contributes zero folded chars, so the next folded char's source index sits PAST the mark, extending
+the highlight over the whole decomposed grapheme. Build accented test literals from explicit `\u` code points
+(é = `é` precomposed vs `é` decomposed) — a typed glyph silently normalizes and the decomposed case
+never actually exercises the mark-skipping branch.
+
 ## 2026-08-30 — a wire model belongs in the layer that carries the wire, not the layer that first drew it (slice `story-drawing-strokes-wire`)
 The prior slice placed the drawing wire types (`StoryDrawingStroke` &c.) in `:feature:stories` because the
 board reducer was the first consumer. But the SAME type is the payload of `StoryEffects.drawingStrokes`, which
