@@ -246,6 +246,29 @@ data class ConversationDeletedSocketEvent(
     val deletedAt: String? = null,
 )
 
+/**
+ * `conversation:restored` — la MONTANTE du couple `delete-for-me` /
+ * `restore-for-me` (#4389, moitié cliente de #4344).
+ *
+ * Diffusée sur la room PERSONNELLE du restaurateur, jamais celle de la
+ * conversation : le geste est personnel, et les autres membres n'ont rien à
+ * apprendre — la conversation ne les a jamais quittés.
+ *
+ * `userId` est déclaré comme sur [ConversationDeletedSocketEvent]… à ceci près
+ * que la descendante ne le porte PAS ici : son modèle Kotlin s'arrête à
+ * `conversationId` + `deletedAt`, quand la passerelle émet bien `userId`. On ne
+ * corrige pas ce voisin dans ce lot, mais on ne reproduit pas son omission :
+ * `userId` est ce qui permettra de distinguer une restauration à soi d'un
+ * événement reçu par erreur, le jour où cette room cesse d'être une preuve.
+ * Il est OPTIONNEL par prudence de décodage — kotlinx échoue sur le document
+ * ENTIER quand un champ requis manque, et un tel échec est silencieux.
+ */
+@Serializable
+data class ConversationRestoredSocketEvent(
+    val conversationId: String,
+    val userId: String? = null,
+)
+
 /** `conversation:closed` — the whole conversation ended for EVERY participant
  *  (creator-only full delete), distinct from [ConversationDeletedSocketEvent]
  *  which is scoped to the caller's own devices only (`delete-for-me`). */

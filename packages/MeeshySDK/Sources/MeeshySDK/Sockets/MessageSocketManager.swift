@@ -390,6 +390,21 @@ public struct ConversationDeletedSocketEvent: Decodable, Sendable {
     public let conversationId: String
 }
 
+/// `conversation:restored` — la MONTANTE du couple `delete-for-me` /
+/// `restore-for-me` (#4389, moitié cliente de #4344).
+///
+/// Miroir EXACT de `ConversationDeletedSocketEvent` — mêmes deux champs, même
+/// room personnelle (`ROOMS.user`), même geste symétrique. La charge n'est pas
+/// élargie d'un octet, et c'est délibéré : le décodeur iOS est STRICT, donc un
+/// champ non optionnel absent fait échouer le décodage de l'événement ENTIER,
+/// en silence, dans un `catch`. Un nom NEUF plutôt qu'un élargissement de
+/// `conversation:updated` relève de la même mesure — c'est la leçon du cycle
+/// 128, et le serveur a tranché pareil.
+public struct ConversationRestoredSocketEvent: Decodable, Sendable {
+    public let userId: String
+    public let conversationId: String
+}
+
 /// `user:preferences-reordered` — batch drag-reorder broadcast.
 public struct UserPreferencesReorderedSocketEvent: Decodable, Sendable {
     public struct Update: Decodable, Sendable {
@@ -1771,6 +1786,12 @@ public protocol MessageSocketProviding: Sendable {
     /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
     /// received while offline came back from the dead on the next cold start.
     var conversationDeleted: PassthroughSubject<ConversationDeletedSocketEvent, Never> { get }
+    /// `conversation:restored` — la conversation revient dans MA liste, sur mes
+    /// AUTRES appareils (#4389). Exposé au protocole pour la même raison que sa
+    /// jumelle descendante : une restauration reçue par un seul abonné laisserait
+    /// les autres consommateurs — le cache disque comme le moteur de synchro —
+    /// sur un état que le serveur a déjà quitté.
+    var conversationRestored: PassthroughSubject<ConversationRestoredSocketEvent, Never> { get }
     var userPreferencesUpdated: PassthroughSubject<UserPreferencesUpdatedEvent, Never> { get }
     /// Conversation-scope variant of `user:preferences-updated` (versioned).
     /// Routed separately from `userPreferencesUpdated` (category scope) so the
@@ -2025,6 +2046,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
     public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+    public let conversationRestored = PassthroughSubject<ConversationRestoredSocketEvent, Never>()
 
     // Combine publishers — profil public d'un CONTACT
     public let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
@@ -3840,6 +3862,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ConversationDeletedSocketEvent.self, from: data) { [weak self] event in
                 self?.conversationDeleted.send(event)
+            }
+        }
+
+        socket.on("conversation:restored") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationRestoredSocketEvent.self, from: data) { [weak self] event in
+                self?.conversationRestored.send(event)
             }
         }
 

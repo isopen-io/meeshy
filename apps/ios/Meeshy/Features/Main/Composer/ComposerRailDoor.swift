@@ -93,6 +93,19 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déplacer.
     case drawing
 
+    /// **Le TEXTE** — un `StoryTextObject` du plan `fg` (#4401).
+    ///
+    /// La vue `3b` ne le dessine pas dans sa rangée d'outils, et la vue `1c` le
+    /// montre pourtant SÉLECTIONNÉ, avec son inspecteur. La contradiction se
+    /// lève en regardant `1b` : le texte y est déjà sur la scène. Aucune des
+    /// trois vues ne dit par où on le POSE — d'où cette porte, qui manquait au
+    /// plateau alors que l'atelier l'a depuis toujours.
+    ///
+    /// Elle pose une coquille VIDE et ouvre l'éditeur en ligne. Une coquille
+    /// restée vide est supprimée à la fermeture (`exitTextEditingMode`) : un
+    /// texte annulé ne laisse rien derrière lui.
+    case text
+
     /// Le niveau du modèle sur lequel la porte agit.
     ///
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
@@ -102,7 +115,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         switch self {
         case .description:                    return .slide
         case .mention:                        return .publication
-        case .media, .sound, .sticker, .place: return .object
+        case .media, .sound, .sticker, .place, .text: return .object
         case .drawing:                        return .scene
         }
     }
@@ -111,7 +124,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .drawing, .sticker, .mention, .place
+        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -128,6 +141,10 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         // `scribble.variable` plutôt qu'un `pencil` générique : ce n'est pas
         // « éditer », c'est TRACER — et le glyphe DIT le verbe (loi 7).
         case .drawing:     return "scribble.variable"
+        // `textformat` et non `textbox` : ce qu'on pose est du TEXTE, pas un
+        // cadre. La description, elle, porte `text.alignleft` — deux glyphes
+        // distincts pour deux niveaux du modèle (la slide, l'objet).
+        case .text:        return "textformat"
         }
     }
 

@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.ConversationRestoredSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
@@ -85,6 +86,7 @@ class ConversationListViewModelTest {
 
     private fun socketManager(
         conversationDeleted: MutableSharedFlow<ConversationDeletedSocketEvent> = MutableSharedFlow(),
+        conversationRestored: MutableSharedFlow<ConversationRestoredSocketEvent> = MutableSharedFlow(),
         conversationClosed: MutableSharedFlow<ConversationClosedSocketEvent> = MutableSharedFlow(),
         participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
         userStatus: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
@@ -100,6 +102,7 @@ class ConversationListViewModelTest {
             every { this@mockk.messageReceived } returns messageReceived
             every { this@mockk.conversationUpdated } returns conversationUpdated
             every { this@mockk.conversationDeleted } returns conversationDeleted
+            every { this@mockk.conversationRestored } returns conversationRestored
             every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
             every { this@mockk.userStatus } returns userStatus
@@ -241,6 +244,39 @@ class ConversationListViewModelTest {
 
             // Une relecture de queue — jamais zero (rien n'est perdu), jamais trois.
             assertThat(refreshCount).isEqualTo(2)
+        }
+
+    /**
+     * #4389 — la MONTANTE du couple `delete-for-me` / `restore-for-me`.
+     *
+     * `conversation:restored` part sur la room PERSONNELLE du restaurateur :
+     * l'appareil qui a appelé la route lit sa propre réponse REST, les AUTRES
+     * n'apprennent la restauration que par cet événement. Sans cette collecte,
+     * la conversation restait absente de leur liste jusqu'au prochain
+     * chargement complet — le symptôme que #4344 nommait, survivant à sa
+     * moitié serveur.
+     *
+     * Le témoin assert sur l'EFFET (une relecture est demandée), pas sur
+     * l'abonnement : c'est la seule forme qui tombe si l'on retire le
+     * `collect` du ViewModel.
+     */
+    @Test
+    fun a_restored_conversation_refreshes_the_list_on_this_device() =
+        runTest(dispatcher) {
+            val conversationRestored = MutableSharedFlow<ConversationRestoredSocketEvent>()
+            var refreshCount = 0
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            coEvery { repo.refresh() } coAnswers { refreshCount++; Unit }
+            viewModel(repo, socket = socketManager(conversationRestored = conversationRestored))
+            advanceUntilIdle()
+            val avant = refreshCount
+
+            conversationRestored.emit(
+                ConversationRestoredSocketEvent(conversationId = "c1", userId = "u1"),
+            )
+            advanceUntilIdle()
+
+            assertThat(refreshCount).isGreaterThan(avant)
         }
 
     /**

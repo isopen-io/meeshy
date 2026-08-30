@@ -275,9 +275,9 @@ extension MeeshyComposerHost {
             // — poser un sticker, avancer un objet, changer le fond — ne se
             // défont par rien d'autre. Sur le document, le dernier geste est
             // presque toujours du texte, que le clavier annule déjà.
-            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
+            canUndo: ComposerHistoryService.servesHistory(on: mountedComposerView)
                 && viewModel.canUndoGlobal,
-            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
+            canRedo: ComposerHistoryService.servesHistory(on: mountedComposerView)
                 && viewModel.canRedoGlobal,
             onUndo: { performHistoryUndo() },
             onRedo: { performHistoryRedo() },
@@ -361,13 +361,28 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
-            // **Les deux montages du dessin** (#4092). La bande porte les
-            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
-            // la bande est ouverte par la même porte qui entre dans le mode —
-            // mais elles sont montées à deux endroits distincts, parce qu'elles
-            // ne vivent pas au même niveau : l'une sous la scène, l'autre
-            // dessus.
-            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
+            // le trait, et les contrôleurs qui règlent le pinceau. Les deux
+            // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau
+            // (stylo / marqueur / gomme), couleur, épaisseur, lissage,
+            // annulation par trait. Une bande simplifiée écrite ici aurait
+            // perdu quatre capacités que l'atelier a (leçon 336).
+            drawingToolbar: viewModel.isDrawingActive
+                ? AnyView(StoryDrawingToolbar(viewModel: viewModel))
+                : nil,
+            // Les contrôleurs du TEXTE, montés pendant l'édition seule (#4401).
+            // Ce sont ceux de l'atelier : les 18 styles, la couleur,
+            // l'alignement, le fond, le cadrage, le contour.
+            textToolbar: viewModel.textEditingMode.activeTextId != nil
+                ? AnyView(StoryTextEditToolbar(viewModel: viewModel))
+                : nil,
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, texte in
+                viewModel.updateTextContent(id: id, text: texte)
+            },
+            // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
+            // ce qu'il advient d'une coquille vide — il la supprime.
+            onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.

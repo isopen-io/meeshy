@@ -92,8 +92,25 @@ struct ComposerSceneSurface: View {
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
 
-    /// La bande de réglages du pinceau, montée par l'hôte (#4092).
-    var drawingBand: AnyView?
+    /// **Les contrôleurs FLOTTANTS du pinceau**, montés par l'hôte (#4092).
+    ///
+    /// Ils flottent SUR la scène, comme dans l'atelier — ce n'est pas une
+    /// bande. C'est la forme du contrôleur qui l'impose : `StoryDrawingToolbar`
+    /// est un `VStack` à ressort qui pousse ses bulles vers le bas de la place
+    /// qu'on lui donne ; logé dans une bande, il s'effondrerait.
+    var drawingToolbar: AnyView?
+
+    /// **Les contrôleurs FLOTTANTS du texte** — 18 styles, couleur, alignement,
+    /// fond, cadrage, contour (#4401). Montés seulement pendant l'édition, comme
+    /// ceux du pinceau, et pour la même raison : hors édition ils n'ont aucun
+    /// objet à régler.
+    var textToolbar: AnyView?
+
+    /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
+    /// place, dans sa vraie police, sur le vrai fond.
+    var editingTextId: String?
+    var onInlineTextChanged: ((String, String) -> Void)?
+    var onInlineTextEditEnded: ((String) -> Void)?
 
     /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
     /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
@@ -135,7 +152,10 @@ struct ComposerSceneSurface: View {
                     // Le canvas retire son calque de dessin persisté pendant
                     // qu'une surface live est posée dessus — sinon le trait
                     // s'affiche deux fois, à deux endroits (défaut 2026-05-27).
-                    isDrawingOverlayActive: drawingSurface != nil
+                    isDrawingOverlayActive: drawingSurface != nil,
+                    editingTextId: editingTextId,
+                    onInlineTextChanged: onInlineTextChanged,
+                    onInlineTextEditEnded: onInlineTextEditEnded
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // **Le canvas cesse de recevoir les touches pendant le
@@ -143,6 +163,10 @@ struct ComposerSceneSurface: View {
                 // l'objet sous lui : deux gestes pour un seul mouvement.
                 .allowsHitTesting(drawingSurface == nil)
                 .overlay { drawingSurface }
+                // Les contrôleurs PAR-DESSUS la couche de capture : ils doivent
+                // recevoir leurs taps, elle doit recevoir le reste.
+                .overlay { drawingToolbar }
+                .overlay { textToolbar }
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
                 // un goût de marge mais une conséquence — cible tactile 44 pt,
@@ -188,8 +212,7 @@ struct ComposerSceneSurface: View {
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening,
-                                          drawingBand: drawingBand)
+                                          onPickOpening: onPickBandOpening)
                 }
 
             }

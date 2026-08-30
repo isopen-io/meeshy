@@ -58,7 +58,30 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
     }
 
     public enum Source: Sendable, Equatable {
-        case conversation(id: String)
+        /// La conversation à ouvrir, et — quand l'entrée vise un message
+        /// précis — **l'ancre de ce message**.
+        ///
+        /// L'ancre voyage ICI, dans la destination, et non à côté d'elle sur
+        /// l'item : « où cette entrée mène-t-elle » est UNE question. Une ancre
+        /// rangée dans un champ voisin pourrait être appliquée à une autre
+        /// conversation que celle qu'on ouvre — le genre de désaccord qu'aucun
+        /// témoin ne voit, chaque moitié restant cohérente avec elle-même.
+        ///
+        /// **Ce que l'ancre contient dépend de ce que l'entrée EST**, et seul
+        /// le site qui la compose le sait :
+        ///
+        /// | entrée | ancre |
+        /// |---|---|
+        /// | envoi (`sendMessage`) | `record.clientMessageId` — l'id LOCAL de la bulle optimiste, celui sous lequel `ConversationViewModel` a inséré la ligne |
+        /// | édition / suppression / réaction | `payload.messageId` — l'id SERVEUR de la cible ; le `clientMessageId` du record y identifie la MUTATION, pas le message |
+        /// | tout le reste (frappe, conversation créée…) | `nil` — il n'y a pas de message à viser |
+        ///
+        /// `nil` n'est pas un repli paresseux : une charge illisible doit
+        /// ouvrir la conversation SANS viser, plutôt que viser un message
+        /// inexistant. Un scroll vers un id introuvable laisse le fil à un
+        /// endroit arbitraire, ce qui se lit comme un bug là où l'absence
+        /// d'ancre ne se lit pas du tout.
+        case conversation(id: String, messageId: String?)
         case post(id: String)
         case story(id: String)
         case unknown
@@ -151,7 +174,8 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: icon,
             attachmentCount: attachments.count,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: record.clientMessageId),
             status: record.status,
             createdAt: record.createdAt
         )
@@ -192,33 +216,49 @@ extension OutboxUIItem {
             titlePreview: preview,
             iconKind: .text,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: payload?.messageId),
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     private static func mapDeleteMessage(record: OutboxRecord) -> OutboxUIItem {
+        // La charge n'était décodée par PERSONNE ici — l'aperçu est un
+        // littéral. Elle l'est désormais pour la seule ancre : viser le
+        // message dont la suppression est en attente, c'est montrer où
+        // l'opération se joue.
+        let payload = JSONDecoder().decodeOrLog(OfflineDeletePayload.self, from: record.payload,
+                                                field: "delete payload (sync pill)", id: record.id,
+                                                logger: Logger.ui)
         return OutboxUIItem(
             id: record.id,
             kind: .delete,
             titlePreview: "Suppression…",
             iconKind: .text,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: payload?.messageId),
             status: record.status,
             createdAt: record.createdAt
         )
     }
 
     private static func mapSendReaction(record: OutboxRecord) -> OutboxUIItem {
+        // Emoji ET ancre sortent de la MÊME lecture, y compris sur le chemin
+        // de repli JSON brut : deux décodages parallèles de la même charge
+        // divergeraient au premier ajustement de l'un.
         let emoji: String?
+        let reactedMessageId: String?
         if let payload = try? JSONDecoder().decode(ReactionOutboxPayload.self, from: record.payload) {
             emoji = payload.emoji
+            reactedMessageId = payload.messageId
         } else if let object = try? JSONSerialization.jsonObject(with: record.payload) as? [String: Any] {
             emoji = object["emoji"] as? String
+            reactedMessageId = object["messageId"] as? String
         } else {
             emoji = nil
+            reactedMessageId = nil
         }
         return OutboxUIItem(
             id: record.id,
@@ -226,7 +266,8 @@ extension OutboxUIItem {
             titlePreview: emoji,
             iconKind: .reaction,
             attachmentCount: 0,
-            source: .conversation(id: record.conversationId),
+            source: .conversation(id: record.conversationId,
+                                  messageId: reactedMessageId),
             status: record.status,
             createdAt: record.createdAt
         )

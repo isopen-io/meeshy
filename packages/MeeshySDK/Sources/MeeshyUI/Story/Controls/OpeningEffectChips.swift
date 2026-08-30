@@ -25,9 +25,27 @@ public struct OpeningEffectChips: View {
     let selection: StoryTransitionEffect?
     let onSelect: (StoryTransitionEffect?) -> Void
 
+    /// **La surface qui PORTE les puces est-elle sombre en permanence ?**
+    ///
+    /// Sans ce drapeau, les puces suivent `colorScheme` — le thème de
+    /// l'APPAREIL. C'est juste sous l'atelier, dont le band est opaque et suit
+    /// le thème ; c'est faux sur le plateau du composer, **sombre en
+    /// permanence**. Un appareil en thème CLAIR y peignait alors un texte
+    /// `indigo950` sur un fond sombre : les puces non sélectionnées existaient
+    /// dans l'arbre d'accessibilité, avec leur libellé et leur cadre, et
+    /// n'étaient PAS VISIBLES. Défaut mesuré au simulateur le 2026-08-30.
+    ///
+    /// C'est la même règle que `ComposerTopBar` documente pour sa croix de
+    /// fermeture : sur une surface qui ne suit pas le thème, une couleur
+    /// adaptative peint du sombre sur du sombre dès que l'appareil quitte la
+    /// nuit.
+    public var onDarkSurface: Bool = false
+
     public init(selection: StoryTransitionEffect?,
+                onDarkSurface: Bool = false,
                 onSelect: @escaping (StoryTransitionEffect?) -> Void) {
         self.selection = selection
+        self.onDarkSurface = onDarkSurface
         self.onSelect = onSelect
     }
     // Les chips s'affichent sur le band opaque (blanc@92% en clair) : sans
@@ -53,7 +71,7 @@ public struct OpeningEffectChips: View {
             defaultValue: "Aucune",
             bundle: .module
         )
-        let isDark = colorScheme == .dark
+        let isDark = onDarkSurface || colorScheme == .dark
         // Sélectionné : blanc sur brand (contrasté dans les deux thèmes).
         // Non sélectionné : texte adaptatif sur remplissage subtil adaptatif.
         let textColor: Color = isSelected ? .white : (isDark ? .white : MeeshyColors.indigo950)

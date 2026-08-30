@@ -1173,10 +1173,21 @@ struct RootView: View {
     /// that hasn't been hydrated into the cache yet).
     private func handleSyncPillTap(_ source: OutboxUIItem.Source) {
         switch source {
-        case .conversation(let id):
+        case .conversation(let id, let messageId):
             guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
                 Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
                 return
+            }
+        // #4027 — l'entrée mène à sa CIBLE EXACTE. Le surlignage est posé
+            // AVANT la navigation et SCOPÉ à la conversation visée : sans le
+            // scope, une ancre survivrait à une ouverture différente et ferait
+            // sauter un autre fil sur un id qui n'est pas le sien.
+            // `ConversationView` le consomme (scroll + flash) puis le remet à
+            // `nil` — même chemin que le tap d'une notification, d'un résultat
+            // de recherche ou d'un message étoilé, à un seul exemplaire.
+            if let messageId {
+                router.pendingHighlightMessageId = messageId
+                router.pendingHighlightConversationId = id
             }
             router.push(.conversation(conv))
         case .post(let id):

@@ -94,7 +94,7 @@ extension StoryComposerViewModel {
     /// garantit. Suppression et duplication sont gardées côté canvas
     /// (`isLockedItem`) et côté ViewModel (`deleteElement`) ; l'édition l'est
     /// ici, à son point d'entrée unique.
-    func enterTextEditingMode(textId: String) {
+    public func enterTextEditingMode(textId: String) {
         if case .active(let current, _) = textEditingMode, current == textId { return }
         guard let target = currentEffects.textObjects.first(where: { $0.id == textId }),
               target.isLocked != true else { return }
@@ -103,7 +103,7 @@ extension StoryComposerViewModel {
     }
 
     /// Sort du mode édition. Rien à restaurer (la géométrie n'a jamais bougé).
-    func exitTextEditingMode() {
+    public func exitTextEditingMode() {
         // Audit it.90 : un texte resté VIDE à la fermeture de l'éditeur est un
         // fantôme — invisible au canvas, compté par le badge du FAB, sérialisé
         // au publish (et traduit côté gateway pour rien). On le retire au seul
