@@ -88,6 +88,7 @@ extension StoryCanvasUIView {
     /// mute state, completion callback). Idempotent — safe to call from `updateUIView`.
     public func setReaderContext(_ context: StoryReaderContext) {
         readerContext = context
+        muteIsLocked = context.locksMute
         isAudioMuted = context.mute
         audioMixer.setMute(context.mute)
         // Propagation immédiate aux video media layers : `rebuildLayers()` qui

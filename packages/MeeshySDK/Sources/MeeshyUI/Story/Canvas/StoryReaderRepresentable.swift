@@ -18,6 +18,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let storyItem: StoryItem
     public internal(set) var preferredLanguages: [String]
     public internal(set) var mute: Bool
+    /// **Le muet de cette surface est-il VERROUILLÉ ?** (#4084) — `mute` dit
+    /// l'état, celui-ci dit s'il a le droit de changer. Projection de
+    /// `ScenePlayerConfig.locksMute` jusqu'au canvas, qui seul peut refuser une
+    /// notification diffusée.
+    public internal(set) var locksMute: Bool = false
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -93,6 +98,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedAudioURLs: [String: URL] = [:],
                 playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                 mute: Bool = false,
+                locksMute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
@@ -110,6 +116,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preferredLanguages = chain
         self.playerProvider = playerProvider
         self.mute = mute
+        self.locksMute = locksMute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
         self.onCompletion = onCompletion
@@ -201,7 +208,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             postMediaURLResolver: resolver,
             imageCache: imageCache,
             localAudioURLResolver: localAudioResolver,
-            playerProvider: playerProvider
+            playerProvider: playerProvider,
+            locksMute: locksMute
         ))
         return view
     }

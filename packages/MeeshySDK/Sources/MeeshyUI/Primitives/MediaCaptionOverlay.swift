@@ -33,11 +33,43 @@ import SwiftUI
 /// Swift interdit les propriétés stockées statiques dans un type générique —
 /// et une règle de produit n'a de toute façon rien à faire dans un paramètre
 /// de rendu : elle est la même quel que soit ce qui peint le texte.
-public enum MediaCaptionRule {
+/// **La règle de repli d'une légende — PURE, et hors de toute vue.**
+///
+/// `nonisolated` parce qu'elle ne touche rien de l'interface : sans cette
+/// annotation elle hérite de l'isolation `@MainActor` du paquet, et devient
+/// inappelable depuis un test synchrone — ce qui est exactement ce qui a cassé
+/// la cible de tests du SDK quand elle vivait encore sur le type générique de la
+/// vue (2026-08-30).
+///
+/// Le déplacement dit aussi quelque chose de la conception : une règle portée
+/// par un type GÉNÉRIQUE demande à chaque appelant de choisir un paramètre qui
+/// n'a aucun rôle dans le calcul. `MediaCaptionOverlay<TextBody>.collapse` ne
+/// dépendait pas de `TextBody` ; l'inférence, elle, l'exigeait quand même.
+public nonisolated enum MediaCaptionRule {
     /// Le SEUIL qui décide de replier.
     public static let wordThreshold = 30
     /// La TÊTE qu'on montre quand on replie. Toujours ≤ `wordThreshold`.
     public static let wordHead = 15
+
+    /// Découpe sur les BLANCS (espaces, sauts de ligne, tabulations) en écartant
+    /// les vides : une légende aérée de plusieurs paragraphes compte ses mots
+    /// réels, pas ses séparateurs. Un texte sans blanc — japonais, chinois — ne
+    /// compte qu'UN mot et sort donc entier : le rogner à un nombre de mots qui
+    /// n'existe pas dans sa langue le couperait au hasard.
+    public static func collapse(_ text: String,
+                                threshold: Int,
+                                head: Int) -> (head: String, isTruncated: Bool) {
+        let mots = text.split(whereSeparator: \.isWhitespace)
+        guard mots.count > threshold, head > 0 else { return (text, false) }
+        return (mots.prefix(head).joined(separator: " "), true)
+    }
+
+    /// Le cas DÉGÉNÉRÉ où seuil et tête se confondent — replier dès le premier
+    /// mot de trop. Conservé pour les appelants qui veulent exactement ça ; la
+    /// règle du produit passe par la forme à deux nombres ci-dessus.
+    public static func collapse(_ text: String, words: Int) -> (head: String, isTruncated: Bool) {
+        collapse(text, threshold: words, head: words)
+    }
 }
 
 public struct MediaCaptionOverlay<TextBody: View>: View {
@@ -97,28 +129,8 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
 
     /// Les `words` premiers mots, et si quelque chose suit.
     ///
-    /// Découpe sur les BLANCS (espaces, sauts de ligne, tabulations) en écartant
-    /// les vides : une légende aérée de plusieurs paragraphes compte ses mots
-    /// réels, pas ses séparateurs. Un texte sans blanc — japonais, chinois — ne
-    /// compte qu'UN mot et sort donc entier : le rogner à un nombre de mots qui
-    /// n'existe pas dans sa langue le couperait au hasard.
-    public static func collapse(_ text: String,
-                                threshold: Int,
-                                head: Int) -> (head: String, isTruncated: Bool) {
-        let mots = text.split(whereSeparator: \.isWhitespace)
-        guard mots.count > threshold, head > 0 else { return (text, false) }
-        return (mots.prefix(head).joined(separator: " "), true)
-    }
-
-    /// Le cas DÉGÉNÉRÉ où seuil et tête se confondent — replier dès le premier
-    /// mot de trop. Conservé pour les appelants qui veulent exactement ça ; la
-    /// règle du produit passe par la forme à deux nombres ci-dessus.
-    public static func collapse(_ text: String, words: Int) -> (head: String, isTruncated: Bool) {
-        collapse(text, threshold: words, head: words)
-    }
-
     private var collapsed: (head: String, isTruncated: Bool) {
-        Self.collapse(caption, threshold: wordThreshold, head: wordHead)
+        MediaCaptionRule.collapse(caption, threshold: wordThreshold, head: wordHead)
     }
 
     // MARK: - Corps
