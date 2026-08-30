@@ -166,6 +166,73 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
     expect(payload.subtitle).toBe('Voice Notes');
   });
 
+  // ── Relations : une bannière annonce une ACTION, pas une rubrique ──
+  //
+  // `content` disait « Nouvelle demande de contact » — un intitulé de rubrique,
+  // pas ce que quelqu'un vient de faire. Sans phrase d'action sur le fil, la
+  // bannière in-app des trois clients ne pouvait composer « X veut se
+  // connecter » qu'en réécrivant du français en dur, ce que le Prisme (i18n
+  // serveur) interdit.
+
+  it('emits « veut se connecter » as the action subtitle of a friend request', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'requester_id',
+      username: 'alice',
+      displayName: 'Alice Martin',
+      avatar: null,
+    });
+
+    await service.createFriendRequestNotification({
+      recipientUserId: 'recipient_id',
+      requesterId: 'requester_id',
+      friendRequestId: 'fr_1',
+    });
+
+    const payload = findNotificationNewEmit(mockIO);
+    expect(payload).toBeDefined();
+    expect(payload.title).toBe('Alice Martin');
+    expect(payload.subtitle).toBe('veut se connecter');
+  });
+
+  it('emits « a accepté votre demande » as the action subtitle of an accepted request', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'accepter_id',
+      username: 'bob',
+      displayName: 'Bob',
+      avatar: null,
+    });
+
+    await service.createFriendAcceptedNotification({
+      recipientUserId: 'recipient_id',
+      accepterUserId: 'accepter_id',
+    });
+
+    const payload = findNotificationNewEmit(mockIO);
+    expect(payload).toBeDefined();
+    expect(payload.title).toBe('Bob');
+    expect(payload.subtitle).toBe('a accepté votre demande');
+  });
+
+  it('persists the composed headline so the LIST says it too, not only the banner', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'requester_id',
+      username: 'alice',
+      displayName: 'Alice Martin',
+      avatar: null,
+    });
+
+    await service.createFriendRequestNotification({
+      recipientUserId: 'recipient_id',
+      requesterId: 'requester_id',
+      friendRequestId: 'fr_2',
+    });
+
+    const created = mockPrisma.notification.create.mock.calls[0][0].data;
+    expect(created.title).toBe('Alice Martin veut se connecter');
+    // Il n'y a pas d'entité visée : rien à nommer en sous-titre.
+    expect(created.subtitle).toBeNull();
+  });
+
   it('falls back to "Meeshy" as title when no actor is provided (system notification with conversation context)', async () => {
     // System notification can be emitted without an explicit actor — buildPushHeader
     // already falls back to "Meeshy", we just want the socket payload to mirror it.

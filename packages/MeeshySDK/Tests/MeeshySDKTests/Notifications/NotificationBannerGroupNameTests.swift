@@ -1,15 +1,15 @@
 import XCTest
 @testable import MeeshySDK
 
-/// Tests for the Local-First in-app toast subtitle resolution on
-/// `NotificationToastManager`. A conversation toast must show the LOCAL
-/// presentation (renamed name + favorite emoji, resolved via the
-/// app-injected `conversationPresentationProvider`), and fall back to the
-/// gateway-sent group title when no local snapshot exists. Direct messages
-/// (which never had a subtitle) must stay subtitle-less even when a provider
-/// is installed.
+/// Résolution Local-First du nom de groupe d'une bannière in-app.
+///
+/// Le cadrage « X dans <groupe> » doit nommer le groupe tel que L'APPAREIL le
+/// connaît (renommé + emoji favori, via `conversationPresentationProvider`
+/// injecté par l'app), et retomber sur le titre canonique du serveur à défaut
+/// d'instantané local. Un message direct n'a pas de groupe, et un fournisseur
+/// installé ne doit pas lui en inventer un.
 @MainActor
-final class NotificationToastSubtitleResolutionTests: XCTestCase {
+final class NotificationBannerGroupNameTests: XCTestCase {
 
     private let decoder = JSONDecoder()
 
@@ -58,40 +58,41 @@ final class NotificationToastSubtitleResolutionTests: XCTestCase {
         XCTAssertEqual(presentation.composedSubtitle, "Maman")
     }
 
-    // MARK: - resolvedToastSubtitle
+    // MARK: - resolvedConversationGroupName
 
-    func test_resolvedSubtitle_noProvider_fallsBackToGatewayTitle() throws {
+    func test_resolvedGroupName_noProvider_fallsBackToGatewayTitle() throws {
         let event = try groupEvent()
         NotificationToastManager.shared.conversationPresentationProvider = nil
         XCTAssertEqual(
-            NotificationToastManager.shared.resolvedToastSubtitle(for: event),
+            NotificationToastManager.shared.resolvedConversationGroupName(for: event),
             "Équipe Tech"
         )
     }
 
-    func test_resolvedSubtitle_withLocalRename_prefersRenamedNameAndFavorite() throws {
+    func test_resolvedGroupName_withLocalRename_prefersRenamedNameAndFavorite() throws {
         let event = try groupEvent()
         NotificationToastManager.shared.conversationPresentationProvider = { id in
             id == "c1" ? .init(name: "Mon équipe à moi", favoriteEmoji: "😴") : nil
         }
         XCTAssertEqual(
-            NotificationToastManager.shared.resolvedToastSubtitle(for: event),
+            NotificationToastManager.shared.resolvedConversationGroupName(for: event),
             "😴 Mon équipe à moi"
         )
     }
 
-    func test_resolvedSubtitle_providerReturnsNil_fallsBackToGatewayTitle() throws {
+    func test_resolvedGroupName_providerReturnsNil_fallsBackToGatewayTitle() throws {
         let event = try groupEvent()
         NotificationToastManager.shared.conversationPresentationProvider = { _ in nil }
         XCTAssertEqual(
-            NotificationToastManager.shared.resolvedToastSubtitle(for: event),
+            NotificationToastManager.shared.resolvedConversationGroupName(for: event),
             "Équipe Tech"
         )
     }
 
-    func test_resolvedSubtitle_directMessage_staysSubtitleLess() throws {
-        // No conversationTitle → toastSubtitle is nil; the provider must NOT
-        // inject a subtitle that the direct-message toast never displayed.
+    func test_resolvedGroupName_directMessage_staysGroupLess() throws {
+        // Pas de conversationTitle → `conversationGroupName` est nil ; le
+        // fournisseur ne doit PAS injecter un groupe là où il n'y en a pas :
+        // la bannière d'un message direct dit « Bob », jamais « Bob dans Bob ».
         let event = try makeEvent("""
         {
             "id": "n2", "userId": "u1", "type": "new_message",
@@ -103,6 +104,6 @@ final class NotificationToastSubtitleResolutionTests: XCTestCase {
         NotificationToastManager.shared.conversationPresentationProvider = { _ in
             .init(name: "Bob renommé", favoriteEmoji: "❤️")
         }
-        XCTAssertNil(NotificationToastManager.shared.resolvedToastSubtitle(for: event))
+        XCTAssertNil(NotificationToastManager.shared.resolvedConversationGroupName(for: event))
     }
 }
