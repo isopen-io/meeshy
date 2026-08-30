@@ -568,7 +568,11 @@ extension MeeshyComposerHost {
             // Sous la scène, la matière est celle de l'ATELIER, relayée par la
             // télécommande (#4135). Le meuble ne la recalcule pas : il ne voit
             // ni le son de fond ni les traits de dessin.
-            atelierHasMatter: publishTrigger.canPublish
+            atelierHasMatter: publishTrigger.canPublish,
+            // La matière que le MEUBLE voit, lui — celle que l'écran montre
+            // déjà en vignettes et en chip de lieu (#4514).
+            hasMedia: !documentLocalMedia.isEmpty,
+            hasLocation: documentLocation != nil
         )
     }
 

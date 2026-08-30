@@ -662,7 +662,19 @@ nonisolated enum ComposerDocumentPublishGate {
         /// Défaut `false`, et c'est le sens SÛR : un appelant qui l'ignore
         /// obtient une flèche INERTE sur la scène, jamais une flèche armée
         /// au-dessus d'une composition vide.
-        atelierHasMatter: Bool = false
+        atelierHasMatter: Bool = false,
+        /// **La matière du DOCUMENT — des pièces jointes, un lieu (#4514).**
+        ///
+        /// Elle manquait, et le défaut était silencieux : un post de deux photos
+        /// sans légende était REFUSÉ, bouton peint et désactivé, sans que rien
+        /// ne dise que la seule chose absente était du texte. Mesuré au
+        /// simulateur le 2026-08-31.
+        ///
+        /// Défaut `false` des deux côtés — le sens SÛR : un appelant qui ne se
+        /// prononce pas obtient le comportement d'avant, jamais une porte
+        /// ouverte sur un brouillon vide.
+        hasMedia: Bool = false,
+        hasLocation: Bool = false
     ) -> Bool {
         guard !isPublishing else { return false }
         guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
@@ -672,7 +684,16 @@ nonisolated enum ComposerDocumentPublishGate {
         case .mood:
             return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
         case .document:
+            // **Publier une photo sans un mot est le cas NOMINAL d'un réseau
+            // social, pas un cas limite.** La porte n'acceptait qu'un repost ou
+            // du texte : les pièces jointes ne figuraient pas dans la question,
+            // alors que l'écran les montrait déjà en vignettes.
+            //
+            // Un lieu seul compte aussi — « je suis ici » est une publication
+            // en soi et n'a pas besoin d'une légende pour en être une.
             return repostOfId != nil
+                || hasMedia
+                || hasLocation
                 || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }

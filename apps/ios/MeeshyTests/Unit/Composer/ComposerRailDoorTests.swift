@@ -209,7 +209,14 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         // s'intercale entre le ressort et les entrées. Ce qui reste vrai — et
         // qui est la seule chose que ce témoin doit dire — c'est que le ressort
         // PRÉCÈDE tout ce qui se peint, portes comme contrôleurs.
-        XCTAssertTrue(source.contains("Spacer(minLength:0)switchmode{"),
+        // **Le ressort est CONDITIONNEL depuis #4072** : il n'a de sens que pour
+        // un rail de COULOIR, vertical et pleine hauteur. Sur le rail qui FLOTTE
+        // sur la scène il étirait le socle de verre sur toute la carte et faisait
+        // déborder la dernière entrée — mesuré à l'écran.
+        //
+        // Ce que le témoin doit dire n'a pas changé : le ressort PRÉCÈDE tout ce
+        // qui se peint. Sa condition s'intercale, elle ne le déplace pas.
+        XCTAssertTrue(source.contains("ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}switchmode{"),
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
         XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
         XCTAssertTrue(source.contains("case.tool(letcontrols):ForEach(controls)"))
