@@ -204,11 +204,20 @@ export async function messageValidationHook(
  * `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut au hook
  * `onRequest`, qui court AVANT `preValidation`, donc avant que `unifiedAuth`
  * ne pose `authContext`. Un `keyGenerator` qui lit `authContext?.userId` y
- * reçoit `undefined` et retombe sur `ip:${request.ip}` — l'adresse du
- * conteneur Traefik, le gateway tournant sans `trustProxy`, donc la MÊME pour
- * tout le monde. Un plafond « 30/min par compte » devenait 30/min pour la
- * PLATEFORME : le premier appelant privait tous les autres, et la protection
- * se retournait en déni de service. Mesuré sur le vrai plugin, pas déduit.
+ * reçoit `undefined` et retombe SYSTÉMATIQUEMENT sur `ip:${request.ip}`, pour
+ * un appelant authentifié comme pour un visiteur. Mesuré sur le vrai plugin
+ * (`fastify.inject`), pas déduit : sans `hook`, le générateur voit
+ * `authContext === undefined` ; avec `hook: 'preHandler'`, il voit le compte.
+ *
+ * Ce que ce repli coûte, exactement. Depuis #4137, `trustProxy` est posé
+ * (`config/trust-proxy.ts`, un maillon par défaut), donc `request.ip` est
+ * l'adresse RÉELLE de l'appelant — pas celle du conteneur Traefik. Un
+ * plafond « par compte » silencieusement dégradé en « par adresse » n'est
+ * donc pas un seau unique pour la plateforme ; il reste néanmoins faux dans
+ * les DEUX sens : plusieurs comptes derrière une même sortie (opérateur
+ * mobile, bureau, NAT) se partagent un crédit prévu pour un seul, et un même
+ * compte disposant de plusieurs adresses en obtient autant de crédits. Une
+ * limite par compte se compte par compte.
  *
  * Le repli `ip:` reste LÉGITIME là où l'appelant peut être anonyme — c'est
  * alors la seule identité disponible, et le déplacer au `preHandler` ne le
@@ -362,14 +371,14 @@ export function createSoundRouteRateLimitConfig(
  * `config.rateLimit` s'applique par défaut au hook `onRequest`, qui court
  * AVANT `preValidation` — donc avant que `unifiedAuth` ne pose `authContext`
  * sur la requête. Un `keyGenerator` qui lit `authContext?.userId` y reçoit
- * `undefined` et retombe sur son repli. Mesuré sur le vrai plugin
- * (@fastify/rate-limit, `fastify.inject`), pas déduit : sans `hook`, le
+ * `undefined` et retombe sur son repli `ip:${request.ip}`. Mesuré sur le vrai
+ * plugin (@fastify/rate-limit, `fastify.inject`), pas déduit : sans `hook`, le
  * générateur voit `AUCUN-authContext` ; avec `hook: 'preHandler'`, il voit le
- * compte. Le repli étant `ip:${request.ip}` et le gateway tournant sans
- * `trustProxy` derrière Traefik, la clé valait l'adresse du conteneur proxy —
- * la MÊME pour tout le monde. « 3/h par compte » était donc 3/h pour la
- * PLATEFORME : le premier appelant privait tous les autres, et la protection
- * se retournait en déni de service. C'est la découverte de #4147, portée ici.
+ * compte. Ces trois gestes comptaient donc par ADRESSE — plusieurs comptes
+ * derrière une même sortie se partageant les trois demandes horaires, et un
+ * même compte multipliant son crédit par ses adresses. C'est la découverte de
+ * #4147, portée ici. Voir `GARDES_DE_CLE` pour la portée exacte du repli
+ * depuis que `trustProxy` est posé (#4137).
  *
  * ## `skipOnError: false` — la panne du gardien n'est pas l'absence de garde
  *
