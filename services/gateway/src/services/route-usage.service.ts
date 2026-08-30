@@ -53,6 +53,28 @@
  *    demarrage (`onReady`). Une adresse surveillee qui n'est montee nulle part
  *    ressort `matched: false` — jamais comme un zero.
  *
+ * ## Une adresse hors `/api/v1/` se DECLARE, elle ne se devine pas (#4470)
+ *
+ * Un alias deprecie n'est servi que pour la duree de son sursis, et le depot
+ * fait du zero de ce compteur — jamais d'une date posee a la main — le critere
+ * de son retrait. Les neuf alias hors `/api/v1/` sont donc precisement les
+ * adresses dont l'existence ne se justifie QUE par ce compteur : les omettre
+ * rendait la question « les appelle-t-on encore ? » sans reponse possible la
+ * ou elle est la plus utile.
+ *
+ * Le garde qui les excluait exigeait une FORME de chemin. Son remplacant exige
+ * une RAISON : `horsPrefixe` porte la famille et le motif, `surveilleesMalDeclarees`
+ * les confronte au chemin. Il est strictement plus contraignant — voir le
+ * doc-comment de cette fonction.
+ *
+ * Le defaut etait CIRCULAIRE, et sa forme merite d'etre retenue : la table
+ * brute comptait bien ces neuf adresses (`record()` n'a jamais regarde le
+ * prefixe), mais la portee `watched` — la SEULE que la route S5 sert par
+ * defaut — ne les MATERIALISAIT pas. Un temoin pose sur le comptage serait
+ * donc reste vert des deux cotes du correctif. **La question a poser a un
+ * compteur n'est pas « compte-t-il ? » mais « SERT-il ce qu'il compte, a qui
+ * doit en decider ? »**
+ *
  * ## Fenetre glissante, en memoire, sans minuterie
  *
  * Un anneau de `sliceCount` tranches de `windowMs / sliceCount`. La rotation
@@ -82,6 +104,23 @@
 /** Lecture d'horloge, en millisecondes. Injectable pour que la fenetre se teste. */
 export type Horloge = () => number;
 
+/**
+ * Ou vit une adresse surveillee qui n'est PAS sous `/api/v1/`.
+ *
+ * `alias-racine` : servie hors de `/api` — donc hors de toute regle ancree sur
+ * ce prefixe (proxy, WAF, journal). `alias-non-versionne` : servie sous `/api`
+ * mais sans version. La distinction n'est pas decorative : `surveilleesMalDeclarees`
+ * la CONFRONTE au chemin, de sorte qu'une famille fausse rougisse.
+ */
+export type FamilleHorsPrefixe = 'alias-racine' | 'alias-non-versionne';
+
+/** Ce qu'une adresse hors `/api/v1/` doit DIRE pour figurer dans la liste. */
+export type DeclarationHorsPrefixe = {
+  readonly famille: FamilleHorsPrefixe;
+  /** Pourquoi cette adresse existe hors du prefixe, et ce que son zero autorise. */
+  readonly raison: string;
+};
+
 /** Une adresse depreciee sous surveillance, et l'issue qui attend son zero. */
 export type RouteSurveillee = {
   readonly method: string;
@@ -89,6 +128,22 @@ export type RouteSurveillee = {
   readonly route: string;
   /** Le numero d'issue qui fait de son zero un critere de retrait. */
   readonly issue: number;
+  /** REQUISE des que `route` ne commence pas par `/api/v1/` — et INTERDITE sinon. */
+  readonly horsPrefixe?: DeclarationHorsPrefixe;
+};
+
+/** Pourquoi une entree est refusee. Un seul motif par entree : le premier rencontre. */
+export type MotifMauvaiseDeclaration =
+  | 'chemin-non-absolu'
+  | 'hors-prefixe-sans-declaration'
+  | 'raison-vide'
+  | 'declaration-perimee'
+  | 'famille-dementie';
+
+export type SurveilleeMalDeclaree = {
+  readonly method: string;
+  readonly route: string;
+  readonly motif: MotifMauvaiseDeclaration;
 };
 
 /** L'echantillon tel que le hook `onResponse` le lit, sans aucune identite. */
@@ -481,6 +536,15 @@ const CATEGORIES_PREFERENCES = [
  * Les surveiller aurait produit des verdicts PERMANENTS et faux : `matched: false`
  * pour les deux premieres, un compteur qui ne tombe JAMAIS a zero pour la
  * troisieme. Une alarme qui crie sans arret finit par ne plus rien dire.
+ *
+ * Depuis #4470 la liste porte aussi les NEUF alias depreciees servies hors de
+ * `/api/v1/` — cinq a la racine (`voiceAnalysisLegacyAliasRoutes`) et quatre
+ * sous `/api` sans version (`socketIOAdminRoutes`, `attachmentLegacyFileRoutes`,
+ * `userDeletionsRoutes`). Elles se trouvent en croisant le manifeste (les 17
+ * adresses hors `/api/v1`) avec les sites qui posent `depreciee()` : c'est ce
+ * croisement, et non une lecture, qui garantit qu'aucune ne manque.
+ * Chacune declare sa famille et sa raison via `horsPrefixe`, faute de quoi
+ * `surveilleesMalDeclarees` la refuse.
  */
 export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   // #4178 — la lecture de soi converge sur `GET /api/v1/me`
@@ -535,7 +599,198 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   { method: 'POST', route: '/api/v1/admin/users/:userId/verify-age', issue: 4154 },
   { method: 'POST', route: '/api/v1/admin/users/:userId/voice-consent', issue: 4154 },
   { method: 'POST', route: '/api/v1/admin/users/:userId/reset-password', issue: 4154 },
+
+  // ── Les neuf alias DEPRECIES hors `/api/v1/` (#4470) ──────────────────────
+  //
+  // Ils sont la raison d'etre de `horsPrefixe`. Chacun est servi UNIQUEMENT
+  // pour la duree de son sursis, et les trois modules qui les posent designent
+  // tous ce compteur comme l'arbitre de leur retrait (#4275). Les omettre
+  // laissait la question « les appelle-t-on encore ? » sans reponse possible
+  // sur les SEULES adresses dont l'existence ne se justifie que par un sursis.
+  //
+  // La table brute les comptait deja : ce qui manquait etait leur
+  // MATERIALISATION — seau TOTAL, pre-semis a zero, ligne `watched` avec son
+  // `matched` — dans la portee que sert la route S5.
+  {
+    method: 'GET',
+    route: '/attachments/:attachmentId/analysis',
+    issue: 4277,
+    horsPrefixe: {
+      famille: 'alias-racine',
+      raison:
+        "Alias racine de GET /api/v1/attachments/:attachmentId/analysis (voiceAnalysisLegacyAliasRoutes, " +
+        'routes/voice-analysis.ts), servi jusqu\'au sunset du 2027-02-25 INCLUS.',
+    },
+  },
+  {
+    method: 'POST',
+    route: '/attachments/:attachmentId/analysis',
+    issue: 4277,
+    horsPrefixe: {
+      famille: 'alias-racine',
+      raison:
+        'Alias racine de POST /api/v1/attachments/:attachmentId/analysis (voiceAnalysisLegacyAliasRoutes), ' +
+        'servi jusqu\'au sunset du 2027-02-25 INCLUS.',
+    },
+  },
+  {
+    method: 'POST',
+    route: '/attachments/batch/analysis',
+    issue: 4277,
+    horsPrefixe: {
+      famille: 'alias-racine',
+      raison:
+        'Alias racine de POST /api/v1/attachments/batch/analysis (voiceAnalysisLegacyAliasRoutes), servi ' +
+        'jusqu\'au sunset du 2027-02-25 INCLUS.',
+    },
+  },
+  {
+    method: 'GET',
+    route: '/voice/analysis',
+    issue: 4277,
+    horsPrefixe: {
+      famille: 'alias-racine',
+      raison:
+        'Alias racine de GET /api/v1/voice/analysis (voiceAnalysisLegacyAliasRoutes), servi jusqu\'au sunset ' +
+        'du 2027-02-25 INCLUS.',
+    },
+  },
+  {
+    method: 'POST',
+    route: '/voice/analysis',
+    issue: 4277,
+    horsPrefixe: {
+      famille: 'alias-racine',
+      raison:
+        'Alias racine de POST /api/v1/voice/analysis (voiceAnalysisLegacyAliasRoutes), servi jusqu\'au sunset ' +
+        'du 2027-02-25 INCLUS.',
+    },
+  },
+
+  // #4376 — les deux gestes d'administration Socket.IO portaient leur chemin
+  // EN DUR, sans version. `aliasNonVersionne()` pose leurs trois en-tetes et
+  // renvoie sur `apiPath(...)` ; leur doc-comment dit deja que le retrait se
+  // decide « sur un compteur d'acces nul (#4275) », pas sur un grep client.
+  {
+    method: 'GET',
+    route: '/api/socketio/stats',
+    issue: 4376,
+    horsPrefixe: {
+      famille: 'alias-non-versionne',
+      raison:
+        'Alias non versionne de GET /api/v1/socketio/stats (socketio/socketio-admin-routes.ts), sunset ' +
+        'du 2027-02-26. Une console tierce, un signet ou un script ne sont dans aucun grep.',
+    },
+  },
+  {
+    method: 'POST',
+    route: '/api/socketio/disconnect-user',
+    issue: 4376,
+    horsPrefixe: {
+      famille: 'alias-non-versionne',
+      raison:
+        'Alias non versionne de POST /api/v1/socketio/disconnect-user (socketio/socketio-admin-routes.ts), ' +
+        'sunset du 2027-02-26.',
+    },
+  },
+
+  // #4324 — la migration 013 a reecrit les `fileUrl` persistees ; ce qui reste
+  // sont les notifications DEJA LIVREES, qu'aucun deploiement ne rattrape. Le
+  // module le dit mot pour mot : « son retrait se decidera sur le compteur
+  // d'acces (#4275) plutot que sur une revue de code ».
+  // #4317 — la decision « laquelle des deux implementations de delete-for-me
+  // survit ? » est PRISE : `routes/conversations/delete-for-me.ts` reste, et
+  // cette adresse-ci devient un alias en sursis. Son doc-comment le dit mot
+  // pour mot — « le retrait reel reste gouverne par le compteur d'acces nul
+  // (#4275). Ici le compteur devrait tomber vite : aucun des trois clients
+  // n'appelle cette adresse » — et le compteur ne la materialisait pas.
+  //
+  // Les SIX autres routes de `userDeletionsRoutes` ne sont PAS ici : aucune ne
+  // porte l'annonce (`depreciee`), aucune n'a de successeur, ce sont des
+  // `known-gap` en attente d'une decision produit — pas des alias en sursis.
+  {
+    method: 'DELETE',
+    route: '/api/conversations/:conversationId/delete-for-me',
+    issue: 4317,
+    horsPrefixe: {
+      famille: 'alias-non-versionne',
+      raison:
+        'Alias non versionne de DELETE /api/v1/conversations/:id/delete-for-me (routes/user-deletions.ts), ' +
+        'sunset du 2027-02-26 — seule route de son module a porter l\'annonce, la decision #4317 etant prise.',
+    },
+  },
+  {
+    method: 'GET',
+    route: '/api/attachments/file/*',
+    issue: 4324,
+    horsPrefixe: {
+      famille: 'alias-non-versionne',
+      raison:
+        'Alias non versionne de lecture d\'octets (attachmentLegacyFileRoutes, routes/attachments/index.ts), ' +
+        'sunset du 2027-02-26 — des notifications deja livrees portent des adresses de cette forme.',
+    },
+  },
 ]);
+
+/**
+ * `/api` exactement, ou `/api/…` — jamais `startsWith('/api')` seul, qui
+ * rangerait `/apiary` sous le perimetre d'une regle qui ne le couvre pas.
+ *
+ * Le predicat est ECRIT ICI plutot qu'importe de
+ * `__tests__/route-manifest/unprefixed-mounts.ts`, qui porte le meme : un
+ * service de production n'importe pas d'un module de temoins.
+ */
+export function servieSousApi(route: string): boolean {
+  return route === '/api' || route.startsWith('/api/');
+}
+
+/**
+ * Les entrees que la liste surveillee ne DECLARE pas correctement.
+ *
+ * ## Pourquoi une declaration, et non une forme de chemin
+ *
+ * Le garde precedent exigeait `route.startsWith('/api/v1/')`. Il empechait
+ * bien qu'une entree soit ajoutee sans passer par l'adresse canonique — et
+ * c'est ce qu'on veut pour les cinquante-sept adresses versionnees. Mais il
+ * rendait IMPOSSIBLE de surveiller les huit alias depreciees qui, par
+ * construction, n'ont pas ce prefixe : le mecanisme cense gouverner leur
+ * retrait ne pouvait pas les voir (#4470).
+ *
+ * Le relacher aurait ete pire que le defaut. Ce garde-ci n'interdit donc pas
+ * une FORME, il exige une RAISON — le patron que le depot emploie deja deux
+ * fois (`ALLOWED_OUTSIDE_API_V1`, `UNPREFIXED_MOUNT_DECISIONS`) — et il est
+ * strictement plus contraignant que celui qu'il remplace :
+ *
+ *  - une entree prefixee reste acceptee, et ne peut PAS porter de declaration
+ *    (`declaration-perimee`) : une justification posee « au cas ou » ne veut
+ *    plus rien dire quand elle ne justifie rien ;
+ *  - une entree hors prefixe passe UNIQUEMENT avec sa famille et sa raison,
+ *    non vide ;
+ *  - la famille est CONFRONTEE au chemin (`famille-dementie`) — sans quoi elle
+ *    serait un commentaire, pas une declaration ;
+ *  - tout chemin, prefixe ou non, doit etre ABSOLU : un motif relatif ne
+ *    designe aucune route Fastify et ne pourrait produire qu'un `matched`
+ *    faux a jamais.
+ *
+ * Une liste vide est le seul resultat acceptable.
+ */
+export function surveilleesMalDeclarees(
+  routes: readonly RouteSurveillee[] = ROUTES_SURVEILLEES
+): SurveilleeMalDeclaree[] {
+  return routes.flatMap((r): SurveilleeMalDeclaree[] => {
+    const motif = motifDe(r);
+    return motif === null ? [] : [{ method: r.method, route: r.route, motif }];
+  });
+}
+
+function motifDe(r: RouteSurveillee): MotifMauvaiseDeclaration | null {
+  if (!r.route.startsWith('/')) return 'chemin-non-absolu';
+  if (r.route.startsWith('/api/v1/')) return r.horsPrefixe ? 'declaration-perimee' : null;
+  if (!r.horsPrefixe) return 'hors-prefixe-sans-declaration';
+  if (r.horsPrefixe.raison.trim() === '') return 'raison-vide';
+  const racine = r.horsPrefixe.famille === 'alias-racine';
+  return racine === servieSousApi(r.route) ? 'famille-dementie' : null;
+}
 
 let singleton: RouteUsageCounter | null = null;
 

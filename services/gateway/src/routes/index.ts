@@ -348,13 +348,15 @@ export const ROUTE_TABLE_BEFORE_VOICE_PLUGIN: readonly RouteRegistrationEntry[] 
     // adresses tombent chez `frontend-ip` — l'illustration exacte de la
     // conséquence décrite ici.
     //
-    // La conséquence porte donc sur ce qui viendrait APRÈS — et, déjà,
-    // sur une règle INTERNE : les 57 entrées de `ROUTES_SURVEILLEES`
-    // (`services/route-usage.service.ts`, #4275) commencent TOUTES par
-    // `/api/v1/`, et un témoin le fige. Le compteur d'accès compte bien ces
-    // cinq adresses dans sa table brute, mais ne les MATÉRIALISE pas dans la
-    // portée `watched` que sert la route S5 — soit le mécanisme même censé
-    // gouverner leur retrait. Toute règle ancrée sur `/api` — quota, WAF,
+    // La conséquence porte donc sur ce qui viendrait APRÈS. Elle a porté,
+    // un temps, sur une règle INTERNE : `ROUTES_SURVEILLEES`
+    // (`services/route-usage.service.ts`, #4275) ancrait sa garde sur le
+    // préfixe, si bien que le compteur comptait ces cinq adresses dans sa
+    // table brute sans jamais les MATÉRIALISER dans la portée `watched`
+    // que sert la route S5 — le mécanisme censé gouverner leur retrait
+    // était aveugle à ce qu'il devait retirer. SOLDÉ par #4470 : la garde
+    // exige désormais une déclaration motivée plutôt qu'une forme de
+    // chemin, et les neuf alias du dépôt hors `/api/v1` y sont déclarés. Toute règle ancrée sur `/api` — quota, WAF,
     // journal d'API, catalogue — doit donc nommer ces cinq chemins
     // explicitement jusqu'au `sunset`. Le témoin
     // `__tests__/route-manifest/unprefixed-mounts.ts` tient cette décision et

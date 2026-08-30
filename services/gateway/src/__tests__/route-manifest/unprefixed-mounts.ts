@@ -288,9 +288,11 @@ export const UNPREFIXED_MOUNT_DECISIONS: readonly UnprefixedMountDecision[] = [
       "`Deprecation`/`Sunset`/`Link` s'adressent à un client, jamais à une règle de chemin. Mesuré au " +
       '2026-08-30 : aucune règle du chemin de PRODUCTION ne les manque (prod et staging routent par HÔTE, ' +
       '`Host(gate[.staging].meeshy.me)` → gateway:3000, tous chemins). La conséquence porte donc sur toute ' +
-      "règle FUTURE ainsi ancrée, et déjà sur DEUX règles vivantes : le routeur LAN de développement " +
+      "règle FUTURE ainsi ancrée, et encore sur UNE règle vivante : le routeur LAN de développement " +
       "`gateway-ip` (`docker-compose.local.yml`, `PathPrefix('/api')`), sous lequel elles tombent chez le " +
-      "frontal ; et `ROUTES_SURVEILLEES` (#4275), dont les 57 entrées commencent toutes par `/api/v1/` — le " +
-      'compteur qui gouverne le retrait ne MATÉRIALISE donc pas ces cinq adresses.',
+      'frontal. La seconde est SOLDÉE : `ROUTES_SURVEILLEES` (#4275) ancrait sa garde sur le préfixe, si ' +
+      'bien que le compteur censé gouverner le retrait ne matérialisait aucune de ces adresses ; depuis ' +
+      '#4470 la garde exige une DÉCLARATION MOTIVÉE plutôt qu`une forme de chemin, et les neuf alias ' +
+      'du dépôt hors `/api/v1` y sont déclarés.',
   },
 ];
