@@ -100,13 +100,14 @@ final class MessageActionResolverTests: XCTestCase {
     /// RÉELLES parce que la règle lit leurs drapeaux de protection : un contexte
     /// de primitives ne pourrait pas la mesurer.
     private func msg(
-        attachments: [MessageAttachment],
+        attachments: [MessageAttachment] = [],
+        content: String = "",
         isViewOnce: Bool = false,
         isBlurred: Bool = false,
         isEncrypted: Bool = false
     ) -> Message {
         var m = MeeshyMessage(
-            conversationId: "conv-1", content: "",
+            conversationId: "conv-1", content: content,
             isEncrypted: isEncrypted, attachments: attachments)
         m.isViewOnce = isViewOnce
         m.isBlurred = isBlurred
@@ -465,5 +466,81 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertNotNil(info)
         XCTAssertTrue(info?.contains(.reactions) ?? false)
         XCTAssertTrue(info?.contains(.language) ?? false)
+    }
+
+    // MARK: - #4025 — « Composer » est offert sur TOUT message, et le PLAN dit comment
+
+    /// **Le défaut.** « Composer » n'apparaissait que sur un message portant un
+    /// média posable sur un canvas. Un message TEXTE — le cas le plus courant —
+    /// ne l'offrait pas, alors que son texte a une destination évidente dans
+    /// l'atelier : la DESCRIPTION de la slide.
+    ///
+    /// La règle ne rend donc plus « quelle pièce » mais un PLAN : ce qui se pose
+    /// sur le canvas, et ce qui pré-remplit la description. Deux questions que
+    /// `target(in:)` seul ne pouvait pas porter — il rendait un `MessageAttachment?`,
+    /// un type qui n'a aucun endroit où loger du texte.
+    func test_seedPlan_textOnlyMessage_seedsTheDescription() {
+        let plan = ComposableAttachment.seedPlan(in: msg(content: "On se voit à 18h"))
+        XCTAssertEqual(plan?.description, "On se voit à 18h")
+        XCTAssertNil(plan?.media, "un message texte ne pose rien sur le canvas")
+    }
+
+    func test_offers_textOnlyMessage_isNowOffered() {
+        XCTAssertTrue(ComposableAttachment.offers(message: msg(content: "salut")))
+    }
+
+    /// **Un message VIDE n'offre rien** — ni texte, ni média : le contre-témoin
+    /// sans lequel « offert sur tout message » se lirait « offert toujours »,
+    /// et l'atelier s'ouvrirait sur rien.
+    func test_offers_emptyMessage_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg()))
+    }
+
+    /// Un texte fait d'espaces n'est pas un texte.
+    func test_offers_blankText_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "   \n\t ")))
+    }
+
+    /// **Le texte porte les MÊMES protections que le média.** Publier au-delà
+    /// de la conversation ce qui est masqué DANS la conversation est une
+    /// divulgation — que la chose masquée soit une image ou une phrase.
+    /// Sans ces trois cas, l'extension au texte ouvrirait une porte que le
+    /// média avait fermée.
+    func test_offers_protectedTextIsRefused_onAllThreeDeclarations() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isViewOnce: true)),
+                       "vue unique : clause O13")
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isBlurred: true)),
+                       "flouté : le masque n'est qu'un rendu, le texte partirait en clair")
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isEncrypted: true)),
+                       "chiffré : ce qui ne se lit que dans la conversation n'en sort pas")
+    }
+
+    /// **Un message qui porte les DEUX sème les deux.** Le média va sur le
+    /// canvas, le texte dans la description — c'est exactement la légende que
+    /// l'auteur avait déjà écrite, et la lui redemander serait un geste de plus
+    /// pour rien.
+    func test_seedPlan_mediaWithText_seedsBoth() {
+        let plan = ComposableAttachment.seedPlan(
+            in: msg(attachments: [piece("image/jpeg")], content: "au bord du lac"))
+        XCTAssertNotNil(plan?.media, "le média reste ce qui se pose sur le canvas")
+        XCTAssertEqual(plan?.description, "au bord du lac")
+    }
+
+    /// Un LOT reste refusé — mais son TEXTE, lui, reste semable : le refus
+    /// portait sur « quelle pièce part », pas sur la phrase qui l'accompagne.
+    func test_seedPlan_aBatchKeepsItsTextButPosesNoMedia() {
+        let plan = ComposableAttachment.seedPlan(
+            in: msg(attachments: [piece("image/jpeg"), piece("video/mp4")], content: "nos vacances"))
+        XCTAssertNil(plan?.media, "un lot mentirait sur ce qui part")
+        XCTAssertEqual(plan?.description, "nos vacances")
+    }
+
+    /// `target(in:)` survit comme PROJECTION du plan, pour ses deux lecteurs
+    /// qui n'ont besoin que de la pièce. Deux implémentations de la même
+    /// conjonction seraient deux règles qui ont commencé à diverger.
+    func test_target_isAProjectionOfTheSamePlan() {
+        let message = msg(attachments: [piece("image/jpeg")], content: "x")
+        XCTAssertEqual(ComposableAttachment.target(in: message)?.id,
+                       ComposableAttachment.seedPlan(in: message)?.media?.id)
     }
 }
