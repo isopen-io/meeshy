@@ -109,27 +109,39 @@ export async function performConversationDeleteForMe(
   // écrite `CREATOR`, l'égalité stricte sautait cette branche et la
   // conversation restait sans créateur — sans erreur ni log.
   if (isMemberCreator(participant.role ?? 'member')) {
-    // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
-    // quand le champ est present-et-null que quand il est ABSENT (legacy,
-    // jamais backfillé) — impossible de distinguer les deux cas côté JS
-    // via un simple `select` + négation. On requête donc directement le
-    // state present-et-null (seul état correspondant à un DM "genuinely
-    // empty") via `count`, qui ne matche jamais un document où le champ
-    // est absent — `type: 'direct'` est filtré dans la même requête.
-    const isEmptyDirect = (await prisma.conversation.count({
-      where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
-    })) > 0
+    // QUI hérite : la loi de succession, écrite UNE fois et partagée avec
+    // `leave.ts` (#4058). Cette porte élisait un MODÉRATEUR en premier —
+    // l'ordre des rangs était inversé, et la décision porteur du 2026-08-28 ne
+    // connaît que deux étages : le premier à avoir été ADMINISTRATEUR, sinon le
+    // plus ancien membre. Le DM jamais utilisé, qui se ferme au lieu de se
+    // transmettre, était posé ICI seul : sa jumelle `leave.ts` transmettait donc
+    // ce que cette porte fermait. Il est passé dans la loi avec le reste — voir
+    // `creatorSuccession.ts` pour où vit l'instant de la promotion, pourquoi la
+    // trace n'a pas à être protégée, et pourquoi hériter demande un compte.
+    const succession = await resoudreSuccessionDuCreateur(prisma, {
+      conversationId,
+      sortantUserId: userId,
+    })
 
-    if (isEmptyDirect) {
-      // DM vide jamais utilisé : rien à préserver pour un successeur qui
-      // ne l'a pas demandé (Prisme design doc 2026-08-04) — fermer
-      // plutôt que transférer, même s'il reste un autre participant actif.
-      //
-      // `closedAt`/`closedBy` ne sont pas décoratifs : le stream de
-      // rattrapage `loadConversationTombstones` interroge `closedAt >
-      // since`. Une clôture qui n'écrit que `isActive: false` n'est portée
-      // par AUCUN delta — le participant restant garderait la ligne dans
-      // son cache persistant jusqu'à une réconciliation complète.
+    if (succession.kind === 'transfer') {
+      const successor = succession.successor
+      await prisma.$transaction([
+        prisma.participant.update({
+          where: { id: successor.id },
+          data: { role: 'creator' },
+        }),
+        prisma.participant.update(hideSelf),
+      ])
+      promotedSuccessor = { userId: successor.userId }
+    } else {
+      // Personne n'hérite — DM jamais utilisé, ou plus aucun membre éligible.
+      // Personne à prévenir dans le second cas (c'est la condition même), mais
+      // la clôture doit rester ENREGISTRÉE : `closedAt`/`closedBy` ne sont pas
+      // décoratifs, le stream de rattrapage `loadConversationTombstones`
+      // interroge `closedAt > since`. Une clôture qui n'écrit que
+      // `isActive: false` n'est portée par AUCUN delta — un participant restant
+      // garderait la ligne dans son cache persistant jusqu'à une réconciliation
+      // complète.
       const [closed] = await prisma.$transaction([
         prisma.conversation.update({
           where: { id: conversationId },
@@ -139,43 +151,6 @@ export async function performConversationDeleteForMe(
         prisma.participant.update(hideSelf),
       ])
       closedAudience = (closed.participants ?? []).filter(p => p.isActive)
-    } else {
-      // QUI hérite : la loi de succession, écrite UNE fois et partagée avec
-      // `leave.ts` (#4058). Cette porte élisait un MODÉRATEUR en premier —
-      // l'ordre des rangs était inversé, et la décision porteur du 2026-08-28
-      // ne connaît que deux étages : le premier à avoir été ADMINISTRATEUR,
-      // sinon le plus ancien membre. Voir `creatorSuccession.ts` pour où vit
-      // l'instant de la promotion et pourquoi la trace n'a pas à être protégée.
-      const succession = await resoudreSuccessionDuCreateur(prisma, {
-        conversationId,
-        sortantUserId: userId,
-      })
-
-      if (succession.kind === 'transfer') {
-        const successor = succession.successor
-        await prisma.$transaction([
-          prisma.participant.update({
-            where: { id: successor.id },
-            data: { role: 'creator' },
-          }),
-          prisma.participant.update(hideSelf),
-        ])
-        promotedSuccessor = { userId: successor.userId }
-      } else {
-        // No other active members — close conversation. Personne à
-        // prévenir ici (c'est la condition même de cette branche), mais la
-        // clôture doit rester ENREGISTRÉE : même écriture que la branche
-        // jumelle ci-dessus, pour la même raison de rattrapage.
-        const [closed] = await prisma.$transaction([
-          prisma.conversation.update({
-            where: { id: conversationId },
-            data: { isActive: false, closedAt: now, closedBy: userId },
-            include: { participants: { select: { id: true, userId: true, isActive: true } } },
-          }),
-          prisma.participant.update(hideSelf),
-        ])
-        closedAudience = (closed.participants ?? []).filter(p => p.isActive)
-      }
     }
   } else {
     // Aucune écriture jumelle à accorder : le masquage est tout le geste.

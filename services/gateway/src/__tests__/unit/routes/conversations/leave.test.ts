@@ -95,6 +95,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+      // La loi de succession écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme
+      // au lieu de se transmettre — 0 ici : ces scénarios ne sont pas ce DM.
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
