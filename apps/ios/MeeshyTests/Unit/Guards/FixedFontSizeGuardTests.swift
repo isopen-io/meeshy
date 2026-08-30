@@ -207,6 +207,21 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
+        // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
+        // porte DEUX sites figés dont les origines sont opposées, et les
+        // confondre avalerait en silence le second :
+        //
+        //   · le glyphe de lecture d'une vidéo (12 pt) est une RELOCALISATION —
+        //     il vient de `galleryImageView`, dont le visuel est devenu
+        //     `FeedMediaTile` pour que le carrousel et l'aperçu d'une
+        //     republication rendent la même vignette. La population ne bouge
+        //     pas, seul le nom s'ajoute ;
+        //   · la chevronnette d'une flèche de pagination (14 pt) est un VRAI
+        //     ajout, et `totalCeiling` monte d'un cran pour lui, avec sa raison :
+        //     elle vit dans un cercle de 34 pt qu'elle déborderait si elle
+        //     scalait, exactement la doctrine 86i. La cible tactile reste à 44,
+        //     posée par-dessus.
+        "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView+Attachments.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
@@ -301,7 +316,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
     /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
     /// et les confondre aurait masqué l'un des deux.
-    private static let totalCeiling = 247
+    /// **248 depuis #4096.** Un cran, pour la chevronnette des flèches de
+    /// pagination du carrousel (14 pt dans un cercle fixe de 34). Le second
+    /// site figé du même fichier — le glyphe de lecture d'une vidéo — n'y
+    /// participe pas : il a été DÉPLACÉ depuis `FeedPostCard+Media.swift`.
+    private static let totalCeiling = 248
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
