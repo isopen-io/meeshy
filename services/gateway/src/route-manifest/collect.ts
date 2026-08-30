@@ -142,7 +142,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { EventEmitter } from 'events';
 import { registerAllRoutes, type RouteRegistrationDeps } from '../route-registration';
-import { createUnifiedAuthMiddleware } from '../middleware/auth';
+import { createUnifiedAuthMiddleware, AUTH_REGIME, type AuthRegime } from '../middleware/auth';
 import { socketIOAdminRoutes } from '../socketio/socketio-admin-routes';
 
 // ---------------------------------------------------------------------------
@@ -237,6 +237,8 @@ export interface CollectedRoute {
    * `app.ready()` — voir `instrumentEncapsulatedAuthHooks`.
    */
   instanceAuthGuard?: boolean;
+  /** Idem, mais le hook d'instance ENRICHIT sans jamais refuser (#4489). */
+  instanceAuthEnricher?: boolean;
 }
 
 /** Étiquette portée par une route déclarée SANS passer par `server.register(...)` — voir la note de module en tête de fichier. */
@@ -327,9 +329,10 @@ function instrumentRegistrationForModuleLabels(app: FastifyInstance): () => stri
 function instrumentEncapsulatedAuthHooks(
   app: FastifyInstance,
   authenticateRef: unknown
-): () => ReadonlySet<string> {
+): () => { gardees: ReadonlySet<string>; enrichies: ReadonlySet<string> } {
   interface ContexteEncapsule {
     porteUneGarde: boolean;
+    porteUnEnrichisseur: boolean;
     readonly clesDeRoute: Set<string>;
   }
 
@@ -338,7 +341,11 @@ function instrumentEncapsulatedAuthHooks(
   const PHASES_DE_GARDE = new Set(['onRequest', 'preValidation', 'preHandler']);
 
   app.addHook('onRegister', (instance: FastifyInstance) => {
-    const contexte: ContexteEncapsule = { porteUneGarde: false, clesDeRoute: new Set() };
+    const contexte: ContexteEncapsule = {
+      porteUneGarde: false,
+      porteUnEnrichisseur: false,
+      clesDeRoute: new Set(),
+    };
     contextes.push(contexte);
 
     // Fastify type `addHook` par une surcharge par nom de phase que la
@@ -348,8 +355,9 @@ function instrumentEncapsulatedAuthHooks(
 
     (instance as unknown as { addHook: (name: string, fn: unknown) => FastifyInstance }).addHook =
       function instrumentedAddHook(name: string, fn: unknown) {
-        if (PHASES_DE_GARDE.has(name) && hookLooksLikeAuth(fn, authenticateRef)) {
-          contexte.porteUneGarde = true;
+        if (PHASES_DE_GARDE.has(name)) {
+          if (hookIsGuard(fn, authenticateRef)) contexte.porteUneGarde = true;
+          else if (hookIsEnricher(fn, authenticateRef)) contexte.porteUnEnrichisseur = true;
         }
         return original(name, fn);
       };
@@ -364,11 +372,16 @@ function instrumentEncapsulatedAuthHooks(
 
   return () => {
     const gardees = new Set<string>();
+    const enrichies = new Set<string>();
     for (const contexte of contextes) {
-      if (!contexte.porteUneGarde) continue;
-      for (const cle of contexte.clesDeRoute) gardees.add(cle);
+      if (contexte.porteUneGarde) for (const cle of contexte.clesDeRoute) gardees.add(cle);
+      else if (contexte.porteUnEnrichisseur) for (const cle of contexte.clesDeRoute) enrichies.add(cle);
     }
-    return gardees;
+    // Une garde l'emporte toujours sur un enrichisseur : deux contextes
+    // imbriqués peuvent porter l'un et l'autre, et c'est le plus strict qui
+    // décide de ce que l'appelant subit.
+    for (const cle of gardees) enrichies.delete(cle);
+    return { gardees, enrichies };
   };
 }
 
@@ -499,9 +512,11 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
   await app.ready();
 
   // APRÈS `ready()` seulement — voir le doc de `instrumentEncapsulatedAuthHooks`.
-  const gardees = routesGardeesParInstance();
+  const { gardees, enrichies } = routesGardeesParInstance();
   for (const route of routes) {
-    if (gardees.has(`${route.method} ${route.url}`)) route.instanceAuthGuard = true;
+    const cle = `${route.method} ${route.url}`;
+    if (gardees.has(cle)) route.instanceAuthGuard = true;
+    else if (enrichies.has(cle)) route.instanceAuthEnricher = true;
   }
 
   return { app, routes };
@@ -563,6 +578,42 @@ function hookLooksLikeAuth(fn: unknown, authenticateRef: unknown): boolean {
 }
 
 /**
+ * Le régime que le middleware DÉCLARE sur lui-même (#4489) — `undefined` quand
+ * il ne déclare rien (un enrobage `(req, rep) => fastify.authenticate(...)`,
+ * par exemple).
+ *
+ * Deux appels de `createUnifiedAuthMiddleware` rendent des fonctions dont la
+ * SOURCE est identique : `options` est capturée dans la fermeture, donc
+ * invisible à `Function.prototype.toString()`. Reconnaître l'appel ne dit donc
+ * RIEN de ce que l'appel décide — un middleware monté `requireAuth: false` ne
+ * garde rien, il ENRICHIT. Dix-huit routes ouvertes étaient annoncées gardées
+ * pour cette seule raison.
+ */
+function hookRegime(fn: unknown): AuthRegime | undefined {
+  if (typeof fn !== 'function') return undefined;
+  const declare = (fn as unknown as Record<symbol, unknown>)[AUTH_REGIME];
+  return typeof declare === 'object' && declare !== null ? (declare as AuthRegime) : undefined;
+}
+
+/**
+ * Une GARDE refuse un appelant sans identité. Un régime ABSENT compte comme
+ * une garde : c'est la forme des enrobages de `fastify.authenticate`, qui
+ * gardent tous. Le sens du doute va vers « gardée » — se tromper là ne fait
+ * qu'annoncer une route plus protégée qu'elle n'est, jamais l'inverse.
+ */
+function hookIsGuard(fn: unknown, authenticateRef: unknown): boolean {
+  if (!hookLooksLikeAuth(fn, authenticateRef)) return false;
+  const regime = hookRegime(fn);
+  return regime === undefined || regime.requireAuth;
+}
+
+/** Un ENRICHISSEUR lit l'identité si elle est là, et ne refuse jamais son absence. */
+function hookIsEnricher(fn: unknown, authenticateRef: unknown): boolean {
+  if (!hookLooksLikeAuth(fn, authenticateRef)) return false;
+  return hookRegime(fn)?.requireAuth === false;
+}
+
+/**
  * Les TROIS phases où une garde peut vivre. Le collecteur n'en lisait que deux
  * — `preValidation` manquait, et c'est la forme de 186 déclarations de
  * `routes/` (#4318). Une phase oubliée ne rend pas un résultat approximatif :
@@ -579,7 +630,18 @@ function routeHooks(route: CollectedRoute): unknown[] {
 function hasAuthenticateHook(route: CollectedRoute, authenticateRef: unknown): boolean {
   if (route.instanceAuthGuard === true) return true;
   if (GARDES_HORS_HOOK.has(`${route.method} ${route.url}`)) return true;
-  return routeHooks(route).some((fn) => hookLooksLikeAuth(fn, authenticateRef));
+  return routeHooks(route).some((fn) => hookIsGuard(fn, authenticateRef));
+}
+
+/**
+ * Vrai quand la route porte un résolveur d'identité OPTIONNEL et aucune garde
+ * (#4489) : elle sert un appelant sans jeton, et enrichit sa réponse s'il en
+ * présente un. C'est une route PUBLIQUE, pas une route S2/S3.
+ */
+function hasEnricherOnly(route: CollectedRoute, authenticateRef: unknown): boolean {
+  if (hasAuthenticateHook(route, authenticateRef)) return false;
+  if (route.instanceAuthEnricher === true) return true;
+  return routeHooks(route).some((fn) => hookIsEnricher(fn, authenticateRef));
 }
 
 /**
@@ -670,7 +732,12 @@ const ADMIN_PREFIX_RE = /^\/api\/v1\/admin(\/|$)|^\/admin(\/|$)/;
  * routes qui partagent une clé, et la dupliquer aurait près que doublé la
  * taille du fichier commité pour zéro information supplémentaire.
  */
-export type SecurityBasisKey = 'no-standard-auth-hook' | 'sovereign' | 'permission-gated' | 'authenticated-only';
+export type SecurityBasisKey =
+  | 'no-standard-auth-hook'
+  | 'optional-identity'
+  | 'sovereign'
+  | 'permission-gated'
+  | 'authenticated-only';
 
 interface SecurityDerivation {
   readonly level: SecurityLevel;
@@ -680,6 +747,9 @@ interface SecurityDerivation {
 
 /** Dérive le niveau de sécurité d'UNE route depuis ce que le serveur assemblé donne à voir. Voir la note de module en tête de fichier. */
 function deriveSecurityLevel(route: CollectedRoute, authenticateRef: unknown): SecurityDerivation {
+  if (hasEnricherOnly(route, authenticateRef)) {
+    return { level: 'inconnu', candidates: ['S0', 'S1', 'S2', 'S3'], basisKey: 'optional-identity' };
+  }
   if (!hasAuthenticateHook(route, authenticateRef)) {
     return { level: 'inconnu', candidates: ['S0', 'S1'], basisKey: 'no-standard-auth-hook' };
   }
@@ -731,6 +801,18 @@ const SECURITY_BASIS_LEGEND: Readonly<Record<SecurityBasisKey, string>> = {
     'deux ne se distinguent pas depuis le serveur assemblé : le limiteur de débit global ' +
     '(registerGlobalRateLimiter, middleware/rate-limiter.ts) est monté par server.ts, hors du graphe que ' +
     'registerAllRoutes — et donc ce collecteur — construit.',
+  'optional-identity':
+    "Un résolveur d'identité OPTIONNEL est monté (createUnifiedAuthMiddleware avec requireAuth: false, qui " +
+    'DÉCLARE son régime sur la fonction rendue — voir AUTH_REGIME dans middleware/auth.ts) et aucune garde ' +
+    "ne l'accompagne. Ce HOOK ne refuse donc jamais un appelant sans jeton : il sert l'anonyme et enrichit " +
+    "la réponse si un jeton est présent. Le niveau reste inconnu sur TOUTE l'échelle S0–S3, et c'est une " +
+    'affirmation, pas un aveu : la mesure montre que la moitié de ces routes sont réellement publiques ' +
+    "(GET /u/:username, /links/:identifier, /tracking-links/*) et que l'autre moitié est gardée DANS le " +
+    "handler (GET /conversations, POST /conversations/:id/messages — l'appartenance au fil, que le hook " +
+    "ne peut pas connaître). Les annoncer publiques serait le défaut de #4318 à l'envers ; les annoncer " +
+    'S2/S3 était le défaut de #4489. Cette clé dit ce qui est SU : le hook ne garde pas, le handler peut. ' +
+    "Sans la déclaration AUTH_REGIME, les deux régimes de la fabrique étaient indistinguables — l'appel " +
+    'a la même source compilée, `options` étant une variable capturée.',
   sovereign:
     'requireSovereign() détecté (middleware/authorize.ts) — sans ambiguïté possible : cette garde ' +
     "n'admet que BIGBOSS, par définition (aucune route ne l'utilise au 2026-08-29 ; la détection reste " +

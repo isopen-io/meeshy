@@ -321,9 +321,16 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
 
   // --- me/delete-account : flux de suppression de compte par email, tokens à usage limité ---
-  { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature" },
-  { method: 'GET', url: '/api/v1/me/delete-account/cancel', why: 'idem (cancelTokenHash)' },
-  { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: "idem, exige en plus le statut GRACE_PERIOD_EXPIRED" },
+  // Les trois liens de courriel de suppression de compte VIVAIENT ici, avec
+  // le motif « pré-session par nature ». Mesuré le 2026-08-30 sur le serveur
+  // assemblé : les trois rendent **401 AUTH_REQUIRED** à un appelant anonyme.
+  // Le motif décrivait donc l'INTENTION du produit, pas ce que le serveur
+  // sert — et parce qu'ils figuraient dans cette liste, le témoin ci-dessous
+  // les sautait, et personne ne l'a vu. Une exception qui décrit une intention
+  // au lieu d'une mesure éteint la garde qui l'aurait contredite.
+  // Retirés : le témoin exige désormais leur 401/403, qu'il obtient. Le
+  // DÉFAUT — un lien de courriel inaccessible à qui n'est pas connecté, ce qui
+  // est le cas nominal — est suivi par son issue, jamais masqué ici.
 
   // --- Profils publics (design produit assumé) ---
   { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },
