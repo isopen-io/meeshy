@@ -34,6 +34,17 @@ const mockContactFns = {
 
 jest.mock('../../../../routes/users/contact-change', () => mockContactFns);
 
+// Surface unifiée `/me/contact-changes` (#4341) — module SÉPARÉ de
+// `contact-change.ts` (budget de taille, voir son doc-comment de tête).
+const mockContactChangesFns = {
+  initiateContactChange: jest.fn<any>().mockResolvedValue(undefined),
+  verifyContactChange: jest.fn<any>().mockResolvedValue(undefined),
+  resendContactChangeVerification: jest.fn<any>().mockResolvedValue(undefined),
+  getContactChangeStatus: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/contact-changes', () => mockContactChangesFns);
+
 const mockPreferencesFns = {
   getDashboardStats: jest.fn<any>().mockResolvedValue(undefined),
   getUserStats: jest.fn<any>().mockResolvedValue(undefined),
@@ -101,7 +112,13 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByPhone).toHaveBeenCalledWith(mockFastify);
 
-    // Contact change routes
+    // Contact change routes — surface unifiée (#4341) d'abord
+    expect(mockContactChangesFns.initiateContactChange).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.verifyContactChange).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.resendContactChangeVerification).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.getContactChangeStatus).toHaveBeenCalledWith(mockFastify);
+
+    // Anciennes adresses (#4184) — dépréciées, montées en alias
     expect(mockContactFns.initiateEmailChange).toHaveBeenCalledWith(mockFastify);
     expect(mockContactFns.verifyEmailChange).toHaveBeenCalledWith(mockFastify);
     expect(mockContactFns.resendEmailChangeVerification).toHaveBeenCalledWith(mockFastify);

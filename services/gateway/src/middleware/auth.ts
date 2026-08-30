@@ -10,6 +10,7 @@ import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -134,6 +135,46 @@ export async function findTrustedSession(
   });
 }
 
+// ===== VIE D'UNE SESSION NOMMÉE (#4264 critère 4) =====
+
+/**
+ * Verdict d'une lecture de session — TROIS états, jamais deux, comme
+ * `NotificationService.messageLiveness` (`services/gateway/CLAUDE.md`
+ * § « Une garde d'admission se pose sur CHAQUE chemin ») : `UserSession`
+ * n'est JAMAIS supprimée physiquement dans ce dépôt (seul `isValid` bascule —
+ * `SessionService.invalidateSession`, `services/gateway/src/services/SessionService.ts`),
+ * donc une ligne ABSENTE ne PROUVE rien.
+ *
+ *  - `live`    — la ligne existe, `isValid` est vrai. Admettre.
+ *  - `gone`    — la ligne existe, `isValid` est FAUX : la révocation est
+ *    ÉCRITE en base, donc PROUVÉE. Refuser (fail-CLOSED sur la preuve).
+ *  - `unknown` — la ligne n'a pas été trouvée, ou la lecture a levé : rien
+ *    n'est prouvé. Un secondaire en retard sur le jeu de réplicas rend
+ *    `null` pour une session tout juste créée — le cas nominal du PREMIER
+ *    appel REST suivant un `POST /auth/login` — et ce n'est pas une preuve
+ *    de révocation. Admettre (fail-OPEN sur l'absence de preuve).
+ *
+ * Ne JAMAIS filtrer `isValid` dans le `where` de la lecture (voir
+ * `AuthMiddleware.sessionLiveness`) : cela confondrait `gone` et `unknown`
+ * sous un seul « non trouvé », et ferait perdre exactement la distinction
+ * qui protège la connexion qui vient d'avoir lieu.
+ */
+type SessionLiveness = 'live' | 'gone' | 'unknown';
+
+/**
+ * Motif de refus interne — jamais transmis au client, qui n'apprend que le
+ * message générique existant (`'Invalid JWT token'`), comme pour toute autre
+ * raison de refus JWT sur ce chemin. Sert uniquement à journaliser
+ * précisément côté serveur, sans faire classer ce refus comme une erreur
+ * JWT « inattendue » dans le bloc `catch` de `createRegisteredUserContext`.
+ */
+class SessionRevokedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionRevokedError';
+  }
+}
+
 // ===== SERVICE =====
 
 export class AuthMiddleware {
@@ -159,6 +200,37 @@ export class AuthMiddleware {
     }
 
     return this.createUnauthenticatedContext();
+  }
+
+  /**
+   * Verdict de vie de la session NOMMÉE par le claim `sid` d'un JWT — voir
+   * {@link SessionLiveness}. Lit par IDENTITÉ (`id` + `userId`), JAMAIS en
+   * filtrant `isValid` dans le `where` : c'est ce qui permet de distinguer
+   * `gone` (prouvé — la ligne existe et porte `isValid: false`) de `unknown`
+   * (rien trouvé, y compris par retard de réplication).
+   *
+   * `userId` est dans le `where` par défense en profondeur, comme pour
+   * `findTrustedSession` ci-dessus : sans lui, un `sid` valide appartenant à
+   * un AUTRE compte suffirait à passer la garde. En pratique cela ne peut
+   * pas arriver avec un JWT authentique — `signSessionToken` signe toujours
+   * `userId` et `sid` pour le MÊME utilisateur (`session-jwt.ts`) — mais le
+   * filtre ne coûte rien et documente l'invariant sur place.
+   */
+  private async sessionLiveness(sid: string, userId: string): Promise<SessionLiveness> {
+    try {
+      const session = await this.prisma.userSession.findFirst({
+        where: { id: sid, userId },
+        select: { isValid: true },
+      });
+      if (!session) return 'unknown';
+      return session.isValid ? 'live' : 'gone';
+    } catch (error) {
+      authLogger.warn(
+        '[AUTH] Lecture de session en échec — admission fail-open, aucune preuve de révocation (#4264 critère 4)',
+        { sid, userId, error }
+      );
+      return 'unknown';
+    }
   }
 
   private async createRegisteredUserContext(
@@ -196,6 +268,57 @@ export class AuthMiddleware {
       }
 
       const jwtUserId = jwtPayload.userId as string;
+
+      // #4264 critère 4 — la garde REST porte enfin le même gain que
+      // `POST /auth/refresh` (#4213, #4264 critères 1-3 — voir
+      // `routes/auth/magic-link.ts` et `services/auth/session-jwt.ts`) : un
+      // JWT dont la session NOMMÉE est révoquée ne doit plus ouvrir de
+      // requête authentifiée, pas seulement un rafraîchissement. Posée ICI,
+      // avant tout accès au cache `auth:user:*` ou à la ligne `User` — une
+      // session PROUVÉE révoquée n'a besoin de rien charger de plus.
+      const sidClaim = jwtPayload[SESSION_CLAIM];
+      const sid = typeof sidClaim === 'string' ? sidClaim : undefined;
+
+      if (sid) {
+        // Régime NOMINAL — comme `refresh` : c'est la session NOMMÉE par le
+        // jeton, et aucune autre, qui décide. `sessionLiveness` ne filtre
+        // JAMAIS `isValid` dans son `where` (cf. sa doc) : une ligne ABSENTE
+        // (réplica en retard sur un login tout juste fait) n'est PAS une
+        // preuve de révocation — c'est le témoin « deux sessions, une
+        // révoquée » qui exerce cette branche.
+        const verdict = await this.sessionLiveness(sid, jwtUserId);
+        if (verdict === 'gone') {
+          authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton a été révoquée', {
+            userId: jwtUserId,
+            sid,
+          });
+          throw new SessionRevokedError('Session révoquée');
+        }
+        // 'live' ou 'unknown' : admettre (fail-OPEN sur l'absence de preuve).
+      } else {
+        // Régime de TRANSITION — jeton émis avant #4264, sans `sid`. Même
+        // butoir daté que `refresh` (`legacyTokenRefusal`,
+        // `services/auth/session-jwt.ts`) : ne PAS le réinventer ici, sous
+        // peine de désaccorder les deux portes le jour où la fenêtre bouge.
+        //
+        // `refresh` applique EN PLUS, pour ce même régime, la règle de
+        // compte de #4213 (« au moins une session valide pour le compte »).
+        // Cette route-ci s'arrête au butoir de fenêtre : l'étendre à CHAQUE
+        // requête REST demande la même requête `count()` que `refresh`, dont
+        // le site vit hors du territoire de ce lot (`routes/auth/magic-link.ts`) —
+        // voir le commentaire de livraison pour le suivi.
+        const iatClaim = jwtPayload.iat;
+        const iat = typeof iatClaim === 'number' ? iatClaim : undefined;
+        const refus = legacyTokenRefusal({ iat }, new Date());
+
+        if (refus) {
+          authLogger.warn('[AUTH] Requête REST refusée : jeton hérité hors de la fenêtre de transition (#4264)', {
+            userId: jwtUserId,
+            motif: refus,
+          });
+          throw new SessionRevokedError('Jeton hérité hors fenêtre de transition');
+        }
+      }
 
       const cacheKey = `auth:user:${jwtUserId}`;
 
@@ -384,6 +507,10 @@ export class AuthMiddleware {
         }
       } else if (error instanceof jwt.JsonWebTokenError) {
         authLogger.warn('JWT invalid', { message: error.message });
+      } else if (error instanceof SessionRevokedError) {
+        // Déjà journalisé avec son motif précis au site d'appel (#4264
+        // critère 4) — ne pas dupliquer le log, ni le classer en erreur
+        // « inattendue » : c'est une garde qui vient de fonctionner.
       } else {
         authLogger.error('Unexpected JWT error', { error });
       }
