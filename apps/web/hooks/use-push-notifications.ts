@@ -14,6 +14,8 @@ import {
   canReceivePushNotifications,
 } from '@/utils/push-notifications';
 import { logger } from '@/utils/logger';
+import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 interface UsePushNotificationsReturn {
   /** Permission actuelle pour les notifications */
@@ -126,7 +128,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
 
         // Envoyer la subscription au backend
         try {
-          const response = await fetch('/api/push/subscribe', {
+          const response = await fetch(buildApiUrl(API_ENDPOINTS.users.registerDeviceToken), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -167,8 +169,8 @@ export function usePushNotifications(): UsePushNotificationsReturn {
 
         // Informer le backend
         try {
-          await fetch('/api/push/unsubscribe', {
-            method: 'POST',
+          await fetch(buildApiUrl(API_ENDPOINTS.users.registerDeviceToken), {
+            method: 'DELETE',
             credentials: 'include',
           });
 

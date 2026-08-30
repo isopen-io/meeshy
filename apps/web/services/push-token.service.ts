@@ -5,9 +5,24 @@ import { logger } from '@/utils/logger';
  */
 
 import axios from 'axios';
+import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 interface RegisterTokenPayload {
   token: string;
+  /**
+   * #4337 — la plateforme au sens du SERVEUR (`z.enum(['ios','android','web'])`,
+   * `routes/push-tokens.ts:32`), qui la déclare REQUISE (`required: ['token',
+   * 'platform']`) et en déduit le type de jeton : `platform === 'ios'` ⇒ APNs,
+   * sinon FCM.
+   *
+   * À ne pas confondre avec `deviceInfo.platform`, qui porte `navigator.platform`
+   * (« MacIntel », « Win32 »…) — même nom, autre référentiel. Recopier le second
+   * dans le premier ferait échouer l'enum côté serveur.
+   *
+   * Ce client est le web : la valeur est constante.
+   */
+  platform: 'web';
   deviceInfo?: {
     userAgent: string;
     platform: string;
@@ -26,12 +41,7 @@ interface DeleteTokenResponse {
 }
 
 class PushTokenService {
-  private baseURL: string;
   private lastRegisteredToken: string | null = null;
-
-  constructor() {
-    this.baseURL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-  }
 
   /**
    * Log helper
@@ -72,11 +82,12 @@ class PushTokenService {
 
       const payload: RegisterTokenPayload = {
         token,
+        platform: 'web',
         deviceInfo: this.getDeviceInfo(),
       };
 
       const response = await axios.post<RegisterTokenResponse>(
-        `${this.baseURL}/api/users/push-token`,
+        buildApiUrl(API_ENDPOINTS.users.registerDeviceToken),
         payload,
         {
           headers: {
@@ -130,7 +141,7 @@ class PushTokenService {
       }
 
       const response = await axios.delete<DeleteTokenResponse>(
-        `${this.baseURL}/api/users/push-token`,
+        buildApiUrl(API_ENDPOINTS.users.registerDeviceToken),
         {
           data: { token: tokenToDelete },
           headers: {
