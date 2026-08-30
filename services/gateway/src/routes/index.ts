@@ -310,6 +310,55 @@ export const ROUTE_TABLE_BEFORE_VOICE_PLUGIN: readonly RouteRegistrationEntry[] 
     // dans `routes/voice-analysis.ts`). Avant ce lot, cette route ne recevait
     // AUCUN objet d'options ; `prefix: ''` est la même adresse, dite au lieu
     // d'être sous-entendue.
+    //
+    // ── La conséquence de PÉRIMÈTRE, assumée (#4367 critère 1) ────────────
+    //
+    // Ce qui précède motive l'ADRESSE. Il ne dit rien de ce que cette adresse
+    // NE REÇOIT PAS, et c'est la moitié qui manquait : les trois en-têtes
+    // `Deprecation` / `Sunset` / `Link` s'adressent à un CLIENT — aucune règle
+    // de proxy, de WAF ou de journalisation ne les lit. Une telle règle s'ancre
+    // sur un PRÉFIXE DE CHEMIN. Ces cinq adresses (`GET|POST
+    // /attachments/:attachmentId/analysis`, `POST /attachments/batch/analysis`,
+    // `GET|POST /voice/analysis`) sont donc hors de TOUTE règle ancrée sur
+    // `/api`, et le rester jusqu'au retrait du 2027-02-25 INCLUS : un alias
+    // déprécié est servi jusqu'à son `sunset`, la dépréciation ne le retire
+    // pas du périmètre, elle annonce sa fin.
+    //
+    // L'alias N'EST PAS déplacé sous `/api` pour autant — ce serait retirer
+    // aux appelants, avant l'échéance, l'adresse qu'on vient de leur promettre
+    // de servir jusque-là.
+    //
+    // Mesuré au 2026-08-30, et c'est ce qui rend la conséquence tolérable
+    // AUJOURD'HUI : aucune règle vivante n'est ainsi ancrée sur le chemin
+    // d'accès de production. Prod et staging routent par HÔTE
+    // (`Host(gate.meeshy.me)` / `Host(gate.staging.meeshy.me)` →
+    // `gateway:3000`, TOUS chemins, `infrastructure/docker/compose/
+    // docker-compose.{prod,staging}.yml`) : il n'y a pas de porte `/api` à
+    // franchir, ce qui explique le `200` observé sur staging. Les `handle
+    // /api/*` du `Caddyfile` et les `location /api/` des quatre confs nginx qui
+    // relaient vers la passerelle (`default.conf`, `dev.conf`,
+    // `production.conf`, `ssl-optimized.conf`) décrivent une topologie
+    // mono-hôte que ce dépôt ne déploie pas : Caddy n'est référencé par aucun
+    // compose, trois de ces confs sont sur la liste de suppression de
+    // `scripts/cleanup-production.sh` et la quatrième n'est référencée nulle
+    // part ; seul `static-files.conf` est monté, et il ne relaie rien vers la
+    // passerelle. Le seul ancrage `/api` VIVANT du dépôt est le routeur
+    // LAN de développement `gateway-ip` (`docker-compose.local.yml`,
+    // `Host(192.168.1.171) && PathPrefix('/api')`) : sous lui, ces cinq
+    // adresses tombent chez `frontend-ip` — l'illustration exacte de la
+    // conséquence décrite ici.
+    //
+    // La conséquence porte donc sur ce qui viendrait APRÈS — et, déjà,
+    // sur une règle INTERNE : les 57 entrées de `ROUTES_SURVEILLEES`
+    // (`services/route-usage.service.ts`, #4275) commencent TOUTES par
+    // `/api/v1/`, et un témoin le fige. Le compteur d'accès compte bien ces
+    // cinq adresses dans sa table brute, mais ne les MATÉRIALISE pas dans la
+    // portée `watched` que sert la route S5 — soit le mécanisme même censé
+    // gouverner leur retrait. Toute règle ancrée sur `/api` — quota, WAF,
+    // journal d'API, catalogue — doit donc nommer ces cinq chemins
+    // explicitement jusqu'au `sunset`. Le témoin
+    // `__tests__/route-manifest/unprefixed-mounts.ts` tient cette décision et
+    // rougit si un module rejoint la racine sans la sienne.
     prefix: '',
     module: voiceAnalysisLegacyAliasRoutes,
   },
