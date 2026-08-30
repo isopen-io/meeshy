@@ -42,6 +42,34 @@
  * décide pas d'une conséquence » — appliquée un cran plus haut : ici elle
  * décidait de l'ÉTIQUETTE, et l'étiquette aurait décidé de l'héritage.
  *
+ * ─── HÉRITER DEMANDE UN COMPTE ──────────────────────────────────────────────
+ *
+ * Un participant sans `userId` — un visiteur venu par un lien de partage — n'est
+ * pas éligible. Gouverner un fil (fermer, bannir, promouvoir) depuis une session
+ * qui expire, et sans ligne `User` à qui l'imputer, n'est pas une succession :
+ * c'est une conversation laissée sans gouvernance sous couvert d'en avoir une.
+ * S'il ne reste que des invités, la clôture s'applique.
+ *
+ * ─── ET CE QUI NE SE TRANSMET PAS DU TOUT ───────────────────────────────────
+ *
+ * Un DM JAMAIS UTILISÉ se ferme au lieu de se transmettre : rien à préserver
+ * pour un successeur qui ne l'a pas demandé. Cette règle vivait dans
+ * `delete-for-me.ts` SEUL — donc `leave.ts` transmettait ce que sa jumelle
+ * fermait, ce qui est exactement la divergence que #4058 vient de supprimer.
+ * Elle appartient à la loi, pas à la porte.
+ *
+ * ─── CE QUE LA LOI N'EST PAS : UNE QUESTION D'AUTORITÉ ──────────────────────
+ *
+ * `utils/conversation-authority.ts` (#3892) dit qu'un ADMIN ou BIGBOSS de la
+ * plateforme, une fois MEMBRE d'un fil, **agit avec les droits du créateur**.
+ * C'est le voisin d'apparence interchangeable de cette loi-ci, et l'employer ici
+ * serait un contresens : `effectiveConversationRole` répond « ce geste est-il
+ * permis à cet acteur ? », jamais « qui hérite ? ». Un administrateur de
+ * plateforme simple membre AGIT comme le créateur ; il n'a pas pour autant été
+ * administrateur DE CETTE CONVERSATION, seul rang que la décision porteur
+ * classe. Le faire hériter d'office ferait dépendre la succession d'un rang de
+ * PLATEFORME que personne n'a promu dans ce fil.
+ *
  * ─── POURQUOI LA TRACE N'A PAS BESOIN D'ÊTRE PROTÉGÉE ───────────────────────
  *
  * `DELETE /notifications` fait un `deleteMany({})` **global**. La question
@@ -89,6 +117,9 @@ const TYPES_DE_CHANGEMENT_DE_RANG = [
   'member_role_changed',
 ] as const
 
+const estEligible = (candidat: SuccessionCandidate): boolean =>
+  typeof candidat.userId === 'string' && candidat.userId.length > 0
+
 const estAdministrateur = (role: string | null | undefined): boolean =>
   (role ?? MemberRole.MEMBER).toLowerCase() === MemberRole.ADMIN
 
@@ -111,10 +142,14 @@ export function elireSuccesseur(
   candidats: readonly SuccessionCandidate[],
   promotions: readonly AdminPromotion[]
 ): CreatorSuccession {
-  if (candidats.length === 0) return { kind: 'close' }
+  // Hériter demande un compte — voir le doc-comment de tête. Le filtre est ICI,
+  // dans la loi PURE, et pas seulement dans le `where` : une porte qui
+  // remettrait ses propres candidats ne doit pas pouvoir contourner la règle.
+  const eligibles = candidats.filter(estEligible)
+  if (eligibles.length === 0) return { kind: 'close' }
 
-  const administrateurs = candidats.filter(candidat => estAdministrateur(candidat.role))
-  const pool = administrateurs.length > 0 ? administrateurs : candidats
+  const administrateurs = eligibles.filter(candidat => estAdministrateur(candidat.role))
+  const pool = administrateurs.length > 0 ? administrateurs : eligibles
 
   const premierRang = new Map<string, number>()
   if (administrateurs.length > 0) {
@@ -168,22 +203,54 @@ const meneAuRangAdmin = (metadata: unknown): boolean => {
  * règle retombe sur l'ancienneté d'appartenance, que la première lecture porte
  * déjà.
  */
+/**
+ * Le plafond des candidats. Aucune lecture de ce dépôt ne rend une collection
+ * ENTIÈRE (#4165), et une élection n'a pas besoin du fil entier : au-delà,
+ * concourent les participants les plus anciennement ARRIVÉS.
+ */
+export const PLAFOND_CANDIDATS = 500
+
+/** Le plafond de la trace, généreux devant celui des candidats. */
+export const PLAFOND_TRACES = 2000
+
+/**
+ * Un DM jamais utilisé ne se transmet pas.
+ *
+ * Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien quand le
+ * champ est present-et-null que quand il est ABSENT (legacy, jamais backfillé) —
+ * impossible de distinguer les deux côté JS via un `select` + négation. On
+ * requête donc directement le seul état qui corresponde à un DM « genuinely
+ * empty » via `count`, qui ne matche jamais un document où le champ est absent.
+ */
+async function estDirectJamaisUtilise(
+  prisma: PrismaClient,
+  conversationId: string
+): Promise<boolean> {
+  const combien = await prisma.conversation.count({
+    where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
+  })
+  return combien > 0
+}
+
 export async function resoudreSuccessionDuCreateur(
   prisma: PrismaClient,
   params: { conversationId: string; sortantUserId: string }
 ): Promise<CreatorSuccession> {
   const { conversationId, sortantUserId } = params
 
+  if (await estDirectJamaisUtilise(prisma, conversationId)) return { kind: 'close' }
+
   const candidats = await prisma.participant.findMany({
     where: { conversationId, isActive: true, userId: { not: sortantUserId } },
     select: { id: true, userId: true, role: true, joinedAt: true },
     orderBy: { joinedAt: 'asc' },
+    take: PLAFOND_CANDIDATS,
   })
 
   if (candidats.length === 0) return { kind: 'close' }
 
   const identifiantsAdmins = candidats
-    .filter(candidat => estAdministrateur(candidat.role))
+    .filter(candidat => estAdministrateur(candidat.role) && estEligible(candidat))
     .map(candidat => candidat.userId)
     .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0)
 
@@ -193,9 +260,17 @@ export async function resoudreSuccessionDuCreateur(
     where: {
       userId: { in: identifiantsAdmins },
       type: { in: [...TYPES_DE_CHANGEMENT_DE_RANG] },
+      // Cadré sur CETTE conversation par la BASE, pas seulement en JavaScript :
+      // sans ce filtre, la requête ramène tout l'historique de rang de ces
+      // comptes sur TOUS leurs fils pour n'en garder qu'une poignée. Le
+      // prédicat `memeConversation` reste appliqué ensuite — il coûte un
+      // parcours et couvre les lignes anciennes dont le `context` n'a pas la
+      // forme attendue.
+      context: { path: ['conversationId'], equals: conversationId },
     },
     select: { userId: true, createdAt: true, context: true, metadata: true },
     orderBy: { createdAt: 'asc' },
+    take: PLAFOND_TRACES,
   })
 
   const promotions: AdminPromotion[] = traces

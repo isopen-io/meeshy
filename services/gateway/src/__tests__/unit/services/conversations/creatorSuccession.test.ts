@@ -15,6 +15,8 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  PLAFOND_CANDIDATS,
+  PLAFOND_TRACES,
   elireSuccesseur,
   resoudreSuccessionDuCreateur,
 } from '../../../../services/conversations/creatorSuccession';
@@ -140,7 +142,16 @@ describe('elireSuccesseur — la loi, sans base de données', () => {
   });
 });
 
-const prismaDouble = (candidats: unknown[], notifications: unknown[]) => ({
+const prismaDouble = (
+  candidats: unknown[],
+  notifications: unknown[],
+  options: { directJamaisUtilise?: boolean } = {}
+) => ({
+  // La loi écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme au lieu de se
+  // transmettre — règle qui vivait dans `delete-for-me.ts` seul.
+  conversation: {
+    count: jest.fn<any>().mockResolvedValue(options.directJamaisUtilise ? 1 : 0),
+  },
   participant: { findMany: jest.fn<any>().mockResolvedValue(candidats) },
   notification: { findMany: jest.fn<any>().mockResolvedValue(notifications) },
 });
@@ -273,5 +284,120 @@ describe('resoudreSuccessionDuCreateur — la lecture', () => {
       kind: 'transfer',
       successor: expect.objectContaining({ userId: 'u-c' }),
     });
+  });
+});
+
+describe('elireSuccesseur — hériter demande un compte', () => {
+  it("n'élit pas un invité sans compte, fût-il le plus ancien", () => {
+    // Un visiteur venu par un lien de partage n'a aucune ligne `User` : lui
+    // donner le fil, c'est le laisser sans gouvernance sous couvert d'en avoir
+    // une — sa session expire, et rien ne peut lui être imputé.
+    const invite = membre({ userId: null, id: 'p-invite', joinedAt: JANVIER });
+    const inscrit = membre({ userId: 'u-b', joinedAt: MARS });
+
+    expect(elireSuccesseur([invite, inscrit], [])).toEqual({
+      kind: 'transfer',
+      successor: inscrit,
+    });
+  });
+
+  it("ferme le fil quand il ne reste QUE des invités sans compte", () => {
+    const invite = membre({ userId: null, id: 'p-invite', joinedAt: JANVIER });
+
+    expect(elireSuccesseur([invite], [])).toEqual({ kind: 'close' });
+  });
+
+  it("n'élit pas un invité même écrit ADMINISTRATEUR", () => {
+    // L'éligibilité passe AVANT le rang : un rang posé sur une ligne sans
+    // compte ne fabrique pas un héritier.
+    const inviteAdmin = membre({ userId: null, id: 'p-invite', role: 'admin', joinedAt: JANVIER });
+    const inscrit = membre({ userId: 'u-b', joinedAt: MARS });
+
+    expect(elireSuccesseur([inviteAdmin, inscrit], [])).toEqual({
+      kind: 'transfer',
+      successor: inscrit,
+    });
+  });
+});
+
+describe('resoudreSuccessionDuCreateur — ce qui ne se transmet pas, et ce qui borne', () => {
+  it("ferme un DM jamais utilisé plutôt que de le transmettre", async () => {
+    // Cette règle vivait dans `delete-for-me.ts` SEUL : `leave.ts` transmettait
+    // donc ce que sa jumelle fermait. Elle appartient à la loi.
+    const prisma = prismaDouble([membre({ userId: 'u-b', role: 'admin' })], [], {
+      directJamaisUtilise: true,
+    });
+
+    const issue = await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(issue).toEqual({ kind: 'close' });
+    // La loi n'a même pas cherché de candidat : il n'y a rien à transmettre.
+    expect(prisma.participant.findMany).not.toHaveBeenCalled();
+  });
+
+  it("interroge le DM jamais utilisé sur le seul état DISTINGUABLE", async () => {
+    // `firstMessageSentAt` rendu `null` ne dit pas si le champ est
+    // present-et-null ou ABSENT (legacy jamais backfillé) — seul un `count` sur
+    // l'état recherché tranche, et il ne matche jamais un champ absent.
+    const prisma = prismaDouble([], []);
+
+    await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(prisma.conversation.count).toHaveBeenCalledWith({
+      where: { id: 'c-1', type: 'direct', firstMessageSentAt: null },
+    });
+  });
+
+  it('BORNE ses deux lectures, et cadre la trace sur CETTE conversation', async () => {
+    // #4165 — aucune lecture ne rend une collection entière. Et sans le cadre
+    // en base, la requête ramenait tout l'historique de rang de ces comptes sur
+    // TOUS leurs fils pour n'en garder qu'une poignée.
+    const prisma = prismaDouble([membre({ userId: 'u-b', role: 'admin' })], []);
+
+    await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: PLAFOND_CANDIDATS })
+    );
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: PLAFOND_TRACES,
+        where: expect.objectContaining({
+          context: { path: ['conversationId'], equals: 'c-1' },
+        }),
+      })
+    );
+  });
+
+  it("ne compte pas un invité sans compte parmi les administrateurs à tracer", async () => {
+    // Une ligne sans `userId` ne peut porter aucune trace : la faire entrer
+    // dans le `in` de la requête y glisserait un identifiant vide.
+    const prisma = prismaDouble(
+      [
+        membre({ userId: null, id: 'p-invite', role: 'admin' }),
+        membre({ userId: 'u-b', role: 'member' }),
+      ],
+      []
+    );
+
+    const issue = await resoudreSuccessionDuCreateur(prisma as any, {
+      conversationId: 'c-1',
+      sortantUserId: 'u-a',
+    });
+
+    expect(issue).toEqual({
+      kind: 'transfer',
+      successor: expect.objectContaining({ userId: 'u-b' }),
+    });
+    expect(prisma.notification.findMany).not.toHaveBeenCalled();
   });
 });

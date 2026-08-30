@@ -23,6 +23,7 @@ jest.mock('../../../services/CacheStore', () => ({
 // ---------------------------------------------------------------------------
 
 import { registerContentRoutes } from '../../../routes/admin/content';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -582,5 +583,234 @@ describe('Admin content routes — #4333 bonus : un média protégé ne sort pas
     expect(select.attachments.select.isViewOnce).toBe(true);
     expect(select.attachments.select.isBlurred).toBe(true);
     expect(select.attachments.select.effectFlags).toBe(true);
+  });
+});
+
+/**
+ * #4384 — `GET /admin/messages` sert encore le TEXTE d'un message protégé.
+ *
+ * #4333 a porté le prédicat de protection partagé à cette route, mais aux
+ * seules PIÈCES JOINTES : `Message.content` y partait en clair, y compris pour
+ * un message à vue unique, flouté, éphémère expiré ou chiffré. L'exposition est
+ * plus LARGE que celle que la lecture souveraine ferme — toute la plateforme au
+ * lieu d'une conversation nommée, `canModerateContent` (MODERATOR compris) au
+ * lieu de BIGBOSS + motif écrit + audit.
+ *
+ * Forme appliquée, celle de #4333 et de #4157 c.4 : masquage SANS effacement.
+ * La ligne reste LISTÉE — expéditeur, dates, conversation, compteurs — `content`
+ * tombe à `null`, et `isProtected` dit que la ligne est amputée SANS nommer le
+ * mécanisme qui l'a décidé.
+ *
+ * Tous les témoins traversent `app.inject()`, donc fast-json-stringify : un
+ * `select` Prisma mocké rend ce qu'on lui dit, et une non-fuite obtenue par
+ * omission de schéma n'est pas une garde (`services/gateway/CLAUDE.md`
+ * § « CHARGER n'est pas SERVIR »).
+ */
+describe('Admin content routes — #4384 : GET /messages ne sert plus le texte d’un message protégé', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // Un message ORDINAIRE, avec ses six colonnes de protection au repos : c'est
+  // la ligne de base contre laquelle chaque cas protégé se lit.
+  const SANS_PROTECTION = {
+    isViewOnce: false, isBlurred: false, effectFlags: 0,
+    expiresAt: null, deletedAt: null,
+    isEncrypted: false, encryptionMode: null,
+  };
+
+  // La TROISIÈME porte de `maskedAttachment`, celle qu'aucun booléen ne
+  // déclare — et la constante RÉELLE, jamais un littéral : `EPHEMERAL` est
+  // le bit 0 et n'est PAS masquant, si bien qu'un `1` écrit à la main aurait
+  // rendu ce cas vert quoi que fasse la production.
+  const EFFECT_FLAG_MASQUANT = MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
+
+  function messageProtegePar(flags: Record<string, unknown>) {
+    return { ...MESSAGE_ROW, ...SANS_PROTECTION, ...flags, attachments: [] };
+  }
+
+  async function servirUneLigne(row: Record<string, unknown>, role = 'ADMIN') {
+    mockPrisma.message.findMany.mockResolvedValue([row]);
+    mockPrisma.message.count.mockResolvedValue(1);
+    const local = buildApp(role);
+    await local.ready();
+    const response = await local.inject({ method: 'GET', url: '/messages' });
+    await local.close();
+    return JSON.parse(response.body).data[0];
+  }
+
+  it('sert le contenu d’un message ORDINAIRE — la garde n’ampute pas la liste entière', async () => {
+    const row = await servirUneLigne(messageProtegePar({}));
+
+    expect(row.content).toBe('Bonjour');
+    expect(row.isProtected).toBe(false);
+  });
+
+  it.each([
+    ['VUE UNIQUE', { isViewOnce: true }],
+    ['FLOUTÉ', { isBlurred: true }],
+    ['effet MASQUANT (effectFlags)', { effectFlags: EFFECT_FLAG_MASQUANT }],
+    ['ÉPHÉMÈRE déjà expiré', { expiresAt: new Date(Date.now() - 60_000) }],
+    ['CHIFFRÉ (isEncrypted)', { isEncrypted: true }],
+    ['CHIFFRÉ (encryptionMode)', { encryptionMode: 'signal' }],
+  ])('retire le contenu d’un message %s', async (_libelle, flags) => {
+    const row = await servirUneLigne(messageProtegePar(flags));
+
+    expect(row.content).toBeNull();
+    expect(row.isProtected).toBe(true);
+  });
+
+  it('laisse passer un ÉPHÉMÈRE encore vivant — la garde lit l’horloge, pas la seule présence du champ', async () => {
+    const row = await servirUneLigne(messageProtegePar({ expiresAt: new Date(Date.now() + 3_600_000) }));
+
+    expect(row.content).toBe('Bonjour');
+    expect(row.isProtected).toBe(false);
+  });
+
+  it('MASQUE sans EFFACER : la ligne reste listée avec son auteur, son fil et ses compteurs', async () => {
+    const row = await servirUneLigne(messageProtegePar({ isViewOnce: true }));
+
+    expect(row.content).toBeNull();
+    expect(row.id).toBe('msg-1');
+    expect(row.createdAt).toBe('2026-08-22T10:00:00.000Z');
+    expect(row.sender).toMatchObject({ id: 'part-1', displayName: 'Alice' });
+    expect(row.conversation).toMatchObject({ id: 'conv-1', title: 'Fil' });
+    expect(row._count).toEqual({ replies: 3 });
+  });
+
+  it('ne sort AUCUN des six drapeaux bruts — la ligne annonce l’EFFET, jamais le mécanisme', async () => {
+    const row = await servirUneLigne(messageProtegePar({
+      isViewOnce: true, isBlurred: true, effectFlags: EFFECT_FLAG_MASQUANT,
+      expiresAt: new Date(Date.now() - 60_000), isEncrypted: true, encryptionMode: 'signal',
+    }));
+
+    expect(row.isProtected).toBe(true);
+    for (const drapeau of ['isViewOnce', 'isBlurred', 'effectFlags', 'expiresAt', 'isEncrypted', 'encryptionMode', 'deletedAt']) {
+      expect(row).not.toHaveProperty(drapeau);
+    }
+  });
+
+  it('garde aussi le contenu devant un MODERATOR — c’est la population que cette route ajoute', async () => {
+    const row = await servirUneLigne(messageProtegePar({ isViewOnce: true }), 'MODERATOR');
+
+    expect(row.content).toBeNull();
+    expect(row.isProtected).toBe(true);
+  });
+});
+
+/**
+ * #4384, point 5 — ce qui part À CÔTÉ du champ gardé.
+ *
+ * #4333 a coupé `fileUrl` et `thumbnailUrl` d'une pièce jointe protégée, et
+ * laissé partir tout le reste de la ligne : `adminMessageRowSchema` déclare la
+ * pièce jointe en `additionalProperties: true`, donc TOUT ce que
+ * `attachmentMediaSelect` charge est SERVI. Or cette forme porte le Prisme
+ * Linguistique (`transcription`, `translations`) et les variantes d'image.
+ *
+ * Sur un VOCAL à vue unique, `transcription.text` EST le message ; sur une
+ * PHOTO à vue unique, `imageVariants[].url` est la même image en une autre
+ * taille et `thumbHash` en rend une version basse résolution sans réseau —
+ * trois contournements directs des deux URL que #4333 venait de couper.
+ *
+ * `services/gateway/CLAUDE.md` : « Une protection de CONTENU se mesure sur tout
+ * ce que la charge TRANSPORTE, jamais sur sa seule chaîne. »
+ */
+describe('Admin content routes — #4384 : la charge d’une pièce jointe protégée ne contourne pas ses deux URL', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const VOCAL_VUE_UNIQUE = {
+    id: 'att-vocal', fileName: 'v.m4a', originalName: 'memo.m4a', mimeType: 'audio/mp4',
+    fileUrl: '2026/08/x/v.m4a', thumbnailUrl: null,
+    duration: 12_000, fileSize: 48_120,
+    isViewOnce: true, isBlurred: false, effectFlags: 0,
+    transcription: { text: 'le code du coffre est 4821', language: 'fr' },
+    translations: { en: { type: 'audio', transcription: 'the vault code is 4821', url: '2026/08/x/v-en.mp3' } },
+    imageVariants: null, thumbHash: null, metadata: { exif: { gps: '48.85,2.35' } },
+  };
+
+  const PHOTO_VUE_UNIQUE = {
+    id: 'att-photo', fileName: 'p.png', originalName: 'p.png', mimeType: 'image/png',
+    fileUrl: '2026/08/x/p.png', thumbnailUrl: '2026/08/x/p-t.png',
+    isViewOnce: true, isBlurred: false, effectFlags: 0,
+    transcription: null, translations: null,
+    imageVariants: [{ width: 320, height: 240, url: '2026/08/x/p-320.webp', format: 'webp' }],
+    thumbHash: 'YTQGDYSFeYh/d3iId3eYhw==', metadata: null,
+  };
+
+  const ATTACHMENT_ORDINAIRE = {
+    id: 'att-libre', fileName: 'ok.png', originalName: 'ok.png', mimeType: 'image/png',
+    fileUrl: '2026/08/x/ok.png', thumbnailUrl: '2026/08/x/ok-t.png',
+    isViewOnce: false, isBlurred: false, effectFlags: 0,
+    transcription: { text: 'bonjour tout le monde' },
+    translations: { en: { transcription: 'hello everyone', url: '2026/08/x/ok-en.mp3' } },
+    imageVariants: [{ width: 320, url: '2026/08/x/ok-320.webp' }],
+    thumbHash: 'AAAA', metadata: { exif: {} },
+  };
+
+  async function servirLesPiecesJointes(attachments: Array<Record<string, unknown>>) {
+    mockPrisma.message.findMany.mockResolvedValue([{
+      ...MESSAGE_ROW,
+      isViewOnce: false, isBlurred: false, effectFlags: 0,
+      expiresAt: null, deletedAt: null, isEncrypted: false, encryptionMode: null,
+      attachments,
+    }]);
+    mockPrisma.message.count.mockResolvedValue(1);
+    const local = buildApp('ADMIN');
+    await local.ready();
+    const response = await local.inject({ method: 'GET', url: '/messages' });
+    await local.close();
+    return JSON.parse(response.body).data[0].attachments;
+  }
+
+  it('retire la TRANSCRIPTION et ses TRADUCTIONS d’un vocal à vue unique — le texte du message vivait là', async () => {
+    const [vocal] = await servirLesPiecesJointes([VOCAL_VUE_UNIQUE]);
+
+    expect(vocal.isProtected).toBe(true);
+    expect(vocal.fileUrl).toBeNull();
+    expect(vocal.transcription).toBeNull();
+    expect(vocal.translations).toBeNull();
+    expect(JSON.stringify(vocal)).not.toContain('4821');
+  });
+
+  it('retire les VARIANTES D’IMAGE et le THUMBHASH d’une photo à vue unique — deux contournements de fileUrl', async () => {
+    const [photo] = await servirLesPiecesJointes([PHOTO_VUE_UNIQUE]);
+
+    expect(photo.isProtected).toBe(true);
+    expect(photo.thumbnailUrl).toBeNull();
+    expect(photo.imageVariants).toBeNull();
+    expect(photo.thumbHash).toBeNull();
+    expect(JSON.stringify(photo)).not.toContain('p-320.webp');
+  });
+
+  it('retire les MÉTADONNÉES libres d’une pièce jointe protégée — EXIF et analyse IA y vivent', async () => {
+    const [vocal] = await servirLesPiecesJointes([VOCAL_VUE_UNIQUE]);
+
+    expect(vocal.metadata).toBeNull();
+  });
+
+  it('MASQUE sans EFFACER : la pièce jointe protégée reste listée avec son identité et son poids', async () => {
+    const [vocal] = await servirLesPiecesJointes([VOCAL_VUE_UNIQUE]);
+
+    expect(vocal.id).toBe('att-vocal');
+    expect(vocal.mimeType).toBe('audio/mp4');
+    expect(vocal.fileSize).toBe(48_120);
+    expect(vocal.duration).toBe(12_000);
+  });
+
+  it('laisse la pièce jointe ORDINAIRE entière — la garde vise la protection, pas le champ', async () => {
+    const [libre] = await servirLesPiecesJointes([ATTACHMENT_ORDINAIRE]);
+
+    expect(libre.isProtected).toBe(false);
+    expect(libre.transcription).toEqual({ text: 'bonjour tout le monde' });
+    expect(libre.translations).toEqual({ en: { transcription: 'hello everyone', url: '2026/08/x/ok-en.mp3' } });
+    expect(libre.imageVariants).toEqual([{ width: 320, url: '2026/08/x/ok-320.webp' }]);
+    expect(libre.thumbHash).toBe('AAAA');
+    expect(libre.metadata).toEqual({ exif: {} });
+  });
+
+  it('CHARGE les deux colonnes qu’un TEXTE exige — une garde sans sa colonne ne garde rien', async () => {
+    await servirLesPiecesJointes([]);
+
+    const select = mockPrisma.message.findMany.mock.calls[0][0].select;
+    expect(select.isEncrypted).toBe(true);
+    expect(select.encryptionMode).toBe(true);
   });
 });

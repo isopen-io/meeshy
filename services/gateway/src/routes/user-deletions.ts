@@ -23,6 +23,8 @@ import {
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
+import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
+import { broadcastToUser } from '../utils/socket-broadcast';
 // #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
 // deleted-conversations) est réalignée sur le geste que la route CANONIQUE
 // (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit
@@ -349,6 +351,28 @@ export default async function userDeletionsRoutes(
         // participant jusqu'à l'expiration de son TTL, alors que la ligne
         // vient d'être réactivée.
         invalidateParticipantLookup(participant.id, conversationId);
+
+        // #4344 — jumeau de l'émission `CONVERSATION_DELETED` que
+        // `performConversationDeleteForMe` diffuse après SA persistance
+        // (`conversations/delete-for-me.ts`) : sans elle, restaurer une
+        // conversation sur UN appareil ne l'annonçait à AUCUN autre — la ligne
+        // `Participant` venait d'être réactivée en base, mais rien ne le
+        // disait aux autres sessions du même utilisateur. Diffusée sur SA
+        // SEULE room personnelle (`ROOMS.user`, via `broadcastToUser`),
+        // jamais celle de la conversation : c'est un fait PERSONNEL (ce que
+        // CE participant voit), symétrique à `CONVERSATION_DELETED`, pas un
+        // fait partagé par le fil — aucun autre membre n'a besoin de le
+        // savoir, la conversation ne les a jamais quittés. Émise APRÈS la
+        // persistance et son invalidation de cache ci-dessus, jamais avant :
+        // une annonce ne précède pas la durabilité du fait qu'elle annonce
+        // (même discipline que `delete-for-me.ts`). `broadcastToUser` est la
+        // porte typée (`socketio/serverEmit.ts`) qu'emprunte déjà sa jumelle
+        // `restoreMessageForUser` (`services/personalMessageVisibilitySync.ts`)
+        // pour le même verbe côté message — jamais un `Server` nu de
+        // socket.io, et jamais un échec de diffusion ne fait échouer cette
+        // route (best-effort, comme documenté sur `broadcastToUser`).
+        const restoredPayload: ConversationRestoredEventData = { userId, conversationId };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CONVERSATION_RESTORED, restoredPayload);
 
         logger.info('Conversation restored', { conversationId });
 

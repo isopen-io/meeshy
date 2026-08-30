@@ -77,8 +77,15 @@ interface MessageProtectionFields {
  * `MessageProcessor.getEncryptionContext`, qui écrit `content: ''` pour tout
  * message chiffré : cette garde est un SIGNAL explicite pour l'admin, pas un
  * retrait de fuite qui n'existait pas).
+ *
+ * EXPORTÉ depuis #4384 : `GET /admin/messages` (`routes/admin/content.ts`) pose
+ * exactement la même question sur exactement la même colonne, et la seule chose
+ * qu'une seconde écriture puisse produire est une divergence — c'est la raison
+ * pour laquelle `mediaAttachmentIsProtected` vit déjà dans un module partagé
+ * (`routes/admin/media-protection.ts`). L'appelant reste seul juge de la FORME
+ * du masquage ; ce prédicat ne rend que le verdict.
  */
-function messageContentIsProtected(message: MessageProtectionFields): boolean {
+export function messageContentIsProtected(message: MessageProtectionFields): boolean {
   if (maskedAttachment(message)) return true;
   if (message.expiresAt && message.expiresAt.getTime() <= Date.now()) return true;
   if (message.isEncrypted === true) return true;
