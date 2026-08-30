@@ -745,6 +745,22 @@ export function registerFeedRoutes(
         return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
       }
       const q = query.data;
+
+      // `updatedSince` n'est implémenté que par `scope=stories`
+      // (`PostFeedService.getStories`). Zod le RETIRE en silence des dix
+      // autres membres de l'union — et une synchronisation delta silencieusement
+      // dégradée en page complète est PIRE qu'un refus : le client range tout
+      // ce qu'il reçoit comme « ce qui a changé », et ne sait pas que ce qui a
+      // changé hors de cette page lui manque. Un refus lui apprend la vérité
+      // en un appel (#4339).
+      if (q.scope !== 'stories' && typeof (request.query as Record<string, unknown>).updatedSince === 'string') {
+        return sendBadRequest(
+          reply,
+          `updatedSince is only supported on scope=stories (received scope=${q.scope})`,
+          { code: 'VALIDATION_ERROR' },
+        );
+      }
+
       const reader = wireReaderFromRequest(request as UnifiedAuthRequest);
       const authContext = (request as UnifiedAuthRequest).authContext;
       const registeredUserId = authContext?.registeredUser?.id;
