@@ -32,7 +32,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// l'ordre des `case` porte aussi la sérialisation.
     static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
 
-    var sfSymbol: String {
+    public var sfSymbol: String {
         switch self {
         case .style:      return "textformat"
         case .color:      return "paintpalette.fill"
@@ -48,7 +48,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// SPM sans annotation, tombe sous l'isolation par défaut du package. Seule
     /// la vue lit ce libellé — les helpers purs n'en ont pas besoin.
     @MainActor
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .style:      return String(localized: "story.textEdit.tool.style", defaultValue: "Style de texte", bundle: .module)
         case .color:      return String(localized: "story.textEdit.tool.color", defaultValue: "Couleur du texte", bundle: .module)
@@ -94,7 +94,7 @@ extension StoryComposerViewModel {
     /// garantit. Suppression et duplication sont gardées côté canvas
     /// (`isLockedItem`) et côté ViewModel (`deleteElement`) ; l'édition l'est
     /// ici, à son point d'entrée unique.
-    func enterTextEditingMode(textId: String) {
+    public func enterTextEditingMode(textId: String) {
         if case .active(let current, _) = textEditingMode, current == textId { return }
         guard let target = currentEffects.textObjects.first(where: { $0.id == textId }),
               target.isLocked != true else { return }
@@ -103,7 +103,7 @@ extension StoryComposerViewModel {
     }
 
     /// Sort du mode édition. Rien à restaurer (la géométrie n'a jamais bougé).
-    func exitTextEditingMode() {
+    public func exitTextEditingMode() {
         // Audit it.90 : un texte resté VIDE à la fermeture de l'éditeur est un
         // fantôme — invisible au canvas, compté par le badge du FAB, sérialisé
         // au publish (et traduit côté gateway pour rien). On le retire au seul
@@ -119,7 +119,7 @@ extension StoryComposerViewModel {
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
-    func setExpandedTool(_ tool: TextEditTool?) {
+    public func setExpandedTool(_ tool: TextEditTool?) {
         guard case .active(let id, _) = textEditingMode else { return }
         textEditingMode = .active(textId: id, expandedTool: tool)
     }

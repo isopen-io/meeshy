@@ -27,6 +27,22 @@
  * que les trois en-têtes sortent RÉELLEMENT sur le fil — une garde de source
  * seule ne prouve pas qu'un en-tête est SERVI (elle prouve qu'il est ÉCRIT).
  *
+ * PARTIE 4 — SUIVABILITÉ, par BALAYAGE (#4423, reprise sur retour du
+ * coordinateur). La partie 1 portait un contrôle « aucun successeur en
+ * gabarit », mais SUR DEUX FICHIERS ÉCRITS À LA MAIN
+ * (`admin/users-write.ts`, `users/blocking.ts`) et par un MOTIF qui ne lit
+ * qu'un successeur en chaîne LITTÉRALE — sa justification étant « les
+ * successeurs paramétrés se déclarent en FONCTION ». Vrai, et insuffisant :
+ * une fonction peut tout aussi bien émettre un `:param` non résolu, ce
+ * qu'a fait `message-read-status.ts` sans faire tomber ce fichier. La partie
+ * 4 remplace ce contrôle : elle balaie TOUT `routes/`
+ * (`deprecation-successor-sweep.ts`), ÉVALUE réellement chaque successeur
+ * (littéral, ou appelé avec une requête FABRIQUÉE) et juge la CHAÎNE ÉMISE,
+ * jamais la forme de sa déclaration. Elle a trouvé, sans qu'on la lui
+ * indique, le SEUL site aujourd'hui fautif — `users/profile.ts#ANNONCE_PROFIL`
+ * — et aucun autre : zéro faux positif sur les 54 sites qu'elle sait
+ * évaluer.
+ *
  * ## Ce que ce fichier NE VOIT PAS (à lire avant d'en déduire une couverture totale)
  *
  * - La partie 2 est LEXICALE : elle ne comprend pas le code, seulement le
@@ -169,18 +185,6 @@ describe('Partie 1 — chaque route ALIAS de ce lot marque son sursis dans SON b
     const bloc = texte.slice(debut, fin);
     expect(bloc).toContain(site.via);
   });
-
-  it.each(['admin/users-write.ts', 'users/blocking.ts'])(
-    '%s n’annonce AUCUN successeur en gabarit — un `Link` que le client ne peut pas suivre n’indique aucune migration',
-    (relatif) => {
-      const texte = fs.readFileSync(path.join(RACINE_ROUTES, relatif), 'utf8');
-      const bloc = texte.slice(texte.indexOf('const ANNONCE = {'), texte.indexOf('} as const;', texte.indexOf('const ANNONCE = {')));
-      expect(bloc.length).toBeGreaterThan(0);
-      // Un `:param` dans une chaîne de successeur = le gabarit part tel quel sur
-      // le fil. Les successeurs paramétrés se déclarent en FONCTION de la requête.
-      expect(bloc).not.toMatch(/successeur: '[^']*:[a-zA-Z]/);
-    }
-  );
 
   it('directory/blocks.ts expose BLOCKS_SUCCESSOR_PATH — la plomberie que `users/blocking.ts` doit consommer (hors territoire de ce lot, voir edits_hors_territoire)', async () => {
     const { BLOCKS_SUCCESSOR_PATH } = await import('../../routes/directory/blocks');
@@ -396,5 +400,182 @@ describe('Partie 3 — POST /admin/reports (adaptateur mince, #4155) sert les tr
     expect(res.statusCode).toBe(400);
     expect(res.headers['deprecation']).toMatch(/^@\d+$/);
     expect(res.headers['link']).toBe('</api/v1/reports>; rel="successor-version"');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// PARTIE 4 — SUIVABILITÉ : la chaîne ÉMISE, par BALAYAGE (#4423)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Remplace le contrôle de la partie 1 qui n'en couvrait que deux fichiers
+// (`admin/users-write.ts`, `users/blocking.ts`, écrits à la main) et
+// n'attrapait qu'un successeur en CHAÎNE littérale — jamais une FONCTION qui
+// émet elle-même un `:param` non résolu, exactement le cas manqué sur
+// `message-read-status.ts`.
+
+import {
+  balayerSuccesseurs,
+  sitesDuFichier,
+  evaluerSuccesseur,
+  RACINE_ROUTES as SUCCESSOR_RACINE_ROUTES,
+} from './deprecation-successor-sweep';
+
+const BALAYAGE_SUCCESSEURS = balayerSuccesseurs();
+
+describe('PARTIE 4 — le balayage de suivabilité balaie bien ce qu’il prétend balayer', () => {
+  it('ouvre tout `routes/`, pas un seul répertoire', () => {
+    expect(BALAYAGE_SUCCESSEURS.fichiersVisites).toBeGreaterThan(100);
+  });
+
+  it('trouve des sites de dépréciation dans PLUSIEURS fichiers DISTINCTS — jamais une paire écrite à la main', () => {
+    const fichiers = new Set(BALAYAGE_SUCCESSEURS.findings.map((f) => f.fichier));
+    // Les quatre étaient hors de portée du contrôle qu'il remplace : deux
+    // n'y figuraient pas du tout (`friends.ts`, `posts/feed.ts`), un y
+    // figurait mais son motif ne lisait que les chaînes littérales
+    // (`users/profile.ts`), un est le sixième territoire de #4423
+    // (`message-read-status.ts`).
+    // `users/profile.ts` -> `users/profile-lookups.ts` (#4284) : c'est là que
+    // vivent désormais les trois portes de profil.
+    for (const attendu of ['friends.ts', 'posts/feed.ts', 'users/profile-lookups.ts', 'message-read-status.ts']) {
+      expect(fichiers.has(attendu)).toBe(true);
+    }
+    expect(fichiers.size).toBeGreaterThan(15);
+  });
+
+  /**
+   * Les QUATRE formes de déclaration que ce dépôt emploie pour un
+   * `AdresseDepreciee` — un détecteur qui n'en reconnaîtrait qu'une mesurerait
+   * la popularité d'un style d'écriture, pas une propriété (cycle 107, leçon
+   * du dépôt sur les balayages lexicaux).
+   */
+  it.each([
+    // #4284 — les fichiers REPRÉSENTATIFS de deux de ces quatre formes ont
+    // changé d'adresse : l'inline vit dans `conversations/messages-read-status.ts`
+    // et l'indirection dans `users/profile-lookups.ts`. Ce qui est gardé est la
+    // FORME, jamais le fichier ; seule l'adresse de l'exemplaire bouge.
+    ['conversations/messages-read-status.ts', /^conversations\/messages-read-status\.ts#<inline:POST/, 'littéral INLINE au site d’appel'],
+    ['message-read-status.ts', 'message-read-status.ts#ANNONCE_RECEIPTS_ECRITURE', 'const de même fichier, référencée par son NOM'],
+    ['friends.ts', 'friends.ts#ANNONCE_ALIAS_FRIENDS.agir', 'const GROUPÉE, référencée par PROPRIÉTÉ'],
+    ['users/profile-lookups.ts', /^users\/profile-lookups\.ts#annonceProfil\(/, 'INDIRECTION : appel d’une fonction de même fichier qui RETOURNE une AdresseDepreciee'],
+  ])('reconnaît %s — %s', (_fichier, cleOuMotif) => {
+    const cles = BALAYAGE_SUCCESSEURS.findings.map((f) => f.cle);
+    if (typeof cleOuMotif === 'string') {
+      expect(cles).toContain(cleOuMotif);
+    } else {
+      expect(cles.some((c) => (cleOuMotif as RegExp).test(c))).toBe(true);
+    }
+  });
+
+  // ── La preuve qui vaille : il ROUGIT sur une source fabriquée fautive, ──
+  // ── et se TAIT sur la même source corrigée ───────────────────────────────
+  const SOURCE_FONCTION_FAUTIVE = `
+    import { depreciee } from '../utils/deprecation';
+    export async function routesFictives(fastify) {
+      fastify.get('/x/:id/y', {
+        onRequest: depreciee({
+          depuis: '2026-08-30',
+          successeur: (request) => \`/api/v1/x/:id/y\`,
+        }),
+      }, handler);
+    }
+  `;
+
+  it('ROUGIT (chaîne en gabarit) sur un successeur FONCTION fabriqué pour être fautif', () => {
+    const sites = sitesDuFichier('/x/routes/fictif.ts', SOURCE_FONCTION_FAUTIVE);
+    expect(sites).toHaveLength(1);
+
+    const resultat = evaluerSuccesseur(sites[0], SOURCE_FONCTION_FAUTIVE);
+    expect(resultat.ok).toBe(true);
+    expect(resultat.ok && resultat.chaineEmise).toBe('/api/v1/x/:id/y');
+  });
+
+  it('se TAIT sur la MÊME source une fois le paramètre réellement interpolé', () => {
+    const corrigee = SOURCE_FONCTION_FAUTIVE.replace(
+      '`/api/v1/x/:id/y`',
+      '`/api/v1/x/${(request.params as { id: string }).id}/y`'
+    );
+    const sites = sitesDuFichier('/x/routes/fictif.ts', corrigee);
+    const resultat = evaluerSuccesseur(sites[0], corrigee);
+    expect(resultat.ok).toBe(true);
+    expect(resultat.ok && resultat.chaineEmise).toBe('/api/v1/x/FAKE_PARAM_507f1f77bcf86cd799439aa/y');
+  });
+
+  it('ROUGIT aussi sur un successeur CHAÎNE littérale fabriqué pour être fautif (la forme du contrôle remplacé)', () => {
+    // `const ANNONCE` DOIT rester en COLONNE 0 : c'est ce qui distingue une
+    // déclaration de MODULE (que le résolveur doit suivre) d'une variable
+    // LOCALE à un handler (qu'il ne doit surtout pas confondre avec elle —
+    // voir le doc-comment de `corpsDeLaDeclaration`).
+    const source = [
+      "import { depreciee } from '../utils/deprecation';",
+      "const ANNONCE = { depuis: '2026-08-30', successeur: '/api/v1/x/:id' };",
+      'export async function r(fastify) {',
+      "  fastify.get('/x/:id', { onRequest: depreciee(ANNONCE) }, handler);",
+      '}',
+    ].join('\n');
+    const sites = sitesDuFichier('/x/routes/fictif2.ts', source);
+    const resultat = evaluerSuccesseur(sites[0], source);
+    expect(resultat.ok).toBe(true);
+    expect(resultat.ok && resultat.chaineEmise).toBe('/api/v1/x/:id');
+  });
+});
+
+/**
+ * DETTE_HORS_TERRITOIRE — le SEUL site que le balayage élargi trouve fautif,
+ * et il est hors du territoire de #4423 (`services/gateway/src/routes/users/profile.ts`
+ * n'est ni `messages.ts` ni `message-read-status.ts`). Nommé plutôt
+ * qu'ignoré, comme `routes/admin/agent-topics.ts` pour le cliquet voisin
+ * (`account-keyed-rate-limit-sweep.test.ts`) : une entrée EN TROP signale un
+ * nouveau site fautif ; une entrée EN MOINS signale un site réparé — la
+ * retirer fait partie du correctif qui l'a réparé.
+ *
+ * `ANNONCE_PROFIL.successeur = '/api/v1/directory/people/:handle'` part
+ * INCONDITIONNELLEMENT sur `onRequest`, y compris sur les branches 401/403
+ * qui précèdent la résolution du handle — le client n'a alors AUCUN moyen de
+ * le suivre. Le même fichier porte pourtant `annonceProfil(handle)`, qui
+ * résout le VRAI handle et s'ajoute (le `Link` est cumulatif) une fois le
+ * handler atteint — mais seulement sur les branches qui l'atteignent.
+ */
+const DETTE_HORS_TERRITOIRE: ReadonlyArray<readonly [string, string]> = [];
+
+describe('PARTIE 4 — le successeur ANNONCÉ émet une chaîne SUIVABLE, partout sauf la dette nommée', () => {
+  it('aucun site, hors DETTE_HORS_TERRITOIRE, n’émet un successeur en gabarit', () => {
+    const attendues = DETTE_HORS_TERRITOIRE.map(([cle]) => cle).sort();
+    const fautifs = BALAYAGE_SUCCESSEURS.findings
+      .filter((f) => !f.suivable)
+      .map((f) => f.cle)
+      .sort();
+
+    expect(fautifs).toEqual(attendues);
+  });
+
+  // `it.each` sur un tableau VIDE lève (Jest 30) plutôt que de ne produire
+  // aucun cas — la garde protège l'état visé par `DETTE_HORS_TERRITOIRE` lui-
+  // même : une liste vide, aucune dette hors territoire à confirmer fautive.
+  if (DETTE_HORS_TERRITOIRE.length > 0) {
+    it.each(DETTE_HORS_TERRITOIRE)('%s reste fautif (%s) — sinon retirer sa ligne', (cle) => {
+      const trouve = BALAYAGE_SUCCESSEURS.findings.find((f) => f.cle === cle);
+      expect(trouve).toBeDefined();
+      expect(trouve?.suivable).toBe(false);
+    });
+  }
+
+  /**
+   * Une garde négative dont le balayage rend `[]` reste verte pour rien
+   * (doctrine du cliquet voisin, `account-keyed-rate-limit-sweep.test.ts`).
+   * Ici l'équivalent est une ÉVALUATION qui échoue silencieusement : un site
+   * que le résolveur ne sait pas évaluer disparaît de `suivable`/`!suivable`
+   * sans qu'aucun test ne le remarque. Zéro échec d'évaluation mesuré sur les
+   * 54 sites vivants du dépôt au moment de #4423.
+   */
+  it('chaque site s’évalue SANS erreur — une évaluation manquée masquerait un défaut réel', () => {
+    const echecs = BALAYAGE_SUCCESSEURS.findings
+      .filter((f) => f.evaluation.ok === false)
+      .map((f) => `${f.cle}: ${f.evaluation.ok === false ? f.evaluation.raison : ''}`);
+
+    expect(echecs).toEqual([]);
+  });
+
+  it('`RACINE_ROUTES` du balayage pointe bien `routes/`, jamais un autre sous-arbre', () => {
+    expect(SUCCESSOR_RACINE_ROUTES.endsWith(`${require('path').sep}routes`)).toBe(true);
   });
 });

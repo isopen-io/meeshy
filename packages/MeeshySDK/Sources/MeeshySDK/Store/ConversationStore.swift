@@ -433,6 +433,27 @@ public actor ConversationStore {
         publishList()
     }
 
+    /// Apply a conversation-restored socket event (#4389) : la conversation
+    /// REVIENT dans la liste en mémoire, et la liste est republiée.
+    ///
+    /// Jumelle exacte d'`applyConversationDeleted`, et volontairement PURE —
+    /// elle reçoit la conversation déjà lue, elle ne va pas la chercher. La
+    /// lecture BORNÉE (`GET /conversations/:id`) vit chez l'appelant, comme
+    /// côté web où le geste est `fetchConversationIntoCache` et jamais une
+    /// invalidation de préfixe : rejouer les pages d'une liste écrase les
+    /// écritures socket concurrentes et duplique une ligne à chaque frontière
+    /// de page. Le store n'a donc aucune couture réseau de plus, et cette
+    /// méthode reste testable sans I/O.
+    ///
+    /// Idempotente : appliquée deux fois — un rejeu, deux appareils — elle
+    /// commit la même ligne. Elle ne suppose pas non plus que la conversation
+    /// soit absente : une restauration peut arriver alors que la liste a déjà
+    /// été rechargée par ailleurs, et écraser par la version fraîche est ce
+    /// qu'on veut.
+    public func applyConversationRestored(_ conversation: MeeshyConversation) {
+        commit(conversation)
+    }
+
     /// Apply a `conversation:updated` socket event. Updates conversation
     /// metadata and/or the last-message fields used for bump-to-top list
     /// reordering. Only non-nil fields are applied (nil = "not provided by

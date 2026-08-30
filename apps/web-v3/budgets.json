@@ -1,0 +1,202 @@
+{
+  "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4 et § 8.5",
+  "lu_par": [
+    "apps/web-v3/scripts/check-bundle-budget.mjs (groupes, routes)",
+    "apps/web-v3/scripts/mesure-reseau.mjs (reseau)"
+  ],
+  "note": "Un plafond « À ÉTABLIR » n'est comparé à rien : la conception ne le donne pas, et un chiffre qu'on n'a pas mesuré ne s'invente pas. Il se remplit par la première mesure de l'écran qui le porte, dans le commit de cet écran. Les valeurs MESURÉES vivent dans budgets-mesures.json — ce fichier-ci ne porte que des PLAFONDS.",
+  "motifs": "Un motif s'écrit contre l'URL servie (« /stories/* »). Next conserve pourtant le segment de groupe dans la clé du manifeste (« /(public)/stories/[id]/page ») : le gate normalise donc la clé avant de la classer. Un motif qui porte lui-même un segment « (…) » est, lui, comparé à la clé BRUTE — seule façon de distinguer (public)/page de (connected)/page.",
+  "questions_ouvertes": [
+    {
+      "id": "plancher-next-au-dessus-du-plafond-du-role-premier",
+      "constat": "Le PLANCHER d'App Router — une page RSC vide, sans une ligne de code produit — pèse 99,6 Ko gzip de chunks partagés, au-dessus du plafond de 95 Ko que le § 8.3 fixe à la lecture partagée (/stories/:id, /posts/:id, /reels/:id, /moods/:id), c'est-à-dire au RÔLE PREMIER.",
+      "mesure": "budgets-mesures.json → plancher_next_ko",
+      "commande": "page sonde jetable sous app/(public)/, puis `cd apps/web-v3 && npx next build && node scripts/check-bundle-budget.mjs` ; le manifeste produit est commité en fixture (__tests__/fixtures/app-build-manifest-groupe-reel.json)",
+      "consequence": "Soit le plafond de 95 Ko monte, soit les écrans du rôle premier sortent de l'hydratation d'App Router (RSC sans runtime client, ou rendu statique servi hors Next). Trancher AVANT L1 : le découvrir au troisième écran coûte l'architecture.",
+      "renvoi": "conception § 11 — question 12",
+      "temoin": "apps/web-v3/__tests__/bundle-budget.test.ts § « le plancher mesuré contre le plafond du rôle premier »"
+    }
+  ],
+  "groupes_unite": "Ko gzip de JS client",
+  "groupes": [
+    {
+      "id": "(public)",
+      "role": "rôle premier — lecture partagée et jonction anonyme, sans compte",
+      "motifs": [
+        "/l/*",
+        "/stories/*",
+        "/posts/*",
+        "/post/*",
+        "/reels/*",
+        "/moods/*",
+        "/chats/[key]/*",
+        "/login/*",
+        "/signup/*",
+        "/_not-found/page"
+      ],
+      "plafonds": {
+        "socle_ko": {
+          "valeur": null,
+          "statut": "À ÉTABLIR",
+          "source": "§ 8.3 donne des totaux par écran, jamais la part de socle du groupe (public) ; le plancher mesuré (99,6 Ko) vit dans budgets-mesures.json et fait l'objet de la question ouverte ci-dessus"
+        },
+        "ecran_ko": {
+          "valeur": 95,
+          "statut": "CIBLE",
+          "source": "§ 8.3 — lecture partagée (/stories/:id, /posts/:id, /reels/:id, /moods/:id) : ≤ 95 Ko"
+        },
+        "cumul_p95_ko": {
+          "valeur": 165,
+          "statut": "CIBLE",
+          "source": "§ 8.3 — conversation anonyme après « Rejoindre » : ≤ 165 Ko cumulé"
+        }
+      }
+    },
+    {
+      "id": "(connected)",
+      "role": "rôle secondaire — après authentification",
+      "motifs": [
+        "/page",
+        "/chats/*",
+        "/feed/*",
+        "/composer/*",
+        "/links/*",
+        "/notifications/*",
+        "/settings/*",
+        "/contacts/*",
+        "/communities/*",
+        "/calls/*",
+        "/search/*",
+        "/stories/new/page"
+      ],
+      "plafonds": {
+        "socle_ko": {
+          "valeur": 150,
+          "statut": "CIBLE",
+          "source": "§ 8.3 — socle (connected) ≤ 150 Ko, rendu séparément pour qu'un dépassement désigne un coupable (§ 8.4)"
+        },
+        "ecran_ko": {
+          "valeur": 130,
+          "statut": "CIBLE",
+          "source": "§ 8.3 — composer / réglages : écran ≤ 130 Ko, le plafond haut assumé du groupe"
+        },
+        "cumul_p95_ko": {
+          "valeur": null,
+          "statut": "À ÉTABLIR",
+          "source": "§ 8.3 ne donne pas de cumul p95 pour (connected) ; l'additionner à la main serait une arithmétique, pas une mesure"
+        }
+      }
+    }
+  ],
+  "routes_note": "Les plafonds que le § 8.3 marque GATE sur une route NOMMÉE, et qu'aucun plafond de groupe ne peut porter : le groupe (public) autorise 95 Ko par écran, ce qui laisserait passer un /l/:token à 90 Ko alors que son plafond est ZÉRO. Un gestionnaire de route (app/**/route.ts) n'expédie aucun octet et n'est jamais comparé — c'est le jour où quelqu'un pose une PAGE sous /l/ que ce plafond mord.",
+  "routes_unite": "Ko gzip de JS client par page",
+  "routes": [
+    {
+      "motifs": ["/l/*"],
+      "role": "/l/:token — redirection : aucun <script> hors ThemeScript inline",
+      "plafonds": {
+        "js_ko": {
+          "valeur": 0,
+          "statut": "GATE",
+          "source": "§ 8.3 — « 0 Ko — GATE (aucun <script> sauf le ThemeScript inline, ≤ 400 o) »"
+        }
+      }
+    },
+    {
+      "motifs": ["/l/[token]/expired/page"],
+      "role": "/l/:token/expired — RSC pur + ThemeScript",
+      "plafonds": {
+        "js_ko": {
+          "valeur": 10,
+          "statut": "CIBLE",
+          "source": "§ 8.3 — ≤ 10 Ko, CIBLE ; motif plus précis que /l/*, il l'emporte sur le GATE à 0 Ko"
+        }
+      }
+    }
+  ],
+  "reseau_note": "Les seuils du § 8.3 et du § 8.5 qui ne se lisent pas dans un manifeste de build : requêtes avant le premier pixel, premier pixel utile, CLS, CSS, connexions tenues. Ils sont comparés par mesure-reseau.mjs, contre le profil ci-dessous — un LCP mesuré en réseau local ne s'oppose à aucun plafond exprimé « 3G Fast simulé, p75 ».",
+  "reseau": {
+    "profil": {
+      "nom": "Fast 3G — préréglage de Chrome DevTools, appliqué par Network.emulateNetworkConditions",
+      "download_bps": 188743,
+      "upload_bps": 86400,
+      "latence_ms": 562.5,
+      "repetitions": 5,
+      "percentile": 75,
+      "source": "§ 8.3 exprime le premier pixel utile en « 3G Fast simulé, p75 » ; une exécution unique en réseau local ne rend pas ce chiffre"
+    },
+    "transverses": {
+      "css_ko": {
+        "valeur": 20,
+        "statut": "GATE",
+        "source": "§ 8.5 — CSS ≤ 20 Ko gzip par route"
+      }
+    },
+    "ecrans": [
+      {
+        "motifs": ["/l/*"],
+        "role": "/l/:token — redirection",
+        "plafonds": {
+          "requetes_avant_premier_pixel": { "valeur": 1, "statut": "GATE", "source": "§ 8.3" },
+          "cls": { "valeur": 0.05, "statut": "GATE", "source": "§ 8.5 — toute route (public)" }
+        }
+      },
+      {
+        "motifs": ["/l/*/expired"],
+        "role": "/l/:token/expired",
+        "plafonds": {
+          "requetes_avant_premier_pixel": { "valeur": 2, "statut": "GATE", "source": "§ 8.3 — HTML + CSS" },
+          "lcp_ms": { "valeur": 900, "statut": "CIBLE", "source": "§ 8.3" },
+          "cls": { "valeur": 0.05, "statut": "GATE", "source": "§ 8.5 — toute route (public)" }
+        }
+      },
+      {
+        "motifs": ["/stories/*", "/posts/*", "/post/*", "/reels/*", "/moods/*"],
+        "role": "lecture partagée — le rôle premier",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 3,
+            "statut": "GATE",
+            "source": "§ 8.3 — HTML + CSS + sprite externe"
+          },
+          "requetes_pendantes": {
+            "valeur": 0,
+            "statut": "GATE",
+            "source": "§ 8.3 — « GATE neuf : 0 connexion serveur tenue après le premier pixel (aucune requête pending) »"
+          },
+          "lcp_ms": { "valeur": 2000, "statut": "CIBLE", "source": "§ 8.3 — LCP ≤ 2,0 s" },
+          "cls": { "valeur": 0.05, "statut": "GATE", "source": "§ 8.5 — toute route (public)" }
+        }
+      },
+      {
+        "motifs": ["/chats/*"],
+        "role": "aperçu de lien puis conversation anonyme",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 4,
+            "statut": "GATE",
+            "source": "§ 8.3 — aperçu de lien (/chats/:key, non rejoint) ≤ 4 ; après « Rejoindre » le § 8.3 en autorise 6, mesuré par le spec de cycle de vie et non par ce gate de premier pixel"
+          },
+          "lcp_ms": { "valeur": 2200, "statut": "CIBLE", "source": "§ 8.3" },
+          "cls": { "valeur": 0.05, "statut": "GATE", "source": "§ 8.5 — toute route (public)" }
+        }
+      },
+      {
+        "motifs": ["/", "/feed/*", "/notifications/*", "/contacts/*", "/search/*"],
+        "role": "accueil connecté / chats",
+        "plafonds": {
+          "requetes_avant_premier_pixel": { "valeur": 8, "statut": "GATE", "source": "§ 8.3" },
+          "lcp_ms": { "valeur": 3000, "statut": "CIBLE", "source": "§ 8.3" }
+        }
+      },
+      {
+        "motifs": ["/composer/*", "/settings/*"],
+        "role": "composer / réglages",
+        "plafonds": {
+          "requetes_avant_premier_pixel": { "valeur": 10, "statut": "GATE", "source": "§ 8.3" },
+          "lcp_ms": { "valeur": 3500, "statut": "CIBLE", "source": "§ 8.3" }
+        }
+      }
+    ]
+  }
+}

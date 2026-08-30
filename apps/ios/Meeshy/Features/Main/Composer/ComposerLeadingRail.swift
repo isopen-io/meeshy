@@ -31,9 +31,11 @@ import MeeshyUI
 /// est exactement ce que la loi 4 interdit.
 struct ComposerLeadingRail: View {
 
-    /// Les portes SERVIES, dans l'ordre du rail. Déjà filtrées par
-    /// `ComposerRailDoor.offered` : cette vue n'a rien à décider.
-    let doors: [ComposerRailDoor]
+    /// **Ce que le rail montre** — les portes, ou les contrôleurs de l'outil en
+    /// cours (directive porteur 2026-08-30). Déjà résolu par
+    /// `ComposerRailMode.resolve` : cette vue n'a rien à décider, pas plus
+    /// qu'elle ne décidait quelles portes peindre.
+    let mode: ComposerRailMode
 
     /// La teinte du plateau, pour que le socle de verre du rail s'y pose au
     /// lieu de flotter sur un fond codé en dur — le défaut exact que le
@@ -42,18 +44,43 @@ struct ComposerLeadingRail: View {
 
     var onDoor: ((ComposerRailDoor) -> Void)?
 
-    @State private var lastTapped: ComposerRailDoor?
+    /// Un contrôleur d'outil a été tapé — l'hôte déplie ou replie son panneau.
+    var onToolControl: ((ComposerToolControl) -> Void)?
+
+    /// Le `(x)` — termine l'outil en cours et rend le rail à ses portes.
+    var onExitTool: (() -> Void)?
+
+    @State private var lastTapped: String?
+
+    private var isEmpty: Bool {
+        switch mode {
+        case .doors(let doors):   return doors.isEmpty
+        case .tool(let controls): return controls.isEmpty
+        }
+    }
 
     var body: some View {
-        if !doors.isEmpty {
+        if !isEmpty {
             VStack(spacing: 10) {
-                // Le ressort POUSSE les portes vers le bas : c'est lui, et non
+                // Le ressort POUSSE les entrées vers le bas : c'est lui, et non
                 // un alignement, qui tient la décision 2 — un `VStack` centré
-                // remettrait les portes hautes hors de portée du pouce dès que
+                // remettrait les entrées hautes hors de portée du pouce dès que
                 // la scène rétrécit.
                 Spacer(minLength: 0)
-                ForEach(doors, id: \.rawValue) { door in
-                    doorButton(door)
+                switch mode {
+                case .doors(let doors):
+                    ForEach(doors, id: \.rawValue) { door in
+                        doorButton(door)
+                    }
+                case .tool(let controls):
+                    ForEach(controls) { control in
+                        toolButton(control)
+                    }
+                    // **Le `(x)` est TOUJOURS le dernier.** La position que le
+                    // doigt apprend pour sortir ne doit pas dépendre du nombre
+                    // de contrôleurs de l'outil ouvert — quatre pour le dessin,
+                    // sept pour le texte.
+                    exitButton
                 }
             }
             .frame(width: ComposerRailGeometry.railWidth)
@@ -68,23 +95,64 @@ struct ComposerLeadingRail: View {
     }
 
     private func doorButton(_ door: ComposerRailDoor) -> some View {
-        Button {
-            lastTapped = door
+        entry(id: door.rawValue,
+              symbolName: door.symbolName,
+              label: ComposerRailCopy.label(door),
+              tint: MeeshyColors.textSecondary(isDark: true)) {
             onDoor?(door)
+        }
+    }
+
+    /// Un contrôleur d'outil. **Teinté quand son panneau est déplié** — le même
+    /// signal que la rangée d'outils de l'atelier donne à l'outil actif, et que
+    /// la palette de fond du document donne quand elle est ouverte.
+    private func toolButton(_ control: ComposerToolControl) -> some View {
+        entry(id: control.id,
+              symbolName: control.symbolName,
+              label: control.label,
+              tint: control.isExpanded
+                  ? MeeshyColors.brandPrimary
+                  : MeeshyColors.textSecondary(isDark: true)) {
+            onToolControl?(control)
+        }
+    }
+
+    /// **Le `(x)`.** Il porte la couleur du texte, pas celle d'une action
+    /// destructrice : terminer un outil ne détruit rien — ce qui a été posé
+    /// reste sur la scène.
+    private var exitButton: some View {
+        entry(id: "tool.exit",
+              symbolName: "xmark",
+              label: ComposerToolExitCopy.label,
+              tint: MeeshyColors.textPrimary(isDark: true)) {
+            onExitTool?()
+        }
+    }
+
+    /// Le gabarit COMMUN des trois. Il existe pour que la cible de 44 pt, le
+    /// rebond et la forme de contact ne soient écrits qu'une fois : trois
+    /// copies auraient divergé au premier ajustement, et c'est la zone
+    /// TOUCHABLE — pas le dessin — que la règle borne.
+    private func entry(id: String,
+                       symbolName: String,
+                       label: String,
+                       tint: Color,
+                       action: @escaping () -> Void) -> some View {
+        Button {
+            lastTapped = id
+            action()
             HapticFeedback.light()
         } label: {
-            Image(systemName: door.symbolName)
+            Image(systemName: symbolName)
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .composerToolBounce(active: lastTapped == door)
-                // La cible fait 44 pt MÊME si le glyphe est plus petit : c'est
-                // la zone TOUCHABLE que la règle borne, pas le dessin.
+                .foregroundColor(tint)
+                .composerToolBounce(active: lastTapped == id)
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(Text(ComposerRailCopy.label(door)))
+        .accessibilityLabel(Text(label))
     }
 }
 
@@ -121,6 +189,9 @@ nonisolated enum ComposerRailCopy {
         case .drawing:
             return String(localized: "composer.rail.drawing",
                           defaultValue: "Dessiner", bundle: .main)
+        case .text:
+            return String(localized: "composer.rail.text",
+                          defaultValue: "Ajouter du texte", bundle: .main)
         }
     }
 }

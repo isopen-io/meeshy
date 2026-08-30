@@ -127,6 +127,13 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
+      # Même partage que le type-check ci-dessous : l'amnistie de l'étape
+      # précédente est achetée par la dette du legacy. La v3 n'en a aucune, et
+      # une étape amnistiée est le SEUL signal qu'elle aurait — autant dire
+      # aucun. Elle rougit donc pour elle seule, sans toucher au reste.
+      - name: Lint (apps/web-v3 — blocking)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint --filter=@meeshy/web-v3
+
       # Type-check, en DEUX étapes plutôt qu'une amnistie.
       #
       # L'étape unique qui précédait portait `continue-on-error: true`, et ce
@@ -142,14 +149,60 @@ jobs:
       # a dans son `diagnostics.ignoreCodes`. Ni le job de test ni celui-ci ne
       # pouvaient donc rougir sur une charge fausse. Mesuré en retirant un champ
       # requis d'une émission de `preferences-broadcast.ts`.
+      # `@meeshy/web-v3` entre ICI et nulle part ailleurs. Le ratchet ci-dessous
+      # est gagé sur `WEB_BASELINE`, la dette de types d'`apps/web` LEGACY : y
+      # faire entrer la v3 lui offrirait un budget d'erreurs qu'elle n'a pas à
+      # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
+      # le garantir — elle ne porte pas `continue-on-error`.
       - name: Type-check (contract packages — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web-v3
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
+
+      # L'invariant porte sur le `bun.lock` de la RACINE et sur tous les
+      # manifestes que la racine déclare comme workspaces : sa surface est le
+      # dépôt, donc il est appelé ici, à côté des autres gates de racine, et
+      # non depuis les tests d'une app. Il rougit dans les DEUX sens — un
+      # manifeste que le lock ignore, un workspace loqué qu'aucun arbre de
+      # fichiers ne porte — pour qu'un `bun.lock` ne puisse plus être commité
+      # sans l'arbre qu'il décrit.
+      - name: Lockfile alignment guard
+        run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+
+      # Même raison de placement que le garde ci-dessus : l'invariant porte sur
+      # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
+      # tests d'une app. Sa première écriture vivait dans
+      # `apps/web-v3/__tests__/` — elle remontait de trois crans pour atteindre
+      # sa surface et ne tournait dans AUCUN job (la matrice `test:` ne porte
+      # que shared/web/gateway/agent) : un contrôle inerte, qui laissait
+      # rouvrir au commit suivant la régression qu'il prétendait fermer.
+      # Il déroule les cibles avec `make -n` : un `*_DIR` mort se lit dans le
+      # texte, mais un `cd` vers un répertoire absent ne se voit qu'après
+      # expansion des variables.
+      - name: Makefile workspace directories guard
+        run: node scripts/check-makefile-workspaces.mjs --self-test && node scripts/check-makefile-workspaces.mjs
+
+      # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
+      # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
+      # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
+      # relire : « un push qui ne touche que apps/web-v3 construit-il la v3 sans
+      # réveiller le legacy ? » ne se lit pas dans le texte d'un `[[ == *"…"* ]]`.
+      - name: web-v3 pipeline guard
+        run: node scripts/check-v3-pipeline.mjs --self-test && node scripts/check-v3-pipeline.mjs
+
+      # Le rapport unique de la machine de vérification (§ 9 de la conception)
+      # agrège quatre mesures dont trois ont un prérequis (un build, un serveur).
+      # Ce qui est BLOQUANT en CI est donc son agrégation, pas son verdict : une
+      # mesure non exécutée doit sortir en « rapport incomplet » (rc=2), jamais
+      # en vert. C'est exactement ce que les mutations du --self-test sondent.
+      # Le rapport complet se lance à la main, avec la v3 servie :
+      #   node scripts/v3-rapport.mjs --base http://127.0.0.1:3300
+      - name: web-v3 verification report aggregation
+        run: node scripts/v3-rapport.mjs --self-test
 
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
@@ -183,6 +236,9 @@ jobs:
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+          - name: web-v3
+            path: apps/web-v3
+            filter: '@meeshy/web-v3'
 
     steps:
       - name: Checkout
@@ -259,7 +315,7 @@ jobs:
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
           # Web tests must use Jest (configured with Next.js)
-          if [ "${{ matrix.package.name }}" = "web" ]; then
+          if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v3" ]; then
             cd ${{ matrix.package.path }}
             echo "Running web tests with Jest via bun..."
             bun run test:coverage

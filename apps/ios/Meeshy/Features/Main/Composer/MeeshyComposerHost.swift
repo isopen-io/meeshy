@@ -999,9 +999,21 @@ struct MeeshyComposerHost: View {
         }
     }
 
+    /// **La vue réellement MONTÉE** — et c'est elle, jamais le kind de surface,
+    /// qui répond à « y a-t-il une scène à l'écran ? ».
+    ///
+    /// Elle était calculée en ligne dans l'aiguillage. Un second site en a eu
+    /// besoin — l'historique (#4402) — et a interrogé `mountedSurface` à la
+    /// place : ça compilait, et ça ne pouvait jamais rendre vrai, la scène
+    /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
+    /// endroit ne peut pas être lue de travers ailleurs.
+    var mountedComposerView: ComposerMountedView {
+        ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene)
+    }
+
     @ViewBuilder
     var surface: some View {
-        switch ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene) {
+        switch mountedComposerView {
         case .atelier:
             composerSurface
         case .scene:

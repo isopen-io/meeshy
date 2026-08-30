@@ -153,18 +153,63 @@ nonisolated enum ComposableAttachment {
     /// - EXACTEMENT une pièce composable — un lot mentirait sur ce qui part ;
     /// - AUCUNE pièce protégée dans le message, fût-ce une voisine.
     static func target(in message: Message) -> MessageAttachment? {
+        seedPlan(in: message)?.media
+    }
+
+    /// **Ce qu'un message sème dans l'atelier** — le canvas ET la description,
+    /// portés ENSEMBLE (#4025).
+    ///
+    /// La règle rendait auparavant « quelle pièce poser » (`MessageAttachment?`),
+    /// un type qui n'a aucun endroit où loger du texte. « Composer » n'était donc
+    /// offert que sur un média, et un message TEXTE — le cas le plus courant —
+    /// ne l'offrait pas, alors que son texte a une destination évidente : la
+    /// DESCRIPTION de la slide.
+    ///
+    /// Les deux voyagent ensemble parce qu'un message porte souvent les deux, et
+    /// que la légende que l'auteur a déjà écrite ne doit pas lui être redemandée.
+    /// Pas `Equatable` : `MessageAttachment` ne l'est pas, et le rendre tel
+    /// pour un type de plan serait faire porter à un modèle du SDK une exigence
+    /// née d'un test. Les témoins comparent ce qu'ils veulent vérifier —
+    /// l'identité du média et le texte — plutôt que le plan en bloc.
+    struct SeedPlan {
+        /// Ce qui se pose sur le CANVAS. `nil` pour un message texte, ou pour un
+        /// LOT — dont le refus portait sur « quelle pièce part », jamais sur la
+        /// phrase qui l'accompagne.
+        let media: MessageAttachment?
+        /// Ce qui pré-remplit la DESCRIPTION. Normalisé : une chaîne d'espaces
+        /// n'est pas un texte.
+        let description: String?
+    }
+
+    /// Les trois protections sont lues UNE fois, pour les deux moitiés du plan.
+    ///
+    /// Le texte les porte au même titre que le média : publier au-delà de la
+    /// conversation ce qui est masqué DANS la conversation est une divulgation,
+    /// que la chose masquée soit une image ou une phrase. Les poser ici, en
+    /// tête, est ce qui empêche l'extension au texte de rouvrir une porte que le
+    /// média avait fermée.
+    static func seedPlan(in message: Message) -> SeedPlan? {
         guard message.isForwardable, !message.isBlurred, !message.isEncrypted else { return nil }
+
         let composables = message.attachments.filter { form(mimeType: $0.mimeType) != nil }
-        guard composables.count == 1, let seule = composables.first else { return nil }
-        guard !message.attachments.contains(where: Self.isProtected) else { return nil }
-        return seule
+        let aucuneProtegee = !message.attachments.contains(where: Self.isProtected)
+        let media = (composables.count == 1 && aucuneProtegee) ? composables.first : nil
+
+        let texte = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = texte.isEmpty ? nil : texte
+
+        // Un message qui ne sème RIEN n'ouvre pas d'atelier : sans ce refus,
+        // « offert sur tout message » se lirait « offert toujours », et la porte
+        // s'ouvrirait sur une scène vide.
+        guard media != nil || description != nil else { return nil }
+        return SeedPlan(media: media, description: description)
     }
 
     /// Le même verdict, sous la forme que lisent les surfaces qui n'ont pas
-    /// besoin de la pièce. `target` en est l'UNIQUE implémentation : deux
+    /// besoin du plan. `seedPlan` en est l'UNIQUE implémentation : deux
     /// écritures de la même conjonction sont deux règles qui ont déjà commencé
     /// à diverger.
-    static func offers(message: Message) -> Bool { target(in: message) != nil }
+    static func offers(message: Message) -> Bool { seedPlan(in: message) != nil }
 }
 
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —

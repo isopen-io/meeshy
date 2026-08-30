@@ -131,7 +131,15 @@ final class ComposerTrailingRailTests: XCTestCase {
     /// Ancré en bas, comme sa jumelle *leading* — le ressort PRÉCÈDE les
     /// actions.
     func test_lesActions_sontPousseesVersLeBas() throws {
-        XCTAssertTrue(compact(try railSource()).contains("Spacer(minLength:0)ForEach(actions"))
+        // Le rail droit porte désormais la frame `[+]` AVANT ses contrôleurs
+        // (directive porteur 2026-08-30) : le ressort précède donc l'ensemble,
+        // pas la seule boucle d'actions. C'est ce que ce témoin doit dire —
+        // rien n'est peint au-dessus du ressort.
+        let source = compact(try railSource())
+        XCTAssertTrue(source.contains("Spacer(minLength:0)ifletonAddSlide{"),
+                      "Le ressort doit PRÉCÉDER tout ce qui se peint, `[+]` comprise.")
+        XCTAssertTrue(source.contains("ForEach(actions,id:\\.self)"),
+                      "Les contrôleurs de l'objet suivent la frame, jamais l'inverse.")
     }
 
     /// La vue ne re-filtre pas : une seconde loi 4 divergerait de la première.

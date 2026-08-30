@@ -1126,6 +1126,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Conversation RESTAURÉE sur un autre appareil (#4389) — la remettre
+        // dans le cache PERSISTÉ, pas seulement dans le store RAM. Sans ce
+        // relais, la restauration ne survivait pas au prochain démarrage à
+        // froid : le cache disque continuait de servir une liste d'où la
+        // conversation avait été retirée, exactement le défaut symétrique que
+        // le doc-comment de la descendante nomme au-dessus.
+        messageSocket.conversationRestored
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleConversationRestored(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // `message:consumed` (vue unique consommée) reçu conversation FERMÉE :
         // sans ce relais, seule la conversation ouverte marquait le message
         // consommé — le rouvrir hors-ligne réaffichait un média déjà brûlé.
@@ -1740,6 +1753,32 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             conversations.filter { $0.id != event.conversationId }
         }
         await cache.messages.invalidate(for: event.conversationId)
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// `conversation:restored` — la jumelle MONTANTE (#4389).
+    ///
+    /// La ligne revient dans le cache persisté par une lecture BORNÉE
+    /// (`GET /conversations/:id`), jamais par un rechargement de liste : c'est
+    /// la même règle que côté RAM et que côté web. Une lecture qui échoue ne
+    /// fabrique rien — la liste reste telle quelle, et la prochaine synchro
+    /// rattrapera.
+    ///
+    /// Idempotent : si la ligne est déjà présente (une autre voie l'a
+    /// ramenée), elle est remplacée par la version fraîche plutôt que
+    /// dupliquée.
+    private func handleConversationRestored(_ event: ConversationRestoredSocketEvent) async {
+        // `conversationService` est déjà une couture de ce moteur — pas de
+        // dépendance neuve, et le double des tests la contrôle déjà.
+        // `event.userId` EST le restaurateur : l'événement ne part que sur SA
+        // room personnelle, donc le recevoir signifie que c'est nous, comme
+        // pour la descendante juste au-dessus qui ne gate pas davantage.
+        guard let api = try? await conversationService.getById(event.conversationId) else { return }
+        let restored = api.toConversation(currentUserId: event.userId)
+        await cache.conversations.update(for: "list") { conversations in
+            conversations.filter { $0.id != restored.id } + [restored]
+        }
         _conversationsDidChange.send()
         await recomputeTotalUnread()
     }

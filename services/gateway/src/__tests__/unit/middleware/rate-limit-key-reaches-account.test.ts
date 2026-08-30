@@ -43,6 +43,7 @@ import {
   createSignalProtocolRateLimitConfig,
 } from '../../../middleware/rate-limiter';
 import { meRouteRateLimitConfig } from '../../../routes/me/get-me';
+import { ROUTE_RATE_LIMITS } from '../../../middleware/rate-limit';
 
 const COMPTE = 'u-4184';
 
@@ -135,6 +136,17 @@ describe("La clé de débit du changement de contact atteint le COMPTE (#4184)",
  * la liste : le nettoyage devient visible au lieu d'être silencieux. Motif
  * emprunté à `no-silent-query-fallback-guard.test.ts`, même contrainte
  * multi-agents, même solution.
+ *
+ * ## Ce que cette liste ne peut PAS voir, et où c'est gardé
+ *
+ * Elle ÉNUMÈRE les fabriques de `middleware/rate-limiter.ts`. Elle disait donc
+ * vrai en déclarant la dette soldée — de ce fichier. `middleware/rate-limit.ts`,
+ * à un caractère du premier, a porté le même défaut intact sur les neuf routes
+ * d'appels pendant tout ce temps, et `routes/admin/agent-topics.ts` le porte
+ * encore. **Une énumération mesure ce que son auteur connaissait.** Le
+ * balayage qui mesure la PROPRIÉTÉ sur tout `src/` vit dans
+ * `account-keyed-rate-limit-sweep.test.ts` ; `calls:*` est ajouté ci-dessous
+ * pour que la fabrique corrigée soit gardée par les deux.
  */
 const CONFORMES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['contact-change:initiate', createContactChangeRateLimitConfig('initiate') as Record<string, unknown>],
@@ -169,5 +181,44 @@ describe('Toute fabrique qui prétend compter par compte le fait vraiment', () =
   it('la liste de dette ne contient rien de déjà corrigé', () => {
     const perimees = DETTE.filter(([, cfg]) => cfg.hook === 'preHandler').map(([nom]) => nom);
     expect(perimees).toEqual([]);
+  });
+});
+
+/**
+ * La JUMELLE — `middleware/rate-limit.ts`, la surface d'appels.
+ *
+ * Elle est rangée à part parce que son sens d'ÉCHEC diverge, et que la
+ * divergence est une décision, pas un oubli : les neuf routes de `calls.ts`
+ * couvrent RACCROCHER et QUITTER un appel, et un `skipOnError: false` les
+ * ferait répondre **500** pendant une panne Redis — enfermant l'utilisateur
+ * dans un appel qu'il ne peut plus quitter. C'est le « fail-open assumé là où
+ * la disponibilité prime » du critère 2 de #4334. Le témoin garde donc la
+ * décision dans son sens à elle : la valeur doit être ÉCRITE, et valoir
+ * `true`.
+ */
+const CALLS: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+  ['calls:initiate', ROUTE_RATE_LIMITS.initiateCall.config.rateLimit as Record<string, unknown>],
+  ['calls:join', ROUTE_RATE_LIMITS.joinCall.config.rateLimit as Record<string, unknown>],
+  ['calls:operations', ROUTE_RATE_LIMITS.callOperations.config.rateLimit as Record<string, unknown>],
+];
+
+describe('La jumelle des appels compte le compte, et assume son échec ouvert', () => {
+  it.each(CALLS)('%s pose hook preHandler', (_nom, cfg) => {
+    expect(cfg.hook).toBe('preHandler');
+  });
+
+  it.each(CALLS)('%s DÉCLARE son échec ouvert au lieu de l\'hériter', (_nom, cfg) => {
+    expect(Object.prototype.hasOwnProperty.call(cfg, 'skipOnError')).toBe(true);
+    expect(cfg.skipOnError).toBe(true);
+  });
+
+  /**
+   * Le plugin `throw`e ce que rend `errorResponseBuilder` et Fastify lit
+   * `statusCode` sur l'objet lancé : sans ce champ, un refus de débit
+   * répondait 500 sur les neuf routes d'appels.
+   */
+  it.each(CALLS)('%s : le refus porte son 429', (_nom, cfg) => {
+    const corps = (cfg.errorResponseBuilder as () => Record<string, unknown>)();
+    expect(corps.statusCode).toBe(429);
   });
 });

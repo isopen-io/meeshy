@@ -275,9 +275,9 @@ extension MeeshyComposerHost {
             // — poser un sticker, avancer un objet, changer le fond — ne se
             // défont par rien d'autre. Sur le document, le dernier geste est
             // presque toujours du texte, que le clavier annule déjà.
-            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
+            canUndo: ComposerHistoryService.servesHistory(on: mountedComposerView)
                 && viewModel.canUndoGlobal,
-            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
+            canRedo: ComposerHistoryService.servesHistory(on: mountedComposerView)
                 && viewModel.canRedoGlobal,
             onUndo: { performHistoryUndo() },
             onRedo: { performHistoryRedo() },
@@ -313,12 +313,24 @@ extension MeeshyComposerHost {
             // le fait sous l'atelier. Elle était retenue parce que « rien ne
             // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
             // meuble qui le fait désormais, en ouvrant sa zone basse.
-            railDoors: ComposerRailDoor.offered(
-                served: ComposerSceneCapabilities.doors,
-                format: selectedFormat,
-                allowsCapture: profile.allowsCapture
+            // **Le rail montre les portes, OU les contrôleurs de l'outil
+            // ouvert** (directive porteur 2026-08-30). La résolution est une
+            // règle pure : le meuble ne décide pas ici quel outil l'emporte,
+            // il fournit l'état.
+            railMode: ComposerRailMode.resolve(
+                drawing: viewModel.isDrawingActive,
+                textEditing: viewModel.textEditingMode.activeTextId != nil,
+                expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
+                expandedTextTool: viewModel.textEditingMode.expandedTool,
+                doors: ComposerRailDoor.offered(
+                    served: ComposerSceneCapabilities.doors,
+                    format: selectedFormat,
+                    allowsCapture: profile.allowsCapture
+                )
             ),
             onRailDoor: { door in handleRailDoor(door) },
+            onRailToolControl: { control in handleRailToolControl(control) },
+            onRailExitTool: { handleRailExitTool() },
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
@@ -335,6 +347,9 @@ extension MeeshyComposerHost {
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
+            // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
+            // d'où sa place tout en haut du rail et son séparateur.
+            onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -361,13 +376,25 @@ extension MeeshyComposerHost {
                 viewModel.openingEffect = effect
                 HapticFeedback.light()
             },
-            // **Les deux montages du dessin** (#4092). La bande porte les
-            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
-            // la bande est ouverte par la même porte qui entre dans le mode —
-            // mais elles sont montées à deux endroits distincts, parce qu'elles
-            // ne vivent pas au même niveau : l'une sous la scène, l'autre
-            // dessus.
-            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // **Les deux montages du dessin** (#4092) : la couche qui CAPTURE
+            // le trait, et les contrôleurs qui règlent le pinceau. Les deux
+            // flottent sur la scène, et ce sont ceux de l'ATELIER — pinceau
+            // (stylo / marqueur / gomme), couleur, épaisseur, lissage,
+            // annulation par trait. Une bande simplifiée écrite ici aurait
+            // perdu quatre capacités que l'atelier a (leçon 336).
+            // **Les OPTIONS de l'outil déplié**, sous la scène. Les bulles sont
+            // au rail ; ce panneau porte ce qui a besoin de largeur — la
+            // palette, la glissière, les dix-huit styles. `MeeshyToolOptionsPanel`
+            // rend `EmptyView` quand rien n'est déplié, donc le montage est
+            // inconditionnel et la loi 4 est tenue par la vue elle-même.
+            toolOptions: AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)),
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, texte in
+                viewModel.updateTextContent(id: id, text: texte)
+            },
+            // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
+            // ce qu'il advient d'une coquille vide — il la supprime.
+            onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.

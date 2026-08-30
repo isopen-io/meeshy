@@ -41,6 +41,10 @@ function makePrisma(overrides: any = {}): any {
       count: jest.fn<any>().mockResolvedValue(0),
       findMany: jest.fn<any>().mockResolvedValue([]),
       groupBy: jest.fn<any>().mockResolvedValue([]),
+      // Depuis #4391, `GET /stats` tire son histogramme quotidien ET sa
+      // longueur moyenne d'UN `$facet` MongoDB — plus d'un `findMany` sur toute
+      // la fenêtre.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
       ...overrides.message,
     },
     participant: {
@@ -216,5 +220,88 @@ describe('Admin messages routes — GET /engagement', () => {
     expect(response.statusCode).toBe(500);
     const body = JSON.parse(response.body);
     expect(body.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /stats — l'agrégation de fenêtre, calculée en base (#4391)
+//
+// `messagesByPeriod` et `averageLength` venaient d'un `findMany` sur toute la
+// fenêtre (une ligne par message, `content` intégral compris) plié en
+// JavaScript. Ils viennent désormais d'un `$facet` MongoDB. Ces deux témoins
+// couvrent le dépouillement du facet — la part de comportement que le
+// remplacement a déplacée.
+// ---------------------------------------------------------------------------
+
+describe('Admin messages routes — GET /stats agrège la fenêtre en base', () => {
+  const jourISO = (recul: number): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - recul);
+    return d.toISOString().split('T')[0];
+  };
+
+  it('reporte les comptes quotidiens du $facet, et zéro pour les jours absents', async () => {
+    const app = await buildApp('ADMIN', {
+      message: {
+        count: jest.fn<any>().mockResolvedValue(0),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        groupBy: jest.fn<any>().mockResolvedValue([]),
+        aggregateRaw: jest.fn<any>().mockResolvedValue([
+          { daily: [{ _id: jourISO(1), count: 12 }], length: [] },
+        ]),
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/stats' });
+    const body = JSON.parse(response.body);
+    await app.close();
+
+    const parJour: Array<{ date: string; count: number }> = body.data.messagesByPeriod;
+    expect(parJour.find((e) => e.date === jourISO(1))?.count).toBe(12);
+    expect(parJour.find((e) => e.date === jourISO(2))?.count).toBe(0);
+  });
+
+  it('arrondit la longueur moyenne rendue par le $facet, et sert 0 quand il est vide', async () => {
+    const app = await buildApp('ADMIN', {
+      message: {
+        count: jest.fn<any>().mockResolvedValue(0),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        groupBy: jest.fn<any>().mockResolvedValue([]),
+        aggregateRaw: jest.fn<any>().mockResolvedValue([
+          { daily: [], length: [{ _id: null, avg: 41.6 }] },
+        ]),
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/stats' });
+    const body = JSON.parse(response.body);
+    await app.close();
+
+    expect(body.data.averageLength).toBe(42);
+
+    const vide = await buildApp('ADMIN');
+    const sansContenu = await vide.inject({ method: 'GET', url: '/stats' });
+    await vide.close();
+    expect(JSON.parse(sansContenu.body).data.averageLength).toBe(0);
+  });
+
+  it('borne le $match du pipeline à la fenêtre demandée', async () => {
+    const aggregateRaw = jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]);
+    const app = await buildApp('ADMIN', {
+      message: {
+        count: jest.fn<any>().mockResolvedValue(0),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        groupBy: jest.fn<any>().mockResolvedValue([]),
+        aggregateRaw,
+      },
+    });
+
+    await app.inject({ method: 'GET', url: '/stats?period=7d' });
+    await app.close();
+
+    const [{ pipeline }] = aggregateRaw.mock.calls[0] as [{ pipeline: any[] }];
+    expect(pipeline[0].$match.createdAt.$gte.$date).toEqual(expect.any(String));
+    expect(pipeline[0].$match.deletedAt).toBeNull();
+    expect(Object.keys(pipeline[1].$facet)).toEqual(['daily', 'length']);
   });
 });

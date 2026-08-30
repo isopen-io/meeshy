@@ -69,7 +69,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.iconKind == .text)
         #expect(item.titlePreview == "Bonjour Marie")
         #expect(item.attachmentCount == 0)
-        #expect(item.source == .conversation(id: "conv-1"))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "client-1"))
     }
 
     @Test func test_from_longContent_truncatesAt61CharsWithEllipsis() {
@@ -162,7 +162,7 @@ struct OutboxUIItemMappingTests {
 
     @Test func test_from_record_mapsConversationIdToSource() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "x"))
-        #expect(OutboxUIItem.from(record: r).source == .conversation(id: "conv-1"))
+        #expect(OutboxUIItem.from(record: r).source == .conversation(id: "conv-1", messageId: "client-1"))
     }
 
     @Test func test_from_textWithAttachment_keepsTextIcon() {
@@ -421,5 +421,63 @@ struct OutboxUIItemMappingTests {
         let r = record(kind: .repostPost, payload: Data("not json".utf8))
         let item = OutboxUIItem.from(record: r)
         #expect(item.source == .unknown)
+    }
+
+    // MARK: - #4027 — l'entrée mène à sa CIBLE EXACTE, pas seulement à sa conversation
+
+    /// **Le défaut.** Taper « Message non envoyé » ouvrait la conversation et
+    /// s'arrêtait là : dans un fil de trois cents messages, l'utilisateur
+    /// devait retrouver lui-même celui qui n'était pas parti.
+    ///
+    /// L'ancre voyage AVEC la destination, dans `Source`, et non à côté d'elle
+    /// sur l'item : « où cette entrée mène-t-elle » est UNE question, et une
+    /// ancre rangée ailleurs pourrait être appliquée à une autre conversation
+    /// que celle qu'on ouvre.
+    ///
+    /// Pour un envoi, l'ancre est le `clientMessageId` du record — l'id LOCAL
+    /// que la bulle optimiste porte dans la liste (`ConversationViewModel`
+    /// insère la ligne GRDB sous ce même `tempId`). C'est donc exactement la
+    /// clé que `ConversationView` sait retrouver.
+    @Test func test_sendMessage_carriesTheOptimisticMessageAsItsAnchor() {
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "Bonjour Marie"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .conversation(id: "conv-1", messageId: "client-1"))
+    }
+
+    /// Une édition en attente vise le message ÉDITÉ, dont l'id SERVEUR vit
+    /// dans la charge — pas le `clientMessageId` du record, qui identifie la
+    /// mutation.
+    @Test func test_editMessage_anchorsOnTheEditedMessage() {
+        let payload = try! JSONEncoder().encode(
+            OfflineEditPayload(messageId: "srv-42", clientMessageId: "client-1",
+                               content: "corrigé", conversationId: "conv-1"))
+        let item = OutboxUIItem.from(record: record(kind: .editMessage, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-42"))
+    }
+
+    @Test func test_deleteMessage_anchorsOnTheMessageBeingDeleted() {
+        let payload = try! JSONEncoder().encode(
+            OfflineDeletePayload(messageId: "srv-43", clientMessageId: "client-1",
+                                 conversationId: "conv-1"))
+        let item = OutboxUIItem.from(record: record(kind: .deleteMessage, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-43"))
+    }
+
+    @Test func test_sendReaction_anchorsOnTheReactedMessage() {
+        let payload = try! JSONEncoder().encode(
+            ReactionOutboxPayload(messageId: "srv-44", emoji: "🔥", action: .add,
+                                  conversationId: "conv-1", clientMessageId: "client-1"))
+        let item = OutboxUIItem.from(record: record(kind: .sendReaction, payload: payload))
+        #expect(item.source == .conversation(id: "conv-1", messageId: "srv-44"))
+    }
+
+    /// **Le contre-témoin, et il compte autant.** Une charge illisible ne doit
+    /// pas fabriquer d'ancre : mieux vaut ouvrir la conversation sans viser que
+    /// viser un message qui n'existe pas — un scroll vers un id introuvable
+    /// laisserait le fil à un endroit arbitraire, ce qui se lit comme un bug.
+    @Test func test_anUndecodablePayload_yieldsNoAnchor_butStillOpensTheConversation() {
+        let item = OutboxUIItem.from(record: record(kind: .editMessage,
+                                                    payload: Data("pas du JSON".utf8)))
+        #expect(item.source == .conversation(id: "conv-1", messageId: nil))
     }
 }

@@ -198,7 +198,16 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'admin/agent-observability.ts': 4,
   'admin/agent-topics.ts': 1,
   'admin/invitations.ts': 1,
-  'admin/messages.ts': 3,
+  // 3 -> 2 : #4391 a RETIRE le `findMany` de `GET /admin/messages/stats`, qui
+  // ramenait `select: { createdAt, content }` sur TOUTE la fenetre — une ligne
+  // par message, texte integral compris — pour n'en tirer qu'un histogramme
+  // quotidien et une longueur moyenne. Les deux se calculent desormais en base,
+  // en une seule passe `aggregateRaw` + `$facet` (patron de `admin/languages.ts`).
+  // Les DEUX restants sont ailleurs dans le fichier : `GET /trends` (meme motif,
+  // hors des six routes nommees par #4391 — voir le rapport de cloture) et la
+  // relecture des participants du top-10 de `/stats`, bornee transitivement par
+  // le `take: 10` du `groupBy` qui l'alimente.
+  'admin/messages.ts': 2,
   'admin/posts.ts': 1,
   'admin/system-rankings.ts': 13,
   'auth/register.ts': 1,
@@ -260,7 +269,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'signal-protocol.ts': 1,
   'sync/membership.ts': 1,
   'user-deletions.ts': 2,
-  'user-stats.ts': 1,
+  // 1 -> 0, donc la CLE disparait : #4391 a retire le dernier `findMany` nu du
+  // fichier — `GET /users/me/stats/timeline` ramenait UNE LIGNE PAR MESSAGE des
+  // 90 derniers jours (`select: { createdAt }`, sans `take`) pour en faire un
+  // histogramme de 90 entiers. Un COUNT par tranche, en parallele, le remplace
+  // (patron de `admin/analytics.ts`). Le budget de lignes lues est garde par
+  // `__tests__/security/stats-routes-row-budget.test.ts`.
 };
 
 describe('Aucun findMany sans take ni skip hors inventaire figé (#4165 critère 4)', () => {

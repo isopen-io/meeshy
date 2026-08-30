@@ -227,7 +227,11 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
-    func addText() -> StoryTextObject? {
+    /// `public` : la porte TEXTE du composer unifié pose l'objet (#4401). Elle
+    /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
+    /// coquille restée vide est supprimée à la sortie de l'éditeur
+    /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
+    public func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
@@ -754,7 +758,7 @@ extension StoryComposerViewModel {
     /// ouvre l'éditeur, ce qui est juste pour l'auteur qui écrit. Un collage
     /// apporte déjà son texte ; le faire transiter par l'éditeur obligerait
     /// l'auteur à valider ce qu'il vient de coller.
-    func updateTextContent(id: String, text: String) {
+    public func updateTextContent(id: String, text: String) {
         var effects = currentEffects
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }

@@ -50,13 +50,13 @@ final class ComposerSceneBandTests: XCTestCase {
     /// La liste est celle de la planche, et elle est FERMÉE. Ce témoin rougit
     /// si un quatrième contexte s'y glisse sans que le critère
     /// — un axe horizontal, ou une comparaison latérale — ait été rediscuté.
-    /// **`drawing` entre au #4092, et le critère tient sans être réécrit** : on
-    /// choisit une couleur de pinceau en la voyant à côté des autres, comme un
-    /// fond — c'est la COMPARAISON LATÉRALE, la seconde moitié du critère. Une
-    /// cinquième entrée ferait rougir ce témoin, et c'est ce qu'on lui demande.
+    /// **`drawing` en est ressorti** : ses réglages sont le contrôleur FLOTTANT
+    /// de l'atelier (`StoryDrawingToolbar`), pas une bande. La liste reste donc
+    /// celle de la planche, à trois entrées — et une quatrième ferait rougir ce
+    /// témoin, ce qu'on lui demande.
     func test_lesContextes_sontCeuxDeLaPlanche() {
         XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)),
-                       ["palette", "timeline", "textStyles", "drawing"])
+                       ["palette", "timeline", "textStyles"])
     }
 
     // MARK: - Le `⋯` rouvre la palette là où la rangée d'outils a disparu
@@ -253,7 +253,13 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
     /// du panneau de l'atelier au premier effet ajouté.
     func test_laRangee_estCelleDuSDK() throws {
         let source = compact(try bandSource())
-        XCTAssertTrue(source.contains("OpeningEffectChips(selection:openingEffect,onSelect:onPickOpening)"))
+        // **La signature n'est PAS épinglée au mot près.** Elle l'était, et le
+        // correctif de contraste (`onDarkSurface:`) l'a fait rougir — une garde
+        // qui pin une liste d'arguments rougit à chaque paramètre ajouté, y
+        // compris quand l'ajout est le correctif. On garde ce qui compte : la
+        // vue vient du SDK, et elle reçoit la sélection et le rappel de l'hôte.
+        XCTAssertTrue(source.contains("OpeningEffectChips(selection:openingEffect,"))
+        XCTAssertTrue(source.contains("onSelect:onPickOpening)"))
         XCTAssertFalse(source.contains("StoryTransitionEffect.allCases"),
                        "Énumérer les effets ICI ferait une seconde liste à faire diverger.")
     }
@@ -283,5 +289,43 @@ final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
                       "Le rappel d'ouverture doit poser le réglage…")
         XCTAssertFalse(source.contains("viewModel.openingEffect=effectrequestedSceneBand=nil"),
                        "…et NE PAS refermer la bande, contrairement à la couleur.")
+    }
+}
+
+/// **Les puces d'ouverture suivent la SURFACE, pas le thème de l'appareil**
+/// (#4403, correctif du 2026-08-30).
+///
+/// Mesuré au simulateur : les puces non sélectionnées existaient dans l'arbre
+/// d'accessibilité — libellé et cadre corrects — et n'étaient PAS VISIBLES.
+/// `OpeningEffectChips` lisait `colorScheme`, le thème de l'APPAREIL ; sur un
+/// appareil en clair, elle peignait de l'`indigo950` sur le plateau, qui est
+/// sombre en permanence.
+///
+/// **Un contrôle présent à l'accessibilité et absent à l'œil est le pire des
+/// deux mondes** : les tests le trouvent, l'utilisateur non.
+final class ComposerSceneBandOpeningContrastGuardTests: XCTestCase {
+
+    private func bandSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSource_estLisible() throws {
+        XCTAssertTrue(try bandSource().contains("OpeningEffectChips"))
+    }
+
+    /// La bande DÉCLARE que sa surface est sombre. Sans ce drapeau, les puces
+    /// retombent sur le thème de l'appareil — et disparaissent en thème clair.
+    func test_lesPuces_saventQueLePlateauEstSombre() throws {
+        XCTAssertTrue(compact(try bandSource()).contains("onDarkSurface:true"),
+                      "Le plateau est sombre EN PERMANENCE : une couleur adaptative y peint "
+                        + "du sombre sur du sombre dès que l'appareil quitte la nuit.")
     }
 }

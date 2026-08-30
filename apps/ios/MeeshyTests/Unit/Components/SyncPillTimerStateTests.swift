@@ -100,4 +100,58 @@ final class SyncPillTimerStateTests: XCTestCase {
         XCTAssertFalse(noms.contains("SyncPillAccentLaw.swift"),
                        "SyncPillAccentLaw.swift est revenu — voir le témoin ci-dessus")
     }
+
+    // MARK: - #4027 — le tap mène à sa cible exacte, sur les DEUX hôtes
+
+    /// La branche « conversation » de `handleSyncPillTap`, chez un hôte donné.
+    ///
+    /// Le témoin est BORNÉ à cette branche, jamais au fichier : les deux hôtes
+    /// posent déjà `pendingHighlightMessageId` ailleurs (navigation par id,
+    /// message étoilé, résultat de recherche). Un `contains` sur le fichier
+    /// entier serait donc vert AVANT le correctif — une garde positive née
+    /// morte, qui ne mesure que la présence d'un mot.
+    private func syncPillConversationBranch(ofHost relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        let text = try String(contentsOf: url, encoding: .utf8)
+        guard let start = text.range(of: "func handleSyncPillTap(_ source: OutboxUIItem.Source)"),
+              let end = text.range(of: "case .post(", range: start.upperBound..<text.endIndex) else {
+            XCTFail("\(relativePath) : la branche conversation de handleSyncPillTap est introuvable — le témoin ne mesure plus rien")
+            return ""
+        }
+        return String(text[start.upperBound..<end.lowerBound])
+    }
+
+    /// **Taper « Message non envoyé » doit mener AU message, pas seulement à
+    /// sa conversation.** Dans un fil de trois cents messages, ouvrir la
+    /// conversation et s'arrêter là laisse l'utilisateur chercher lui-même ce
+    /// que la pastille venait de lui signaler.
+    ///
+    /// Les deux hôtes sont vérifiés parce qu'ils ont DIVERGÉ par le passé :
+    /// `ConnectionBanner` était construit sans `onItemTap` côté iPad, et taper
+    /// une entrée n'y menait nulle part — c'est la raison d'être du jumeau
+    /// `iPadRootView+Navigation.handleSyncPillTap`. Une correction posée sur un
+    /// seul hôte rejouerait exactement ce défaut.
+    func test_bothHosts_carryTheMessageAnchorFromTheSyncPillTap() throws {
+        for hôte in ["Meeshy/Features/Main/Views/RootView.swift",
+                     "Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"] {
+            let branche = try syncPillConversationBranch(ofHost: hôte)
+            XCTAssertTrue(
+                branche.contains("case .conversation(let id, let messageId)"),
+                "\(hôte) : la branche ignore l'ancre servie par OutboxUIItem.Source"
+            )
+            XCTAssertTrue(
+                branche.contains("router.pendingHighlightMessageId = messageId"),
+                "\(hôte) : l'ancre est reçue mais jamais posée — le tap ouvrirait la conversation sans viser"
+            )
+            XCTAssertTrue(
+                branche.contains("router.pendingHighlightConversationId = id"),
+                """
+                \(hôte) : l'ancre est posée SANS son scope. Sans lui, elle survivrait                 à une ouverture différente et ferait sauter un autre fil sur un id qui                 n'est pas le sien — un défaut PIRE que l'absence de visée.
+                """
+            )
+        }
+    }
 }

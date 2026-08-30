@@ -63,9 +63,15 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
         let vue = makeCanvasSansEditeur()
         let titres = vue.contextMenu(for: freeText().id, kind: .text)
             .children.compactMap { ($0 as? UIAction)?.title }
-        XCTAssertFalse(titres.contains("Modifier"),
+        // Les deux entrées se nomment par leur ACTION, jamais par un littéral
+        // français : `title` est localisée depuis `11acc349f0`, et comparer à
+        // « Modifier » / « Dupliquer » rendait ce témoin vert en France et
+        // rouge partout ailleurs. Passer par la propriété teste ce que le
+        // témoin visait — QUELLES actions sont offertes — sans dépendre de la
+        // langue du simulateur.
+        XCTAssertFalse(titres.contains(StoryCanvasContextAction.edit.title),
                        "Sans `onItemDoubleTapped`, « Modifier » n'a personne derrière elle.")
-        XCTAssertTrue(titres.contains("Dupliquer"),
+        XCTAssertTrue(titres.contains(StoryCanvasContextAction.duplicate.title),
                       "…et les entrées qui ne dépendent d'aucun hôte restent servies.")
     }
 

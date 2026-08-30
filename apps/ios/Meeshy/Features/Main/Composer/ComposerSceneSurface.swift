@@ -68,14 +68,20 @@ struct ComposerSceneSurface: View {
 
     // MARK: - Les deux rails
 
-    /// Les portes SERVIES — déjà filtrées par `ComposerRailDoor.offered`. Cette
-    /// vue ne re-filtre rien : une seconde loi 4 divergerait de la première.
-    var railDoors: [ComposerRailDoor] = []
+    /// **Ce que le rail *leading* montre** — déjà résolu par
+    /// `ComposerRailMode.resolve`. Cette vue ne re-filtre rien : une seconde
+    /// loi 4 divergerait de la première.
+    var railMode: ComposerRailMode = .doors([])
     var onRailDoor: ((ComposerRailDoor) -> Void)?
+    var onRailToolControl: ((ComposerToolControl) -> Void)?
+    var onRailExitTool: (() -> Void)?
 
     /// Les contrôleurs SERVIS — déjà filtrés par `ComposerTrailingRailPolicy`.
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
+
+    /// La frame `[+]` du rail *trailing* — créer une slide.
+    var onAddSlide: (() -> Void)?
 
     // MARK: - La bande contextuelle
 
@@ -92,8 +98,16 @@ struct ComposerSceneSurface: View {
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
 
-    /// La bande de réglages du pinceau, montée par l'hôte (#4092).
-    var drawingBand: AnyView?
+    /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
+    /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
+    /// besoin de largeur — palette, glissière, dix-huit styles — vit ici.
+    var toolOptions: AnyView?
+
+    /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
+    /// place, dans sa vraie police, sur le vrai fond.
+    var editingTextId: String?
+    var onInlineTextChanged: ((String, String) -> Void)?
+    var onInlineTextEditEnded: ((String) -> Void)?
 
     /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
     /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
@@ -135,7 +149,10 @@ struct ComposerSceneSurface: View {
                     // Le canvas retire son calque de dessin persisté pendant
                     // qu'une surface live est posée dessus — sinon le trait
                     // s'affiche deux fois, à deux endroits (défaut 2026-05-27).
-                    isDrawingOverlayActive: drawingSurface != nil
+                    isDrawingOverlayActive: drawingSurface != nil,
+                    editingTextId: editingTextId,
+                    onInlineTextChanged: onInlineTextChanged,
+                    onInlineTextEditEnded: onInlineTextEditEnded
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // **Le canvas cesse de recevoir les touches pendant le
@@ -143,6 +160,9 @@ struct ComposerSceneSurface: View {
                 // l'objet sous lui : deux gestes pour un seul mouvement.
                 .allowsHitTesting(drawingSurface == nil)
                 .overlay { drawingSurface }
+                // Les contrôleurs PAR-DESSUS la couche de capture : ils doivent
+                // recevoir leurs taps, elle doit recevoir le reste.
+
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
                 // un goût de marge mais une conséquence — cible tactile 44 pt,
@@ -155,22 +175,21 @@ struct ComposerSceneSurface: View {
                 // l'aperçu sur le rendu final.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
                 .overlay(alignment: .bottomLeading) {
-                    if !railDoors.isEmpty {
-                        ComposerLeadingRail(doors: railDoors,
-                                            plateauTint: plateauTint,
-                                            onDoor: onRailDoor)
-                            .padding(.leading, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
+                    ComposerLeadingRail(mode: railMode,
+                                        plateauTint: plateauTint,
+                                        onDoor: onRailDoor,
+                                        onToolControl: onRailToolControl,
+                                        onExitTool: onRailExitTool)
+                        .padding(.leading, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, ComposerRailGeometry.gutter)
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    if !trailingActions.isEmpty {
-                        ComposerTrailingRail(actions: trailingActions,
-                                             plateauTint: plateauTint,
-                                             onAction: onTrailingAction)
-                            .padding(.trailing, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
+                    ComposerTrailingRail(actions: trailingActions,
+                                         plateauTint: plateauTint,
+                                         onAction: onTrailingAction,
+                                         onAddSlide: onAddSlide)
+                        .padding(.trailing, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, ComposerRailGeometry.gutter)
                 }
                 .padding(.top, 8)
 
@@ -183,13 +202,17 @@ struct ComposerSceneSurface: View {
                 // Montée sans transition ni animation : la bande est un frère
                 // du canvas, et animer son insertion ferait varier la frame de
                 // `StoryCanvasUIView` sur chaque image du ressort.
-                if let band {
+                // Le panneau d'options passe AVANT la bande de fond : c'est
+                // l'outil ouvert qui a la priorité sur le bas de l'écran, et
+                // les deux ne coexistent jamais (ouvrir un outil ferme la
+                // bande, et réciproquement).
+                if let toolOptions { toolOptions }
+                else if let band {
                     ComposerSceneBandView(band: band,
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening,
-                                          drawingBand: drawingBand)
+                                          onPickOpening: onPickBandOpening)
                 }
 
             }

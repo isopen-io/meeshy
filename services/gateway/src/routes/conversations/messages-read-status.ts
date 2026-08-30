@@ -16,6 +16,9 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 // #4349 — le dimensionnement de debit de l'accuse vient de la collection
 // unique, jamais d'une copie locale.
 import { createReceiptWriteRateLimitConfig, type ReceiptHandlers } from './receipts';
+// #4423 — cette porte est un ALIAS DÉPRÉCIÉ (adaptateur, #4349) : elle le dit
+// désormais au client, comme les autres alias du dépôt (#4274).
+import { depreciee } from '../../utils/deprecation';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
@@ -82,18 +85,26 @@ export function registerMarkReadRoute(
 ) {
   // ALIAS de `POST /conversations/:conversationId/receipts` (#4349) : ADAPTATEUR
   // MINCE vers la collection unique — `receipts.markReadAlias` est la MÊME
-  // référence de gestionnaire, aucun corps dupliqué. Son ANNONCE de dépréciation
-  // relève de #4423.
+  // référence de gestionnaire, aucun corps dupliqué. Son annonce est posée
+  // ci-dessous (#4423).
   //
-  // Cette déclaration est ADJACENTE à l'enregistrement, et non portée par le
+  // La déclaration est ADJACENTE à l'enregistrement, jamais portée par le
   // doc-comment du registrar : `alias-deprecation-guard` lit le commentaire qui
-  // précède l'appel `fastify.post`, jamais celui de la fonction qui l'enveloppe.
+  // précède l'appel `fastify.post`, pas celui de la fonction qui l'enveloppe.
   // Le découpage #4284 ayant mis cet appel dans un registrar, la déclaration
-  // devait descendre avec lui.
+  // est descendue avec lui.
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:id/mark-read', {
     config: { rateLimit: createReceiptWriteRateLimitConfig() },
+    // #4423 — annonce de dépréciation : `type: 'read'` voyage dans le CORPS
+    // du successeur, jamais dans son URL (comme `ANNONCE_ALIAS_FRIENDS.agir`,
+    // `routes/friends.ts`, pour accepter/refuser une demande d'ami).
+    onRequest: depreciee({
+      depuis: '2026-08-30',
+      successeur: (request) =>
+        `/api/v1/conversations/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
+    }),
     schema: {
       description: 'Mark all messages in a conversation as read for the authenticated user',
       tags: ['conversations', 'messages'],
