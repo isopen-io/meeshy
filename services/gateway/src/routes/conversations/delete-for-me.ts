@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { isMemberCreator, memberRoleCasings } from '@meeshy/shared/types/role-types'
+import { isMemberCreator } from '@meeshy/shared/types/role-types'
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
@@ -9,6 +9,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
+import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 
 /** Ce que rend un « delete-for-me » réussi — identique sur les deux adresses qui le servent. */
 export type ConversationDeleteForMeResult = {
@@ -139,29 +140,19 @@ export async function performConversationDeleteForMe(
       ])
       closedAudience = (closed.participants ?? []).filter(p => p.isActive)
     } else {
-      // Try moderator first, then oldest active member
-      let successor = await prisma.participant.findFirst({
-        where: {
-          conversationId,
-          isActive: true,
-          userId: { not: userId },
-          role: { in: memberRoleCasings(['moderator']) },
-        },
-        orderBy: { joinedAt: 'asc' },
+      // QUI hérite : la loi de succession, écrite UNE fois et partagée avec
+      // `leave.ts` (#4058). Cette porte élisait un MODÉRATEUR en premier —
+      // l'ordre des rangs était inversé, et la décision porteur du 2026-08-28
+      // ne connaît que deux étages : le premier à avoir été ADMINISTRATEUR,
+      // sinon le plus ancien membre. Voir `creatorSuccession.ts` pour où vit
+      // l'instant de la promotion et pourquoi la trace n'a pas à être protégée.
+      const succession = await resoudreSuccessionDuCreateur(prisma, {
+        conversationId,
+        sortantUserId: userId,
       })
 
-      if (!successor) {
-        successor = await prisma.participant.findFirst({
-          where: {
-            conversationId,
-            isActive: true,
-            userId: { not: userId },
-          },
-          orderBy: { joinedAt: 'asc' },
-        })
-      }
-
-      if (successor) {
+      if (succession.kind === 'transfer') {
+        const successor = succession.successor
         await prisma.$transaction([
           prisma.participant.update({
             where: { id: successor.id },
