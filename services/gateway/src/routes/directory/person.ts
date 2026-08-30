@@ -11,6 +11,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { getOptionalAuth } from '../users/presence-gate';
+import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -48,14 +49,17 @@ function lecteurInscrit(request: FastifyRequest): string | undefined {
   return acteur?.isAuthenticated ? acteur.registeredUser?.id : undefined;
 }
 
-/** Ce qu'un `expand` peut demander. Tout autre jeton est ignoré, jamais refusé. */
+/**
+ * Ce qu'un `expand` peut demander. Tout autre jeton est ignoré, jamais refusé.
+ *
+ * Le DÉCOUPAGE est celui de `utils/sparse-fieldset.ts` (#4356) ; ce fichier ne
+ * garde que son VOCABULAIRE. Les trois jetons n'ont d'ailleurs pas le même
+ * coût, et c'est pour cela qu'`expand` reste distinct de `fields` :
+ * `relation` et `stats` DÉCLENCHENT des requêtes, `presence` ne fait que
+ * retenir une suppression.
+ */
 type Expansion = 'stats' | 'presence' | 'relation';
 const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation'] as const;
-
-function expansionsDemandees(expand: string | undefined): ReadonlySet<Expansion> {
-  const demandes = (expand ?? '').split(',').map((s) => s.trim());
-  return new Set(EXPANSIONS.filter((e) => demandes.includes(e)));
-}
 
 /**
  * La relation du LECTEUR au sujet — jamais l'inverse, et jamais entre tiers.
@@ -255,10 +259,15 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       const acteur = (request as unknown as UnifiedAuthRequest).authContext;
       const viewerId = lecteurInscrit(request);
 
-      const profil = await servirProfilPublic(fastify, request, reply, handle);
+      // La liste est analysée AVANT la lecture : elle gouverne le `select`
+      // Prisma autant que la réponse (#4356). Une projection qui n'arriverait
+      // qu'après le chargement n'aurait allégé que le fil.
+      const champs = parseFieldList(fields);
+
+      const profil = await servirProfilPublic(fastify, request, reply, handle, champs);
       if (!profil) return reply;
 
-      const demande = expansionsDemandees(expand);
+      const demande = parseTokenSet(expand, EXPANSIONS);
 
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :
       // `servirProfilPublic` a déjà appliqué la loi du 2026-08-25, et ce qui
@@ -286,7 +295,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const servi = restreindre(profil, fields, demande);
+      const servi = restrictFields(profil, champs, epinglesServis(demande));
 
       // `public` uniquement pour l'ANONYME, et c'est une condition de sécurité,
       // pas un réglage de performance : la charge d'un lecteur connecté dépend
@@ -317,32 +326,27 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
 }
 
 /**
- * `fields` ne peut que RESTREINDRE.
+ * Les clés qui survivent à `fields` sans y être nommées.
  *
- * Un paramètre de projection qui ÉLARGIT est une porte : il suffirait alors de
- * demander `fields=email` pour que la garde posée à la source devienne
- * décorative. Ici, un nom inconnu ne fabrique rien — il est simplement absent
- * du résultat — et `id` reste toujours servi, sans quoi la réponse ne dirait
- * plus de qui elle parle.
+ * `fields` ne peut que RESTREINDRE : un paramètre de projection qui ÉLARGIT est
+ * une porte — il suffirait de demander `fields=email` pour que la garde posée à
+ * la source devienne décorative. Un nom inconnu ne fabrique donc rien, ni dans
+ * la réponse ni dans le `select` (§ bornes de `utils/sparse-fieldset.ts`).
  *
- * Les blocs d'expansion demandés survivent à `fields` : ils ont été demandés
- * explicitement, et les faire disparaître obligerait à les nommer deux fois.
+ * Deux familles échappent au filtre, et pour la même raison — elles ont été
+ * demandées EXPLICITEMENT, par un autre paramètre :
+ *
+ * - `id`, sans quoi la réponse ne dirait plus de qui elle parle ;
+ * - les blocs des expansions obtenues, que les faire disparaître obligerait à
+ *   nommer deux fois.
+ *
+ * `presence` n'y figure pas : ses deux champs sont RETIRÉS par défaut plus haut,
+ * et `expand=presence` décide seulement si l'on POSE la question — jamais de la
+ * réponse, que la loi du 2026-08-25 tranche seule.
  */
-function restreindre(
-  profil: Record<string, unknown>,
-  fields: string | undefined,
-  demande: ReadonlySet<Expansion>
-): Record<string, unknown> {
-  const demandes = (fields ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (demandes.length === 0) return profil;
-
-  const gardes = new Set<string>(['id', ...demandes]);
-  if (demande.has('stats')) gardes.add('stats');
-  if (demande.has('relation')) { gardes.add('relation'); gardes.add('isSelf'); }
-
-  const restreint: Record<string, unknown> = {};
-  for (const [cle, valeur] of Object.entries(profil)) {
-    if (gardes.has(cle)) restreint[cle] = valeur;
-  }
-  return restreint;
+function epinglesServis(demande: ReadonlySet<Expansion>): readonly string[] {
+  const epingles = ['id'];
+  if (demande.has('stats')) epingles.push('stats');
+  if (demande.has('relation')) epingles.push('relation', 'isSelf');
+  return epingles;
 }
