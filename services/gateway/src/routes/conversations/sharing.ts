@@ -426,7 +426,18 @@ export function registerSharingRoutes(
       const shareLink = await prisma.conversationShareLink.findFirst({
         where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
-          conversation: true
+          // `select` et non `true` (#4166 critère 5). Un `include: { relation:
+          // true }` ramène la ligne `Conversation` ENTIÈRE — tous ses champs,
+          // y compris ceux qu'aucun lecteur de cette route ne demande et que
+          // personne ne relira le jour où la table en gagnera un.
+          //
+          // Ce que le seul consommateur lit est nommé par son type :
+          // `resolveConversationEntry` prend un `ConversationTerminalStateRow`,
+          // soit `Pick<…, 'isActive' | 'closedAt'>`. Tout le reste du handler
+          // passe par `shareLink.conversationId`, un scalaire du LIEN — jamais
+          // par la relation. Deux colonnes suffisent donc, et le select les
+          // fixe au lieu de les laisser à la largeur de la table.
+          conversation: { select: { isActive: true, closedAt: true } }
         }
       });
 
