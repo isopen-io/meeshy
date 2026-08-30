@@ -1091,7 +1091,8 @@ struct ConversationView: View {
             }
             .modifier(ConversationMediaGalleryLayer(
                 viewModel: viewModel, scrollState: $scrollState,
-                composerState: $composerState, accentColor: accentColor))
+                composerState: $composerState, accentColor: accentColor,
+                onReply: { triggerReply(for: $0) }))
             .fullScreenCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video":

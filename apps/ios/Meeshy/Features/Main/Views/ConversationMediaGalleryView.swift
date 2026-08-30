@@ -58,6 +58,13 @@ struct ConversationMediaGalleryView: View {
     /// action inerte — il n'en affiche pas du tout.
     var onComposeWithMedia: ((MessageAttachment) -> Void)?
 
+    /// **Répondre au média** (#4013) — c'est-à-dire au MESSAGE (conversation) ou
+    /// au COMMENTAIRE (post, story, réel) qui le porte.
+    ///
+    /// Même forme que ci-dessus, et pour la même raison : la galerie ne connaît
+    /// pas le porteur. `nil` ⇒ aucun bouton.
+    var onReplyToMedia: ((MessageAttachment) -> Void)?
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
@@ -81,7 +88,8 @@ struct ConversationMediaGalleryView: View {
         accentColor: String,
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
-        onComposeWithMedia: ((MessageAttachment) -> Void)? = nil
+        onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
+        onReplyToMedia: ((MessageAttachment) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -89,6 +97,7 @@ struct ConversationMediaGalleryView: View {
         self.captionMap = captionMap
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
+        self.onReplyToMedia = onReplyToMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -421,6 +430,29 @@ struct ConversationMediaGalleryView: View {
     /// Aucune action câblée ⇒ la barre ne rend RIEN, pas même son espace.
     @ViewBuilder
     private func mediaActionBar(_ att: MessageAttachment) -> some View {
+        if let onReplyToMedia, !ComposableAttachment.isProtected(att) {
+            // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de
+            // citation porte la vignette du média, ce qui ferait sortir de la
+            // conversation ce qu'une vue unique, un flou ou un chiffrement y
+            // retiennent. Le prédicat est celui que le menu d'appui long lit
+            // déjà — `ComposableAttachment.isProtected` — plutôt qu'une seconde
+            // écriture des trois mêmes drapeaux.
+            Button {
+                HapticFeedback.light()
+                onReplyToMedia(att)
+            } label: {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+            }
+            .accessibilityLabel(String(localized: "media.reply.title",
+                                       defaultValue: "Répondre", bundle: .main))
+            .accessibilityHint(String(localized: "media.reply.hint",
+                                      defaultValue: "Cite le message qui porte ce média et revient au composer.",
+                                      bundle: .main))
+        }
         if let onComposeWithMedia {
             Button {
                 HapticFeedback.light()

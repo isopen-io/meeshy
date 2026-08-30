@@ -282,9 +282,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// ressemble à une dette de plus. **Un déménagement n'ajoute rien** ; seul
     /// un site NEUF le fait. Le plafond se mesure, il ne se déduit pas du
     /// nombre de noms dans la liste.
-    /// **246 depuis le #4014** — la barre d'actions du plein écran gagne son
-    /// bouton « Créer avec ce média », un SF Symbol figé dans un cercle glass
-    /// de 40 pt. Même doctrine que ses deux voisins immédiats du même fichier
+    /// **247 depuis le #4013** — la barre d'actions du plein écran porte
+    /// désormais DEUX boutons (« Répondre », « Créer avec ce média »), chacun
+    /// un SF Symbol figé dans un cercle glass de 40 pt. Même doctrine que ses deux voisins immédiats du même fichier
     /// (fermer, enregistrer), qui la portent déjà mot pour mot : « chrome —
     /// glyphe figé dans un cercle glass 40 pt, ne pas scaler ». Une police
     /// relative y ferait grossir le glyphe sans que le cercle suive.
@@ -294,7 +294,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
     /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
     /// et les confondre aurait masqué l'un des deux.
-    private static let totalCeiling = 246
+    private static let totalCeiling = 247
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

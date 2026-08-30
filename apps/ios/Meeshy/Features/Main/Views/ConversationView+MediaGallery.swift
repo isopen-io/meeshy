@@ -27,6 +27,13 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     @Binding var composerState: ConversationComposerState
     let accentColor: String
 
+    /// Le chemin de citation de l'hôte, passé en closure : `triggerReply` vit
+    /// dans `ConversationView+MessageRow` et compose la `ReplyReference`
+    /// complète — média représentatif, aperçu, avatar gravé. Le rappeler ici
+    /// aurait été une SECONDE écriture de la citation, qui aurait divergé de la
+    /// bannière du composer au premier ajustement de l'une.
+    let onReply: (Message) -> Void
+
     func body(content: Content) -> some View {
         content.fullScreenCover(item: $scrollState.galleryStartAttachment,
                                 onDismiss: promotePendingCompose) { startAttachment in
@@ -36,7 +43,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                 accentColor: accentColor,
                 captionMap: viewModel.mediaCaptionMap,
                 senderInfoMap: viewModel.mediaSenderInfoMap,
-                onComposeWithMedia: armCompose
+                onComposeWithMedia: armCompose,
+                onReplyToMedia: replyToCarrier
             )
         }
     }
@@ -60,6 +68,20 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             message.attachments.contains { $0.id == attachment.id }
         }
         composerState.pendingComposeTarget = porteur.flatMap(ComposableMessageTarget.init(message:))
+        scrollState.galleryStartAttachment = nil
+    }
+
+    /// **Répondre au média, c'est répondre à son PORTEUR** (#4013).
+    ///
+    /// Le plein écran se referme et rend la main au composer, déjà armé de la
+    /// citation. Rien n'est différé ici, contrairement à `armCompose` : la
+    /// citation n'ouvre aucun second modal — elle pose une bannière dans un
+    /// composer qui est déjà là, sous la galerie.
+    private func replyToCarrier(_ attachment: MessageAttachment) {
+        guard let porteur = viewModel.messages.first(where: { message in
+            message.attachments.contains { $0.id == attachment.id }
+        }) else { return }
+        onReply(porteur)
         scrollState.galleryStartAttachment = nil
     }
 
