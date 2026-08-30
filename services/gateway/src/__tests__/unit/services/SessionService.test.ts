@@ -12,7 +12,7 @@
  * - Trust and expiry extension
  * - Configuration retrieval
  *
- * Run with: pnpm test -- --testPathPattern="SessionService"
+ * Run with: bun run test -- --testPathPatterns="SessionService"
  *
  * @jest-environment node
  */

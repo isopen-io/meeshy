@@ -9,7 +9,7 @@
  * - Security event logging
  * - Factory function
  *
- * Run with: pnpm test -- --testPathPattern="MagicLinkService"
+ * Run with: bun run test -- --testPathPatterns="MagicLinkService"
  *
  * @jest-environment node
  */
