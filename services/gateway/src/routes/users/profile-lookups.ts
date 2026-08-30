@@ -14,6 +14,7 @@ import type { UsernameParams } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
+import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
 import {
   publicProfileSchema,
   publicUserSelect,
@@ -52,6 +53,49 @@ const annonceProfil = (handle: string): AdresseDepreciee => ({
 });
 
 /**
+ * `?fields=` de ces trois alias (#4449).
+ *
+ * ## La cause MESURÉE, et pourquoi elle diffère de l'hypothèse de l'issue
+ *
+ * L'issue proposait qu'un bloc `querystring` INCOMPLET fasse supprimer `fields`
+ * par Ajv avant que le handler ne s'exécute (`removeAdditional`). Vérifié contre
+ * la configuration Ajv réelle du serveur (`server.ts` : `customOptions` ne pose
+ * ni `removeAdditional` ni `additionalProperties`, donc les valeurs par défaut
+ * de `@fastify/ajv-compiler` s'appliquent) : `removeAdditional: true` ne retire
+ * une propriété que si son schéma porte `additionalProperties: false`
+ * EXPLICITEMENT — jamais par la simple absence d'une clé dans `properties`.
+ * Aucune de ces trois routes ne déclarait de bloc `querystring` du tout, et un
+ * paramètre non couvert par un schéma traverse Fastify INTACT.
+ *
+ * La cause réelle est plus simple et plus locale : ces trois handlers ne
+ * lisaient jamais `request.query`, et appelaient `servirProfilPublic` sans son
+ * cinquième argument — qui vaut alors `null` par défaut, c'est-à-dire « rien
+ * demandé », le comportement d'avant #4356. Déclarer `fields` dans le schéma
+ * ci-dessous documente le contrat (comme `GET /directory/people/:handle`) ; ce
+ * qui RÉPARE est cet appel, qui lit et transmet enfin le paramètre.
+ */
+function champsDemandes(request: FastifyRequest): FieldSet {
+  return parseFieldList((request.query as { fields?: string }).fields);
+}
+
+/**
+ * L'unique clé ÉPINGLÉE de ces trois alias — comme `GET /directory/people/:handle`
+ * (`epinglesServis`), dont ils partagent l'implémentation (`servirProfilPublic`) :
+ * sans `id`, une réponse réduite par `?fields=` ne dirait plus de qui elle parle.
+ * Aucun bloc `expand` ici : ces trois portes servent le SOCLE de la route
+ * canonique, jamais ses expansions (#4161, critère 9).
+ */
+const CLES_EPINGLEES_PROFIL = ['id'] as const;
+
+/** Le bloc `querystring` partagé par les trois — même vocabulaire, même texte que `directory/person.ts`. */
+const QUERYSTRING_FIELDS = {
+  type: 'object',
+  properties: {
+    fields: { type: 'string', description: 'Comma-separated subset of the default projection' },
+  },
+} as const;
+
+/**
  * Get user profile by username (public route)
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
@@ -70,6 +114,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
           username: { type: 'string', description: 'Username to lookup (case-insensitive)' }
         }
       },
+      querystring: QUERYSTRING_FIELDS,
       response: {
         200: {
           type: 'object',
@@ -107,16 +152,20 @@ export async function getUserByUsername(fastify: FastifyInstance) {
       const { username } = request.params;
       annoncerDepreciation(reply, annonceProfil(username));
 
+      // `fields` gouverne le `select` Prisma ET la réponse (#4449) — voir
+      // `champsDemandes` pour la cause mesurée de son absence jusqu'ici.
+      const champs = champsDemandes(request);
+
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
       // Cette porte servait une projection PLUS COURTE que ses trois voisines —
       // une troisième forme de réponse pour la même ligne de base. Elle sert
       // désormais la même, et les liens `/u/<pseudo>` déjà partagés continuent
       // de fonctionner.
-      const profil = await servirProfilPublic(fastify, request, reply, username);
+      const profil = await servirProfilPublic(fastify, request, reply, username, champs);
       if (!profil) return reply;
 
-      return sendSuccess(reply, profil);
+      return sendSuccess(reply, restrictFields(profil, champs, CLES_EPINGLEES_PROFIL));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -144,6 +193,7 @@ export async function getUserById(fastify: FastifyInstance) {
           id: { type: 'string', description: 'User MongoDB ID (24 hex chars) or username' }
         }
       },
+      querystring: QUERYSTRING_FIELDS,
       response: {
         200: {
           type: 'object',
@@ -176,6 +226,10 @@ export async function getUserById(fastify: FastifyInstance) {
       const { id } = request.params;
       annoncerDepreciation(reply, annonceProfil(id));
 
+      // `fields` gouverne le `select` Prisma ET la réponse (#4449) — voir
+      // `champsDemandes` pour la cause mesurée de son absence jusqu'ici.
+      const champs = champsDemandes(request);
+
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
       // Ce handler recopiait la projection à la main — c'est lui qui chargeait,
@@ -184,10 +238,10 @@ export async function getUserById(fastify: FastifyInstance) {
       // `servirProfilPublic`, et cette adresse reste servie tant que des
       // versions iOS installées l'appellent. Un profil s'ouvre depuis un lien
       // partagé : la queue est longue, et une 302 casserait ces clients.
-      const profil = await servirProfilPublic(fastify, request, reply, id);
+      const profil = await servirProfilPublic(fastify, request, reply, id, champs);
       if (!profil) return reply;
 
-      return sendSuccess(reply, profil);
+      return sendSuccess(reply, restrictFields(profil, champs, CLES_EPINGLEES_PROFIL));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -278,6 +332,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
           id: { type: 'string', pattern: '^[a-f\\d]{24}$', description: 'MongoDB ObjectId (24 hex chars)' }
         }
       },
+      querystring: QUERYSTRING_FIELDS,
       response: {
         200: {
           type: 'object',
@@ -305,14 +360,18 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by ObjectId: ${id}`);
 
+      // `fields` gouverne le `select` Prisma ET la réponse (#4449) — voir
+      // `champsDemandes` pour la cause mesurée de son absence jusqu'ici.
+      const champs = champsDemandes(request);
+
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9). Le
       // paramètre est ici contraint à un ObjectId par le schéma ; le lecteur
       // partagé accepte les deux formes, ce qui ne change rien à ce que cette
       // porte-ci laisse entrer.
-      const profil = await servirProfilPublic(fastify, request, reply, id);
+      const profil = await servirProfilPublic(fastify, request, reply, id, champs);
       if (!profil) return reply;
 
-      return sendSuccess(reply, profil);
+      return sendSuccess(reply, restrictFields(profil, champs, CLES_EPINGLEES_PROFIL));
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
       return sendInternalError(reply, 'Internal server error');
