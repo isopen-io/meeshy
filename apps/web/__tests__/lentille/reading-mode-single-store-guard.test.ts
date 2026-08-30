@@ -338,9 +338,15 @@ describe('[Q-146/R5-4] les 4 points d\'entrée légitimes, nommés', () => {
   });
 
   it('4. la lecture serveur du choix collant — alimente `suggestedMode` (G-121/G-123), hors apps/web', () => {
+    // `core-list.ts` depuis #4284 : `conversations/core.ts` (2 618 lignes) a été
+    // découpé en list / detail / lifecycle / selects, et `core.ts` n'est plus
+    // qu'une façade d'enregistrement. La garde nommait le FICHIER, pas l'UNITÉ,
+    // et le découpage l'a donc rendue rouge sans qu'aucune règle ne bouge —
+    // c'est exactement la leçon 347, appliquée depuis `apps/web`, hors du
+    // balayage gateway qui a repointé ses propres gardes.
     const gatewayCore = path.join(
       WEB_ROOT,
-      '../../services/gateway/src/routes/conversations/core.ts'
+      '../../services/gateway/src/routes/conversations/core-list.ts'
     );
     expect(fs.existsSync(gatewayCore)).toBe(true);
     expect(fs.readFileSync(gatewayCore, 'utf8')).toContain('prefs?.readingMode');
