@@ -71,10 +71,23 @@ extension MeeshyComposerHost {
     /// Une pastille, DEUX états : l'invitation quand rien n'est posé, le crédit
     /// dès qu'un son l'est. Le mot vient d'une règle pure (`ComposerSocleSound`)
     /// pour que « quel crédit afficher » s'éprouve sans monter la vue.
-    @ViewBuilder
-    var soundChip: some View {
+    /// **Le type est EFFACÉ, et ce n'est pas une préférence de style.**
+    ///
+    /// Ajoutée telle quelle au `HStack` du socle, cette pastille a fait
+    /// DÉBORDER la profondeur de type de `MeeshyComposerHost.body` :
+    /// `SIGBUS / EXC_ARM_DA_ALIGN` dans `ViewBuilder.buildExpression`, 111
+    /// trames, reproductible à chaque ouverture du composer depuis le fil
+    /// (2026-08-30, simulateur `Meeshy-iOS26`). Le socle porte cinq zones
+    /// conditionnelles ; chacune multiplie le type générique de la pile, et la
+    /// cinquième l'a fait franchir la limite.
+    ///
+    /// `AnyView` coupe la chaîne : le meuble le fait déjà pour ses autres
+    /// accessoires (`toolOptions`, `railSystemEntry`), pour la même raison.
+    /// Le coût de diffing est réel et assumé — une vue qui plante n'a pas de
+    /// performance.
+    var soundChip: AnyView {
         let fond = viewModel.currentEffects.resolvedBackgroundAudio
-        Button {
+        return AnyView(Button {
             presentedPortal = .sound
             HapticFeedback.light()
         } label: {
@@ -85,7 +98,20 @@ extension MeeshyComposerHost {
                     Text(ComposerSocleSound.label(for: fond))
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        // **Troncature en QUEUE, jamais au milieu.** J'avais
+                        // posé `.middle` en croyant préserver le début ET la
+                        // fin ; mesuré à l'écran, « Ajouter un son » devenait
+                        // « Aj…son » — pas un mot abrégé, un mot INEXISTANT :
+                        // l'œil le lit, butte et revient. En queue, « Ajouter
+                        // un… » et « NUITS BLANCHES · @… » restent lisibles, et
+                        // ce qui est coupé est ce qui compte le moins — le
+                        // titre du son passe avant son crédit, son crédit avant
+                        // sa durée.
+                        .truncationMode(.tail)
+                        // Elle CÈDE la place plutôt que de la prendre : le
+                        // socle porte l'action terminale, et un titre de son
+                        // long ne doit jamais pousser « Publier » vers le bord.
+                        .frame(maxWidth: 140, alignment: .leading)
                 }
             }
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
@@ -100,7 +126,7 @@ extension MeeshyComposerHost {
         // La pastille peut porter un titre long ; elle cède la place au reste
         // du socle plutôt que de pousser « Publier » hors de l'écran.
         .layoutPriority(0)
-        .accessibilityLabel(Text(ComposerSocleSound.label(for: fond)))
+        .accessibilityLabel(Text(ComposerSocleSound.label(for: fond))))
     }
 
     /// **Annuler et rétablir, au SOCLE** (directive porteur 2026-08-30).

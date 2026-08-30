@@ -50,6 +50,18 @@ import {
 const TRANSLATIONS_MESSAGE_SCAN_CAP = 5_000;
 
 /**
+ * Fenêtre lue par le chemin `?search=` de `GET /admin/messages` avant que le
+ * prédicat de protection ne s'applique (#4387).
+ *
+ * Le même ordre de grandeur que le plafond des traductions, et pour la même
+ * raison : le prédicat n'est pas exprimable en `where`, donc il faut charger
+ * pour trancher. Au-delà de cette fenêtre, une ligne ancienne qui matche le
+ * terme n'est pas servie — c'est une TRONCATURE, pas une fuite, et elle va
+ * dans le sens prudent.
+ */
+const SEARCH_SCAN_CAP = 5_000;
+
+/**
  * Lignes des deux listes d'administration de ce fichier.
  *
  * Elles étaient déclarées `data: { type: 'array', items: { type: 'object' } }`.
@@ -255,9 +267,61 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         where.createdAt = { gte: startDate };
       }
 
+      // #4387 — ARBITRAGE (a) : la recherche ne matche plus le contenu d'un
+      // message PROTÉGÉ.
+      //
+      // #4384 a fermé la LECTURE du texte protégé ; le filtre `?search=`
+      // interrogeait toujours la colonne brute. Un modérateur ne pouvait plus
+      // lire un message à vue unique, mais pouvait le deviner terme à terme en
+      // observant si la ligne apparaît — quelques dizaines de requêtes sur un
+      // code ou un montant. Ce n'est pas la charge qui fuyait, c'est
+      // l'APPARTENANCE de la ligne à la page : la forme exacte que le dépôt
+      // connaît sous « une SÉLECTION qui dépend du champ révèle autant que le
+      // champ » (§ visibilité de la présence), jamais portée au contenu.
+      //
+      // Le prédicat de protection n'est pas exprimable en `where` — il porte
+      // un ET binaire (`effectFlags & 6`) et un `expiresAt` relatif à
+      // l'instant. Sur le chemin AVEC recherche on charge donc une fenêtre
+      // bornée, on retire les protégées, et on pagine sur ce qui RESTE :
+      // `total` compte les lignes servies, jamais les lignes trouvées. Le
+      // chemin SANS recherche garde sa pagination en base — inchangé.
+      //
+      // Pourquoi (a) et pas (b) « assumer et tracer » : un oracle tracé reste
+      // un oracle. La trace le rend attribuable APRÈS coup, elle ne rend pas
+      // le secret à son auteur. Et (c) — réserver la recherche au rang
+      // souverain — casse un usage de modération légitime pour fermer un trou
+      // que (a) ferme sans rien retirer à personne.
+      //
+      // Ce que (a) COÛTE, et qui est assumé : une ligne protégée dont le texte
+      // contient le terme cherché ne remonte plus. Elle reste atteignable sans
+      // `?search=`, ce qui est exactement la promesse du masquage sans
+      // effacement — la ligne se CONSTATE, son texte ne se lit pas.
+      let wherePage: any = where;
+      if (search) {
+        const trouves = await fastify.prisma.message.findMany({
+          where,
+          select: {
+            id: true,
+            ...messageProtectionSelect,
+            ...messageContentProtectionSelect,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: SEARCH_SCAN_CAP,
+        });
+        const servables = trouves.filter((m) => !messageContentIsProtected(m)).map((m) => m.id);
+        // Restreindre par ID plutôt que par contenu, dans un objet NEUF :
+        // muter `where` après l'avoir passé à la première requête le
+        // changerait rétroactivement pour quiconque en garde la référence —
+        // un double de test capture la RÉFÉRENCE, pas un instantané, et un
+        // témoin voisin l'a vu tout de suite. La pagination en base porte
+        // ainsi sur l'ensemble déjà filtré.
+        const { content: _termeRecherche, ...sansContenu } = where;
+        wherePage = { ...sansContenu, id: { in: servables } };
+      }
+
       const [messages, totalCount] = await Promise.all([
         fastify.prisma.message.findMany({
-          where,
+          where: wherePage,
           select: {
             id: true,
             content: true,
@@ -315,7 +379,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           skip: offsetNum,
           take: limitNum
         }),
-        fastify.prisma.message.count({ where })
+        fastify.prisma.message.count({ where: wherePage })
       ]);
 
       // #4333 bonus — un média à vue unique / flouté / éphémère-expiré ne

@@ -119,7 +119,12 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // un bouton en attente : ce qui suit garde la DÉCISION, pas un report.
 
     func test_feedPostCard_muteButton_isNeverMounted_cardIsSilentByConstruction() throws {
+        // #4078/#4084 — la rangée auteur a quitté `FeedPostCard.swift` pour
+        // `FeedPostCard+Header.swift`. Une garde NÉGATIVE laissée sur le seul
+        // hôte serait passée au vert sans plus rien protéger : c'est dans la
+        // moitié EXTRAITE qu'un bouton muet réapparaîtrait.
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+            + source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
         XCTAssertFalse(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
             "La carte ne doit JAMAIS monter de bouton muet : sa scène est muette par " +
@@ -140,11 +145,13 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     func test_feedPostCard_backgroundSoundBadge_stillMounted_noRegression() throws {
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertTrue(
-            text.contains("private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement"),
+            text.contains("var backgroundSoundAnnouncement: BackgroundAudioAnnouncement"),
             "La carte doit continuer d'exposer l'annonce résolue (E1)."
         )
+        // Le badge lui-même est parti dans l'extraction ; la valeur, non.
         XCTAssertTrue(
-            text.contains("announcement: backgroundSoundAnnouncement"),
+            try source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+                .contains("announcement: backgroundSoundAnnouncement"),
             "Le badge (E1) doit continuer de consommer cette valeur — non-régression."
         )
     }
@@ -194,7 +201,13 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// rendaient le canvas story avec `mute: false` figé (natif + repost-de-
     /// story, RF3) passent par le même état local.
     func test_postDetailView_canvasSites_wireToLocalMuteState() throws {
+        // #4086 — le chemin NATIF a suivi la section canvas dans son propre
+        // fichier ; le chemin republication est resté chez l'hôte. Compter sur
+        // un seul des deux ferait dire à cette garde « un site câblé » là où
+        // il y en a bien deux — un rouge honnête, mais qui désigne le mauvais
+        // coupable et invite à recâbler ce qui l'est déjà.
         let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+            + source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
         let wiredOccurrences = text.components(separatedBy: "mute: isCanvasMuted").count - 1
         XCTAssertEqual(
             wiredOccurrences, 2,
@@ -211,8 +224,13 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
 
     func test_postDetailView_muteState_isLocalNotGlobal() throws {
         let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+        // `private` est TOMBÉ au #4086, et pour une raison qui ne change rien
+        // à ce que cette garde protège : un membre `private` d'une View n'est
+        // pas visible depuis un fichier d'EXTENSION, où le chemin natif vit
+        // désormais. Ce qui compte ici est `@State` — l'état reste LOCAL à la
+        // vue, ce que la seconde assertion confirme par la négative.
         XCTAssertTrue(
-            text.contains("@State private var isCanvasMuted"),
+            text.contains("@State var isCanvasMuted"),
             "Le muet du détail doit être un état LOCAL à la vue."
         )
         XCTAssertFalse(
@@ -261,14 +279,111 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         XCTAssertFalse(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
     }
 
-    /// POST qui reposte une STORY (isStoryRepost) : repostEmbed rend
-    /// inconditionnellement le canvas de la source.
-    func test_detailCanvasIsRendered_storyRepost_isTrue() {
+    /// POST qui reposte une STORY dont la source a du contenu : `repostEmbed`
+    /// rend son canvas.
+    func test_detailCanvasIsRendered_storyRepostWithContent_isTrue() {
         let repost = RepostContent(author: "bob", authorId: "b1", content: "", type: "STORY",
                                     storyEffects: StoryEffects(backgroundAudioId: "lib-sound-9"))
         let post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "", repost: repost)
         let renderedItem = StoryItem(feedPost: post)
         XCTAssertTrue(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
+    /// **Vue `2h` (#4086) — le témoin de la règle unique.**
+    ///
+    /// POST qui reposte une STORY dont la source est EXPIRÉE ou sans asset.
+    /// Ce cas répondait `true` : la branche republication de la porte ne
+    /// demandait que le TYPE, et elle avait raison de le faire, puisque
+    /// `repostEmbed` rendait alors un canvas NOIR — sans aucune garde de
+    /// contenu, là où le chemin natif affiche « Story indisponible ». Le
+    /// bouton muet se montait par-dessus, prêt à piloter un lecteur sans rien
+    /// à jouer.
+    ///
+    /// C'est le seul cas où la règle unique change une réponse : au rang
+    /// « story native » comme au rang « repost de post », l'ancienne et la
+    /// nouvelle écriture rendent le même verdict. Un témoin posé ailleurs ne
+    /// serait donc jamais tombé.
+    func test_detailCanvasIsRendered_storyRepostWithEmptySource_isFalse() {
+        let repost = RepostContent(author: "bob", authorId: "b1", content: "", type: "STORY")
+        let post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "", repost: repost)
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertFalse(
+            BackgroundSoundBadge.canvasHasContent(renderedItem),
+            "Rien à rendre : ni effects, ni média — ni côté post, ni côté source."
+        )
+        XCTAssertFalse(
+            BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem),
+            "Une story republiée dont la source a disparu doit afficher « Story " +
+            "indisponible », donc AUCUN canvas — et donc aucun bouton de son."
+        )
+    }
+
+    /// Le second facteur de la porte reste nécessaire : `canvasHasContent`
+    /// seul dirait `true` pour un post NON-story portant son propre fond
+    /// audio (son emprunté, E1), alors qu'aucun canvas ne rend nulle part.
+    /// Sans lui, la règle unique deviendrait une régression.
+    func test_canvasHasContent_aloneIsNotEnough_theNatureOfThePostStillCounts() {
+        var post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "")
+        post.storyEffects = StoryEffects(backgroundAudioId: "lib-sound-9")
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertTrue(BackgroundSoundBadge.canvasHasContent(renderedItem))
+        XCTAssertFalse(BackgroundSoundBadge.isCanvasPost(post))
+        XCTAssertFalse(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
+    // MARK: - Vue `2h` — une règle, trois consommateurs (garde de source)
+
+    /// Les DEUX chemins de rendu passent par le point de décision unique.
+    /// Le chemin republication l'a rejoint ici : il appelait
+    /// `storyCanvasContainer` en direct, sans garde.
+    func test_bothCanvasPaths_goThroughTheSingleDecisionPoint() throws {
+        let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+        let host = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+
+        XCTAssertTrue(
+            canvas.contains("BackgroundSoundBadge.canvasHasContent(renderedItem)"),
+            "Le point de décision doit consulter la règle partagée, jamais la réécrire."
+        )
+        XCTAssertTrue(
+            canvas.contains("storyCanvasOrPlaceholder(renderedItem: renderedItem)"),
+            "Le chemin NATIF doit passer par le point de décision."
+        )
+        XCTAssertTrue(
+            host.contains("storyCanvasOrPlaceholder(renderedItem: renderedItem)"),
+            "Le chemin REPUBLICATION doit passer par le MÊME point de décision — " +
+            "sans lui, une source expirée rend un rectangle noir sous un bouton de son."
+        )
+    }
+
+    /// **Garde NÉGATIVE — la condition ne doit être réécrite NULLE PART.**
+    ///
+    /// C'est la forme même du défaut de la vue `2h` : trois sites disaient la
+    /// même chose, et la copie la plus pauvre décidait. Elle balaie l'hôte ET
+    /// son extension : le code a traversé cette frontière dans ce lot, et une
+    /// garde négative restée sur un seul fichier passerait au vert en ne
+    /// regardant plus rien.
+    func test_theEmptinessRule_isNeverRewrittenOutsideItsSite() throws {
+        let sites = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+            + source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+
+        for rewrite in ["storyEffects == nil && renderedItem.media.isEmpty",
+                        "renderedItem.storyEffects != nil || !renderedItem.media.isEmpty"] {
+            XCTAssertFalse(
+                sites.contains(rewrite),
+                "Condition de contenu réécrite à la main (« \(rewrite) ») : elle vit " +
+                "dans BackgroundSoundBadge.canvasHasContent(_:), et nulle part ailleurs."
+            )
+        }
+    }
+
+    /// Fusible : sans lui, les deux gardes ci-dessus passeraient au vert sur
+    /// une lecture vide — le mode de panne le plus courant d'une garde de
+    /// source, et le seul qu'aucune de ses assertions ne peut signaler.
+    func test_thePostDetailSourcesAreActuallyRead() throws {
+        XCTAssertGreaterThan(
+            try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift").count, 1_000)
+        XCTAssertGreaterThan(
+            try source("Meeshy/Features/Main/Views/PostDetailView.swift").count, 50_000)
     }
 
     /// POST qui reposte un POST (pas une story) : ni storyCanvasSection ni
@@ -347,7 +462,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // MARK: - Réel plein écran (ReelsPlayerView) — bouton local, RÉELLEMENT câblé au lecteur
 
     func test_reelsPlayerView_mountsMuteButton_gatedBySharedAnnouncement() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: announcement)"),
             "Le bouton muet du réel doit se monter via le prédicat partagé, sur la MÊME " +
@@ -368,7 +483,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// sur un cas où l'annonce vient d'ailleurs (ex. audio incrusté dans une
     /// vidéo) sans qu'aucun moteur pilotable n'existe.
     func test_reelsPlayerView_muteButton_wiresToLocalPlayer() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("audioPlayer.togglePlayPause()"),
             "Le tap doit basculer le lecteur RÉEL de la piste de fond empruntée — pas un " +
@@ -423,7 +538,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// meta auteur, un glyphe de 10pt sans zone de hit élargie ratait un tap
     /// sur deux à l'usage (précédent documenté sur la carte).
     func test_reelsPlayerView_muteButton_hasFortyFourPointHitTarget() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         let buttonBlock = block(
             from: "BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)",
             to: "reels.action.unmute",

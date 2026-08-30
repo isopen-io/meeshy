@@ -233,7 +233,14 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryViewerContainer.swift",
         "Features/Main/Views/StoryViewerView+Canvas.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
-        "Features/Main/Views/StoryViewerView+Sidebar.swift",
+        // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
+        // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues
+        // pour 1 369 lignes) et emporte AVEC LUI les quatre sites figés — des
+        // glyphes dans un cadre fixe, dont la raison d'exemption voyage avec
+        // eux. La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling`
+        // ne changent, seul le NOM change. Le rail n'en porte plus aucun : il
+        // sort de la liste et n'y revient jamais.
+        "Features/Main/Views/StoryViewerView+Header.swift",
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",

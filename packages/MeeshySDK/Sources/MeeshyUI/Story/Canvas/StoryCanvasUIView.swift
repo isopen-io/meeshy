@@ -499,6 +499,14 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false
+
+    /// **Le muet de CE canvas est-il verrouillé ?** (#4084)
+    ///
+    /// Posé par `setReaderContext` depuis `ScenePlayerConfig.locksMute`. Une
+    /// carte de fil est muette PAR CONSTRUCTION ; sans ce champ, le verrou
+    /// n'existait qu'au niveau du prop et n'atteignait le canvas qu'à la passe
+    /// de rendu suivante. Entre les deux, une notification DIFFUSÉE gagnait.
+    public internal(set) var muteIsLocked: Bool = false
     /// `slideAudioRevision` contre laquelle `audioMixer` a été configuré la
     /// dernière fois. Permet à `reconfigureAudioForPlayback()` de sauter le
     /// rechargement (coûteux) des `AVAudioFile` tant que la COMPOSITION de la

@@ -27,6 +27,7 @@ import {
   EMPTY_EDIT_REFUSAL_MESSAGE,
 } from '../services/messaging/messageEditContent';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { loadPrivacyPreferencesCached } from '../services/preferences/privacy-cache';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
@@ -606,7 +607,24 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
-          const room = ROOMS.conversation(attachment.message.conversationId);
+          // #3907 — la réciprocité `showReadReceipts` gouverne AUSSI ce flux.
+          //
+          // Cet événement pousse `userId`, `playPositionMs`, `durationMs` et
+          // `percentage` à TOUTE la room, et le web les persiste en cache
+          // (`use-socket-cache-sync.ts`). Un participant qui a désactivé ses
+          // accusés y annonçait donc en direct où il en est dans un vocal —
+          // plus intime que l'accusé texte qu'il a refusé, et sans qu'aucune
+          // porte de lecture ne puisse le rattraper : le cache du destinataire
+          // le tient déjà.
+          //
+          // Il n'est pas SILENCIÉ pour autant : la diffusion se replie sur SA
+          // room à lui, pour que ses propres appareils restent synchronisés.
+          // « Ne pas dire aux autres » n'est pas « ne rien savoir soi-même ».
+          const prefs = await loadPrivacyPreferencesCached(prisma, [userId]);
+          const diffuseAuxAutres = prefs.get(userId)?.showReadReceipts !== false;
+          const room = diffuseAuxAutres
+            ? ROOMS.conversation(attachment.message.conversationId)
+            : ROOMS.user(userId);
           const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0
             ? Math.min(100, Math.round((playPositionMs / durationMs) * 100))
             : undefined;

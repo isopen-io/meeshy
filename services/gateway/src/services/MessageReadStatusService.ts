@@ -2217,12 +2217,65 @@ export class MessageReadStatusService {
     }
   }
 
+  /**
+   * Les participants de la conversation d'une pièce jointe qui ont désactivé
+   * leurs accusés de lecture — le LECTEUR excepté (#3907).
+   *
+   * Le lot d'origine (`read-exactness-design` § 5) a posé la réciprocité sur
+   * cinq sites de ce fichier, tous sur le chemin TEXTE. Celui-ci construisait
+   * ses participants par une requête à lui, sans jamais passer par la règle.
+   *
+   * > Une préférence appliquée sur cinq portes et pas sur la sixième ne
+   * > protège pas « presque » : elle protège ce que l'utilisateur voit le
+   * > moins. Un accusé texte se lit d'un coup d'œil ; une position d'écoute,
+   * > une couverture de segments et une liste de langues consultées disent
+   * > combien de fois et jusqu'où — et c'est cette porte-là qui restait ouverte.
+   *
+   * Fail-closed sur l'absence de lecteur : sans `viewerUserId`, personne n'est
+   * excepté. Une exception fabriquée serait pire que pas d'exception.
+   */
+  private async _attachmentReadReceiptOptOuts(
+    attachmentId: string,
+    viewerUserId?: string
+  ): Promise<string[]> {
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      select: {
+        message: {
+          select: {
+            conversation: {
+              select: {
+                participants: { select: { id: true, userId: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const participants = attachment?.message?.conversation?.participants ?? [];
+    if (participants.length === 0) return [];
+
+    const optedOut = await this._loadReadReceiptOptOuts(participants);
+    return participants
+      .filter(p => optedOut.has(p.id))
+      .filter(p => !(viewerUserId && p.userId === viewerUserId))
+      .map(p => p.id);
+  }
+
   async getAttachmentStatusDetails(
     attachmentId: string,
     options: {
       offset?: number;
       limit?: number;
       filter?: "all" | "viewed" | "downloaded" | "listened" | "watched";
+      /**
+       * Le LECTEUR, pour que sa propre ligne lui reste visible même s'il a
+       * désactivé ses accusés — même convention que les cinq portes texte
+       * (#3907). Absent, la porte est fail-closed : tous les opt-out
+       * disparaissent, y compris le demandeur.
+       */
+      viewerUserId?: string;
     } = {}
   ): Promise<{
     statuses: Array<{
@@ -2269,7 +2322,7 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all" } = options;
+    const { offset = 0, limit = 20, filter = "all", viewerUserId } = options;
 
     try {
       const whereClause: any = { attachmentId };
@@ -2278,6 +2331,20 @@ export class MessageReadStatusService {
         whereClause.downloadedAt = { not: null };
       else if (filter === "listened") whereClause.listenedAt = { not: null };
       else if (filter === "watched") whereClause.watchedAt = { not: null };
+
+      // #3907 — la réciprocité `showReadReceipts` gouverne AUSSI la
+      // consommation audio/vidéo. Cette porte servait position d'écoute,
+      // couverture des segments, indicateur « terminé » et langues consultées
+      // d'un participant qui a désactivé ses accusés — des données plus
+      // intimes que l'accusé texte qu'il a explicitement refusé.
+      //
+      // L'exclusion entre dans le `whereClause`, pas dans une boucle après
+      // coup, et c'est la seule forme correcte ICI : `total` vient d'un
+      // `count` SÉPARÉ sur ce même `where`. Filtré en JS, la page rétrécirait
+      // pendant que le total resterait entier — le compte dirait alors
+      // exactement ce que l'exclusion cache, et `hasMore` mentirait par-dessus.
+      const exclus = await this._attachmentReadReceiptOptOuts(attachmentId, viewerUserId);
+      if (exclus.length > 0) whereClause.participantId = { notIn: exclus };
 
       const total = await this.prisma.attachmentStatusEntry.count({
         where: whereClause,

@@ -32,10 +32,20 @@ import XCTest
 /// contenu qui l'identifie sans ambiguïté : la clé localisée), puis compare.
 final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
 
+    /// #4084 — le rail et l'en-tête ne partagent plus un fichier. Les deux
+    /// actions que cette garde OPPOSE vivent désormais de part et d'autre :
+    /// le bouton du rail dans `+Sidebar`, l'ancrage dans le menu de partage de
+    /// `+Header`. Les comparer exige donc de les lire ENSEMBLE — nommer un seul
+    /// fichier ferait tomber la garde à « 0 trouvé », ce qui est un rouge, mais
+    /// une garde qui ne compte plus qu'une des deux moitiés serait un VERT
+    /// bien pire : elle ne pourrait plus voir la collision qu'elle existe pour
+    /// interdire.
     private static let sidebarFile = "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"
+    private static let headerFile = "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"
 
     private func source() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.sidebarFile)
+            + MyStoriesSourceCorpus.text(of: Self.headerFile)
     }
 
     /// Fenêtre ÉQUILIBRÉE ouverte par `marker` : du marqueur jusqu'au

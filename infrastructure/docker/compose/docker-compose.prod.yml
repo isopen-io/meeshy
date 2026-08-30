@@ -445,12 +445,31 @@ services:
   #
   # `scripts/check-v3-pipeline.mjs` garde les deux sens : un actif servi hors
   # de cette règle, et un chemin de cette règle que la zone ne sert pas.
+  #
+  # CE QUE LA ZONE LIT DE SON ENVIRONNEMENT, ET POURQUOI C'EST ICI
+  #
+  # `/l/:token` est le premier code v3 qui lit l'environnement à l'EXÉCUTION.
+  # Ses deux replis codés en dur sont des replis de DÉVELOPPEMENT, et dans ce
+  # conteneur ils sont faux tous les deux :
+  #   • `MEESHY_GATEWAY_URL` absent ⇒ `http://localhost:3000` désigne le
+  #     conteneur LUI-MÊME, jamais la passerelle : toute résolution de lien
+  #     échoue et la route rend 503 pour tout le monde ;
+  #   • `NEXT_PUBLIC_FRONTEND_URL` absent ⇒ `og:url` retombe sur l'en-tête
+  #     `Host`, c'est-à-dire l'hôte INTERNE derrière Traefik : la carte d'aperçu
+  #     est mise en cache deux fois, sous deux origines.
+  # L'appel de la passerelle est SERVEUR à serveur : il passe par le réseau
+  # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
+  # elle, est celle que les plateformes mettent en cache — donc le domaine.
+  # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
+  # `apps/web-v3/app` ou `apps/web-v3/lib` est déclarée ici.
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - MEESHY_GATEWAY_URL=http://gateway:3000
+      - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
     depends_on:
       gateway:
         condition: service_healthy

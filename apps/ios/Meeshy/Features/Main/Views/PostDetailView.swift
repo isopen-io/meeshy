@@ -21,7 +21,9 @@ struct PostDetailView: View {
     /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
     /// les contacts (parité avec `FeedCommentsSheet`).
     @StateObject private var mentionController: MentionComposerController
-    private var theme: ThemeManager { ThemeManager.shared }
+    // internal : lu par `PostDetailView+Canvas.swift` (#4086) — un membre
+    // `private` d'une View n'est PAS visible depuis un fichier d'extension.
+    var theme: ThemeManager { ThemeManager.shared }
 
     init(
         postId: String,
@@ -55,7 +57,7 @@ struct PostDetailView: View {
     /// B3.6, Task E2. Pilote `mute:` aux DEUX sites `StoryReaderRepresentable`
     /// (mutuellement exclusifs — un seul rend à la fois). Jamais
     /// `isGlobalMuted` du viewer story : surfaces indépendantes.
-    @State private var isCanvasMuted = false
+    @State var isCanvasMuted = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -92,10 +94,10 @@ struct PostDetailView: View {
     @State private var isTextExpanded = false
     @State private var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
-    @State private var storyCanvasVisible: Bool = true
-    @State private var isCallActive: Bool = false
-    @State private var scrollViewportHeight: CGFloat = 0
-    private static let scrollSpace = "postDetailScroll"
+    @State var storyCanvasVisible: Bool = true
+    @State var isCallActive: Bool = false
+    @State var scrollViewportHeight: CGFloat = 0
+    static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.
@@ -500,7 +502,7 @@ struct PostDetailView: View {
             if post.isStory && isSharedStory {
                 storyRepostAttributionRow(repost)
             } else {
-                repostEmbed(repost)
+                repostEmbed(repost, renderedItem: renderedItem)
             }
         }
 
@@ -1453,7 +1455,7 @@ struct PostDetailView: View {
     }
 
     @ViewBuilder
-    private func repostEmbed(_ repost: RepostContent) -> some View {
+    private func repostEmbed(_ repost: RepostContent, renderedItem: StoryItem) -> some View {
         let isStoryRepost = (repost.type ?? "").uppercased() == "STORY"
 
         VStack(alignment: .leading, spacing: 0) {
@@ -1558,14 +1560,25 @@ struct PostDetailView: View {
             // pause wiring, so the repost canvas can't play with sound while
             // scrolled off-screen.
             if isStoryRepost {
-                storyCanvasContainer(
+                // Vue `2h` (#4086) — MÊME décision que le chemin natif.
+                // Ce site appelait `storyCanvasContainer` directement, donc
+                // sans aucune garde de contenu : une story republiée dont la
+                // source est expirée ou sans asset rendait un rectangle NOIR,
+                // là où la même story, native, affiche « Story indisponible ».
+                // Le canvas suffisait à faire répondre `true` à la porte du
+                // bouton muet, qui se montait par-dessus, prêt à piloter un
+                // lecteur sans rien à jouer.
+                //
+                // `renderedItem` décrit bien CE contenu : `StoryItem(feedPost:)`
+                // retombe sur la SOURCE d'une republication (`hasOwnContent`).
+                storyCanvasOrPlaceholder(renderedItem: renderedItem) {
                     StoryReaderRepresentable(
                         repost: repost,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
                         mute: isCanvasMuted,
                         isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
                     )
-                )
+                }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
@@ -1870,76 +1883,6 @@ EngagementGlyph(
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Story Canvas (inline reader)
-
-    /// Renders a story post's canvas inline via `StoryReaderRepresentable`
-    /// (audio active by default; local mute toggle in the actions bar,
-    /// B3.6, Task E2 — `isCanvasMuted`). Pauses when scrolled off-screen or
-    /// during a call. Empty guard covers an expired/asset-less story (no
-    /// black box).
-    @ViewBuilder
-    private func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
-        // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
-        // (`StoryItem(feedPost:)` retombe sur la source d'une republication) :
-        // une story-repost sans ajouts propres a `storyEffects`/`media` nil
-        // côté post mais un contenu complet côté source — elle doit rendre
-        // son canvas, pas le placeholder. `renderedItem` est HISSÉ par
-        // l'appelant (`postDetailContent`), partagé avec la porte du bouton
-        // muet (correctif revue mineur #8) — pas reconstruit ici.
-        if renderedItem.storyEffects == nil && renderedItem.media.isEmpty {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles.rectangle.stack")
-                Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
-            }
-            .font(.footnote)
-            .foregroundColor(theme.textMuted)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
-        } else {
-            // Réutilise `renderedItem` construit pour la garde ci-dessus au
-            // lieu de laisser `StoryReaderRepresentable(feedPost:)` reconvertir
-            // le même `FeedPost` — évite une 2e conversion par évaluation de
-            // body (ce panneau réévalue à chaque frame de scroll via
-            // `storyCanvasVisible`) ET garantit que la garde et le rendu
-            // voient EXACTEMENT le même item (post-revue 2026-07-13 : la
-            // double construction pouvait diverger si la cascade de fallback
-            // changeait d'un côté sans l'autre).
-            storyCanvasContainer(
-                StoryReaderRepresentable(
-                    story: renderedItem,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: isCanvasMuted,
-                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
-                )
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
-    }
-
-    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
-    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
-    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
-    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
-    /// and be missing on the other (which would leak audio on the repost path).
-    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
-        reader
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-            .frame(maxWidth: 460)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: StoryCanvasFrameKey.self,
-                                           value: geo.frame(in: .named(Self.scrollSpace)))
-                }
-            )
-            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
-                let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
-                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
-            }
     }
 
     // MARK: - Media Views
@@ -2561,7 +2504,7 @@ EngagementGlyph(
 
 // MARK: - Story canvas visibility preference keys
 
-private struct StoryCanvasFrameKey: PreferenceKey {
+struct StoryCanvasFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
