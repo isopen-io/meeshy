@@ -151,6 +151,10 @@ export const API_ENDPOINTS = {
     byMessageIdDeleteForMe: (messageId: string) => `/api/messages/${messageId}/delete-for-me`,
     byMessageIdRestoreForMe: (messageId: string) => `/api/messages/${messageId}/restore-for-me`,
   },
+  apiLegacySocketio: {
+    disconnectUser: '/api/socketio/disconnect-user',
+    stats: '/api/socketio/stats',
+  },
   apiLegacyUser: {
     deletedConversations: '/api/user/deleted-conversations',
   },
@@ -448,6 +452,10 @@ export const API_ENDPOINTS = {
   social: {
     posts: '/api/v1/social/posts',
   },
+  socketio: {
+    disconnectUser: '/api/v1/socketio/disconnect-user',
+    stats: '/api/v1/socketio/stats',
+  },
   sounds: {
     byId: (id: string) => `/api/v1/sounds/${id}`,
     byIdPosts: (id: string) => `/api/v1/sounds/${id}/posts`,
@@ -580,6 +588,8 @@ export const API_PATH_TEMPLATES = [
   '/api/messages/:messageId/delete-for-me',
   '/api/messages/:messageId/restore-for-me',
   '/api/messages/bulk/delete-for-me',
+  '/api/socketio/disconnect-user',
+  '/api/socketio/stats',
   '/api/user/deleted-conversations',
   '/api/v1/account/deletion/resolve',
   '/api/v1/admin/agent/archetypes',
@@ -915,6 +925,8 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/signal/keys/:userId',
   '/api/v1/signal/session/establish',
   '/api/v1/social/posts',
+  '/api/v1/socketio/disconnect-user',
+  '/api/v1/socketio/stats',
   '/api/v1/sounds/:id',
   '/api/v1/sounds/:id/posts',
   '/api/v1/sounds/mine',
@@ -1021,6 +1033,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/messages/:messageId/delete-for-me': ['DELETE'],
   '/api/messages/:messageId/restore-for-me': ['POST'],
   '/api/messages/bulk/delete-for-me': ['DELETE'],
+  '/api/socketio/disconnect-user': ['POST'],
+  '/api/socketio/stats': ['GET'],
   '/api/user/deleted-conversations': ['GET'],
   '/api/v1/account/deletion/resolve': ['POST'],
   '/api/v1/admin/agent/archetypes': ['GET'],
@@ -1356,6 +1370,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/signal/keys/:userId': ['GET'],
   '/api/v1/signal/session/establish': ['POST'],
   '/api/v1/social/posts': ['GET'],
+  '/api/v1/socketio/disconnect-user': ['POST'],
+  '/api/v1/socketio/stats': ['GET'],
   '/api/v1/sounds/:id': ['GET', 'PATCH'],
   '/api/v1/sounds/:id/posts': ['GET'],
   '/api/v1/sounds/mine': ['GET'],
