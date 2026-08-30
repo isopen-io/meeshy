@@ -229,10 +229,6 @@ struct MeeshyComposerHost: View {
     /// vérités à faire diverger, pour une capacité identique.
     @State var composerReferences: [ComposerReference] = []
 
-    /// La feuille qui NOMME — ouverte par l'outil `@` de la rangée du
-    /// document. Même patron que `showsEmojiPicker` : la présentation vit
-    /// dans le meuble, jamais dans la surface, qui reste sans état.
-    @State var showsReferencePicker = false
 
     /// L'envoi EN VOL du socle. Il ferme le gate le temps de l'aller-retour :
     /// sans lui, un double tap sur la flèche produirait deux publications, ce
@@ -259,14 +255,10 @@ struct MeeshyComposerHost: View {
     /// devine pas.
     @State var showsSoundSourceChooser = false
 
-    /// L'étagère elle-même, une fois la provenance choisie.
-    @State var showsSoundLibrary = false
 
     @State var showsMediaSourceChooser = false
 
-    @State var showsStickerPicker = false
 
-    @State var showsEmojiPicker = false
 
     /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
     /// `DefaultComposerLanguage.resolve()` — le point de DÉPART du brouillon
@@ -278,11 +270,6 @@ struct MeeshyComposerHost: View {
     /// ait aucun moyen de corriger.
     @State var documentLanguage = DefaultComposerLanguage.resolve()
 
-    /// Le sélecteur de langue de la rangée est-il ouvert ? Même forme que
-    /// `showsEmojiPicker` juste au-dessus, pour la même raison : le sélecteur
-    /// vit dans le meuble, qui possède `documentLanguage`, jamais dans la
-    /// surface.
-    @State var showsDocumentLanguagePicker = false
 
     /// **L'ingestion de fichiers LOCAUX (T2.3).** Trois sélecteurs, un état
     /// par famille — même patron que `showsEmojiPicker` /
@@ -292,14 +279,25 @@ struct MeeshyComposerHost: View {
     /// `CameraView` (`ComposerDocumentSurfaceTests`
     /// `.test_laSurface_neFabriquePasUnSecondPipelineDIngestion`, élargie à la
     /// caméra par ce lot).
+    /// **UNE feuille à la fois, et le type l'impose** (#4467).
+    ///
+    /// Huit booléens vécurent ici, chacun avec son `.sheet(isPresented:)`.
+    /// SwiftUI n'en supporte qu'une par vue : dès que deux passaient à `true`
+    /// dans la même transaction, il levait « only presenting a single sheet is
+    /// supported » et **terminait le process**. Trois terminaisons mesurées au
+    /// simulateur le 2026-08-30, sur trois points d'interaction différents.
+    ///
+    /// L'inventaire des portails (#4120) garantissait que chaque booléen est
+    /// LU ; il ne pouvait pas garantir qu'un seul l'est à la fois — une règle de
+    /// placement ne dit rien du nombre. Le type somme, lui, rend l'état invalide
+    /// IRREPRÉSENTABLE : une variable ne porte qu'une valeur, et ouvrir un
+    /// portail ferme le précédent au lieu de l'empiler.
+    @State var presentedPortal: ComposerPortal?
+
     @State var showsPhotoPicker = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
-    @State var showsCamera = false
     @State var showsFileImporter = false
 
-    /// **Le sélecteur de lieu (T2.5).** Même patron que les trois au-dessus :
-    /// vit dans le meuble, jamais dans `ComposerDocumentSurface`.
-    @State var showsLocationPicker = false
 
     /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
     /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
@@ -402,11 +400,6 @@ struct MeeshyComposerHost: View {
     /// sans lieu à indexer.
     @State var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
 
-    /// **T2.6 — le sixième et dernier outil de la rangée.** Même patron que
-    /// `showsLocationPicker` juste au-dessus : le sélecteur vit dans le
-    /// MEUBLE, jamais dans `ComposerDocumentSurface`, qui reste une
-    /// présentation sans état.
-    @State var showsAudioComposer = false
 
     /// **T2.6 — la transcription du vocal composé par `AudioPostComposerView`.**
     /// Voyage À CÔTÉ de `documentLocalMedia` (l'enregistrement, posé comme un
@@ -921,11 +914,7 @@ struct MeeshyComposerHost: View {
                 .padding(.bottom, 10)
             }
         }
-        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
-        .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
-        .sheet(isPresented: $showsStickerPicker) { stickerPickerSheet }
         .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
                             isPresented: $showsMediaSourceChooser,
                             titleVisibility: .visible) {
@@ -950,7 +939,6 @@ struct MeeshyComposerHost: View {
             }
             Button(ComposerSoundSourcePolicy.cancel, role: .cancel) { }
         }
-        .sheet(isPresented: $showsSoundLibrary) { soundLibrarySheet }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant
         // que la scène est montée perdrait tout ce que le document a posé
@@ -969,15 +957,30 @@ struct MeeshyComposerHost: View {
         // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
         // tout défaire.
         .task { viewModel.seedHistory() }
-        .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
-        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
         // ici disait « montés ICI, sur le meuble, jamais dans
         // `ComposerDocumentSurface` » — et « ici » désignait l'expression
         // `documentSurface`. La phrase était juste, le placement ne l'était
         // pas : c'est ce demi-pas qui a rendu les quatre portes du rail
         // inertes (#4120). Ils sont désormais où la phrase les mettait.
-        .sheet(isPresented: $showsCamera) { documentCameraSheet }
+        // **LA feuille du meuble — une seule, et c'est le correctif de #4467.**
+        //
+        // Le `switch` est exhaustif : un neuvième portail ne compile pas tant
+        // qu'il n'a pas dit ce qu'il montre. C'est la même discipline que les
+        // portes du rail, appliquée à la présentation — et elle remplace huit
+        // modificateurs que rien n'empêchait de s'activer ensemble.
+        .sheet(item: $presentedPortal) { portail in
+            switch portail {
+            case .location:     documentLocationPickerSheet
+            case .audio:        documentAudioComposerSheet
+            case .emoji:        emojiPickerSheet
+            case .sticker:      stickerPickerSheet
+            case .soundLibrary: soundLibrarySheet
+            case .reference:    referencePickerSheet
+            case .language:     documentLanguagePickerSheet
+            case .camera:       documentCameraSheet
+            }
+        }
         .photosPicker(
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,

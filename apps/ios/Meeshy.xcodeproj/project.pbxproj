@@ -122,6 +122,7 @@
 		120A4B22B1AE1661E80FBFE7 /* E2EAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D68F9E157D7FC0A4640E90 /* E2EAPI.swift */; };
 		125D2B4D52B1663144969533 /* MockAffiliateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6518E061AE7D1AD5DC29FEA0 /* MockAffiliateService.swift */; };
 		126C200477074A02F92F0333 /* CommentListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7D4D41FA14B796B69D4098 /* CommentListViewController.swift */; };
+		12FE9EE143486448E4745F1C /* ComposerPortal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D48982071F1215C478F738 /* ComposerPortal.swift */; };
 		13087D0C173D04CE8C4DB169 /* LentilleMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7A55214D8C731371D3034F /* LentilleMetricsTests.swift */; };
 		137A7821C2547FF9B8C04B26 /* SupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9FC79AAAB5E8688034FEB1 /* SupportView.swift */; };
 		1395569EE1B231276BADCBDE /* ConversationMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80FA0E09CC728C025903018 /* ConversationMediaViews.swift */; };
@@ -2214,6 +2215,7 @@
 		7667AAA1E9E8DD7B88A0450D /* CallTranscriptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriptionServiceTests.swift; sourceTree = "<group>"; };
 		76AE05D36C83F44C44B9D6A7 /* RiverConversationMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverConversationMappingTests.swift; sourceTree = "<group>"; };
 		76C9E5349D6E0BA1D88E8C0D /* ConversationEncryptionDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEncryptionDetailSheet.swift; sourceTree = "<group>"; };
+		76D48982071F1215C478F738 /* ComposerPortal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPortal.swift; sourceTree = "<group>"; };
 		76F17DEB0A27F244F9E14273 /* PiPSourceAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPSourceAnchor.swift; sourceTree = "<group>"; };
 		77548AE748BD08BEE5640877 /* ConversationListView+Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationListView+Rows.swift"; sourceTree = "<group>"; };
 		775F426642CE8CEA8A515A49 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
@@ -3356,6 +3358,7 @@
 				B8DC2F10794039EDAB28957B /* ComposerMoodSurface.swift */,
 				7D3640268650BEEE8B3FBD39 /* ComposerMountedView.swift */,
 				CBE3149261064B1F00AA57D1 /* ComposerPlateau.swift */,
+				76D48982071F1215C478F738 /* ComposerPortal.swift */,
 				6689D3220B4BD73D57B33D61 /* ComposerRailDoor.swift */,
 				8503894FB8FF59EE1A41808C /* ComposerRailGeometry.swift */,
 				691499A943B7D387CF899D5A /* ComposerRailMode.swift */,
@@ -5492,6 +5495,7 @@
 				EC7C4E48171C136A393EFEBA /* ComposerMountedView.swift in Sources */,
 				3D0CB94DDB1D41CD76C22BE5 /* ComposerPanelHandleLaw.swift in Sources */,
 				C5A0E3E5FCD090C5493FCFE7 /* ComposerPlateau.swift in Sources */,
+				12FE9EE143486448E4745F1C /* ComposerPortal.swift in Sources */,
 				9B2F88BDF2DD6C749C5EAB4A /* ComposerRailDoor.swift in Sources */,
 				EE995946C42C70C6112C02D9 /* ComposerRailGeometry.swift in Sources */,
 				1ABF608C9FB0028BEC3B3C2E /* ComposerRailMode.swift in Sources */,

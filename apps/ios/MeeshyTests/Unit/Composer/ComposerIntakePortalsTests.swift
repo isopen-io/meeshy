@@ -142,4 +142,50 @@ final class ComposerIntakePortalsTests: XCTestCase {
         XCTAssertTrue(compacte.contains("surfaceWithIntakePortals"),
                       "Le body doit monter la vue qui porte les portails.")
     }
+
+    // MARK: - #4467 — une SEULE feuille, et le nombre est la garde
+
+    /// **Une règle de PLACEMENT ne dit rien du NOMBRE**, et c'est ce que
+    /// l'inventaire ci-dessus ne pouvait pas dire.
+    ///
+    /// Il garantissait que chaque booléen de présentation est LU au-dessus de
+    /// l'aiguillage — vrai, utile, et insuffisant : huit `.sheet(isPresented:)`
+    /// y ont coexisté, chacun parfaitement placé. SwiftUI n'en supporte qu'une
+    /// par vue ; deux booléens vrais dans la même transaction ont **terminé le
+    /// process** trois fois au simulateur.
+    ///
+    /// Ce témoin est celui qui aurait attrapé le défaut : il ne regarde pas où
+    /// sont les feuilles, il les COMPTE.
+    func test_leMeuble_neMonteQuUneSeuleFeuille() throws {
+        let code = try hostSource()
+        let feuilles = code.components(separatedBy: ".sheet(").count - 1
+        XCTAssertLessThanOrEqual(
+            feuilles, 1,
+            "SwiftUI ne présente qu'UNE feuille par vue. \(feuilles) modificateurs `.sheet` sur "
+                + "l'unité du meuble : dès que deux s'activent dans la même transaction, la "
+                + "configuration devient invalide et le process est TERMINÉ (#4467)."
+        )
+    }
+
+    /// Et cette feuille est pilotée par un ITEM, jamais par un booléen : c'est
+    /// ce qui rend l'état invalide irreprésentable plutôt que seulement rare.
+    func test_laFeuilleUnique_estPiloteeParUnItem() throws {
+        let code = compact(try hostSource())
+        XCTAssertTrue(code.contains(".sheet(item:$presentedPortal)"))
+        XCTAssertFalse(code.contains(".sheet(isPresented:"),
+                       "Un booléen par feuille laisse deux feuilles s'ouvrir ensemble ; "
+                        + "un item ne porte qu'une valeur.")
+    }
+
+    /// **Le `switch` du portail est EXHAUSTIF** — un neuvième cas ne compile pas
+    /// tant qu'il n'a pas dit ce qu'il montre. Même discipline que les portes du
+    /// rail, appliquée à la présentation.
+    func test_chaquePortail_aSaFeuille() throws {
+        let code = compact(try hostSource())
+        for portail in ComposerPortal.allCases {
+            XCTAssertTrue(code.contains("case.\(portail.rawValue):"),
+                          "Le portail `\(portail.rawValue)` n'a aucune feuille montée.")
+        }
+    }
+
 }
