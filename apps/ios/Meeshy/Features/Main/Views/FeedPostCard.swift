@@ -84,13 +84,13 @@ struct FeedPostCard: View {
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
-    private var theme: ThemeManager { ThemeManager.shared }
+    var theme: ThemeManager { ThemeManager.shared }
     @State private var showCommentsSheet = false
-    @State private var showTranslationSheet = false
+    @State var showTranslationSheet = false
     @State private var showRepostOptions = false
-    @State private var selectedProfileUser: ProfileSheetUser?
+    @State var selectedProfileUser: ProfileSheetUser?
     @State var audioFullscreen: AudioFullscreenSource?
-    @State private var secondaryLangCode: String? = nil
+    @State var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
@@ -106,7 +106,7 @@ struct FeedPostCard: View {
 
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (impressions + views) shown only to the author.
-    private var isAuthor: Bool {
+    var isAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == post.authorId
     }
@@ -211,7 +211,7 @@ struct FeedPostCard: View {
         return post.translations?.first(where: { $0.key.lowercased() == code })?.value.text
     }
 
-    private func buildAvailableFlags() -> [String] {
+    func buildAvailableFlags() -> [String] {
         Self.availableFlags(
             originalLanguage: post.originalLanguage,
             translationKeys: post.translations.map { Array($0.keys) } ?? [],
@@ -249,7 +249,7 @@ struct FeedPostCard: View {
     /// Le retour haptique appartient à `LanguageFlagChip` — seul appelant de
     /// cette méthode — et non aux trois sorties de sa logique : une puce qui
     /// vibre à l'appui, toujours, quel que soit ce que l'appui déclenche.
-    private func handleFlagTap(_ code: String) {
+    func handleFlagTap(_ code: String) {
         let isOriginal = code == post.originalLanguage?.lowercased()
         let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
 
@@ -293,7 +293,7 @@ struct FeedPostCard: View {
     /// CLAIRE, le même repli AA que les mentions/hashtags du corps
     /// (`mentionTint`, indigo vérifié AA) plutôt que l'accent brut du post,
     /// qui peut échouer AA sur fond blanc (revue totale U16).
-    private var backgroundSoundAccentHex: String {
+    var backgroundSoundAccentHex: String {
         theme.mode.isDark ? accentColor : MeeshyColors.indigo600Hex
     }
 
@@ -301,7 +301,7 @@ struct FeedPostCard: View {
     /// auteur, exposée comme UNE valeur réutilisable : le bouton muet
     /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
     /// seconde condition d'existence qui pourrait diverger.
-    private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
+    var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
         BackgroundSoundBadge.announcement(for: post.storyEffects)
     }
 
@@ -371,6 +371,32 @@ struct FeedPostCard: View {
         .frame(maxWidth: Self.cardSceneMaxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        // Vue `1h` — **l'état est VRAI, il devient DIT.**
+        //
+        // La carte naît muette et en pause depuis la revue Fable n°25, et le
+        // verrou est solide (`ScenePlayerConfig(mode: .card)` côté SDK,
+        // `isPlaying: .constant(false)` ici). Mais rien ne le DISAIT : le
+        // lecteur voyait une scène immobile sans savoir si elle est figée par
+        // choix ou en train de ne pas charger, et sans savoir qu'un son
+        // l'attend ailleurs. Un état gardé mais muet se lit comme une panne.
+        //
+        // Le badge répond aux deux d'un coup — « muette » annonce le son qui
+        // existe et ne joue pas ici, « en pause » annonce le mouvement qui
+        // vit dans la destination du tap. Il est décoratif pour VoiceOver :
+        // `cardSceneAccessibilityLabel` porte déjà l'attribution, et le
+        // dupliquer ferait lire deux fois la même carte.
+        .overlay(alignment: .bottomLeading) {
+            Text(String(localized: "feed.post.scene.muted_paused",
+                        defaultValue: "scène · muette, en pause",
+                        bundle: .main))
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.45), in: Capsule())
+                .padding(10)
+                .accessibilityHidden(true)
+        }
         .contentShape(Rectangle())
         .onTapGesture { onTapPost?(post) }
     }
@@ -705,7 +731,7 @@ struct FeedPostCard: View {
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
     /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
     /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
-    private func requestSaveMedia() {
+    func requestSaveMedia() {
         guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
         HapticFeedback.light()
         let attachmentKind: AttachmentKind
@@ -722,208 +748,6 @@ struct FeedPostCard: View {
         ))
     }
 
-    // MARK: - Author Header
-    private var authorHeader: some View {
-        HStack(spacing: 12) {
-            // Avatar
-            MeeshyAvatar(
-                name: post.author,
-                context: .postAuthor,
-                accentColor: accentColor,
-                avatarURL: post.authorAvatarURL,
-                storyState: authorStoryRing,
-                moodEmoji: authorMoodEmoji,
-                onViewProfile: { selectedProfileUser = .from(feedPost: post) },
-                onViewStory: onViewAuthorStory,
-                onMoodTap: onAuthorMoodTap,
-                contextMenuItems: [
-                    AvatarContextMenuItem(label: String(localized: "feed.post.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
-                        selectedProfileUser = .from(feedPost: post)
-                    }
-                ]
-            )
-            .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
-            .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-
-            VStack(alignment: .leading, spacing: 2) {
-                // Author name with repost indicator
-                HStack(spacing: 6) {
-                    Text(post.author)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(theme.textPrimary)
-
-                    // Attribution de republication, juste après le pseudo :
-                    // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
-                    // user 2026-08-19). La formule « a republié de @handle »
-                    // disait en toutes lettres ce que l'icône dit déjà, et
-                    // poussait le handle en bout de ligne, là où la troncature
-                    // le mangeait en premier sur une carte étroite : le seul
-                    // mot qui porte l'information était le premier sacrifié.
-                    //
-                    // Rien ne se perd pour VoiceOver : la phrase complète
-                    // devient l'étiquette du groupe, l'icône restant muette.
-                    // Elle serait sinon lue « @handle » sans dire pourquoi.
-                    if post.repostAuthor != nil {
-                        let handle = post.repost?.authorUsername ?? post.repostAuthor
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.2.squarepath")
-                                .font(.caption2)
-                            if let handle {
-                                Text("@\(handle)")
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        }
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(
-                            handle.map {
-                                String(format: String(localized: "feed.post.reposted_from",
-                                                      defaultValue: "a republié de @%@",
-                                                      bundle: .main), $0)
-                            } ?? String(localized: "feed.post.reposted",
-                                        defaultValue: "a republié", bundle: .main)
-                        )
-                    }
-
-                    // Annonce du fond (B3.3-5), résolveur unique partagé
-                    // avec le viewer story et le plein écran réel (E1) —
-                    // BackgroundSoundBadge rend EmptyView sans piste (B3.5).
-                    BackgroundSoundBadge(
-                        announcement: backgroundSoundAnnouncement,
-                        accentHex: backgroundSoundAccentHex
-                    )
-                    .equatable()
-                }
-
-                HStack(spacing: 4) {
-                    Text(timeAgo(from: post.timestamp))
-                        .font(.caption)
-                        .foregroundColor(theme.accentText(accentColor))
-
-                    let flags = buildAvailableFlags()
-                    if !flags.isEmpty || post.translations?.isEmpty == false {
-                        MetaSeparator()
-                            .font(.caption)
-                            .foregroundColor(theme.textMuted)
-
-                        ForEach(flags, id: \.self) { code in
-                            LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
-                                handleFlagTap(code)
-                            }
-                        }
-
-                        if post.translations?.isEmpty == false {
-                            TranslationsBadge { showTranslationSheet = true }
-                        }
-                    }
-
-                    // Reach stats (impressions · views) — visible ONLY to the
-                    // post's author, after the meta row (private analytics).
-                    if isAuthor {
-                        MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: 3) {
-                            ReachMetricLabel(
-                                icon: "chart.bar.fill",
-                                count: post.impressionCount,
-                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                            ReachMetricLabel(
-                                icon: "eye.fill",
-                                count: post.viewCount,
-                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-
-            Menu {
-                if let onTapPost {
-                    Button {
-                        onTapPost(post)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
-                    }
-                }
-                Button {
-                    UIPasteboard.general.string = post.content
-                    HapticFeedback.success()
-                } label: {
-                    Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-                }
-                Button {
-                    onShare?(post.id)
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-                Button {
-                    if post.primaryReelDisplayMedia != nil {
-                        requestSaveMedia()
-                    } else {
-                        onBookmark?(post.id)
-                        HapticFeedback.light()
-                    }
-                } label: {
-                    Label(
-                        post.primaryReelDisplayMedia != nil
-                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
-                    )
-                }
-                if onPin != nil {
-                    Button {
-                        onPin?(post.id)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
-                    }
-                }
-                if onEdit != nil {
-                    Button {
-                        onEdit?(post)
-                        HapticFeedback.light()
-                    } label: {
-                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                    }
-                }
-                if onDelete != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onDelete?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                    }
-                }
-                if onReport != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onReport?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(16))
-                    .foregroundColor(theme.textMuted)
-                    .padding(8)
-            }
-            .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
-            .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
-        }
-    }
 
     // MARK: - Repost View
     private func repostView(_ repost: RepostContent) -> some View {
