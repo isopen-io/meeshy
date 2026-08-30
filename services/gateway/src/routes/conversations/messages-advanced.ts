@@ -9,6 +9,7 @@ import { ErrorCode } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types/index';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
@@ -1309,7 +1310,7 @@ export function registerMessagesAdvancedRoutes(
         type: 'object',
         required: ['emoji'],
         properties: {
-          emoji: { type: 'string', minLength: 1, maxLength: 10, description: 'Emoji character to add as reaction' }
+          emoji: { type: 'string', minLength: 1, maxLength: EMOJI_MAX_LENGTH, description: 'Emoji character to add as reaction' }
         }
       },
       response: {
@@ -1496,7 +1497,7 @@ export function registerMessagesAdvancedRoutes(
         type: 'object',
         required: ['emoji'],
         properties: {
-          emoji: { type: 'string', minLength: 1, maxLength: 10, description: 'Emoji character to remove' }
+          emoji: { type: 'string', minLength: 1, maxLength: EMOJI_MAX_LENGTH, description: 'Emoji character to remove' }
         }
       },
       response: {
