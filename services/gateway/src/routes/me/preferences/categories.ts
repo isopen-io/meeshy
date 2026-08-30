@@ -15,10 +15,9 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError, sendPaginatedSuccess } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendConflict, sendGone, sendInternalError, sendPaginatedSuccess } from '../../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'PreferenceCategoriesRoutes' });
-import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   CategoriesReorderedEventData,
@@ -29,6 +28,8 @@ import type {
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../../../utils/socket-broadcast';
 import { detachConversationsFromCategory } from '../../../services/conversationPreferencesSync';
+import { withMutationOutcome } from '../../../utils/withMutationLog';
+import { MutationInFlight } from '../../../services/MutationLogService';
 
 interface CategoryRow {
   id: string;
@@ -118,7 +119,8 @@ const reorderCategoriesRequestSchema = {
   properties: {
     updates: {
       type: 'array',
-      description: 'Liste des mises à jour d\'ordre',
+      description: 'Liste des mises à jour d\'ordre (200 maximum par lot — #4182 critère 2 : 100 000 entrées ouvraient 100 000 requêtes Prisma concurrentes)',
+      maxItems: 200,
       items: {
         type: 'object',
         required: ['categoryId', 'order'],
@@ -156,6 +158,37 @@ const successMessageResponseSchema = {
   }
 } as const;
 
+/**
+ * Débit par COMPTE, jamais par IP (#4182 critère 7) — une clé IP laisserait un
+ * seul compte, réparti sur plusieurs sessions/adresses, contourner la limite,
+ * et pénaliserait tout le monde derrière une même sortie NAT. Repli sur l'IP
+ * uniquement pour l'appel sans `request.auth` (ne devrait jamais arriver ici,
+ * la garde d'authentification étant posée par le plugin parent).
+ *
+ * `hook: 'preHandler'` n'est PAS un détail : le hook par défaut
+ * d'@fastify/rate-limit est `onRequest`, la toute première phase — AVANT
+ * même le `preHandler` du plugin parent qui pose `request.auth`. Sans cette
+ * option, `keyGenerator` tourne à chaque fois avec `request.auth` encore
+ * `undefined` et retombe systématiquement sur l'IP, silencieusement : le
+ * plafond a l'air posé par compte et se comporte comme un plafond par IP,
+ * exactement ce que ce critère interdit. Mesuré au vrai plugin (`global:
+ * false`), pas seulement lu dans sa documentation.
+ */
+const categoryRateLimitConfig = (label: string, max: number) => ({
+  max,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  keyGenerator: (request: FastifyRequest) => {
+    const userId = request.auth?.userId;
+    return userId ? `categories:${label}:${userId}` : `categories:${label}:ip:${request.ip}`;
+  },
+  errorResponseBuilder: () => ({
+    success: false,
+    error: `Trop de requêtes (categories/${label}). Veuillez patienter.`,
+    statusCode: 429,
+  }),
+});
+
 export async function categoriesRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
 
@@ -164,13 +197,13 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     return;
   }
 
-  // Auth middleware pour toutes les routes de catégories
-  const authMiddleware = createUnifiedAuthMiddleware(prisma, {
-    requireAuth: true,
-    allowAnonymous: false
-  });
-
-  fastify.addHook('preHandler', authMiddleware);
+  // Pas de hook d'auth ICI (#4182 critère 4) : `userPreferencesRoutes`
+  // (routes/me/preferences/index.ts) en pose déjà un sur tout le sous-arbre
+  // AVANT d'enregistrer ce plugin, et Fastify propage les hooks du parent à
+  // l'enfant par encapsulation — les ré-ajouter ici les faisait tourner DEUX
+  // FOIS par requête (deux vérifications JWT, deux lectures Prisma de
+  // l'utilisateur) sur chacune des six routes de ce fichier. `request.auth`
+  // est déjà posé quand un handler s'exécute.
 
   /**
    * GET /me/preferences/categories
@@ -179,6 +212,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: PaginationQuery }>(
     '/',
     {
+      config: { rateLimit: categoryRateLimitConfig('read', 300) },
       schema: {
         description: 'Récupère toutes les catégories de conversations pour l\'utilisateur authentifié avec support de pagination. Les catégories sont retournées dans l\'ordre d\'affichage.',
         tags: ['preferences', 'categories'],
@@ -238,6 +272,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: CategoryIdParams }>(
     '/:categoryId',
     {
+      config: { rateLimit: categoryRateLimitConfig('read', 300) },
       schema: {
         description: 'Récupère les détails d\'une catégorie spécifique par ID',
         tags: ['preferences', 'categories'],
@@ -299,8 +334,9 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: CategoryBody }>(
     '/',
     {
+      config: { rateLimit: categoryRateLimitConfig('create', 30) },
       schema: {
-        description: 'Crée une nouvelle catégorie de conversation. Si l\'ordre n\'est pas spécifié, la catégorie sera ajoutée à la fin. Les catégories peuvent être utilisées pour organiser les conversations.',
+        description: 'Crée une nouvelle catégorie de conversation. Si l\'ordre n\'est pas spécifié, la catégorie sera ajoutée à la fin. Les catégories peuvent être utilisées pour organiser les conversations. Idempotent via l\'en-tête X-Client-Mutation-Id (cmid_<uuid>) : un rejeu du même identifiant rend la catégorie déjà créée au lieu d\'en fabriquer une seconde (#4182 critère 3).',
         tags: ['preferences', 'categories'],
         summary: 'Créer une nouvelle catégorie',
         body: createCategoryRequestSchema,
@@ -314,6 +350,8 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           },
           400: errorResponseSchema,
           401: errorResponseSchema,
+          409: errorResponseSchema,
+          410: errorResponseSchema,
           500: errorResponseSchema
         }
       }
@@ -332,36 +370,74 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           return sendBadRequest(reply, 'Category name is required');
         }
 
-        // Si order n'est pas spécifié, prendre le max + 1
-        let finalOrder = order;
-        if (finalOrder === undefined || finalOrder === null) {
-          const maxOrder = await prisma.userConversationCategory.findFirst({
-            where: { userId },
-            orderBy: { order: 'desc' },
-            select: { order: true }
-          });
-          finalOrder = maxOrder ? maxOrder.order + 1 : 0;
-        }
+        // Idempotent via X-Client-Mutation-Id (#4182 critère 3). `create`
+        // DIVERGE — le rejouer fabriquerait une seconde catégorie, contrairement
+        // à un `like`/toggle qui converge — donc un rejeu du même cmid RESERT la
+        // ligne déjà créée au lieu d'en refaire une (même patron que
+        // `POST /posts/:postId/repost`, `withMutationLog.ts`). Sans en-tête, le
+        // comportement legacy est inchangé : `withMutationOutcome` exécute `op()`
+        // une fois et rend `applied`.
+        const outcome = await withMutationOutcome<CategoryRow>({
+          request,
+          fastify,
+          userId,
+          kind: 'createCategory',
+          replayCost: 'diverges',
+          op: async () => {
+            // Si order n'est pas spécifié, prendre le max + 1
+            let finalOrder = order;
+            if (finalOrder === undefined || finalOrder === null) {
+              const maxOrder = await prisma.userConversationCategory.findFirst({
+                where: { userId },
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              });
+              finalOrder = maxOrder ? maxOrder.order + 1 : 0;
+            }
 
-        const category = await prisma.userConversationCategory.create({
-          data: {
-            userId,
-            name: name.trim(),
-            color: color || null,
-            icon: icon || null,
-            order: finalOrder,
-            isExpanded: isExpanded ?? true
-          }
+            const created = await prisma.userConversationCategory.create({
+              data: {
+                userId,
+                name: name.trim(),
+                color: color || null,
+                icon: icon || null,
+                order: finalOrder,
+                isExpanded: isExpanded ?? true
+              }
+            });
+            return created as CategoryRow & { id: string };
+          },
+          onDuplicate: async (resultId) => {
+            const existing = await prisma.userConversationCategory.findFirst({
+              where: { id: resultId, userId }
+            });
+            return existing as (CategoryRow & { id: string }) | null;
+          },
         });
 
-        const createdPayload: CategoryCreatedEventData = {
-          userId,
-          category: toCategoryPayload(category as CategoryRow),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_CREATED, createdPayload);
+        if (outcome.status === 'gone') {
+          return sendGone(reply, 'Category already created, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+        }
+
+        const category = outcome.result;
+
+        // La diffusion ne part que sur une création FRAÎCHE : un rejeu resert
+        // la même catégorie aux autres appareils, il ne doit pas leur annoncer
+        // une seconde fois une création qu'ils ont déjà vue (même garde que
+        // `POST /posts/:postId/repost`, cf. withMutationLog.ts).
+        if (outcome.status === 'applied') {
+          const createdPayload: CategoryCreatedEventData = {
+            userId,
+            category: toCategoryPayload(category),
+          };
+          broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_CREATED, createdPayload);
+        }
 
         return sendSuccess(reply, category);
       } catch (error: any) {
+        if (error instanceof MutationInFlight) {
+          return sendConflict(reply, 'Category creation already in flight', { code: 'MUTATION_IN_FLIGHT' });
+        }
         logError('Error creating category', error, { source: 'categories-routes' });
         return sendInternalError(reply, 'CREATE_ERROR', { message: error.message || 'Failed to create category' });
       }
@@ -375,6 +451,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.patch<{ Params: CategoryIdParams; Body: Partial<CategoryBody> }>(
     '/:categoryId',
     {
+      config: { rateLimit: categoryRateLimitConfig('update', 60) },
       schema: {
         description: 'Met à jour une catégorie existante. Supporte les mises à jour partielles - seuls les champs fournis seront modifiés.',
         tags: ['preferences', 'categories'],
@@ -456,6 +533,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.delete<{ Params: CategoryIdParams }>(
     '/:categoryId',
     {
+      config: { rateLimit: categoryRateLimitConfig('delete', 30) },
       schema: {
         description: 'Supprime une catégorie de conversation. Toutes les conversations dans cette catégorie seront non-catégorisées (categoryId mis à null) mais leurs préférences resteront.',
         tags: ['preferences', 'categories'],
@@ -533,8 +611,9 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: { updates: Array<{ categoryId: string; order: number }> } }>(
     '/reorder',
     {
+      config: { rateLimit: categoryRateLimitConfig('reorder', 30) },
       schema: {
-        description: 'Met à jour l\'ordre d\'affichage de plusieurs catégories en batch. Utile pour le glisser-déposer dans l\'UI.',
+        description: 'Met à jour l\'ordre d\'affichage de plusieurs catégories en batch (200 maximum). Utile pour le glisser-déposer dans l\'UI.',
         tags: ['preferences', 'categories'],
         summary: 'Réorganiser les catégories',
         body: reorderCategoriesRequestSchema,
