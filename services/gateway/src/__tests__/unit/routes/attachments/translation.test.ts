@@ -235,6 +235,56 @@ describe('POST /attachments/:id/translate — success', () => {
   });
 });
 
+// ─── POST /attachments/:id/translate — une seule lecture (#4166 critère 4) ───
+//
+// Témoin sur l'APPEL PRISMA — pas sur la réponse rendue, qui reste 200 quoi
+// qu'il arrive au `select`. Prouve les deux moitiés du correctif : (a) la
+// route lit avec un `select` explicite (jamais nu, jamais `include`), et
+// (b) elle PASSE la ligne déjà lue à `translateService.translate` au lieu
+// de le laisser la relire — c'est ce second point que
+// `attachment-translate-single-read.test.ts` (services/) prouve à son tour
+// côté service, avec un vrai `AttachmentTranslateService`.
+
+describe('POST /attachments/:id/translate — la route lit UNE SEULE FOIS et passe la ligne au service', () => {
+  it('appelle messageAttachment.findUnique avec un select explicite (jamais include)', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+
+    await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/translate`,
+      payload: { targetLanguages: ['fr'] },
+    });
+
+    expect(prisma.messageAttachment.findUnique).toHaveBeenCalledTimes(1);
+    const call = (prisma.messageAttachment.findUnique as jest.Mock<any>).mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(call).not.toHaveProperty('include');
+    expect(call.select).toBeDefined();
+    // Le select porte à la fois le champ du gate de consentement (`mimeType`)
+    // ET ceux dont `translate()` a besoin — signe que c'est bien LA MÊME
+    // lecture qui sert les deux, pas une lecture étroite suivie d'une seconde.
+    expect(call.select).toMatchObject({ mimeType: true, uploadedBy: true, id: true });
+  });
+
+  it('passe la ligne déjà lue en 4e argument à translateService.translate — jamais undefined', async () => {
+    const translateService = makeTranslateService();
+    const { app } = await buildApp({ translateService });
+
+    await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/translate`,
+      payload: { targetLanguages: ['fr'] },
+    });
+
+    expect(translateService.translate).toHaveBeenCalledTimes(1);
+    const args = (translateService.translate as jest.Mock<any>).mock.calls[0] as unknown[];
+    expect(args).toHaveLength(4);
+    const preloaded = args[3] as Record<string, unknown>;
+    expect(preloaded).toMatchObject({ id: ATTACHMENT_ID, mimeType: 'audio/mp3' });
+  });
+});
+
 describe('POST /attachments/:id/translate — translate service error', () => {
   it('returns 404 when service returns ATTACHMENT_NOT_FOUND error', async () => {
     const translateService = makeTranslateService();

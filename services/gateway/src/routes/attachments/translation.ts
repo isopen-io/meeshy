@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
+import { attachmentTranslateSelect } from '../../services/attachments/attachmentIncludes';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -160,9 +161,14 @@ export async function registerTranslationRoutes(
         const body = request.body as TranslateBody;
         const userId = authContext.userId;
 
+        // #4166, critère 4 — un seul aller-retour pour toute la requête :
+        // `attachmentTranslateSelect` porte à la fois `mimeType` (le gate de
+        // consentement ci-dessous) et tout ce que `translateService.translate`
+        // lit sur la ligne. La ligne chargée ici est PASSÉE à `translate`
+        // (dernier argument) au lieu de le laisser la relire.
         const attachment = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
-          select: { mimeType: true }
+          select: attachmentTranslateSelect
         });
 
         if (!attachment) {
@@ -197,7 +203,7 @@ export async function registerTranslationRoutes(
           async: body.async,
           webhookUrl: body.webhookUrl,
           priority: body.priority
-        });
+        }, attachment);
 
         if (!result.success) {
           const statusCode = result.errorCode === 'ATTACHMENT_NOT_FOUND' ? 404 :

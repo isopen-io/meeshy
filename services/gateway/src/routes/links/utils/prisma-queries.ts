@@ -49,9 +49,36 @@ const senderInclude = {
 };
 
 /**
- * Structure d'inclusion pour récupérer un lien de partage avec toutes ses relations
+ * Projection RACINE pour récupérer un lien de partage (#4166, critère 1).
+ *
+ * Remplace l'ancien `shareLinkIncludeStructure` : un `include` SANS `select`
+ * à la racine charge toute colonne du modèle `ConversationShareLink` — les
+ * compteurs de session (`maxUniqueSessions`, `currentUniqueSessions`),
+ * `allowedCountries`/`allowedLanguages`/`allowedIpRanges`, `createdAt`/
+ * `updatedAt` — pour n'en servir qu'une quinzaine. `findShareLinkByIdentifier`
+ * est appelée par un SEUL site (`routes/links/retrieval.ts`, vérifié) : les
+ * champs ci-dessous sont exactement ceux que ce site lit sur `shareLink`.
+ *
+ * `creator` a disparu : `retrieval.ts` ne lit jamais `shareLink.creator` — la
+ * relation était chargée (profil complet de l'auteur du lien) sans qu'aucun
+ * lecteur n'en fasse rien.
  */
-export const shareLinkIncludeStructure = {
+export const shareLinkSelectStructure = {
+  id: true,
+  linkId: true,
+  name: true,
+  description: true,
+  conversationId: true,
+  allowViewHistory: true,
+  allowAnonymousMessages: true,
+  allowAnonymousFiles: true,
+  allowAnonymousImages: true,
+  requireAccount: true,
+  requireEmail: true,
+  requireNickname: true,
+  requireBirthday: true,
+  expiresAt: true,
+  isActive: true,
   conversation: {
     select: {
       id: true,
@@ -60,15 +87,6 @@ export const shareLinkIncludeStructure = {
       description: true,
       type: true,
       createdAt: true
-    }
-  },
-  creator: {
-    select: {
-      id: true,
-      username: true,
-      firstName: true,
-      lastName: true,
-      displayName: true
     }
   }
 };
@@ -207,7 +225,7 @@ export async function findShareLinkByIdentifier(
   if (isObjectId) {
     return prisma.conversationShareLink.findUnique({
       where: { id: identifier },
-      include: shareLinkIncludeStructure
+      select: shareLinkSelectStructure
     });
   }
 
@@ -217,7 +235,7 @@ export async function findShareLinkByIdentifier(
   // les deux (cohérent avec le fix join `ab22f62ac`).
   return prisma.conversationShareLink.findFirst({
     where: { OR: [{ linkId: identifier }, { identifier: identifier }] },
-    include: shareLinkIncludeStructure
+    select: shareLinkSelectStructure
   });
 }
 
