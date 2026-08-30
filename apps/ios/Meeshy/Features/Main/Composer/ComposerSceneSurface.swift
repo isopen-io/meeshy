@@ -87,6 +87,11 @@ struct ComposerSceneSurface: View {
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
+    /// L'effet d'ouverture, servi par la même bande que les couleurs — c'est
+    /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
+    var bandOpeningEffect: StoryTransitionEffect?
+    var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -164,7 +169,9 @@ struct ComposerSceneSurface: View {
                 if let band {
                     ComposerSceneBandView(band: band,
                                           colors: bandColors,
-                                          onPickColor: onPickBandColor)
+                                          onPickColor: onPickBandColor,
+                                          openingEffect: bandOpeningEffect,
+                                          onPickOpening: onPickBandOpening)
                 }
 
             }

@@ -70,6 +70,18 @@ struct ComposerSceneBandView: View {
     let colors: [String]
     var onPickColor: ((String) -> Void)?
 
+    /// **L'effet d'OUVERTURE de la scène** (#4403). Le panneau « Fond » de
+    /// l'atelier porte deux choses — les couleurs et cette rangée — et la
+    /// bande n'en portait qu'une : l'effet était inatteignable depuis le
+    /// plateau.
+    ///
+    /// Le manque ne se voyait pas en composant, et c'est ce qui l'a laissé
+    /// passer : un effet d'ouverture ne se joue qu'à la LECTURE. Une absence
+    /// dont le symptôme n'apparaît pas sur l'écran qui la contient est la plus
+    /// difficile à remarquer.
+    var openingEffect: StoryTransitionEffect?
+    var onPickOpening: ((StoryTransitionEffect?) -> Void)?
+
     var body: some View {
         switch band {
         case .palette:
@@ -101,8 +113,21 @@ struct ComposerSceneBandView: View {
     /// répété sur chaque bouton. Un commentaire ne fait pas d'une copie une
     /// source unique (leçon 248i). `BackgroundColorPalette` l'est.
     private var palette: some View {
-        BackgroundColorPalette(colors: colors) { hex in
-            onPickColor?(hex)
+        VStack(alignment: .leading, spacing: 8) {
+            BackgroundColorPalette(colors: colors) { hex in
+                onPickColor?(hex)
+            }
+            // **La rangée d'ouverture n'est montée que si l'hôte la sert**
+            // (loi 4). Sans le rappel, choisir un effet ne mènerait nulle
+            // part : mieux vaut ne pas la peindre que peindre un choix inerte.
+            //
+            // Elle est SOUS les couleurs, comme dans le panneau de l'atelier —
+            // le fond d'abord, ce qu'il fait en apparaissant ensuite. L'ordre
+            // suit la décision, pas la mise en page.
+            if let onPickOpening {
+                OpeningEffectChips(selection: openingEffect, onSelect: onPickOpening)
+                    .padding(.horizontal, 2)
+            }
         }
     }
 }

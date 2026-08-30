@@ -208,3 +208,76 @@ final class ComposerSceneBandTests: XCTestCase {
         }
     }
 }
+
+/// **La bande de fond porte les DEUX rangées du panneau « Fond »** (#4403).
+///
+/// Le panneau de l'atelier fait 236 pt et son commentaire dit ce qu'il
+/// contient : « couleurs + rangée Ouverture ». La bande du plateau ne portait
+/// que les couleurs — l'effet d'ouverture d'une scène y était inatteignable.
+///
+/// **Le manque ne se voyait pas en composant**, et c'est ce qui l'a laissé
+/// passer : un effet d'ouverture ne se joue qu'à la LECTURE. Une absence dont
+/// le symptôme n'apparaît pas sur l'écran qui la contient est la plus difficile
+/// à remarquer — d'où une garde de source plutôt qu'un œil.
+final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
+
+    private func bandSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **Le fusible.**
+    func test_laSourceDeLaBande_estLisible() throws {
+        let s = try bandSource()
+        XCTAssertGreaterThan(s.count, 800)
+        XCTAssertTrue(s.contains("struct ComposerSceneBandView"))
+    }
+
+    /// **La rangée est EMPRUNTÉE au SDK, jamais recopiée.** Un corps, deux
+    /// montages — règle du #4035. Une seconde rangée écrite ici aurait divergé
+    /// du panneau de l'atelier au premier effet ajouté.
+    func test_laRangee_estCelleDuSDK() throws {
+        let source = compact(try bandSource())
+        XCTAssertTrue(source.contains("OpeningEffectChips(selection:openingEffect,onSelect:onPickOpening)"))
+        XCTAssertFalse(source.contains("StoryTransitionEffect.allCases"),
+                       "Énumérer les effets ICI ferait une seconde liste à faire diverger.")
+    }
+
+    /// **Loi 4 — la rangée n'est montée que si l'hôte la SERT.** Sans le
+    /// rappel, choisir un effet ne mènerait nulle part.
+    func test_laRangee_nExistePasSansSonRappel() throws {
+        let source = compact(try bandSource())
+        XCTAssertTrue(source.contains("ifletonPickOpening{"))
+    }
+
+    /// Le meuble lit ET écrit le réglage — un choix qui n'atteint pas le modèle
+    /// est un contrôle inerte.
+    func test_leMeuble_litEtEcritLeReglage() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("bandOpeningEffect:viewModel.openingEffect"))
+        XCTAssertTrue(source.contains("viewModel.openingEffect=effect"))
+    }
+
+    /// **La bande NE se referme PAS sur un effet d'ouverture**, à la différence
+    /// de la couleur : une couleur se voit sur la scène dès qu'elle est posée,
+    /// un effet ne se joue qu'à la lecture. Refermer laisserait l'auteur sans
+    /// aucun retour sur ce qu'il vient de choisir.
+    func test_choisirUnEffet_neRefermePasLaBande() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("onPickBandOpening:{effectinviewModel.openingEffect=effect"),
+                      "Le rappel d'ouverture doit poser le réglage…")
+        XCTAssertFalse(source.contains("viewModel.openingEffect=effectrequestedSceneBand=nil"),
+                       "…et NE PAS refermer la bande, contrairement à la couleur.")
+    }
+}

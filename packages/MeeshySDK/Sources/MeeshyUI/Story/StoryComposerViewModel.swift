@@ -287,7 +287,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // `reset()` — l'ancien @State View survivait à `viewModel.reset()` et la
     // chaîne de sync ré-injectait l'effet dans le slide vierge (la classe de
     // bug que `resetLocalState()` documente).
-    @Published var openingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE ET EN ÉCRITURE (#4403) : la bande de fond du
+    /// plateau choisit l'effet comme le fait le panneau de l'atelier, et la
+    /// persistance passe par la même chaîne `granularCanvasSync` — aucun
+    /// callback de synchro à câbler par surface.
+    @Published public var openingEffect: StoryTransitionEffect?
     @Published var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)

@@ -350,6 +350,17 @@ extension MeeshyComposerHost {
                 // l'espace pour montrer ce que l'écran montre déjà.
                 requestedSceneBand = nil
             },
+            bandOpeningEffect: viewModel.openingEffect,
+            // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
+            // la différence avec la couleur juste au-dessus : une couleur se
+            // voit sur la scène dès qu'elle est posée, un effet d'ouverture ne
+            // se joue qu'à la LECTURE. Refermer laisserait l'auteur sans aucun
+            // retour sur ce qu'il vient de choisir ; la rangée reste ouverte,
+            // avec sa puce sélectionnée pour tout témoin.
+            onPickBandOpening: { effect in
+                viewModel.openingEffect = effect
+                HapticFeedback.light()
+            },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
