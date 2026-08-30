@@ -453,10 +453,26 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 //       correctif.
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
-  // `/api/og-image-dynamic` : AUCUNE route locale `app/api/og-image-dynamic/route.ts`
-  // n'existe (vérifié — cf. `nextLocalApiPrefixes`), et ces quatre sites ne
-  // passent NI par `buildApiUrl` NI par `apiService` : une image OG qui vise une
-  // adresse absente, famille exacte de #4219/#4222. Suivi : #4338.
+  // `/api/og-image-dynamic` — LA RAISON A CHANGÉ le 2026-08-30, le compte non.
+  //
+  // Ces quatre sites comptaient ici parce que l'adresse était MORTE (aucune
+  // route locale, `404` mesuré sur staging — famille de #4219/#4222). #4338 a
+  // livré `app/api/og-image-dynamic/route.tsx` : l'adresse est désormais
+  // SERVIE, et `nextLocalApiPrefixes` la dérive (l'assertion des routes
+  // locales, plus haut, a rougi le jour même — le signal a fonctionné).
+  //
+  // Ils restent comptés pour une raison ENTIÈREMENT différente, et il faut la
+  // dire plutôt que de faire baisser le chiffre : l'exemption locale de
+  // `scanApiPathLiterals` teste le PREMIER segment du gabarit, et ces quatre
+  // sites écrivent `` `${frontendUrl}/api/og-image-dynamic?…` `` — le chemin
+  // n'y est pas le premier segment, donc l'exemption ne joue pas. Ce n'est pas
+  // un défaut de ces sites : une balise `og:image` DOIT porter une URL
+  // ABSOLUE, les robots sociaux ne résolvant pas de façon fiable un chemin
+  // relatif. Élargir l'exemption à TOUS les segments exempterait du même coup
+  // un `` `${baseURL}/api/…` `` visant le GATEWAY, où le chemin serait bel et
+  // bien faux — c'est-à-dire exactement la classe que cette garde existe pour
+  // attraper. Une garde de sécurité ne s'élargit pas pour faire décroître un
+  // compteur. Angle mort NOMMÉ, suivi : #4422.
   'app/api/metadata/route.ts': 2,
   'app/chat/[id]/layout.tsx': 1,
   'app/conversation/[conversationId]/page.tsx': 1,
@@ -471,14 +487,21 @@ describe('Le balayage LIT bien apps/web — sinon les gardes ci-dessous seraient
     expect(walkSourceFiles(WEB_ROOT).length).toBeGreaterThan(1000);
   });
 
-  it('dérive les cinq routes locales Next.js connues au 2026-08-29, ni plus ni moins', () => {
-    // Une SIXIÈME route locale ajoutée demain fait rougir CETTE assertion —
+  it('dérive les six routes locales Next.js connues au 2026-08-30, ni plus ni moins', () => {
+    // Une SEPTIÈME route locale ajoutée demain fait rougir CETTE assertion —
     // c'est le signal voulu : une nouvelle surface « BFF » mérite d'être vue,
     // jamais absorbée en silence dans les exemptions de la garde principale.
+    //
+    // La sixième est arrivée le 2026-08-30 et le signal a fonctionné comme
+    // annoncé : `/api/og-image-dynamic` (#4338) est la route que quatre pages
+    // ANNONÇAIENT dans leur `og:image` sans que rien ne la serve — mesuré
+    // `404` sur staging. L'assertion a rougi le jour où elle a été créée,
+    // c'est-à-dire au moment exact où l'arbitrage devait être vu.
     expect(nextLocalApiPrefixes(API_ROOT)).toEqual([
       '/api/client-error',
       '/api/health',
       '/api/metadata',
+      '/api/og-image-dynamic',
       '/api/upload/avatar',
       '/api/upload/banner',
     ]);
