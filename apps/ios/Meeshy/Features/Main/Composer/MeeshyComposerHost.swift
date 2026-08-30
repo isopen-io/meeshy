@@ -244,6 +244,13 @@ struct MeeshyComposerHost: View {
     /// c'est le meuble qui possède le texte où l'emoji atterrit, et une surface
     /// qui porterait le sélecteur devrait posséder sa destination — donc cesser
     /// d'être la simple présentation qu'elle est.
+    /// **La porte STICKER de la scène** — distincte du sélecteur d'emoji juste
+    /// au-dessus, et la distinction est celle du NIVEAU du modèle : l'emoji
+    /// s'insère dans le TEXTE du document, le sticker POSE un objet sur la
+    /// scène. Même patron de présentation, deux gestes qui ne se remplacent
+    /// pas.
+    @State var showsStickerPicker = false
+
     @State var showsEmojiPicker = false
 
     /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
@@ -903,6 +910,7 @@ struct MeeshyComposerHost: View {
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
         .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsStickerPicker) { stickerPickerSheet }
         .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait

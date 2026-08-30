@@ -322,3 +322,71 @@ nonisolated extension ComposerIntent {
         ).routesToLegacy
     }
 }
+
+
+/// **Ce que CE meuble sait servir sur la scène** — les portes du rail *leading*
+/// et les contrôleurs du rail *trailing*, déclarés UNE fois.
+///
+/// ## Pourquoi une règle, et pas deux littéraux dans le corps de la vue
+///
+/// Les deux ensembles vécurent en `Set` littéraux, écrits à la volée dans
+/// l'expression `sceneSurface`. Un littéral posé là est INÉPROUVABLE autrement
+/// que par une garde de source — et une garde de source sur un littéral est
+/// exactement le témoin qui passe au vert le jour où quelqu'un réécrit la liste
+/// autrement. Sortis ici, les deux ensembles s'interrogent directement : un test
+/// demande « la porte sticker est-elle servie ? » et obtient une réponse, pas
+/// une sous-chaîne.
+///
+/// ## La loi 4, et ce qu'elle exige VRAIMENT d'une capacité
+///
+/// « Un contrôle sans effet est ABSENT, jamais grisé. » Une entrée n'entre donc
+/// ici **qu'accompagnée de son chemin** : le meuble doit savoir, pour chacune,
+/// ouvrir le portail et poser le résultat. C'est la seule question à se poser
+/// avant d'ajouter une ligne — pas « la maquette la dessine-t-elle ? ».
+///
+/// ## Ce que l'absence de `sticker` cachait, et qui vaut d'être dit
+///
+/// La porte `sticker` fut retenue au motif qu'« aucun chemin ne pose un objet de
+/// ce kind ». Le motif était faux : `StoryComposerViewModel.addSticker(emoji:)`
+/// existe depuis C13, `StickerPickerView` est publique depuis C8, et le meuble
+/// injecte déjà « Mes stickers » (`storyStickerLibraryProvided`). Ce qui
+/// manquait n'était pas le chemin, c'était le niveau d'ACCÈS de la primitive —
+/// et un `internal` ressemble, vu du site d'appel, à une règle produit.
+///
+/// Même histoire pour l'empilement : `bringForward` / `sendBackward` vivent sur
+/// le MODÈLE, pas sur la vue UIKit, et l'auraient toujours pu.
+///
+/// ## Ce qui n'y est PAS, et pourquoi
+///
+/// - `edit` — l'inspecteur par kind est la vue `1c`, pas encore montée (#4073) ;
+///   servir l'action ouvrirait un éditeur qui n'existe pas.
+/// - `leaveScene` — sortir un objet de la scène demande de décider ce qu'il
+///   devient dehors, ce qu'aucune règle du dépôt ne tranche encore (#4038).
+nonisolated enum ComposerSceneCapabilities {
+
+    /// Les portes du rail *leading*. Passées à `ComposerRailDoor.offered`, qui
+    /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
+    /// disparaît d'un `status`, qui n'a pas de scène.
+    static let doors: Set<ComposerRailDoor> = [
+        .description, .media, .sound, .sticker, .mention, .place
+    ]
+
+    /// Les contrôleurs du rail *trailing*. Passés à
+    /// `ComposerTrailingRailPolicy.actions`, qui leur applique ensuite ce que
+    /// l'OBJET admet (verrouillé, fond, seul de son plan).
+    static let controllers: Set<StoryCanvasContextAction> = [
+        .duplicate, .delete, .bringForward, .sendBackward
+    ]
+
+    /// Les bandes contextuelles du bas de scène. Passées à
+    /// `ComposerSceneBand.opened`, qui n'ouvre JAMAIS une bande demandée mais
+    /// non servie — sans quoi un contexte déclaré avant d'avoir son contenu
+    /// occuperait les ≈ 170 pt que l'encastrement des rails vient de libérer.
+    ///
+    /// `timeline` et `textStyles` appartiennent au critère de
+    /// `ComposerSceneBand` — un axe horizontal, une comparaison latérale — mais
+    /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
+    /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
+    /// surface ne pose encore (#4083).
+    static let bands: Set<ComposerSceneBand> = [.palette]
+}

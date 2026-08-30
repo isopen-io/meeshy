@@ -283,9 +283,18 @@ extension MeeshyComposerHost {
                 selectedSceneItemKind = kind
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
-            // Les portes que CE meuble sert. `sticker` en est absente : aucun
-            // chemin ne pose un objet de ce kind — `showsEmojiPicker` insère
-            // dans le TEXTE, ce qui n'est pas la même chose.
+            // Les portes que CE meuble sert — l'ensemble vit dans
+            // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
+            // écrit dans un corps de vue ne s'interroge qu'à la garde de
+            // source, et une garde de source sur un littéral passe au vert dès
+            // qu'on réécrit la liste autrement.
+            //
+            // **`sticker` y est entrée le 2026-08-30.** Son absence était
+            // motivée par « aucun chemin ne pose un objet de ce kind » — motif
+            // faux : `addSticker(emoji:)` existe depuis C13 et
+            // `StickerPickerView` depuis C8. Seul le niveau d'ACCÈS de la
+            // primitive manquait, et un `internal` ressemble, vu d'ici, à une
+            // règle produit.
             //
             // **`description` y entre le 2026-08-30**, et c'est ce qui rend le
             // retrait du champ permanent possible : la porte devient le SEUL
@@ -294,26 +303,33 @@ extension MeeshyComposerHost {
             // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
             // meuble qui le fait désormais, en ouvrant sa zone basse.
             railDoors: ComposerRailDoor.offered(
-                served: [.description, .media, .sound, .place, .mention],
+                served: ComposerSceneCapabilities.doors,
                 format: selectedFormat,
                 allowsCapture: profile.allowsCapture
             ),
             onRailDoor: { door in handleRailDoor(door) },
-            // Les contrôleurs que CE meuble sert. L'empilement ne vit que sur la
-            // `StoryCanvasUIView`, dont le meuble n'a aucune référence.
+            // Les contrôleurs que CE meuble sert — même règle, même raison.
+            //
+            // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
+            // vivait ici l'attribuait à la `StoryCanvasUIView` « dont le meuble
+            // n'a aucune référence » : `bringForward` / `sendBackward` vivent
+            // en fait sur le MODÈLE (`StoryComposerViewModel+ZOrder`), et
+            // persistent leur `zIndex` dans la slide — donc au reader et à la
+            // publication, ce qu'un empilement de vue n'aurait jamais fait.
             trailingActions: ComposerTrailingRailPolicy.actions(
                 slide: viewModel.currentSlide,
                 selectedId: selectedSceneItemId,
-                served: [.duplicate, .delete],
+                served: ComposerSceneCapabilities.controllers,
                 hasEditor: false,
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
-            // **Les bandes SERVIES par ce meuble** (#4064) — `palette` seule.
-            // La timeline vit dans l'atelier et les 18 styles exigent un objet
-            // `text` sélectionné, qu'aucune porte de cette surface ne pose :
-            // les servir peindrait une bande vide.
-            band: ComposerSceneBand.opened(requestedSceneBand, served: [.palette]),
+            // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
+            // deux rails, et pour la même raison : la capacité s'interroge,
+            // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
+            // vit avec l'ensemble, dans `ComposerSceneCapabilities.bands`.
+            band: ComposerSceneBand.opened(requestedSceneBand,
+                                           served: ComposerSceneCapabilities.bands),
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
