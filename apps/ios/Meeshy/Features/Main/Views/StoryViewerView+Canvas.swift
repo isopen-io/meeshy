@@ -151,8 +151,8 @@ struct StoryGestureOverlayView: View {
         Color.clear
             .contentShape(Rectangle())
             .accessibilityElement()
-            .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
-            .accessibilityHint(String(localized: "story.viewer.navigation.hint", defaultValue: "Tap left for the previous story, right for the next, hold to pause", bundle: .main))
+            .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Lecteur de stories", bundle: .main))
+            .accessibilityHint(String(localized: "story.viewer.navigation.hint", defaultValue: "Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause", bundle: .main))
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
             // distinguer un tap court d'un hold long sur la même hit-area —
@@ -768,7 +768,7 @@ struct StoryComposerBarView: View {
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(0.12)))
                         }
-                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la r\u{00E9}ponse", bundle: .main))
+                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)

@@ -93,7 +93,7 @@ struct ThreadView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
+                    Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -160,7 +160,7 @@ struct ThreadView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: message.senderColor ?? accentColor))
 
@@ -196,7 +196,7 @@ struct ThreadView: View {
             }
 
             HStack(spacing: 10) {
-                TextField(String(localized: "thread.reply.placeholder", defaultValue: "Repondre...", bundle: .main), text: $replyText)
+                TextField(String(localized: "thread.reply.placeholder", defaultValue: "Répondre…", bundle: .main), text: $replyText)
                     .font(.subheadline)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)

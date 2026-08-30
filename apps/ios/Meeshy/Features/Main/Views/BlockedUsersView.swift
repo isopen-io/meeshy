@@ -29,14 +29,14 @@ struct BlockedUsersView: View {
                 content
             }
         }
-        .alert(String(localized: "blocked.users.unblock.title", defaultValue: "Debloquer", bundle: .main), isPresented: Binding(
+        .alert(String(localized: "blocked.users.unblock.title", defaultValue: "Débloquer", bundle: .main), isPresented: Binding(
             get: { userToUnblock != nil },
             set: { if !$0 { userToUnblock = nil } }
         )) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
                 userToUnblock = nil
             }
-            Button(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
+            Button(String(localized: "blocked.users.unblock.action", defaultValue: "Débloquer", bundle: .main), role: .destructive) {
                 guard let user = userToUnblock else { return }
                 Task { await viewModel.unblock(userId: user.id) }
                 userToUnblock = nil
@@ -68,7 +68,7 @@ struct BlockedUsersView: View {
 
             Spacer()
 
-            Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
+            Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloqués", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -169,7 +169,7 @@ struct BlockedUsersView: View {
                             HapticFeedback.medium()
                             userToUnblock = user
                         } label: {
-                            Label(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), systemImage: "person.crop.circle.badge.checkmark")
+                            Label(String(localized: "blocked.users.unblock.action", defaultValue: "Débloquer", bundle: .main), systemImage: "person.crop.circle.badge.checkmark")
                         }
                         .tint(MeeshyColors.success)
                     }
@@ -211,7 +211,7 @@ struct BlockedUsersView: View {
                 HapticFeedback.light()
                 userToUnblock = user
             } label: {
-                Text(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main))
+                Text(String(localized: "blocked.users.unblock.action", defaultValue: "Débloquer", bundle: .main))
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .padding(.horizontal, MeeshySpacing.md)

@@ -30,6 +30,7 @@ import type {
   ReactionSyncEventData,
 } from '@meeshy/shared/types';
 import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import {
   reactionSchema,
   reactionSummarySchema,
@@ -90,7 +91,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           emoji: {
             type: 'string',
             minLength: 1,
-            maxLength: 10,
+            maxLength: EMOJI_MAX_LENGTH,
             description: 'Emoji character to add as reaction'
           }
         }

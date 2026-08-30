@@ -136,7 +136,7 @@ struct ChangePasswordView: View {
                     icon: "key.fill",
                     title: String(localized: "auth.password.change.new.field", defaultValue: "Nouveau mot de passe", bundle: .main),
                     text: $newPassword,
-                    placeholder: String(localized: "auth.password.change.new.placeholder", defaultValue: "Minimum 8 caracteres", bundle: .main),
+                    placeholder: String(localized: "auth.password.change.new.placeholder", defaultValue: "Minimum 8 caractères", bundle: .main),
                     color: accentColor,
                     field: .newPass
                 )
@@ -175,7 +175,7 @@ struct ChangePasswordView: View {
     private var validationHints: some View {
         VStack(alignment: .leading, spacing: 6) {
             validationRow(
-                text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caracteres", bundle: .main),
+                text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caractères", bundle: .main),
                 met: newPassword.count >= 8
             )
             validationRow(
@@ -260,7 +260,7 @@ struct ChangePasswordView: View {
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
+            Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifié", bundle: .main))
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
@@ -377,14 +377,14 @@ struct ChangePasswordView: View {
                 // = « mot de passe actuel incorrect » → message localisé dédié.
                 if case .server(let statusCode, let msg) = error {
                     errorMessage = statusCode == 400
-                        ? String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
+                        ? String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
                         : msg
                 } else {
                     errorMessage = error.localizedDescription
                 }
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "common.error.generic", defaultValue: "An error occurred", bundle: .main)
+                errorMessage = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             isSaving = false
         }

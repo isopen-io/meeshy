@@ -2171,7 +2171,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
       `__underline__` (recursive nesting), `@username` (+ display-name resolution), `m+TOKEN`, `http(s)`
-      URLs; plus `highlightRanges` (case-insensitive/non-overlapping), `extractUrls` (meeshy→mention→http),
+      URLs; plus `highlightRanges` (accent- **and** case-insensitive/non-overlapping — `search-accent-fold-highlight`
+      2026-08-30, iOS `.diacriticInsensitive`/`.caseInsensitive` parity via pure `SearchTextFolder`, ranges mapped
+      back to original indices even when folding changes length, decomposed graphemes highlighted whole),
+      `extractUrls` (meeshy→mention→http),
       `resolvedLinkUrl` (tracked-link redirect). Rendered via `:sdk-ui` `RichMessageText` (`AnnotatedString`
       + `LinkAnnotation.Url`/`withLink` real taps, highlight over rendered plain text) wired into the bubble;
       `mentionDisplayNames`/`highlightTerm`/`trackedLinks` params ready for `ChatScreen` to feed. +34 tests.
@@ -3734,7 +3737,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
       than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
-- [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+- [~] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+      **Pure board core done** (`story-drawing-board`): a pure, immutable `StoryDrawingBoard`
+      (`:feature:stories`) porting the iOS `StoryComposerViewModel+DrawingEditing` reducer —
+      committed `strokes` + a `redoStack` + a `selectedStrokeId`, with `commit` / `undo` / `redo` /
+      `clear` / `delete` / `select` and per-stroke `recolorSelected` / `resizeSelected` /
+      `smoothSelected`. The redo-invariant lives in one place: `redoStack` is populated only by
+      `undo`, and any fresh action (`commit`, a real `delete`) invalidates it, while a property tweak
+      (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact. `StoryDrawingStroke` /
+      `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line)
+      mirror the iOS models with the exact gateway wire strings.
+      Two deliberate improvements over iOS: `undo`/`delete`/`select`/mutate no-ops return the same board
+      unchanged, and `delete` of an absent id keeps the redo history (iOS clears it unconditionally).
+      +33 tests, RED-proven (dropping `commit`'s `redoStack = emptyList()` fails exactly the
+      redo-invalidation test).
+      **Wire serialization done** (`story-drawing-strokes-wire`): the stroke wire model was promoted
+      from `:feature:stories` to `:core:model` (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/
+      `StrokeTool`/`StrokeSmoothing`, now `@Serializable` with `@SerialName` = the exact gateway strings)
+      so it is the SINGLE type the reducer AND the `StoryEffects.drawingStrokes` wire field both hold —
+      exactly as iOS keeps one `MeeshySDK/Models/StoryDrawingStroke` for both (no divergent twin).
+      `createdAt` is now carried as an optional `Double?` passthrough (epoch seconds) for round-trip
+      fidelity; the reducer still never reads it. `StoryEffects.drawingStrokes` decodes flat on the v1
+      wire and rides the v3 `kind:"drawing"` object's `payload.strokes`, projected back by
+      `CanvasV3Projection` (port of iOS `CanvasV3Migration.swift:580-583`); the legacy PKDrawing blob
+      (`payload.data`) has no Android renderer and is read as nothing to paint, an empty/absent `strokes`
+      normalises to `null`. +9 tests, RED-proven (neutering the projection branch fails exactly the 3
+      strokes-projection tests, oracle = shared `v1-legacy-rich` v1/v3 fixture pair). Pending: the Compose
+      capture surface (variable-width pressure render) + composer VM wiring — device/Compose-bound.
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
       `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
       symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
@@ -4900,7 +4929,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
       exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
-- [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+- [~] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+      — **pure canvas-reprojection core shipped** (slice `story-canvas-reprojection`, 2026-08-30): the
+      JVM-testable heart of reposting a story's canvas into a post of a different aspect ratio. Pure
+      `:feature:stories` `CanvasReprojector(source, target)` ports iOS `CanvasReprojector`
+      (`MeeshyUI/Story/Canvas`): normalized `[0,1]` positions are reprojected center-anchored
+      (`(0.5,0.5)` a fixed point, scaled by the source/target aspect ratio), out-of-bounds results
+      clamped back into `[0,1]` and reported with a `ReprojectionWarning.Clamped(originalX, originalY)`;
+      scale/aspect/rotation invariant. `reproject(text/media/sticker)` per family; `reproject(audio)`
+      identity (no spatial position). Batch `reprojectAll(CanvasObjects) → RepostReprojection` collects
+      warnings in encounter order and exposes `repositionedCount`/`hasClampedItems` — the pure decision
+      the "N item(s) repositioned for the new aspect ratio" banner reads (iOS
+      `RepostReprojectionResult`/`reprojectionWarnings.count`). **SOTA over iOS:** a degenerate target
+      (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an
+      identity reprojection — a malformed canvas size can never corrupt coordinates. +15 tests
+      (`CanvasReprojectorTest`), mutation-RED-proven (suppressing the clamp warning reddens EXACTLY the
+      4 warning/count tests, the 10 centered/invariance/identity/empty tests stay green). **Pending
+      (device/Compose-bound):** the `RepostPayload` extractor from a `StorySlide`/`StoryItem` (needs the
+      source-canvas-aspect → size mapping, iOS `repostSourceCanvasSize`), reprojecting the freehand
+      `StoryDrawingStroke` set (Android's pure stroke model, not iOS's PencilKit blob — its own
+      follow-up once the stroke coordinate space is confirmed), `StoryLocationObject` (no Android model
+      yet), and the Compose "items repositioned" banner glue + `UnifiedPostComposer` import wiring.
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
       count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
 - [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
@@ -6660,8 +6709,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
-- [ ] Notification center with category filters (messages, reactions, mentions, social,
-      contacts, groups, calls, translations, system)
+- [x] Notification center with category filters (messages, reactions, mentions, social,
+      contacts, groups, calls, translations, system) — **shipped 2026-08-30** (slice
+      `notification-center-category-filter`): pure `:core:model` `NotificationFilterCategory`
+      (11 chips — ALL/UNREAD + 9 type chips) + `NotificationTypeVocabulary`, a faithful port of
+      iOS `NotificationCategory` (`MeeshyUI/Notifications/NotificationListView.swift`). Each chip
+      owns its backend-`type` set + `matches(type)`; `filter(list)` reproduces iOS
+      `filteredNotifications` exactly (ALL keeps all, UNREAD keeps unread of any type, a type chip
+      keeps matching rows read-or-not). Unknown wire type → `system` (iOS `rawValue ?? .system`),
+      known-but-uncategorised types surface only under ALL. Wired into `NotificationsViewModel`
+      (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
+      ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
+      empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
@@ -6849,7 +6908,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       parity, blank→null, unparseable→null, unix-epoch preserved).
 
 ## N. Search
-- [ ] Global search (messages, conversations, users) with recent searches + query highlighting
+- [~] Global search (messages, conversations, users) with recent searches + query highlighting —
+      three-tab search (`GlobalSearchViewModel` + `GlobalSearchRepository`, debounce 300 ms / 2-char
+      floor / single query feeds all tabs), recent searches (`RecentSearches`/`RecentSearchesStore`),
+      and accent-folded highlight ranges (`MessageTextParser.highlightRanges` via `SearchTextFolder`)
+      all done in earlier slices. **Cache-first query cache + socket invalidation done** (slice
+      `global-search-query-cache`, 2026-08-30): pure `:core:model` `SearchQueryCache<V>` — immutable
+      LRU (capacity 5) + TTL (120 s) keyed by normalised query (trim+lowercase), faithful port of iOS
+      `GlobalSearchViewModel.messageQueryCache` (`get` a pure read — an expired entry is a MISS, never a
+      mutation; `put` evicts the oldest past capacity and never a slot on re-put; `invalidate` clears).
+      `GlobalSearchViewModel` now serves a repeated in-TTL query from the cache with NO network round-trip
+      and NO spinner (dimension 2 Performance), and invalidates on `conversation:updated`/`conversation:deleted`
+      socket events (parity iOS `setupSocketInvalidation`), so a stale result never survives a data change.
+      +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
+      +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
+      re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
+      **Remaining:** query highlighting rendered in the RESULT rows (iOS `highlightedText`, currently only the
+      chat bubble renders `highlightRanges`), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,

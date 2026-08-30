@@ -496,7 +496,7 @@ class FeedViewModel: ObservableObject {
             // stays stuck "liked" forever even though the server never accepted it.
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
-            }, toast: String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
+            }, toast: String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
@@ -573,7 +573,7 @@ class FeedViewModel: ObservableObject {
             updated.insert(post, at: 0)
             try? await feedCache.savePreservingFreshness(updated, for: bookmarksKey)
         }
-        FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Added to bookmarks", bundle: .main))
+        FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Ajouté aux favoris", bundle: .main))
 
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
@@ -583,7 +583,7 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Rollback the optimistic cache insertion.
             try? await feedCache.savePreservingFreshness(snapshot, for: bookmarksKey)
-            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Error saving bookmark", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Impossible d'enregistrer le favori", bundle: .main))
         }
     }
 
@@ -1098,7 +1098,7 @@ class FeedViewModel: ObservableObject {
                 guard let self, let i = self.posts.firstIndex(where: { $0.id == postId }) else { return }
                 self.posts[i].comments = snapshot
                 self.posts[i].commentCount = snapshotCount
-            }, toast: String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+            }, toast: String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         } catch {
             // Roll back the optimistic comment if the outbox refuses the row
             // (re-resolve the index — the feed may have mutated during the await).
@@ -1106,7 +1106,7 @@ class FeedViewModel: ObservableObject {
                 posts[i].comments = snapshot
                 posts[i].commentCount = snapshotCount
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         }
     }
 
@@ -1140,7 +1140,7 @@ class FeedViewModel: ObservableObject {
                                       visibility: nil)
             try await repostPublisher.publish(intention)
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
         }
     }
 
@@ -1183,7 +1183,7 @@ class FeedViewModel: ObservableObject {
             )
             return response.data.shortUrl
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.share.error", defaultValue: "Error sharing post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.share.error", defaultValue: "Impossible de partager la publication", bundle: .main))
             return nil
         }
     }
@@ -1203,19 +1203,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
         } catch {
             posts = snapshot
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }
 
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Publication signalée", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Erreur lors du signalement", bundle: .main))
         }
     }
 
@@ -1275,23 +1275,23 @@ class FeedViewModel: ObservableObject {
                 posts[newIdx] = updated.toFeedPost(preferredLanguages: preferredLanguages)
                 debouncedCacheSave()
             }
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Publication modifiée", bundle: .main))
         } catch {
             // Rollback the optimistic snapshot.
             if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
                 posts[rollbackIdx] = snapshot
                 debouncedCacheSave()
             }
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Erreur lors de la modification", bundle: .main))
         }
     }
 
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Publication épinglée", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Erreur lors de l'épinglage", bundle: .main))
         }
     }
 

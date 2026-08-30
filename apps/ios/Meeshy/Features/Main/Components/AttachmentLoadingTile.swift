@@ -226,12 +226,12 @@ struct AttachmentLoadingTile: View {
 
     private var stageLabel: String {
         switch prep.stage {
-        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Loading", bundle: .main)
-        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compressing", bundle: .main)
-        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Preview", bundle: .main)
-        case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Hash", bundle: .main)
+        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Chargement en cours", bundle: .main)
+        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compression en cours", bundle: .main)
+        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Aperçu", bundle: .main)
+        case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Empreinte", bundle: .main)
         case .ready:        return ""
-        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Error", bundle: .main)
+        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main)
         }
     }
 

@@ -273,7 +273,7 @@ class PostDetailViewModel: ObservableObject {
             }
         } catch {
             if comments.isEmpty {
-                FeedbackToastManager.shared.showError(String(localized: "feed.comment.loadError", defaultValue: "Error loading comments", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "feed.comment.loadError", defaultValue: "Impossible de charger les commentaires", bundle: .main))
             }
         }
     }
@@ -575,11 +575,11 @@ class PostDetailViewModel: ObservableObject {
             // stays stuck "liked" forever even though the server never accepted it.
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.restoreLike(isLiked: wasLiked, likes: priorLikes)
-            }, toast: String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
+            }, toast: String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(isLiked: wasLiked, likes: priorLikes)
-            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
         }
     }
 
@@ -701,10 +701,10 @@ class PostDetailViewModel: ObservableObject {
     func deletePost(_ postId: String) async -> Bool {
         do {
             try await postService.delete(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
             return true
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
             return false
         }
     }
@@ -712,9 +712,9 @@ class PostDetailViewModel: ObservableObject {
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Publication épinglée", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Erreur lors de l'épinglage", bundle: .main))
         }
     }
 
@@ -765,11 +765,11 @@ class PostDetailViewModel: ObservableObject {
                 guard let self else { return }
                 self.comments = snapshot
                 self.post?.commentCount = snapshotCount
-            }, toast: String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+            }, toast: String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         } catch {
             comments = snapshot
             self.post?.commentCount = snapshotCount
-            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         }
     }
 
@@ -836,7 +836,7 @@ class PostDetailViewModel: ObservableObject {
                     self.comments[idx].replies = snapshotParentReplies ?? self.comments[idx].replies
                 }
                 self.post?.commentCount = snapshotCount
-            }, toast: String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
+            }, toast: String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
         } catch {
             repliesMap[parentId] = snapshotReplies
             if !snapshotExpanded { expandedThreads.remove(parentId) }
@@ -844,7 +844,7 @@ class PostDetailViewModel: ObservableObject {
                 comments[idx].replies = snapshotParentReplies ?? comments[idx].replies
             }
             self.post?.commentCount = snapshotCount
-            FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
         }
     }
 
@@ -981,7 +981,7 @@ class PostDetailViewModel: ObservableObject {
             comments = snapshotComments
             if let parentId { repliesMap[parentId] = snapshotReplies }
             self.post?.commentCount = snapshotCount
-            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         }
     }
 

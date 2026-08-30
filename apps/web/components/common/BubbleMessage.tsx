@@ -249,6 +249,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           currentUser={currentUser}
           userLanguage={userLanguage}
           currentDisplayLanguage={effectiveDisplayLanguage}
+          usedLanguages={usedLanguages}
           translationError={translationError}
           conversationType={conversationType}
           userRole={userRole as React.ComponentProps<typeof FocalRow>['userRole']}

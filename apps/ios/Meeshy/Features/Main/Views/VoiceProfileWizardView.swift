@@ -56,13 +56,13 @@ struct VoiceProfileWizardView: View {
         case .consent:
             return String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main)
         case .ageVerification:
-            return String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Verification de l'age", bundle: .main)
+            return String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main)
         case .recording:
             return String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main)
         case .processing:
-            return String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours...", bundle: .main)
+            return String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours…", bundle: .main)
         case .complete:
-            return String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal cree !", bundle: .main)
+            return String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal créé !", bundle: .main)
         }
     }
 
@@ -131,8 +131,8 @@ struct VoiceProfileWizardView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     consentInfoRow(icon: "mic.fill", text: String(localized: "voice.profile.wizard.consent.samples", defaultValue: "3 échantillons vocaux de 10 secondes minimum", bundle: .main))
-                    consentInfoRow(icon: "lock.shield.fill", text: String(localized: "voice.profile.wizard.consent.encrypted", defaultValue: "Donnees chiffrees et stockees de maniere securisee", bundle: .main))
-                    consentInfoRow(icon: "trash.fill", text: String(localized: "voice.profile.wizard.consent.rgpd", defaultValue: "Suppression possible a tout moment (RGPD)", bundle: .main))
+                    consentInfoRow(icon: "lock.shield.fill", text: String(localized: "voice.profile.wizard.consent.encrypted", defaultValue: "Données chiffrées et stockées de manière sécurisée", bundle: .main))
+                    consentInfoRow(icon: "trash.fill", text: String(localized: "voice.profile.wizard.consent.rgpd", defaultValue: "Suppression possible à tout moment (RGPD)", bundle: .main))
                     consentInfoRow(icon: "waveform.path", text: String(localized: "voice.profile.wizard.consent.use", defaultValue: "Utilisé pour générer des traductions avec votre voix", bundle: .main))
                 }
                 .padding(16)
@@ -201,7 +201,7 @@ struct VoiceProfileWizardView: View {
                 .foregroundColor(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
-            Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Verification de l'age", bundle: .main))
+            Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main))
                 .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -299,7 +299,7 @@ struct VoiceProfileWizardView: View {
                 .scaleEffect(1.5)
                 .tint(Color(hex: accentColor))
 
-            Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours...", bundle: .main))
+            Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours…", bundle: .main))
                 .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -340,7 +340,7 @@ struct VoiceProfileWizardView: View {
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal cree !", bundle: .main))
+            Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal créé !", bundle: .main))
                 .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 

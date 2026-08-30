@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
@@ -265,5 +266,104 @@ class NotificationsViewModelTest {
 
         coVerify(exactly = 1) { repo.loadMore() }
         pending.complete(NetworkResult.Success(Unit))
+    }
+
+    // --- Category filter chips (feature-parity §M "Notification center with category filters") ---
+
+    private fun typed(id: String, type: String, isRead: Boolean = false) = ApiNotification(
+        id = id,
+        type = type,
+        state = NotificationState(isRead = isRead, createdAt = "2024-01-01"),
+    )
+
+    private fun vmWith(vararg rows: ApiNotification): NotificationsViewModel {
+        val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
+        val vm = NotificationsViewModel(repository(notifications), socketManager(), SyncSeqTracker())
+        notifications.tryEmit(CacheResult.Fresh(rows.toList(), ageMillis = 0))
+        return vm
+    }
+
+    @Test
+    fun `the default selected category is ALL`() = runTest {
+        val vm = vmWith(typed("1", "new_message"), typed("2", "post_like"))
+
+        assertThat(vm.state.value.selectedCategory).isEqualTo(NotificationFilterCategory.ALL)
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("1", "2").inOrder()
+    }
+
+    @Test
+    fun `selecting a category narrows the rendered rows by type only`() = runTest {
+        val vm = vmWith(
+            typed("m", "new_message", isRead = true),
+            typed("r", "post_like"),
+            typed("m2", "message_reply"),
+        )
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+
+        assertThat(vm.state.value.selectedCategory).isEqualTo(NotificationFilterCategory.MESSAGES)
+        // A read message still shows — the chip filters by type, never by read state.
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("m", "m2").inOrder()
+    }
+
+    @Test
+    fun `the UNREAD chip keeps only unread rows across every type`() = runTest {
+        val vm = vmWith(
+            typed("a", "new_message", isRead = false),
+            typed("b", "post_like", isRead = true),
+            typed("c", "missed_call", isRead = false),
+        )
+
+        vm.selectCategory(NotificationFilterCategory.UNREAD)
+
+        assertThat(vm.state.value.filteredNotifications.map { it.id }).containsExactly("a", "c").inOrder()
+    }
+
+    @Test
+    fun `the full notifications list stays intact under a filter`() = runTest {
+        val vm = vmWith(typed("1", "new_message"), typed("2", "post_like"))
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+
+        // Badge/pagination source is untouched — only the projection narrows.
+        assertThat(vm.state.value.notifications.map { it.id }).containsExactly("1", "2").inOrder()
+    }
+
+    @Test
+    fun `re-selecting the active category is inert`() = runTest {
+        val vm = vmWith(typed("1", "new_message"))
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+        val before = vm.state.value
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
+    }
+
+    @Test
+    fun `loadMore is suppressed while a non-ALL chip is selected`() = runTest {
+        val hasMore = MutableStateFlow(true)
+        val repo = repository(hasMore = hasMore)
+        coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+        vm.loadMore()
+
+        coVerify(exactly = 0) { repo.loadMore() }
+    }
+
+    @Test
+    fun `loadMore resumes after returning to the ALL chip`() = runTest {
+        val hasMore = MutableStateFlow(true)
+        val repo = repository(hasMore = hasMore)
+        coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+        vm.selectCategory(NotificationFilterCategory.ALL)
+        vm.loadMore()
+
+        coVerify(exactly = 1) { repo.loadMore() }
     }
 }

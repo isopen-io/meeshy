@@ -200,7 +200,7 @@ struct PostTranslationSheet: View {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark")
                                 .font(.caption2.weight(.bold))
-                            Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandee", bundle: .main))
+                            Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandée", bundle: .main))
                                 .font(.caption2.weight(.medium))
                         }
                         .foregroundColor(MeeshyColors.success)

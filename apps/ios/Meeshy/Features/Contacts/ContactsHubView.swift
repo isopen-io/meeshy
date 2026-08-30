@@ -110,7 +110,7 @@ struct ContactsHubView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.title)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Onglet", bundle: .main)) \(tab.title)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "éléments", bundle: .main))" : "")")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 

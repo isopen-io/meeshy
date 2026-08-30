@@ -97,7 +97,7 @@ struct MemberManagementSection: View {
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre...", bundle: .main), text: $viewModel.memberSearchText)
+            TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre…", bundle: .main), text: $viewModel.memberSearchText)
                 .font(MeeshyFont.relative(14, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -208,7 +208,7 @@ struct MemberManagementSection: View {
                     Image(systemName: "crown.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
-                    Text(String(localized: "member-management.role.creator", defaultValue: "Creator", bundle: .main))
+                    Text(String(localized: "member-management.role.creator", defaultValue: "Créateur", bundle: .main))
                         .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "F8B500"))
@@ -264,7 +264,7 @@ struct MemberManagementSection: View {
                 alignment: .top
             )
         }
-        .accessibilityLabel(String(localized: "member-management.add-a11y", defaultValue: "Ajouter un membre a la conversation", bundle: .main))
+        .accessibilityLabel(String(localized: "member-management.add-a11y", defaultValue: "Ajouter un membre à la conversation", bundle: .main))
     }
 
     // MARK: - Loading State
@@ -377,7 +377,7 @@ struct MemberManagementSection: View {
     private func label(for kind: MemberActionPolicy.Kind) -> String {
         switch kind {
         case .promoteToAdmin:
-            return String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir Admin", bundle: .main)
+            return String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir administrateur", bundle: .main)
         case .promoteToModerator:
             return String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir Modérateur", bundle: .main)
         case .demoteToMember:

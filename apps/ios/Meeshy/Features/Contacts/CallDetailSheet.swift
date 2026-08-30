@@ -75,9 +75,9 @@ struct CallDetailSheet: View {
     private var statusLine: String {
         let direction: String
         switch record.directionKind {
-        case .outgoing: direction = String(localized: "calls.direction.outgoing", defaultValue: "Appel emis", bundle: .main)
-        case .incoming: direction = String(localized: "calls.direction.incoming", defaultValue: "Appel recu", bundle: .main)
-        case .missed: direction = String(localized: "calls.direction.missed", defaultValue: "Appel manque", bundle: .main)
+        case .outgoing: direction = String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
+        case .incoming: direction = String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .missed: direction = String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
         }
         return "\(direction) · \(record.startedAt.relativeTimeString)"
     }
@@ -148,7 +148,7 @@ struct CallDetailSheet: View {
             if let phone = record.peer?.phoneNumber, !phone.isEmpty {
                 detailRow(
                     icon: "number",
-                    label: String(localized: "calls.detail.phone", defaultValue: "Numero", bundle: .main),
+                    label: String(localized: "calls.detail.phone", defaultValue: "Numéro", bundle: .main),
                     value: phone
                 )
             }

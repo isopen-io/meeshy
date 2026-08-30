@@ -5,6 +5,108 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — the local gate catches a missing test-file import that the core-only pre-run misses (slice `notification-center-category-filter`)
+A per-module test run (`:core:model:testDebugUnitTest --tests …`) green-lit the pure model, but the FULL
+`assembleDebug testDebugUnitTest` gate then failed on `:feature:notifications:compileDebugUnitTestKotlin` with
+`Unresolved reference 'NotificationFilterCategory'` — the new symbol was used in `NotificationsViewModelTest.kt`
+without its `import me.meeshy.sdk.model.NotificationFilterCategory`. **Lesson: when a slice adds a new `:core:model`
+type AND consumes it from a `:feature` test, a narrow single-module test run cannot prove the feature module; only
+the full multi-module gate compiles the feature test source.** Always run the full `meeshy.sh check` (or at least
+`:feature:<mod>:testDebugUnitTest`) before claiming green — and add the import at the same moment you first
+reference a cross-module symbol in a test, exactly as you would in production code. Cheap catch here (one line), but
+it would have been a red CI on the PR if pushed unverified.
+
+## 2026-08-30 — the `android-37 → android-37.0` symlink DID resolve this run; keep bootstrapping before assuming it can't (slice `global-search-query-cache`)
+The immediately-prior note (below) reported AGP could not resolve `compileSdk = 37` even via the ROUTINE's
+documented `android-37 → android-37.0` symlink. **This run the symlink recipe worked**: install
+`platforms;android-37.0` + `platforms;android-35` + `build-tools;35.0.0` + `platform-tools`, symlink
+`android-37 → android-37.0`, and `assembleDebug` + all-module `testDebugUnitTest` built GREEN (973 tasks, 0
+failed). So the failure below was environment- or revision-specific, not a permanent property of `compileSdk = 37`.
+**Lesson: always attempt the full SDK bootstrap first** — the local Gradle gate is the strongest verification and
+it may well work; only fall back to the embeddable-kotlinc pure-logic harness (still handy for a fast RED-mutation
+check) when the bootstrap actually fails. Don't pre-emptively skip the local gate on the strength of a one-day-old
+note.
+
+## 2026-08-30 — a pure cache is a VALUE, the clock and the socket are the caller's (slice `global-search-query-cache`)
+Porting iOS's in-ViewModel `messageQueryCache` (a mutated array + `Date()` + Combine socket sinks) to Android, the
+clean split is: the cache is a pure immutable `:core:model` value type that takes `nowMillis: Long` as a PARAMETER
+and knows nothing of clocks, sockets or coroutines; the ViewModel supplies `CacheClock.nowMillis()` at the call
+site and owns the socket subscriptions that call `invalidate()`. This keeps EVERY cache branch JVM-testable with a
+plain `Long` (TTL boundary, eviction, blank-key no-op) and keeps the "when" (debounce, clock, socket) in the
+orchestration layer where it belongs (SDK-purity grain). Two design choices worth repeating: (1) `get` is a PURE
+read — an expired entry is a MISS but is NOT evicted on read (eviction happens at `put` via capacity), so a test can
+assert `get` never changes `size`; iOS evicts-on-read by mutating, which a pure value type can't and shouldn't do.
+(2) A no-op returns `this` (blank-key `put`, `invalidate` on empty), letting a test pin inertness with `assertSame`.
+For the ViewModel's socket-invalidation tests, reuse the established `ConversationListViewModelTest` pattern:
+`mockk<MessageSocketManager>` stubbing only the two flows the VM collects, backed by real `MutableSharedFlow`s you
+`emit` into after an `advanceUntilIdle` (so the init collector is subscribed before the emit — a no-replay
+SharedFlow drops anything emitted before subscription). A controllable `CacheClock` fake (a `var` the override
+returns) makes the TTL-expiry path testable without sleeping. Also: a private-constructor `data class` needs
+`@ConsistentCopyVisibility` in this module (precedent `UserCategoryCatalog`) or kotlinc warns about `copy()`
+visibility.
+
+## 2026-08-30 — AGP 8.13 + `compileSdk = 37` can't resolve locally; the symlink recipe no longer holds (slice `search-accent-fold-highlight`)
+`dl.google.com` was reachable, but the ONLY publishable API-37 platform is the preview `platforms;android-37.0`,
+and AGP 8.13 demands target hash `android-37`. That hash is never satisfied — reproduced on (a) a pristine
+`android-37.0`, (b) the ROUTINE's documented `android-37 → android-37.0` symlink, and (c) a fully-normalized COPY
+where `source.properties` ApiLevel, `package.xml` `<api-level>`/path id, and `build.prop` `sdk_full` were all
+forced to `37`. The copy even registered as `platforms;android-37` in AGP's `--info` output, yet
+`Failed to find target with hash string 'android-37'` persisted (AGP builds the hash from the AndroidVersion it
+constructs, not the package id). **So the symlink line in `ROUTINE.md` §Environment recipe is stale for this
+platform revision — don't burn a run chasing it.** When you hit this: don't treat it as `dl.google.com`-denied
+and don't merge on faith. De-risk the PURE logic instead — copy the exact production functions into a standalone
+`.kt`, compile with the embeddable compiler already on disk (`java -cp /opt/gradle-*/lib/'*'
+org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -cp <kotlin-stdlib.jar> Verify.kt -d out`, run
+`java -cp "out:<stdlib>" VerifyKt`), and run every test assertion in a `main()`. That proves the algorithm; the
+**Android** CI check (which DOES build `compileSdk = 37` — prior slices merged green there) is then the real gate.
+A slice verified this way is a PASS only once its Android CI check is green.
+
+## 2026-08-30 — a highlight that folds accents must map ranges back to ORIGINAL indices (slice `search-accent-fold-highlight`)
+Making `highlightRanges` accent-insensitive (iOS `.diacriticInsensitive` parity) is not just "fold both sides then
+`indexOf`": NFD-decomposing + dropping combining marks CHANGES the string length, so a match position in folded
+space is the WRONG index into the original text. The fix is `foldWithMap`: fold per source char and record, for
+each folded char, the source index it came from. A match `[a, b)` in folded space → original range
+`sourceIndexOf[a] until (if b<len sourceIndexOf[b] else text.length)`. That end rule falls out for free: a
+combining mark contributes zero folded chars, so the next folded char's source index sits PAST the mark, extending
+the highlight over the whole decomposed grapheme. Build accented test literals from explicit `\u` code points
+(é = `é` precomposed vs `é` decomposed) — a typed glyph silently normalizes and the decomposed case
+never actually exercises the mark-skipping branch.
+
+## 2026-08-30 — a wire model belongs in the layer that carries the wire, not the layer that first drew it (slice `story-drawing-strokes-wire`)
+The prior slice placed the drawing wire types (`StoryDrawingStroke` &c.) in `:feature:stories` because the
+board reducer was the first consumer. But the SAME type is the payload of `StoryEffects.drawingStrokes`, which
+lives in `:core:model` — and a `:core:model` field cannot reference a `:feature:*` type (dependency points the
+other way). So the wire could not be wired at all until the model was promoted to `:core:model`. iOS had it
+right from the start: `StoryDrawingStroke` sits in `MeeshySDK/Models/` (SDK core), shared by both its
+`StoryEffects` wire and its editor ViewModel — ONE type, no twin. **When a value type is BOTH an editor's
+edit-state AND a field's wire payload, it belongs in the shared/core layer; the feature reducer imports it.**
+The tell that a placement is wrong: you reach to add a serialized field somewhere and the type you need is
+"below" you in the module graph. Promote the type (one move + an import re-point, behaviour identical), don't
+mint a second one — a structurally-identical twin across layers is the divergence CLAUDE.md forbids.
+
+Corollary on `createdAt`: the board slice dropped it as "the reducer never reads it → clock-free". True for the
+REDUCER, but the field is also a wire payload, and iOS's decoder REQUIRES the key. Dropping it would make an
+Android v1 re-serialize emit a stroke iOS then fails to decode. So it came back as an optional `Double?`
+PASSTHROUGH — the reducer still never reads it, but the wire round-trips whole. **"The reducer doesn't read
+it" justifies not branching on a field; it does not justify dropping it from a type that also serializes.**
+
+## 2026-08-29 — an undo/redo reducer's ONE invariant is "what repopulates the redo stack", and every op is judged by it (slice `story-drawing-board`)
+Porting iOS's drawing undo/redo (`StoryComposerViewModel+DrawingEditing`) to a pure immutable
+`StoryDrawingBoard`, the whole correctness story reduces to a single rule: **`redoStack` is populated ONLY by
+`undo`; every other user action decides whether it invalidates redo.** Enumerate the ops against that rule and
+the branches fall out — `commit`/`delete` clear redo (a new action makes "redo forward" caduc); `redo` consumes
+its own stack (LIFO); a property tweak (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact;
+`clear` nukes both. The single RED mutation that proves the suite is dropping `commit`'s `redoStack = emptyList()`
+— it fails EXACTLY the redo-invalidation test, nothing else, because that one line IS the invariant.
+Two deliberate improvements over iOS worth keeping as a pattern for ported reducers: (1) a no-op returns the SAME
+instance (`return this`) rather than a fresh copy — cheaper, and lets a test assert `op(x) == x` to pin
+inertness; (2) `delete` of an ABSENT id is a genuine no-op that keeps redo, whereas iOS's `deleteStroke` calls
+`removeAll` then clears redo unconditionally (so deleting a non-existent stroke silently discarded the redo
+history). Faithful parity is the default, but a user-invisible iOS quirk that throws away state is worth
+diverging from — document the divergence in the doc-comment so the next reader knows it's chosen, not missed.
+Also: omit iOS's `createdAt: Date` from a ported value type when the reducer never reads it (draw order is the
+list order) — it keeps the type pure and its tests clock-free with zero behavioural loss.
+
 ## 2026-08-29 — porting an inlined-constant formula: pin the boundary behaviourally, and give the "fold two cores" clause a real seam (slice `call-low-light-boost`)
 Two reusable moves from porting iOS `applyLowLightBoost`:
 - **Boundary tests must not depend on float-exactness.** iOS gates on `normalizedBrightness < 0.3` where
