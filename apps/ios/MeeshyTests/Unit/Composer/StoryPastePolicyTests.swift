@@ -65,29 +65,43 @@ final class StoryPastePolicyTests: XCTestCase {
         XCTAssertEqual(StoryPastePolicy.placement(forText: "  salut  "), .textObject("salut"))
     }
 
-    // MARK: - Le média
+    // MARK: - Ce que cette règle NE porte pas, et pourquoi
 
-    /// **Le cas qui fait la règle.** La même matière va à deux endroits selon ce
-    /// que la scène porte déjà : une image posée en premier plan sur une scène
-    /// vide donnerait une vignette flottant sur du vide.
-    func test_unMedia_devientLeFOND_quandLaSceneNenAPas() {
-        XCTAssertEqual(StoryPastePolicy.placement(forMediaWhenSceneHasBackground: false), .background)
-    }
-
-    func test_unMedia_sePose_quandLaSceneAUnFond() {
-        XCTAssertEqual(StoryPastePolicy.placement(forMediaWhenSceneHasBackground: true), .foreground)
-    }
-
-    /// Garde de FORME : la règle du média ne prend QUE l'état de la scène.
-    /// Ajouter le type du média à sa signature inviterait à faire diverger image,
-    /// vidéo et son — que la directive traite explicitement de la même façon.
-    /// Le témoin ne peut pas l'empêcher au compilateur ; il le dit là où on
-    /// viendra le lire.
-    func test_lesTroisFamilles_sontTraiteesPareil_parConstruction() {
-        for aUnFond in [true, false] {
-            let place = StoryPastePolicy.placement(forMediaWhenSceneHasBackground: aUnFond)
-            XCTAssertEqual(place, aUnFond ? .foreground : .background,
-                           "image, vidéo et son partagent la MÊME décision : seule la scène compte.")
+    /// **Le média n'a pas sa branche ici, et c'est le point.**
+    ///
+    /// La directive demande qu'un média collé aille en fond quand la scène n'en
+    /// a pas — et cette règle EXISTE déjà, à l'endroit où l'insertion se fait :
+    /// `shouldBeBackground` pour l'image et la vidéo, `ComposerAudioPlacement`
+    /// pour le son. La réécrire ici aurait donné deux règles pour une question,
+    /// et la seconde aurait divergé en silence — rien ne compare des règles qui
+    /// ne s'appellent pas.
+    ///
+    /// Garde NÉGATIVE : elle rougit si quelqu'un rajoute un placement média à
+    /// cette politique, ce qui est la façon la plus naturelle de « compléter »
+    /// une règle qu'on lit isolément.
+    func test_laPolitique_neDecidePasDuMedia_carLaRegleExisteDeja() throws {
+        let code = AppSourceGuard.stripComments(try politiqueSource())
+        for interdit in ["forMedia", "background", "foreground"] {
+            XCTAssertFalse(
+                code.contains(interdit),
+                "`\(interdit)` réintroduirait une seconde règle de placement média. La première "
+                    + "vit dans `StoryComposerViewModel+Elements` (`shouldBeBackground`) et dans "
+                    + "`ComposerAudioPlacement`."
+            )
         }
+    }
+
+    private func politiqueSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()   // apps
+            .deletingLastPathComponent()   // racine du dépôt
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/StoryPastePlacement.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1000, "Source vide — la garde serait verte par omission.")
+        return brut
     }
 }
