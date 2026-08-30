@@ -54,7 +54,7 @@ final class ComposerToolIconsTests: XCTestCase {
 
     // 3 — la rangée applique le rendu hiérarchique ET l'effet de rebond.
     func test_laRangee_appliqueHierarchique_etRebond() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let raw = try AppSourceGuard.composerSurfaceSource()
         XCTAssertTrue(raw.contains("private var toolRow"), "toolRow introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
@@ -69,7 +69,7 @@ final class ComposerToolIconsTests: XCTestCase {
 
     // 4 — l'effet est GARDÉ derrière iOS 17, avec repli (pas de non-compilation 16).
     func test_lEffet_estGardeDerriereIOS17_avecRepli() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"))
+        let src = compact(try AppSourceGuard.composerSurfaceSource())
         XCTAssertTrue(
             src.contains("#available(iOS17.0,*)"),
             "L'effet doit être gardé par `#available(iOS 17.0, *)` — la cible descend à iOS 16, "

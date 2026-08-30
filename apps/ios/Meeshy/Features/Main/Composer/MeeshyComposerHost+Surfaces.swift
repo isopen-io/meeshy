@@ -33,6 +33,10 @@ extension MeeshyComposerHost {
             viewModel: viewModel,
             initialVisibility: initialVisibility,
             chromeOwner: chromeOwner,
+            // #4135 — sans elle, `chromeOwner == .host` laisserait la scène
+            // SANS aucun chemin de départ : l'atelier n'assemble plus ses
+            // commandes, et le socle n'aurait personne à presser.
+            publishTrigger: publishTrigger,
             publishTargetType: selectedFormat.postType,
             onPublishAllInBackground: onPublishAllInBackground,
             onPreview: onPreview,

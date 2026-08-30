@@ -338,6 +338,19 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
+    /// **La télécommande de publication de l'atelier** (#4135).
+    ///
+    /// `@StateObject` et non `@State` : le meuble doit se re-rendre quand
+    /// l'atelier RAPPORTE sa matière (`canPublish`) ou arme son œil, sinon la
+    /// flèche du socle resterait grise sur une composition devenue publiable —
+    /// une commande qui ment sur son propre état.
+    ///
+    /// Elle est CONSTRUITE ici et pressée ici ; c'est l'atelier qui l'arme avec
+    /// `publishAllSlides` et `presentPreview`. Le meuble ne recompose rien : ni
+    /// le rabattement des effets du canvas, ni la langue, ni les médias
+    /// préchargés — trois choses qu'il ne voit pas.
+    @StateObject var publishTrigger = ComposerPublishTrigger()
+
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
     /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
@@ -432,9 +445,16 @@ struct MeeshyComposerHost: View {
         // `UserDefaults.standard` est bien le magasin de `@AppStorage` : la
         // graine et l'écriture du socle lisent donc le même endroit, sous la
         // même clé, dont `ComposerAudienceMemory` est l'unique orthographe.
-        _composerVisibility = State(initialValue: ComposerAudienceMemory.remembered(
-            ComposerAudienceMemory.key(for: ouverture)
-                .flatMap { UserDefaults.standard.string(forKey: $0) }
+        // #4135 — le second rang N'EST PAS décoratif. Story et Réel n'ont pas de
+        // clé de mémoire (délibérément : leur graine vient de la porte), et
+        // depuis que le socle peint l'audience SERVIE sous la scène, retomber
+        // sur `.public` publierait sous une audience que l'auteur n'a pas
+        // choisie. La règle porte l'ordre ; ce site ne fait que lui donner ses
+        // deux sources.
+        _composerVisibility = State(initialValue: ComposerAudienceMemory.seed(
+            rememberedRaw: ComposerAudienceMemory.key(for: ouverture)
+                .flatMap { UserDefaults.standard.string(forKey: $0) },
+            doorRaw: initialVisibility
         ))
     }
 
@@ -595,7 +615,9 @@ struct MeeshyComposerHost: View {
             // condition que le doc-comment de `socleZones` avait écrite en
             // 2026-08-24 comme prix de son retour, et elle se vérifie ICI,
             // jamais dans le corps du socle.
-            documentHasScene: documentHasScene
+            documentHasScene: documentHasScene,
+            // Sous la SCÈNE, l'œil n'existe que si l'atelier l'a armé (#4135).
+            atelierOffersPreview: publishTrigger.offersPreview
         )
     }
 
