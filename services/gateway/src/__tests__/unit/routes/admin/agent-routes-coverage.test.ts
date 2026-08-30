@@ -54,6 +54,14 @@ const adminUser = {
   email: 'admin@test.com',
 };
 
+// #4157 — `DELETE /reset` monte en S6 (souverain) : ADMIN n'y suffit plus.
+const bigbossUser = {
+  id: '507f1f77bcf86cd799439098',
+  role: 'BIGBOSS',
+  username: 'bigboss',
+  email: 'bigboss@test.com',
+};
+
 function makePrisma(): any {
   return {
     agentConfig: {
@@ -99,6 +107,10 @@ function makePrisma(): any {
     },
     agentGlobalProfile: {
       deleteMany: jest.fn<any>(),
+    },
+    // #4157 — `PUT /llm` et `DELETE /reset` (S6) écrivent leur trace ici.
+    adminAuditLog: {
+      create: jest.fn<any>().mockResolvedValue({}),
     },
     conversation: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -489,14 +501,19 @@ describe('Agent Admin Routes — coverage gap tests', () => {
   // PUT /llm — validation fail (line 824), create path (line 837), error catch (lines 861-862)
   // ──────────────────────────────────────────────────────────────────────────
   describe('PUT /llm', () => {
+    // #4157 — la route monte en S6 (BIGBOSS + motif écrit obligatoire) : les
+    // trois témoins de ce bloc ciblaient un comportement du CORPS (validation
+    // Zod, chemin de création, chemin d'erreur) sur l'app ADMIN par défaut —
+    // ils atteignent désormais un 403 avant même de parser le corps. BIGBOSS
+    // + `reason` valide les fait retomber sur le comportement qu'ils testent.
     it('returns 400 when Zod validation fails (invalid baseUrl)', async () => {
-      app = buildApp(prisma);
+      app = buildApp(prisma, bigbossUser);
       await app.ready();
 
       const res = await app.inject({
         method: 'PUT',
         url: '/llm',
-        payload: { baseUrl: 'not-a-valid-url' },
+        payload: { baseUrl: 'not-a-valid-url', reason: 'Test de validation #4157' },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -511,32 +528,48 @@ describe('Agent Admin Routes — coverage gap tests', () => {
         fallbackApiKeyEncrypted: null,
       });
 
-      app = buildApp(prisma);
+      app = buildApp(prisma, bigbossUser);
       await app.ready();
 
       const res = await app.inject({
         method: 'PUT',
         url: '/llm',
-        payload: { provider: 'openai', model: 'gpt-4', apiKeyEncrypted: 'enc-key' },
+        payload: { provider: 'openai', model: 'gpt-4', apiKeyEncrypted: 'enc-key', reason: 'Nouvelle configuration LLM' },
       });
 
       expect(res.statusCode).toBe(200);
       expect(prisma.agentLlmConfig.create).toHaveBeenCalled();
       expect(prisma.agentLlmConfig.update).not.toHaveBeenCalled();
+      // `reason` ne fait pas partie du modèle `AgentLlmConfig`.
+      expect(prisma.agentLlmConfig.create.mock.calls[0][0].data).not.toHaveProperty('reason');
     });
 
     it('returns 500 when DB throws', async () => {
       prisma.agentLlmConfig.findFirst.mockRejectedValue(new Error('DB error'));
 
-      app = buildApp(prisma);
+      app = buildApp(prisma, bigbossUser);
       await app.ready();
 
       const res = await app.inject({
         method: 'PUT',
         url: '/llm',
-        payload: { provider: 'openai' },
+        payload: { provider: 'openai', reason: 'Test du chemin d\'erreur #4157' },
       });
       expect(res.statusCode).toBe(500);
+    });
+
+    it('refuse ADMIN — le rang souverain (BIGBOSS) est requis (#4157)', async () => {
+      app = buildApp(prisma, adminUser);
+      await app.ready();
+
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/llm',
+        payload: { provider: 'openai', reason: 'Tentative non autorisée #4157' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(prisma.agentLlmConfig.update).not.toHaveBeenCalled();
+      expect(prisma.agentLlmConfig.create).not.toHaveBeenCalled();
     });
   });
 
@@ -574,13 +607,22 @@ describe('Agent Admin Routes — coverage gap tests', () => {
   // DELETE /reset — error catch (lines 1052-1053)
   // ──────────────────────────────────────────────────────────────────────────
   describe('DELETE /reset', () => {
+    // #4157 — la route monte en S6 (BIGBOSS + motif écrit obligatoire) : le
+    // témoin d'origine appelait avec ADMIN et sans corps, ce qui atteindrait
+    // désormais un 403/400 AVANT le `$transaction` que ce test veut voir
+    // ÉCHOUER — le chemin d'erreur (lignes 1052-1053) ne serait plus exercé
+    // du tout.
     it('returns 500 when transaction throws', async () => {
       prisma.$transaction.mockRejectedValue(new Error('DB error'));
 
-      app = buildApp(prisma);
+      app = buildApp(prisma, bigbossUser);
       await app.ready();
 
-      const res = await app.inject({ method: 'DELETE', url: '/reset' });
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/reset',
+        payload: { reason: 'Corruption détectée après incident #4157' },
+      });
       expect(res.statusCode).toBe(500);
     });
   });
@@ -970,15 +1012,15 @@ describe('Agent Admin Routes — coverage gap tests', () => {
         avgConfidence: 0.7,
         lastResponseAt: now,
       };
-      prisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: CONV_ID }])
-        .mockResolvedValueOnce([configItem]);
-      prisma.agentUserRole.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ conversationId: CONV_ID, userId: USER_ID }]);
-      prisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([analyticsItem]);
+      // #4165 — `GET /configs` ne fait plus DEUX appels à chacun de ces trois
+      // `findMany` (un pour rassembler l'univers des conversationIds, un pour
+      // la page) : le premier a été retiré, remplacé par le `where` relationnel
+      // de `conversation.findMany` ci-dessous. Un seul appel désormais — donc
+      // une seule valeur mockée, celle de l'ancien SECOND appel (la donnée de
+      // détail), plus jamais la forme `{conversationId}` seule du premier.
+      prisma.agentConfig.findMany.mockResolvedValue([configItem]);
+      prisma.agentUserRole.findMany.mockResolvedValue([{ conversationId: CONV_ID, userId: USER_ID }]);
+      prisma.agentAnalytic.findMany.mockResolvedValue([analyticsItem]);
       prisma.conversation.findMany.mockResolvedValue([{ id: CONV_ID, title: 'Room', type: 'GROUP' }]);
       prisma.conversation.count.mockResolvedValue(1);
 
@@ -1021,13 +1063,11 @@ describe('Agent Admin Routes — coverage gap tests', () => {
         avgConfidence: 0.5,
         lastResponseAt: null,
       };
-      prisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: CONV_ID }])
-        .mockResolvedValueOnce([]);
+      // #4165 — un seul appel par `findMany` désormais (voir le commentaire
+      // du test précédent) : la valeur de l'ancien SECOND appel seule.
+      prisma.agentConfig.findMany.mockResolvedValue([]);
       prisma.agentUserRole.findMany.mockResolvedValue([]);
-      prisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([analyticsItemNoDate]);
+      prisma.agentAnalytic.findMany.mockResolvedValue([analyticsItemNoDate]);
       prisma.conversation.findMany.mockResolvedValue([{ id: CONV_ID, title: 'Room', type: 'GROUP' }]);
       prisma.conversation.count.mockResolvedValue(1);
 

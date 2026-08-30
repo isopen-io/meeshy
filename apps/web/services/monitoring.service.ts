@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 /**
  * Le service que lit l'onglet de supervision de l'administration.
@@ -133,7 +134,7 @@ async function sonder<T>(nom: string, appel: () => Promise<unknown>, lire: (char
 export const monitoringService = {
   async getRealtime() {
     try {
-      const response = await apiService.get('/admin/analytics/realtime');
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsRealtime);
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching realtime data', { error });
@@ -148,14 +149,14 @@ export const monitoringService = {
    * pas une seconde vérité reconstituée à partir des métriques.
    */
   async getReadiness(): Promise<Sonde<Disponibilite>> {
-    return sonder('/health/ready', () => apiService.get('/health/ready'), (charge) => ({
+    return sonder(API_ENDPOINTS.health.ready, () => apiService.get(API_ENDPOINTS.health.ready), (charge) => ({
       status: champ(charge, 'status') === 'ready' ? 'ready' : 'not-ready',
     }));
   },
 
   /** S5 : métriques de PROCESSUS — distinctes de `/admin/analytics/*`, qui porte du produit. */
   async getProcessMetrics(): Promise<Sonde<MetriquesProcessus>> {
-    return sonder('/health/metrics', () => apiService.get('/health/metrics'), (charge) => ({
+    return sonder(API_ENDPOINTS.health.metrics, () => apiService.get(API_ENDPOINTS.health.metrics), (charge) => ({
       uptimeSeconds: nombre(champ(charge, 'uptimeSeconds')),
       memory: {
         heapUsed: nombre(champ(champ(charge, 'memory'), 'heapUsed')),
@@ -170,7 +171,7 @@ export const monitoringService = {
 
   /** S5 : l'état des disjoncteurs, tel que le registre du gateway le tient. */
   async getCircuitBreakers(): Promise<Sonde<readonly Disjoncteur[]>> {
-    return sonder('/health/circuit-breakers', () => apiService.get('/health/circuit-breakers'), (charge) => {
+    return sonder(API_ENDPOINTS.health.circuitBreakers, () => apiService.get(API_ENDPOINTS.health.circuitBreakers), (charge) => {
       if (!Array.isArray(charge)) return [];
       return charge.map((ligne: unknown, index: number) => ({
         name: texte(champ(ligne, 'name'), `Service ${index + 1}`),
@@ -185,7 +186,7 @@ export const monitoringService = {
 
   async getKpis(period: '7d' | '30d' | '90d' = '7d') {
     try {
-      const response = await apiService.get('/admin/analytics/kpis', { period });
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsKpis, { period });
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching KPIs', { error });
@@ -194,7 +195,7 @@ export const monitoringService = {
   },
   async getVolumeTimeline() {
     try {
-      const response = await apiService.get('/admin/analytics/volume-timeline');
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsVolumeTimeline);
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching volume timeline', { error });
@@ -203,7 +204,7 @@ export const monitoringService = {
   },
   async getLanguageDistribution() {
     try {
-      const response = await apiService.get('/admin/analytics/language-distribution');
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsLanguageDistribution);
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching language distribution', { error });
@@ -212,7 +213,7 @@ export const monitoringService = {
   },
   async getUserDistribution() {
     try {
-      const response = await apiService.get('/admin/analytics/user-distribution');
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsUserDistribution);
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching user distribution', { error });
@@ -221,7 +222,7 @@ export const monitoringService = {
   },
   async getHourlyActivity() {
     try {
-      const response = await apiService.get('/admin/analytics/hourly-activity');
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsHourlyActivity);
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching hourly activity', { error });
@@ -230,7 +231,7 @@ export const monitoringService = {
   },
   async getMessageTypes(period: '24h' | '7d' | '30d' = '7d') {
     try {
-      const response = await apiService.get('/admin/analytics/message-types', { period });
+      const response = await apiService.get(API_ENDPOINTS.admin.analyticsMessageTypes, { period });
       return response;
     } catch (error) {
       logger.error('[Monitoring]', 'Error fetching message types', { error });

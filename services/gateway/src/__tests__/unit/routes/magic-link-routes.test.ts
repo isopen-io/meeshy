@@ -285,118 +285,18 @@ describe('MagicLink Routes', () => {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // GET /magic-link/validate
+  // GET /magic-link/validate — RETIRÉE (#4186)
+  //
+  // Elle ouvrait une session sans appliquer `rememberDevice` ni
+  // `markSessionTrusted`, figeait `expiresIn` à 86 400, et faisait voyager le
+  // jeton en query string. Ses onze cas ne sont pas « perdus » : leurs
+  // équivalents vivent tous sur la POST ci-dessous, qui est désormais l'unique
+  // porte. L'absence de la route, elle, est gardée par un témoin NÉGATIF —
+  // `__tests__/unit/routes/identity-twins-retired.test.ts` — parce qu'un
+  // fichier qui se contente de ne plus tester une route ne remarquerait jamais
+  // son retour.
   // ══════════════════════════════════════════════════════════════════════════
 
-  describe('GET /magic-link/validate', () => {
-    it('returns 200 with user/token/session on valid token', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=valid-token-abc',
-      });
-
-      expect(response.statusCode).toBe(200);
-      const body = response.json();
-      expect(body.success).toBe(true);
-      // Fastify's fast-json-stringify serialises nested objects via their schema;
-      // user/session are typed as { type: 'object' } with no properties, so fields
-      // pass as empty objects in the serialised response — check presence, not fields.
-      expect(body.data.user).toBeDefined();
-      expect(body.data.token).toBe('jwt-token-abc');
-      expect(body.data.sessionToken).toBe('session-token-xyz');
-      expect(body.data.expiresIn).toBe(86400);
-    });
-
-    it('passes the query token to validateMagicLink', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=my-specific-token',
-      });
-
-      expect(mockValidateMagicLink).toHaveBeenCalledWith(
-        expect.objectContaining({ token: 'my-specific-token' })
-      );
-    });
-
-    it('returns 400 when token query param is missing', async () => {
-      // Missing required querystring property is caught by Fastify before the handler
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate',
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it('returns 400 when token query param is empty string', async () => {
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=',
-      });
-
-      expect(response.statusCode).toBe(400);
-      const body = response.json();
-      expect(body.success).toBe(false);
-    });
-
-    it('returns 400 with result.error when validateMagicLink returns success=false', async () => {
-      mockValidateMagicLink.mockResolvedValue({
-        success: false,
-        error: 'Token expired or invalid',
-      });
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=expired-token',
-      });
-
-      expect(response.statusCode).toBe(400);
-      const body = response.json();
-      expect(body.success).toBe(false);
-      expect(body.error).toBe('Token expired or invalid');
-    });
-
-    it('always sets expiresIn to 86400 (24h) regardless of the result', async () => {
-      mockValidateMagicLink.mockResolvedValue(makeValidateResult());
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=any-token',
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.expiresIn).toBe(86400);
-    });
-
-    it('returns 500 and logs error when validateMagicLink throws', async () => {
-      mockValidateMagicLink.mockRejectedValue(new Error('DB crash'));
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=crash-token',
-      });
-
-      expect(response.statusCode).toBe(500);
-      const body = response.json();
-      expect(body.success).toBe(false);
-      expect(mockLoggerChild.error).toHaveBeenCalled();
-    });
-
-    it('returns 500 when getRequestContext throws', async () => {
-      mockGetRequestContext.mockRejectedValue(new Error('context error'));
-
-      const response = await app.inject({
-        method: 'GET',
-        url: '/magic-link/validate?token=some-token',
-      });
-
-      expect(response.statusCode).toBe(500);
-    });
-  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // POST /magic-link/validate
@@ -722,10 +622,13 @@ describe('MagicLink Routes', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // La connexion rend-elle un UTILISATEUR ?
 //
-// Les deux routes de validation déclaraient `user: { type: 'object' }` et
+// La route de validation déclarait `user: { type: 'object' }` et
 // `session: { type: 'object' }`. Sans `properties`, fast-json-stringify
 // (`additionalProperties: false` par défaut) les vidait en `{}` : la connexion
 // par lien magique rendait son jeton, et AUCUN utilisateur.
+//
+// (Le défaut valait pour ses DEUX verbes ; la jumelle GET a depuis été
+// retirée — #4186.)
 //
 // Les deux formes sont déjà décrites par les schémas partagés — `userSchema`
 // couvre le `socketIOUser` que le service construit, `sessionSchema` la
@@ -801,5 +704,77 @@ describe('POST /magic-link/validate — l’utilisateur et la session atteignent
     const data = await validateAndRead();
 
     expect(data.token).toBe('jwt-token-abc');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La PROPRIÉTÉ qui devait survivre à la fusion (#4186)
+//
+// Les deux verbes ouvraient une session ; un seul appliquait la politique
+// complète. En retirant la jumelle GET on garde la POST — encore faut-il que
+// ce qui la rendait supérieure soit VERROUILLÉ, sans quoi la fusion aurait
+// aligné la survivante sur la pauvre sans que rien ne rougisse.
+//
+// Les cas unitaires ci-dessus couvrent chaque geste séparément. Ce témoin-ci
+// exige leur CONJONCTION sur une seule réponse — c'est la conjonction qui est
+// le contrat : `rememberDevice` vient du stockage SERVEUR (jamais du corps de
+// la requête, sinon n'importe quel client s'offrirait 365 jours), il DÉCLENCHE
+// `markSessionTrusted`, il porte `expiresIn` à un an, et il se relit sur
+// `session.isTrusted`. Trois d'entre eux verts et le quatrième rouge, c'est
+// une session annoncée durable que le serveur ne tient pas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /magic-link/validate — la politique de session complète (#4186)', () => {
+  // Ce bloc vit HORS du `describe` racine : il ne bénéficie donc pas de son
+  // `beforeEach`. Sans ce nettoyage, `markSessionTrusted` gardait l'appel du
+  // cas précédent et le témoin « aucune session de confiance » rougissait sur
+  // un appel qui n'était pas le sien.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetRequestContext.mockResolvedValue(makeRequestContext());
+  });
+
+  it('applique rememberDevice, marque la session de confiance et sert 365 jours — ensemble', async () => {
+    mockValidateMagicLink.mockResolvedValue(
+      makeValidateResult({ rememberDevice: true, session: makeSession() })
+    );
+    mockMarkSessionTrusted.mockResolvedValue(true);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/magic-link/validate',
+      // Le corps ne porte PAS `rememberDevice` : le service seul le sait.
+      payload: { token: 'tok-remember' },
+    });
+    const data = res.json().data;
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockMarkSessionTrusted).toHaveBeenCalledWith(
+      'session-xyz-789',
+      expect.objectContaining({ userId: 'user-abc-123', source: 'magic_link' })
+    );
+    expect(data.expiresIn).toBe(365 * 24 * 60 * 60);
+    expect(data.session.isTrusted).toBe(true);
+  });
+
+  it('sans rememberDevice : aucune session de confiance, 24 heures', async () => {
+    mockValidateMagicLink.mockResolvedValue(
+      makeValidateResult({ rememberDevice: false, session: makeSession() })
+    );
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/magic-link/validate',
+      payload: { token: 'tok-simple' },
+    });
+    const data = res.json().data;
+    await app.close();
+
+    expect(mockMarkSessionTrusted).not.toHaveBeenCalled();
+    expect(data.expiresIn).toBe(24 * 60 * 60);
+    expect(data.session.isTrusted).toBe(false);
   });
 });

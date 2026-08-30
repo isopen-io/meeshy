@@ -1,5 +1,6 @@
 package me.meeshy.app.reels
 
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 
@@ -47,9 +48,4 @@ object ReelBuilder {
     private val ApiPostMedia.isVideo: Boolean
         get() = mimeType?.startsWith("video/") == true
 
-    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-        url.startsWith("http") -> url
-        mediaBaseUrl == null -> url
-        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
-    }
 }

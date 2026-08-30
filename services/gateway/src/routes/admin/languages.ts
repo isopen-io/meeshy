@@ -93,7 +93,13 @@ function dailyLanguageCountsPipeline(options: { since: Date; language?: string }
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
-const requireAdmin = requirePermission('canViewAnalytics');
+//
+// #4157 — même défaut que `analytics.ts` et `dashboard.ts` : `canViewAnalytics`
+// admet ANALYST, qui n'a PAS `canAccessAdmin` dans la matrice centrale. Ces
+// trois routes vivent sous `/admin/languages/*` — la garde d'entrée d'un
+// périmètre d'administration est `canAccessAdmin`, pas une permission de
+// domaine qu'ANALYST porte pour une raison étrangère à `/admin`.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 export async function languagesRoutes(fastify: FastifyInstance) {
   /**

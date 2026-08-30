@@ -117,14 +117,11 @@ struct MeeshyApp: App {
                     }
                     .opacity(showSplash ? 0 : 1)
 
-                    if showSplash {
-                        // onFinish is kept as a no-op so the existing component
-                        // signature is preserved ; dismissal is driven by the
-                        // `.task` block once boot work completes.
-                        SplashScreen(onFinish: {})
-                            .transition(.opacity.combined(with: .scale(scale: 1.1)))
-                            .zIndex(1)
-                    }
+                    // #4363 — il ne se RETIRE plus, il s'efface : un retrait
+                    // interrompu laisse la vue hit-testable. Voir `fullScreenGate`.
+                    SplashScreen(onFinish: {})
+                        .fullScreenGate(isPresented: showSplash)
+                        .zIndex(1)
                 }
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un
@@ -1170,6 +1167,12 @@ struct SplashScreen: View {
     @State private var backgroundScale: CGFloat = 1.2
     @ObservedObject private var theme = ThemeManager.shared
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private var isDark: Bool { theme.mode.isDark }
 
     var body: some View {
@@ -1224,7 +1227,7 @@ struct SplashScreen: View {
                     .padding(.bottom, 32)
 
                 // App Name
-                Text("Meeshy")
+                Text(verbatim: "Meeshy")
                     .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
@@ -1272,8 +1275,16 @@ struct SplashScreen: View {
                 showSubtitle = true
             }
 
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                glowPulse = true
+            // Le halo est DÉCORATIF : sous Reduce Motion il ne se pose sur
+            // aucune valeur, il n'existe pas. `glowPulse` reste `false`, donc
+            // les trois orbes gardent leur échelle de repos. Avec le halo de
+            // `LoginView`, ce sont les deux seuls des sept sites de #4286 où
+            // « ne rien faire » est le bon repos — les cinq autres portent un
+            // STATUT, et devaient choisir une valeur qui le dit encore.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    glowPulse = true
+                }
             }
 
             withAnimation(.easeInOut(duration: 1.0)) {

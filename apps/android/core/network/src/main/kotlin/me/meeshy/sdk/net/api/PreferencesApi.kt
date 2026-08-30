@@ -44,4 +44,29 @@ interface PreferencesApi {
 
     @PATCH("me/preferences/privacy")
     suspend fun updatePrivacy(@Body body: PrivacyPreferenceSyncBody): ApiResponse<Unit>
+
+    /**
+     * Re-reads the stored notification block — the READ half of [updateNotification],
+     * added for issue #4133. The device store stays the UI source of truth, so this is
+     * not a hydration path: it is what `user:preferences-updated` (category scope) asks
+     * for when another device changed the block, the broadcast carrying only the category
+     * NAME and never its content.
+     *
+     * The response decodes into the same [NotificationPreferenceSyncBody] the PATCH sends
+     * — the gateway's block is that contract exactly — and
+     * [NotificationPreferenceSyncBody.toPreferences] folds it back onto the local block.
+     */
+    @GET("me/preferences/notification")
+    suspend fun getNotification(): ApiResponse<NotificationPreferenceSyncBody>
+
+    /**
+     * Re-reads the stored privacy block (issue #4133), the READ half of [updatePrivacy].
+     *
+     * The response carries the gateway's whole privacy block, of which this body decodes
+     * the twelve editable toggles; the lenient decoder drops the encryption keys, which
+     * Android renders read-only and must never overwrite from the wire. See
+     * [PrivacyPreferenceSyncBody.toPreferences].
+     */
+    @GET("me/preferences/privacy")
+    suspend fun getPrivacy(): ApiResponse<PrivacyPreferenceSyncBody>
 }

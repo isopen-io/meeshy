@@ -601,7 +601,9 @@ final class NotificationActionHandler: NotificationActionHandling {
             return explicit
         }
         guard let senderId = payload.senderId else { return nil }
-        let pending = try await friendService.receivedRequests(offset: 0, limit: 50)
+        let pending = try await friendService.friendRequests(
+            direction: .received, status: "pending", q: nil, cursor: nil, limit: 50
+        )
         return pending.data.first(where: { $0.senderId == senderId })?.id
     }
 

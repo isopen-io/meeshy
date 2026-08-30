@@ -1957,7 +1957,7 @@ struct CallView: View {
         .pressable()
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
-        .callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)
+        .toggleStateAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)
     }
 
     /// Derived from `transcriptionService.isShowingOverlay` (le panneau de
@@ -2064,7 +2064,7 @@ struct CallView: View {
         }
         .pressable()
         // Constant label (the feature's name) + a live value (its current state) — NOT
-        // .callToggleAccessibility(isToggle: true, ...): that helper's .isToggle trait +
+        // .toggleStateAccessibility(isToggle: true, ...): that helper's .isToggle trait +
         // on/off value is for binary toggles. This is a 3-state cycle, so VoiceOver hears
         // "Sous-titres, Traduction" today and "Sous-titres, Texte original" after the next
         // double-tap — the default Button action already IS the cycle-forward gesture, so
@@ -2097,6 +2097,13 @@ struct CallView: View {
         .pressable()
         .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main))
         .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
+        // L'indice disait « ouvre OU ferme » — ambigu précisément parce que
+        // l'état n'était pas exposé : le glyphe passe de `camera.filters` à
+        // `xmark` et rien ne le disait (253i, #4266). L'état porté ici est celui
+        // que le bouton BASCULE (la barre), jamais `hasActiveEffects`, qui est
+        // un fait VOISIN — la teinte le montre, et l'annoncer ici ferait dire au
+        // contrôle un état qui n'est pas le sien.
+        .toggleStateAccessibility(isToggle: true, isActive: showEffectsToolbar)
     }
 
     private var endCallButton: some View {
@@ -2223,22 +2230,7 @@ extension View {
     }
 }
 
-extension View {
-    @ViewBuilder
-    func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
-        if isToggle {
-            let stateLabel = isActive
-                ? String(localized: "call.control.state.on", defaultValue: "Activé", bundle: .main)
-                : String(localized: "call.control.state.off", defaultValue: "Désactivé", bundle: .main)
-            if #available(iOS 17, *) {
-                self
-                    .accessibilityAddTraits(.isToggle)
-                    .accessibilityValue(stateLabel)
-            } else {
-                self.accessibilityValue(stateLabel)
-            }
-        } else {
-            self
-        }
-    }
-}
+// `callToggleAccessibility` a vécu ici. Rien dedans n'était propre aux appels :
+// il a déménagé dans `ToggleStateAccessibility.swift` sous le nom
+// `toggleStateAccessibility`, parce que son NOM et son FICHIER l'avaient enfermé
+// dans les cinq surfaces d'appel (253i, #4266).

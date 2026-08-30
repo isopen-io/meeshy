@@ -71,7 +71,20 @@ const AUTH = { authorization: 'Bearer token' };
 
 // ─── Prisma factories ─────────────────────────────────────────────────────────
 
-type PrismaParticipant = { id: string; userId: string; conversationId: string; isActive: boolean };
+type PrismaParticipant = {
+  id: string;
+  userId: string;
+  conversationId: string;
+  isActive: boolean;
+  // #4332 — champs consultés par `performConversationDeleteForMe` (le rôle,
+  // pour la branche créateur) et par le NOUVEAU `restore-for-me` (`deletedForMe`
+  // + la conversation englobante, pour refuser de restaurer dans une
+  // conversation FERMÉE). Absents avant ce lot, où `participant.findFirst`
+  // ne servait que la vérification d'appartenance de `clear-history`.
+  role?: string;
+  deletedForMe?: Date | null;
+  conversation?: { isActive: boolean };
+};
 type PrismaConvPref = {
   id: string;
   userId: string;
@@ -105,6 +118,30 @@ const ACTIVE_PARTICIPANT: PrismaParticipant = {
   userId: USER_ID,
   conversationId: CONV_ID,
   isActive: true,
+  role: 'member',
+  // Par défaut « déjà supprimé pour soi, conversation encore active » : c'est
+  // l'état qu'exige le chemin heureux de `restore-for-me` (partagé par
+  // `beforeAll`), et un `deletedForMe` non nul est sans effet sur les DEUX
+  // autres routes qui lisent ce mock (`delete-for-me` ne le regarde jamais,
+  // `clear-history` ne teste que la vérité de l'objet).
+  deletedForMe: new Date('2024-01-01'),
+  conversation: { isActive: true },
+};
+
+// Ligne que `GET /api/user/deleted-conversations` lit désormais via
+// `prisma.participant.findMany` — miroir exact de l'ancien `DELETED_PREF`
+// (même sous-objet `conversation`), colonne différente (#4332).
+const DELETED_PARTICIPANT = {
+  conversationId: CONV_ID,
+  deletedForMe: new Date('2024-01-01'),
+  conversation: {
+    id: CONV_ID,
+    identifier: 'conv-123',
+    title: 'Test Conv',
+    type: 'direct',
+    avatar: null,
+    lastMessageAt: new Date('2024-01-15'),
+  },
 };
 
 const MESSAGE: PrismaMessage = {
@@ -130,13 +167,17 @@ const DELETED_PREF: PrismaConvPref = {
   },
 };
 
-const NOT_DELETED_PREF: PrismaConvPref = {
-  ...DELETED_PREF,
-  deletedForUserAt: null,
-};
-
 type PrismaOpts = {
   participantFindFirst?: PrismaParticipant | null | Error;
+  // #4332 — l'écrivain de `delete-for-me` (branche non-créateur) et de
+  // `restore-for-me` : les deux flippent `isActive`/`deletedForMe` sur la
+  // MÊME ligne participant, jamais `UserConversationPreferences`.
+  participantUpdate?: PrismaParticipant | Error;
+  // #4332 — source de `GET /api/user/deleted-conversations`, qui lisait
+  // AUPARAVANT `userConversationPreferences.findMany` (`convPrefFindMany`
+  // ci-dessous, conservé pour `clear-history` mais plus consulté par cette
+  // liste).
+  participantFindMany?: Array<typeof DELETED_PARTICIPANT> | Error;
   convPrefFindUnique?: PrismaConvPref | null | Error;
   convPrefUpsert?: PrismaConvPref | Error;
   messageFindUnique?: PrismaMessage | null | Error;
@@ -172,6 +213,8 @@ function makePrisma(opts: PrismaOpts = {}) {
   return {
     participant: {
       findFirst: resolve(opt(opts.participantFindFirst, ACTIVE_PARTICIPANT)),
+      update: resolve(opt(opts.participantUpdate, { ...ACTIVE_PARTICIPANT, isActive: false })),
+      findMany: resolve(opt(opts.participantFindMany, [DELETED_PARTICIPANT])),
     },
     userConversationPreferences: {
       findUnique: resolve(opt(opts.convPrefFindUnique, DELETED_PREF)),
@@ -223,7 +266,11 @@ describe('DELETE /api/conversations/:conversationId/delete-for-me', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(body.data.message).toBe('Conversation deleted from your view');
+    // #4332 — cette route délègue désormais à `performConversationDeleteForMe`
+    // (la logique de la route canonique) : la charge n'est plus `{ message }`
+    // mais `{ conversationId, deletedAt }`, identique aux deux adresses.
+    expect(body.data.conversationId).toBe(CONV_ID);
+    expect(body.data.deletedAt).toEqual(expect.any(String));
   });
 
   it('returns 401 when no auth header provided', async () => {
@@ -234,14 +281,20 @@ describe('DELETE /api/conversations/:conversationId/delete-for-me', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('returns 403 when user is not a member', async () => {
+  it('returns 404 when user is not a member', async () => {
+    // #4332 — l'alias délègue à `performConversationDeleteForMe`, qui lève
+    // `ConversationDeleteForMeNotAParticipantError` (404), le même verdict
+    // que la route canonique. Avant ce lot cette route portait sa PROPRE
+    // vérification et répondait 403 : deux adresses pour le même geste ne
+    // doivent plus diverger sur ce qu'elles répondent, pas seulement sur ce
+    // qu'elles écrivent.
     const appNotMember = await buildApp({ participantFindFirst: null });
     const res = await appNotMember.inject({
       method: 'DELETE',
       url: `/api/conversations/${CONV_ID}/delete-for-me`,
       headers: AUTH,
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await appNotMember.close();
   });
 
@@ -256,8 +309,10 @@ describe('DELETE /api/conversations/:conversationId/delete-for-me', () => {
     await appErr.close();
   });
 
-  it('returns 500 when upsert fails after membership check', async () => {
-    const appErr = await buildApp({ convPrefUpsert: new Error('upsert failed') });
+  it('returns 500 when the participant update fails after membership check', async () => {
+    // #4332 — repointé : le geste écrit désormais `participant.update`
+    // (`deletedForMe`/`isActive`), plus `userConversationPreferences.upsert`.
+    const appErr = await buildApp({ participantUpdate: new Error('update failed') });
     const res = await appErr.inject({
       method: 'DELETE',
       url: `/api/conversations/${CONV_ID}/delete-for-me`,
@@ -265,6 +320,32 @@ describe('DELETE /api/conversations/:conversationId/delete-for-me', () => {
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+
+  it('annonce sa dépréciation vers la route canonique /api/v1 (#4332)', async () => {
+    // `depreciee()` — RFC 9745 (`Deprecation`) + RFC 5829 (`Link
+    // rel="successor-version"`) — sans `Sunset` : le retrait est gouverné
+    // par le compteur d'accès (#4275), jamais posé à la main ici.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/conversations/${CONV_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+    // 2026-08-30 en epoch. Deux lots ont converge sur cette route : le mien
+    // datait l'annonce du 29, le lot voisin du 30 -- c'est la sienne qui tient,
+    // l'annonce partant reellement ce jour-la. La valeur reste ECRITE en dur
+    // plutot que derivee de la constante : un temoin qui recalcule ce qu'il
+    // mesure ne mesure plus rien.
+    expect(res.headers['deprecation']).toBe('@1788048000');
+    expect(res.headers['link']).toBe(
+      `</api/v1/conversations/${CONV_ID}/delete-for-me>; rel="successor-version"`
+    );
+    // Ce temoin exigeait l'ABSENCE de Sunset ; la version retenue en pose un, et
+    // c'est la bonne : sa date n'est pas une habitude mais une MESURE -- aucun
+    // des trois clients n'appelle cette adresse, verifie par grep. Affirmer la
+    // date exacte est de plus un temoin plus fort qu'affirmer une absence : une
+    // fenetre de retrait qui glisserait en silence ferait rougir celui-ci.
+    expect(res.headers['sunset']).toBe('Fri, 26 Feb 2027 00:00:00 GMT');
   });
 });
 
@@ -288,19 +369,23 @@ describe('POST /api/conversations/:conversationId/restore-for-me', () => {
     expect(body.data.message).toBe('Conversation restored');
   });
 
-  it('returns 400 when no preferences record exists', async () => {
-    const appNoPref = await buildApp({ convPrefFindUnique: null });
-    const res = await appNoPref.inject({
+  it('returns 400 when no participant record exists', async () => {
+    // #4332 — repointé : la corbeille lit `Participant`, plus
+    // `UserConversationPreferences`.
+    const appNoParticipant = await buildApp({ participantFindFirst: null });
+    const res = await appNoParticipant.inject({
       method: 'POST',
       url: `/api/conversations/${CONV_ID}/restore-for-me`,
       headers: AUTH,
     });
     expect(res.statusCode).toBe(400);
-    await appNoPref.close();
+    await appNoParticipant.close();
   });
 
-  it('returns 400 when preferences exist but conversation is not deleted', async () => {
-    const appNotDeleted = await buildApp({ convPrefFindUnique: NOT_DELETED_PREF });
+  it('returns 400 when the participant exists but is not deleted', async () => {
+    const appNotDeleted = await buildApp({
+      participantFindFirst: { ...ACTIVE_PARTICIPANT, deletedForMe: null },
+    });
     const res = await appNotDeleted.inject({
       method: 'POST',
       url: `/api/conversations/${CONV_ID}/restore-for-me`,
@@ -308,6 +393,23 @@ describe('POST /api/conversations/:conversationId/restore-for-me', () => {
     });
     expect(res.statusCode).toBe(400);
     await appNotDeleted.close();
+  });
+
+  it('returns 400 when the conversation itself is closed — a personal restore never reopens it for everyone', async () => {
+    // #4332 — garde NOUVELLE : `performConversationDeleteForMe` peut CLORE
+    // la conversation entière (DM vide jamais utilisé, ou dernier membre
+    // actif parti). Restaurer le SEUL participant appelant ne doit jamais
+    // rouvrir un fil que la route canonique a fermé pour tout le monde.
+    const appClosed = await buildApp({
+      participantFindFirst: { ...ACTIVE_PARTICIPANT, conversation: { isActive: false } },
+    });
+    const res = await appClosed.inject({
+      method: 'POST',
+      url: `/api/conversations/${CONV_ID}/restore-for-me`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(400);
+    await appClosed.close();
   });
 
   it('returns 401 when no auth header provided', async () => {
@@ -318,8 +420,8 @@ describe('POST /api/conversations/:conversationId/restore-for-me', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('returns 500 on database error during findUnique', async () => {
-    const appErr = await buildApp({ convPrefFindUnique: new Error('db crash') });
+  it('returns 500 on database error during the participant lookup', async () => {
+    const appErr = await buildApp({ participantFindFirst: new Error('db crash') });
     const res = await appErr.inject({
       method: 'POST',
       url: `/api/conversations/${CONV_ID}/restore-for-me`,
@@ -330,7 +432,7 @@ describe('POST /api/conversations/:conversationId/restore-for-me', () => {
   });
 
   it('returns 500 on database error during the restore write', async () => {
-    const appErr = await buildApp({ convPrefUpsert: new Error('update failed') });
+    const appErr = await buildApp({ participantUpdate: new Error('update failed') });
     const res = await appErr.inject({
       method: 'POST',
       url: `/api/conversations/${CONV_ID}/restore-for-me`,
@@ -679,7 +781,9 @@ describe('GET /api/user/deleted-conversations', () => {
   });
 
   it('returns 200 with empty array when no conversations deleted', async () => {
-    const appEmpty = await buildApp({ convPrefFindMany: [] });
+    // #4332 — repointé : la source est `participant.findMany`, plus
+    // `userConversationPreferences.findMany`.
+    const appEmpty = await buildApp({ participantFindMany: [] });
     const res = await appEmpty.inject({
       method: 'GET',
       url: '/api/user/deleted-conversations',
@@ -701,7 +805,7 @@ describe('GET /api/user/deleted-conversations', () => {
   });
 
   it('returns 500 on database error', async () => {
-    const appErr = await buildApp({ convPrefFindMany: new Error('db crash') });
+    const appErr = await buildApp({ participantFindMany: new Error('db crash') });
     const res = await appErr.inject({
       method: 'GET',
       url: '/api/user/deleted-conversations',
@@ -711,7 +815,7 @@ describe('GET /api/user/deleted-conversations', () => {
     await appErr.close();
   });
 
-  it('maps deleted preferences to conversationId, deletedAt, and conversation fields', async () => {
+  it('maps deleted participants to conversationId, deletedAt, and conversation fields', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/user/deleted-conversations',

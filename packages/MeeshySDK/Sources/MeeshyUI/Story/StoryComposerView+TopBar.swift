@@ -167,13 +167,25 @@ extension StoryComposerView {
         }
     }
 
+    /// **L'aperçu, en UN site** (#4135). La rangée de l'atelier le presse, et la
+    /// télécommande du meuble aussi — deux écritures du même geste auraient
+    /// divergé au premier ajustement, et l'une des deux se serait mise à rendre
+    /// un aperçu qui ne dit pas la vérité sur ce qui sera publié (loi 6).
+    ///
+    /// Il vit ICI, jamais chez le presseur : `snapshotAllSlides()` rabat les
+    /// effets du canvas courant, et `viewModel.loadedImages` / `loadedVideoURLs`
+    /// / `loadedAudioURLs` sont les médias PRÉCHARGÉS de l'atelier.
+    func presentPreview() {
+        NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
+        Task { @MainActor in
+            let snapshot = await snapshotAllSlides()
+            onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+        }
+    }
+
     var previewButton: some View {
         Button {
-            NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
-            Task { @MainActor in
-                let snapshot = await snapshotAllSlides()
-                onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
-            }
+            presentPreview()
         } label: {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))

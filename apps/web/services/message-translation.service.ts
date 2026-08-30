@@ -6,6 +6,7 @@
 import axios from 'axios';
 import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from './auth-manager.service';
 import type { TranslationModel } from '@meeshy/shared/types';
 
@@ -75,7 +76,7 @@ class MessageTranslationService {
         headers['X-Session-Token'] = sessionToken;
       }
 
-      const response = await axios.post(buildApiUrl('/translate'), requestBody, {
+      const response = await axios.post(buildApiUrl(API_ENDPOINTS.translate.root), requestBody, {
         timeout: TIMEOUT,
         headers
       });
@@ -98,7 +99,15 @@ class MessageTranslationService {
    */
   async getTranslationStatus(messageId: string, targetLanguage: string): Promise<MessageTranslationStatus> {
     try {
-      const response = await axios.get(`${buildApiUrl('/messages')}/${messageId}/translate/${targetLanguage}/status`, {
+      // ADRESSE FANTÔME, trouvée par #4281 en migrant ce fichier vers le
+      // catalogue partagé : `GET /messages/:id/translate/:lang/status` n'a
+      // aucune route dans le manifeste (services/gateway/route-manifest.json)
+      // — seules `.../read-status`, `.../status-details` et `.../translations`
+      // existent sous `/messages/:id`. Même famille que #4219/#4222. Le
+      // préfixe `/messages/:id` migre vers le catalogue ; le suffixe
+      // `/translate/:lang/status` reste littéral EXPRÈS — ce n'est pas à une
+      // migration de chemins de deviner le correctif. Suivi à ouvrir.
+      const response = await axios.get(buildApiUrl(`${API_ENDPOINTS.messages.byMessageId(messageId)}/translate/${targetLanguage}/status`), {
         timeout: 10000
       });
 
@@ -126,7 +135,10 @@ class MessageTranslationService {
    */
   async cancelTranslation(messageId: string, targetLanguage: string): Promise<boolean> {
     try {
-      await axios.delete(`${buildApiUrl('/messages')}/${messageId}/translate/${targetLanguage}`, {
+      // ADRESSE FANTÔME — même défaut que getTranslationStatus ci-dessus
+      // (voir son commentaire) : `DELETE /messages/:id/translate/:lang`
+      // n'existe pas non plus dans le manifeste. Laissée en littéral EXPRÈS.
+      await axios.delete(buildApiUrl(`${API_ENDPOINTS.messages.byMessageId(messageId)}/translate/${targetLanguage}`), {
         timeout: 10000
       });
       return true;
@@ -141,7 +153,7 @@ class MessageTranslationService {
    */
   async getMessageTranslations(messageId: string): Promise<MessageTranslationStatus[]> {
     try {
-      const response = await axios.get(`${buildApiUrl('/messages')}/${messageId}/translations`, {
+      const response = await axios.get(buildApiUrl(API_ENDPOINTS.messages.byMessageIdTranslations(messageId)), {
         timeout: 10000
       });
 

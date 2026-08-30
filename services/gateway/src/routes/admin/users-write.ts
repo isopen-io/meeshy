@@ -11,6 +11,7 @@ import { requireUserModifyAccess } from '../../middleware/admin-user-auth.middle
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 
 /**
@@ -48,6 +49,37 @@ import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
  * qui rejouerait le handler porterait une seconde loi — le défaut même que
  * cette issue ferme.
  */
+
+/**
+ * Le sursis des neuf adresses HISTORIQUES (#4274).
+ *
+ * `depuis` est la date de fermeture de #4154 — le jour où les quatre adresses
+ * de la loi sont devenues les seules à porter le geste. Aucune ne porte de
+ * `retraitLe` : la règle de retrait du dépôt est un COMPTEUR d'accès à zéro sur
+ * deux versions publiées (#4275), pas une revue des consoles installées. Tant
+ * que ce compteur n'existe pas, une date de `Sunset` serait inventée — et une
+ * console qui la croirait cesserait d'appeler une adresse encore servie, ou
+ * continuerait d'appeler une adresse déjà morte.
+ *
+ * Le successeur est nommé PAR FAMILLE de champs, pas par route : c'est
+ * l'information dont une console a besoin pour migrer, et c'est exactement la
+ * traduction que l'alias applique déjà en corps.
+ */
+const DEPUIS = '2026-08-29';
+
+/**
+ * Le successeur porte l'id RÉSOLU, jamais le gabarit `:userId` : un `Link`
+ * que le client ne peut pas suivre tel quel n'indique aucune migration.
+ */
+const versLaFicheDe = (suffixe: string) => (request: FastifyRequest): string =>
+  `/api/v1/admin/users/${encodeURIComponent((request.params as { userId: string }).userId)}${suffixe}`;
+
+const ANNONCE = {
+  compte: { depuis: DEPUIS, successeur: versLaFicheDe(''), retraitLe: dateDeRetrait(DEPUIS) },
+  securite: { depuis: DEPUIS, successeur: versLaFicheDe('/security'), retraitLe: dateDeRetrait(DEPUIS) },
+  verifications: { depuis: DEPUIS, successeur: versLaFicheDe('/verifications'), retraitLe: dateDeRetrait(DEPUIS) },
+  consentements: { depuis: DEPUIS, successeur: versLaFicheDe('/consents'), retraitLe: dateDeRetrait(DEPUIS) },
+} as const;
 
 type Deps = {
   userManagementService: UserManagementService;
@@ -469,10 +501,16 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
   // Elles restent servies pour les consoles déjà installées. Chacune n'est
   // qu'une TRADUCTION de son corps d'époque : aucune ne porte de garde propre,
   // donc aucune ne peut diverger de la loi.
+  //
+  // Chacune ANNONCE son sursis (#4274), en `onRequest` — donc AVANT `gardes`.
+  // Une console dont le jeton a expiré, ou dont le rang est refusé, reçoit son
+  // 401/403 ET apprend par quoi migrer : posée dans le chemin de succès,
+  // l'annonce n'aurait jamais atteint l'appelant qui doit migrer le plus vite.
 
   const messageSeul = (message: string): Rendu => () => ({ data: { message }, message });
 
-  fastify.patch('/admin/users/:userId/role', { preHandler: gardes }, (request, reply) => {
+  // ALIAS de `PATCH /admin/users/:userId` (#4154) — le champ `role`.
+  fastify.patch('/admin/users/:userId/role', { onRequest: depreciee(ANNONCE.compte), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     return ecrireCompte(request, reply, { role: corps.role, reason: corps.reason }, ({ servi, corps: c }) => ({
       data: servi,
@@ -480,7 +518,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     }));
   });
 
-  fastify.patch('/admin/users/:userId/status', { preHandler: gardes }, (request, reply) => {
+  // ALIAS de `PATCH /admin/users/:userId` (#4154) — le champ `isActive`.
+  fastify.patch('/admin/users/:userId/status', { onRequest: depreciee(ANNONCE.compte), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     return ecrireCompte(request, reply, { isActive: corps.isActive, reason: corps.reason }, ({ servi, corps: c }) => ({
       data: servi,
@@ -488,7 +527,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     }));
   });
 
-  fastify.post('/admin/users/:userId/unlock', { preHandler: gardes }, (request, reply) =>
+  // ALIAS de `PATCH /admin/users/:userId/security` (#4154) — le champ `unlock`.
+  fastify.post('/admin/users/:userId/unlock', { onRequest: depreciee(ANNONCE.securite), preHandler: gardes }, (request, reply) =>
     ecrireSecurite(
       request,
       reply,
@@ -497,7 +537,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     )
   );
 
-  fastify.post('/admin/users/:userId/enable-2fa', { preHandler: gardes }, (request, reply) =>
+  // ALIAS de `PATCH /admin/users/:userId/security` (#4154) — `twoFactorEnabled: true`.
+  fastify.post('/admin/users/:userId/enable-2fa', { onRequest: depreciee(ANNONCE.securite), preHandler: gardes }, (request, reply) =>
     ecrireSecurite(
       request,
       reply,
@@ -506,7 +547,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     )
   );
 
-  fastify.post('/admin/users/:userId/disable-2fa', { preHandler: gardes }, (request, reply) =>
+  // ALIAS de `PATCH /admin/users/:userId/security` (#4154) — `twoFactorEnabled: false`.
+  fastify.post('/admin/users/:userId/disable-2fa', { onRequest: depreciee(ANNONCE.securite), preHandler: gardes }, (request, reply) =>
     ecrireSecurite(
       request,
       reply,
@@ -515,7 +557,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     )
   );
 
-  fastify.post('/admin/users/:userId/verify-email', { preHandler: gardes }, (request, reply) => {
+  // ALIAS de `PATCH /admin/users/:userId/verifications` (#4154) — `emailVerified`.
+  fastify.post('/admin/users/:userId/verify-email', { onRequest: depreciee(ANNONCE.verifications), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -525,7 +568,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     );
   });
 
-  fastify.post('/admin/users/:userId/verify-phone', { preHandler: gardes }, (request, reply) => {
+  // ALIAS de `PATCH /admin/users/:userId/verifications` (#4154) — `phoneVerified`.
+  fastify.post('/admin/users/:userId/verify-phone', { onRequest: depreciee(ANNONCE.verifications), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -535,7 +579,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     );
   });
 
-  fastify.post('/admin/users/:userId/verify-age', { preHandler: gardes }, (request, reply) => {
+  // ALIAS de `PATCH /admin/users/:userId/verifications` (#4154) — `ageVerified`.
+  fastify.post('/admin/users/:userId/verify-age', { onRequest: depreciee(ANNONCE.verifications), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -553,7 +598,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
    * l'intention de #4154 — l'alias existe pour ne pas rendre 404, pas pour
    * conserver une porte que l'issue ferme.
    */
-  fastify.post('/admin/users/:userId/voice-consent', { preHandler: gardes }, (request, reply) => {
+  fastify.post('/admin/users/:userId/voice-consent', { onRequest: depreciee(ANNONCE.consentements), preHandler: gardes }, (request, reply) => {
     const corps = corpsDe(request);
     const type = typeof corps.consentType === 'string' ? corps.consentType : '__inconnu__';
     return ecrireConsentements(

@@ -20,7 +20,15 @@ const CACHE_TTL = {
 // `requireAnalyticsPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
-const requireAnalyticsPermission = requirePermission('canViewAnalytics');
+//
+// #4157 — `canViewAnalytics` admet ANALYST, qui n'a PAS `canAccessAdmin` dans
+// la matrice centrale : ces huit routes vivent sous `/admin/analytics/*`, un
+// périmètre d'ADMINISTRATION, pas la surface où `canViewAnalytics` d'ANALYST
+// est censée s'exercer (une surface hors `/admin`, hors périmètre de cette
+// issue). La garde d'ENTRÉE de tout `/admin/*` est `canAccessAdmin` — elle
+// admet BIGBOSS/ADMIN/MODERATOR/AUDIT (comme `canViewAnalytics` le faisait
+// déjà pour ces quatre-là) et exclut ANALYST, qui n'a rien à faire ici.
+const requireAnalyticsPermission = requirePermission('canAccessAdmin');
 
 export async function analyticsRoutes(fastify: FastifyInstance) {
   /**

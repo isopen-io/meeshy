@@ -3,4 +3,5 @@
  * @deprecated Use ./voice/index.ts directly
  */
 
-export { registerVoiceRoutes } from './voice/index';
+export { registerVoiceRoutes, voiceRoutesPlugin } from './voice/index';
+export type { VoiceRoutesPluginOptions } from './voice/index';

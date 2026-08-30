@@ -67,6 +67,18 @@ struct ComposerDescriptionLayer: View {
     /// repos, où c'est le tap sur le texte qui déclenche l'édition.
     var opensEditingOnAppear: Bool = false
 
+    /// **Ce que la COCHE fait en plus de refermer l'édition** (directive porteur
+    /// 2026-08-30).
+    ///
+    /// Le calque, seul, repassait simplement en lecture — ce qui suffisait tant
+    /// qu'il vivait dans la surface en permanence. Monté par le meuble en zone
+    /// basse (#4361), la même coche doit RANGER la zone : sinon elle laisse à
+    /// l'écran un lecteur que personne n'a demandé, et l'auteur cherche un
+    /// second geste pour s'en débarrasser.
+    ///
+    /// `nil` = le site de montage garde le comportement d'origine.
+    var onValidate: (() -> Void)?
+
     /// **Occupe toute la hauteur qu'on lui donne** (#4124). Le champ compact
     /// convient au calque posé EN PLACE, où il légende une scène ; la couche
     /// plein écran, elle, est une surface d'écriture — le texte y part du haut
@@ -98,6 +110,25 @@ struct ComposerDescriptionLayer: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .onAppear { if opensEditingOnAppear { isEditing = true } }
+        // **Quand le clavier part, la zone part** (directive porteur
+        // 2026-08-30). Une seule loi pour les trois chemins — la coche, le
+        // glissement contrôlé, et toute dismission système — au lieu d'une
+        // fermeture recopiée à chaque site.
+        //
+        // L'ORDRE tombe alors tout seul, et c'est ce que la directive demande :
+        // le clavier s'en va d'abord (le geste le pousse, ou la coche le lâche),
+        // et la zone ne se retire qu'ensuite, parce qu'elle attend ce départ.
+        // L'inverse — fermer la zone puis laisser le clavier retomber dans le
+        // vide — est ce qu'on voyait avant.
+        .adaptiveOnChange(of: isFocused) { avant, apres in
+            guard avant, !apres, isEditing else { return }
+            isEditing = false
+            // La requête ne survit pas à la fermeture : rouvrir le calque sur
+            // une bande héritée d'une frappe précédente offrirait des
+            // suggestions pour un `@` que le curseur a quitté.
+            mentionBox.controller.clearSuggestions()
+            onValidate?()
+        }
     }
 
     // MARK: - Le repos : ce que le lecteur verra
@@ -204,12 +235,13 @@ struct ComposerDescriptionLayer: View {
                 .accessibilityLabel(Text(placeholder))
 
             Button {
+                // **La coche ne ferme pas : elle LÂCHE LE FOCUS.** C'est la
+                // perte de focus qui range la zone (voir plus bas), et lui
+                // laisser ce seul rôle donne au bouton et au glissement le même
+                // chemin — donc le même ordre : le clavier part, puis la zone.
+                // Fermer ici en plus ferait partir les deux ensemble par un
+                // geste et dans l'ordre par l'autre.
                 isFocused = false
-                isEditing = false
-                // La requête ne survit pas à la fermeture : rouvrir le calque
-                // sur une bande héritée d'une frappe précédente offrirait des
-                // suggestions pour un `@` que le curseur a quitté.
-                mentionBox.controller.clearSuggestions()
             } label: {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(14).weight(.semibold))
@@ -269,3 +301,17 @@ nonisolated enum ComposerDescriptionCopy {
                defaultValue: "Écrire la description", bundle: .main)
     }
 }
+
+/// La hauteur RENDUE de la zone de saisie de description (#4361), remontée au
+/// meuble pour qu'il la déclare en réserve basse à l'atelier.
+///
+/// Mesurée, jamais supposée : la zone grandit avec le texte et le clavier la
+/// pousse. Une constante ferait remonter la scène du mauvais nombre de points
+/// dès la deuxième ligne.
+struct ComposerDescriptionEditorHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+

@@ -9,8 +9,26 @@ import type {
   ReportFilters
 } from '@meeshy/shared/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/authorize';
+import { requirePermission, withAudit } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
+
+const DEPUIS_REPORTS = '2026-08-29';
+
+/**
+ * Le sursis de `POST /admin/reports`.
+ *
+ * `depuis` est la date de fermeture de #4155 — le jour où `POST /api/v1/reports`
+ * est devenue l'adresse du geste. `retraitLe` s'en dérive par la fenêtre du
+ * dépôt (`identity.md` § 5, 180 jours) : il INFORME le client d'une échéance
+ * stable, il ne décide pas du retrait. Le retrait réel reste gouverné par le
+ * compteur d'accès nul des trois clients (#4155 c.5, mesuré par #4275).
+ */
+const ADAPTATEUR_SIGNALEMENT = {
+  depuis: DEPUIS_REPORTS,
+  successeur: '/api/v1/reports',
+  retraitLe: dateDeRetrait(DEPUIS_REPORTS),
+} as const;
 
 // Schemas de validation Zod
 const updateReportSchema = z.object({
@@ -47,8 +65,11 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Kotlin (`core/network/.../ReportApi.kt`) n'avait pas été inventorié par
    * l'audit qui a ouvert cette issue.
    */
+  // L'annonce est posée en `onRequest`, AVANT `authenticate` : un appelant dont
+  // le jeton a expiré reçoit 401 et apprend quand même par quoi migrer — c'est
+  // exactement celui qui a le plus besoin de le savoir (#4274).
   fastify.post('/', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ADAPTATEUR_SIGNALEMENT), fastify.authenticate],
     preHandler: limiteursDeSignalement(fastify)
   }, (request: FastifyRequest, reply: FastifyReply) => signaler(fastify, request, reply));
 
@@ -188,14 +209,43 @@ export async function reportRoutes(fastify: FastifyInstance) {
   /**
    * DELETE /api/admin/reports/:id
    * Supprimer un signalement
+   *
+   * #4157 — la matrice n'a pas d'avis sur CE point précis (« — » dans le
+   * tableau de l'issue) : la question n'est pas « quel rôle ? » (MODERATOR
+   * reste le seuil juste, `canModerateContent`) mais « quel rapport entre
+   * l'appelant et la CIBLE du signalement ? ». Sans garde, un modérateur
+   * SIGNALÉ (reportedType === 'user', reportedEntityId === lui-même) pouvait
+   * effacer la preuve avant qu'un rang supérieur ne l'examine — `deleteReport`
+   * est un DELETE Mongo définitif, pas une corbeille. Deux gestes séparés :
+   * REFUSER l'auto-suppression, et laisser une trace `AdminAuditLog` pour
+   * toute suppression qui a réellement lieu — la seule chose qui survit à la
+   * disparition définitive de la ligne `Report`.
    */
   fastify.delete('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const moderatorId = authContext.registeredUser.id;
+
+      const report = await reportService.getReportById(id);
+      if (!report) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+      if (report.reportedType === 'user' && report.reportedEntityId === moderatorId) {
+        return sendForbidden(reply, 'Un modérateur ne peut pas supprimer un signalement qui le vise');
+      }
 
       await reportService.deleteReport(id);
+
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_DELETED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        changes: { reportedType: report.reportedType, reportType: report.reportType, status: report.status },
+      });
 
       return sendSuccess(reply, { message: 'Signalement supprime' });
     } catch (error) {
@@ -206,17 +256,24 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/admin/reports/entity/:type/:id
-   * Obtenir tous les signalements pour une entite specifique
+   * Obtenir une PAGE des signalements d'une entite specifique (#4165).
+   *
+   * La route rendait la collection entiere : une entite tres signalee servait
+   * TOUS ses signalements a chaque ouverture de la fiche. Elle reprend ici la
+   * convention offset/limit deja posee par GET / du meme fichier, plutot
+   * qu'une seconde convention inventee pour l'occasion.
    */
   fastify.get('/entity/:type/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { type, id } = request.params as { type: string; id: string };
+      const { offset: offsetRaw, limit: limitRaw } = request.query as { offset?: string; limit?: string };
+      const { offset, limit } = validatePagination(offsetRaw, limitRaw);
 
-      const reports = await reportService.getReportsForEntity(type, id);
+      const { reports, total } = await reportService.getReportsForEntity(type, id, offset, limit);
 
-      return sendSuccess(reply, reports);
+      return sendPaginatedSuccess(reply, reports, buildPaginationMeta(total, offset, limit, reports.length));
     } catch (error) {
       logError(fastify.log, 'Get entity reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');

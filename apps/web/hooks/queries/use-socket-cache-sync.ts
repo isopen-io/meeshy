@@ -10,6 +10,7 @@ import { useNotificationStore } from '@/stores/notification-store';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import { applyReadingModePreferenceBroadcast } from '@/lib/conversations/reading-mode-broadcast';
+import { refreshMirroredPreferenceCategory } from '@/lib/preferences/mirrored-preference-categories';
 import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
 import {
   rebuildInfiniteConversationPages,
@@ -1738,6 +1739,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.preferences.category(data.category),
         });
+        // La clé ci-dessus n'a d'observateur que pendant que l'écran de
+        // réglages de la catégorie est monté. Le bloc `privacy` que les BULLES
+        // rendent (`DeliveryIndicator`, `FocalRow`) vit dans un second
+        // exemplaire — le store Zustand — dont `initialize()`, appelé une fois
+        // au montage, était l'unique source. Quelle catégorie est doublée et
+        // comment se relit vit à un seul site, jamais ici.
+        refreshMirroredPreferenceCategory(data.category);
         return;
       }
       if ('communityId' in data) {

@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type {
   UserConversationPreferences,
   UserConversationCategory,
@@ -97,7 +98,7 @@ export class UserPreferencesService {
       }
 
       const response = await apiService.get<UserPreferencesResponse>(
-        `/api/user-preferences/conversations/${conversationId}`
+        API_ENDPOINTS.userPreferences.conversationsByConversationId(conversationId)
       );
 
       if (!response.data?.success || !response.data?.data) {
@@ -127,7 +128,7 @@ export class UserPreferencesService {
       const response = await apiService.get<{
         success: boolean;
         data: unknown[];
-      }>('/api/user-preferences/conversations');
+      }>(API_ENDPOINTS.userPreferences.conversations);
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
         return [];
@@ -159,7 +160,7 @@ export class UserPreferencesService {
   ): Promise<UserConversationPreferences> {
     try {
       const response = await apiService.put<UserPreferencesResponse>(
-        `/api/user-preferences/conversations/${conversationId}`,
+        API_ENDPOINTS.userPreferences.conversationsByConversationId(conversationId),
         data
       );
 
@@ -185,7 +186,7 @@ export class UserPreferencesService {
    */
   async deletePreferences(conversationId: string): Promise<void> {
     try {
-      await apiService.delete(`/api/user-preferences/conversations/${conversationId}`);
+      await apiService.delete(API_ENDPOINTS.userPreferences.conversationsByConversationId(conversationId));
 
       // Invalider le cache pour cette conversation
       this.preferencesCache.delete(conversationId);
@@ -304,7 +305,7 @@ export class UserPreferencesService {
     }>
   ): Promise<void> {
     try {
-      await apiService.post('/api/user-preferences/reorder', { updates });
+      await apiService.post(API_ENDPOINTS.userPreferences.reorder, { updates });
 
       // Invalider le cache
       this.invalidateCache();
@@ -434,7 +435,7 @@ export class UserPreferencesService {
    */
   async deleteCategory(categoryId: string): Promise<void> {
     try {
-      await apiService.delete(`/me/preferences/categories/${categoryId}`);
+      await apiService.delete(API_ENDPOINTS.me.preferencesCategoriesByCategoryId(categoryId));
 
       // Invalider le cache
       this.categoriesCache = null;
@@ -465,7 +466,7 @@ export class UserPreferencesService {
     }>
   ): Promise<void> {
     try {
-      await apiService.post('/me/preferences/categories/reorder', { updates });
+      await apiService.post(API_ENDPOINTS.me.preferencesCategoriesReorder, { updates });
 
       // Invalider le cache
       this.categoriesCache = null;

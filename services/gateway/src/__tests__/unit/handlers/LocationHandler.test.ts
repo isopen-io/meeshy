@@ -170,7 +170,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStart(socket, invalidData as any, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('returns error for invalid duration (exceeds max)', async () => {
@@ -180,7 +180,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStart(socket, invalidData as any, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('returns error for invalid duration (negative)', async () => {
@@ -190,7 +190,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStart(socket, invalidData as any, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('returns error for invalid coordinates', async () => {
@@ -200,7 +200,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStart(socket, invalidData as any, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid coordinates' });
     });
 
     it('returns error when not authenticated', async () => {

@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { conversationsCrudService } from './crud.service';
 import { generateLinkName } from '@/utils/link-name-generator';
@@ -53,7 +54,7 @@ export class LinksService {
       const response = await apiService.post<{
         success: boolean;
         data: { link: string; code: string; shareLink: any };
-      }>(`/conversations/${conversationId}/new-link`, {
+      }>(API_ENDPOINTS.conversations.byIdNewLink(conversationId), {
         name: linkName,
         description: linkData?.description || 'Rejoignez cette conversation',
         maxUses: linkData?.maxUses,
@@ -95,7 +96,7 @@ export class LinksService {
     const response = await apiService.post<{
       success: boolean;
       data: { linkId: string; conversationId: string; shareLink: any };
-    }>('/api/links', {
+    }>(API_ENDPOINTS.links.root, {
       name: linkData.name || 'Nouvelle conversation',
       description: linkData.description || 'Rejoignez cette conversation',
       maxUses: linkData.maxUses,

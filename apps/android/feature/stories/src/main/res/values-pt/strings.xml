@@ -31,6 +31,10 @@
     <string name="stories_publish_failed_title">Não foi possível publicar sua story</string>
     <string name="stories_publish_retry">Tentar novamente</string>
     <string name="stories_publish_discard">Descartar</string>
+    <plurals name="stories_publish_media_summary">
+        <item quantity="one">Foto ou vídeo</item>
+        <item quantity="other">%1$d fotos ou vídeos</item>
+    </plurals>
     <string name="stories_composer_title">Nova story</string>
     <string name="stories_composer_cancel">Cancelar</string>
     <string name="stories_composer_publish">Partilhar</string>

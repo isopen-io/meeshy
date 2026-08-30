@@ -72,12 +72,14 @@ Routes pour l'analyse vocale, le feedback et le monitoring.
 **Endpoints de feedback**:
 - `POST /api/v1/voice/feedback` - Soumission de feedback utilisateur
 - `GET /api/v1/voice/history` - Historique des traductions
-- `GET /api/v1/voice/stats` - Statistiques utilisateur
 
 **Endpoints de monitoring**:
 - `GET /api/v1/voice/admin/metrics` - Métriques système (admin uniquement)
-- `GET /api/v1/voice/health` - Statut de santé des services (public)
 - `GET /api/v1/voice/languages` - Langues supportées (public)
+
+> `GET /api/v1/voice/stats` et `GET /api/v1/voice/health` ont été RETIRÉES (#4190) :
+> aucun appelant sur les trois clients, ni sur les sondes d'infrastructure. La santé
+> se lit sur `GET /health` (racine), l'usage sur `GET /users/me/stats`.
 
 ## Usage
 

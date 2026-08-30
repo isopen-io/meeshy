@@ -28,6 +28,15 @@ const mockCreateCallSummaryMessageDc = jest.fn<any>();
 const mockForceEndOrphanedCallSessionDc = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  // Vague 182 — `CallAlreadyEndedError` must be the REAL class, not
+  // undefined: CallEventsHandler's catch blocks now do
+  // `error instanceof CallAlreadyEndedError` (absorbAlreadyEndedLeave's
+  // no-op path), which throws "right-hand side of 'instanceof' is not
+  // callable" under a mock that omits it — silently swallowing every
+  // assertion downstream of the disconnect-grace force-cleanup path this
+  // suite exercises. `jest.requireActual` keeps the real error class while
+  // still mocking the service itself.
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCallDc,
     createCallSummaryMessage: mockCreateCallSummaryMessageDc,
@@ -90,6 +99,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';

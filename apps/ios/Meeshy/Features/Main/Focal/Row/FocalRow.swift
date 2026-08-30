@@ -584,23 +584,11 @@ struct FocalRow: View {
         )
     }
 
-    /// Drapeau-TOGGLE de version — le SEUL indicateur multi-langue de la
-    /// rangée (arbitrages user 2026-08-18 : plus d'icône translate ni de
-    /// bande de drapeaux ; le menu d'appui long garde l'exploration
-    /// complète). Affiché UNIQUEMENT quand plusieurs versions existent
-    /// (`content.translation` non-nil).
-    ///
-    /// Le drapeau montre L'AUTRE version disponible, et le tap y bascule :
-    /// - traduction affichée → drapeau de la langue D'ORIGINE ; tap =
-    ///   afficher l'original (`onSetActiveDisplayLanguage(originalLangCode)`) ;
-    /// - original affiché → drapeau de la langue CONFIGURÉE sur le profil
-    ///   (la cible du Prisme, `preferredLangCode`) ; tap = revenir à la
-    ///   traduction (`onSetActiveDisplayLanguage(nil)` → résolution Prisme).
-    /// Quand le Prisme n'a aucune traduction préférée (`preferredLangCode`
-    /// nil), le drapeau d'origine reste un simple indicateur multi-versions.
-    private func flagEmoji(_ code: String) -> String {
-        LanguageData.info(for: code.lowercased())?.flag ?? "\u{1F310}"
-    }
+    // `flagEmoji` a vécu ici, repliant sur 🌐 et lisant `LanguageData` quand la
+    // source unique lit `LanguageDisplay` : deux tables pour une question, et
+    // un repli qui ne distingue AUCUNE langue d'une autre là où #4248 avait
+    // choisi le code en capitales — « un code se lit et se reconnaît ». La
+    // production du drapeau passe désormais par `LanguageFlagChip.flag(for:)`.
 
     /// Drapeau-toggle + réactions sur LA MÊME LIGNE, le drapeau en PREMIER
     /// (arbitrage user 2026-08-18, précision : jamais sur une ligne à part).
@@ -771,15 +759,24 @@ struct FocalRow: View {
                     ),
                     id: \.self
                 ) { code in
+                    // DIXIÈME copie (252i, #4260). Elle garde sa VUE — le fond
+                    // `focusChip` n'existe que sur la bande magnifiée, et
+                    // `LanguageFlagChip` étant un `Button`, l'adopter ici
+                    // imbriquerait un bouton dans un bouton. Elle prend donc le
+                    // VOCABULAIRE : même table, même repli, étiquette d'action,
+                    // état porté par un trait et non par le seul fond de puce.
                     Button {
                         actions.onSetActiveDisplayLanguage?(content.messageId, code)
                     } label: {
                         focusChip(isActive: code.lowercased() == translation.activeLangCode.lowercased()) {
-                            Text(flagEmoji(code)).font(MeeshyFont.relative(12))
+                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(12))
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(LanguageData.info(for: code.lowercased())?.name ?? code)
+                    .languageFlagAccessibility(
+                        code: code,
+                        isActive: code.lowercased() == translation.activeLangCode.lowercased()
+                    )
                 }
             }
             Button {
@@ -936,23 +933,40 @@ struct FocalRow: View {
                 ),
                 id: \.self
             ) { code in
-                let isActive = code.lowercased() == translation.activeLangCode.lowercased()
-                Button {
+                // NEUVIÈME copie du drapeau-contrôle, soldée au 252i (#4260) —
+                // invisible à la garde de #4248 parce qu'elle disait son état
+                // par l'OPACITÉ et non par le soulignement que cette garde
+                // interdit. L'opacité seule ne dit rien à VoiceOver (WCAG
+                // 1.4.1), et « Français » nu ressemble à une étiquette, pas à
+                // une action : la source unique porte les deux (trait
+                // `.isSelected` + « Afficher en Français »).
+                LanguageFlagChip(
+                    code: code,
+                    isActive: code.lowercased() == translation.activeLangCode.lowercased(),
+                    metrics: .compact
+                ) {
                     // Rangée ORDINAIRE, montée sur le DERNIER message d'un
                     // groupe (#3919) : le choix s'applique à tout le groupe.
                     actions.onSetActiveDisplayLanguageForGroup?(content.messageId, code)
-                } label: {
-                    Text(flagEmoji(code))
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                        .opacity(isActive ? 1 : 0.55)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(LanguageData.info(for: code.lowercased())?.name ?? code)
             }
         }
     }
 
+    /// Drapeau-TOGGLE de version — le SEUL indicateur multi-langue de la
+    /// rangée (arbitrages user 2026-08-18 : plus d'icône translate ni de
+    /// bande de drapeaux ; le menu d'appui long garde l'exploration
+    /// complète). Affiché UNIQUEMENT quand plusieurs versions existent
+    /// (`content.translation` non-nil).
+    ///
+    /// Le drapeau montre L'AUTRE version disponible, et le tap y bascule :
+    /// - traduction affichée → drapeau de la langue D'ORIGINE ; tap =
+    ///   afficher l'original (`onSetActiveDisplayLanguage(originalLangCode)`) ;
+    /// - original affiché → drapeau de la langue CONFIGURÉE sur le profil
+    ///   (la cible du Prisme, `preferredLangCode`) ; tap = revenir à la
+    ///   traduction (`onSetActiveDisplayLanguage(nil)` → résolution Prisme).
+    /// Quand le Prisme n'a aucune traduction préférée (`preferredLangCode`
+    /// nil), le drapeau d'origine reste un simple indicateur multi-versions.
     @ViewBuilder
     private var originalLanguageFlag: some View {
         if let translation = content.translation {
@@ -967,7 +981,9 @@ struct FocalRow: View {
                     actions.onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)
                 }
             } label: {
-                Text(showsProfileFlag ? flagEmoji(profileLang ?? "") : flagEmoji(translation.originalLangCode))
+                Text(showsProfileFlag
+                     ? LanguageFlagChip.flag(for: profileLang ?? "")
+                     : LanguageFlagChip.flag(for: translation.originalLangCode))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize))
                     .contentShape(Rectangle())
             }

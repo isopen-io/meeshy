@@ -138,6 +138,32 @@ object SdkModule {
         return DataStoreInterfaceLanguageStore(dataStore, scope)
     }
 
+    /**
+     * The read side of `user:preferences-updated` (category scope) — issue #4133 — and the
+     * per-connection hydration that catches up what a backgrounded phone never heard (#4197).
+     * Built here rather than by `@Inject` for the same reason the stores are: the graph
+     * binds no `CoroutineScope`, and this owner holds a session-long collector.
+     */
+    @Provides
+    @Singleton
+    fun providesPreferencesSyncCoordinator(
+        socketManager: me.meeshy.sdk.socket.PreferencesSocketManager,
+        connectionManager: me.meeshy.sdk.socket.SocketManager,
+        preferencesApi: me.meeshy.sdk.net.api.PreferencesApi,
+        outboxRepository: me.meeshy.sdk.outbox.OutboxRepository,
+        notificationStore: NotificationPreferencesStore,
+        privacyStore: PrivacyPreferencesStore,
+    ): me.meeshy.sdk.preferences.PreferencesSyncCoordinator =
+        me.meeshy.sdk.preferences.PreferencesSyncCoordinator(
+            socketManager = socketManager,
+            connectionManager = connectionManager,
+            preferencesApi = preferencesApi,
+            outboxRepository = outboxRepository,
+            notificationStore = notificationStore,
+            privacyStore = privacyStore,
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        )
+
     @Provides
     @Singleton
     fun providesNotificationPreferencesStore(@ApplicationContext context: Context): NotificationPreferencesStore {

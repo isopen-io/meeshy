@@ -185,7 +185,7 @@ describe('LocationHandler', () => {
         latitude: 200, longitude: 0, conversationId: CONV_ID, durationMinutes: 5,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid coordinates' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid coordinates' });
     });
 
     it('returns error for durationMinutes = 0', async () => {
@@ -197,7 +197,7 @@ describe('LocationHandler', () => {
         ...VALID_COORDINATES, conversationId: CONV_ID, durationMinutes: 0,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('returns error for durationMinutes = 481 (over max)', async () => {
@@ -209,7 +209,7 @@ describe('LocationHandler', () => {
         ...VALID_COORDINATES, conversationId: CONV_ID, durationMinutes: 481,
       }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid duration (must be 1-480 minutes)' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Validation failed: Invalid duration (must be 1-480 minutes)' });
     });
 
     it('accepts durationMinutes = 1 (boundary min)', async () => {
@@ -412,6 +412,20 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
+    });
+
+    it('rejects a forged payload missing conversationId at the Zod boundary', async () => {
+      // location:live-stop had no boundary guard before iter 281 — a forged
+      // payload without conversationId went straight to normalizeConversationId.
+      // The schema now refuses it before any work; the stream verb has no
+      // callback, so the only observable is that nothing is normalized/emitted.
+      const { handler } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationStop(socket, {} as any);
+
+      expect(mockNormalize).not.toHaveBeenCalled();
       expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
 

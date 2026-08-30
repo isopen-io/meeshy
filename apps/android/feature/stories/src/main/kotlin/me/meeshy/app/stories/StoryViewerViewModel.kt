@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.util.resolveMediaUrl
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -188,6 +189,15 @@ data class StorySlideView(
      * aspect-fill — a video background or a legacy/flat story never carries one yet.
      */
     val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+    /**
+     * The ThumbHash the viewer decodes into an instant blur behind the background
+     * [imageUrl] while it loads — no black flash on cold load. Resolved once at
+     * projection time via [StorySlidePlaceholder] (slide-level `effects.thumbHash`
+     * then the flat background image's per-media hash). `null` when the slide
+     * carries no usable hash: the image then loads over the plain background with
+     * no placeholder, exactly as before.
+     */
+    val backgroundThumbHash: String? = null,
     /**
      * The locked repost attribution shown after the author's name when this slide
      * is a repost of someone else's story (repost icon + `@handle`, no "via"),
@@ -700,6 +710,7 @@ class StoryViewerViewModel @Inject constructor(
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
+            backgroundThumbHash = StorySlidePlaceholder.resolve(this),
             foregroundMedia = foreground,
             textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
@@ -738,7 +749,7 @@ class StoryViewerViewModel @Inject constructor(
         val isVideo = backgroundObject?.mediaType == "video" ||
             (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
         val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
 
         if (isVideo) {
             // The framing rides only on a modern `isBackground` object whose OWN
@@ -758,7 +769,7 @@ class StoryViewerViewModel @Inject constructor(
             )
         }
         val imageUrl = resolvedUrl
-            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         // The framing rides only on a modern `isBackground` object; a legacy/flat
         // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
         val transform = backgroundObject
@@ -771,7 +782,7 @@ class StoryViewerViewModel @Inject constructor(
     private fun StoryMediaObject.toForegroundMediaView(
         clipTransitions: List<StoryClipTransition>,
     ): StoryForegroundMediaView? {
-        val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
+        val url = mediaURL?.let { resolveMediaUrl(it, config.apiBaseUrl) } ?: return null
         return StoryForegroundMediaView(
             id = id,
             url = url,
@@ -803,11 +814,11 @@ class StoryViewerViewModel @Inject constructor(
             .firstOrNull { (it.isBackground == true) == preferBackground }
         val fromObject = match?.postMediaId
             ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         if (fromObject != null) return fromObject
         if (!preferBackground) return null
-        return audioUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.socketUrl) }
+        return audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
     }
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {

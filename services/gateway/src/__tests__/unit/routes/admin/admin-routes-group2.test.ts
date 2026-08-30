@@ -601,6 +601,19 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // #4157 — la route relit le signalement AVANT de le supprimer, pour refuser
+      // qu'un moderateur efface la preuve d'un signalement qui le VISE. Sans ce
+      // stub, la relecture rend undefined et la route repond 404 : le temoin
+      // tomberait sur une fixture absente, jamais sur le comportement vise.
+      // reportedType 'message' place deliberement le cas HORS de la garde, dont
+      // le temoin dedie vit dans admin-reports.test.ts.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockResolvedValueOnce(undefined);
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });
@@ -613,6 +626,16 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // La relecture doit REUSSIR pour que le temoin atteigne le chemin d'erreur
+      // qu'il nomme : sans elle, la route repondrait 404 et le test passerait au
+      // vert pour la mauvaise raison le jour ou l'on attendrait 404.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });
@@ -637,13 +660,16 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const reports = [{ id: 'r1' }, { id: 'r2' }];
-      mockReportService.getReportsForEntity.mockResolvedValueOnce(reports);
+      mockReportService.getReportsForEntity.mockResolvedValueOnce({ reports, total: 2 });
 
       const res = await app.inject({ method: 'GET', url: '/entity/user/507f1f77bcf86cd799439020' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data).toHaveLength(2);
-      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020');
+      // #4165 — la borne voyage jusqu'au service : la route ne peut plus lui
+      // demander la collection entiere, meme si le service l'acceptait encore.
+      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020', 0, 20);
+      expect(body.pagination).toMatchObject({ total: 2, offset: 0, limit: 20 });
     });
 
     it('returns 500 on service error', async () => {
@@ -2076,59 +2102,3 @@ describe('Admin types schemas', () => {
   });
 });
 
-// ===========================================================================
-// SECTION 5 — system.ts (empty file)
-// ===========================================================================
-
-describe('system.ts', () => {
-  it('is an empty placeholder file with no exports', () => {
-    // The file exists but is empty — no runtime behavior to test.
-    // Coverage for this file is handled by the TypeScript compiler confirming it compiles.
-    expect(true).toBe(true);
-  });
-});
-
-// ===========================================================================
-// SECTION 6 — index.ts (re-exports smoke test)
-// ===========================================================================
-
-describe('admin index.ts', () => {
-  it('re-exports reportRoutes', async () => {
-    const { reportRoutes: r } = await import('../../../../routes/admin/index');
-    expect(typeof r).toBe('function');
-  });
-
-  it('re-exports analyticsRoutes', async () => {
-    const { analyticsRoutes: a } = await import('../../../../routes/admin/index');
-    expect(typeof a).toBe('function');
-  });
-
-  it('re-exports messagesRoutes', async () => {
-    const { messagesRoutes: m } = await import('../../../../routes/admin/index');
-    expect(typeof m).toBe('function');
-  });
-
-  it('re-exports languagesRoutes, invitationRoutes, registerRoleRoutes, registerContentRoutes', async () => {
-    const mod = await import('../../../../routes/admin/index');
-    expect(typeof mod.languagesRoutes).toBe('function');
-    expect(typeof mod.invitationRoutes).toBe('function');
-    expect(typeof mod.registerRoleRoutes).toBe('function');
-    expect(typeof mod.registerContentRoutes).toBe('function');
-  });
-
-  it('re-exports dashboardRoutes, userAdminRoutes, systemRankingsRoutes, agentAdminRoutes', async () => {
-    const mod = await import('../../../../routes/admin/index');
-    expect(typeof mod.dashboardRoutes).toBe('function');
-    expect(typeof mod.userAdminRoutes).toBe('function');
-    expect(typeof mod.systemRankingsRoutes).toBe('function');
-    expect(typeof mod.agentAdminRoutes).toBe('function');
-  });
-
-  it('adminRoutes is a valid async function (plugin signature)', async () => {
-    const { adminRoutes } = await import('../../../../routes/admin/index');
-    // Verify it is an async function with the expected arity (FastifyInstance → void)
-    expect(typeof adminRoutes).toBe('function');
-    expect(adminRoutes.constructor.name).toBe('AsyncFunction');
-    expect(adminRoutes.length).toBe(1);
-  });
-});

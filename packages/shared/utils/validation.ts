@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
+import { EMOJI_MAX_LENGTH } from '../types/reaction.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
@@ -103,11 +104,19 @@ const supportedLanguageCode = z
  * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
  * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
  * inchangé, seul le stockage des codes région-taggés est corrigé.
+ *
+ * La borne `.max(6)` reflète la longueur MAXIMALE d'un code 639-3 région-taggé
+ * (`[a-z]{3}` + `-` + `[A-Z]{2}` = 6, ex. `'bas-CM'`, `'ewo-CM'`), miroir de
+ * {@link CommonSchemas.language}. Un `.max(5)` tombait AVANT la `.transform` et
+ * rejetait ces locales de plateforme (`Locale.current` / `Accept-Language`) en
+ * HTTP 400 — la même exclusion silencieuse que l'itération 266 a fermée sur les
+ * langues de contenu, manquée ici parce que `.min`/`.max` sur deux lignes
+ * échappaient à son grep mono-ligne.
  */
 const customDestinationLanguageCode = z
   .string()
   .min(2)
-  .max(5)
+  .max(6)
   .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
@@ -354,6 +363,26 @@ export const httpUrlSchema = z.string().refine(isHttpUrl, 'URL invalide : http(s
 /**
  * Schéma de validation pour la mise à jour du profil utilisateur
  * Avec validation stricte (rejette les champs inconnus)
+ *
+ * #4184 — `email` et `phoneNumber` sont ABSENTS d'ICI par construction, et
+ * `.strict()` (dernière ligne) transforme cette absence en REFUS EXPLICITE
+ * (Zod lève, le handler répond 400) plutôt qu'en simple silence. Cette route
+ * écrivait ces deux champs DIRECTEMENT en base sur simple appel authentifié —
+ * sans jeton ni code envoyé à la NOUVELLE adresse, et sans jamais remettre
+ * `emailVerifiedAt` / `phoneVerifiedAt` à `null` — alors qu'une preuve de
+ * possession n'était qu'à un fichier de là (`contact-change.ts`). Le coût :
+ * une session courte (volée, fixée) suffisait à un attaquant pour poser SA
+ * propre adresse, déclencher une réinitialisation de mot de passe dessus, et
+ * prendre le compte en entier — le tout en un seul appel HTTP, sans jamais
+ * prouver la possession de quoi que ce soit. Le changement de contact passe
+ * désormais EXCLUSIVEMENT par `POST /users/me/change-email` / `/change-phone`
+ * (`services/gateway/src/routes/users/contact-change.ts`), qui exigent cette
+ * preuve avant d'écrire. Ne JAMAIS réintroduire ces deux clés ici — les
+ * gardes ci-dessous (`__tests__/validation.test.ts`, même paquet) et
+ * `unit/routes/users/profile.test.ts` (gateway, describe « email/phoneNumber
+ * are not writable via this route ») rougissent sous cette mutation précise,
+ * schéma AJV frère `updateUserRequestSchema`
+ * (`packages/shared/types/api-schemas.ts`) compris.
  */
 export const updateUserProfileSchema = z.object({
   firstName: z.string().min(1).optional().refine(noEmoji, {
@@ -363,8 +392,6 @@ export const updateUserProfileSchema = z.object({
     message: 'Le nom ne peut pas contenir d\'emojis'
   }),
   displayName: z.string().optional(), // Autorise les emojis dans displayName
-  email: z.email().optional(),
-  phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
   systemLanguage: supportedLanguageCode.optional(),
   // Chaîne vide autorisée = effacement de la langue secondaire (mirror de
@@ -1303,7 +1330,7 @@ export const ReactionSchemas = {
 
   // Ajouter une réaction
   add: z.object({
-    emoji: z.string().min(1).max(10),
+    emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
   }),
 };
 

@@ -158,19 +158,21 @@ describe('POST /conversations/:id/leave — creator with other active members', 
             isActive: true,
             displayName: 'Alice',
           }),
-          // Les candidats à la succession (`userId: { not }`) d'un côté,
-          // l'effectif restant du fanout de l'autre — mêmes appels, `where`
-          // différents.
+          // Trois lectures, trois formes : les administrateurs (`where.role`,
+          // aucun ici), le membre le plus ancien (`take: 1`), l'effectif
+          // restant du fanout.
           findMany: jest.fn<any>((args: any) =>
             Promise.resolve(
-              args?.where?.userId
-                ? [{
-                    id: 'p-successor',
-                    userId: SUCCESSOR_USER_ID,
-                    role: 'member',
-                    joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                  }]
-                : []
+              args?.where?.role
+                ? []
+                : args?.take === 1
+                  ? [{
+                      id: 'p-successor',
+                      userId: SUCCESSOR_USER_ID,
+                      role: 'member',
+                      joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+                    }]
+                  : []
             )
           ),
           count: jest.fn<any>().mockResolvedValue(3),

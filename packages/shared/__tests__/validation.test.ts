@@ -22,6 +22,7 @@ import {
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
+import { updateUserRequestSchema } from '../types/api-schemas.js';
 
 describe('validateSchema', () => {
   const testSchema = z.object({
@@ -328,6 +329,24 @@ describe('language-code normalization at the write boundary', () => {
     expect(parsed.customDestinationLanguage).toBe('bas');
   });
 
+  // The region-tagged form of a supported ISO 639-3 code (`bas-CM`, `ewo-CM` —
+  // officially-supported Cameroonian languages, 639-3 body + ISO 3166-1 region =
+  // 6 chars) is exactly what the platform locale surfaces (`Locale.current`,
+  // `Accept-Language`). customDestinationLanguageCode's `.max(5)` fired BEFORE the
+  // normalizing `.transform` and rejected these 6-char codes with HTTP 400 — the
+  // same silent exclusion CommonSchemas.language.max(6) documents closing, missed
+  // here because `.min(2)`/`.max(...)` split across lines escaped the line-based
+  // grep of iteration 266. The transform reduces bas-CM -> bas (SUPPORTED, kept
+  // verbatim). Prisme priority-3 language must be settable by these users.
+  it('updateUserProfileSchema canonicalizes a region-tagged ISO 639-3 customDestinationLanguage (bas-CM -> bas)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'bas-CM' });
+    expect(parsed.customDestinationLanguage).toBe('bas');
+  });
+
+  it('updateUserProfileSchema still rejects an over-long (7-char) customDestinationLanguage', () => {
+    expect(updateUserProfileSchema.safeParse({ customDestinationLanguage: 'abcd-CM' }).success).toBe(false);
+  });
+
   it('updateUserProfileSchema still clears customDestinationLanguage on empty string / null', () => {
     expect(updateUserProfileSchema.parse({ customDestinationLanguage: '' }).customDestinationLanguage).toBe('');
     expect(updateUserProfileSchema.parse({ customDestinationLanguage: null }).customDestinationLanguage).toBeNull();
@@ -417,6 +436,79 @@ describe('language-code normalization at the write boundary', () => {
       const result = AuthSchemas.register.safeParse({ ...base, firstName });
       expect(result.success, `firstName '${firstName}' should be rejected`).toBe(false);
     }
+  });
+});
+
+/**
+ * #4184 — `PATCH /users/me` écrivait `email`/`phoneNumber` DIRECTEMENT en
+ * base, sans jeton ni code envoyé à la nouvelle adresse et sans jamais
+ * remettre `emailVerifiedAt`/`phoneVerifiedAt` à `null` : une session courte
+ * (volée, fixée) suffisait à poser SA propre adresse et déclencher une
+ * réinitialisation de mot de passe dessus — prise de contrôle de compte en un
+ * seul appel HTTP. Le témoin ci-dessous garde le SCHÉMA (la couche la plus en
+ * amont où la garde peut vivre) ; `unit/routes/users/profile.test.ts` (gateway,
+ * describe « email/phoneNumber are not writable via this route ») garde la
+ * route entière, bout en bout, `prisma.user.update` compris.
+ */
+describe('updateUserProfileSchema — email/phoneNumber removed for account-takeover fix (#4184)', () => {
+  it('rejects a body carrying email — unknown key under .strict()', () => {
+    const result = updateUserProfileSchema.safeParse({ firstName: 'Bob', email: 'attacker@evil.com' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a body carrying phoneNumber — unknown key under .strict()', () => {
+    const result = updateUserProfileSchema.safeParse({ firstName: 'Bob', phoneNumber: '+33611111111' });
+    expect(result.success).toBe(false);
+  });
+
+  it('still accepts a body without email/phoneNumber (no collateral rejection)', () => {
+    const result = updateUserProfileSchema.safeParse({ firstName: 'Bob', bio: 'hello' });
+    expect(result.success).toBe(true);
+  });
+});
+
+/**
+ * #4184 § critère 2 — le contrat AJV de la route (`updateUserRequestSchema`,
+ * types/api-schemas.ts) et son validateur Zod frère (`updateUserProfileSchema`
+ * ci-dessus) doivent déclarer EXACTEMENT le même jeu de clés. Avant ce lot ils
+ * divergeaient dans les DEUX sens — `avatar`/`timezone` existaient côté AJV
+ * sans exister côté Zod (documentation mensongère : un client qui lit le
+ * schéma croit ces champs acceptés, et se fait rejeter en 400 à l'exécution) ;
+ * `email`/`phoneNumber` existaient côté Zod sans exister côté AJV (c'est
+ * l'inverse qui ouvrait la prise de contrôle de compte ci-dessus). Un test de
+ * bout en bout ne peut PAS garder cette parité : Zod rejette déjà
+ * `avatar`/`timezone` par lui-même (double défense), donc une requête HTTP qui
+ * les envoie répond 400 que le champ AJV soit propre ou pollué — seule une
+ * comparaison DIRECTE des deux jeux de clés déclarées peut faire tomber cette
+ * classe de régression (mesuré : un témoin HTTP sur `avatar`/`timezone`
+ * ajouté au même lot est resté VERT sous cette mutation précise).
+ */
+describe('updateUserRequestSchema (AJV) — field-set parity with updateUserProfileSchema (Zod) (#4184)', () => {
+  it('declares exactly the same properties as the Zod schema — no more, no less', () => {
+    const ajvKeys = Object.keys(updateUserRequestSchema.properties).sort();
+    const zodKeys = Object.keys(updateUserProfileSchema.shape).sort();
+    expect(ajvKeys).toEqual(zodKeys);
+  });
+
+  it('does not declare email or phoneNumber — the fields this issue removes', () => {
+    expect(updateUserRequestSchema.properties).not.toHaveProperty('email');
+    expect(updateUserRequestSchema.properties).not.toHaveProperty('phoneNumber');
+  });
+
+  it('does not declare avatar or timezone — handled by dedicated routes, unread by this handler', () => {
+    expect(updateUserRequestSchema.properties).not.toHaveProperty('avatar');
+    expect(updateUserRequestSchema.properties).not.toHaveProperty('timezone');
+  });
+
+  it('does not lower-bound displayName — "" is the product-intended way to clear it', () => {
+    // Régression trouvée EN CORRIGEANT #4184 : l'ancien anti-témoin de
+    // profile.test.ts remplaçait ce schéma par un double `additionalProperties:
+    // true` sans aucune borne, si bien que `minLength: 1` sur `displayName`
+    // n'avait jamais traversé le VRAI contrat AJV — `PATCH /users/me` avec
+    // `{ displayName: '' }` (effacer le nom d'affichage, cf. profile.ts) aurait
+    // été rejeté en 400 par Fastify avant même d'atteindre Zod, qui l'accepte.
+    const prop = updateUserRequestSchema.properties.displayName as { minLength?: number };
+    expect(prop.minLength).toBeUndefined();
   });
 });
 

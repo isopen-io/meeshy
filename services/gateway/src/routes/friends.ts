@@ -7,15 +7,18 @@ import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendNotFound, sendCo
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { withMutationLog, MutationResultGone } from '../utils/withMutationLog';
 import {
-  friendRequestSchema,
   sendFriendRequestSchema,
-  respondFriendRequestSchema,
-  userMinimalSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { envoyerDemande, repondreDemande } from './directory/friend-requests-core';
-import { repondreDemandeHTTP } from './directory/friend-requests';
+import { envoyerDemande, repondreDemande, servirParties, INCLUDE_PARTIES } from './directory/friend-requests-core';
+import {
+  repondreDemandeHTTP,
+  creerGardesFriendRequests,
+  demandeAvecPresenceSchema,
+  demandeAvecConversationSchema,
+} from './directory/friend-requests';
+import { depreciee } from '../utils/deprecation';
 
 // Schemas de validation
 const createFriendRequestSchema = z.object({
@@ -28,14 +31,57 @@ const updateFriendRequestSchema = z.object({
 });
 
 
+/**
+ * Le sursis des cinq alias (#4274, #4283).
+ *
+ * `depuis` est le jour où ce fichier a cessé de diverger SILENCIEUSEMENT de
+ * `/directory/friend-requests` : #4162 avait déjà unifié les gardes
+ * d'AUTORISATION (qui peut envoyer, accepter, annuler) en les faisant passer
+ * par le même cœur (`friend-requests-core.ts`), mais ni le débit, ni le
+ * budget quotidien, ni la forme de réponse ne l'étaient — un correctif posé
+ * côté `directory` (le budget anti-spam, `conversation` servie à
+ * l'acceptation, `lastActiveAt` gardée) laissait CETTE adresse intacte,
+ * exactement le défaut que #4283 ferme.
+ *
+ * Aucun `retraitLe` : la règle de retrait est gouvernée par le compteur
+ * d'adoption de #4275, jamais par une date posée en dur ici. Android appelle
+ * encore les CINQ routes (`FriendRepository.kt` → `ContactsViewModel.kt`,
+ * `DiscoverViewModel.kt`), iOS deux (`FriendService.receivedRequests` /
+ * `.sentRequests`) : une date inventée ferait échouer un geste que
+ * l'utilisateur croit accompli.
+ */
+const DEPUIS_ALIAS_FRIENDS = '2026-08-29';
+
+/** Le successeur d'une route PAR ID porte l'id RÉSOLU, jamais le gabarit `:id`. */
+const successeurDemandeCiblee = (request: FastifyRequest): string =>
+  `/api/v1/directory/friend-requests/${encodeURIComponent((request.params as { id: string }).id)}`;
+
+const ANNONCE_ALIAS_FRIENDS = {
+  envoyer: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests' },
+  recues: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests?direction=received' },
+  envoyees: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests?direction=sent' },
+  agir: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: successeurDemandeCiblee },
+} as const;
+
 export async function friendRequestRoutes(fastify: FastifyInstance) {
+  // Les MÊMES gardes d'abus que `/directory/friend-requests` (#4283) — pas des
+  // jumelles redéclarées : même usine, même `keyPrefix` par garde, donc même
+  // compteur Redis par acteur quelle que soit l'adresse par laquelle il est
+  // passé. Avant ce lot, cette adresse — la plus APPELÉE des deux, cf.
+  // commentaire du POST — n'appliquait NI débit NI budget quotidien : le
+  // plafond posé côté `directory` ne protégeait rien tant qu'un appelant
+  // pouvait le contourner en alternant les deux adresses.
+  const { parLecture, parEnvoi, parAction, budgetEpuise } = creerGardesFriendRequests(fastify);
+
   // Envoyer une demande d'ami
   fastify.post('/friend-requests', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE_ALIAS_FRIENDS.envoyer), fastify.authenticate],
+    preHandler: [parEnvoi.middleware()],
     schema: {
-      description: 'Send a friend request to another user. Creates a pending friend request and notifies the recipient with action buttons to accept or reject the request.',
+      deprecated: true,
+      description: 'DEPRECATED — use POST /directory/friend-requests, which shares this route\'s guards, rate limit and daily budget (#4283). Send a friend request to another user. Creates a pending friend request and notifies the recipient with action buttons to accept or reject the request.',
       tags: ['friends'],
-      summary: 'Send friend request',
+      summary: 'Send friend request (deprecated)',
       body: sendFriendRequestSchema,
       response: {
         201: {
@@ -43,7 +89,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: friendRequestSchema
+            data: demandeAvecPresenceSchema
           }
         },
         400: {
@@ -62,6 +108,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           description: 'Friend request already exists between users',
           ...errorResponseSchema
         },
+        429: {
+          description: 'Rate limit or daily budget exceeded',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -71,6 +121,18 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = createFriendRequestSchema.parse(request.body);
+
+      // Le BUDGET quotidien (#4283) — partagé par `keyPrefix` avec
+      // `/directory/friend-requests` : il ne se contourne plus en alternant
+      // les deux adresses (cf. doc-comment de `creerGardesFriendRequests`).
+      if (await budgetEpuise(request.user!.userId)) {
+        return reply.code(429).send({
+          success: false,
+          error: 'Budget quotidien de demandes atteint.',
+          message: 'Budget quotidien de demandes atteint. Il se réinitialise dans les prochaines heures.',
+          code: 'FRIEND_REQUEST_BUDGET_EXCEEDED',
+        });
+      }
 
       // ALIAS de `POST /directory/friend-requests` (#4162).
       //
@@ -113,11 +175,13 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Recuperer les demandes d'ami recues
   fastify.get('/friend-requests/received', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE_ALIAS_FRIENDS.recues), fastify.authenticate],
+    preHandler: [parLecture.middleware()],
     schema: {
-      description: 'Get all pending friend requests received by the authenticated user. Returns paginated list of requests with sender information.',
+      deprecated: true,
+      description: 'DEPRECATED — use GET /directory/friend-requests?direction=received, which paginates by cursor and shares this route\'s presence gate (#4283). Get all pending friend requests received by the authenticated user. Returns paginated list of requests with sender information.',
       tags: ['friends'],
-      summary: 'Get received friend requests',
+      summary: 'Get received friend requests (deprecated)',
       querystring: {
         type: 'object',
         properties: {
@@ -141,7 +205,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: friendRequestSchema
+              items: demandeAvecPresenceSchema
             },
             pagination: {
               type: 'object',
@@ -156,6 +220,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         },
         401: {
           description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Rate limited',
           ...errorResponseSchema
         },
         500: {
@@ -176,19 +244,15 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
       const [friendRequests, totalCount] = await Promise.all([
         fastify.prisma.friendRequest.findMany({
+          // `INCLUDE_PARTIES.sender` (#4283) — la MÊME projection que la
+          // route canonique, plutôt qu'un `select` local qui charge cinq
+          // colonnes et OUBLIE `isOnline`/`lastActiveAt`. Avant ce lot, la
+          // requête ne les demandait même pas : le schéma de réponse pouvait
+          // bien les DÉCLARER, elles restaient absentes de la ligne Prisma —
+          // exactement le défaut « correctif appliqué à `directory`, laissé
+          // intact ici » que #4283 ferme, une couche plus bas que le schéma.
           where: whereClause,
-          include: {
-            sender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          },
+          include: { sender: INCLUDE_PARTIES.sender },
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -196,7 +260,15 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify.prisma.friendRequest.count({ where: whereClause })
       ]);
 
-      return sendPaginatedSuccess(reply, friendRequests, {
+      // La loi de présence (#4283) — le MÊME gate que `directory`
+      // (`servirParties`), sans lequel `isOnline`/`lastActiveAt` sortiraient
+      // BRUTS pour un expéditeur qui n'est pas encore un ami accepté :
+      // exactement la fuite que la directive du 2026-08-25 interdit.
+      const servedRequests = await servirParties(
+        fastify, request, friendRequests as unknown as Array<Record<string, unknown>>
+      );
+
+      return sendPaginatedSuccess(reply, servedRequests, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -211,11 +283,13 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Recuperer les demandes d'ami envoyees
   fastify.get('/friend-requests/sent', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE_ALIAS_FRIENDS.envoyees), fastify.authenticate],
+    preHandler: [parLecture.middleware()],
     schema: {
-      description: 'Get all friend requests sent by the authenticated user. Returns paginated list of requests with receiver information, including pending, accepted, and rejected requests.',
+      deprecated: true,
+      description: 'DEPRECATED — use GET /directory/friend-requests?direction=sent, which paginates by cursor and shares this route\'s presence gate (#4283). Get all friend requests sent by the authenticated user. Returns paginated list of requests with receiver information, including pending, accepted, and rejected requests.',
       tags: ['friends'],
-      summary: 'Get sent friend requests',
+      summary: 'Get sent friend requests (deprecated)',
       querystring: {
         type: 'object',
         properties: {
@@ -239,7 +313,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: friendRequestSchema
+              items: demandeAvecPresenceSchema
             },
             pagination: {
               type: 'object',
@@ -254,6 +328,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         },
         401: {
           description: 'Authentication required',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Rate limited',
           ...errorResponseSchema
         },
         500: {
@@ -274,19 +352,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
       const [friendRequests, totalCount] = await Promise.all([
         fastify.prisma.friendRequest.findMany({
+          // `INCLUDE_PARTIES.receiver` — même raison que GET .../received
+          // ci-dessus : projection PARTAGÉE avec la route canonique (#4283).
           where: whereClause,
-          include: {
-            receiver: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          },
+          include: { receiver: INCLUDE_PARTIES.receiver },
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -294,7 +363,13 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify.prisma.friendRequest.count({ where: whereClause })
       ]);
 
-      return sendPaginatedSuccess(reply, friendRequests, {
+      // La loi de présence (#4283) — voir le commentaire jumeau de GET
+      // .../received.
+      const servedRequests = await servirParties(
+        fastify, request, friendRequests as unknown as Array<Record<string, unknown>>
+      );
+
+      return sendPaginatedSuccess(reply, servedRequests, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -309,11 +384,13 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Repondre a une demande d'ami
   fastify.patch('/friend-requests/:id', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE_ALIAS_FRIENDS.agir), fastify.authenticate],
+    preHandler: [parAction.middleware()],
     schema: {
-      description: 'Respond to a friend request by accepting or rejecting it. When accepted, creates a direct conversation between users. Automatically marks the friend request notification as read and sends a notification to the requester.',
+      deprecated: true,
+      description: 'DEPRECATED — use PATCH /directory/friend-requests/:id with {action}: accepted status→accept, rejected→reject (#4283). Also fixes a silent gap: this route used to strip `conversation` from an acceptance response — it is served now, like the canonical route. Respond to a friend request by accepting or rejecting it. When accepted, creates a direct conversation between users. Automatically marks the friend request notification as read and sends a notification to the requester.',
       tags: ['friends'],
-      summary: 'Respond to friend request',
+      summary: 'Respond to friend request (deprecated)',
       params: {
         type: 'object',
         required: ['id'],
@@ -341,7 +418,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: friendRequestSchema
+            data: demandeAvecConversationSchema
           }
         },
         400: {
@@ -354,6 +431,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Friend request not found or already processed',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Rate limited',
           ...errorResponseSchema
         },
         500: {
@@ -390,11 +471,13 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
   // Supprimer une demande d'ami
   fastify.delete('/friend-requests/:id', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE_ALIAS_FRIENDS.agir), fastify.authenticate],
+    preHandler: [parAction.middleware()],
     schema: {
-      description: 'Delete a friend request. Can be used by either the sender to cancel a sent request or the receiver to remove a received request without responding.',
+      deprecated: true,
+      description: 'DEPRECATED — use PATCH /directory/friend-requests/:id with {action: "dismiss"} (#4283). Delete a friend request. Can be used by either the sender to cancel a sent request or the receiver to remove a received request without responding.',
       tags: ['friends'],
-      summary: 'Delete friend request',
+      summary: 'Delete friend request (deprecated)',
       params: {
         type: 'object',
         required: ['id'],
@@ -425,6 +508,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Friend request not found',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Rate limited',
           ...errorResponseSchema
         },
         500: {

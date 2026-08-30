@@ -120,7 +120,7 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
  * config de route ne remplace que `max`/`timeWindow` — elle HERITE du
  * `keyGenerator` du plugin global enregistre par ailleurs (`global:${request.ip}`,
  * cf. middleware/rate-limiter.ts#registerGlobalRateLimiter). Le gateway tourne
- * sans `trustProxy` derriere Traefik : `request.ip` est l'IP du conteneur proxy,
+ * avec `trustProxy` depuis #4137 : `request.ip` est l'adresse de l'appelant,
  * IDENTIQUE pour TOUS les utilisateurs. Une limite "5/min" par route devenait
  * donc un seau plateforme unique partage par tout le monde.
  *

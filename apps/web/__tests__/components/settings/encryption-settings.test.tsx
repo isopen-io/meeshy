@@ -276,7 +276,7 @@ describe('EncryptionSettings', () => {
       fireEvent.click(screen.getByText('Generer les cles'));
 
       await waitFor(() => {
-        expect(mockApiPost).toHaveBeenCalledWith('/signal/keys', {});
+        expect(mockApiPost).toHaveBeenCalledWith('/api/v1/signal/keys', {});
       });
     });
 

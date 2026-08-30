@@ -66,7 +66,23 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     postImpression: { create: impressionCreate },
-    post: { update: postUpdate, findUnique: postFindUnique },
+    // #4146 — la route consulte l'audience du post AVANT de compter une
+    // impression : `loadPostAcl` lit `post.findFirst`. Le double rend un post
+    // PUBLIC, donc tout ce que ce fichier mesure (comptage par source, absence
+    // de dedup, absence de lecture dediee) reste ce qu'il mesurait ; le refus
+    // hors audience a son temoin dans
+    // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+    post: {
+      update: postUpdate,
+      findUnique: postFindUnique,
+      findFirst: (args: { where: { id: string } }) => Promise.resolve({
+        id: args.where.id,
+        authorId: 'author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [] as string[],
+        expiresAt: null,
+      }),
+    },
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');

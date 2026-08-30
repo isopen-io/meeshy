@@ -120,7 +120,12 @@ const createMockPrisma = () => {
       findFirst: jest.fn() as MockFn,
       findMany: jest.fn() as MockFn,
       update: jest.fn() as MockFn,
-      updateMany: jest.fn() as MockFn
+      updateMany: jest.fn() as MockFn,
+      // Vague 183 — leaveCall()'s fresh in-transaction remaining-active
+      // count (see CallService.leaveCall). No default resolved value: every
+      // test that reaches it must state the participant count it means to
+      // exercise.
+      count: jest.fn() as MockFn
     },
     message: {
       create: jest.fn() as MockFn,
@@ -1086,7 +1091,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithOneParticipant);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // Sole participant — the fresh in-transaction count confirms it.
+            count: jest.fn().mockResolvedValue(0)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1140,7 +1150,14 @@ describe('CallService', () => {
       mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation({ type: 'direct' }));
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            // The other party is still active — irrelevant to the outcome
+            // here (isDirectCall short-circuits `isLastParticipant`), but the
+            // fresh in-transaction read always runs.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1160,7 +1177,19 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
-    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+    // Vague 182 (#4202/Vague 181 follow-up) — endCall()'s sibling P2034/version
+    // conflict branch was fixed to throw CallAlreadyEndedError instead of
+    // silently resolving to the fresh (already-ended-by-the-winner) session —
+    // see the matching `describe('endCall')` test above. This is the
+    // structurally identical branch on leaveCall(): the loser of the race is
+    // exactly "already ended by someone else", and a resolved promise here is
+    // indistinguishable from "I just ended it" to every caller
+    // (CallEventsHandler's call:leave/call:force-leave, AuthHandler's
+    // anonymous-disconnect loop, routes/calls.ts's leave/kick route), which
+    // then re-broadcast call:ended, re-post the call-summary, and (for a
+    // `missed` outcome) re-fire the missed-call notification for a call this
+    // leaveCall() did not actually end.
+    it('throws CallAlreadyEndedError (not a silent resolve) when Mongo reports a P2034 write conflict on the terminal write — sibling of the call:join/endCall fix, 2026-07-04: near-simultaneous call:end/leave for the same call', async () => {
       const participant = createMockParticipant();
       const callWithParticipant = createMockCallSession({
         status: CallStatus.active,
@@ -1171,6 +1200,7 @@ describe('CallService', () => {
         ...callWithParticipant,
         status: CallStatus.ended,
         endedAt: new Date(),
+        endReason: CallEndReason.completed,
         participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1185,9 +1215,10 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockRejectedValueOnce(p2034);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
 
-      const result = await callService.leaveCall(validLeaveData);
+      const rejection = callService.leaveCall(validLeaveData);
 
-      expect(result.status).toBe(CallStatus.ended);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should not end call when other participants remain', async () => {
@@ -1214,7 +1245,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn() },
+          callParticipant: {
+            update: jest.fn(),
+            // The other participant genuinely remains active — confirmed
+            // fresh, inside the transaction — so the call must not end.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1226,6 +1262,77 @@ describe('CallService', () => {
       const result = await callService.leaveCall(validLeaveData);
 
       expect(result.status).toBe(CallStatus.active);
+    });
+
+    // Vague 183 — TOCTOU race between two concurrent leaves of the LAST two
+    // participants of a group call. `isLastParticipant` was computed from
+    // `call.participants`, a snapshot read via `callSession.findUnique`
+    // several awaits before the transaction even starts (an intervening
+    // `conversation.findUnique` call sits in between). If the OTHER
+    // participant's own concurrent `leaveCall()` commits in that window, this
+    // leaver's stale snapshot still shows them active — `isLastParticipant`
+    // evaluates false, the version-guarded terminal write is never attempted
+    // (nothing to conflict against), and BOTH leaves "succeed" as ordinary
+    // mid-call leaves. The result: an `active` CallSession with zero live
+    // `CallParticipant` rows, invisible to CallCleanupService's heartbeat
+    // tier (`staleParticipants.length > 0` never holds against zero rows) and
+    // reaped only by the 2h wall-clock cap — during which the conversation's
+    // `activeCallId` claim also stays locked, blocking any new call.
+    it('ends the call when the other participant already left concurrently, even though the outer snapshot still shows them active', async () => {
+      const participant = createMockParticipant();
+      const otherParticipant = createMockParticipant({
+        id: 'participant-456',
+        userId: 'user-456'
+      });
+      // The snapshot read BEFORE the transaction is STALE: it still shows
+      // `otherParticipant` active (no `leftAt`), even though — by the time
+      // the transaction runs — their own concurrent leave has already
+      // committed `leftAt` in the database.
+      const callWithTwoParticipants = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 30_000),
+        participants: [participant, otherParticipant]
+      });
+      const endedCall = {
+        ...callWithTwoParticipants,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [
+          { ...participant, leftAt: new Date(), user: createMockUser() },
+          { ...otherParticipant, leftAt: new Date(), user: createMockUser({ id: 'user-456' }) }
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
+      mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // The FRESH, in-transaction read: `otherParticipant` has ALREADY
+            // left by the time this transaction runs — zero others remain.
+            count: jest.fn().mockResolvedValue(0)
+          },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        await callback(mockTx);
+        // The call MUST end — the fresh in-transaction count proves no other
+        // participant is still active, regardless of what the stale outer
+        // snapshot said.
+        expect(mockTx.callSession.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: CallStatus.ended })
+          })
+        );
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.ended);
     });
 
     it('should clear the leaving participant heartbeat from in-memory tracking when others remain', async () => {
@@ -1255,7 +1362,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // The other participant is still active — the call continues.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1412,6 +1524,10 @@ describe('CallService', () => {
         mockPrisma.callParticipant.findFirst.mockResolvedValue(ender);
         mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
         mockPrisma.callParticipant.update.mockResolvedValue(undefined);
+        // The two other participants genuinely remain active — confirmed
+        // fresh, inside leaveCall()'s own transaction (Vague 183) — so the
+        // hang-up must not end the CallSession.
+        mockPrisma.callParticipant.count.mockResolvedValue(2);
 
         await callService.endCall('call-123', 'user-123', 'participant-123');
 
@@ -1556,9 +1672,18 @@ describe('CallService', () => {
       );
     });
 
-    it('should return current state if call already ended', async () => {
+    // Issue #3581 — endCall() used to RETURN the current session on a
+    // terminal call instead of throwing, which left CallEventsHandler unable
+    // to tell "just ended" apart from "already ended" and re-broadcast
+    // call:ended/re-posted the summary/re-fired the missed-call notification
+    // on every retried call:end. It now throws CallAlreadyEndedError — same
+    // class joinCallAttempt already uses for the identical condition — so
+    // both callers (CallEventsHandler, routes/calls.ts) can special-case the
+    // no-op without touching those side effects a second time.
+    it('throws CallAlreadyEndedError if call already ended, without overwriting the session', async () => {
       const endedCall = createMockCallSession({
         status: CallStatus.ended,
+        endReason: CallEndReason.completed,
         participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1566,18 +1691,20 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(endedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.ended);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('should return current state without overwriting when call already resolved to missed (duplicate call:end)', async () => {
+    it('throws CallAlreadyEndedError without overwriting when call already resolved to missed (duplicate call:end)', async () => {
       // Mirrors the real race: the ringing-timeout path (`markCallAsMissed`)
       // resolves the CallSession to `missed` WITHOUT touching participant
       // rows (see markCallAsMissed) — so a delayed/retried `call:end` from
       // the initiator still finds its own participant with `leftAt: null`.
       const missedCall = createMockCallSession({
         status: CallStatus.missed,
+        endReason: CallEndReason.connectionLost,
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1585,15 +1712,16 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(missedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.missed);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.connectionLost });
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('should return current state without overwriting when call already rejected (duplicate call:end)', async () => {
+    it('throws CallAlreadyEndedError without overwriting when call already rejected (duplicate call:end)', async () => {
       const rejectedCall = createMockCallSession({
         status: CallStatus.rejected,
+        endReason: CallEndReason.rejected,
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1601,10 +1729,26 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(rejectedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.rejected);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.rejected });
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('falls back to endReason=completed when the already-ended call predates the endReason column (legacy null)', async () => {
+      const endedCall = createMockCallSession({
+        status: CallStatus.ended,
+        endReason: null,
+        participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(endedCall);
+
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should throw error when user not in call', async () => {
@@ -1701,7 +1845,18 @@ describe('CallService', () => {
       ).rejects.toThrow('NOT_A_PARTICIPANT: You are not in this call');
     });
 
-    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+    // Issue #3581 follow-up — the guard at the TOP of endCall() (a call
+    // already terminal at the initial read) now throws CallAlreadyEndedError
+    // instead of silently resolving, so CallEventsHandler/routes/calls.ts can
+    // treat it as an idempotent no-op. This SIBLING branch — losing the race
+    // to a concurrent terminal writer DURING the transaction itself (P2034 /
+    // version conflict) — was never updated to match: it still silently
+    // resolves to the fresh (already-ended-by-the-winner) session, so the
+    // LOSER of the race falls straight back into the exact bug #3581 closed:
+    // CallEventsHandler re-broadcasts call:ended, re-posts the call-summary,
+    // and (for a `missed` outcome) re-fires the missed-call notification —
+    // for a call this request did not actually end.
+    it('throws CallAlreadyEndedError (not a silent resolve) when Mongo reports a P2034 write conflict on the terminal write — sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call', async () => {
       const initiatorParticipant = createMockParticipant({
         role: ParticipantRole.initiator
       });
@@ -1713,6 +1868,7 @@ describe('CallService', () => {
         ...mockCall,
         status: CallStatus.ended,
         endedAt: new Date(),
+        endReason: CallEndReason.completed,
         participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1726,9 +1882,10 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockRejectedValueOnce(p2034);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
 
-      expect(result.status).toBe(CallStatus.ended);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should allow any active participant to end a P2P call (spec C4)', async () => {
@@ -5038,7 +5195,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
@@ -5085,7 +5244,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
@@ -5131,7 +5292,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {

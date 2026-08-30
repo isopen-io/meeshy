@@ -16,7 +16,9 @@ jest.mock('@/services/auth-manager.service', () => ({
 }));
 
 jest.mock('@/lib/config', () => ({
-  buildApiUrl: (path: string) => `https://api.meeshy.test/api/v1${path}`,
+  // #4281 — miroir du vrai comportement (lib/config.ts) : un chemin déjà
+  // préfixé /api/v… (catalogue partagé) n'est pas re-préfixé.
+  buildApiUrl: (path: string) => `https://api.meeshy.test${path.startsWith('/api/v') ? path : `/api/v1${path}`}`,
 }));
 
 global.fetch = jest.fn();
@@ -29,6 +31,7 @@ import {
   initializeUserPreferences,
   resetUserPreferences,
 } from '@/stores/user-preferences-store';
+import { isPreferenceWriteInFlight } from '@/lib/preferences/preference-write-lock';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -519,16 +522,21 @@ describe('useUserPreferencesStore', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('reads key status from the encryption endpoint, not from the user object', async () => {
-      // `GET /auth/me` cannot carry these: `userSchema` (the response schema
-      // fast-json-stringify serializes through) declares no signal field, so any
-      // the handler puts there is stripped before the body is written.
+    it('reads key status from GET /me?expand=security — #4178, la seule lecture de soi', async () => {
+      // `GET /me/preferences/encryption` est désormais un ALIAS déprécié de
+      // `GET /me?expand=security` (#4178) : la forme sert `security` NICHÉ
+      // sous `data.user`, pas à plat sous `data` — c'est ce que
+      // `?expand=security` ajoute à la lecture de soi, exactement la forme
+      // que servait déjà l'ancienne route.
       mockGetAuthToken.mockReturnValue('tok');
       mockFetch.mockResolvedValue(makeOkResponse({
-        encryptionPreference: 'always',
-        hasSignalKeys: true,
-        signalRegistrationId: 4242,
-        lastKeyRotation: '2026-03-04T05:06:07.000Z',
+        user: {
+          security: {
+            hasSignalKeys: true,
+            signalRegistrationId: 4242,
+            lastKeyRotation: '2026-03-04T05:06:07.000Z',
+          },
+        },
       }));
 
       await act(async () => {
@@ -536,7 +544,7 @@ describe('useUserPreferencesStore', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.meeshy.test/api/v1/me/preferences/encryption',
+        'https://api.meeshy.test/api/v1/me?expand=security',
         expect.anything(),
       );
       const { encryptionKeys } = useUserPreferencesStore.getState();
@@ -551,16 +559,33 @@ describe('useUserPreferencesStore', () => {
         encryptionKeys: { hasSignalKeys: true, signalRegistrationId: 1, lastKeyRotation: 'x' },
       });
       mockFetch.mockResolvedValue(makeOkResponse({
-        encryptionPreference: 'optional',
-        hasSignalKeys: false,
-        signalRegistrationId: null,
-        lastKeyRotation: null,
+        user: { security: { hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null } },
       }));
 
       await act(async () => {
         await useUserPreferencesStore.getState().syncEncryptionKeys();
       });
 
+      expect(useUserPreferencesStore.getState().encryptionKeys).toEqual({
+        hasSignalKeys: false,
+        signalRegistrationId: null,
+        lastKeyRotation: null,
+      });
+    });
+
+    it('data.user sans security ne lève pas — les trois champs retombent à leur valeur "aucune clé"', async () => {
+      // Cohérent avec le contrat générique des sync* (§ plus bas) : une
+      // enveloppe qui PORTE des données rend `true`, même incomplète — seule
+      // l'ABSENCE de `data` (§ « enveloppe sans données ») rend `false`.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeOkResponse({ user: {} }));
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+
+      expect(result).toBe(true);
       expect(useUserPreferencesStore.getState().encryptionKeys).toEqual({
         hasSignalKeys: false,
         signalRegistrationId: null,
@@ -761,6 +786,215 @@ describe('useUserPreferencesStore', () => {
     });
   });
 
+  // ─── une écriture n'envoie QUE ce qu'on lui a soumis ─────────────────────────
+
+  /**
+   * Les trois écritures envoyaient un instantané de DOCUMENT ENTIER construit
+   * depuis une tranche de store qui est un SOUS-ENSEMBLE STRICT de ce document,
+   * sur un `PUT` que la passerelle traite en REMPLACEMENT
+   * (`update: { [category]: validated }`) — Zod comblant les clés absentes par
+   * leurs `default()`.
+   *
+   * La tranche `privacy` ne peut structurellement pas porter le bloc
+   * CHIFFREMENT : `syncPrivacy` l'en retire, `EncryptionPreferences` en est le
+   * seul porteur. Basculer n'importe quel réglage de confidentialité remettait
+   * donc `encryptionPreference` / `autoEncryptNewConversations` /
+   * `showEncryptionStatus` / `warnOnUnencrypted` aux défauts — les
+   * conversations neuves cessant d'être chiffrées automatiquement, sans un
+   * signe.
+   *
+   * Les témoins portent sur la MÉTHODE et sur le CORPS : aucun des témoins
+   * d'écriture précédents n'assertait ni l'une ni l'autre, et c'est exactement
+   * l'espace où le défaut vivait (« un témoin d'écriture assert sur l'EFFET,
+   * jamais sur le statut »).
+   */
+  describe('une écriture ne nomme que les clés soumises', () => {
+    function lastRequest(): { url: string; init: RequestInit } {
+      const [url, init] = mockFetch.mock.calls[mockFetch.mock.calls.length - 1] as [
+        string,
+        RequestInit,
+      ];
+      return { url, init };
+    }
+
+    function lastBody(): Record<string, unknown> {
+      return JSON.parse(String(lastRequest().init.body)) as Record<string, unknown>;
+    }
+
+    const ENCRYPTION_KEYS = [
+      'encryptionPreference',
+      'autoEncryptNewConversations',
+      'showEncryptionStatus',
+      'warnOnUnencrypted',
+    ] as const;
+
+    it('updatePrivacy fusionne au lieu de remplacer', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+    });
+
+    it('updatePrivacy ne nomme AUCUNE clé de chiffrement', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(Object.keys(lastBody())).toEqual(['showOnlineStatus']);
+      for (const key of ENCRYPTION_KEYS) {
+        expect(lastBody()).not.toHaveProperty(key);
+      }
+    });
+
+    it('updatePrivacy ne réaffirme pas les réglages voisins qu\'on n\'a pas touchés', async () => {
+      // Un voisin changé sur un AUTRE appareil serait annulé par la simple
+      // bascule d'un réglage sans rapport.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showReadReceipts: false });
+      });
+
+      expect(lastBody()).toEqual({ showReadReceipts: false });
+    });
+
+    it('updateEncryption ne nomme AUCUNE clé de confidentialité', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updateEncryption({ warnOnUnencrypted: true });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+      expect(lastBody()).toEqual({ warnOnUnencrypted: true });
+    });
+
+    it('updateNotifications ne nomme que ce qu\'on lui a passé', async () => {
+      // `StoreNotificationPreferences` est un `Pick` de 14 des 33 champs du
+      // schéma : après une hydratation ÉCHOUÉE, un remplacement remettait les
+      // dix-neuf autres aux défauts — `callsEnabled`, `dndDays`,
+      // `dndUtcOffsetMinutes` et les sept bascules sociales comprises.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updateNotifications({ soundEnabled: false });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+      expect(lastBody()).toEqual({ soundEnabled: false });
+    });
+
+    it('une écriture sans aucune clé ne part pas', async () => {
+      // Un `PATCH` au corps vide fait payer un aller-retour, un journal de
+      // mutation et une diffusion `preferences:updated` pour zéro changement.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({});
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+  });
+
+  // ─── déclaration des écritures en vol ────────────────────────────────────────
+
+  /**
+   * Les deux écritures appliquent OPTIMISTEMENT puis envoient. Pendant cette
+   * fenêtre, la valeur juste n'existe que localement : une relecture qui part
+   * là rend l'ancienne valeur du serveur et DÉFAIT le geste. Les écritures se
+   * déclarent donc, pour que la relecture puisse s'abstenir (leçon 310).
+   */
+  describe('déclaration des écritures en vol', () => {
+    function pendingFetch(): (response: Response) => void {
+      let release!: (response: Response) => void;
+      mockFetch.mockImplementation(
+        () => new Promise<Response>((resolve) => { release = resolve; })
+      );
+      return (response: Response) => release(response);
+    }
+
+    it('déclare updatePrivacy en vol pendant tout le PATCH', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      const release = pendingFetch();
+
+      let write!: Promise<void>;
+      await act(async () => {
+        write = useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+        await Promise.resolve();
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(true);
+
+      await act(async () => {
+        release({ ok: true } as Response);
+        await write;
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('déclare updateEncryption en vol pendant tout le PATCH', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      const release = pendingFetch();
+
+      let write!: Promise<void>;
+      await act(async () => {
+        write = useUserPreferencesStore.getState().updateEncryption({ warnOnUnencrypted: true });
+        await Promise.resolve();
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(true);
+
+      await act(async () => {
+        release({ ok: true } as Response);
+        await write;
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('libère la déclaration quand le serveur refuse', async () => {
+      // Sans libération sur l'échec, le verrou resterait posé pour la vie de
+      // l'onglet et plus aucun rattrapage ne partirait.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch
+        .mockResolvedValueOnce(makeErrorResponse())
+        .mockResolvedValueOnce(makeOkResponse({}));
+
+      // On attend la promesse de l'ÉCRITURE, pas celle d'un `act` : `act`
+      // propage le rejet avant que le `finally` du verrou n'ait tourné, et
+      // c'est le verrou qu'on mesure ici.
+      await expect(
+        useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false })
+      ).rejects.toThrow('Failed to update privacy preferences');
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('ne déclare rien quand il n\'y a pas de jeton', async () => {
+      mockGetAuthToken.mockReturnValue(null);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+  });
+
   // ─── initialize ──────────────────────────────────────────────────────────────
 
   describe('initialize', () => {
@@ -792,9 +1026,11 @@ describe('useUserPreferencesStore', () => {
       expect(state.error).toBeNull();
     });
 
-    it('still completes initialization even when individual syncs fail (errors are swallowed)', async () => {
-      // Sync methods catch their own errors — initialize never hits its catch block.
-      // Verify: network failure → still initialized, no error state, isLoading cleared.
+    it("n'horodate RIEN quand aucune lecture n'a rendu de données", async () => {
+      // Le défaut du cycle 134 : `syncAll()` absorbait l'échec de ses quatre
+      // `GET`, donc une passe entièrement ratée posait `lastSyncedAt` comme une
+      // passe réussie. Un onglet ouvert hors ligne déclarait une hydratation
+      // qui n'avait rien lu.
       mockGetAuthToken.mockReturnValue('tok');
       mockFetch.mockRejectedValue(new Error('network failure'));
 
@@ -805,7 +1041,122 @@ describe('useUserPreferencesStore', () => {
       const state = useUserPreferencesStore.getState();
       expect(state.isInitialized).toBe(true);
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBeNull(); // sync methods swallow errors
+      expect(state.lastSyncedAt).toBeNull();
+      expect(state.error).toBe('Failed to load preferences');
+    });
+
+    it("laisse l'horodatage PRÉCÉDENT intact quand la passe ne lit rien", async () => {
+      act(() => {
+        useUserPreferencesStore.setState({ lastSyncedAt: '2026-01-01T00:00:00.000Z' });
+      });
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeErrorResponse());
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().initialize();
+      });
+
+      expect(useUserPreferencesStore.getState().lastSyncedAt).toBe('2026-01-01T00:00:00.000Z');
+    });
+
+    it("horodate dès qu'UNE seule lecture a rendu des données", async () => {
+      // `some`, jamais `every` : un point de terminaison absent en permanence
+      // — `privacy` l'a été — supprimerait sinon l'horodatage à vie, et le
+      // rattrapage de reconnexion serait dû à CHAQUE connexion pour zéro
+      // fraîcheur de plus.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockImplementation((url: string) =>
+        url.includes('/preferences/notification') ? makeOkResponse({}) : makeErrorResponse(),
+      );
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().initialize();
+      });
+
+      const state = useUserPreferencesStore.getState();
+      expect(state.lastSyncedAt).not.toBeNull();
+      expect(state.error).toBeNull();
+    });
+  });
+
+  // ─── le contrat de lecture des sync* ─────────────────────────────────────────
+
+  describe('contrat de lecture des sync*', () => {
+    const readers = [
+      'syncNotifications',
+      'syncEncryption',
+      'syncEncryptionKeys',
+      'syncPrivacy',
+    ] as const;
+
+    it.each(readers)('%s rend true quand des données serveur ont été appliquées', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeOkResponse({}));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(true);
+      });
+    });
+
+    it.each(readers)('%s rend false sans jeton', async (method) => {
+      mockGetAuthToken.mockReturnValue(null);
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it.each(readers)('%s rend false sur un statut non-2xx', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeErrorResponse());
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it.each(readers)('%s rend false sur une enveloppe sans données', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ success: false }) } as Response),
+      );
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it.each(readers)('%s rend false quand le réseau tombe', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockRejectedValue(new Error('network error'));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it('syncAll rend false quand les QUATRE lectures échouent', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockRejectedValue(new Error('network error'));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState().syncAll()).resolves.toBe(false);
+      });
+    });
+
+    it("syncAll rend true dès qu'une lecture aboutit", async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      // #4178 : syncEncryptionKeys lit désormais GET /me?expand=security,
+      // plus /me/preferences/encryption — seule requête qu'on laisse aboutir
+      // pour prouver que syncAll ne dépend d'AUCUNE lecture en particulier.
+      mockFetch.mockImplementation((url: string) =>
+        url.includes('/me?expand=security') ? makeOkResponse({}) : makeErrorResponse(),
+      );
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState().syncAll()).resolves.toBe(true);
+      });
     });
   });
 

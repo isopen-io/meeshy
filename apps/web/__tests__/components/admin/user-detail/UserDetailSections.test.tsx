@@ -1071,7 +1071,7 @@ describe('UserSecuritySection', () => {
     mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('usersDetail.unlockButton'));
     // Une adresse pour la SÉCURITÉ d'un compte, deux champs (#4154).
-    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { unlock: true }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/api/v1/admin/users/user-1/security', { unlock: true }));
     expect(onUpdate).toHaveBeenCalled();
   });
 
@@ -1087,7 +1087,7 @@ describe('UserSecuritySection', () => {
     const { onUpdate } = renderSecurity({ twoFactorEnabledAt: '2024-01-01T00:00:00Z' });
     mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('security.disable2FA'));
-    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { twoFactorEnabled: false }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/api/v1/admin/users/user-1/security', { twoFactorEnabled: false }));
     expect(onUpdate).toHaveBeenCalled();
   });
 
@@ -1095,7 +1095,7 @@ describe('UserSecuritySection', () => {
     const { onUpdate } = renderSecurity({ twoFactorEnabledAt: null });
     mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('security.enable2FA'));
-    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { twoFactorEnabled: true }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/api/v1/admin/users/user-1/security', { twoFactorEnabled: true }));
     expect(onUpdate).toHaveBeenCalled();
   });
 

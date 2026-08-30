@@ -42,6 +42,7 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -243,6 +244,7 @@ class ConversationListViewModel @Inject constructor(
     private val starredStore: StarredMessagesStore,
     private val categoryRepository: CategoryRepository,
     categorySocketManager: CategorySocketManager,
+    preferencesSocketManager: PreferencesSocketManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
     private val lockStore: ConversationLockStore,
@@ -391,6 +393,19 @@ class ConversationListViewModel @Inject constructor(
             categorySocketManager.categoryEvents.collect { event ->
                 categoryCatalog = categoryCatalog.apply(event)
                 publishCategories()
+            }
+        }
+
+        viewModelScope.launch {
+            // Les préférences de conversation changées sur un AUTRE appareil : la
+            // ligne est par UTILISATEUR, donc épingler / mettre en sourdine /
+            // archiver / recatégoriser depuis le web ou l'iPhone n'atteignait
+            // Android par aucun chemin avant cet écouteur (#4127). L'écriture Room
+            // suffit à repeindre : [conversationsStream] observe la table, et
+            // `ConversationSections.of` re-range la ligne à l'émission suivante —
+            // aucune relecture réseau n'est demandée.
+            preferencesSocketManager.conversationPreferencesUpdated.collect { event ->
+                repository.applyRemoteConversationPreferences(event)
             }
         }
 

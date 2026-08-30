@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from './auth-manager.service';
 
 // Interface pour le statut 2FA
@@ -106,7 +107,7 @@ class TwoFactorService {
    */
   async getStatus(): Promise<TwoFactorStatusResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/status'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaStatus), {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
@@ -126,7 +127,7 @@ class TwoFactorService {
    */
   async setup(): Promise<TwoFactorSetupResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/setup'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaSetup), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });
@@ -146,7 +147,7 @@ class TwoFactorService {
    */
   async enable(code: string): Promise<TwoFactorEnableResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/enable'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaEnable), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ code: code.replace(/\s/g, '') }),
@@ -169,7 +170,7 @@ class TwoFactorService {
    */
   async verify(twoFactorToken: string, code: string): Promise<TwoFactorVerifyResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/verify'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaVerify), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,7 +206,7 @@ class TwoFactorService {
    */
   async disable(password: string, code?: string): Promise<TwoFactorDisableResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/disable'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaDisable), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({
@@ -229,7 +230,7 @@ class TwoFactorService {
    */
   async regenerateBackupCodes(): Promise<TwoFactorBackupCodesResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/backup-codes'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaBackupCodes), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });
@@ -249,7 +250,7 @@ class TwoFactorService {
    */
   async cancelSetup(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/cancel'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaCancel), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });

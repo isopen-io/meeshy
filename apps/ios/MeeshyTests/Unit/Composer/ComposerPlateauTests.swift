@@ -98,13 +98,7 @@ final class ComposerPlateauTests: XCTestCase {
     /// tout ce qui est peint. Cette garde échoue si le host référence un jeton
     /// de premier plan qui n'est pas mesuré ci-dessus.
     func test_theMeasuredListCoversEveryForegroundTheHostActuallyPaints() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Source du host introuvable — la garde ne mesurerait rien")
 
         // Les seuls premiers plans autorisés : ceux que cette suite mesure à

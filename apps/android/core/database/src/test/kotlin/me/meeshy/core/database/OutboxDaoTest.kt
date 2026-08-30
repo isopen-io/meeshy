@@ -18,10 +18,11 @@ private fun outboxRow(
     lane: String = "message:c1",
     state: String = "PENDING",
     createdAt: Long = 0L,
+    kind: String = "SEND_MESSAGE",
 ) = OutboxEntity(
     cmid = cmid,
     lane = lane,
-    kind = "SEND_MESSAGE",
+    kind = kind,
     targetId = "t",
     payload = "{}",
     dependsOn = null,
@@ -58,6 +59,34 @@ class OutboxDaoTest {
         dao.upsert(outboxRow("c", createdAt = 300))
 
         assertThat(dao.observeAll().first().map { it.cmid }).containsExactly("a", "b", "c").inOrder()
+    }
+
+    /**
+     * The question a reader asks before folding a SERVER value onto a device-local store:
+     * "does this device still owe the server a write of this exact kind?". A `true` for a
+     * SIBLING kind on the same lane would veto a refresh that has nothing to do with the
+     * pending row — the two settings kinds share the settings lane on purpose.
+     */
+    @Test
+    fun `hasDeliverableOfKind matches lane and kind, and ignores exhausted rows`() = runTest {
+        dao.upsert(outboxRow("a", lane = "settings", kind = "UPDATE_SETTINGS", state = "PENDING"))
+        dao.upsert(
+            outboxRow("b", lane = "settings", kind = "UPDATE_PRIVACY_SETTINGS", state = "EXHAUSTED"),
+        )
+        dao.upsert(outboxRow("c", lane = "reaction", kind = "TOGGLE_REACTION", state = "PENDING"))
+
+        assertThat(dao.hasDeliverableOfKind("settings", "UPDATE_SETTINGS")).isTrue()
+        assertThat(dao.hasDeliverableOfKind("settings", "UPDATE_PRIVACY_SETTINGS")).isFalse()
+        assertThat(dao.hasDeliverableOfKind("reaction", "UPDATE_SETTINGS")).isFalse()
+        assertThat(dao.hasDeliverableOfKind("settings", "TOGGLE_REACTION")).isFalse()
+    }
+
+    /** An INFLIGHT row is still owed: the delivery is in the air, not confirmed. */
+    @Test
+    fun `hasDeliverableOfKind counts an inflight row`() = runTest {
+        dao.upsert(outboxRow("a", lane = "settings", kind = "UPDATE_SETTINGS", state = "INFLIGHT"))
+
+        assertThat(dao.hasDeliverableOfKind("settings", "UPDATE_SETTINGS")).isTrue()
     }
 
     @Test

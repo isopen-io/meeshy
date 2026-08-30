@@ -9,6 +9,7 @@ import { useAppStore } from './app-store';
 import { useAuthStore } from './auth-store';
 import { useLanguageStore } from './language-store';
 import { useUserPreferencesStore } from './user-preferences-store';
+import { startMirroredPreferenceRehydration } from '@/lib/preferences/preference-rehydration';
 
 interface StoreInitializerProps {
   children: ReactNode;
@@ -66,6 +67,27 @@ export function StoreInitializer({ children }: StoreInitializerProps) {
     
     initializeStores();
   }, []); // Empty dependency array - run once on mount
-  
+
+  /**
+   * Le rattrapage PÉRENNE du double des préférences prend le relais de
+   * l'hydratation initiale ci-dessus.
+   *
+   * Il vit ICI, et pas dans `useSocketCacheSync`, parce que ce dernier n'est
+   * monté que sur les écrans de conversation : un changement fait ailleurs
+   * pendant qu'aucune conversation n'est ouverte n'atteindrait le double qu'au
+   * prochain montage. `StoreInitializer` enveloppe l'application entière.
+   *
+   * L'abonnement est posé APRÈS le premier rendu comme l'hydratation, et sa
+   * clause « la lecture initiale n'a rien rendu » lit `lastSyncedAt`, que seule
+   * une lecture ABOUTIE renseigne — un onglet ouvert hors ligne se rattrape
+   * donc à sa première connexion, et un démarrage nominal ne paie aucune
+   * requête de plus.
+   *
+   * L'ORDRE des deux effets ne fait rien à l'affaire : la clause lit
+   * `isInitialized`, donc une connexion qui précède l'hydratation ci-dessus
+   * attend son verdict au lieu de doubler ses lectures.
+   */
+  useEffect(() => startMirroredPreferenceRehydration(), []);
+
   return <>{children}</>;
 }

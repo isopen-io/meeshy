@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { safeExternalUrl } from '@/utils/safe-redirect';
 import { assignLocation, replaceLocation } from '@/lib/navigate';
 import {
@@ -224,7 +225,7 @@ function collectBrowserData(): Record<string, unknown> {
  * fallback) and want to suppress the "failed" timeout.
  */
 function wireRedirectConfirmation(token: string, clickId: string): () => void {
-  const beaconUrl = buildApiUrl(`/tracking-links/${token}/redirect-status`);
+  const beaconUrl = buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenRedirectStatus(token));
   const confirmPayload = new Blob(
     [JSON.stringify({ clickId, status: 'confirmed' })],
     { type: 'application/json' }
@@ -305,7 +306,7 @@ function openAppThenFallback(appUrl: string, webFallback: () => void): void {
 
 async function resolveTarget(token: string): Promise<TrackingLinkResolution | null> {
   try {
-    const url = buildApiUrl(`/tracking-links/${token}/resolve`);
+    const url = buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenResolve(token));
     const response = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -357,7 +358,7 @@ export default function TrackingLinkPage() {
       if (utmContent) data.utmClickContent = utmContent;
 
       try {
-        const response = await fetch(buildApiUrl(`/tracking-links/${token}/click`), {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenClick(token)), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),

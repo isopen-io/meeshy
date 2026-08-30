@@ -450,29 +450,6 @@ describe('Voice API Routes', () => {
       });
     });
 
-    describe('GET /voice/stats', () => {
-      it('should return user statistics', () => {
-        const query = { period: 'month' };
-
-        const response = {
-          success: true,
-          data: {
-            userId: 'user-123',
-            totalTranslations: 150,
-            totalAudioMinutes: 45.5,
-            languagesUsed: ['en', 'fr', 'es'],
-            averageProcessingTimeMs: 2500,
-            averageFeedbackRating: 4.5,
-            periodStart: '2024-01-01',
-            periodEnd: '2024-01-31'
-          }
-        };
-
-        expect(response.data.totalTranslations).toBeGreaterThanOrEqual(0);
-        expect(response.data.averageFeedbackRating).toBeGreaterThanOrEqual(0);
-        expect(response.data.averageFeedbackRating).toBeLessThanOrEqual(5);
-      });
-    });
   });
 
   describe('Admin Endpoints', () => {
@@ -519,40 +496,14 @@ describe('Voice API Routes', () => {
     });
   });
 
+  // #4190 — les describes « GET /voice/stats » et « GET /voice/health » ont été
+  // retirés AVEC leurs routes. Ils n'exerçaient d'ailleurs aucune route : ils
+  // affirmaient sur des objets littéraux écrits dans le test lui-même, donc ils
+  // seraient restés VERTS sur des routes supprimées comme sur des routes
+  // cassées. Le témoin qui garde réellement ce retrait lit la table de routes
+  // montée — `src/__tests__/unit/routes/voice/analysis.test.ts` et
+  // `src/__tests__/unit/routes/orphan-route-removal.test.ts`.
   describe('System Endpoints', () => {
-    describe('GET /voice/health', () => {
-      it('should return health status', () => {
-        const response = {
-          status: 'healthy',
-          services: {
-            transcription: true,
-            translation: true,
-            tts: true,
-            voiceClone: true,
-            analytics: true,
-            database: true
-          },
-          latency: {
-            transcriptionMs: 150,
-            translationMs: 200,
-            ttsMs: 500
-          },
-          timestamp: new Date().toISOString()
-        };
-
-        expect(['healthy', 'degraded', 'unhealthy']).toContain(response.status);
-        expect(response.services.transcription).toBe(true);
-      });
-
-      it('should not require authentication', () => {
-        // Health endpoint is public
-        const request = createMockRequest({ user: null });
-
-        // Should still return health status
-        expect(true).toBe(true); // Public endpoint
-      });
-    });
-
     describe('GET /voice/languages', () => {
       it('should return supported languages', () => {
         const response = {

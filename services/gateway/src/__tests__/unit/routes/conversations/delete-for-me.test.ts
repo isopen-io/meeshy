@@ -68,6 +68,15 @@ function makePreValidationAuth(authenticated: boolean) {
   };
 }
 
+/**
+ * Le résolveur de succession lit d'abord les ADMINISTRATEURS (`where.role`,
+ * plafonné) puis, à défaut, le membre le plus ancien (`take: 1`). Ces scénarios
+ * n'ont aucun administrateur : le double rend la liste sur la SECONDE lecture
+ * seulement, sans quoi un modérateur y passerait pour un administrateur.
+ */
+const successorFindMany = (rows: any[]) =>
+  jest.fn<any>((args: any) => Promise.resolve(args?.where?.role ? [] : rows));
+
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
@@ -76,7 +85,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // Membres encore actifs APRÈS la désactivation de l'appelant — l'audience
       // de `conversation:closed`. Vide par défaut : les scénarios qui ne
       // ferment rien ne doivent nommer personne.
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      findMany: successorFindMany([]),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
@@ -84,6 +93,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // scenarios in this file — the `count` query filters `type: 'direct'`
       // itself, so a non-direct conversation would also resolve to 0 here).
       count: jest.fn<any>().mockResolvedValue(0),
+    },
+    notification: {
+      // La trace `member_promoted` qui date l'ancienneté DE RANG (#4058).
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     // La clôture (ou la promotion du successeur) et le masquage de l'appelant
     // committent ensemble (cycle 69).
@@ -184,7 +197,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with a successor',
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: successorFindMany([
           { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
         ]),
         update: jest.fn<any>().mockResolvedValue({}),
@@ -249,7 +262,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: successorFindMany([
           { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
         ]),
         update: jest.fn<any>().mockResolvedValue({}),
@@ -278,7 +291,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: successorFindMany([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -320,7 +333,7 @@ function makeClosingPrisma(overrides: Record<string, any> = {}) {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
       update: jest.fn<any>().mockResolvedValue({}),
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      findMany: successorFindMany([]),
     },
     conversation: {
       // L'audience sort de l'ÉCRITURE (`include`), comme chez le jumeau
@@ -419,7 +432,7 @@ describe('DELETE /conversations/:id/delete-for-me — clôture faute de successe
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: successorFindMany([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
       conversation: {
@@ -472,7 +485,7 @@ describe('DELETE /conversations/:id/delete-for-me — ce qui ne ferme rien n\'an
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: successorFindMany([
           { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
         ]),
         update: jest.fn<any>().mockResolvedValue({}),
@@ -521,7 +534,7 @@ describe('DELETE /conversations/:id/delete-for-me — le créateur écrit CREATO
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: successorFindMany([
           { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
         ]),
         update: jest.fn<any>().mockResolvedValue({}),

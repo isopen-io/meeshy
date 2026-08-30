@@ -199,19 +199,15 @@ final class NewConversationViewModel: ObservableObject {
     private func fetchContactsFromNetwork() async {
         do {
             var collected: [FriendRequest] = []
-            var offset = 0
+            var cursor: String?
             while collected.count < Self.friendsFetchCap {
-                let page = try await friendService.allFriendRequests(
-                    status: "accepted",
-                    offset: offset,
-                    limit: Self.friendsPageSize
+                let page = try await friendService.friendRequests(
+                    direction: .any, status: "accepted", q: nil, cursor: cursor, limit: Self.friendsPageSize
                 )
                 collected.append(contentsOf: page.data)
-                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
-                // le repli sur la taille de page garde le comportement correct.
                 let more = page.pagination?.hasMore ?? (page.data.count == Self.friendsPageSize)
-                if !more || page.data.isEmpty { break }
-                offset += Self.friendsPageSize
+                cursor = page.pagination?.nextCursor
+                if !more || page.data.isEmpty || cursor == nil { break }
             }
 
             let friends = FriendListAggregator.aggregate(

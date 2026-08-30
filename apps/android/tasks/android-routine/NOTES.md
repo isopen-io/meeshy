@@ -5,6 +5,96 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — porting an inlined-constant formula: pin the boundary behaviourally, and give the "fold two cores" clause a real seam (slice `call-low-light-boost`)
+Two reusable moves from porting iOS `applyLowLightBoost`:
+- **Boundary tests must not depend on float-exactness.** iOS gates on `normalizedBrightness < 0.3` where
+  `normalized = avg/255`. Testing the exact boundary (`avg = 76.5`) is fragile — `76.5f/255f` may land on
+  either side of `0.3f` (neither is exactly representable). Pin the behaviour with values *clearly* on each
+  side instead: `77f` (≈0.302 → no boost) and `76f` (≈0.298 → small boost). The threshold is proven without
+  ever asserting a float equality on the boundary itself.
+- **Avoid tautology on a ported formula by anchoring concrete outputs, not re-deriving it.** Assert the two
+  fixed points — pitch-black → full strength (EV 1.5, saturation 1.2, …) and bright → `null` — plus monotonic
+  relations (darker boosts more), never `expected = boostFactor * gain` recomputed in the test.
+- **When the parity note says "fold core A into core B", ship the fold as a real one-call seam.** Here
+  `planForFrame(yPlane,…) = plan(FrameLuminance.averageOfYPlane(…))`. It turns two cores that existed apart
+  into a composition the actuator calls in one line, and a degenerate geometry (FrameLuminance → null) flows
+  through to "no boost" for free — the clause becomes code, not a comment.
+
+## 2026-08-29 — SDK bootstrap for compileSdk 37 needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` (slice `story-publish-queue-media-only`)
+Installing only `platforms;android-37.0` (the sole published API-37 platform — no bare `android-37` exists) is
+NOT enough: AGP 8.13.0 resolves `compileSdk = 37` to the target hash `android-37`, and Gradle dies with
+`Failed to find target with hash string 'android-37' in: …` at task-dependency resolution — a red herring that
+looks like a missing platform. Installing `platforms;android-35` + `build-tools;35.0.0` alongside android-37.0
+(the exact package set the last green run used) unblocks resolution and the full gate goes green. So the fresh-
+container recipe is: `cmdline-tools` + accept licences + `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+"platform-tools" "platforms;android-35" "build-tools;35.0.0"`. Also: prefer a plain (incremental) rerun for the
+mutation-proof, NOT `--rerun-tasks` — the latter recompiles the whole dependency chain (~2 min) instead of just
+re-running the one test task.
+
+## 2026-08-29 — the outbox decode gate is a Prisme-of-content question: "what does this publish CARRY?", not "does it have TEXT?" (slice `story-publish-queue-media-only`)
+`StoryRepository.decodeStoryPublish` gated on non-blank text (`content?.takeIf { isNotBlank } ?: return null`),
+so a media-only (RAW background) story — `content = null`, `mediaIds = [...]`, exactly what the composer emits —
+decoded to null and vanished from BOTH the optimistic ring AND the failure strip: a queued image/video story
+that FAILED was lost silently, with no retry/discard. The block was fine for text and invisible for media
+because media never composes a caption. **When a decoder/projection gates on ONE payload dimension (text), ask
+what ELSE the row can carry (media, and later a local URI/thumbnail) that the gate silently drops** — the same
+"what travels beside the text?" reflex the gateway Prisme lessons (root CLAUDE.md §124/125) apply to
+notifications, here applied to the outbox. The fix widened the gate to "non-blank text OR ≥1 non-blank media id"
+and made `content` nullable on both building blocks; the failure strip's caption became a localised media
+summary so a media-only row is never a blank line.
+
+## 2026-08-29 — a model field + a decoder + a painter all shipping does NOT mean a surface consumes them (slice `story-slide-thumbhash-placeholder`)
+The ThumbHash blur placeholder was "half-built and invisible": the field was on the model
+(`StoryEffects.thumbHash`, `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`) and the Compose
+painter (`rememberThumbHashPainter`) were ported a month ago AND already wired in the feed — yet the story
+viewer's background `AsyncImage` still painted black on cold load, because nobody had passed the hash to it.
+A feature-parity box that reads "ThumbHash decoder shipped" is about the BUILDING BLOCK, not every SURFACE
+that should use it. **Grep the consumer, not the block:** when a placeholder/decoder/resolver exists, search
+every `AsyncImage`/image surface for whether it actually passes the value — an unconsumed capability is a
+cold-load flash the user sees, exactly the instant-app gap (dim. 2/4/8) the block was meant to close. The
+cheap win is wiring the last mile, and it is easy to miss precisely because the parts all look "done".
+
+## 2026-08-29 — when the LAST case a gate guarded goes away, RETIRE the gate; don't leave it as a constant-`false` branch (slice `story-draft-persist-sticker-elements`)
+The story-draft fidelity gate (`deckHasRichContent`) existed to catch content the primitive snapshot could
+not yet represent, purging a stale draft rather than restoring lossily. Six slices lifted its dimensions one
+at a time (transform, filter, duration, background, text elements, stickers); after the last one the gate
+would have been `deck.slides.any { it.stickers.isNotEmpty() }` → wired to a snapshot that now *carries*
+stickers → constant `false`. The temptation is to keep the (now-dead) function and its two call sites "just in
+case". Resisted: a branch that can never be true is a lie about the code's shape — it tells the next reader a
+purge path still exists. So the function, its `resolve` first arm, and its `deckIsPristine` call were all
+removed; `deckIsPristine`'s intent (a silently-added sticker still counts as touched) moved to an explicit
+`it.stickers.isEmpty()`. **Retiring a gate is a behaviour change and needs the same TDD care as adding one**:
+the `resolve` purge-on-rich test became a Save test, the VM does-not-save test became a saves test, and the
+six `deckHasRichContent is …` unit tests were deleted WITH the function — legitimate because each dimension's
+"is persistable" behaviour is already covered by its own Save + round-trip tests, so no behaviour coverage was
+lost (only tests of a deleted symbol). Check that equivalence before deleting a test, every time.
+
+## 2026-08-29 — a durable "object-graph" snapshot can stay primitive-only by riding EXISTING wire SSOTs, not re-spelling them (slice `story-draft-persist-text-elements`)
+The first object-graph dimension of the story fidelity gate (on-canvas `StoryTextElement`, ~13 styled
+fields incl. a sealed `StoryTextBackground` and three enums) looked like it needed a polymorphic
+serialiser. It didn't. Two reuse moves kept the durable `StoryDraftTextElementSnapshot` a flat
+primitive bag:
+- **A sealed value that already projects to a `@Serializable` wire type rides as THAT type — don't
+  invent `{type,hex,radius}` fields.** `StoryTextBackground` already had `toStyleWire(): StoryTextBackgroundStyle?`
+  and `resolve(style, textBg)` as the single source for its tagged-union encoding (the gateway/reader
+  path). The snapshot stores `background: StoryTextBackgroundStyle?` and maps through those exact two
+  functions, so the tagged union is spelled in ONE place and the round-trip is provably the reader's own.
+- **An enum defined in a DOWNSTREAM module (`:feature:stories`) rides a `:core:model` snapshot as its
+  Kotlin `.name` string**, resolved back with `entries.firstOrNull { it.name == s } ?: default`. This
+  keeps the durable-model module free of the composer's enums (no upward dependency) AND is tolerant by
+  construction — an unknown/blank name from a legacy or corrupt blob decays to the element's own default,
+  exactly like every other story restore decoder. `color.ifBlank { DEFAULT_COLOR }` closes the same gap
+  for the one free-form string field.
+- **Same decouple-the-gate discipline as the four scalar dimensions before it**: `deckHasRichContent`
+  dropped its `elements` arm (now representable, gate holds only `stickers`), `deckIsPristine` gained an
+  explicit `elements.isEmpty()` so a silently-added element still counts as touched. And `hasContent`
+  (worth-restoring) counts a **publishable** element only — a blank on-canvas text box carries nothing to
+  restore, matching iOS's "a text-element-only slide publishes iff the text is non-blank".
+- **One flip, one retarget, both genuine behaviour changes not weakenings**: the old `a draft with a text
+  element is not persisted` autosave test now asserts `Save` (the whole point of the slice); the VM
+  rich-content purge test retargeted from a text element to a still-gated sticker so it keeps proving the
+  gate for what's still gated. Mutation-RED-proven three ways (gate arm, pristine guard, hasContent arm).
+
 ## 2026-08-27 — a "fidelity gate" over a field that's actually primitive was never a real gate; decouple the gate from pristine before lifting one dimension (slice `story-draft-persist-canvas-transform`)
 The story autosave slice installed a fidelity gate: any slide carrying rich on-canvas content
 (elements/stickers/filter/background/duration/**transform**) was treated as "not persistable" and its
@@ -2316,3 +2406,74 @@ by a store the seam predates.
   local evidence, and the **Android** CI check (clean ubuntu Maven cache, not this proxy) is the authoritative
   full gate. A retry-with-backoff loop that greps for `429` and re-runs is the right local tool; do not read a
   429-truncated `compileKotlin FAILED` (no `e:`/error text, daemon vanished) as a code failure.
+
+## 2026-08-28 — the story-draft fidelity gate's three SCALAR dimensions are now all lifted; what remains is object graphs (slice `story-draft-persist-duration`)
+`story-draft-persist-duration` lifted the third and last scalar dimension of the story-composer autosave
+fidelity gate — the author-pinned `StorySlide.durationSecondsPin: Double?`. It followed the transform and
+filter slices' pattern but was even thinner: no nested `@Serializable` snapshot type was needed (the field
+is already a nullable scalar), so the change was one field on `StoryDraftSlideSnapshot`, two mapper lines,
+and the now-routine decoupled-gate move (drop from `deckHasRichContent`, add the explicit `== null` guard to
+`deckIsPristine`). The pin is restored verbatim — it can only reach the snapshot through `setSelectedDuration`,
+which already clamps to `[2,600]` via `StoryDurationPin.clamp`, so no re-clamp on restore.
+- **The remaining fidelity-gate dimensions are NOT scalars — they want real slices, not one-liners.** With
+  transform/filter/duration done, what's left in `deckHasRichContent` is the two object-list dimensions
+  (`elements: List<StoryTextElement>`, `stickers: List<StoryStickerElement>` → their own mirror snapshots)
+  and the sealed background (`StoryBackgroundValue` → closed-polymorphic or wire-string projection, carrying
+  `backgroundMediaId`/`backgroundLoop` WITH it, never alone). The "mirror the last scalar slice" reflex stops
+  here — an object list needs its own element snapshot type and its own round-trip/order tests.
+- **Container bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (AGP mapped
+  compileSdk 37 → android-37.0 on first `./gradlew`, no hash error, no copy→patch). Full CI-mirror gate
+  (`assembleDebug testDebugUnitTest`, all modules) BUILD SUCCESSFUL locally — the "try pristine first" note
+  held again.
+
+## 2026-08-29 — a "ported from iOS … matching iOS" doc-comment is a claim to VERIFY, not a fact to trust (slice `call-quality-rtt-longhaul-parity`)
+`CallQualityThresholds` said, in its own KDoc, "the Android SSOT ported from iOS `QualityThresholds`" and
+"matching iOS" — while carrying `VIDEO_FAIR_RTT_MS=200 / VIDEO_POOR_RTT_MS=300 / POOR_RTT_MS=500`, the values
+iOS held *before* it recalibrated the RTT ladder out to `300/500/800` for real long-haul baselines. The port
+was faithful the day it was written and silently drifted when iOS moved. Reusable moves:
+- **When a constant claims parity with another platform, open BOTH and diff the numbers — don't trust the
+  prose.** The divergence here was three literals a `grep` apart; the doc-comment actively hid it. A parity
+  claim ages; the SSOT it names keeps moving. This is the cross-platform twin of leçon 261 ("an énumération of
+  sites carries two claims, and 'these are the sites' is almost never re-checked"): "these values match iOS"
+  is a second, unverified claim riding on "these values were ported from iOS".
+- **A stale threshold is a lenience/parity BUG, priced like the feature it degrades — not tech debt.** The
+  effect wasn't cosmetic: a healthy 350 ms intercontinental call rendered in the weak-link ERROR hue (POOR)
+  when iOS/web showed it FAIR. The roadmap's "une lenteur/dégradation est un BUG" applies verbatim to a
+  misclassification that paints a good call red.
+- **The test that catches a stale boundary must live on a value the boundary actually MOVED past, and name the
+  scenario.** Re-pinning `300 stays GOOD / 300.1 → FAIR` proves the new boundary; the three *named*
+  intercontinental regressions (250→GOOD, 350→FAIR, 550→POOR) are what a future reader greps for when the next
+  recalibration lands — they encode the real Africa↔Asia baseline (155-221 ms backbone + mobile last mile),
+  not just an abstract threshold. RED-proving showed exactly 9 fail against the stale constants, no collateral.
+- **Blast-radius check before touching a shared constant: `grep` its non-test consumers first.** Only
+  `VideoQualityLevel.from(rttMs, packetLoss)` reads these three — the survival policy and sender-cap plan
+  consume the enum *tier*, not raw RTT — so the change could not ripple. Confirmed before editing, not after.
+- **SDK bootstrap reconciliation (vs. the prior run's "pristine android-37.0 alone worked" note):** it did
+  NOT this run — local cmdline-tools `11076708` + AGP 8.13.0 errored `Failed to find target with hash string
+  'android-37'` because only `android-37.0/.1/.2` are published (never a bare `android-37`). Fix off-CI: a
+  `platforms/android-37 → android-37.0` symlink (SDK is local-only, never committed). The two notes are both
+  true — AGP's willingness to auto-map `37 → 37.0` is version/cache-sensitive; if pristine errors, symlink
+  rather than assume the repo is broken. CI is unaffected (its `setup-android` step documents the same quirk).
+
+## 2026-08-29 — a "needs an emulator" pending item often has a PURE half worth extracting first (slice `call-stats-reduce`)
+The prior run's "Next" named "the live WebRTC stats source (`RTCStatsReport → CallQualitySample`)" as device-only.
+That is half true. The FRAMEWORK half (reading `RTCStatsReport`'s `NSObject`/value graph) is device-bound; the
+ARITHMETIC half (per-kind packet sums, codec-id→name resolution, the audio-jitter mean, and — critically — the
+cumulative-counter → interval-loss-**ratio** conversion) is pure and was already factored out on iOS exactly so
+it is unit-testable (`CallStats.reduce` + `WebRTCService.adjustBitrate`, `WebRTCTypes.swift` §5.7). Lesson:
+before shelving a pending item as "emulator only", ask **which slice of it is the decision and which is the I/O**
+— port the decision as `:core:model` now, leave only the thin adapter for the device run. This is the same
+building-blocks-vs-orchestration grain the whole Calls area has followed (the reducer is the input SSOT the
+existing `VideoQualityLevel`/`CallQualitySample` ladder consumes).
+
+Two porting specifics worth keeping:
+- **A cumulative counter is never a fraction.** libwebrtc's `packetsLost`/`packetsReceived` only grow. A tick's
+  loss ratio is `Δlost/(Δlost+Δreceived)` between two snapshots, and each delta must be **clamped ≥ 0** —
+  otherwise an ICE-restart counter reset (current < previous) reads as negative loss when ONLY one axis resets
+  while the other grows (both-axes reset is already caught by `denom > 0`, so a full-reset test does NOT exercise
+  the clamp — a loss-counter-only-reset test does; that's the discriminating case that makes the clamp
+  load-bearing). Watch the denominator: iOS's is `Δlost + Δreceived`, not `Δreceived`.
+- **Fraction vs percent are two consumers.** iOS emits BOTH a `lossRatio` (fraction, feeds `VideoQualityLevel.from`)
+  and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
+  `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
+  critical. Document which one you ported so the next reader doesn't "fix" it.

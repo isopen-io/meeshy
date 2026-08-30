@@ -399,6 +399,40 @@ describe('reactionRoutes', () => {
       expect(reply.statusCode).toBe(404);
     });
 
+    /**
+     * REPOINTÉ depuis la porte IMBRIQUÉE retirée (#4188/#4190).
+     *
+     * `POST /conversations/:id/messages/:messageId/reactions` portait ce témoin
+     * (« returns 400 when reacting to a system message ») ; la porte plate porte
+     * la MÊME branche — `error.message === 'Cannot react to a system message'`
+     * → `sendBadRequest` — et n'en avait AUCUN témoin. Supprimer l'imbriquée
+     * sans repointer aurait emporté la seule couverture d'un comportement
+     * toujours servi, et l'aurait fait en silence : la branche serait restée
+     * là, verte de couverture ligne, sans que rien ne garde son CODE de retour.
+     *
+     * L'enjeu est ce code, pas le texte. Sans cette branche, réagir à un
+     * message système retombe sur le `sendInternalError` du bas — un 500 pour
+     * une règle produit, donc un client qui réessaie sans fin, exactement le
+     * défaut que la branche 410 du fil clos corrige un peu plus bas.
+     *
+     * `ReactionService.test.ts` couvre le service qui LÈVE cette erreur ; il ne
+     * dit rien de ce que la route en fait. Les deux moitiés sont disjointes.
+     */
+    it('returns 400 when service throws "Cannot react to a system message"', async () => {
+      const { fastify, reply } = setup();
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      mockAddReaction.mockRejectedValue(new Error('Cannot react to a system message'));
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
+      await handler(req, reply);
+
+      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Cannot react to a system message');
+      expect(reply.statusCode).toBe(400);
+      // Le 500 est le repli du bas : c'est précisément ce que la branche évite.
+      expect(mockSendInternalError).not.toHaveBeenCalled();
+    });
+
     it('returns 409 with the reaction-limit message when service throws ConflictError (cap reached)', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');

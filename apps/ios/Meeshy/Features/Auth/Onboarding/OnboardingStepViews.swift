@@ -885,7 +885,7 @@ struct StepLanguageView: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "onboarding.step.language.system", defaultValue: "Langue principale", bundle: .main)).font(.caption2.weight(.medium)).foregroundColor(.secondary)
-                    Text("\(selectedSystemLang?.flag ?? "") \(selectedSystemLang?.name ?? viewModel.systemLanguage)")
+                    Text("\(LanguageFlagChip.flag(for: viewModel.systemLanguage)) \(selectedSystemLang?.name ?? viewModel.systemLanguage)")
                         .font(.subheadline.weight(.semibold))
                 }
                 Spacer()
@@ -904,7 +904,7 @@ struct StepLanguageView: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "onboarding.step.language.regional", defaultValue: "Langue régionale", bundle: .main)).font(.caption2.weight(.medium)).foregroundColor(.secondary)
-                    Text("\(selectedRegionalLang?.flag ?? "") \(selectedRegionalLang?.name ?? viewModel.regionalLanguage)")
+                    Text("\(LanguageFlagChip.flag(for: viewModel.regionalLanguage)) \(selectedRegionalLang?.name ?? viewModel.regionalLanguage)")
                         .font(.subheadline.weight(.semibold))
                 }
                 Spacer()
@@ -996,12 +996,12 @@ struct StepLanguageView: View {
                     Circle()
                         .fill(MeeshyColors.indigo400.opacity(0.2))
                         .frame(width: 32, height: 32)
-                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
+                        .overlay(Text(verbatim: "JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Jean-Pierre")
+                        Text(verbatim: "Jean-Pierre")
                             .font(.caption2.weight(.medium)).foregroundColor(.secondary)
-                        Text("Hello! How are you doing today?")
+                        Text(verbatim: "Hello! How are you doing today?")
                             .font(.footnote)
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemGray5)))

@@ -32,8 +32,8 @@ enum ComposerMentionFriendsSource {
     ) async -> [MentionCandidate] {
         guard !currentUserId.isEmpty else { return [] }
         do {
-            let page = try await friendService.allFriendRequests(
-                status: "accepted", offset: 0, limit: pageSize
+            let page = try await friendService.friendRequests(
+                direction: .any, status: "accepted", q: nil, cursor: nil, limit: pageSize
             )
             let friends = FriendListAggregator.aggregate(
                 received: page.data, sent: [], currentUserId: currentUserId

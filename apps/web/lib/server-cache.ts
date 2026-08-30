@@ -21,6 +21,7 @@
 
 import { cache } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 // `getDashboardData`, `getGroups` et `getGroupById` ont été retirés : ils
 // visaient `/dashboard`, `/groups` et `/groups/:id`, trois adresses qui
@@ -55,7 +56,7 @@ export const getUserById = cache(async (userId: string) => {
   // lui, n'appelle plus que l'implémentation. Le paramètre accepte aussi bien
   // un ObjectId qu'un pseudo, ce que le nom `userId` ne dit pas et que le site
   // d'appel exploite déjà.
-  const response = await fetch(buildApiUrl(`/directory/people/${userId}`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.directory.peopleByHandle(userId)), {
     next: { revalidate: 300 }, // Cache 5 minutes
   });
 
@@ -84,7 +85,7 @@ export const getUserById = cache(async (userId: string) => {
  * ```
  */
 export const getConversationById = cache(async (conversationId: string) => {
-  const response = await fetch(buildApiUrl(`/conversations/${conversationId}`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.conversations.byId(conversationId)), {
     next: { revalidate: 30 }, // Cache 30 secondes (data temps réel)
   });
 
@@ -140,6 +141,17 @@ export const getConversationMessages = cache(
  *
  * @param userId - ID de l'utilisateur
  * @returns Notifications array
+ *
+ * ADRESSE FANTÔME, trouvée par #4281 en migrant ce fichier vers le catalogue
+ * partagé : `GET /users/:id/notifications` n'existe dans AUCUNE des 419
+ * routes de `@meeshy/shared/api/endpoints` (#4280, dérivé du manifeste
+ * gateway). Zéro appelant dans ce dépôt (vérifié) — même famille que
+ * `getDashboardData`/`getGroups`/`getGroupById`, retirés de CE MÊME FICHIER
+ * par #4189 pour la même raison. Non retirée ici : #4281 migre des chemins
+ * littéraux vers le catalogue, il ne tranche pas le sort d'un code mort —
+ * enterrer cette découverte dans un lot de migration referait exactement
+ * l'erreur que #4189 nommait. Laissée en littéral EXPRÈS : il n'y a pas
+ * d'entrée de catalogue vers laquelle la migrer. Suivi à ouvrir.
  */
 export const getUserNotifications = cache(async (userId: string) => {
   const response = await fetch(buildApiUrl(`/users/${userId}/notifications`), {
@@ -159,7 +171,7 @@ export const getUserNotifications = cache(async (userId: string) => {
  * Cette data change rarement, on peut la cacher plus longtemps
  */
 export const getAvailableLanguages = cache(async () => {
-  const response = await fetch(buildApiUrl('/languages'), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.languages.root), {
     next: { revalidate: 3600 }, // Cache 1 heure (data statique)
   });
 

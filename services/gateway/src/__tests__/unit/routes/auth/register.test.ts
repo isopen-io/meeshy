@@ -47,6 +47,16 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   })),
 }));
 
+// #4264 — l'inscription crée désormais une SESSION, comme la connexion : sans
+// elle, le JWT d'un compte frais ne nommait rien, et depuis #4213 son premier
+// `POST /auth/refresh` rendait 401 « Session révoquée » à quelqu'un qui n'avait
+// rien révoqué (`count({ userId, isValid: true })` valait zéro).
+const mockCreateSession = jest.fn<any>().mockResolvedValue({ id: 'session-inscription' });
+jest.mock('../../../../services/SessionService', () => ({
+  createSession: (...args: any[]) => mockCreateSession(...args),
+  generateSessionToken: jest.fn(() => 'session-token-inscription'),
+}));
+
 jest.mock('../../../../utils/normalize', () => ({
   normalizePhoneNumber: jest.fn((p: string) => p),
   normalizePhoneWithCountry: jest.fn((phone: string) => ({
@@ -175,6 +185,61 @@ describe('POST /register — success', () => {
     expect(body.success).toBe(true);
     expect(body.data.token).toBe('jwt-token');
     expect(authService.register).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /register — le compte frais naît AVEC une session (#4264)', () => {
+  // CHANGEMENT DE COMPORTEMENT ASSUMÉ. `AuthService.register` n'appelait
+  // JAMAIS `createSession` : un compte tout neuf repartait avec un JWT
+  // rattaché à RIEN. Depuis #4213 ce n'était plus seulement incohérent,
+  // c'était CASSÉ — sa garde refuse `POST /refresh` quand le compte n'a
+  // aucune session valide, ce qui est exactement l'état d'un compte qui vient
+  // d'être créé. Le premier renouvellement, 24 h plus tard, rendait 401
+  // « Session révoquée » à quelqu'un qui n'avait rien révoqué.
+  //
+  // Nommer la session dans le jeton IMPOSAIT d'en créer une ; on y gagne que
+  // le premier appareil devient révocable comme tous les autres.
+
+  it('crée une session avec le contexte de la requête', async () => {
+    const { app } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    });
+
+    expect(mockCreateSession).toHaveBeenCalledWith({
+      userId: expect.any(String),
+      token: 'session-token-inscription',
+      requestContext: expect.objectContaining({ ip: '127.0.0.1' }),
+    });
+    await app.close();
+  });
+
+  it('rattache le jeton à cette session — le cinquième site d\'émission n\'est pas oublié', async () => {
+    const { app, authService } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), 'session-inscription');
+    await app.close();
+  });
+
+  it('SERT le jeton de session au client — un champ non déclaré au schéma part vide', async () => {
+    // Le piège maison : la branche du conflit de numéro a déjà payé une
+    // omission de schéma, `data` partant vide et le client retombant sur un
+    // « Registration failed » générique. Un `sessionToken` non déclaré serait
+    // retiré à la sérialisation et le client ne pourrait jamais glisser sa
+    // fenêtre de session.
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    });
+
+    expect(res.json().data.sessionToken).toBe('session-token-inscription');
     await app.close();
   });
 });

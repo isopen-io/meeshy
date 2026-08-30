@@ -195,7 +195,10 @@ describe('useVoiceProfileManagement', () => {
         await result.current.grantConsent();
       });
 
-      expect(mockPost).toHaveBeenCalledWith('/voice/consent', { granted: true });
+      // #4180 — `/voice/consent` n'existe pas (404). La seule route réelle,
+      // qui horodate le consentement côté SERVEUR, est
+      // POST /voice/profile/consent.
+      expect(mockPost).toHaveBeenCalledWith('/voice/profile/consent', { voiceRecordingConsent: true });
       expect(result.current.hasConsent).toBe(true);
       expect(mockToastSuccess).toHaveBeenCalledWith('Voice recording consent granted');
     });
@@ -290,7 +293,10 @@ describe('useVoiceProfileManagement', () => {
         await result.current.grantVoiceCloningConsent();
       });
 
-      expect(mockPost).toHaveBeenCalledWith('/voice/voice-cloning-consent', {
+      // #4180 — `/voice/voice-cloning-consent` n'existe pas (404) : le web
+      // n'avait AUCUN moyen d'accorder le clonage vocal. Seule route réelle :
+      // POST /voice/profile/consent (même écrivain que grantConsent).
+      expect(mockPost).toHaveBeenCalledWith('/voice/profile/consent', {
         voiceRecordingConsent: true,
         voiceCloningConsent: true,
       });
@@ -333,7 +339,10 @@ describe('useVoiceProfileManagement', () => {
         await result.current.revokeVoiceCloningConsent();
       });
 
-      expect(mockPost).toHaveBeenCalledWith('/voice/voice-cloning-consent', {
+      // #4180 — même route que grantVoiceCloningConsent ; `false` fait
+      // écrire `User.voiceCloningEnabledAt = null` côté serveur, donc une
+      // révocation avec un effet réellement observable au prochain GET.
+      expect(mockPost).toHaveBeenCalledWith('/voice/profile/consent', {
         voiceRecordingConsent: true,
         voiceCloningConsent: false,
       });

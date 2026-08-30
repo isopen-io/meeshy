@@ -248,3 +248,68 @@ describe('POST /users/me/verify-phone-change — success', () => {
     await app.close();
   });
 });
+
+// ─── #4184 witness (b) — un jeton valide pour A n'autorise PAS un changement vers B ──
+//
+// `pendingEmail`/`pendingEmailVerificationToken` (et leurs jumeaux téléphone)
+// sont posés ENSEMBLE, dans le MÊME `update` Prisma, à chaque
+// (ré)initiation (`initiateEmailChange`, `resendEmailChangeVerification`) —
+// il n'existe donc, à tout instant, qu'UNE SEULE cible pending par compte. Un
+// jeton émis pour l'adresse A cesse d'être valide dès que le compte
+// réinitie vers B : la ligne courante ne porte plus le hash de A, et la
+// comparaison à temps constant du handler échoue. Ces témoins le prouvent en
+// simulant exactement ce scénario — jeton A en poche, ligne DB déjà passée à
+// B — et vérifient que ni `email`/`phoneNumber` n'est écrit avec la valeur A,
+// ni `update` n'est appelé DU TOUT : un attaquant qui a intercepté le premier
+// e-mail/SMS ne peut pas s'en servir après que la cible légitime a changé
+// d'avis.
+describe('POST /users/me/verify-email-change — a token minted for address A does not authorize the change once pending moved to B (#4184)', () => {
+  it('rejects tokenA when the current pending row already points at B with a different token', async () => {
+    const crypto = require('crypto');
+    const tokenA = 'token-for-address-a';
+    const tokenB = 'token-for-address-b';
+    const hashB = crypto.createHash('sha256').update(tokenB).digest('hex');
+
+    const prisma = makePrisma();
+    const update = prisma.user.update as jest.Mock<any>;
+    // La ligne COURANTE ne connaît plus A : `initiateEmailChange` a déjà
+    // réécrit `pendingEmail`/`pendingEmailVerificationToken` en une seule
+    // opération atomique lors de la réinitiation vers B.
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({
+      id: USER_ID, email: 'old@test.com', pendingEmail: 'b@legit.com',
+      pendingEmailVerificationToken: hashB,
+      pendingEmailVerificationExpiry: new Date(Date.now() + 3600000),
+    });
+
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/users/me/verify-email-change', payload: { token: tokenA } });
+
+    expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /users/me/verify-phone-change — a code minted for number A does not authorize the change once pending moved to B (#4184)', () => {
+  it('rejects codeA when the current pending row already points at B with a different code', async () => {
+    const crypto = require('crypto');
+    const codeA = '111111';
+    const codeB = '222222';
+    const hashB = crypto.createHash('sha256').update(codeB).digest('hex');
+
+    const prisma = makePrisma();
+    const update = prisma.user.update as jest.Mock<any>;
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({
+      id: USER_ID, phoneNumber: '+33600000000', pendingPhoneNumber: '+33699999999',
+      pendingPhoneVerificationCode: hashB,
+      pendingPhoneVerificationExpiry: new Date(Date.now() + 3600000),
+    });
+
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/users/me/verify-phone-change', payload: { code: codeA } });
+
+    expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+});

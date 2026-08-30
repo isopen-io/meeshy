@@ -208,6 +208,24 @@ function registerSubRoutes(ctx: Context) {
 }
 ```
 
+## La table des routes est PUBLIÉE, et un cliquet la tient
+
+`docs/api/route-manifest.{json,md}` liste les routes réellement SERVIES — méthode,
+chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa preuve —
+produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par `grep`.
+C'est la source qui fait foi pour les catalogues clients (#4276).
+
+**Ajouter, retirer ou déplacer une route rend `src/__tests__/route-manifest-ratchet.test.ts`
+ROUGE tant que le manifeste n'est pas régénéré** — c'est voulu :
+
+```bash
+npx tsx scripts/route-manifest.ts        # régénère (à commiter avec la route)
+npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
+```
+
+Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
+préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
+
 ## Service Pattern
 ```typescript
 export class ServiceName {
@@ -285,6 +303,16 @@ GET /api/v1/static/:filename   (JWT-protected)
   avale ses erreurs » : c'est une propriété du collaborateur, pas une garantie du site
   d'appel — et elle est fausse dès que le callee a UNE instruction non gardée avant son
   propre `.catch`. Cf. `tasks/lessons.md` § Leçon 230.
+  **En CLIQUET depuis le cycle 130 bis** : `src/__tests__/detached-promise-catch-sweep.ts`,
+  inventaire VIDE. La règle était écrite, motivée, et commentée sur place partout où
+  elle était appliquée — et le balayage a rendu **quatorze** contre-exemples de
+  production, dont deux à cinquante lignes d'un de ces commentaires. Une règle ne se
+  propage pas depuis son énoncé : elle vaut là où quelqu'un l'a récitée. Quand le
+  cliquet tombe, la réparation est le `.catch`, jamais une ligne d'inventaire — il n'y
+  a pas de promesse détachée non gardée légitime à porter. Cinq des quatorze vivaient
+  dans un `setTimeout`, la forme la plus chère : aucun `try/catch` englobant à
+  invoquer, et un rappel qui se déclenche longtemps après la requête qui l'a armé.
+  Cf. `tasks/lessons.md` § Leçon 307.
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption
@@ -1757,9 +1785,18 @@ dépôt, et un cliquet ment plus longtemps qu'un journal.
 
 ### Ce qui reste, à sa taille
 
-Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
-couverture : les gardes sont réelles et lisibles. La question utile n'est pas
-« sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+Deux familles sur douze validaient à la main. Écart de CONSISTANCE, pas de
+couverture : les gardes étaient réelles et lisibles. La question utile n'était
+pas « sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+
+**SOLDÉ.** `AttachmentReactionHandler` (itération 280) puis `LocationHandler`
+(itération 281) ont rejoint la frontière Zod partagée. Les DOUZE familles
+valident désormais par `validateSocketEvent`. `LocationHandler` exprime ses
+bornes de coordonnées et de durée en Zod pur (`z.number().min().max()`,
+`.gt(0).max(480)`) — `_validateCoordinates` est retiré — et `location:live-stop`
+a reçu sa première garde de frontière (`SocketLocationLiveStopSchema`). Les
+messages métier (`'Invalid coordinates'`, `'Invalid duration (must be 1-480
+minutes)'`) remontent sous le préfixe unifié `'Validation failed: …'`.
 
 ### Et pourtant le CAST, lui, effaçait les DEUX sens
 

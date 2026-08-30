@@ -79,6 +79,10 @@ class ConversationLockFlowViewModelTest {
         categorySocketManager = mockk<CategorySocketManager> {
             every { categoryEvents } returns MutableSharedFlow<CategoryEvent>()
         },
+        preferencesSocketManager = mockk<me.meeshy.sdk.socket.PreferencesSocketManager> {
+            every { conversationPreferencesUpdated } returns
+                MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData>()
+        },
         socketManager = mockk<SocketManager> {
             every { connectionState } returns MutableStateFlow(SocketConnectionState.DISCONNECTED)
         },

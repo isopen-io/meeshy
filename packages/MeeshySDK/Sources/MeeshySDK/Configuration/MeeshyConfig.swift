@@ -6,6 +6,10 @@ public final class MeeshyConfig: @unchecked Sendable {
     private static let remoteOrigin = "https://gate.meeshy.me"
     private static let localOrigin = "http://localhost:3000"
     private static let defaultApiPath = "/api/v1"
+
+    /// Le segment sous lequel la passerelle sert un fichier, RELATIF au préfixe
+    /// d'API — jamais préfixé ici : `apiBaseURL` porte déjà l'hôte et la version.
+    private static let attachmentFileRoute = "/attachments/file/"
     private static let environmentKey = "meeshy_selected_environment"
     private static let customHostKey = "meeshy_custom_host"
 
@@ -111,7 +115,32 @@ public final class MeeshyConfig: @unchecked Sendable {
         } else if urlString.hasPrefix("/") {
             resolved = shared.serverOrigin + urlString
         } else {
-            resolved = shared.serverOrigin + "/" + urlString
+            // Une chaîne sans barre initiale n'est pas un chemin : c'est la CLÉ
+            // DE STOCKAGE du média (`2025/10/<id>/photo.png`), la seule chose que
+            // la base doit porter (#4324). Ni hôte, ni préfixe d'API, ni version
+            // n'y figurent — ce sont des décisions de déploiement, et c'est au
+            // SDK de poser la route qui les porte.
+            //
+            // Sans cette branche, `serverOrigin + "/" + clé` rendait
+            // `https://gate.meeshy.me/2025/10/…` : le segment de service
+            // manquait, et les 514 attachements déjà stockés sous cette forme
+            // étaient illisibles sur iOS comme sur Android.
+            //
+            // La route suit `apiBaseURL` — donc le préfixe CONFIGURÉ, jamais une
+            // version écrite ici. `.urlPathAllowed` encode ce qu'une URL ne peut
+            // pas porter tel quel sans toucher aux barres obliques, qui sont les
+            // séparateurs du chemin et non des caractères à échapper.
+            // Deux formes ne sont PAS des clés, et se reconnaissent avant de
+            // poser quoi que ce soit : la chaîne VIDE (aucun média désigné) et
+            // celle qui porte DÉJÀ le segment de service, à qui une seconde
+            // route donnerait `…/attachments/file/api/v1/attachments/file/…`.
+            let porteDejaLaRoute = urlString.contains(Self.attachmentFileRoute.dropFirst())
+            if urlString.isEmpty || porteDejaLaRoute {
+                resolved = shared.serverOrigin + "/" + urlString
+            } else {
+                let cle = urlString.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? urlString
+                resolved = shared.apiBaseURL + Self.attachmentFileRoute + cle
+            }
         }
         guard let url = URL(string: resolved),
               let scheme = url.scheme?.lowercased(),

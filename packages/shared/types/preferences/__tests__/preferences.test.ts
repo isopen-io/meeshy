@@ -356,35 +356,51 @@ describe('ApplicationPreferenceSchema', () => {
     expect(valid.tutorialsCompleted).toHaveLength(3);
   });
 
-  test('conserve les timestamps de consentement voix (non strippés par Zod)', () => {
-    // Popup iOS 2026-07-08 : le consentement vocal transite par la MÊME API
-    // préférences (PATCH /me/preferences/application). Sans ces clés au
-    // schema, Zod (mode strip) les supprimait silencieusement.
-    const result = ApplicationPreferenceSchema.parse({
-      dataProcessingConsentAt: '2026-07-08T10:00:00Z',
-      voiceDataConsentAt: '2026-07-08T10:00:00Z',
-      voiceProfileConsentAt: '2026-07-08T10:00:00Z',
-      voiceCloningConsentAt: '2026-07-08T10:00:00Z',
-      voiceCloningEnabledAt: '2026-07-08T10:00:00Z'
+  // #4180 — un consentement se prouve par UNE SEULE colonne, horodatée par le
+  // serveur. Jusqu'ici ce schéma acceptait les CINQ mêmes noms que les
+  // colonnes `User.*ConsentAt` que `VoiceProfileService.updateConsent`
+  // horodate côté serveur : un client pouvait donc AFFIRMER un consentement
+  // — avec la date de SON choix — via un PATCH de préférences ordinaire, et
+  // `ConsentValidationService` donnait PRIORITÉ à cette affirmation sur la
+  // colonne serveur. Les quatre témoins ci-dessous remplacent les anciens
+  // « conserve »/« accepte null », qui gardaient exactement ce défaut.
+  describe('clés de consentement legacy — rejetées, jamais strippées en silence (#4180)', () => {
+    const LEGACY_KEYS = [
+      'dataProcessingConsentAt',
+      'voiceDataConsentAt',
+      'voiceProfileConsentAt',
+      'voiceCloningConsentAt',
+      'voiceCloningEnabledAt',
+    ] as const;
+
+    test.each(LEGACY_KEYS)('rejette %s avec une date ISO (le client ne peut plus affirmer un consentement)', (key) => {
+      expect(() => {
+        ApplicationPreferenceSchema.parse({ [key]: '2026-07-08T10:00:00Z' });
+      }).toThrow();
     });
-    expect(result.voiceProfileConsentAt).toBe('2026-07-08T10:00:00Z');
-    expect(result.voiceCloningConsentAt).toBe('2026-07-08T10:00:00Z');
-  });
 
-  test('accepte null et l\'absence des timestamps de consentement', () => {
-    const withNulls = ApplicationPreferenceSchema.parse({
-      voiceProfileConsentAt: null
+    test.each(LEGACY_KEYS)('rejette %s à null (un retrait explicite reste une AFFIRMATION du client, pas une absence)', (key) => {
+      expect(() => {
+        ApplicationPreferenceSchema.parse({ [key]: null });
+      }).toThrow();
     });
-    expect(withNulls.voiceProfileConsentAt).toBeNull();
 
-    const absent = ApplicationPreferenceSchema.parse({});
-    expect(absent.voiceProfileConsentAt).toBeUndefined();
-  });
+    test('rejette au format .partial() aussi — le chemin réel de PATCH /me/preferences/application', () => {
+      // `preference-router-factory.ts` appelle `schema.partial().parse(body)`
+      // sur PATCH (submittedFrom) — le témoin ci-dessus, sur `.parse()` nu,
+      // ne prouverait pas que la garde survit à `.partial()`, qui enveloppe
+      // CHAQUE champ dans un `.optional()` supplémentaire.
+      expect(() => {
+        ApplicationPreferenceSchema.partial().parse({ voiceCloningEnabledAt: '2026-07-08T10:00:00Z' });
+      }).toThrow();
+    });
 
-  test('rejette un timestamp de consentement non ISO-8601', () => {
-    expect(() => {
-      ApplicationPreferenceSchema.parse({ voiceProfileConsentAt: 'pas-une-date' });
-    }).toThrow();
+    test('l\'absence des cinq clés continue de parser normalement', () => {
+      const result = ApplicationPreferenceSchema.parse({ theme: 'dark' });
+      for (const key of LEGACY_KEYS) {
+        expect(result[key]).toBeUndefined();
+      }
+    });
   });
 
   test('conserve autoTranslateEnabled=false (le rang qui distingue la clé du défaut)', () => {

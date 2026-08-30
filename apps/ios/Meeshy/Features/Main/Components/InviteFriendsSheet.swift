@@ -152,9 +152,8 @@ struct InviteFriendsSheet: View {
                         Text("\(conversation.memberCount) \(String(localized: "invite.members", defaultValue: "membres"))")
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
-                        Text("·")
+                        MetaSeparator()
                             .foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true) // decorative separator — not announced to VoiceOver
                         Text(conversation.type.displayName)
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
@@ -253,7 +252,7 @@ struct InviteFriendsSheet: View {
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
-            Text("·")
+            MetaSeparator()
                 .foregroundColor(theme.textMuted)
 
             HStack(spacing: 4) {

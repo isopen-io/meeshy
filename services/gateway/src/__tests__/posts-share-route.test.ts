@@ -1,5 +1,5 @@
 /**
- * Route tests — POST/GET /posts/:postId/share (LOT 6 tracked share).
+ * Route tests — POST /posts/:postId/share (LOT 6 tracked share).
  *
  * @jest-environment node
  */
@@ -39,7 +39,22 @@ const noAuth = (_req: any, _reply: unknown, done: () => void) => done();
 
 async function buildApp(authed: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const prisma = {} as unknown as PrismaClient;
+  // #4146 — le partage verifie l'audience du post avant de frapper le lien
+  // trace : `loadPostAcl` lit `post.findFirst`. Le double rend un post PUBLIC,
+  // donc les trois cas mesures ici restent ceux d'avant la garde ; le refus
+  // hors audience a son temoin dans
+  // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+  const prisma = {
+    post: {
+      findFirst: (args: { where: { id: string } }) => Promise.resolve({
+        id: args.where.id,
+        authorId: 'author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [] as string[],
+        expiresAt: null,
+      }),
+    },
+  } as unknown as PrismaClient;
   const mw = authed ? auth : noAuth;
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
   app.register(async (instance) => {
@@ -76,30 +91,5 @@ describe('POST /posts/:postId/share', () => {
     shareWithTrackingLink.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
     expect(res.statusCode).toBe(404);
-  });
-});
-
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  let unauthApp: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(true); unauthApp = await buildApp(false); });
-  afterAll(async () => { await app.close(); await unauthApp.close(); });
-
-  it('returns the caller share-link analytics', async () => {
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ token: 'tok123', totalClicks: 8, uniqueClicks: 5 });
-  });
-
-  it('returns null data when the caller has no share link', async () => {
-    getPostShareLink.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toBeNull();
-  });
-
-  it('rejects unauthenticated requests with 401', async () => {
-    const res = await unauthApp.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(401);
   });
 });

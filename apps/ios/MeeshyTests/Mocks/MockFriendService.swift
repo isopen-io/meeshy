@@ -90,6 +90,75 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         return try allFriendRequestsResult.get()
     }
 
+    // MARK: - Lecture par CURSEUR — servie pour de vrai (#4342)
+
+    /// **Le pont du SDK rendait ce double AVEUGLE au-delà de la première page.**
+    ///
+    /// `FriendServiceProviding.friendRequests(direction:status:q:cursor:limit:)`
+    /// a une implémentation par défaut : elle sert la première page depuis
+    /// `allFriendRequests`, puis rend une page VIDE dès qu'un curseur est
+    /// présent. C'est le bon repli pour un conformant HORS dépôt — mais pour un
+    /// double du dépôt, c'est un piège : les trois suites qui prouvaient que la
+    /// pagination DÉPASSE la première page ont cessé de le prouver **sans
+    /// rougir**, puisque « une page, puis fin » est un scénario parfaitement
+    /// valide. Trois écrans tronquaient leur liste à 100 relations et aucun test
+    /// ne pouvait le dire.
+    ///
+    /// Ce double sert donc le curseur lui-même, et il l'encode comme le fait le
+    /// gateway : **une POSITION**. Le décoder en décalage garde aux suites leur
+    /// assertion la plus parlante — « le second appel demande ce qui vient APRÈS
+    /// la première page » — au lieu d'un opaque qui ne dirait rien de faux mais
+    /// rien d'utile non plus.
+    static func cursor(forOffset offset: Int) -> String { "offset:\(offset)" }
+
+    static func offset(fromCursor cursor: String?) -> Int {
+        guard let cursor, cursor.hasPrefix("offset:"), let valeur = Int(cursor.dropFirst(7))
+        else { return 0 }
+        return valeur
+    }
+
+    /// Les curseurs REÇUS, dans l'ordre. `nil` en tête = la première page.
+    var friendRequestsCursors: [String?] = []
+
+    func friendRequests(
+        direction: FriendRequestDirection,
+        status: String?,
+        q: String?,
+        cursor: String?,
+        limit: Int
+    ) async throws -> PaginatedAPIResponse<[FriendRequest]> {
+        friendRequestsCursors.append(cursor)
+        let depart = Self.offset(fromCursor: cursor)
+        // **`direction` décide QUEL endpoint répond**, exactement comme le pont
+        // du SDK : `.received` → `receivedRequests`, `.sent` → `sentRequests`,
+        // `.any` → `allFriendRequests`. L'ignorer ferait répondre le mauvais
+        // stub — et c'est le même défaut, rejoué un cran plus bas, que celui
+        // qu'on corrige : un double qui reprend une exigence doit la reprendre
+        // ENTIÈRE, pas la tranche que son premier appelant exerce.
+        let page: OffsetPaginatedAPIResponse<[FriendRequest]>
+        switch direction {
+        case .received: page = try await receivedRequests(offset: depart, limit: limit)
+        case .sent: page = try await sentRequests(offset: depart, limit: limit)
+        case .any: page = try await allFriendRequests(status: status, offset: depart, limit: limit)
+        }
+        // `hasMore` absent ⇒ une page PLEINE veut dire « il en reste », une page
+        // partielle veut dire la fin. C'est la règle que l'appelant applique ;
+        // la répéter ici ferait DEUX règles à faire diverger, mais le double
+        // doit bien produire un `nextCursor`, et il n'en produit un que sur la
+        // même lecture — d'où la projection, jamais une seconde décision.
+        let more = page.pagination?.hasMore ?? (page.data.count == limit)
+        return PaginatedAPIResponse(
+            success: page.success,
+            data: page.data,
+            pagination: CursorPagination(
+                nextCursor: more ? Self.cursor(forOffset: depart + page.data.count) : nil,
+                hasMore: more,
+                limit: limit
+            ),
+            error: page.error
+        )
+    }
+
     func respond(requestId: String, accepted: Bool) async throws -> FriendRequest {
         respondCallCount += 1
         lastRespondRequestId = requestId
@@ -126,6 +195,7 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         lastAllFriendRequestsLimit = nil
         allFriendRequestsOffsets = []
         allFriendRequestsResults = []
+        friendRequestsCursors = []
         respondCallCount = 0
         lastRespondRequestId = nil
         lastRespondAccepted = nil

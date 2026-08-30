@@ -10,17 +10,34 @@ package me.meeshy.sdk.model.call
  * threshold stays in the better tier), matching iOS.
  */
 object CallQualityThresholds {
+    // The RTT ladder is calibrated round-trip against ITU-T G.114 one-way targets
+    // (RTT ≈ 2× one-way) and REAL long-haul baselines, NOT a domestic wired link.
+    // An Africa↔Asia submarine backbone is already 155-221 ms RTT before the mobile
+    // last mile (WACS 155, 2Africa 158, ACC-1 221), so a healthy intercontinental
+    // call routinely sits at 250-450 ms. Parity with iOS `QualityThresholds`
+    // (`WebRTCTypes.swift`) AFTER its recalibration: the prior Android values
+    // (fair 200 / poor 300 / critical 500) predated that move and painted those
+    // healthy calls orange/red at 00:06 — a lenience regression this restores.
+    // Packet loss — the true congestion signal — keeps its tighter bands (below).
+
     /** RTT (ms) at or below which a link is excellent. */
     const val EXCELLENT_RTT_MS: Double = 100.0
 
-    /** RTT (ms) boundary between good and fair video. */
-    const val VIDEO_FAIR_RTT_MS: Double = 200.0
+    /** RTT (ms) boundary between good and fair video (~150 ms one-way). */
+    const val VIDEO_FAIR_RTT_MS: Double = 300.0
 
-    /** RTT (ms) boundary between fair and poor video. */
-    const val VIDEO_POOR_RTT_MS: Double = 300.0
+    /**
+     * RTT (ms) boundary between fair and poor video (~250 ms one-way). Sized to
+     * keep an Africa↔Asia backbone hop + a mobile last mile in the fair tier.
+     */
+    const val VIDEO_POOR_RTT_MS: Double = 500.0
 
-    /** RTT (ms) ceiling above which the link is critical (severe congestion). */
-    const val POOR_RTT_MS: Double = 500.0
+    /**
+     * RTT (ms) ceiling above which the link is critical (severe congestion). At
+     * 800 ms a call is genuinely unusable; a healthy long-haul call never reaches
+     * it, so the prior 500 ms ceiling misflagged intercontinental links as critical.
+     */
+    const val POOR_RTT_MS: Double = 800.0
 
     /** Packet-loss fraction at or below which a link is excellent. */
     const val EXCELLENT_PACKET_LOSS: Double = 0.01

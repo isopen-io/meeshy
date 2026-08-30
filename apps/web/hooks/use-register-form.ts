@@ -174,7 +174,7 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
         ...(affiliateToken && { affiliateToken }),
       };
 
-      const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.REGISTER);
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.register);
       console.log('[REGISTER_FORM] URL API:', apiUrl);
 
       if (affiliateToken) {

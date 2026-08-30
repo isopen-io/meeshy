@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ConversationLink as BaseConversationLink } from '@meeshy/shared/types';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { usersService } from '@/services/users.service';
 
 export interface ConversationLink extends BaseConversationLink {
@@ -20,7 +21,7 @@ export function useLinkValidation(linkId: string) {
   useEffect(() => {
     const initializePage = async () => {
       try {
-        const linkResponse = await fetch(`${buildApiUrl('/anonymous/link')}/${linkId}`);
+        const linkResponse = await fetch(buildApiUrl(API_ENDPOINTS.anonymous.linkByIdentifier(linkId)));
 
         if (linkResponse.ok) {
           const result = await linkResponse.json();
@@ -75,8 +76,9 @@ export function useUsernameValidation(username: string) {
 
     usernameCheckTimeout.current = setTimeout(async () => {
       try {
+        const checkUsernameEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?username=${encodeURIComponent(username.trim())}`;
         const response = await fetch(
-          buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(username.trim())}`)
+          buildApiUrl(checkUsernameEndpoint)
         );
 
         if (response.ok) {

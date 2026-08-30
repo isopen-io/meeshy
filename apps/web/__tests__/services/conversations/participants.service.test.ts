@@ -59,7 +59,7 @@ describe('ParticipantsService', () => {
       const result = await participantsService.getParticipants(conversationId);
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         {}
       );
       expect(result).toEqual(participants);
@@ -71,7 +71,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, { onlineOnly: true });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         expect.objectContaining({ onlineOnly: 'true' })
       );
     });
@@ -82,7 +82,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, { role: 'ADMIN' });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         expect.objectContaining({ role: 'ADMIN' })
       );
     });
@@ -93,7 +93,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, { search: 'john' });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         expect.objectContaining({ search: 'john' })
       );
     });
@@ -104,7 +104,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, { limit: 25 });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         expect.objectContaining({ limit: '25' })
       );
     });
@@ -115,7 +115,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, { cursor: 'abc123' });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         expect.objectContaining({ cursor: 'abc123' })
       );
     });
@@ -132,7 +132,7 @@ describe('ParticipantsService', () => {
       });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         {
           onlineOnly: 'true',
           role: 'MODERATOR',
@@ -149,7 +149,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId, {});
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         {}
       );
     });
@@ -201,7 +201,7 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId);
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         {}
       );
     });
@@ -230,7 +230,7 @@ describe('ParticipantsService', () => {
       await participantsService.searchParticipants(conversationId, '  john  ');
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { search: 'john', limit: '50' }
       );
     });
@@ -241,7 +241,7 @@ describe('ParticipantsService', () => {
       await participantsService.searchParticipants(conversationId, 'test');
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { search: 'test', limit: '50' }
       );
     });
@@ -252,7 +252,7 @@ describe('ParticipantsService', () => {
       await participantsService.searchParticipants(conversationId, 'test', 20);
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { search: 'test', limit: '20' }
       );
     });
@@ -299,7 +299,7 @@ describe('ParticipantsService', () => {
 
       expect(mockApi.get).toHaveBeenCalledTimes(1);
       expect(mockApi.get).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { limit: '100' }
       );
       expect(result.authenticatedParticipants).toEqual(users);
@@ -328,11 +328,11 @@ describe('ParticipantsService', () => {
 
       expect(mockApi.get).toHaveBeenCalledTimes(2);
       expect(mockApi.get).toHaveBeenNthCalledWith(1,
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { limit: '100' }
       );
       expect(mockApi.get).toHaveBeenNthCalledWith(2,
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { limit: '100', cursor: 'cursor-2' }
       );
       expect(result.authenticatedParticipants).toHaveLength(2);
@@ -590,7 +590,7 @@ describe('ParticipantsService', () => {
       await participantsService.addParticipant(conversationId, userId);
 
       expect(mockApi.post).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants`,
+        `/api/v1/conversations/${conversationId}/participants`,
         { userId }
       );
     });
@@ -616,7 +616,7 @@ describe('ParticipantsService', () => {
       await participantsService.removeParticipant(conversationId, userId);
 
       expect(mockApi.delete).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants/${userId}`
+        `/api/v1/conversations/${conversationId}/participants/${userId}`
       );
     });
 
@@ -640,7 +640,7 @@ describe('ParticipantsService', () => {
       await participantsService.updateParticipantRole(conversationId, userId, 'admin');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants/${userId}/role`,
+        `/api/v1/conversations/${conversationId}/participants/${userId}/role`,
         { role: 'admin' }
       );
     });
@@ -651,7 +651,7 @@ describe('ParticipantsService', () => {
       await participantsService.updateParticipantRole(conversationId, userId, 'moderator');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants/${userId}/role`,
+        `/api/v1/conversations/${conversationId}/participants/${userId}/role`,
         { role: 'moderator' }
       );
     });
@@ -662,7 +662,7 @@ describe('ParticipantsService', () => {
       await participantsService.updateParticipantRole(conversationId, userId, 'member');
 
       expect(mockApi.patch).toHaveBeenCalledWith(
-        `/conversations/${conversationId}/participants/${userId}/role`,
+        `/api/v1/conversations/${conversationId}/participants/${userId}/role`,
         { role: 'member' }
       );
     });

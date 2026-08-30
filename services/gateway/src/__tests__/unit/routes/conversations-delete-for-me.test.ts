@@ -58,6 +58,15 @@ function makeSocketIO() {
   return { mockIo, mockManager, mockFetchSockets, mockEmit, mockLeave };
 }
 
+/**
+ * Le résolveur de succession lit d'abord les ADMINISTRATEURS (`where.role`,
+ * plafonné) puis, à défaut, le membre le plus ancien (`take: 1`). Ces scénarios
+ * n'ont aucun administrateur : le double rend la liste sur la SECONDE lecture
+ * seulement, sans quoi un modérateur y passerait pour un administrateur.
+ */
+const successorFindMany = (rows: any[]) =>
+  jest.fn<any>((args: any) => Promise.resolve(args?.where?.role ? [] : rows));
+
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
@@ -72,6 +81,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // to 0 here regardless.
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
+    },
+    notification: {
+      // La trace `member_promoted` qui date l'ancienneté DE RANG (#4058).
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     // La clôture (ou la promotion du successeur) et le masquage de l'appelant
     // committent ensemble (cycle 69).
@@ -200,7 +213,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with a successor',
               role: 'creator',
               isActive: true,
             }),
-          findMany: jest.fn<any>().mockResolvedValue([
+          findMany: successorFindMany([
             { joinedAt: new Date('2026-01-01T00:00:00.000Z'),
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
@@ -311,7 +324,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
               role: 'creator',
               isActive: true,
             }),
-          findMany: jest.fn<any>().mockResolvedValue([
+          findMany: successorFindMany([
             { joinedAt: new Date('2026-01-01T00:00:00.000Z'),
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
@@ -358,7 +371,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no admin but 
               role: 'creator',
               isActive: true,
             }),
-          findMany: jest.fn<any>().mockResolvedValue([
+          findMany: successorFindMany([
             {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
@@ -407,7 +420,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
               role: 'creator',
               isActive: true,
             }),
-          findMany: jest.fn<any>().mockResolvedValue([]), // plus aucun membre actif
+          findMany: successorFindMany([]), // plus aucun membre actif
           update: jest.fn<any>().mockResolvedValue({}),
         },
         conversation: {

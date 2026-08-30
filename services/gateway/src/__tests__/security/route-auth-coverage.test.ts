@@ -56,10 +56,9 @@
  */
 
 import { describe, it, expect, afterAll } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import fs from 'fs';
 import path from 'path';
-import { EventEmitter } from 'events';
 
 // `@tus/server`/`@tus/file-store` sont publiés en ESM pur — Jest ne peut pas
 // les transformer (le reste de node_modules est exclu de la transformation,
@@ -80,9 +79,25 @@ jest.mock('@tus/server', () => ({
     async handle(req: any, res: any) {
       const headers = req?.headers || {};
       const headersApi = { get: (k: string) => headers[k.toLowerCase()] };
+      // #4190 — AVANT : ce double n'appelait QUE `onUploadCreate` et rendait
+      // donc 201/401 POUR TOUTE MÉTHODE. Or `onUploadCreate` n'est invoqué en
+      // production que par le gestionnaire POST : GET/HEAD/PATCH/DELETE passent
+      // par `onIncomingRequest`. Le double fabriquait un 401 sur des méthodes
+      // que ce chemin ne garde pas — n'importe quel témoin écrit contre ce
+      // montage mesurait le double, jamais la route. Il aiguille désormais sur
+      // la MÉTHODE, exactement comme `@tus/server`.
+      const method = String(req?.method || 'POST').toUpperCase();
+      // L'identifiant de session est le dernier segment du chemin ; la
+      // collection n'en a pas — seule la CRÉATION y a un sens.
+      const uploadId = String(req?.url || '').split('?')[0].split('/').filter(Boolean).pop() ?? '';
       try {
-        await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
-        res.statusCode = 201;
+        if (method === 'POST') {
+          await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
+          res.statusCode = 201;
+        } else {
+          await this.opts?.onIncomingRequest?.({ headers: headersApi }, uploadId);
+          res.statusCode = 204;
+        }
         res.end();
       } catch (err: any) {
         res.statusCode = (err && err.status_code) || 500;
@@ -94,6 +109,13 @@ jest.mock('@tus/server', () => ({
 jest.mock('@tus/file-store', () => ({
   FileStore: class MockFileStore {
     constructor(_opts: any) {}
+    // #4190 — un upload EXISTANT, appartenant à un tiers : le seul état dans
+    // lequel `onIncomingRequest` exerce réellement sa comparaison d'identité
+    // (401 sans justificatif, 403 pour un autre utilisateur). Sans lui, la
+    // garde revient sur `if (!ownerUserId) return` et ne mesure rien.
+    async getUpload(id: string) {
+      return { id, offset: 0, size: 0, metadata: { userId: 'tus-upload-owner-user-id' } };
+    }
   },
 }));
 
@@ -113,157 +135,17 @@ jest.mock('../../services/ZmqSingleton', () => {
   return { ZMQSingleton: { getInstance: jest.fn().mockResolvedValue(new EE()) } };
 });
 
-import { registerAllRoutes, type RouteRegistrationDeps } from '../../route-registration';
-import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { buildAssembledApp, type CollectedRoute } from '../../route-manifest';
 
-// ---------------------------------------------------------------------------
-// Stub Prisma "profond" : tout accès de propriété renvoie un nouveau proxy
-// chainable, tout appel renvoie une Promise résolue à `[]`. Suffisant pour
-// que le code de CONSTRUCTION de chaque module de routes (ex. `new
-// XxxService(prisma)`, ou du chargement de clés au démarrage) ne plante pas
-// au chargement — aucune des requêtes anonymes de ce test ne doit jamais
-// réellement lire un résultat Prisma signifiant (elles sont rejetées par le
-// hook d'auth avant), donc le contenu renvoyé par le stub n'a pas d'importance,
-// seule sa forme (itérable, chainable) compte.
-// ---------------------------------------------------------------------------
-// Propriétés à ne JAMAIS relayer vers un proxy imbriqué : `then/catch/finally`
-// évitent qu'un `await` traite le proxy comme un thenable ; `getter/setter`
-// évitent un piège Fastify — `fastify.decorate(name, value)` sonde
-// `value.getter`/`value.setter` (typeof === 'function' ?) pour détecter le
-// pattern d'accesseur `{getter, setter}`. Un proxy racine dont TARGET est une
-// fonction (nécessaire pour que `prisma.model.findMany(...)` reste appelable)
-// a `typeof proxy === 'function'` pour CHAQUE propriété relayée, y compris
-// `.getter` — Fastify croit alors définir un accesseur et n'expose plus la
-// valeur telle quelle (perte de référence, `.serverEncryptionKey` redevient
-// `undefined` une fois traversé `fastify.decorate`). Vérifié empiriquement :
-// sans cette exclusion, `fastify.prisma !== prismaStub` à l'intérieur d'un
-// plugin enregistré.
-const STUB_EXCLUDED_PROPS = new Set(['then', 'catch', 'finally', 'getter', 'setter']);
-
-function makeCallableStub(): any {
-  // `[]` plutôt que `undefined` : plusieurs chemins d'enregistrement (ex.
-  // `EncryptionService.ServerKeyVault.initialize()`) font `for (const x of
-  // await prisma.model.findMany(...))` — un stub générique doit rester
-  // itérable pour ne pas faire planter la CONSTRUCTION des routes (aucune
-  // requête anonyme de ce test ne dépend du contenu réel de ce résultat).
-  const fn: any = (..._args: unknown[]) => Promise.resolve([]);
-  return new Proxy(fn, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-    apply() {
-      return Promise.resolve([]);
-    },
-  });
-}
-
-/**
- * Racine du stub Prisma. Doit envelopper un OBJET, pas une fonction : la même
- * sonde Fastify décrite ci-dessus traite `typeof decoratedValue === 'function'`
- * comme un signal de rebind spécial pour les décorateurs-méthodes — un stub
- * racine appelable perdrait sa référence dès `app.decorate('prisma', ...)`.
- * Seuls les niveaux enfants (`prisma.model.method(...)`) doivent être
- * appelables ; eux ne passent jamais par `fastify.decorate`.
- */
-function makeDeepStub(): any {
-  return new Proxy({}, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-  });
-}
-
-interface CollectedRoute {
-  method: string;
-  url: string;
-  bodySchema?: any;
-  querystringSchema?: any;
-}
-
-async function buildAssembledApp(): Promise<{ app: FastifyInstance; routes: CollectedRoute[] }> {
-  const app = Fastify({
-    logger: false,
-    ajv: {
-      customOptions: {
-        strict: 'log' as const,
-        keywords: ['example'],
-      },
-    },
-  });
-
-  const prismaStub = makeDeepStub();
-
-  // `fastify.authenticate` = EXACT même middleware que la production
-  // (`createUnifiedAuthMiddleware(prisma, {requireAuth:true,
-  // allowAnonymous:false})`, voir `server.ts` `createAuthMiddleware()`).
-  // On utilise la VRAIE fonction, pas un mock — pour un appelant sans
-  // `Authorization` ni `X-Session-Token`, `createAuthContext()` retourne
-  // `createUnauthenticatedContext()` sans jamais toucher Prisma, donc le
-  // stub ci-dessus n'est pas sollicité sur ce chemin.
-  app.decorate('authenticate', createUnifiedAuthMiddleware(prismaStub, {
-    requireAuth: true,
-    allowAnonymous: false,
-  }));
-
-  app.decorate('prisma', prismaStub);
-  app.decorate('redis', undefined);
-  app.decorate('mentionService', {} as any);
-  app.decorate('socketIOHandler', {} as any);
-  app.decorate('jobMappingCache', {} as any);
-  app.decorate('emailService', {} as any);
-  app.decorate('mutationLogService', {} as any);
-  app.decorate('callService', {} as any);
-  app.decorate('notificationService', {} as any);
-  app.decorate('socialEvents', {} as any);
-  app.decorate('presenceChecker', {
-    isOnline: () => false,
-    bulk: () => new Map(),
-    listOnlineAmong: () => [],
-  } as any);
-
-  const routes: CollectedRoute[] = [];
-  app.addHook('onRoute', (routeOptions) => {
-    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-    const schema = (routeOptions as any).schema;
-    for (const method of methods) {
-      if (method === 'HEAD' || method === 'OPTIONS') continue; // miroir mécanique de GET, pas une route distincte à garder
-      routes.push({
-        method,
-        url: routeOptions.url,
-        bodySchema: schema?.body,
-        querystringSchema: schema?.querystring,
-      });
-    }
-  });
-
-  const deps: RouteRegistrationDeps = {
-    prisma: prismaStub,
-    translationService: {
-      healthCheck: async () => true,
-      // Valeur non-null pour forcer l'enregistrement de
-      // `registerVoiceRoutes` (voir `route-registration.ts` : "if
-      // (zmqClient) { ... }") — sans ça, tout `routes/voice/*` ne serait
-      // jamais enregistré et échapperait totalement à ce test.
-      // `AudioTranslateService`/`AttachmentTranslateService` appellent
-      // `zmqClient.on(...)` à la construction (écoute d'évènements) : un vrai
-      // EventEmitter, pas un objet nu, pour que ces constructions ne plantent
-      // pas au chargement des routes.
-      getZmqClient: () => new EventEmitter() as any,
-    } as any,
-    messagingService: {} as any,
-    mentionService: {} as any,
-    orphanMediaCleanup: {} as any,
-  };
-
-  await registerAllRoutes(app, deps);
-  await app.ready();
-
-  return { app, routes };
-}
+// Le montage jetable (stub Prisma profond + assemblage du VRAI serveur Fastify
+// via `registerAllRoutes`) vivait ici même, lignes ~141-266. Il est parti dans
+// `route-manifest/collect.ts` (#4276), qui en fait un ARTEFACT régénérable
+// (`route-manifest.json` + `scripts/generate-route-manifest.ts`) plutôt qu'une
+// pièce jetable de CE seul test — deux montages divergeraient tôt ou tard,
+// exactement la classe de défaut que ce dépôt referme sans relâche. Ce test
+// consomme désormais `buildAssembledApp()` depuis ce module partagé ; son
+// comportement observable (mêmes routes, mêmes décorations, mêmes stubs) est
+// inchangé au caractère près — seul l'endroit où le montage est ÉCRIT a bougé.
 
 /**
  * Remplace les segments `:param`/`*` d'un patron de route Fastify par une
@@ -419,7 +301,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/resend-verification', why: "renvoi d'email de vérification, pré-session" },
   { method: 'POST', url: '/api/v1/auth/send-phone-code', why: 'envoi de code SMS, pré-session (flux de vérification tél.)' },
   { method: 'POST', url: '/api/v1/auth/verify-phone', why: 'vérification de code SMS, pré-session' },
-  { method: 'POST', url: '/api/v1/auth/validate-session', why: 'valide un sessionToken transmis dans le corps — son rôle est justement de fonctionner sans Authorization' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/check', why: 'flux de transfert de numéro, pré-session (rate-limité)' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/initiate', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/verify', why: 'idem' },
@@ -436,7 +317,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/verify-code', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/resend', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/magic-link/request', why: "demande de lien magique par email, pré-session" },
-  { method: 'GET', url: '/api/v1/auth/magic-link/validate', why: 'consomme un lien magique à usage unique, pré-session' },
   { method: 'POST', url: '/api/v1/auth/magic-link/validate', why: 'idem' },
   { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
 
@@ -468,6 +348,15 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/anonymous/refresh', why: 'sessionToken du corps haché puis vérifié en base (fail-closed)' },
   { method: 'POST', url: '/api/v1/anonymous/leave', why: 'idem' },
   { method: 'GET', url: '/api/v1/anonymous/link/:identifier', why: "aperçu pré-jointure d'un lien de partage, sans contenu de messages" },
+  // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
+  // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
+  // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).
+  // `admitLinkEntry` (`services/conversations/linkAdmission.ts`) est la garde —
+  // un JWT valide y bascule simplement l'identité de invité à inscrit, jamais un
+  // 401/403 générique, exactement comme `anonymous/join` ne l'a jamais rendu.
+  { method: 'POST', url: '/api/v1/links/:key/members', why: "point d'entrée UNIFIÉ de jointure par lien — S1 invité (aucune créance) · S2 inscrit (JWT optionnel), gardé par admitLinkEntry" },
+  { method: 'PATCH', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/refresh' },
+  { method: 'DELETE', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/leave' },
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
@@ -483,14 +372,35 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/affiliate/track-visit', why: "tracking de visite public par design (pollution mineure notée séparément dans l'audit)" },
   { method: 'POST', url: '/api/v1/affiliate/click/:token', why: 'comptage de clic public par design' },
 
-  // --- Voice : sondes publiques, aucune donnée utilisateur ---
-  { method: 'GET', url: '/api/v1/voice/health', why: 'statut agrégé des sous-services, aucune donnée utilisateur' },
+  // --- Voice : sonde publique, aucune donnée utilisateur ---
+  // `GET /api/v1/voice/health` a QUITTÉ cette liste AVEC la route elle-même
+  // (#4190) : aucun appelant côté clients ni côté sondes d'infrastructure, et
+  // une seconde réponse à « le service répond-il ? » vaut moins qu'une seule
+  // qui fait autorité — `GET /health` (racine). Ne la remets pas ici.
   { method: 'GET', url: '/api/v1/voice/languages', why: 'liste statique de langues supportées' },
 
   // --- Posts/Feed : visibilité PUBLIC appliquée côté service pour les
   //     appelants anonymes (vérifié par lecture de PostFeedService/PostService) ---
   { method: 'GET', url: '/api/v1/posts/user/:userId', why: 'optionalAuth ; PostFeedService.getUserPosts applique buildVisibilityFilter — un anonyme ne voit que le PUBLIC' },
   { method: 'GET', url: '/api/v1/posts/community/:communityId', why: 'idem' },
+  // #4149 — `GET /api/v1/social/posts` remplace neuf routes de fil social.
+  // Elle est ici pour la MEME raison que les deux lignes ci-dessus : optionalAuth,
+  // et PostFeedService applique `buildVisibilityFilter`, donc un anonyme ne voit
+  // que le PUBLIC. Mais elle mérite un mot de plus, parce que la sonde n'observe
+  // pas d'elle-même ce qui la protège : cette route ne déclare AUCUN
+  // `schema.querystring` Fastify (elle valide son `scope` par une union
+  // discriminée Zod DANS le gestionnaire), donc la synthèse de querystring de ce
+  // test ne s'y applique pas — la sonde l'appelle SANS aucun `?scope=` et reçoit
+  // un 400 avant même que la route sache QUELLE ressource est demandée, donc
+  // avant qu'une autorisation ait un sens.
+  //
+  // Ce que cette ligne fait perdre à ce test, un autre le garde : les six scopes
+  // qui exigent une identité (home, stories, stories.mine, reels, statuses,
+  // bookmarks) rendent 401 à un anonyme, et c'est
+  // `unit/routes/posts/social-posts-scope.test.ts` qui le prouve, scope par
+  // scope. Si cette garantie tombe un jour, c'est LUI qui rougira — pas ce
+  // balayage. Ne retire pas ce témoin en croyant qu'il fait doublon.
+  { method: 'GET', url: '/api/v1/social/posts', why: 'optionalAuth ; scope=author/community publics par conception, les six autres rendent 401 (prouvé par unit/routes/posts/social-posts-scope.test.ts)' },
   { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme, PostService.recordAnonymousOpen filtre explicitement au PUBLIC" },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4
@@ -611,7 +521,6 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     // `hooks/use-group-modal.ts` est resté caché derrière `lib/server-cache.ts`
     // pendant deux tours.
     const fantômes = new Map<string, { url: string; site: string }>();
-    let littéraux = 0;
 
     for (const fichier of fichiers) {
       const source = fs.readFileSync(fichier, 'utf8');
@@ -630,7 +539,6 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
         const suite = source.slice(m.index! + m[0].length, m.index! + m[0].length + 3);
         if (m[0].endsWith(')') && /^\}\s*[/`]/.test(suite)) continue;
 
-        littéraux++;
         const url = versUrlServeur(m[1]);
         if (!estServie(url)) {
           const site = path.relative(racineWeb, fichier);
@@ -641,7 +549,37 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
 
     // Garde-fou du harnais lui-même : si l'extraction cesse de trouver des
     // appels, la garde passerait au vert en ne mesurant plus rien.
-    expect(littéraux).toBeGreaterThan(40);
+    //
+    // Ce garde-fou a porté un PLANCHER DE VOLUME (`littéraux > 40`), calibré
+    // sur un web qui écrivait ses adresses à la main. #4281 en a migré 217 vers
+    // le catalogue partagé : il en reste trois, et le plancher est devenu
+    // inatteignable — non parce que l'extraction a CASSÉ, mais parce qu'elle a
+    // RÉUSSI. Un plancher de volume posé sur une quantité qu'un chantier a pour
+    // BUT de réduire à zéro finit forcément par rougir sur un progrès, puis par
+    // être abaissé à zéro : c'est-à-dire exactement l'état muet qu'il prétendait
+    // interdire. Il ne mesurait pas la santé de l'extracteur, il mesurait
+    // l'ampleur de la dette.
+    //
+    // Les deux façons dont cette garde peut devenir muette se gardent donc
+    // séparément, et aucune des deux ne décroît avec la migration.
+
+    // 1. Le BALAYAGE atteint-il l'arbre ? Un `racineWeb` cassé rendrait une
+    //    liste vide, et tout le reste passerait au vert sans rien lire.
+    expect(fichiers.length).toBeGreaterThan(500);
+
+    // 2. L'EXTRACTEUR reconnaît-il encore les deux formes d'appel ? Question qui
+    //    se répond sur un échantillon FIXE, insensible à ce que le web contient.
+    //    Si `motif` cesse de matcher, ceci rougit — même le jour où il ne reste
+    //    plus un seul littéral en production.
+    const ÉCHANTILLON = [
+      "apiService.get('/api/v1/echantillon/verbe');",
+      "buildApiUrl('/api/v1/echantillon/constructeur');",
+    ].join('\n');
+    const extraits = [...ÉCHANTILLON.matchAll(motif)].map((m) => m[1]);
+    expect(extraits).toEqual([
+      '/api/v1/echantillon/verbe',
+      '/api/v1/echantillon/constructeur',
+    ]);
 
     // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration
     // lit trois sondes qui n'existent pas — un défaut RÉEL, trouvé par cette
@@ -693,6 +631,14 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
       { method: 'PUT', url: '/api/v1/users/:id' },
       { method: 'DELETE', url: '/api/v1/users/:id' },
       { method: 'GET', url: '/api/v1/users/me/test' },
+      // #4186 — jumelles appauvries de l'identité et de « moi ».
+      { method: 'GET', url: '/api/v1/auth/magic-link/validate' },
+      { method: 'POST', url: '/api/v1/auth/validate-session' },
+      // `DELETE /api/v1/me/preferences` a quitté cette liste : #4181 a ROUVERT
+      // l'adresse sous un AUTRE contrat (`?categories=`, absent = tout), qui
+      // absorbe les sept DELETE par catégorie. Le retrait de #4186 n'était pas
+      // un aller-retour — c'est lui qui a libéré l'adresse.
+      { method: 'GET', url: '/api/v1/me/me' },
     ];
 
     const encoreMontees = RETIREES.filter((retiree) =>

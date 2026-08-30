@@ -134,7 +134,14 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       await app.close();
     });
 
-    it.each(['USER', 'MODERATOR'])('returns 403 for role %s', async (role) => {
+    // #4157 — ANTI-TÉMOIN corrigé. MODERATOR figurait ici, dans le groupe
+    // REFUSÉ, sous l'ancienne garde `canViewAnalytics`
+    // (`MODERATOR.canViewAnalytics = false`). `/admin/ranking` sert un
+    // palmarès NOMINATIF (username, displayName, avatar) : la question juste
+    // n'est pas « ce rôle voit-il des statistiques ? » mais « ce rôle a-t-il
+    // le droit de lister des UTILISATEURS ? » — `canViewUsers`, que MODERATOR
+    // porte. Seul USER (aucune permission d'administration) reste refusé ici.
+    it.each(['USER'])('returns 403 for role %s', async (role) => {
       const app = buildApp(role);
       await app.ready();
       const res = await inject(app);
@@ -144,11 +151,27 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       await app.close();
     });
 
-    it.each(['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'])('allows access for role %s', async (role) => {
+    // #4157 — LE PLUS GRAVE des écarts de la matrice (voir le commentaire de
+    // `requireAdmin` dans `system-rankings.ts`) : ANALYST accédait à un
+    // classement NOMINATIF de la plateforme entière (jusqu'à 100 comptes —
+    // username, displayName, avatar) sans porter `canViewUsers`. Ce témoin
+    // l'attestait dans le groupe ADMIS ; il rejoint désormais le refus, et
+    // MODERATOR (`canViewUsers = true`) prend sa place parmi les rôles admis.
+    it.each(['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'])('allows access for role %s (canViewUsers, #4157)', async (role) => {
       const app = buildApp(role);
       await app.ready();
       const res = await inject(app, { entityType: 'users', criterion: 'messages_sent', period: '7d', limit: '5' });
       expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it('returns 403 for ANALYST — palmarès nominatif, pas de canViewUsers (#4157)', async () => {
+      const app = buildApp('ANALYST');
+      await app.ready();
+      const res = await inject(app, { entityType: 'users', criterion: 'messages_sent', period: '7d', limit: '5' });
+      expect(res.statusCode).toBe(403);
+      const body = JSON.parse(res.body);
+      expect(body.success).toBe(false);
       await app.close();
     });
   });
@@ -808,8 +831,15 @@ describe('systemRankingsRoutes — GET /ranking', () => {
       await app.close();
     });
 
-    it('omits lastActivity for ANALYST', async () => {
-      const app = buildApp('ANALYST');
+    // #4157 — ANALYST n'atteint plus cette route DU TOUT (`canViewUsers =
+    // false`, refusé en amont par `requireAdmin`) : le tester ici masquerait
+    // un 403 sous une assertion sur un corps qui n'a pas de `data`. MODERATOR
+    // le remplace — nouvellement ADMIS par ce même lot (`canViewUsers =
+    // true`) et TOUJOURS masqué sur la présence (`canViewPresence = false`,
+    // directive produit 2026-08-25 : « modération de contenu ≠ visibilité de
+    // présence ») : c'est le couple exact que #4157 met en lumière.
+    it('omits lastActivity for MODERATOR', async () => {
+      const app = buildApp('MODERATOR');
       await app.ready();
       mockPrisma.report.groupBy.mockResolvedValue([{ reporterId: USER_ID, _count: { id: 1 } }]);
       mockPrisma.user.findMany.mockResolvedValue([{ ...mockUser, lastActiveAt: new Date('2024-06-01T12:00:00Z') }]);

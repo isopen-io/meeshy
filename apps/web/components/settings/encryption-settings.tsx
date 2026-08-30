@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { useI18n } from '@/hooks/use-i18n';
 import {
   useUserPreferencesStore,
@@ -111,7 +112,7 @@ export function EncryptionSettings() {
     setGeneratingKeys(true);
     try {
       // Generate Signal Protocol keys
-      const response = await apiService.post('/signal/keys', {});
+      const response = await apiService.post(API_ENDPOINTS.signal.keys, {});
 
       if (response.success) {
         await syncEncryptionKeys();

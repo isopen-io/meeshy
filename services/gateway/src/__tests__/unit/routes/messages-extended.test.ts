@@ -5,10 +5,13 @@
  * - DELETE with socketIO manager (socket emit)
  * - PUT with socketIO manager (socket emit)
  * - PUT without translationService (warn branch)
- * - POST /status with invalid status (400)
- * - POST /status with socketIO manager (socket emit)
  * - POST /attachments/status with 'watched' action
  * - POST /attachments/status with socketIO manager (socket emit)
+ *
+ * Les trois blocs `POST /messages/:messageId/status` ont disparu avec la route
+ * (#4188) : porte morte sur les quatre clients, 200 au corps VIDE sur
+ * `status: 'delivered'` — un acquittement sans écriture —, quatrième copie du
+ * fan-out d'accusés.
  *
  * @jest-environment node
  */
@@ -72,7 +75,6 @@ jest.mock('../../../validation/messages-schemas', () => ({
   MessageParamsSchema: {},
   AttachmentParamsSchema: {},
   UpdateMessageBodySchema: {},
-  MessageStatusBodySchema: {},
   MessageStatusDetailsQuerySchema: {},
   AttachmentStatusBodySchema: {},
 }));
@@ -431,113 +433,6 @@ describe('PUT /messages/:messageId — without translationService', () => {
   });
 });
 
-// ─── POST /messages/:messageId/status — invalid status ───────────────────────
-
-describe('POST /messages/:messageId/status — invalid status', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 for invalid status value', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'invalid' },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('returns 400 when status is missing', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: {},
-    });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-// ─── POST /messages/:messageId/status — with socketIO ────────────────────────
-
-describe('POST /messages/:messageId/status — with socketIO manager', () => {
-  let app: FastifyInstance;
-  let mockEmit: jest.Mock;
-  let rooms: string[];
-  beforeAll(async () => {
-    const { mockEmit: emit, rooms: r, manager } = makeMockSocketIO();
-    mockEmit = emit;
-    rooms = r;
-    app = await buildApp({ socketIOManager: manager });
-  });
-  afterAll(async () => { await app.close(); });
-
-  function readMessage() {
-    return {
-      ...mockMessage,
-      senderId: 'other-part-id',
-      conversation: {
-        id: CONV_ID,
-        createdAt: new Date(),
-        participants: [{ id: PART_ID, userId: USER_ID }],
-      },
-    };
-  }
-
-  it('emits READ_STATUS_UPDATED via socketIO', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
-  });
-
-  // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
-  // dernière encore adressée par `userId` seul : l'expéditeur sans compte du
-  // message qu'on vient de lire n'apprenait jamais qu'il avait été lu, sa bulle
-  // restant sur un tic « envoyé » indéfiniment.
-  //
-  // L'éventail ne nomme plus la room de l'ACTEUR : elle en est retirée, et il
-  // reçoit à la place une copie ciblée portant sa frontière de lecture et son
-  // arriéré — deux champs qui décrivent une personne, pas la conversation. Sa
-  // room reste donc nommée, mais par une autre chaîne, plus bas.
-  it('adresse un participant sans compte par son participant id', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
-
-    // Le double distingue les DEUX lectures de participants que cette route
-    // fait maintenant : l'éventail des accusés (`{conversationId, isActive}`)
-    // et la résolution du lecteur par la passe de pont ✦ (`OR: [{id},
-    // {userId}]`, cycle 63). Un `mockResolvedValueOnce` servait la première
-    // lecture ARRIVÉE — la passe de pont partant en parallèle, l'éventail
-    // retombait sur le défaut et le témoin accusait un défaut d'adressage qui
-    // n'existait pas. Un double qui ne regarde pas sa clause décrit un autre
-    // programme dès qu'un second appelant apparaît.
-    const findMany = (app as any).prisma.participant.findMany;
-    const previous = findMany.getMockImplementation();
-    findMany.mockImplementation(async (args: any) =>
-      args?.where?.OR
-        ? [] // la passe de pont ne résout aucun participant ⇒ aucun pont, hors sujet ici
-        : [
-            { id: PART_ID, userId: USER_ID },
-            { id: 'part-anonyme', userId: null },
-          ]
-    );
-    rooms.length = 0;
-
-    try {
-      const res = await app.inject({
-        method: 'POST', url: '/messages/' + MSG_ID + '/status',
-        payload: { status: 'read' },
-      });
-
-      expect(res.statusCode).toBe(200);
-      expect(rooms).toContain(`conversation:${CONV_ID}`);
-      expect(rooms).toContain('user:part-anonyme');
-    } finally {
-      findMany.mockImplementation(previous ?? (async () => [{ userId: USER_ID }]));
-    }
-  });
-});
-
 // ─── POST /attachments/:id/status — watched action ───────────────────────────
 
 describe('POST /attachments/:attachmentId/status — watched action', () => {
@@ -644,21 +539,6 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
 });
 
 // ─── Error paths not covered in messages.test.ts ─────────────────────────────
-
-describe('POST /messages/:messageId/status — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on unexpected DB error', async () => {
-    (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB crash'));
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(500);
-  });
-});
 
 describe('GET /messages/:messageId/translations — DB error', () => {
   let app: FastifyInstance;

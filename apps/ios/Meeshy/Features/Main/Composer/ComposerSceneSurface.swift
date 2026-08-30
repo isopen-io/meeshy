@@ -154,23 +154,23 @@ struct ComposerSceneSurface: View {
                                           onPickColor: onPickBandColor)
                 }
 
-                descriptionField
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    /// La description de la `MeeshySlide`, rendue **comme le lecteur la verra**
-    /// (#4065). Le calque est PARTAGÉ avec l'atelier : deux rendus « en mode
-    /// lecture » auraient divergé au premier ajustement, et l'un des deux se
-    /// serait mis à mentir sur le rendu final — ce qu'interdit la loi 6.
-    ///
-    /// **En profil P, ce n'est pas le texte du post** : c'est la LÉGENDE de ce
-    /// média-là, et la publication garde son `content` (#4045, chaîne serveur
-    /// #4055). Ce que ce calque rend est donc encore le `content` du meuble ;
-    /// changer sa SOURCE est le lot de #4045, pas celui-ci.
-    private var descriptionField: some View {
-        ComposerDescriptionLayer(text: $description,
-                                 placeholder: descriptionPlaceholder)
-    }
+    // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
+    //
+    // > « La zone de description en bas ne doit pas être affichée si on ne
+    // > touche pas l'icône description, même si une description existe ! »
+    //
+    // Il vivait ici en calque de lecture (#4065) et occupait le bas dès qu'un
+    // texte existait — la place que la scène centrée réclame, pour un texte que
+    // l'auteur ne regarde pas la plupart du temps. La description s'ouvre
+    // désormais par sa PORTE, comme les autres niveaux du modèle, et le meuble
+    // monte l'éditeur en zone basse (`sceneDescriptionEditor`).
+    //
+    // `description` et `descriptionPlaceholder` restent au contrat : la porte
+    // est servie par le meuble, qui possède le texte. Les retirer obligerait
+    // chaque site de montage à re-prouver qu'il n'en a pas besoin.
 }

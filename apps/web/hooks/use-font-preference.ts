@@ -1,11 +1,21 @@
 /**
  * Hook pour gérer les préférences de police utilisateur
+ *
+ * `fontFamily` vit dans la catégorie `application` de `/me/preferences`
+ * (§ `ApplicationPreferenceSchema`, `@meeshy/shared/types/preferences`) — la
+ * même route que `usePreferences('application')` lit pour l'écran de
+ * réglages. Ce hook-ci n'utilise pas `usePreferences` : il applique la police
+ * au `document` en dehors de React Query et doit rester lisible AVANT
+ * l'hydratation du reste de l'app (cf. lecture `localStorage` synchrone plus
+ * bas), ce que le cache React Query ne garantit pas. Il parle donc à la même
+ * route en `fetch` nu, comme il le faisait déjà pour la lecture.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { FontFamily, getFontConfig } from '@/lib/fonts';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 const FONT_PREFERENCE_KEY = 'font-family';
 const DEFAULT_FONT_ID: FontFamily = 'nunito';
@@ -38,8 +48,10 @@ export function useFontPreference() {
         const token = authManager.getAuthToken();
         if (token && typeof window !== 'undefined') {
           try {
-            // Utiliser le nouvel endpoint unifié /user-preferences/:key
-            const response = await fetch(buildApiUrl(`/user-preferences/${FONT_PREFERENCE_KEY}`), {
+            // La route unique de #4181 : `?categories=application` ne
+            // repatrie qu'UNE catégorie (~15 clés), pas les sept (~130).
+            const fontPrefsEndpoint = `${API_ENDPOINTS.me.preferences}?categories=application`;
+            const response = await fetch(buildApiUrl(fontPrefsEndpoint), {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -49,18 +61,17 @@ export function useFontPreference() {
 
             if (response.ok) {
               const result = await response.json();
-              // Le nouvel endpoint retourne directement la préférence avec { success, data: { key, value, ... } }
-              if (result.success && result.data && result.data.value) {
-                const serverFontValue = result.data.value;
+              // La réponse range chaque catégorie sous son nom :
+              // { success, data: { application: { fontFamily, … } } }.
+              const serverFontValue = result?.success ? result.data?.application?.fontFamily : undefined;
 
-                if (getFontConfig(serverFontValue as FontFamily)) {
-                  const fontFamily = serverFontValue as FontFamily;
-                  setCurrentFont(fontFamily);
-                  applyFontToDocument(fontFamily);
+              if (serverFontValue && getFontConfig(serverFontValue as FontFamily)) {
+                const fontFamily = serverFontValue as FontFamily;
+                setCurrentFont(fontFamily);
+                applyFontToDocument(fontFamily);
 
-                  // Synchroniser avec localStorage
-                  localStorage.setItem(FONT_PREFERENCE_KEY, fontFamily);
-                }
+                // Synchroniser avec localStorage
+                localStorage.setItem(FONT_PREFERENCE_KEY, fontFamily);
               }
             }
           } catch (backendError) {
@@ -123,24 +134,40 @@ export function useFontPreference() {
       setCurrentFont(newFont);
       applyFontToDocument(newFont);
       
-      // Sauvegarder en localStorage (seulement côté client)
+      // Sauvegarder en localStorage (seulement côté client) — c'est ce qui
+      // rend le changement INSTANTANÉ, avant tout aller-retour réseau.
       if (typeof window !== 'undefined') {
         localStorage.setItem(FONT_PREFERENCE_KEY, newFont);
       }
 
-      // Le choix de police vit dans `localStorage`, et là seulement.
+      // Synchroniser côté serveur, au mieux, sur la route UNIQUE de #4181.
       //
       // Ce bloc envoyait auparavant un `POST /user-preferences` — une adresse
-      // qui n'existe pas côté gateway : chaque changement de police partait en
-      // 404 avalé par un `console.warn`, la préférence ne quittait jamais le
-      // navigateur, et le code affirmait le contraire (#4189).
+      // qui n'existe pas côté gateway (#4189) — puis, le temps que #4181
+      // fournisse une route d'écriture, plus rien du tout : le choix de
+      // police ne quittait jamais le navigateur, sur aucun AUTRE appareil du
+      // même compte.
       //
-      // Elle n'a PAS été recâblée sur `/me/preferences` parce que cette API
-      // n'expose aujourd'hui que GET et DELETE : il n'existe aucune route
-      // d'écriture de préférence dans le dépôt. C'est exactement le sujet de
-      // #4181 (« toutes les préférences se lisent ET s'écrivent par une seule
-      // route ») ; la persistance serveur se rebranchera là, sur une route qui
-      // existe.
+      // Best-effort et NON attendu : un échec réseau ne doit ni bloquer ce
+      // changement (déjà appliqué localement, ligne au-dessus) ni le faire
+      // reculer — une police est un réglage de confort, pas une donnée dont la
+      // perte justifie un rollback UI.
+      if (typeof window !== 'undefined') {
+        const token = authManager.getAuthToken();
+        if (token) {
+          fetch(buildApiUrl(API_ENDPOINTS.me.preferences), {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ application: { fontFamily: newFont } }),
+            signal: AbortSignal.timeout(5000),
+          }).catch((backendError) => {
+            console.warn('Could not persist font preference to backend:', backendError);
+          });
+        }
+      }
 
     } catch (err) {
       console.error('Error changing font:', err);

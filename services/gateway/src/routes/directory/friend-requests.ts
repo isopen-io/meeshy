@@ -4,8 +4,8 @@ import { logError } from '../../utils/logger';
 import {
   sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone,
 } from '../../utils/response';
-import { errorResponseSchema, friendRequestSchema } from '@meeshy/shared/types/api-schemas';
-import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
+import { errorResponseSchema, friendRequestSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
+import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
 import { MutationResultGone } from '../../utils/withMutationLog';
@@ -27,17 +27,83 @@ export const BUDGET_ENVOIS_PAR_JOUR = 100;
 const FENETRE_BUDGET_SECONDES = 24 * 60 * 60;
 
 /**
- * La CHARGE d'une demande, `conversation` COMPRISE.
+ * La partie d'une demande, PRÉSENCE COMPRISE — déclarée ICI, pas dans le schéma
+ * partagé.
  *
- * Le schéma partagé ne la déclare pas — et c'est le défaut : le handler
- * d'acceptation greffait la conversation sur l'objet rendu, que
- * fast-json-stringify supprimait ensuite en silence. Le client acceptait une
- * demande, ne recevait jamais la conversation créée, et devait la rechercher.
+ * `userMinimalSchema` déclare `isOnline` et TAIT `lastActiveAt` ;
+ * fast-json-stringify supprime donc la seconde colonne, celle sur laquelle les
+ * trois clients trient (`FriendListAggregator`, `sortContacts`). L'élargir
+ * globalement pousserait `lastActiveAt` sur les dizaines de réponses qui
+ * emploient ce schéma partagé — dont plusieurs chargent la colonne sans passer
+ * par la loi de visibilité : un champ déclaré est un champ SERVI, et la règle du
+ * dépôt est de décider de sa visibilité dans le lot qui le rend visible. Le
+ * grain juste est donc LOCAL, pour les deux routes de ce fichier, qui gatent à
+ * la source (`servirParties`).
  */
-const demandeAvecConversationSchema = {
-  type: 'object',
+const partieAvecPresenceSchema = {
+  ...userMinimalSchema,
+  properties: {
+    ...userMinimalSchema.properties,
+    firstName: { type: 'string', nullable: true, description: 'Given name' },
+    lastName: { type: 'string', nullable: true, description: 'Family name' },
+    lastActiveAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Last activity — served only when the presence law allows it',
+    },
+  },
+} as const;
+
+/**
+ * Une demande dont les deux parties portent leur présence GATÉE — EXPORTÉE
+ * (#4283) pour que `routes/friends.ts` la RÉUTILISE au lieu de servir la forme
+ * NUE de `friendRequestSchema`.
+ *
+ * ## Ce que la forme nue coûtait sur l'alias
+ *
+ * `lastActiveAt` est chargée par `PROJECTION_PARTIE` et gardée par la loi de
+ * présence dans `servirParties` — le MÊME cœur que `routes/friends.ts` appelle
+ * (`envoyerDemande`, `repondreDemande`). Avant #4283, l'alias déclarait
+ * `data: friendRequestSchema`, qui ne redéclare PAS `lastActiveAt` en local :
+ * le champ était donc CALCULÉ, gardé par la loi, et supprimé par le SCHÉMA —
+ * pas une fuite, mais tout aussi cassant, sur les DEUX routes que l'app iOS
+ * appelle encore par cette adresse (`FriendService.receivedRequests` /
+ * `.sentRequests`, qui n'ont pas basculé vers `/directory/friend-requests` —
+ * leur commentaire le dit : « La bascule appartient aux hôtes, un par un »).
+ * `FriendListAggregator` (iOS) et son port Kotlin trient la liste de contacts
+ * sur `isOnline` PUIS `lastActiveAt` : ces deux GET rendaient donc un ordre de
+ * dictionnaire, jamais un ordre de présence.
+ */
+export const demandeAvecPresenceSchema = {
+  ...friendRequestSchema,
   properties: {
     ...friendRequestSchema.properties,
+    sender: { ...partieAvecPresenceSchema, description: 'Sender user info' },
+    receiver: { ...partieAvecPresenceSchema, description: 'Receiver user info' },
+  },
+} as const;
+
+/**
+ * La CHARGE d'une demande, `conversation` COMPRISE — EXPORTÉE (#4283) pour la
+ * même raison que ci-dessus.
+ *
+ * Le schéma partagé ne la déclare pas — et c'était le défaut ORIGINAL : le
+ * handler d'acceptation greffe `conversation` sur l'objet rendu
+ * (`repondreDemande`), que `friendRequestSchema` NU supprimait à la
+ * sérialisation. Réparé ici (#4162) pour `/directory/friend-requests/:id` —
+ * et SILENCIEUSEMENT intact sur `routes/friends.ts`, l'adresse que l'app
+ * ANDROID appelle encore pour accepter (`FriendApi.respond` →
+ * `FriendRepository.kt`, `ContactsViewModel.kt`, `DiscoverViewModel.kt`) :
+ * iOS a basculé son `respond()` vers `/directory/friend-requests/:id`, Android
+ * non. Un utilisateur Android qui acceptait une demande n'a jamais appris où
+ * parler à son nouvel ami sans relancer une requête — exactement le défaut que
+ * ce schéma corrige ici, laissé intact une adresse plus loin.
+ */
+export const demandeAvecConversationSchema = {
+  type: 'object',
+  properties: {
+    ...demandeAvecPresenceSchema.properties,
     conversation: {
       type: 'object',
       nullable: true,
@@ -88,7 +154,37 @@ export { repondre as repondreDemandeHTTP };
  * Quatre gestes vivaient sur deux verbes et trois routes. Ils sont un seul
  * `PATCH … {action}` : accepter, refuser, annuler, écarter.
  */
-export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
+export type GardesFriendRequests = {
+  readonly parLecture: RateLimiter;
+  readonly parEnvoi: RateLimiter;
+  readonly parAction: RateLimiter;
+  readonly budgetEpuise: (emetteurId: string) => Promise<boolean>;
+};
+
+/**
+ * Les trois limiteurs de débit + le budget quotidien — EXPORTÉS (#4283) pour
+ * que `routes/friends.ts` les PARTAGE au lieu d'exposer ses cinq routes SANS
+ * AUCUNE garde d'abus.
+ *
+ * ## Ce que l'absence de partage aurait coûté
+ *
+ * `routes/friends.ts` sert le MÊME domaine sous une adresse plus ANCIENNE, que
+ * l'app Android appelle encore pour les CINQ gestes (`FriendRepository.kt`) et
+ * l'app iOS pour deux (`FriendService.receivedRequests` / `.sentRequests`).
+ * Tant qu'elle n'appelait AUCUN de ces trois limiteurs, le budget quotidien
+ * ci-dessous ne protégeait RIEN : un appelant plafonné sur
+ * `/directory/friend-requests` pouvait continuer d'arroser des demandes par
+ * `/friend-requests` sans qu'aucun compteur ne le voie — deux adresses pour un
+ * seul domaine ne doivent JAMAIS receler deux budgets.
+ *
+ * L'usine est appelée UNE FOIS PAR SURFACE — chaque plugin Fastify enregistré
+ * via `server.register()` est encapsulé, donc `routes/friends.ts` obtient son
+ * PROPRE objet `RateLimiter`. Ce qui unifie l'application n'est pas le
+ * partage de l'INSTANCE mais celui du `keyPrefix` : les deux exemplaires
+ * incrémentent la MÊME clé Redis pour le même acteur, quelle que soit
+ * l'adresse par laquelle il est passé.
+ */
+export function creerGardesFriendRequests(fastify: FastifyInstance): GardesFriendRequests {
   const parLecture = createCustomRateLimiter(
     { max: 60, windowMs: 60_000, keyPrefix: 'dir:fr:u', message: 'Trop de requêtes. Patientez une minute.', keyGenerator: callerRateKey },
     fastify.redis ?? undefined
@@ -101,6 +197,25 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
     { max: 60, windowMs: 60_000, keyPrefix: 'dir:fr:act:u', message: 'Trop d\'actions. Patientez une minute.', keyGenerator: callerRateKey },
     fastify.redis ?? undefined
   );
+
+  /** Consomme le budget d'envois, et dit si l'appelant l'a épuisé. */
+  async function budgetEpuise(emetteurId: string): Promise<boolean> {
+    const redis = fastify.redis;
+    // Sans Redis (test, exécution directe), le budget ne s'applique pas :
+    // c'est le limiteur par minute qui borne. Dit ici plutôt que subi.
+    if (!redis || !emetteurId) return false;
+
+    const cle = `dir:fr:budget:u:${emetteurId}`;
+    const total = await redis.incrby(cle, 1);
+    if (total === 1) await redis.expire(cle, FENETRE_BUDGET_SECONDES);
+    return total > BUDGET_ENVOIS_PAR_JOUR;
+  }
+
+  return { parLecture, parEnvoi, parAction, budgetEpuise };
+}
+
+export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
+  const { parLecture, parEnvoi, parAction, budgetEpuise } = creerGardesFriendRequests(fastify);
 
   // ─── Lister ────────────────────────────────────────────────────────────────
 
@@ -126,7 +241,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: friendRequestSchema },
+            data: { type: 'array', items: demandeAvecPresenceSchema },
             pagination: {
               type: 'object',
               properties: {
@@ -150,7 +265,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         direction?: DirectionDemande; status?: string; q?: string; cursor?: string; limit?: string;
       };
 
-      const resultat = await listerDemandes(fastify, {
+      const resultat = await listerDemandes(fastify, request, {
         acteurId: request.user!.userId,
         ...query,
       });
@@ -189,7 +304,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           type: 'object',
-          properties: { success: { type: 'boolean', example: true }, data: friendRequestSchema },
+          properties: { success: { type: 'boolean', example: true }, data: demandeAvecPresenceSchema },
         },
         400: errorResponseSchema,
         401: errorResponseSchema,
@@ -206,7 +321,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
       const body = corpsEnvoi.parse(request.body);
       const emetteurId = request.user!.userId;
 
-      if (await budgetEpuise(fastify, emetteurId)) {
+      if (await budgetEpuise(emetteurId)) {
         return reply.code(429).send({
           success: false,
           error: 'Budget quotidien de demandes atteint.',
@@ -286,17 +401,4 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
-
-  /** Consomme le budget d'envois, et dit si l'appelant l'a épuisé. */
-  async function budgetEpuise(instance: FastifyInstance, emetteurId: string): Promise<boolean> {
-    const redis = instance.redis;
-    // Sans Redis (test, exécution directe), le budget ne s'applique pas :
-    // c'est le limiteur par minute qui borne. Dit ici plutôt que subi.
-    if (!redis || !emetteurId) return false;
-
-    const cle = `dir:fr:budget:u:${emetteurId}`;
-    const total = await redis.incrby(cle, 1);
-    if (total === 1) await redis.expire(cle, FENETRE_BUDGET_SECONDES);
-    return total > BUDGET_ENVOIS_PAR_JOUR;
-  }
 }

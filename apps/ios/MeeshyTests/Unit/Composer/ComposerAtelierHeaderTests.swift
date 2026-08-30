@@ -68,7 +68,7 @@ final class ComposerAtelierHeaderTests: XCTestCase {
     }
 
     private func host() throws -> String {
-        try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        try AppSourceGuard.composerHostSource()
     }
 
     private func compact(_ t: String) -> String {
@@ -95,25 +95,126 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body.")
         XCTAssertFalse(compacte.contains("mountedSurface==.scene{sceneDescriptionSection}"),
                        "La description est revenue occuper le bas en permanence.")
-        XCTAssertTrue(compacte.contains("ifeditsSceneDescription{sceneDescriptionLayer}"),
-                      "Elle doit s'ouvrir en COUCHE, par-dessus tout.")
+        // **RETOURNÉ au #4361.** Elle s'ouvrait en COUCHE par-dessus tout ; elle
+        // s'ancre désormais en BAS et fait REMONTER la scène. La directive qui
+        // l'avait mise en couche (#4124) visait juste — la description ne doit
+        // pas occuper le bas en permanence — mais recouvrir était le mauvais
+        // geste : écrire une description, c'est regarder la scène qu'on décrit.
+        XCTAssertTrue(compacte.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
+                      "Elle doit s'ouvrir en ZONE BASSE, la scène remontant au-dessus.")
     }
 
-    /// Le flou vient du MATÉRIAU, jamais d'un `.blur()` : ce dernier aurait
-    /// re-rendu le canvas — `StoryCanvasUIView` reconstruit ses layers à chaque
-    /// `layoutSubviews` — pour un effet que le système compose à coût nul.
-    func test_leFlou_vientDuMateriau_jamaisDUnBlur() throws {
-        let code = try host()
-        guard let couche = declarationBody(startingAt: "private var sceneDescriptionLayer: some View",
-                                           in: code) else {
-            return XCTFail("`sceneDescriptionLayer` est introuvable")
-        }
-        let compacte = compact(couche)
-        XCTAssertTrue(compacte.contains(".fill(.ultraThinMaterial)"))
-        XCTAssertFalse(compacte.contains(".blur(radius:"),
-                       "Un `.blur` re-rendrait le canvas à chaque image.")
-        XCTAssertTrue(compacte.contains("placement:.keyboard"),
-                      "« Terminé » se pose là où le système le met : au-dessus du clavier.")
+    /// **RETOURNÉ au #4361 — il n'y a plus de flou du tout, et c'est le point.**
+    ///
+    /// Cette garde protégeait le fait que le voile venait d'un MATÉRIAU plutôt
+    /// que d'un `.blur()`, qui aurait re-rendu le canvas à chaque image. La
+    /// raison était bonne ; le voile, lui, a disparu — la scène ne se floute
+    /// plus, elle REMONTE. Ce qu'il faut garder n'est donc plus « le bon flou »
+    /// mais « aucun flou », et la mécanique qui le remplace.
+    func test_laScene_neSeFloutePlus_elleRemonte() throws {
+        // `host()` rend la source BRUTE : la seule occurrence restante de
+        // `.blur(radius:)` est dans un commentaire qui explique pourquoi on n'en
+        // met pas. Une garde qui lirait les commentaires interdirait d'écrire la
+        // raison — c'est la leçon « lire le CODE, pas les commentaires ».
+        let compacte = compact(AppSourceGuard.stripComments(try host()))
+        XCTAssertFalse(
+            compacte.contains(".blur(radius:"),
+            "Un `.blur` re-rendrait le canvas à chaque image — et il n'a plus rien à flouter."
+        )
+        XCTAssertTrue(
+            compacte.contains(".storyComposerCanvasBottomReservation("),
+            "La scène remonte parce que le meuble DÉCLARE ce qu'il occupe en bas. Sans cette "
+                + "déclaration, la saisie recouvrirait la scène — le geste que #4361 retire."
+        )
+        XCTAssertTrue(
+            compacte.contains("editsSceneDescription?sceneDescriptionEditorHeight:0"),
+            "… et la réserve est la hauteur MESURÉE, remise à zéro à la fermeture : une constante "
+                + "ferait remonter la scène du mauvais nombre de points dès la deuxième ligne."
+        )
+    }
+
+    /// **RETOURNÉ le 2026-08-30, sur directive porteur** :
+    ///
+    /// > « Le bouton (terminé) au dessus du clavier quand on édite la
+    /// > description est inutile, un bouton Check existe déjà pour valider ; il
+    /// > faudra ajouter la gesture swipe down pour valider et fermer. »
+    ///
+    /// La garde protégeait la PLACE de « Terminé » — au-dessus du clavier, là où
+    /// le système le met, jamais flottant. La raison était bonne ; le bouton,
+    /// lui, faisait DOUBLON avec la coche que le champ porte déjà. Deux commandes
+    /// pour un même acte, dont l'une occupait une barre système.
+    ///
+    /// Ce qui se garde maintenant : qu'il n'y ait PLUS de barre de clavier, et
+    /// que les deux gestes qui restent — la coche et le glissement vers le bas —
+    /// fassent le MÊME acte. Un glissement qui fermerait sans valider perdrait la
+    /// frappe en cours.
+    func test_laValidation_aDeuxGestes_etUnSeulActe() throws {
+        let code = compact(AppSourceGuard.stripComments(try editorSource()))
+
+        XCTAssertFalse(
+            code.contains("placement:.keyboard"),
+            "La barre de clavier portait un « Terminé » en doublon de la coche du champ."
+        )
+        XCTAssertTrue(
+            code.contains("onValidate:onDone"),
+            "La coche du champ doit RANGER la zone, pas seulement repasser en lecture : sinon "
+                + "elle laisse à l'écran un lecteur que personne n'a demandé."
+        )
+        // **UNE loi de fermeture, trois chemins.** La coche, le glissement
+        // contrôlé et toute dismission système passent par la perte de FOCUS —
+        // et c'est d'elle que vient l'ordre demandé : le clavier s'en va
+        // d'abord, la zone attend son départ. Fermer la zone au site du bouton
+        // ferait partir les deux ensemble par un geste, et dans l'ordre par
+        // l'autre.
+        XCTAssertTrue(
+            compact(AppSourceGuard.stripComments(try calqueSource()))
+                .contains("adaptiveOnChange(of:isFocused)"),
+            "La fermeture doit suivre le FOCUS : c'est ce qui donne l'ordre « clavier d'abord, "
+                + "zone ensuite » sans que chaque site ait à le réécrire."
+        )
+        // **Le glissement est CONTRÔLÉ, et c'est le système qui le porte**
+        // (précision porteur 2026-08-30). Un `DragGesture.onEnded` DÉCIDAIT à la
+        // levée du doigt : rien ne bougeait pendant, rien n'était annulable, et
+        // le clavier partait après la zone au lieu d'avant.
+        //
+        // Garde NÉGATIVE sur le geste maison : c'est la reconstruction à la main
+        // qui est interdite, pas le glissement. Elle rougirait au premier
+        // « je refais ça moi-même », qui redonnerait une imitation divergeant du
+        // reste de l'OS.
+        XCTAssertTrue(
+            code.contains(".scrollDismissesKeyboard(.interactively)"),
+            "Le clavier doit suivre le doigt image par image, et remonter si on relâche avant la "
+                + "fin. C'est le mécanisme système ; le fabriquer donnerait une imitation."
+        )
+        XCTAssertFalse(
+            code.contains("DragGesture("),
+            "Un geste maison redeviendrait un DÉCLENCHEUR : il décide à la levée du doigt, ne "
+                + "montre rien pendant, et n'annule rien."
+        )
+    }
+
+    private func calqueSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
+        return brut
+    }
+
+    private func editorSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneDescriptionEditor.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1500, "Source vide — la garde serait verte par omission.")
+        return brut
     }
 
     /// L'atelier reçoit son accessoire de rangée haute — sans ce câblage, le

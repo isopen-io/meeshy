@@ -6,6 +6,7 @@
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { logger } from '@/utils/logger';
 import { apiService } from '../api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type {
   ParticipantsFilters,
   AllParticipantsResponse,
@@ -57,7 +58,7 @@ export class ParticipantsService {
       }
 
       const response = await apiService.get<PaginatedParticipantsResponse>(
-        `/conversations/${conversationId}/participants`,
+        API_ENDPOINTS.conversations.byIdParticipants(conversationId),
         params
       );
 
@@ -82,7 +83,7 @@ export class ParticipantsService {
       }
 
       const response = await apiService.get<PaginatedParticipantsResponse>(
-        `/conversations/${conversationId}/participants`,
+        API_ENDPOINTS.conversations.byIdParticipants(conversationId),
         {
           search: searchQuery.trim(),
           limit: limit.toString()
@@ -115,7 +116,7 @@ export class ParticipantsService {
         }
 
         const response = await apiService.get<PaginatedParticipantsResponse>(
-          `/conversations/${conversationId}/participants`,
+          API_ENDPOINTS.conversations.byIdParticipants(conversationId),
           params
         );
 
@@ -167,7 +168,7 @@ export class ParticipantsService {
    * Ajouter un participant à une conversation
    */
   async addParticipant(conversationId: string, userId: string): Promise<void> {
-    await apiService.post(`/conversations/${conversationId}/participants`, { userId });
+    await apiService.post(API_ENDPOINTS.conversations.byIdParticipants(conversationId), { userId });
 
   }
 
@@ -175,7 +176,7 @@ export class ParticipantsService {
    * Supprimer un participant d'une conversation
    */
   async removeParticipant(conversationId: string, userId: string): Promise<void> {
-    await apiService.delete(`/conversations/${conversationId}/participants/${userId}`);
+    await apiService.delete(API_ENDPOINTS.conversations.byIdParticipantsByUserId(conversationId, userId));
 
   }
 
@@ -187,7 +188,7 @@ export class ParticipantsService {
     userId: string,
     role: MemberRoleType,
   ): Promise<void> {
-    await apiService.patch(`/conversations/${conversationId}/participants/${userId}/role`, { role: role.toLowerCase() });
+    await apiService.patch(API_ENDPOINTS.conversations.byIdParticipantsByUserIdRole(conversationId, userId), { role: role.toLowerCase() });
 
   }
 }

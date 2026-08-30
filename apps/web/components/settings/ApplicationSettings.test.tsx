@@ -254,12 +254,12 @@ describe('ApplicationSettings', () => {
       const saveButton = screen.getByText(/Save changes/i);
       fireEvent.click(saveButton);
 
-      // Check that PUT request was made
+      // `PATCH` — le verbe qui FUSIONNE. Le `PUT` remplaçait le document.
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
           expect.stringContaining('/me/preferences/application'),
           expect.objectContaining({
-            method: 'PUT',
+            method: 'PATCH',
           })
         );
       });
@@ -420,6 +420,92 @@ describe('ApplicationSettings', () => {
       });
 
       expect(screen.getAllByText(/Appearance/i).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  /**
+   * L'amorce locale de cet écran porte 17 des 22 champs du schéma
+   * `application`. Les cinq absents sont `autoTranslateEnabled` — dont ce
+   * document est l'UNIQUE store, lu par les réponses d'authentification — et
+   * les horodatages de consentement, `.nullable().optional()` SANS `default()`
+   * donc simplement omis par Zod et EFFACÉS par un remplacement.
+   * `ConsentValidationService` les lit avec priorité
+   * `UserPreferences.application > User` : un consentement accordé par la seule
+   * API préférences (chemin popup iOS) n'a pas de colonne de repli.
+   */
+  describe("ce qui part au serveur", () => {
+    const writeBody = () => {
+      const write = (global.fetch as jest.Mock).mock.calls.find(
+        ([, init]) => init?.method && init.method !== 'GET'
+      );
+      if (!write) throw new Error("aucune écriture n'a été émise");
+      return JSON.parse(write[1].body as string);
+    };
+
+    const renderAfterFailedLoad = async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ success: false }),
+      });
+
+      render(<ApplicationSettings />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      });
+    };
+
+    it('ne nomme que la clé basculée, même quand le chargement a échoué', async () => {
+      await renderAfterFailedLoad();
+
+      fireEvent.click(screen.getAllByRole('switch')[0]);
+      fireEvent.click(screen.getByText(/Save changes/i));
+
+      await waitFor(() => expect(Object.keys(writeBody())).toHaveLength(1));
+    });
+
+    it("écrit en PATCH — ce que le corps ne nomme pas n'est ni remis au défaut ni effacé", async () => {
+      await renderAfterFailedLoad();
+
+      fireEvent.click(screen.getAllByRole('switch')[0]);
+      fireEvent.click(screen.getByText(/Save changes/i));
+
+      await waitFor(() => {
+        const write = (global.fetch as jest.Mock).mock.calls.find(
+          ([, init]) => init?.method && init.method !== 'GET'
+        );
+        expect(write?.[1].method).toBe('PATCH');
+      });
+    });
+
+    it("ne réaffirme pas un réglage déjà enregistré au geste suivant", async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: mockPreferences }),
+      });
+
+      render(<ApplicationSettings />);
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      });
+
+      const switches = screen.getAllByRole('switch');
+      fireEvent.click(switches[0]);
+      fireEvent.click(screen.getByText(/Save changes/i));
+      await waitFor(() => expect(Object.keys(writeBody())).toHaveLength(1));
+
+      const firstKey = Object.keys(writeBody())[0];
+      (global.fetch as jest.Mock).mockClear();
+
+      fireEvent.click(switches[1]);
+      fireEvent.click(screen.getByText(/Save changes/i));
+
+      await waitFor(() => {
+        const body = writeBody();
+        expect(Object.keys(body)).toHaveLength(1);
+        expect(body).not.toHaveProperty(firstKey);
+      });
     });
   });
 });

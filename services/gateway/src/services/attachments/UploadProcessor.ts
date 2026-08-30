@@ -3,6 +3,7 @@
  * Gère la validation, le stockage physique et le chiffrement
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -360,14 +361,14 @@ export class UploadProcessor {
    * Génère une URL publique pour un fichier
    */
   getAttachmentUrl(filePath: string): string {
-    return `${this.publicUrl}/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
+    return `${this.publicUrl}${apiPath(`/attachments/file/${encodeURIComponent(filePath)}`)}`;
   }
 
   /**
    * Génère le chemin API relatif (sans domaine)
    */
   getAttachmentPath(filePath: string): string {
-    return `/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
+    return apiPath(`/attachments/file/${encodeURIComponent(filePath)}`);
   }
 
   /**

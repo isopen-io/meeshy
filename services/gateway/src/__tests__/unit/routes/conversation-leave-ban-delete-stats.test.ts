@@ -247,9 +247,9 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     prisma.participant.count.mockResolvedValue(2);
     prisma.participant.findMany.mockImplementation((args: any) =>
       Promise.resolve(
-        args?.where?.userId
-          ? [{ id: SUCCESSOR_ID, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') }]
-          : []
+        args?.where?.role || args?.take !== 1
+          ? []
+          : [{ id: SUCCESSOR_ID, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') }]
       )
     );
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
@@ -628,15 +628,18 @@ describe('registerBanRoutes', () => {
       expect(mockedSendSuccess).toHaveBeenCalled();
     });
 
-    it('handles unknown role (defaults to 0) — member cannot ban unknown role == 0', async () => {
+    // Le rang illisible vaut 0, donc la seule comparaison des rangs laissait un
+    // MEMBRE (niveau 10) bannir cette ligne. Bannir est un geste de MODÉRATION :
+    // il exige le TITRE, puis la portée (#4176).
+    it('un simple membre n\'atteint pas une ligne au rang illisible — le plancher passe avant la comparaison', async () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'member' }) // level 10
         .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'unknown-role', bannedAt: null, displayName: 'X' }); // level 0
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
-      // 10 > 0 → ban succeeds
-      expect(mockedSendSuccess).toHaveBeenCalled();
+      expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+      expect(prisma.participant.update).not.toHaveBeenCalled();
     });
 
     it('bans multiple sockets leave room', async () => {
@@ -663,13 +666,30 @@ describe('registerBanRoutes', () => {
       expect(mockedSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
     });
 
-    it('returns 403 when current user is a moderator (below admin)', async () => {
+    // Décision du 2026-08-29 (#4176) : on lève un bannissement qu'on aurait pu
+    // poser. Le modérateur qui bannit un membre le relève — sans quoi la moitié
+    // destructrice du geste lui est ouverte et la moitié réparatrice fermée.
+    it('le modérateur lève le bannissement qu\'il aurait pu poser', async () => {
       const { prisma, unbanRoute, reply } = setup();
       prisma.participant.findFirst
-        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'moderator' });
+        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'moderator' })
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: new Date('2026-08-01T00:00:00.000Z') });
+      const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
+      await unbanRoute.handler(request, reply);
+      expect(prisma.participant.update).toHaveBeenCalled();
+    });
+
+    // Le pendant : la loi vaut dans les deux sens. Seul le CRÉATEUR pouvait
+    // bannir un ADMIN ; lui seul le relève.
+    it('mais un ADMIN ne libère pas un ADMIN banni', async () => {
+      const { prisma, unbanRoute, reply } = setup();
+      prisma.participant.findFirst
+        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'admin', bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+      expect(prisma.participant.update).not.toHaveBeenCalled();
     });
 
     it('returns 403 when current user is a member', async () => {
@@ -850,9 +870,10 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     const io = createMockIO();
     const { prisma, route, reply } = setup(io);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([
+    prisma.participant.findMany.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.role ? [] : [
       { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]);
+    ]));
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     expect(prisma.participant.update).toHaveBeenCalledWith(
@@ -880,9 +901,10 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     const io = createMockIO();
     const { prisma, route, reply } = setup(io);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([
+    prisma.participant.findMany.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.role ? [] : [
       { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]);
+    ]));
     prisma.$transaction.mockRejectedValue(new Error('write failed'));
 
     await expect(
@@ -899,9 +921,10 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     const MODERATOR_ID = '507f1f77bcf86cd799439066';
     const { prisma, route, reply } = setup(createMockIO());
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([
+    prisma.participant.findMany.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.role ? [] : [
       { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]);
+    ]));
 
     await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
 
@@ -974,9 +997,10 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     const MEMBER_SUCCESSOR_ID = '507f1f77bcf86cd799439077';
     const { prisma, route, reply } = setup();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([
+    prisma.participant.findMany.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.role ? [] : [
       { id: MEMBER_SUCCESSOR_ID, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]);
+    ]));
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     expect(prisma.participant.update).toHaveBeenCalledWith(
@@ -1021,9 +1045,10 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     const MOD_ID = '507f1f77bcf86cd799439066';
     const { prisma, route, reply } = setup(undefined);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([
+    prisma.participant.findMany.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.role ? [] : [
       { id: MOD_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]);
+    ]));
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     // update still happens (DB update), success is sent

@@ -82,15 +82,19 @@ const remainingParticipants = [
 ];
 
 /**
- * `participant.findMany` sert DEUX lectures dans cette route : les candidats à
- * la succession (`resolveConversationSuccession`, qui exclut le partant par
- * `userId: { not }`) et l'effectif restant du fanout (qui n'exclut personne).
- * Les distinguer par ce `where` évite un `mockResolvedValueOnce` dont l'ORDRE
- * serait la vraie assertion.
+ * `participant.findMany` sert TROIS lectures dans cette route : les
+ * administrateurs candidats à la succession (`where.role`), le membre le plus
+ * ancien à défaut (`take: 1`), et l'effectif restant du fanout (ni l'un ni
+ * l'autre). Les distinguer par la FORME de la requête évite un
+ * `mockResolvedValueOnce` dont l'ORDRE serait la vraie assertion.
  */
-function splitFindMany(candidates: any[], remaining: any[] = remainingParticipants) {
+function splitFindMany(
+  candidates: any[],
+  opts: { admins?: any[]; remaining?: any[] } = {}
+) {
+  const { admins = [], remaining = remainingParticipants } = opts;
   return jest.fn<any>((args: any) =>
-    Promise.resolve(args?.where?.userId ? candidates : remaining)
+    Promise.resolve(args?.where?.role ? admins : args?.take === 1 ? candidates : remaining)
   );
 }
 
@@ -259,11 +263,14 @@ describe('POST /conversations/:id/leave — creator with other members', () => {
   it('ferme le fil quand il ne reste aucun successeur éligible', async () => {
     // Règle 3 : personne n'hérite ⇒ la conversation se termine, ENREGISTRÉE
     // (`closedAt`/`closedBy`), sans quoi aucun tombstone ne la sort des caches.
+    // Aucun candidat éligible : ni administrateur, ni membre avec un compte —
+    // l'exclusion des invités est faite par le `where` du résolveur, dont
+    // l'unité porte le témoin.
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
         count: jest.fn<any>().mockResolvedValue(1),
-        findMany: splitFindMany([{ ...successorCandidate, userId: null }]),
+        findMany: splitFindMany([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });

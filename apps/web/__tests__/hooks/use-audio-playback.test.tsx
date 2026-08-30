@@ -87,7 +87,7 @@ describe('useAudioPlayback — trackConsumption', () => {
     });
     expect(mockApiPost).toHaveBeenCalledTimes(1);
     expect(mockApiPost).toHaveBeenCalledWith(
-      '/attachments/att-audio-001/status',
+      '/api/v1/attachments/att-audio-001/status',
       expect.objectContaining({ action: 'listened', complete: true }),
     );
   });
@@ -102,7 +102,7 @@ describe('useAudioPlayback — trackConsumption', () => {
     });
     expect(mockApiPost).toHaveBeenCalledTimes(1);
     expect(mockApiPost).toHaveBeenCalledWith(
-      '/attachments/att-audio-001/status',
+      '/api/v1/attachments/att-audio-001/status',
       expect.objectContaining({ action: 'listened' }),
     );
   });

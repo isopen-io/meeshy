@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { AlertTriangle, ShieldCheck, Trash2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 type Action = 'confirm' | 'cancel' | 'purge';
 
@@ -90,7 +91,7 @@ function ContenuSuppression() {
     setEnCours(true);
     setErreur(null);
     try {
-      const reponse = await fetch(buildApiUrl('/account/deletion/resolve'), {
+      const reponse = await fetch(buildApiUrl(API_ENDPOINTS.account.deletionResolve), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action }),

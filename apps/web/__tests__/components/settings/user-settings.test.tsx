@@ -326,7 +326,7 @@ describe('UserSettings', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:3001/users/me',
+          'http://localhost:3001/api/v1/users/me',
           expect.objectContaining({
             method: 'PATCH',
             headers: expect.objectContaining({
@@ -504,7 +504,7 @@ describe('UserSettings', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:3001/users/me/password',
+          'http://localhost:3001/api/v1/users/me/password',
           expect.objectContaining({
             method: 'PATCH',
           })

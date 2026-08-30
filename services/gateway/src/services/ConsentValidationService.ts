@@ -83,16 +83,29 @@ export class ConsentValidationService {
       };
     }
 
-    // Parser les préférences audio (JSON)
+    // Parser les préférences audio (JSON). `applicationPrefs` reste lu plus
+    // bas pour `thirdPartyServicesConsentAt` (hors périmètre #4180) — plus
+    // JAMAIS pour les quatre colonnes de consentement ci-dessous.
     const audioPrefs = userPreferences?.audio as any || {};
     const applicationPrefs = userPreferences?.application as any || {};
 
-    // Consentements de base (User OU UserPreferences.application)
-    // Priorité : UserPreferences.application > User (migration progressive)
-    const dataProcessingConsentAt = applicationPrefs.dataProcessingConsentAt || user.dataProcessingConsentAt;
-    const voiceDataConsentAt = applicationPrefs.voiceDataConsentAt || user.voiceDataConsentAt;
-    const voiceProfileConsentAt = applicationPrefs.voiceProfileConsentAt || user.voiceProfileConsentAt;
-    const voiceCloningEnabledAt = applicationPrefs.voiceCloningEnabledAt || user.voiceCloningEnabledAt;
+    // Consentements de base — SEULE la colonne `User` fait foi (#4180).
+    //
+    // Ce bloc donnait autrefois PRIORITÉ au blob JSON
+    // (`applicationPrefs.xxx || user.xxx`) : `PATCH /me/preferences/application`
+    // acceptait ces mêmes noms comme des champs de date LIBRES, si bien
+    // qu'un client pouvait AFFIRMER un consentement — avec la date de SON
+    // choix — sans jamais passer par `POST /voice/profile/consent`, le seul
+    // écrivain qui horodate côté serveur. Pire : une RÉVOCATION posée sur la
+    // colonne `User` (celle que cette route écrit réellement) restait
+    // invisible tant que le blob gardait sa vieille date — un consentement
+    // retiré sans effet observable. `ApplicationPreferenceSchema` REJETTE
+    // désormais ces cinq clés (`z.never()`, #4180) : le blob ne peut plus
+    // les porter, et cette lecture n'a donc plus de second hasard à départager.
+    const dataProcessingConsentAt = user.dataProcessingConsentAt;
+    const voiceDataConsentAt = user.voiceDataConsentAt;
+    const voiceProfileConsentAt = user.voiceProfileConsentAt;
+    const voiceCloningEnabledAt = user.voiceCloningEnabledAt;
 
     const hasDataProcessingConsent = !!dataProcessingConsentAt;
     const hasVoiceDataConsent = !!voiceDataConsentAt && hasDataProcessingConsent;
@@ -123,13 +136,16 @@ export class ConsentValidationService {
     const translatedAudioGenerationEnabled =
       !!audioPrefs.translatedAudioGenerationEnabledAt || boolPref(audioPrefs.ttsEnabled, true);
 
-    // Consentements avancés dans UserPreferences.application. Le consentement
-    // clonage est aussi porté par `User.voiceCloningEnabledAt` — c'est le champ
-    // que `POST /voice-profile/consent { voiceCloningConsent: true }` écrit.
-    const voiceCloningConsentAt = applicationPrefs.voiceCloningConsentAt || voiceCloningEnabledAt;
+    // Consentement clonage — SEULE colonne : `User.voiceCloningEnabledAt`,
+    // horodatée par `POST /voice/profile/consent { voiceCloningConsent }`
+    // (#4180). Le blob `application.voiceCloningConsentAt` n'est plus lu —
+    // il servait de repli qui masquait exactement une révocation (colonne
+    // remise à `null`, blob encore daté ⇒ `hasVoiceCloningConsent` restait
+    // vrai). `thirdPartyServicesConsentAt` reste dans le blob : il n'a pas
+    // de colonne `User` miroir et n'appartient pas aux cinq clés de #4180.
     const thirdPartyServicesConsentAt = applicationPrefs.thirdPartyServicesConsentAt;
 
-    const hasVoiceCloningConsent = !!voiceCloningConsentAt && hasVoiceProfileConsent;
+    const hasVoiceCloningConsent = !!voiceCloningEnabledAt && hasVoiceProfileConsent;
     const hasThirdPartyServicesConsent = !!thirdPartyServicesConsentAt && hasDataProcessingConsent;
 
     // Calculer les capacités selon la hiérarchie de consentements
@@ -357,15 +373,21 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
-    // Octroi same-request : le corps peut LUI-MÊME accorder le consentement
-    // (popup iOS — PATCH application avec dataProcessingConsentAt + telemetry
-    // dans le même envoi). getConsentStatus lit l'état AVANT écriture ;
-    // sans cette reconnaissance, la requête qui accorde serait rejetée.
-    const grantsDataProcessing =
-      status.hasDataProcessingConsent || !!preferences.dataProcessingConsentAt;
-
-    // Télémétrie requiert dataProcessingConsent
-    if (preferences.telemetryEnabled === true && !grantsDataProcessing) {
+    // #4180 — l'octroi same-request (« le corps du PATCH accorde LUI-MÊME
+    // le consentement ») est SUPPRIMÉ, pas seulement devenu sans effet.
+    // `preferences.dataProcessingConsentAt` était le point d'entrée exact du
+    // défaut : un client posait sa PROPRE date dans le même PATCH que la
+    // préférence qu'il voulait débloquer, et cette ligne l'acceptait comme
+    // une preuve. `ApplicationPreferenceSchema` REJETTE désormais ce champ
+    // (`z.never()`) — un appelant qui passe encore par
+    // `preference-router-factory.ts` ne peut plus faire parvenir cette clé
+    // jusqu'ici — mais cette méthode reste appelable directement avec un
+    // `Record<string, any>` arbitraire (ni Zod ni les tests ne le lui
+    // interdisent) : la retirer ICI ferme le contournement pour de bon,
+    // plutôt que de compter sur une garde amont qui n'est pas la sienne.
+    // Seul l'état STOCKÉ (`status.hasDataProcessingConsent`, lu depuis
+    // `User.dataProcessingConsentAt`) accorde désormais la télémétrie.
+    if (preferences.telemetryEnabled === true && !status.hasDataProcessingConsent) {
       violations.push({
         field: 'telemetryEnabled',
         message: 'Telemetry requires data processing consent',

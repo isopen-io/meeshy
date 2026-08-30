@@ -443,10 +443,10 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
 
         let source = try sourceDuMeuble()
-        guard let plateau = corpsDeDeclaration(commencantPar: "private var plateauTools", dans: source),
+        guard let plateau = corpsDeDeclaration(commencantPar: "var plateauTools", dans: source),
               let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source),
-              let mood = corpsDeDeclaration(commencantPar: "private var moodSurface", dans: source),
-              let document = corpsDeDeclaration(commencantPar: "private var documentSurface", dans: source) else {
+              let mood = corpsDeDeclaration(commencantPar: "var moodSurface", dans: source),
+              let document = corpsDeDeclaration(commencantPar: "var documentSurface", dans: source) else {
             return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
         }
 
@@ -888,13 +888,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `ComposerFormatFan` sont nommés dans plusieurs doc-comments de ce
     /// fichier, et un `.contains` qui matche un commentaire ne prouve rien.
     private func sourceDuMeuble() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     /// Le corps d'un BLOC par appariement d'accolades. `nil` quand l'ancre a
@@ -992,12 +986,18 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 "\(nom(format)) : le socle n'y peint aucune audience — lui donner une mémoire ici en ferait "
                     + "une seconde à côté de celle du tray."
             )
-            XCTAssertTrue(
-                ComposerChromeOwnership.socleZones(
-                    for: ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: format)
-                ).isEmpty,
-                "\(nom(format)) : la prémisse du `nil` ci-dessus est que le socle n'y peint RIEN. Si elle "
-                    + "tombait, l'audience de ce format n'aurait plus de mémoire du tout."
+            // **PRÉMISSE RETOURNÉE au #4135.** Elle était « le socle n'y peint
+            // RIEN » ; le socle y peint désormais l'audience. Ce qui rend le
+            // `nil` ci-dessus encore JUSTE a changé de nature : ce n'est plus
+            // l'absence de sélecteur, c'est que la graine de ces deux formats
+            // vient de la PORTE. Sans ce second rang, le socle y ouvrirait sur
+            // « Public » et publierait sous une audience que l'auteur n'a pas
+            // choisie — la seule erreur irréversible d'une publication.
+            XCTAssertEqual(
+                ComposerAudienceMemory.seed(rememberedRaw: nil, doorRaw: PostVisibility.friends.rawValue),
+                .friends,
+                "\(nom(format)) : sans mémoire propre, la graine du socle DOIT venir de la porte. "
+                    + "Retomber sur `.public` ici publierait sous une audience que personne n'a choisie."
             )
         }
     }
@@ -1297,7 +1297,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// posé sur le bloc entier serait vert grâce au mood seul.
     func test_leMeuble_semeLaSourceDeLaPORTE_dansLeBrouillonDuDocument() throws {
         guard let bloc = corpsDeDeclaration(
-            commencantPar: "private var documentDraft",
+            commencantPar: "var documentDraft",
             dans: try sourceDuMeuble()
         ) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus.")
@@ -1545,13 +1545,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// l'objet mesuré. `AppSourceGuard.stripComments` le ferait disparaître, et
     /// la garde passerait au vert sur une phrase intacte.
     func test_leCommentaireDeRegle_naffirmePlus_queLeMoodEstUnDocument() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
+        let brut = try AppSourceGuard.composerSurfaceSource()
         // COMPACTÉ : la phrase interdite tient sur deux lignes dans l'historique
         // du fichier, et une recherche brute l'aurait manquée pour un simple
         // retour à la ligne — le contournement que la revue a déjà trouvé sur
@@ -1918,13 +1912,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     // MARK: - Gardes de SOURCE sur la surface
 
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
     }
 
     /// Le corps du BLOC `struct ComposerDocumentSurface`, et non le fichier.
@@ -2639,7 +2627,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         // Ancre déplacée au #4030 : l'envoi du DOCUMENT est `publishDocument`,
         // `publish` n'étant plus qu'un aiguillage sur le format.
         guard let envoi = corpsDeDeclaration(
-            commencantPar: "private func publishDocument(_ draft: ComposerDocumentDraft)",
+            commencantPar: "func publishDocument(_ draft: ComposerDocumentDraft)",
             dans: porte
         ) else {
             return XCTFail("L'envoi de la porte du document est introuvable — la garde ne mesurerait RIEN.")
@@ -2722,7 +2710,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 + "Appelants trouvés — \(fichiersAppelants)."
         )
         XCTAssertEqual(
-            fichiersAppelants, ["ComposerDocumentSurface.swift"],
+            // #4103 — le PLAN (`ComposerDocumentSendPlan`) a suivi les règles
+            // pures dans leur propre fichier ; l'appelant unique s'appelle donc
+            // désormais `ComposerDocumentRules.swift`. Ce n'est pas un
+            // relâchement : une règle qui appelle une règle est plus juste
+            // qu'une règle appelée depuis un fichier de VUE.
+            fichiersAppelants, ["ComposerDocumentRules.swift"],
             "L'unique appelant doit être le PLAN du meuble. Une porte de présentation, un modèle ou une vue "
                 + "qui interrogerait la table pour son compte serait un second chemin d'envoi."
         )
@@ -2797,13 +2790,7 @@ final class ComposerDocumentSurfaceContrastTests: XCTestCase {
     /// tout ce qui est peint. Il rougit notamment à la réintroduction de
     /// `textMuted`, mesuré à 4,41:1 sur le violet profond.
     func test_laListeMesuree_couvreToutCeQueLaSurfacePeint() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let fichier = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let fichier = AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
         XCTAssertTrue(fichier.contains("struct ComposerDocumentSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
 
         // **Le bloc de la SURFACE, pas le fichier.** Le fichier héberge aussi

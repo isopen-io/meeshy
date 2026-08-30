@@ -51,6 +51,16 @@ jest.mock('../../../utils/normalize', () => ({
   normalizePhoneWithCountry: (...a: any[]) => mockNormalizePhoneWithCountry(...a),
 }));
 
+// #4264 — l'inscription crée désormais une SESSION, comme la connexion : le
+// JWT d'un compte frais ne nommait rien, et depuis #4213 son premier
+// `POST /auth/refresh` rendait 401 « Session révoquée » à quelqu'un qui
+// n'avait rien révoqué (`count({ userId, isValid: true })` valait zéro).
+const mockCreateSession = jest.fn<any>().mockResolvedValue({ id: 'session-inscription' });
+jest.mock('../../../services/SessionService', () => ({
+  createSession: (...args: any[]) => mockCreateSession(...args),
+  generateSessionToken: jest.fn(() => 'session-token-inscription'),
+}));
+
 jest.mock('../../../services/InitService', () => ({
   InitService: jest.fn().mockImplementation(() => ({
     initializeDatabase: jest.fn().mockResolvedValue(undefined),

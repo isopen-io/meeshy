@@ -39,6 +39,13 @@ import {
   MAX_VIEWED_LANGUAGES,
 } from '../utils/viewed-languages';
 import { coveredDurationMs } from '../utils/playback-segments';
+// #4179 — le plancher d'historique borne déjà `GET /conversations/:id/status`
+// (messages-advanced.ts) ; les trois autres lecteurs d'accusés de CE service ne
+// l'appliquaient pas, alors qu'un accusé NOMINATIF (qui a reçu/lu, et quand) EST
+// de l'historique au même titre que le texte. `applyHistoryFloor` est la même
+// fonction pure que celle déjà éprouvée par `/status` et `threads.ts` : on la
+// RÉUTILISE, on ne réécrit pas la règle une quatrième fois.
+import { applyHistoryFloor } from './historyFloor';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -690,11 +697,23 @@ export class MessageReadStatusService {
    * Marque les messages comme reçus pour un utilisateur connecté
    * Simplifié: Met à jour le curseur `lastDeliveredAt` UNIQUEMENT.
    */
+  /**
+   * @returns le nombre d'entrées `deliveredAt`/`receivedAt` RÉELLEMENT figées
+   *   par cet appel — jamais un décompte de non-lus. #4179 : la porte
+   *   `mark-as-received` servait `markedCount` depuis `getUnreadCount`, calculé
+   *   AVANT le marquage — « non lu » et « non reçu » sont deux ensembles
+   *   distincts (un message peut être livré depuis longtemps et rester non lu),
+   *   donc ce nombre pouvait aussi bien sur-compter (rien de nouveau livré,
+   *   mais 5 messages restaient non lus) que sous-compter (peu de non-lus,
+   *   mais tout le retard de livraison venait d'être rattrapé d'un coup). En
+   *   retournant le compte réel de `freezeMessageStatus`, la route n'a plus
+   *   qu'à relayer ce que le service a effectivement écrit.
+   */
   async markMessagesAsReceived(
     participantId: string,
     conversationId: string,
     latestMessageId?: string
-  ): Promise<void> {
+  ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
     // TTL and silently drop the delivery receipt.
@@ -714,7 +733,7 @@ export class MessageReadStatusService {
           select: { id: true },
         });
 
-        if (!latestMessage) return;
+        if (!latestMessage) return 0;
         messageId = latestMessage.id;
       }
 
@@ -729,7 +748,7 @@ export class MessageReadStatusService {
         lastCall &&
         dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
       ) {
-        return;
+        return 0;
       }
 
       MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
@@ -774,13 +793,16 @@ export class MessageReadStatusService {
         logger.info(
           `[MessageReadStatus] Ignoring stale received receipt for participant ${participantId} in conversation ${conversationId}`
         );
-        return;
+        return 0;
       }
 
       // Précision absolue : fige `deliveredAt`/`receivedAt` par message
       // nouvellement livré (write-once), pour persister la date de réception
-      // de CHAQUE message au lieu de la dériver du curseur mobile.
-      await this.freezeMessageStatus({
+      // de CHAQUE message au lieu de la dériver du curseur mobile. Le compte
+      // RENVOYÉ par `freezeMessageStatus` — pas seulement attendu — est ce que
+      // cette méthode rend à son tour : c'est la seule vraie mesure de ce qui a
+      // été figé, là où `getUnreadCount` mesurait autre chose.
+      const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
         since: prevDeliveredAt,
@@ -791,6 +813,8 @@ export class MessageReadStatusService {
       logger.info(
         `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
       );
+
+      return frozenCount;
     } catch (error) {
       // Release the dedup key so a retry within the TTL is not swallowed by the
       // gate — the failed attempt recorded nothing, so the receipt must still
@@ -962,7 +986,26 @@ export class MessageReadStatusService {
         // restent le reflet exact de ce qui a été affiché. Après l'avance par
         // préfixe contigu, jamais avant : la garde de fraîcheur de
         // `_advanceCursor` ignorerait alors la seconde comme périmée.
-        if (options?.caughtUpToMessageId) {
+        //
+        // #4179 — anti-spoof généralisé. `freezeMessageStatus` borne déjà
+        // `messageIds` à `conversationId` (et exclut l'expéditeur) directement
+        // dans sa clause Prisma ; `caughtUpToMessageId` échappait seule à cette
+        // règle, alors qu'elle alimente `_advanceCursor` SANS AUCUNE vérification
+        // d'appartenance. Un id forgé pointant vers une AUTRE conversation y
+        // était accepté tel quel : `_advanceCursor` résout le `createdAt` du
+        // message par son seul id (aucun filtre `conversationId` sur ce
+        // `findUnique`), donc le curseur de CETTE conversation aurait figé sa
+        // position sur l'horloge d'un message qu'elle n'a jamais contenu — avec
+        // `resetUnreadCount: true`, un badge remis à zéro sur la foi d'une date
+        // arbitraire. Le coût n'est pas une fuite de contenu (l'appelant doit
+        // déjà connaître l'id) mais une corruption du PROPRE curseur du
+        // lecteur ; la garde ne coûte qu'une lecture, et seulement quand ce
+        // champ optionnel est fourni.
+        const caughtUpMessage = await this.prisma.message.findUnique({
+          where: { id: options.caughtUpToMessageId },
+          select: { conversationId: true },
+        });
+        if (caughtUpMessage?.conversationId === conversationId) {
           await this._advanceCursor({
             participantId,
             conversationId,
@@ -1122,7 +1165,14 @@ export class MessageReadStatusService {
           notifError
         );
       }
-    })();
+    })().catch((error: unknown) =>
+      // La garde du SITE, disjointe de celle du corps (leçon 230). Le `catch`
+      // ci-dessus décrit ce que l'IIFE sait rattraper ; celui-ci décrit ce
+      // qu'elle ne sait PAS — un rejet du `catch` lui-même, ou de la seule
+      // instruction qui le précède. Une promesse détachée n'a pas d'appelant
+      // pour porter son rejet, et Node 22 y répond en arrêtant le process.
+      logger.warn("[MessageReadStatus] notification sync rejected", { error })
+    );
   }
 
   /**
@@ -1782,9 +1832,24 @@ export class MessageReadStatusService {
    * dérivent ici de la MÊME union curseur/reçu figé que les compteurs, et
    * respectent donc le même retrait des opt-out `showReadReceipts`.
    */
+  /**
+   * @param historyFloor Plancher d'historique du LECTEUR pour cette
+   *   conversation (`loadReaderHistoryFloor`), optionnel. #4179 : cette
+   *   méthode sert des accusés NOMINATIFS potentiels en amont (comptes agrégés
+   *   ici, mais alimentés par les mêmes curseurs/entrées figées que les vues
+   *   nominatives) sur des `messageIds` fournis par l'appelant — sans plancher,
+   *   un membre pouvait interroger le statut d'un message antérieur à son
+   *   arrivée dans la conversation, alors que `GET /conversations/:id/status`
+   *   applique ce même plancher pour la vue équivalente. Paramètre optionnel
+   *   et par défaut `null` (= aucune restriction) : le seul appelant existant
+   *   qui ne le fournit pas (`GET /conversations/:id/status`) filtre déjà ses
+   *   `messageIds` en amont par le même plancher — ce paramètre est donc sans
+   *   effet, jamais une régression, sur ce chemin-là.
+   */
   async getConversationReadStatuses(
     conversationId: string,
-    messageIds: string[]
+    messageIds: string[],
+    historyFloor: Date | null = null
   ): Promise<
     Map<
       string,
@@ -1805,7 +1870,7 @@ export class MessageReadStatusService {
       // lui faut les participants.
       const [messages, allActiveParticipants, cursors, frozenEntries] = await Promise.all([
         this.prisma.message.findMany({
-          where: { id: { in: messageIds }, conversationId },
+          where: applyHistoryFloor({ id: { in: messageIds }, conversationId }, historyFloor),
           select: { id: true, createdAt: true, senderId: true },
         }),
         this.prisma.participant.findMany({
@@ -1954,12 +2019,29 @@ export class MessageReadStatusService {
     }
   }
 
+  /**
+   * @param options.historyFloor Plancher d'historique du LECTEUR (voir
+   *   `getConversationReadStatuses`), optionnel. #4179 : cette méthode sert la
+   *   liste NOMINATIVE — identité + horodatage de chaque destinataire — de
+   *   `GET /messages/:messageId/status-details`, sans jamais vérifier que le
+   *   message demandé est postérieur à l'arrivée de l'appelant dans la
+   *   conversation. C'était la SEULE des trois vues nominatives/agrégées de ce
+   *   service à n'avoir aucun moyen de le faire, `getMessageReadStatus` et
+   *   `getConversationReadStatuses` acceptant déjà ce plancher. Traité comme un
+   *   message introuvable — même verdict, même message d'erreur — pour ne pas
+   *   distinguer « n'existe pas » de « pas encore visible pour vous », ce que
+   *   révélerait déjà la différence de comportement. `undefined`/`null` par
+   *   défaut : sans lui, aucun changement de comportement pour l'appelant
+   *   actuel (`routes/messages.ts`, hors territoire de ce correctif), qui devra
+   *   le fournir pour clore la garde — voir le commentaire sur la route.
+   */
   async getMessageStatusDetails(
     messageId: string,
     options: {
       offset?: number;
       limit?: number;
       filter?: "all" | "delivered" | "read" | "unread";
+      historyFloor?: Date | null;
     } = {}
   ): Promise<{
     statuses: Array<{
@@ -1978,7 +2060,7 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all" } = options;
+    const { offset = 0, limit = 20, filter = "all", historyFloor = null } = options;
 
     try {
       const message = await this.prisma.message.findUnique({
@@ -1987,6 +2069,12 @@ export class MessageReadStatusService {
       });
 
       if (!message) throw new Error("Message not found");
+      // #4179 — un message antérieur au plancher n'est pas « trouvé » pour ce
+      // lecteur : même erreur que l'absence, pour que les deux cas restent
+      // indiscernables de l'extérieur (cf. doc-comment de la méthode).
+      if (historyFloor && message.createdAt < historyFloor) {
+        throw new Error("Message not found");
+      }
 
       // See `getMessageReadStatus` for the rationale: avoid `include` to
       // prevent Prisma from crashing on orphan cursors.

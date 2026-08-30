@@ -152,8 +152,8 @@ jest.mock('@/services/auth-manager.service', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (path: string) => `http://localhost:3000/api${path}`,
   API_ENDPOINTS: {
-    AUTH: {
-      REGISTER: '/auth/register',
+    auth: {
+      register: '/auth/register',
     },
   },
 }));

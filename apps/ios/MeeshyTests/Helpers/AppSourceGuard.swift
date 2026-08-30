@@ -63,4 +63,83 @@ enum AppSourceGuard {
     static func strippedLines(_ source: String) -> [String] {
         stripComments(source).components(separatedBy: "\n")
     }
+
+    // MARK: - L'UNITÉ de source d'un type découpé (#4102)
+
+    /// La racine `apps/ios`, lue depuis CE fichier — jamais depuis l'appelant :
+    /// une garde qui déménage d'un répertoire ne doit pas déplacer la racine
+    /// avec elle.
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Helpers
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+    }
+
+    /// **Un type découpé garde UNE adresse.**
+    ///
+    /// `Type.swift` scindé en `Type+Rôle.swift` reste une seule source aux yeux
+    /// des gardes. Sans cela, chaque découpage éteint en SILENCE toutes les
+    /// gardes négatives du type : elles passent au vert en lisant la moitié qui
+    /// ne contient pas l'interdit. C'est le mode de panne exact contre lequel
+    /// chaque suite pose déjà un `test_…ReadANonEmptySource` — celui-là attrape
+    /// un chemin FAUX, aucun n'attrapait un chemin devenu PARTIEL.
+    ///
+    /// Le balayage est un GLOB, jamais une liste : une liste de parties se
+    /// périme au premier fichier ajouté, et se périme en silence puisque le
+    /// résultat reste non vide. `alsoIncluding` ne sert qu'aux compagnons qui ne
+    /// portent PAS le nom du type — les règles pures sorties du fichier, qui
+    /// n'ont aucune raison de s'appeler `Type+…`.
+    static func unitURLs(_ relativeToAppRoot: String,
+                         alsoIncluding compagnons: [String] = []) -> [URL] {
+        let principal = appRoot.appendingPathComponent(relativeToAppRoot)
+        let dossier = principal.deletingLastPathComponent()
+        let base = principal.deletingPathExtension().lastPathComponent
+        let voisins = (try? FileManager.default.contentsOfDirectory(
+            at: dossier, includingPropertiesForKeys: nil)) ?? []
+        let parties = voisins
+            .filter { $0.pathExtension == "swift"
+                && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return [principal] + parties + compagnons.map(appRoot.appendingPathComponent)
+    }
+
+    static func unit(_ relativeToAppRoot: String,
+                     alsoIncluding compagnons: [String] = []) throws -> String {
+        try unitURLs(relativeToAppRoot, alsoIncluding: compagnons)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
+    /// L'unité du meuble du composer : le type, ses trois extensions, et les
+    /// règles pures qui en sont sorties au #4102.
+    static let composerHostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    static let composerHostCompanions = ["Meeshy/Features/Main/Composer/ComposerHostRules.swift"]
+
+    static func composerHostURLs() -> [URL] {
+        unitURLs(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    static func composerHostSource() throws -> String {
+        try unit(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles
+    /// pures qui en sont sortis au #4103 (`ComposerSurfaceRules`,
+    /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
+    /// toute garde négative dont l'interdit a suivi les règles passerait au vert
+    /// en lisant la moitié qui ne le contient plus.
+    static let composerSurfacePath = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    static let composerSurfaceCompanions = [
+        "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
+        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift"
+    ]
+
+    static func composerSurfaceURLs() -> [URL] {
+        unitURLs(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    static func composerSurfaceSource() throws -> String {
+        try unit(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
 }

@@ -58,6 +58,15 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var fileName: String?
     public var fileSize: String?
     public var pageCount: Int?
+    /// Légende du média, telle que servie par `PostMedia.caption` (posts, réels,
+    /// stories) — le texte que le plein écran affiche SOUS l'image ou la vidéo,
+    /// et que VoiceOver lit à sa place.
+    ///
+    /// Elle existait sur le fil (`APIPostMedia.caption`) et dans le schéma
+    /// (`PostMedia.caption`) mais n'était déclarée NI ici NI dans
+    /// `toMessageAttachment()` : le décodeur la jetait, et le plein écran d'un
+    /// média de post ou de commentaire ne pouvait structurellement rien montrer.
+    public var caption: String?
     public var transcription: MessageTranscription?
     /// Per-language TTS variants of an audio media (Prisme Linguistique).
     /// Each carries the translated transcription text + the synthesized audio
@@ -87,12 +96,14 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 thumbnailColor: String = "4ECDC4",
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
+                caption: String? = nil,
                 transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = [],
                 imageVariants: [MeeshyImageVariant]? = nil) {
         self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
+        self.caption = caption
         self.transcription = transcription
         self.translatedAudios = translatedAudios
         self.imageVariants = imageVariants
@@ -130,6 +141,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
+        case caption
         case transcription, translatedAudios, imageVariants
     }
 
@@ -147,6 +159,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         fileName = try c.decodeIfPresent(String.self, forKey: .fileName)
         fileSize = try c.decodeIfPresent(String.self, forKey: .fileSize)
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
+        caption = try c.decodeIfPresent(String.self, forKey: .caption)
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
         translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
         _imageVariants = try c.decode(LossyImageVariants.self, forKey: .imageVariants)
@@ -166,6 +179,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         try c.encodeIfPresent(fileName, forKey: .fileName)
         try c.encodeIfPresent(fileSize, forKey: .fileSize)
         try c.encodeIfPresent(pageCount, forKey: .pageCount)
+        try c.encodeIfPresent(caption, forKey: .caption)
         try c.encodeIfPresent(transcription, forKey: .transcription)
         if !translatedAudios.isEmpty {
             try c.encode(translatedAudios, forKey: .translatedAudios)
@@ -184,6 +198,7 @@ extension FeedMedia {
             mimeType: mimeTypeFromFeedType,
             fileSize: 0,
             fileUrl: url ?? "",
+            caption: caption,
             width: width,
             height: height,
             thumbnailPath: nil,

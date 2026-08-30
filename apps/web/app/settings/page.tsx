@@ -26,6 +26,7 @@ import { useCurrentUserQuery } from '@/hooks/queries';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { PreferenceCategory } from '@/types/preferences';
 
 const ProfileSettings = dynamic(
@@ -264,8 +265,19 @@ export default function SettingsPage() {
 
     for (const cat of categoriesToPrefetch) {
       queryClient.prefetchQuery({
+        // Même clé, même forme de valeur que `usePreferences` (#4181) — sous
+        // l'ancien alias, ce préchargement posait l'ENVELOPPE `{success,data}`
+        // dans le cache que `usePreferences` lit comme un DOCUMENT nu :
+        // `staleTime: Infinity` aurait servi cette forme fausse à l'écran
+        // ouvert juste après, sans jamais la corriger.
         queryKey: queryKeys.preferences.category(cat),
-        queryFn: () => apiService.get(`/api/v1/me/preferences/${cat}`).then(r => r.data),
+        queryFn: () =>
+          apiService
+            .get<{ success: boolean; data?: Record<string, unknown> }>(
+              API_ENDPOINTS.me.preferences,
+              { categories: cat }
+            )
+            .then(r => r.data?.data?.[cat]),
       });
     }
   }, [activeTab, tabs, queryClient, TAB_TO_CATEGORY]);

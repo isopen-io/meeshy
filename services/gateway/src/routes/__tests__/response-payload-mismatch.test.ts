@@ -32,38 +32,31 @@ import { scanFileForMismatches, sweepPayloadMismatches, topLevelKeys } from './r
 const ROUTES_DIR = join(__dirname, '..');
 
 /**
- * **Il était VIDE, et l'élargissement de #4192 y a fait entrer QUATRE sites.**
+ * **VIDE, et il l'est resté à travers #4192.**
  *
- * Ce n'est pas une régression : ce sont quatre défauts qui vivaient dans
- * l'angle mort de la sonde, exactement comme #4139 y a vécu — un schéma 2xx qui
- * déclare ses clés à la RACINE, là où `sendSuccess` écrit `{ success, data }`,
- * si bien que fast-json-stringify supprime `data` EN BLOC. Chacun a été ouvert
- * à la main, et chacun sert `{"success":true}` en production :
+ * L'élargissement de la sonde y a fait entrer QUATRE sites d'un coup — quatre
+ * défauts qui vivaient dans son angle mort, exactement comme #4139 y a vécu :
+ * un schéma 2xx qui déclare ses clés à la RACINE, là où `sendSuccess` écrit
+ * `{ success, data }`, si bien que fast-json-stringify supprime `data` EN BLOC
+ * et que la route sert `{"success":true}`.
  *
- * | site | déclaré à la racine | envoyé sous `data` | ce que ça coûte |
- * |---|---|---|---|
- * | `POST /conversations/:id/read` | `success` | `{ markedCount }` | le client ne sait jamais combien de messages viennent d'être marqués lus |
- * | `DELETE /notifications/admin/clear-all` | `success, deletedCount` | `{ deletedCount }` | le compte est déclaré, jamais servi |
- * | `GET /tracking-links/admin/all` | `success, trackingLinks, total` | `{ trackingLinks, total }` | la liste d'administration arrive VIDE |
- * | `GET /tracking-links/admin/:token/clicks` | `success, clicks, total` | `{ clicks, total }` | idem, sur les clics |
+ * Ils ont été gelés le temps d'un lot — le territoire de #4192 était la SONDE,
+ * et `routes/` était édité par cinq sessions au même moment —, puis CORRIGÉS à
+ * l'intégration du même lot. Ce qu'ils coûtaient :
  *
- * **Ils sont gelés ICI et pas corrigés, pour une raison écrite** : le lot de
- * #4192 est la SONDE. Les quatre correctifs vivent dans `routes/`, que cinq
- * autres sessions éditent au même moment — y écrire ferait perdre leur travail.
- * Ils sont déclarés à l'intégrateur, qui décide : correction immédiate, ou une
- * issue par site.
+ * | site | ce que le client perdait |
+ * |---|---|
+ * | `POST /conversations/:id/read` | il marquait une conversation lue sans jamais savoir combien de messages |
+ * | `DELETE /notifications/admin/clear-all` | un geste IRRÉVERSIBLE rendait « succès » sans dire combien de lignes il venait de supprimer |
+ * | `GET /tracking-links/admin/all` | la liste d'administration arrivait VIDE, sans erreur ni journal |
+ * | `GET /tracking-links/admin/:token/clicks` | idem, sur les clics |
  *
- * **La cible reste VIDE.** Chaque ligne retirée d'ici accompagne le correctif de
- * sa route ; et quand une entrée NOUVELLE apparaît, ne pas la geler par réflexe
- * — ouvrir l'ÉMETTEUR, qui est le seul discriminant (cycle 91 bis), et ne geler
- * que ce qu'une raison écrite justifie de laisser ouvert.
+ * **La cible est VIDE, et c'est un état à défendre.** Quand une entrée
+ * NOUVELLE apparaît, ne pas la geler par réflexe : ouvrir l'ÉMETTEUR, qui est
+ * le seul discriminant (cycle 91 bis), et ne geler que ce qu'une raison ÉCRITE
+ * justifie de laisser ouvert — pour la durée d'un lot, pas d'un trimestre.
  */
-const FROZEN_MISMATCHES: readonly string[] = [
-  'conversations/messages.ts|envelope|data',
-  'notifications.ts|envelope|data',
-  'tracking-links/tracking.ts|envelope|data',
-  'tracking-links/tracking.ts|envelope|data',
-];
+const FROZEN_MISMATCHES: readonly string[] = [];
 
 describe('balayage — un schéma de réponse décrit la charge utile que le handler ENVOIE', () => {
   it("n'introduit aucun désaccord que l'inventaire gelé ne nomme pas", () => {

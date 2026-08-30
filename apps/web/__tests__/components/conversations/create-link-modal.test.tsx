@@ -84,12 +84,12 @@ jest.mock('@/lib/clipboard', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (endpoint: string) => `http://api.test${endpoint}`,
   API_ENDPOINTS: {
-    CONVERSATION: {
-      CREATE_LINK: '/conversations/links',
-      CHECK_LINK_IDENTIFIER: (id: string) => `/conversations/links/check/${id}`,
+    links: {
+      root: '/conversations/links',
+      checkIdentifierByIdentifier: (id: string) => `/conversations/links/check/${id}`,
     },
-    USER: {
-      SEARCH: '/users/search',
+    users: {
+      search: '/users/search',
     },
   },
 }));

@@ -2,8 +2,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SecuritySanitizer } from '../../utils/sanitize';
-import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -12,11 +10,12 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
-import {
-  generateUniqueShareLinkId,
-  ensureUniqueShareLinkIdentifier
-} from './utils/identifier-generator';
+// #4169 — `resolveConversationId`, la génération d'identifiants, la garde 410
+// et la garde de RANG ne vivent plus ici : `mintConversationShareLink` est
+// désormais la porte UNIQUE de création d'un lien, partagée avec `POST
+// /links` (`routes/links/creation.ts`). Ce fichier n'en est plus qu'un
+// ADAPTATEUR mince — voir le commentaire du handler `/new-link` plus bas.
+import { mintConversationShareLink } from '../links/utils/share-link-mint';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
@@ -24,10 +23,19 @@ import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
+// #4353 — `POST /conversations/join/:linkId` DÉLÈGUE désormais à la loi
+// d'admission UNIQUE (#4167, `services/conversations/linkAdmission.ts`) via
+// `performLinkJoin`, exactement comme `POST /anonymous/join/:linkId`
+// (`routes/anonymous.ts`) — ce fichier ne recopie plus AUCUN contrôle sur le
+// lien (`isActive`, `expiresAt`, `maxUses`, `allowedIpRanges`, …) : la garde
+// `link-admission-single-source-guard.test.ts` interdit d'y revenir.
+import { performLinkJoin, resolveClientIp } from './link-admission';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
+import { depreciee } from '../../utils/deprecation';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -101,8 +109,10 @@ export function registerSharingRoutes(
       allowAnonymousFiles?: boolean;
       allowAnonymousImages?: boolean;
       allowViewHistory?: boolean;
+      requireAccount?: boolean;
       requireNickname?: boolean;
       requireEmail?: boolean;
+      requireBirthday?: boolean;
       allowedCountries?: string[];
       allowedLanguages?: string[];
       allowedIpRanges?: string[];
@@ -132,8 +142,13 @@ export function registerSharingRoutes(
           allowAnonymousFiles: { type: 'boolean', description: 'Allow anonymous users to send files' },
           allowAnonymousImages: { type: 'boolean', description: 'Allow anonymous users to send images' },
           allowViewHistory: { type: 'boolean', description: 'Allow viewing message history' },
+          // #4169 — parité de police avec `POST /links` : ces deux champs
+          // étaient ACCEPTÉS par la route cible et silencieusement IGNORÉS
+          // ici, sans que rien ne le signale à l'appelant.
+          requireAccount: { type: 'boolean', description: 'Require a registered account for anonymous users' },
           requireNickname: { type: 'boolean', description: 'Require nickname for anonymous users' },
           requireEmail: { type: 'boolean', description: 'Require email for anonymous users' },
+          requireBirthday: { type: 'boolean', description: 'Require birthday for anonymous users' },
           allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes' },
           allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
           allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges' }
@@ -145,9 +160,19 @@ export function registerSharingRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        // #4169 — l'adaptateur applique désormais la garde 410 (fil clos) de
+        // `POST /links` : la déclarer ici évite qu'un statut réel du contrat
+        // sorte non documenté, comme `/links` le fait déjà pour ce même code.
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
+    // #4169 critère de fin #6 — l'adresse reste un ALIAS FONCTIONNEL (le web
+    // l'appelle encore, `links.service.ts:53`) mais n'est plus la porte
+    // canonique : `POST /links` l'est. `onRequest` court avant TOUTE garde
+    // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
+    // qui échoue est celui qui a le plus besoin de savoir migrer.
+    onRequest: [depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links' })],
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -156,36 +181,10 @@ export function registerSharingRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Récupérer les informations de la conversation et du membre
-      const [conversation, membership] = await Promise.all([
-        prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { id: true, type: true, title: true }
-        }),
-        prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: currentUserId,
-            isActive: true
-          }
-        })
-      ]);
-
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
-      }
-
-      if (!membership) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Récupérer le rôle de l'utilisateur
+      // Résout l'acteur (rôle de PLATEFORME) avant de déléguer : cette route
+      // n'appelle pas `isRegisteredUser`, elle relit directement la ligne
+      // `User` et échoue fermé si elle n'existe pas — comportement inchangé
+      // par #4169, préservé tel quel.
       const user = await prisma.user.findUnique({
         where: { id: currentUserId },
         select: { role: true }
@@ -195,87 +194,52 @@ export function registerSharingRoutes(
         return sendForbidden(reply, 'User not found');
       }
 
-      // Vérifier les permissions pour créer des liens de partage
-      const conversationType = conversation.type;
-      const userRole = user.role as UserRoleEnum;
-
-      // Interdire la création de liens pour les conversations directes
-      if (conversationType === 'direct') {
-        return sendForbidden(reply, 'Cannot create share links for direct conversations');
-      }
-
-      // Pour les conversations globales, seuls les BIGBOSS peuvent créer des liens
-      if (conversationType === 'global') {
-        if (userRole !== UserRoleEnum.BIGBOSS) {
-          return sendForbidden(reply, 'You do not have the necessary rights to perform this operation');
-        }
-      }
-
-      // Pour tous les autres types de conversations (group, public, etc.),
-      // n'importe qui ayant accès à la conversation peut créer des liens
-      // L'utilisateur doit juste être membre de la conversation (déjà vérifié plus haut)
-
-      // Identifiant PUBLIC du lien — compact, opaque, vérifié libre sur les
-      // deux colonnes publiques AVANT l'écriture (cf. `generateShareLinkId`).
-      const linkId = await generateUniqueShareLinkId(prisma);
-
-      // Identifiant LISIBLE — dérivé du nom, sinon de la description. Sans ni
-      // l'un ni l'autre, le repli est compact et opaque, plus horodaté.
-      let baseIdentifier = '';
-      if (body.name) {
-        baseIdentifier = `mshy_${body.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`;
-      } else if (body.description) {
-        // Utiliser la description comme base si pas de nom
-        baseIdentifier = `mshy_${body.description.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30)}`;
-      }
-      const uniqueIdentifier = await ensureUniqueShareLinkIdentifier(prisma, baseIdentifier);
-
-      // Créer le lien avec toutes les options configurables
-      const shareLink = await prisma.conversationShareLink.create({
-        data: {
-          linkId,
-          conversationId: conversationId,
-          createdBy: currentUserId,
-          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
-          maxUses: body.maxUses ?? undefined,
-          maxConcurrentUsers: body.maxConcurrentUsers ?? undefined,
-          maxUniqueSessions: body.maxUniqueSessions ?? undefined,
-          expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
-          allowAnonymousMessages: body.allowAnonymousMessages ?? true,
-          allowAnonymousFiles: body.allowAnonymousFiles ?? false,
-          allowAnonymousImages: body.allowAnonymousImages ?? true,
-          allowViewHistory: body.allowViewHistory ?? true,
-          requireNickname: body.requireNickname ?? true,
-          requireEmail: body.requireEmail ?? false,
-          allowedCountries: body.allowedCountries ?? [],
-          allowedLanguages: body.allowedLanguages ?? [],
-          allowedIpRanges: body.allowedIpRanges ?? [],
-          identifier: uniqueIdentifier
-        }
+      // #4169 — tout le reste (résolution de l'identifiant de conversation,
+      // garde 410 sur fil clos, refus des conversations `direct`, BIGBOSS ou
+      // ADMIN sur `global`, et — la garde qui MANQUAIT ici — au moins
+      // MODERATOR sur les autres types, génération des identifiants,
+      // écriture du lien, notification aux admins/créateur) est désormais LA
+      // SEULE responsabilité de `mintConversationShareLink`, partagée avec
+      // `POST /links` (`routes/links/creation.ts:179`). Cette route n'en est
+      // plus qu'un ADAPTATEUR : elle traduit sa forme de requête (l'id de
+      // conversation arrive en PARAMÈTRE, pas au corps) et restitue sa forme
+      // de réponse historique (`{link, code, shareLink}`), que
+      // `apps/web/services/conversations/links.service.ts:53` consomme
+      // encore — durcir cette porte ne casse donc aucun appelant existant,
+      // il ne fait que refuser ce qu'elle n'aurait jamais dû accepter.
+      const result = await mintConversationShareLink({
+        prisma,
+        reply,
+        log: logger,
+        notificationService: fastify.notificationService,
+        socketIOHandler: fastify.socketIOHandler,
+        userId: currentUserId,
+        userRole: user.role,
+        input: { conversationId: id, ...body }
       });
+      if (!result) return; // La réponse d'erreur est déjà partie.
 
       // Retour compatible avec le frontend de service conversations (string du lien complet).
       // `/chat/:linkId` est l'URL canonique (la page qui ouvre la conversation
       // dans la vue courante) ; `/join/:linkId` ne survit qu'en 308 pour les
       // liens déjà en circulation — un lien neuf ne prend pas le détour.
-      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${linkId}`;
+      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${result.linkId}`;
       return sendSuccess(reply, {
         link: inviteLink,
-        code: linkId,
+        code: result.linkId,
         shareLink: {
-          id: shareLink.id,
-          linkId,
-          name: shareLink.name,
-          description: shareLink.description,
-          maxUses: shareLink.maxUses,
-          expiresAt: shareLink.expiresAt,
-          allowAnonymousMessages: shareLink.allowAnonymousMessages,
-          allowAnonymousFiles: shareLink.allowAnonymousFiles,
-          allowAnonymousImages: shareLink.allowAnonymousImages,
-          allowViewHistory: shareLink.allowViewHistory,
-          requireNickname: shareLink.requireNickname,
-          requireEmail: shareLink.requireEmail
+          id: result.shareLink.id,
+          linkId: result.linkId,
+          name: result.shareLink.name,
+          description: result.shareLink.description,
+          maxUses: result.shareLink.maxUses,
+          expiresAt: result.shareLink.expiresAt,
+          allowAnonymousMessages: result.shareLink.allowAnonymousMessages,
+          allowAnonymousFiles: result.shareLink.allowAnonymousFiles,
+          allowAnonymousImages: result.shareLink.allowAnonymousImages,
+          allowViewHistory: result.shareLink.allowViewHistory,
+          requireNickname: result.shareLink.requireNickname,
+          requireEmail: result.shareLink.requireEmail
         }
       });
 
@@ -375,7 +339,13 @@ export function registerSharingRoutes(
       const links = await prisma.conversationShareLink.findMany({
         where: {
           conversationId,
-          ...(isModerator ? {} : { creatorId: userId }) // Si pas modérateur, filtrer par créateur
+          // #4170 -- `creatorId` N'EXISTE PAS sur ConversationShareLink. Le schema
+          // declare `createdBy` ; `creator` n'est que le nom de la RELATION, et
+          // Prisma leve sur un champ inconnu. Le catch-all rendait donc 500, et un
+          // membre non-moderateur ne pouvait JAMAIS lister ses propres liens par
+          // cette porte -- un filtre d'autorisation qui echoue en refusant tout est
+          // silencieux : il ressemble a une panne, jamais a un droit mal ecrit.
+          ...(isModerator ? {} : { createdBy: userId })
         },
         include: {
           creator: {
@@ -414,6 +384,23 @@ export function registerSharingRoutes(
   });
 
   // Route pour rejoindre une conversation via un lien partagé (utilisateurs authentifiés)
+  //
+  // #4353 — cette route DÉLÈGUE désormais à `performLinkJoin()`
+  // (`./link-admission`), le cœur partagé livré par #4167 : la loi d'admission UNIQUE
+  // (`admitLinkEntry`) est désormais évaluée pour cette porte AUSSI —
+  // `maxUses` (incrément ATOMIQUE), `maxConcurrentUsers`, `maxUniqueSessions`,
+  // `allowedIpRanges`, `requireAccount`, `isConversationClosed`. Avant ce lot,
+  // cette route ne contrôlait que `isActive` et `expiresAt` : pour le MÊME
+  // lien, à la MÊME seconde, un inscrit entrait là où un invité était refusé.
+  //
+  // L'auto-jonction à la room Socket.IO et les notifications aux
+  // administrateurs/créateurs NE relèvent PAS de la loi d'admission — elles ne
+  // vivent nulle part ailleurs dans le dépôt (ni dans `performLinkJoin`, ni
+  // dans `admitLinkEntry`) et sont reportées TELLES QUELLES depuis l'ancien
+  // corps, dans la branche `joined` (`new`/`rejoin`) — jamais pour
+  // `already-member`, exactement comme avant. L'annonce dans le fil
+  // (`postJoinSystemMessage`), elle, est désormais posée PAR le cœur partagé
+  // (`joinAsRegistered`) — la rejouer ici la doublerait.
   fastify.post('/conversations/join/:linkId', {
     schema: {
       description: 'Join a conversation using an invitation link - validates link permissions and adds user as member',
@@ -444,9 +431,28 @@ export function registerSharingRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        // #4353 — la loi d'admission unique refuse désormais aussi sur
+        // `maxUses`/`maxConcurrentUsers`/`maxUniqueSessions` (409
+        // LINK_EXHAUSTED) : les déclarer évite qu'un statut réel du contrat
+        // sorte non documenté, comme `/new-link` (#4169) et
+        // `/links/:key/members` (#4167) le font déjà pour 410/409.
+        409: errorResponseSchema,
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
+    // #4167/#4353 — désormais un ADAPTATEUR MINCE au sens exact où
+    // `anonymous.ts` (#4167) l'entend pour ses trois routes-sœurs : elle ne
+    // fait plus que traduire sa forme de requête/réponse historique vers le
+    // cœur partagé (`POST /links/:key/members`). `onRequest` court avant
+    // TOUTE garde (auth comprise) pour que l'annonce parte même sur un refus
+    // — un appelant qui échoue est celui qui a le plus besoin de savoir
+    // migrer. Le successeur porte un paramètre (`:linkId` → `:key`), donc une
+    // FONCTION de la requête, comme pour `/anonymous/join/:linkId`.
+    onRequest: [depreciee({
+      depuis: '2026-08-30',
+      successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}/members`,
+    })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -458,218 +464,152 @@ export function registerSharingRoutes(
         return sendUnauthorized(reply, 'Authentification requise');
       }
 
-      // Accepter linkId OU identifier : iOS partage l'`identifier`, le web le
-      // `linkId`. Querier seulement par linkId 404ait toute invitation partagée
-      // depuis iOS. Symétrique avec resolveTarget (qui accepte déjà les deux).
-      const shareLink = await prisma.conversationShareLink.findFirst({
-        where: { OR: [{ linkId }, { identifier: linkId }] },
-        include: {
-          conversation: true
-        }
-      });
-
-      if (!shareLink) {
-        return sendNotFound(reply, 'Lien de conversation introuvable');
-      }
-
-      if (!shareLink.isActive) {
-        return sendError(reply, 410, 'Ce lien n\'est plus actif');
-      }
-
-      if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'This link has expired');
-      }
-
-      // Que faire de la ligne `Participant` déjà là — cf.
-      // `services/conversations/conversationEntryAdmission.ts`. La recherche qui
-      // précédait ne filtrait pas `isActive` et concluait « déjà membre » sur la
-      // ligne inactive d'un ancien membre : quitter une conversation rejointe
-      // par lien était définitif, et le client naviguait ensuite vers une
-      // conversation que `GET /conversations/:id/messages` refuse.
-      const entry = await resolveConversationEntry({
-        prisma,
-        conversationId: shareLink.conversationId,
-        userId: userToken.userId,
-        // Les trois validations ci-dessus portent sur le LIEN. Aucune ne portait
-        // sur ce vers quoi il pointe : une clôture n'éteint aucun lien de
-        // partage, si bien qu'un lien qui circule restait joignable après la
-        // mort du fil. La ligne est déjà chargée (`include: { conversation }`),
-        // la question ne coûte rien.
-        conversation: shareLink.conversation,
-      });
-
-      if (entry.outcome === 'closed') {
-        logger.info('Jointure refusée — conversation close', { conversationId: shareLink.conversationId });
-        return sendError(reply, 410, 'Cette conversation est terminée');
-      }
-
-      if (entry.outcome === 'banned') {
-        logger.warn('Jointure refusée — participant banni', { conversationId: shareLink.conversationId });
-        return sendForbidden(reply, 'Vous avez été banni de cette conversation');
-      }
-
-      if (entry.outcome === 'already-member') {
-        logger.info('Utilisateur déjà membre', { conversationId: shareLink.conversationId });
-        return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId });
-      }
-
-      // Ajouter l'utilisateur à la conversation
-      logger.info('Entrée dans la conversation', { conversationId: shareLink.conversationId, outcome: entry.outcome });
-      const joiningUserInfo = await prisma.user.findUnique({
+      // Cette route n'a jamais eu de corps de requête (contrairement à `POST
+      // /links/:key/members`) : la langue et l'email que `performLinkJoin`
+      // compare respectivement à `allowedLanguages`/`requireEmail` viennent
+      // donc du COMPTE de l'appelant. `email` est `@unique` et non nul sur
+      // `User` — un lien `requireEmail` est satisfait sans jamais solliciter
+      // l'appelant.
+      const requester = await prisma.user.findUnique({
         where: { id: userToken.userId },
-        select: { displayName: true, username: true }
+        select: { email: true, systemLanguage: true }
       });
 
-      // Le rang et les droits repartent de ce que le lien donne à un nouvel
-      // arrivant : un ancien `admin` qui revient par un lien PUBLIC ne récupère
-      // pas son rang dans une ligne périmée.
-      const linkMemberFields = {
-        type: 'user',
-        displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
-        role: 'member',
-        permissions: {
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendVideos: false,
-          canSendAudios: false,
-          canSendLocations: false,
-          canSendLinks: false,
-          // Figé au join comme pour un anonyme (`routes/anonymous.ts`) : on
-          // entre sous les conditions du MOMENT, et le plancher de lecture
-          // (`services/historyFloor`) lit d'abord ce droit-là.
-          canViewHistory: shareLink.allowViewHistory
+      const result = await performLinkJoin({
+        prisma,
+        key: linkId,
+        authContext: userToken,
+        requestIp: resolveClientIp(request),
+        profile: {
+          firstName: '',
+          lastName: '',
+          email: requester?.email,
+          language: normalizeLanguageForDedup(requester?.systemLanguage || 'fr'),
         },
-        shareLinkId: shareLink.id
-      };
-
-      let joinedParticipantId: string;
-      if (entry.outcome === 'rejoin' && entry.participantId) {
-        // Réintégration sur la ligne existante. `Participant` porte
-        // `@@unique([conversationId, userId, sessionTokenHash])` : pour un
-        // inscrit — dont `sessionTokenHash` est nul — la clé se réduit à
-        // `(conversationId, userId)` et un `create` ici échouerait. Même sans
-        // elle, une seconde ligne rendrait l'identité d'expéditeur ambiguë et
-        // doublerait le fan-out. `joinedAt` reste celui de la première venue.
-        const rejoined = await prisma.participant.update({
-          where: { id: entry.participantId },
-          data: { ...linkMemberFields, ...REJOIN_PARTICIPANT_STATE }
-        });
-        joinedParticipantId = rejoined.id;
-        invalidateParticipantLookup(entry.participantId, shareLink.conversationId);
-      } else {
-        const created = await prisma.participant.create({
-          data: {
-            conversationId: shareLink.conversationId,
-            userId: userToken.userId,
-            ...linkMemberFields,
-            joinedAt: new Date()
-          }
-        });
-        joinedParticipantId = created.id;
-      }
-
-      // Incrémenter le compteur d'utilisation du lien
-      await prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
-        data: { currentUses: { increment: 1 } }
+        broadcast: (message, conversationId) =>
+          fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
+            ?? Promise.resolve()
       });
-      logger.info('Appartenance ouverte', { outcome: entry.outcome });
 
-      // Annoncer l'arrivée — même loi que la porte anonyme. Un retour compte
-      // comme une arrivée : les présents ne l'ont pas vu partir non plus.
-      await postJoinSystemMessage(
-        {
-          prisma,
-          broadcast: (message, conversationId) =>
-            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
-              ?? Promise.resolve()
-        },
-        {
-          conversationId: shareLink.conversationId,
-          participantId: joinedParticipantId,
-          displayName: linkMemberFields.displayName,
-          isAnonymous: false,
-          viaShareLink: true
-        }
-      );
+      switch (result.kind) {
+        case 'not-found':
+          return sendNotFound(reply, 'Lien de conversation introuvable');
 
-      // Auto-join the joining user's currently-connected sockets to the
-      // conversation room so they receive message:new events immediately
-      // without a reconnect (mirrors POST /conversations/:id/participants).
-      const joinSocketManager = fastify.socketIOHandler?.getManager();
-      if (joinSocketManager) {
-        joinSocketManager.joinUserToConversationRoom(userToken.userId, shareLink.conversationId).catch(
-          (err: unknown) => logger.error('Failed to auto-join link joiner to conversation room', err as Error)
-        );
-      }
+        case 'refused':
+          // `admitLinkEntry` rend le statut ET le code — même mapping que
+          // `POST /anonymous/join/:linkId` et `POST /links/:key/members` :
+          // `LINK_EXPIRED` (410, lien inactif OU expiré), `CONVERSATION_CLOSED`
+          // (410), `LINK_EXHAUSTED` (409 — NEUF sur cette porte, le défaut de
+          // tête de #4353), `REGION_NOT_ALLOWED` (403 — NEUF), `ACCOUNT_REQUIRED`
+          // (403 — inatteignable ici, un inscrit a toujours un compte) et
+          // `BANNED` (403). Les statuts pour les motifs déjà gardés par
+          // l'ancien corps (inactif/expiré, clos, banni) sont préservés à
+          // l'identique ; seul `error` porte désormais un CODE stable plutôt
+          // qu'une phrase française — écart assumé, cf. rapport de livraison.
+          return sendError(reply, result.refusal.status, result.refusal.code, { message: result.refusal.message });
 
-      // Envoyer des notifications
-      const notificationService = fastify.notificationService;
-      if (notificationService) {
-        try {
-          // Récupérer les informations de l'utilisateur qui rejoint
-          const joiningUser = await prisma.user.findUnique({
-            where: { id: userToken.userId },
-            select: {
-              username: true,
-              displayName: true,
-              avatar: true
-            }
+        case 'validation':
+          return sendBadRequest(reply, result.message);
+
+        case 'language-not-allowed':
+          return sendError(reply, 403, 'LANGUAGE_NOT_ALLOWED', { message: 'Langue non autorisée pour ce lien' });
+
+        case 'username-taken':
+          // Inatteignable sur cette porte : `requireNickname` (seul chemin vers
+          // `username-taken`) est gardé par `identity.kind === 'guest'` dans
+          // `performLinkJoin`, et cette route n'admet que des inscrits
+          // (`preValidation: [requiredAuth]`). Géré pour l'exhaustivité du
+          // type — fail-closed plutôt qu'omis.
+          return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', {
+            message: 'Ce nom d\'utilisateur est déjà utilisé dans cette conversation',
+            details: { suggestedNickname: result.suggestion }
           });
 
-          if (joiningUser) {
-            const userName = joiningUser.displayName || joiningUser.username;
-
-            // 1. Notification de confirmation pour l'utilisateur qui rejoint
-            await notificationService.createMemberJoinedNotification({
-              recipientUserId: userToken.userId,
-              newMemberUserId: userToken.userId,
-              conversationId: shareLink.conversationId,
-              joinMethod: 'via_link'
-            });
-
-            // 2. Notifier les admins et créateurs de la conversation
-            const adminsAndCreators = await prisma.participant.findMany({
-              where: {
-                conversationId: shareLink.conversationId,
-                // Un `where` Prisma ne replie pas la casse (#4008) : sans les
-                // deux graphies, les admins du salon global — écrits en
-                // majuscules par l'ancien `InitService` — n'étaient prévenus
-                // d'aucune arrivée.
-                role: { in: memberRoleCasings(['admin', 'creator']) },
-                isActive: true,
-                userId: { not: userToken.userId } // Ne pas notifier l'utilisateur lui-même
-              },
-              select: { userId: true }
-            });
-
-            // Une seule diffusion pour tous les administrateurs. La boucle
-            // `await` qui précédait tenait la réponse « vous avez rejoint »
-            // jusqu'à ce que le dernier d'entre eux soit notifié, et relisait
-            // par destinataire un contexte identique pour tous.
-            const adminUserIds = adminsAndCreators
-              .map((member) => member.userId)
-              .filter((id): id is string => !!id);
-            if (adminUserIds.length > 0) {
-              const notified = await notificationService.createMemberJoinedNotificationsBatch(adminUserIds, {
-                newMemberUserId: userToken.userId,
-                conversationId: shareLink.conversationId,
-                joinMethod: 'via_link'
-              });
-              logger.debug('Notifications membre rejoint envoyées', { notified, audience: adminUserIds.length });
-            }
-
-            logger.debug('Notification confirmation envoyée');
+        case 'joined': {
+          if (result.outcome === 'already-member') {
+            logger.info('Utilisateur déjà membre', { conversationId: result.shareLink.conversationId });
+            return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: result.shareLink.conversationId });
           }
-        } catch (notifError) {
-          logger.error('Erreur envoi notifications de jointure', notifError as Error);
-          // Ne pas bloquer la jointure
+
+          // ── PRÉSERVÉ TEL QUEL — hors de la loi d'admission (voir doc-tête) ──
+
+          // Auto-join the joining user's currently-connected sockets to the
+          // conversation room so they receive message:new events immediately
+          // without a reconnect (mirrors POST /conversations/:id/participants).
+          const joinSocketManager = fastify.socketIOHandler?.getManager();
+          if (joinSocketManager) {
+            joinSocketManager.joinUserToConversationRoom(userToken.userId, result.shareLink.conversationId).catch(
+              (err: unknown) => logger.error('Failed to auto-join link joiner to conversation room', err as Error)
+            );
+          }
+
+          // Envoyer des notifications
+          const notificationService = fastify.notificationService;
+          if (notificationService) {
+            try {
+              // Récupérer les informations de l'utilisateur qui rejoint
+              const joiningUser = await prisma.user.findUnique({
+                where: { id: userToken.userId },
+                select: {
+                  username: true,
+                  displayName: true,
+                  avatar: true
+                }
+              });
+
+              if (joiningUser) {
+                // 1. Notification de confirmation pour l'utilisateur qui rejoint
+                await notificationService.createMemberJoinedNotification({
+                  recipientUserId: userToken.userId,
+                  newMemberUserId: userToken.userId,
+                  conversationId: result.shareLink.conversationId,
+                  joinMethod: 'via_link'
+                });
+
+                // 2. Notifier les admins et créateurs de la conversation
+                const adminsAndCreators = await prisma.participant.findMany({
+                  where: {
+                    conversationId: result.shareLink.conversationId,
+                    // Un `where` Prisma ne replie pas la casse (#4008) : sans les
+                    // deux graphies, les admins du salon global — écrits en
+                    // majuscules par l'ancien `InitService` — n'étaient prévenus
+                    // d'aucune arrivée.
+                    role: { in: memberRoleCasings(['admin', 'creator']) },
+                    isActive: true,
+                    userId: { not: userToken.userId } // Ne pas notifier l'utilisateur lui-même
+                  },
+                  select: { userId: true }
+                });
+
+                // Une seule diffusion pour tous les administrateurs. La boucle
+                // `await` qui précédait tenait la réponse « vous avez rejoint »
+                // jusqu'à ce que le dernier d'entre eux soit notifié, et relisait
+                // par destinataire un contexte identique pour tous.
+                const adminUserIds = adminsAndCreators
+                  .map((member) => member.userId)
+                  .filter((id): id is string => !!id);
+                if (adminUserIds.length > 0) {
+                  const notified = await notificationService.createMemberJoinedNotificationsBatch(adminUserIds, {
+                    newMemberUserId: userToken.userId,
+                    conversationId: result.shareLink.conversationId,
+                    joinMethod: 'via_link'
+                  });
+                  logger.debug('Notifications membre rejoint envoyées', { notified, audience: adminUserIds.length });
+                }
+
+                logger.debug('Notification confirmation envoyée');
+              }
+            } catch (notifError) {
+              logger.error('Erreur envoi notifications de jointure', notifError as Error);
+              // Ne pas bloquer la jointure
+            }
+          }
+          // ── FIN DU BLOC PRÉSERVÉ ──
+
+          logger.info('Réponse succès join', { conversationId: result.shareLink.conversationId });
+          return sendSuccess(reply, { message: 'Vous avez rejoint la conversation avec succès', conversationId: result.shareLink.conversationId });
         }
       }
-
-      logger.info('Réponse succès join', { conversationId: shareLink.conversationId });
-      return sendSuccess(reply, { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId });
 
     } catch (error) {
       logger.error('Error joining conversation via link', error as Error);

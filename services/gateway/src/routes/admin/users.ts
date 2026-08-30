@@ -23,6 +23,15 @@ import {
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission, requireHierarchy } from '../../middleware/authorize';
+// #4157 c.4 / #4333 — le prédicat PARTAGÉ (composant lui-même `maskedAttachment`,
+// la MÊME garde que l'éventail de notifications) : voir media-protection.ts.
+import {
+  attachmentProtectionSelect,
+  messageProtectionSelect,
+  mediaAttachmentIsProtected,
+  type MessageProtectionContext
+} from './media-protection';
+import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -32,6 +41,15 @@ import { conversationActiveMemberCountSelect } from '../conversations/utils/acti
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
 const resetPasswordSchema = resetPasswordValidationSchema;
+
+// #4165 — plafonds de l'énumération, en amont de `GET
+// /admin/users/:userId/reported-messages`, des conversations puis des
+// messages d'un utilisateur (`Report.reportedEntityId` étant polymorphe, voir
+// le commentaire au site d'appel). Larges par rapport à un usage normal :
+// couvrent un compte qui aurait rejoint 2 000 conversations ou envoyé 20 000
+// messages, tout en éliminant le scan réellement illimité que l'audit signale.
+const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
+const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
 
 // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
 // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
@@ -400,7 +418,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            linkId: true,
+            // #4157 c.3 — `linkId` EST le secret qui permet de REJOINDRE la
+            // conversation. Le même lot l'a retiré de `GET /admin/share-links`
+            // et lui a dédié un geste souverain tracé (`POST …/reveal`) ; il
+            // continuait de sortir ICI, dans un autre fichier, à des rôles pour
+            // qui `canViewSensitiveData` est `false`. Une protection posée sur
+            // une porte et pas sur sa voisine ne protège rien : `id` suffit à
+            // désigner le lien, et le geste dédié reste la seule façon de le
+            // révéler.
             identifier: true,
             name: true,
             description: true,
@@ -423,7 +448,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'accès retiré, même raison que `linkId`
+            // ci-dessus : `shortUrl` suffit à désigner le lien pour une revue.
             name: true,
             campaign: true,
             source: true,
@@ -445,7 +471,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'affiliation retiré, même raison.
             name: true,
             maxUses: true,
             currentUses: true,
@@ -636,7 +662,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         id: true, originalName: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
         fileSize: true, width: true, height: true, duration: true, createdAt: true
       } as const;
-
+      // #4157 c.4 / #4333 — la protection d'un média se lit aux DEUX niveaux
+      // qui la déclarent : le MESSAGE et la PIÈCE JOINTE elle-même (voir
+      // `media-protection.ts` pour la raison — une seule des deux lectures ne
+      // suffit pas). `PostMedia` n'a AUCUNE de ces colonnes (vérifié au
+      // schéma) : un post n'est pas éphémère, seul le versant
+      // `messageAttachment` les demande.
       const [postMedia, attachments, postCount, attCount] = await Promise.all([
         fastify.prisma.postMedia.findMany({
           where: postWhere,
@@ -646,7 +677,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }),
         fastify.prisma.messageAttachment.findMany({
           where: attWhere,
-          select: { ...mediaSelect, messageId: true },
+          select: {
+            ...mediaSelect,
+            messageId: true,
+            ...attachmentProtectionSelect,
+            message: { select: messageProtectionSelect }
+          },
           orderBy: { createdAt: 'desc' },
           take: window
         }),
@@ -654,20 +690,36 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.messageAttachment.count({ where: attWhere })
       ]);
 
-      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => ({
-        id: m.id,
-        originalName: m.originalName,
-        mimeType: m.mimeType,
-        fileUrl: m.fileUrl,
-        thumbnailUrl: m.thumbnailUrl,
-        fileSize: m.fileSize,
-        width: m.width,
-        height: m.height,
-        duration: m.duration,
-        createdAt: m.createdAt as string | Date,
-        source,
-        contextId
-      });
+      /**
+       * Un média protégé reste LISTÉ — un administrateur doit pouvoir constater
+       * qu'il existe, sa taille, sa date, le message qui le porte — mais son
+       * CONTENU ne voyage pas : `fileUrl` et `thumbnailUrl` tombent à `null` et
+       * `isProtected` dit pourquoi la ligne est amputée, plutôt que de laisser
+       * croire à un média sans fichier. Masquer la ligne entière priverait la
+       * modération d'un fait qu'elle a le droit de connaître ; servir l'URL la
+       * ferait sortir du produit par une porte que le reste du produit ferme.
+       */
+      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => {
+        const protege = source === 'message' && mediaAttachmentIsProtected(
+          m as Parameters<typeof mediaAttachmentIsProtected>[0],
+          m.message as MessageProtectionContext | null | undefined
+        );
+        return {
+          id: m.id,
+          originalName: m.originalName,
+          mimeType: m.mimeType,
+          fileUrl: protege ? null : m.fileUrl,
+          thumbnailUrl: protege ? null : m.thumbnailUrl,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          duration: m.duration,
+          createdAt: m.createdAt as string | Date,
+          source,
+          contextId,
+          isProtected: protege
+        };
+      };
 
       const merged = [
         ...postMedia.map((m) => toMedia(m as Record<string, unknown>, 'post', (m as Record<string, unknown>).postId)),
@@ -697,7 +749,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     Params: { userId: string };
     Querystring: { offset?: string; limit?: string; status?: string };
   }>('/admin/users/:userId/reports', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
+    // #4157 — DEUX seuils gouvernaient la même table : `GET /admin/reports`
+    // exige `canModerateContent` (MODERATOR, ADMIN, BIGBOSS) quand celle-ci se
+    // contentait de `canViewUsers`, qui admet AUDIT en plus. Deux seuils sur
+    // une même donnée, c'est le plus bas qui décide — et le filtre par
+    // `reporterId` ne change pas la nature de ce qui est lu.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canModerateContent')]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
@@ -770,9 +827,27 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       const emptyPage = () => sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
 
+      // BORNÉ (#4165), et c'est un compromis À DOCUMENTER, pas un simple
+      // `take` ajouté : `Report.reportedEntityId` est POLYMORPHE (message,
+      // user, conversation, community, post, story — `schema.prisma`, aucune
+      // relation Prisma déclarée), donc aucune requête ne peut pousser
+      // "expéditeur du message = userId" DANS `report.findMany` lui-même. Il
+      // faut D'ABORD énumérer les messages de l'utilisateur pour construire le
+      // filtre `reportedEntityId IN […]` — c'est cette énumération qui était
+      // SANS `take` : sur un compte très actif (des dizaines de milliers de
+      // messages), CHAQUE page de signalements repayait la totalité de son
+      // historique. Ordonnées par récence, les deux requêtes plafonnent large
+      // (bien au-delà d'un usage normal) : au-delà, ce sont les conversations/
+      // messages les plus ANCIENS qui sortent du périmètre — les plus probables
+      // d'être déjà résolus, les moins probables d'être encore sous
+      // modération active. Une borne exacte demanderait une relation dédiée
+      // sur `Report` (hors territoire de ce lot, `schema.prisma` étant un
+      // fichier-carrefour).
       const participants = await fastify.prisma.participant.findMany({
         where: { userId, type: 'user' },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { joinedAt: 'desc' },
+        take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
       });
       const participantIds = participants.map((p) => p.id);
       if (participantIds.length === 0) return emptyPage();
@@ -780,7 +855,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Message ids authored by the user (bounded by the user's own messages).
       const userMessages = await fastify.prisma.message.findMany({
         where: { senderId: { in: participantIds } },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
       });
       const messageIds = userMessages.map((m) => m.id);
       if (messageIds.length === 0) return emptyPage();
@@ -809,10 +886,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       ]);
 
       const reportedMessageIds = [...new Set(reports.map((r) => r.reportedEntityId))];
+      // Déjà borné IMPLICITEMENT : `reportedMessageIds` dérive de `reports`,
+      // la page ≤ `limitNum` posée ci-dessus par `report.findMany`. `take`
+      // explicite quand même (#4165) — la borne ne doit pas dépendre d'un
+      // raisonnement à distance sur la taille d'un tableau amont.
       const messages = reportedMessageIds.length > 0
         ? await fastify.prisma.message.findMany({
             where: { id: { in: reportedMessageIds } },
-            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true }
+            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true },
+            take: reportedMessageIds.length
           })
         : [];
       const messageMap = new Map(messages.map((m) => [m.id, m]));
@@ -900,80 +982,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /admin/conversations/:conversationId/messages - Paginated messages of a
-   * conversation, newest first (for the messages modal in the admin user fiche).
-   * Deleted messages are included (moderation view) and flagged via deletedAt.
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/conversations/:conversationId/messages', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const { conversationId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
-
-      const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { id: true }
-      });
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      }
-
-      const where = { conversationId };
-      const [messages, total] = await Promise.all([
-        fastify.prisma.message.findMany({
-          where,
-          select: {
-            id: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            messageSource: true,
-            isEdited: true,
-            editedAt: true,
-            deletedAt: true,
-            replyToId: true,
-            createdAt: true,
-            sender: {
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            },
-            _count: { select: { attachments: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.message.count({ where })
-      ]);
-
-      const data = messages.map(({ _count, ...rest }) => ({
-        ...rest,
-        attachmentCount: _count?.attachments ?? 0
-      }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + messages.length < total
-      });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching conversation messages');
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
-    }
-  });
+  // GET /admin/conversations/:conversationId/messages — régime SOUVERAIN
+  // (#4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE
+  // /admin/agent/reset) : servait auparavant le contenu intégral de
+  // n'importe quelle conversation privée sous la seule garde `canViewUsers`
+  // — `requireSovereign()`, motif écrit et audit vivent désormais dans
+  // `conversation-messages-sovereign.ts`, une unité nommable à part entière
+  // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
+  registerConversationMessagesSovereignRoute(fastify);
 }

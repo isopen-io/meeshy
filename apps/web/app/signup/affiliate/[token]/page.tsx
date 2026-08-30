@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LargeLogo } from '@/components/branding';
 import { useI18n } from '@/hooks/useI18n';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getUserInitials } from '@/lib/avatar-utils';
 
 interface InviterInfo {
@@ -38,7 +39,7 @@ export default function AffiliateSignupPage({ params }: AffiliateSignupPageProps
         document.cookie = `meeshy_affiliate_token=${token}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax; secure`;
 
         // Fetch inviter details
-        fetch(buildApiUrl(`/affiliate/validate/${token}`))
+        fetch(buildApiUrl(API_ENDPOINTS.affiliate.validateByToken(token)))
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             const user = data?.data?.affiliateUser;

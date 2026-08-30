@@ -114,9 +114,10 @@ export function UserProfileContent({
   const [loading, setLoading] = useState(true);
   const currentUser = useUser();
 
-  // Les demandes d'ami passaient par un `fetch` local vers `/friend-requests`
-  // — une adresse qui n'existe pas : seules `/friend-requests/received` et
-  // `/friend-requests/sent` sont servies. Le `if (response.ok)` avalait le 404,
+  // Les demandes d'ami passaient par un `fetch` local vers le fantôme
+  // `GET /friend-requests`, remplacé depuis par l'adresse canonique
+  // `GET /directory/friend-requests` (#4162), qui rend les deux sens par
+  // curseur. Le `if (response.ok)` avalait le 404,
   // si bien que `friendRequests` restait DÉFINITIVEMENT vide : le bouton
   // « Ajouter en ami » ne savait jamais qu'une demande était déjà en cours et
   // s'affichait comme si de rien n'était (#4189).

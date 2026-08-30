@@ -12,7 +12,21 @@ import { requirePermission } from '../../middleware/authorize';
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
-const requireAdmin = requirePermission('canViewAnalytics');
+//
+// #4157 — LE PLUS GRAVE des écarts de la matrice : `/admin/ranking` sert un
+// palmarès NOMINATIF (username, displayName, avatar, jusqu'à 100 comptes) de
+// qui écrit le plus, qui a le plus de contacts, qui appelle le plus — ce
+// n'est pas une statistique agrégée comme le reste de `/admin/analytics/*`,
+// c'est une liste d'UTILISATEURS. `canViewAnalytics` admettait ANALYST, qui
+// n'a le droit de lister PERSONNE (`canViewUsers = false` dans la matrice
+// centrale) : un rôle sans accès administrateur consultait un classement
+// nominatif de la plateforme entière. La garde juste est celle qui gouverne
+// déjà `GET /admin/anonymous-users` pour la même raison — `canViewUsers` —
+// et non `canViewAnalytics`, qui parle d'agrégats, pas d'identités. Sous la
+// matrice actuelle les deux permissions coïncident exactement sur
+// BIGBOSS/ADMIN/MODERATOR/AUDIT (les quatre rôles qui ont `canAccessAdmin`) ;
+// seul ANALYST diverge, et c'est précisément lui qu'il faut exclure.
+const requireAdmin = requirePermission('canViewUsers');
 
 function getPeriodStartDate(period: string): Date | null {
   const now = new Date();

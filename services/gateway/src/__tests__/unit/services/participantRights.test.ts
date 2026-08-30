@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-import { resolveParticipantRights } from '../../../services/participantRights';
+import { disclosableEntryRights, resolveParticipantRights } from '../../../services/participantRights';
 
 const permissions = {
   canSendMessages: true,
@@ -76,5 +76,76 @@ describe('resolveParticipantRights', () => {
     });
 
     expect(resolved.canSendImages).toBe(true);
+  });
+});
+
+/**
+ * **#4056 — la loi de divulgation, éprouvée sur ce qu'elle CACHE.**
+ *
+ * Elle vaut pour les deux chemins : la fiche REST et l'événement diffusé à la
+ * room. Deux omissions écrites à la main auraient divergé au premier droit
+ * ajouté — et la divergence se serait faite du côté BAVARD, celui qui ne rougit
+ * jamais. C'est pourquoi la règle est ici, et non dupliquée aux deux sites.
+ */
+describe('disclosableEntryRights — ce qu\'une fiche a le droit de dire', () => {
+  const complet = {
+    canSendMessages: true,
+    canSendFiles: false,
+    canSendImages: true,
+    canSendVideos: true,
+    canSendAudios: true,
+    canSendLocations: false,
+    canSendLinks: true,
+    canViewHistory: true,
+  };
+
+  it('retire canViewHistory à qui n\'héberge pas la conversation', () => {
+    const servi = disclosableEntryRights(complet, false);
+
+    expect(servi).not.toHaveProperty('canViewHistory');
+  });
+
+  /**
+   * La clé ABSENTE, jamais `false`. Un `false` affirmerait « ce visiteur ne voit
+   * pas l'historique » — une affirmation SUR la modération, donc exactement le
+   * fait qu'on refuse de divulguer. C'est la différence entre « je ne te le dis
+   * pas » et « la réponse est non », et seule la première protège.
+   */
+  it('ne le remplace pas par false — l\'absence est le point', () => {
+    const servi = disclosableEntryRights(complet, false) as Record<string, unknown>;
+
+    expect(servi.canViewHistory).toBeUndefined();
+    expect(Object.keys(servi)).not.toContain('canViewHistory');
+  });
+
+  it('sert les SEPT autres droits intacts — c\'est UN droit qui sort, pas l\'objet', () => {
+    const servi = disclosableEntryRights(complet, false);
+
+    expect(servi).toEqual({
+      canSendMessages: true,
+      canSendFiles: false,
+      canSendImages: true,
+      canSendVideos: true,
+      canSendAudios: true,
+      canSendLocations: false,
+      canSendLinks: true,
+    });
+  });
+
+  it('le sert à un hôte, qui est le seul à pouvoir le poser', () => {
+    expect(disclosableEntryRights(complet, true).canViewHistory).toBe(true);
+  });
+
+  /**
+   * Le repli SÛR se lit dans la SIGNATURE : le second paramètre n'a pas de
+   * défaut. Un appelant qui oublierait de dire qui regarde ne compile pas —
+   * plutôt que de servir silencieusement le fait, ce qui est le sens de panne
+   * qu'une garde de confidentialité ne peut pas se permettre.
+   */
+  it('ne rend pas l\'objet d\'origine — le patcher ne doit pas patcher la source', () => {
+    const servi = disclosableEntryRights(complet, true);
+
+    expect(servi).not.toBe(complet);
+    expect(complet.canViewHistory).toBe(true);
   });
 });

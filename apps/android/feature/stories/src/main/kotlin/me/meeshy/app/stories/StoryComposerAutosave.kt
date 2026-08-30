@@ -1,8 +1,11 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftStickerElementSnapshot
+import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 
 /** The persistence action a composer change implies for its single durable draft. */
@@ -24,17 +27,18 @@ sealed interface StoryDraftPersist {
  * [me.meeshy.sdk.story.StoryComposerDraftStore] owns bytes; this owns the *when* —
  * kept out of the Composable and off the ViewModel so every branch stays JVM-testable.
  *
- * ## Fidelity gate
+ * ## Full-fidelity round-trip
  *
- * The [StoryComposerDraftSnapshot] round-trips a slide's caption, media, identity, its
- * 9:16 canvas pan/zoom [StorySlide.transform] and its photo [StorySlide.filter] — but
- * **not** its remaining on-canvas rich content (text/sticker elements, background, pinned
- * duration). So a draft carrying any of that would restore lossily — a silent partial the
- * user never asked for. This layer
- * refuses that: a deck with still-unrepresentable rich content is treated as *not yet
- * persistable* — [resolve] purges any stale stored draft (so a cold start never rebuilds a
- * pre-rich version) and writes nothing new. Widening the snapshot to carry the remaining
- * rich content, lifting this gate further, is a tracked follow-up.
+ * The [StoryComposerDraftSnapshot] now round-trips **every** dimension of a composer slide:
+ * its caption, media and identity, its 9:16 canvas pan/zoom [StorySlide.transform], its photo
+ * [StorySlide.filter], its pinned [StorySlide.durationSecondsPin], its colour/media
+ * [StorySlide.background] / [StorySlide.backgroundMediaId] / [StorySlide.backgroundLoop], its
+ * on-canvas text [StorySlide.elements] and its on-canvas [StorySlide.stickers]. There is no
+ * longer any rich content the snapshot cannot represent, so the historical "not yet
+ * persistable" fidelity gate — which purged a stale draft the moment a deck carried
+ * unrepresentable content — has been **retired** rather than left as a constant-false dead
+ * branch: [resolve] always projects a snapshot and decides purely on whether it is
+ * [StoryComposerDraftSnapshot.isWorthRestoring] and changed.
  */
 object StoryComposerAutosave {
 
@@ -42,11 +46,9 @@ object StoryComposerAutosave {
      * The persistence action for the current composer [deck] / [visibility] / [repostOfId],
      * given the [previous] stored draft. Rules, in order:
      *
-     * - **Rich content present** → the snapshot cannot represent it faithfully:
-     *   [StoryDraftPersist.Clear] over any stored draft (never keep a stale partial),
-     *   else [StoryDraftPersist.None].
-     * - **No restorable content** (no slide carries a caption or media) → the same:
-     *   [StoryDraftPersist.Clear] over a stored draft, else [StoryDraftPersist.None].
+     * - **No restorable content** (no slide carries a caption, media, or a publishable text
+     *   element / sticker) → [StoryDraftPersist.Clear] over a stored draft, else
+     *   [StoryDraftPersist.None].
      * - **Restorable content, unchanged** from [previous] → [StoryDraftPersist.None].
      * - **Restorable content, changed** → [StoryDraftPersist.Save] with a fresh snapshot
      *   stamped [nowIso].
@@ -58,7 +60,6 @@ object StoryComposerAutosave {
         nowIso: String,
         previous: StoryComposerDraftSnapshot?,
     ): StoryDraftPersist {
-        if (deckHasRichContent(deck)) return purgeOrNone(previous)
         val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso)
         if (!snapshot.isWorthRestoring) return purgeOrNone(previous)
         if (previous != null && previous.sameContentAs(snapshot)) return StoryDraftPersist.None
@@ -80,31 +81,21 @@ object StoryComposerAutosave {
 
     /**
      * Whether [deck] is a freshly opened composer: exactly one slide, blank, with no media,
-     * no rich content, an identity canvas transform and no photo filter — the only state a
-     * stored draft may be restored into. The transform and filter are checked explicitly
-     * here (both are persistable, so no longer part of [deckHasRichContent]) so a silently
-     * panned canvas or a picked filter still counts as touched and a restore never clobbers it.
+     * an identity canvas transform, no photo filter, no pinned duration, no colour/media
+     * backdrop, no on-canvas text element and no sticker — the only state a stored draft may
+     * be restored into. Every one of these is persistable, so each is checked explicitly here:
+     * a silently panned canvas, a picked filter, a pinned duration, a chosen backdrop, an added
+     * text element or an added sticker still counts as touched and a restore never clobbers it.
+     * ([backgroundLoop] needs no check: it can only differ from its `true` default once a
+     * [StorySlide.backgroundMediaId] is designated, which this predicate already rejects.)
      */
     fun deckIsPristine(deck: StorySlideDeck): Boolean =
-        deck.size == 1 && !deck.hasText && !deck.hasMedia && !deckHasRichContent(deck) &&
-            deck.slides.all { it.transform.isIdentity && it.filter == null }
-
-    /**
-     * Whether any slide carries on-canvas content the snapshot cannot represent: a text or
-     * sticker element, a colour/media background, or a pinned duration. Such a deck is not
-     * yet persistable. The 9:16 canvas transform and the photo filter are **not** here —
-     * both are now round-tripped by the snapshot ([StorySlide.transform] ↔
-     * [StoryDraftTransformSnapshot]; [StorySlide.filter]/[StorySlide.filterIntensity] ↔
-     * [StoryDraftFilterSnapshot]).
-     */
-    fun deckHasRichContent(deck: StorySlideDeck): Boolean =
-        deck.slides.any { slide ->
-            slide.elements.isNotEmpty() ||
-                slide.stickers.isNotEmpty() ||
-                slide.background != null ||
-                slide.backgroundMediaId != null ||
-                slide.durationSecondsPin != null
-        }
+        deck.size == 1 && !deck.hasText && !deck.hasMedia &&
+            deck.slides.all {
+                it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
+                    it.background == null && it.backgroundMediaId == null &&
+                    it.elements.isEmpty() && it.stickers.isEmpty()
+            }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
         if (previous != null) StoryDraftPersist.Clear else StoryDraftPersist.None
@@ -123,6 +114,12 @@ fun StorySlideDeck.toDraftSnapshot(
             mediaIds = it.mediaIds,
             transform = it.transform.toDraftSnapshot(),
             filter = it.toFilterSnapshot(),
+            durationSecondsPin = it.durationSecondsPin,
+            background = it.background?.serialized(),
+            backgroundMediaId = it.backgroundMediaId,
+            backgroundLoop = it.backgroundLoop,
+            elements = it.elements.map { element -> element.toDraftSnapshot() },
+            stickers = it.stickers.map { sticker -> sticker.toDraftSnapshot() },
         )
     },
     selectedId = selectedId,
@@ -134,9 +131,14 @@ fun StorySlideDeck.toDraftSnapshot(
 /**
  * Rebuilds a deck from a stored [StoryComposerDraftSnapshot], or `null` when the blob is
  * structurally broken (no slides, or a selection that names no present slide) — the deck
- * invariants would otherwise throw. The persistable fields (id / caption / media / canvas
- * transform / photo filter) are restored; every still-gated richer field takes its
- * fresh-slide default.
+ * invariants would otherwise throw. Every persistable field (id / caption / media / canvas
+ * transform / photo filter / pinned duration / colour+media background / text elements /
+ * stickers) is restored. A persisted [StoryDraftSlideSnapshot.background] wire string is
+ * parsed by the tolerant [StoryBackgroundValue.parse] (a malformed value decays to a solid
+ * colour, never throws); each persisted text element is rebuilt by the tolerant
+ * [toTextElement] (unknown enum names / an unusable backing decay to the element's own
+ * defaults); each persisted sticker is rebuilt by [toStickerElement] and re-normalised, so a
+ * corrupt blob never breaks the restore.
  */
 fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
     if (!isStructurallyValid) return null
@@ -147,8 +149,14 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 text = it.text,
                 mediaIds = it.mediaIds,
                 transform = it.transform.toCanvasTransform(),
+                elements = it.elements.map { element -> element.toTextElement() },
+                stickers = it.stickers.map { sticker -> sticker.toStickerElement() },
                 filter = it.filter?.filter,
                 filterIntensity = it.filter?.intensity ?: StoryFilterMatrix.DEFAULT_INTENSITY,
+                durationSecondsPin = it.durationSecondsPin,
+                background = it.background?.let(StoryBackgroundValue::parse),
+                backgroundMediaId = it.backgroundMediaId,
+                backgroundLoop = it.backgroundLoop,
             )
         },
         selectedId = selectedId,
@@ -180,3 +188,93 @@ private fun StoryDraftTransformSnapshot?.toCanvasTransform(): StoryCanvasTransfo
  */
 private fun StorySlide.toFilterSnapshot(): StoryDraftFilterSnapshot? =
     filter?.let { StoryDraftFilterSnapshot(filter = it, intensity = filterIntensity) }
+
+/**
+ * Projects an on-canvas [StoryTextElement] onto its flat, primitive-only durable form. The
+ * three enums ride as their Kotlin `.name` (the inverse [toTextElement] resolves them back,
+ * tolerant to an unknown name); the sealed [StoryTextBackground] rides as its already-wire
+ * [me.meeshy.sdk.model.StoryTextBackgroundStyle] via the single-source [StoryTextBackground.toStyleWire]
+ * (so the tagged-union encoding is never re-spelled here); the outline / fade / timing pairs
+ * and the position/scale/rotation ride verbatim as scalars.
+ */
+private fun StoryTextElement.toDraftSnapshot(): StoryDraftTextElementSnapshot =
+    StoryDraftTextElementSnapshot(
+        id = id,
+        text = text,
+        style = style.name,
+        color = color,
+        align = align.name,
+        size = size.name,
+        background = background.toStyleWire(),
+        outlineWidth = outline.width,
+        outlineColor = outline.color,
+        fadeIn = fade.inSeconds,
+        fadeOut = fade.outSeconds,
+        startSeconds = timing.startSeconds,
+        durationSeconds = timing.durationSeconds,
+        x = x,
+        y = y,
+        scale = scale,
+        rotationDeg = rotationDeg,
+    )
+
+/**
+ * Rebuilds an on-canvas [StoryTextElement] from its durable form, the inverse of
+ * [toDraftSnapshot]. Decodes tolerantly, mirroring the rest of the story restore path: a blank
+ * or unknown enum [StoryDraftTextElementSnapshot.style]/[StoryDraftTextElementSnapshot.align]/[StoryDraftTextElementSnapshot.size]
+ * name resolves to the element's own default rather than throwing; a blank [StoryDraftTextElementSnapshot.color]
+ * falls back to [StoryTextElement.DEFAULT_COLOR]; the backing is reconstructed by the
+ * single-source [StoryTextBackground.resolve] (so a Solid with no usable hex, an unknown type or
+ * a bad glass radius decays exactly as the reader's decoder does). Position/scale/rotation are
+ * seeded verbatim — the deck's own gestures re-clamp against a freshly measured canvas.
+ */
+private fun StoryDraftTextElementSnapshot.toTextElement(): StoryTextElement =
+    StoryTextElement(
+        id = id,
+        text = text,
+        style = StoryTextStyle.entries.firstOrNull { it.name == style } ?: StoryTextStyle.BOLD,
+        color = color.ifBlank { StoryTextElement.DEFAULT_COLOR },
+        align = StoryTextAlign.entries.firstOrNull { it.name == align } ?: StoryTextAlign.CENTER,
+        size = StoryTextSize.entries.firstOrNull { it.name == size } ?: StoryTextSize.DEFAULT,
+        background = StoryTextBackground.resolve(backgroundStyle = background, textBg = null),
+        outline = StoryTextOutline(width = outlineWidth, color = outlineColor),
+        fade = StoryTextFade(inSeconds = fadeIn, outSeconds = fadeOut),
+        timing = StoryElementTiming(startSeconds = startSeconds, durationSeconds = durationSeconds),
+        x = x,
+        y = y,
+        scale = scale,
+        rotationDeg = rotationDeg,
+    )
+
+/**
+ * Projects an on-canvas [StoryStickerElement] onto its flat, primitive-only durable form.
+ * Thinner than a text element — no enums, no backing, no outline/fade/timing — so every
+ * field (the [StoryStickerElement.emoji] glyph and the normalised position/scale/rotation)
+ * rides verbatim as a scalar.
+ */
+private fun StoryStickerElement.toDraftSnapshot(): StoryDraftStickerElementSnapshot =
+    StoryDraftStickerElementSnapshot(
+        id = id,
+        emoji = emoji,
+        x = x,
+        y = y,
+        scale = scale,
+        rotationDeg = rotationDeg,
+    )
+
+/**
+ * Rebuilds an on-canvas [StoryStickerElement] from its durable form, the inverse of
+ * [toDraftSnapshot]. The scalars are seeded verbatim and then [StoryStickerElement.normalised]
+ * pulls any out-of-range persisted position/scale/rotation back into the canvas, mirroring the
+ * tolerant decode of the rest of the story restore path — a corrupt blob never breaks the
+ * restore.
+ */
+private fun StoryDraftStickerElementSnapshot.toStickerElement(): StoryStickerElement =
+    StoryStickerElement(
+        id = id,
+        emoji = emoji,
+        x = x,
+        y = y,
+        scale = scale,
+        rotationDeg = rotationDeg,
+    ).normalised()

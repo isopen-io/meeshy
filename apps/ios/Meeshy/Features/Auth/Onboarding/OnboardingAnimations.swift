@@ -459,6 +459,23 @@ struct InteractiveProgressBar: View {
 
     @State private var pressedStep: RegistrationStep?
 
+    /// Hauteur de la RANGÉE, et donc de la cible tactile de chaque étape.
+    ///
+    /// Le trait visible, lui, fait 5 ou 8 pt (`stepHeight(for:)`) : c'est le
+    /// modèle d'`UIPageControl`, dont les points font ~7 pt dans un contrôle
+    /// haut de 44. **La cible n'est pas le dessin.** Avant cette hauteur, les
+    /// huit boutons de cette barre étaient les seuls contrôles du dépôt dont la
+    /// zone sensible ÉTAIT le dessin — 5 pt de haut, à peine un cinquième du
+    /// minimum HIG, sur le seul chemin qui permette de revenir à une étape
+    /// déjà remplie sans repasser par « Retour » huit fois.
+    ///
+    /// La rangée ne coûte que 12 pt de plus qu'avant : les 8 + 16 pt de marge
+    /// qui l'entouraient chez son hôte sont désormais DANS la cible, où ils
+    /// servent à quelque chose. Élargir ne pouvait pas se faire par un
+    /// `padding` négatif — la barre est collée au bouton « Retour » (8 pt
+    /// au-dessus), et une zone sensible débordante lui volerait ses appuis.
+    static let rowHeight: CGFloat = 44
+
     var body: some View {
         HStack(spacing: 4) {
             ForEach(RegistrationStep.allCases) { step in
@@ -476,6 +493,12 @@ struct InteractiveProgressBar: View {
                         .scaleEffect(y: scaleEffect(for: step))
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: pressedStep)
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
+                        // Le cadre et le `contentShape` vivent DANS le label :
+                        // la zone sensible d'un `Button` EST le cadre de son
+                        // label, et un agrandissement posé après le contrôle
+                        // n'agrandirait rien (leçon 249i).
+                        .frame(maxWidth: .infinity, minHeight: Self.rowHeight)
+                        .contentShape(Rectangle())
                 }
                 .disabled(step.rawValue > currentStep.rawValue)
                 // 242i — ces huit boutons n'avaient AUCUN nom accessible : leur

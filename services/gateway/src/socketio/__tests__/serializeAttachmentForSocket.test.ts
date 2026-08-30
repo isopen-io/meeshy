@@ -81,6 +81,47 @@ describe('serializeAttachmentForSocket', () => {
     expect(result.fileSize).toBe(0);
   });
 
+  it('serves capturedInApp provenance so WS delivery keeps parity with REST', () => {
+    // `attachmentMediaSelect` charge `capturedInApp` À DESSEIN : la feuille de
+    // partage le lit pour décider si publier ce média demande confirmation
+    // (`publicationNeedsCaptureConfirmation`). Le sérialiseur socket est le SEUL
+    // dropper — l'omettre désarme la garde sur le chemin de livraison WebSocket
+    // primaire (`message:new`) et le rattrapage à froid (`sync`), exactement ce
+    // que le commentaire du `select` met en garde.
+    const attachment = {
+      id: 'att-cap-1',
+      messageId: 'msg-cap-1',
+      mimeType: 'image/jpeg',
+      fileSize: 20_000,
+      fileUrl: 'https://cdn.meeshy.me/uploads/in-app.jpg',
+      transcription: null,
+      translations: null,
+      createdAt: new Date(),
+      capturedInApp: true,
+    };
+
+    const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
+
+    expect(result.capturedInApp).toBe(true);
+  });
+
+  it('defaults capturedInApp to false when the query omitted it (matches column @default(false))', () => {
+    const attachment = {
+      id: 'att-cap-2',
+      messageId: 'msg-cap-2',
+      mimeType: 'image/png',
+      fileSize: 3000,
+      fileUrl: 'https://cdn.meeshy.me/uploads/legacy.png',
+      transcription: null,
+      translations: null,
+      createdAt: new Date(),
+    };
+
+    const result = serializeAttachmentForSocket(attachment as Record<string, unknown>);
+
+    expect(result.capturedInApp).toBe(false);
+  });
+
   it('aggregates reactions into reactionSummary and currentUserReactions', () => {
     const attachment = {
       id: 'att-4',

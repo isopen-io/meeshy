@@ -92,24 +92,31 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const isLinkId = identifier.startsWith('mshy_');
 
+      // #4166, critère 1 — `include` sans `select` à la racine chargeait la
+      // ligne `ConversationShareLink` ENTIÈRE (compteurs de session,
+      // `allowedCountries`/`allowedLanguages`/`allowedIpRanges`, `createdAt`/
+      // `updatedAt`…) pour n'en lire que `id` (garde anonyme, `link.id` passé
+      // à `loadHistoryFloor`), `conversationId` et `allowViewHistory` (le
+      // plancher d'historique, `loadHistoryFloor`/`loadReaderHistoryFloor`).
+      const shareLinkSelect = {
+        id: true,
+        conversationId: true,
+        allowViewHistory: true,
+        conversation: {
+          select: { id: true, title: true, type: true }
+        }
+      };
+
       let shareLink;
       if (isLinkId) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: { id: true, title: true, type: true }
-            }
-          }
+          select: shareLinkSelect
         });
       } else {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: identifier },
-          include: {
-            conversation: {
-              select: { id: true, title: true, type: true }
-            }
-          }
+          select: shareLinkSelect
         });
       }
 

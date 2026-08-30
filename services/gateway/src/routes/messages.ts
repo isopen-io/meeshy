@@ -3,24 +3,21 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryFloorJoin } from '../services/historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, loadReaderHistoryFloor, historyReaderFromAuthContext, type HistoryFloorJoin } from '../services/historyFloor';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { validatePagination } from '../utils/pagination';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
-import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
-import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
 import {
   applyPresenceVisibilityAsOffline,
   type PresenceVisibility,
 } from '@meeshy/shared/utils/presence-visibility';
 import { presenceFor, viewerFromRequest } from './users/presence-gate';
-import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -46,7 +43,6 @@ import {
   MessageParamsSchema,
   AttachmentParamsSchema,
   UpdateMessageBodySchema,
-  MessageStatusBodySchema,
   MessageStatusDetailsQuerySchema,
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
@@ -71,12 +67,6 @@ interface MessageParams {
 interface UpdateMessageBody {
   content?: string;
   isEdited?: boolean;
-}
-
-interface MessageStatusBody {
-  status: 'read' | 'delivered';
-  timestamp?: string;
-  language?: string;
 }
 
 /**
@@ -211,9 +201,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService(prisma);
   const translationService = fastify.translationService;
   const socketIOHandler = fastify.socketIOHandler;
-  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
-  // G-123 — cf. la même attache aux trois portes de `routes/message-read-status.ts`.
-  const bridgeService = new ConversationBridgeService(prisma);
   const trackingLinkService = new TrackingLinkService(prisma);
 
   // Middleware d'authentification requis pour les messages
@@ -927,127 +914,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Route pour marquer un message comme lu
-  fastify.post<{
-    Params: MessageParams;
-    Body: MessageStatusBody;
-  }>('/messages/:messageId/status', {
-    preValidation: [requiredAuth],
-    preHandler: [validateParams(MessageParamsSchema), validateBody(MessageStatusBodySchema)]
-  }, async (request, reply) => {
-    try {
-      const { messageId } = request.params;
-      const { status, language } = request.body;
-      const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
-
-      if (!status || !['read', 'delivered'].includes(status)) {
-        return sendBadRequest(reply, 'Statut invalide');
-      }
-
-      // Vérifier que le message existe et que l'utilisateur a accès
-      const message = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          deletedAt: null
-        },
-        include: {
-          conversation: {
-            include: {
-              participants: {
-                where: { userId: userId, isActive: true },
-                select: { id: true, userId: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!message || !message.conversation.participants.length) {
-        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
-      }
-
-      const participant = message.conversation.participants[0];
-
-      // Ne pas marquer ses propres messages comme lus
-      if (message.senderId === participant.id) {
-        return sendBadRequest(reply, 'Vous ne pouvez pas marquer vos propres messages comme lus');
-      }
-
-      if (status === 'read') {
-        // TODO: Cette route utilise l'ancien système de MessageStatus
-        // Elle devrait être remplacée par /conversations/:conversationId/mark-as-read
-        // Pour l'instant, on utilise le MessageReadStatusService avec le nouveau système
-
-        const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
-        const readStatusService = new MessageReadStatusService(prisma);
-
-        // Marquer tous les messages de la conversation comme lus (participantId, pas userId)
-        await readStatusService.markMessagesAsRead(
-          participant.id,
-          message.conversationId,
-          messageId,
-          { language }
-        );
-
-        // Bascule sur CETTE bulle : la langue ci-dessus vaut pour la fenêtre
-        // franchie, celle-ci pour le message que le lecteur vient d'ouvrir dans
-        // une autre version. Les deux comptent, l'entrée les unionne.
-        if (language) {
-          await readStatusService.recordMessageLanguageView(
-            participant.id,
-            messageId,
-            language
-          );
-        }
-
-        // Diffuser le statut de lecture via Socket.IO.
-        //
-        // Cette porte portait la QUATRIÈME copie du fan-out d'accusés, et elle
-        // en avait perdu trois pièces que les trois autres tenaient :
-        //   - la préférence `showReadReceipts` n'était jamais consultée, donc
-        //     un utilisateur qui avait retiré ses accusés diffusait quand même
-        //     un événement NOMINATIF à toute la conversation ;
-        //   - `lastReadAt` / `unreadCount` ne partaient nulle part, donc les
-        //     autres appareils de l'acteur ne recalaient jamais leur curseur ;
-        //   - aucun `conversation:unread-updated`, donc leur badge non plus.
-        // Elle passe désormais par l'unité partagée, qui est la seule forme de
-        // cette diffusion : une règle de confidentialité qui tenait à trois
-        // portes sur quatre n'en était pas une.
-        try {
-          await broadcastReadStatus(
-            {
-              io: socketIOHandler.getManager()?.getIO(),
-              prisma,
-              readStatusService,
-              privacyPreferencesService,
-              bridgeService
-            },
-            {
-              conversationId: message.conversationId,
-              participantId: participant.id,
-              userId,
-              // `allowAnonymous: false` sur ces routes : l'identité qui arrive
-              // ici est toujours un `User.id`. Le champ est passé explicitement
-              // plutôt que déduit, pour que l'unité n'ait pas à connaître la
-              // politique d'authentification de chaque appelant.
-              isAnonymous: false,
-              type: 'read'
-            }
-          );
-        } catch (socketError) {
-          logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-        }
-
-        return sendSuccess(reply, { message: 'Message marqué comme lu' });
-      }
-
-    } catch (error) {
-      logger.error('Error updating message status', error as Error);
-      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut du message');
-    }
-  });
-
   // Route pour récupérer les traductions d'un message
   fastify.get<{
     Params: MessageParams;
@@ -1164,10 +1030,25 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // `MessageStatusDetailsQuerySchema`, no numeric coercion), so a malformed
       // value would otherwise reach the service as `NaN` skip/take → HTTP 500.
       const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      // #4179 -- le plancher d'historique s'applique ICI, pas seulement dans le
+      // service. Un accuse de lecture est NOMINATIF (qui a lu, et quand) : c'est
+      // de l'historique au meme titre que le texte du message, et un membre
+      // arrive apres coup ne doit pas apprendre qui lisait avant lui. Le service
+      // sait deja refuser -- il accepte `historyFloor` depuis ce lot -- mais tant
+      // que cette route ne le lui PASSE pas, la garde est ecrite, testee, et
+      // n'atteint personne en production. Les deux autres lectures nominatives
+      // du meme service le posent deja ; celle-ci etait la derniere sans.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext),
+      });
+
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
         offset: pageOffset,
         limit: pageLimit,
-        filter
+        filter,
+        historyFloor
       });
 
       return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);

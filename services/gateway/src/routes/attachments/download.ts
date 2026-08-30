@@ -304,6 +304,31 @@ export async function registerDownloadRoutes(
     }
   );
 
+  // Le flux d'octets PAR CHEMIN vit dans `registerFileStreamRoute` (plus bas) :
+  // c'est le SEUL couple encore exposé sous le préfixe non versionné `/api`, où
+  // pointent les `fileUrl` persistées en base depuis des années. L'extraction lui
+  // donne un site UNIQUE — un alias qui RECOPIERAIT le handler recréerait la
+  // jumelle qu'il prétend fermer (issue #4187).
+  registerFileStreamRoute(fastify);
+}
+
+/**
+ * `GET /attachments/file/*` — le flux d'octets adressé par CHEMIN.
+ *
+ * Extraite de `registerDownloadRoutes` parce qu'elle est la seule route que le
+ * montage LEGACY non versionné (`/api/attachments/file/…`) doit encore servir :
+ * des `fileUrl` de cette forme sont persistées en base depuis des années et
+ * voyagent dans des notifications déjà livrées — une URL en base ne se migre pas
+ * par un déploiement. Les neuf autres couples d'`attachmentRoutes`, eux, n'ont
+ * plus de second chemin (issue #4187) : ce que le doublon coûtait, c'est que
+ * toute règle de proxy ou de WAF écrite pour `/api/v1/attachments/*` les ratait
+ * silencieusement sous `/api` — une garde posée d'un côté ne protège pas
+ * l'autre, et le contournement ne demandait qu'à retirer « v1 » de l'URL.
+ *
+ * Fonction et non plugin : les DEUX montages appellent le MÊME site, sans copie
+ * de handler ni encapsulation supplémentaire.
+ */
+export function registerFileStreamRoute(fastify: FastifyInstance): void {
   /**
    * GET /attachments/file/*
    * Stream un fichier via son chemin (utilisé pour les URLs générées)

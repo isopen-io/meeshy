@@ -10,6 +10,7 @@
 
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 export class PostMediaService {
   /**
@@ -21,7 +22,7 @@ export class PostMediaService {
   static async deletePendingMedia(mediaId: string, token?: string): Promise<void> {
     const authHeaders = createAuthHeaders(token);
 
-    const response = await fetch(buildApiUrl(`/posts/media/${mediaId}`), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.posts.mediaByMediaId(mediaId)), {
       method: 'DELETE',
       headers: authHeaders,
       credentials: 'include',

@@ -1,3 +1,4 @@
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { Server } from '@tus/server';
 import { FileStore } from '@tus/file-store';
 import type { FastifyInstance } from 'fastify';
@@ -25,6 +26,41 @@ const logger = enhancedLogger.child({ module: 'TusHandler' });
 
 const UPLOAD_PATH = process.env.UPLOAD_PATH || '/app/uploads';
 const TUS_TEMP_PATH = path.join(UPLOAD_PATH, '.tus-resumable');
+
+/**
+ * Repli DÉFENSIF, jamais la source de vérité (#4277, critère 2). Sert
+ * UNIQUEMENT si l'appelant ne fournit aucune `basePath` — un
+ * `buildFakeFastify()` de test (aucune option). L'enregistrement réel fournit
+ * la sienne depuis `route-registration.ts` (`${API_PREFIX}/uploads`), ce que
+ * le manifeste confirme.
+ *
+ * CALCULÉ, plus littéral (#4317, point 3). Il restait le dernier module du
+ * gateway à porter la chaîne `/api/v1` en dur, ce que le critère 2 de #4277
+ * voulait précisément supprimer : la version d'API est une CONFIGURATION —
+ * elle peut devenir `/api/v2`, ou se déplacer vers `api.domaine.tld/v2/` —
+ * et un littéral la fige à l'insu de son module. Le repli suit désormais
+ * `apiPath()`, source unique du préfixe, donc il suit la version partout où
+ * elle bouge. La valeur RENDUE est identique tant que la version vaut `v1` :
+ * ce point ne change aucun comportement, il retire la dernière déclaration
+ * indépendante du préfixe.
+ */
+const DEFAULT_UPLOADS_PATH = apiPath('/uploads');
+
+/**
+ * Options du plugin. `basePath` est volontairement PAS nommée `prefix` :
+ * Fastify réserve cette clé pour SA propre prépondération d'URLs relatives
+ * (`fastify.get('/x', …)` → `<prefix>/x`) — un mécanisme que ce module
+ * n'utilise pas, parce que le serveur TUS sous-jacent a besoin de la MÊME
+ * chaîne absolue pour son option `path` (base du calcul du `Location` renvoyé
+ * au client à la création d'un upload, `@tus/server` `BaseHandler.generateUrl`)
+ * ET pour les deux routes Fastify qui l'exposent. Mélanger les deux
+ * mécanismes de préfixage (`prefix` Fastify + URL déjà absolue) les
+ * additionnerait silencieusement — vérifié : `/api/v1/uploads/api/v1/uploads`.
+ * Une seule chaîne, construite ici, sert donc les deux consommateurs.
+ */
+export type TusRoutesOptions = {
+  readonly basePath?: string;
+};
 
 function getMaxFileSize(): number {
   return Math.max(...Object.values(UPLOAD_LIMITS));
@@ -70,13 +106,19 @@ function clientMeasuredMetadata(rawDuration: string | undefined): { duration: nu
   return { duration };
 }
 
-export async function registerTusRoutes(fastify: FastifyInstance): Promise<void> {
+export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoutesOptions = {}): Promise<void> {
   const prisma = fastify.prisma;
   if (!prisma) {
     throw new Error('[TUS] Prisma client not available');
   }
 
   await fs.mkdir(TUS_TEMP_PATH, { recursive: true });
+
+  // Résolu UNE fois, réutilisé par `path` (options TUS, ci-dessous) et par les
+  // deux enregistrements de route : une seule lecture de `opts.basePath`,
+  // jamais une par site, pour qu'un futur repli ne puisse pas diverger entre
+  // la construction du serveur TUS et les routes qui l'exposent.
+  const uploadsPath = opts.basePath || DEFAULT_UPLOADS_PATH;
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   const publicUrl = buildPublicUrl();
@@ -144,7 +186,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
   }
 
   const tusServer = new Server({
-    path: '/api/v1/uploads',
+    path: uploadsPath,
     datastore: uploadDataStore,
     maxSize: getMaxFileSize(),
     respectForwardedHeaders: true,
@@ -286,7 +328,13 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
 
       const fileSize = upload.size || 0;
       const relPath = path.join(year, month, userId, storedName);
-      const fileUrl = `${publicUrl}/api/v1/attachments/file/${relPath}`;
+      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
+      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
+      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
+      // Les trois clients posent la route : `buildAttachmentUrl` (web),
+      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
+      // (Android).
+      const fileUrl = relPath;
 
       const attachmentType = getAttachmentType(mimeType, filename);
       let metadata: Record<string, any> = {};
@@ -311,7 +359,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           thumbnailRelPath = await metadataManager.generateVideoThumbnail(relPath) ?? undefined;
         }
         if (thumbnailRelPath) {
-          thumbnailUrl = `${publicUrl}/api/v1/attachments/file/${thumbnailRelPath}`;
+          thumbnailUrl = thumbnailRelPath;
         }
       } catch (err) {
         logger.warn('[TUS] Thumbnail generation failed:', err);
@@ -517,23 +565,49 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     (_request: any, _payload: any, done: (err: null) => void) => done(null)
   );
 
-  const TUS_METHODS = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+  // #4190 — UN SEUL jeu de six méthodes était déclaré sur CHACUNE des deux URL,
+  // soit douze couples pour un protocole qui en définit quatre. Quatre de ces
+  // couples n'avaient aucun appelant, et trois d'entre eux — `GET`, `PATCH` et
+  // `DELETE` sur la COLLECTION — ne traversaient AUCUNE garde : `onUploadCreate`
+  // n'est invoqué que par le gestionnaire POST, et `onIncomingRequest` relâche
+  // explicitement ce qu'il ne retrouve pas dans le magasin (`if (!ownerUserId)
+  // return`). Une porte ouverte sur la plomberie interne de `@tus/server`,
+  // offerte à personne : le coût n'était pas une fuite mesurée mais une surface
+  // que rien ne justifiait — et qu'aucun inventaire ne pouvait attraper depuis
+  // le CHEMIN seul, puisque `DELETE /api/v1/uploads/*` est, elle, bien vivante.
+  //
+  // Les deux URL portent donc chacune SES méthodes, celles du protocole :
+  //  - la collection CRÉE une session (`POST`, extension Creation) et se décrit
+  //    (`OPTIONS` : Tus-Version / Tus-Extension / Tus-Max-Size) ;
+  //  - une session existante se sonde (`HEAD` — la reprise, seule méthode
+  //    nominale de reprise du protocole, consommée par les trois clients), se
+  //    poursuit (`PATCH`), se termine (`DELETE` — `tus-js-client` l'émet sur
+  //    chaque `abort`/`pauseAll` du web) et se décrit (`OPTIONS`).
+  //
+  // `HEAD /api/v1/uploads` et `POST /api/v1/uploads/*` SURVIVENT volontairement :
+  // l'inventaire qui a produit #4190 croise gateway × clients en ignorant `HEAD`
+  // et n'a jamais énuméré ces deux couples-là. La règle du lot est que la
+  // confirmation précède le retrait, couple par couple — les retirer ici serait
+  // les retirer sur une SUPPOSITION, exactement le raisonnement que ce lot
+  // corrige. Suivi séparé.
+  const TUS_COLLECTION_METHODS = ['HEAD', 'POST', 'OPTIONS'] as const;
+  const TUS_UPLOAD_METHODS = ['HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
   fastify.route({
-    method: [...TUS_METHODS],
-    url: '/api/v1/uploads',
+    method: [...TUS_COLLECTION_METHODS],
+    url: uploadsPath,
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);
     },
   });
 
   fastify.route({
-    method: [...TUS_METHODS],
-    url: '/api/v1/uploads/*',
+    method: [...TUS_UPLOAD_METHODS],
+    url: `${uploadsPath}/*`,
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);
     },
   });
 
-  logger.info('[TUS] Resumable upload routes registered at /api/v1/uploads/*');
+  logger.info(`[TUS] Resumable upload routes registered at ${uploadsPath}/*`);
 }

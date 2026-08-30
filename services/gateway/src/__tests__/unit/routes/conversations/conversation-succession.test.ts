@@ -13,6 +13,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import {
+  SUCCESSION_ADMIN_LIMIT,
   resolveConversationSuccession,
 } from '../../../../routes/conversations/utils/conversation-succession';
 
@@ -41,15 +42,34 @@ const promotion = (userId: string, createdAt: string, newRole: unknown = 'ADMIN'
   metadata: { action: 'view_conversation', newRole, previousRole: 'MEMBER' },
 });
 
+/**
+ * Deux lectures BORNÉES, pas une collection entière (#4165) : les
+ * administrateurs (`where.role`, plafonnées) puis, à défaut, le membre le plus
+ * ancien (`take: 1`). Le double les sert depuis UNE liste de participants, en
+ * appliquant lui-même le filtre — sans quoi il mesurerait le double et non la
+ * requête.
+ */
 const makePrisma = (opts: {
   participants?: Row[];
   promotions?: Array<ReturnType<typeof promotion>>;
   unusedDirect?: boolean;
-}) => ({
-  conversation: { count: jest.fn<any>().mockResolvedValue(opts.unusedDirect ? 1 : 0) },
-  participant: { findMany: jest.fn<any>().mockResolvedValue(opts.participants ?? []) },
-  notification: { findMany: jest.fn<any>().mockResolvedValue(opts.promotions ?? []) },
-});
+}) => {
+  const rows = (opts.participants ?? []).filter(p => p.userId !== null);
+  const byJoinedAt = [...rows].sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime());
+  return {
+    conversation: { count: jest.fn<any>().mockResolvedValue(opts.unusedDirect ? 1 : 0) },
+    participant: {
+      findMany: jest.fn<any>((args: any) =>
+        Promise.resolve(
+          args?.where?.role
+            ? byJoinedAt.filter(p => args.where.role.in.includes(p.role))
+            : byJoinedAt.slice(0, args?.take ?? byJoinedAt.length)
+        )
+      ),
+    },
+    notification: { findMany: jest.fn<any>().mockResolvedValue(opts.promotions ?? []) },
+  };
+};
 
 const resolve = (prisma: ReturnType<typeof makePrisma>) =>
   resolveConversationSuccession({
@@ -171,6 +191,7 @@ describe('resolveConversationSuccession — sans administrateur', () => {
     });
 
     await expect(resolve(prisma)).resolves.toMatchObject({ participantId: 'p-oldest' });
+    // Aucun administrateur ⇒ aucune trace de promotion à lire.
     expect(prisma.notification.findMany).not.toHaveBeenCalled();
   });
 });
@@ -208,13 +229,16 @@ describe('resolveConversationSuccession — la requête', () => {
 
     await resolve(prisma);
 
+    // Le partant ET l'invité sans compte s'excluent par la MÊME colonne : deux
+    // contraintes `not` sur `userId` ne tiennent pas dans un seul filtre.
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           conversationId: CONVERSATION_ID,
           isActive: true,
-          userId: { not: CREATOR_ID },
+          AND: [{ userId: { not: CREATOR_ID } }, { userId: { not: null } }],
         }),
+        take: SUCCESSION_ADMIN_LIMIT,
       })
     );
     expect(prisma.notification.findMany).toHaveBeenCalledWith(

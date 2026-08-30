@@ -69,7 +69,7 @@ export function useRegistrationSubmit({
     if (affiliateToken) body.affiliateToken = affiliateToken;
     if (options?.phoneTransferToken) body.phoneTransferToken = options.phoneTransferToken;
 
-    const response = await fetch(buildApiUrl(API_ENDPOINTS.AUTH.REGISTER), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.register), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -111,7 +111,7 @@ export function useRegistrationSubmit({
         // Le jeton est indispensable : le serveur rattache désormais le
         // parrainage à l'appelant authentifié et ignore `referredUserId`.
         // Sans en-tête, la requête est rejetée et l'affiliation est perdue.
-        await fetch(buildApiUrl('/affiliate/register'), {
+        await fetch(buildApiUrl(API_ENDPOINTS.affiliate.register), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

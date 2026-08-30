@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { resolveOriginalLanguageForCreate } from './posts.service';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { Post, PostVisibility, PostView } from '@meeshy/shared/types/post';
@@ -101,19 +102,19 @@ class StoryService {
   }
 
   async deleteStory(storyId: string): Promise<void> {
-    await apiService.delete(`/posts/${storyId}`);
+    await apiService.delete(API_ENDPOINTS.posts.byPostId(storyId));
   }
 
   async recordView(storyId: string): Promise<void> {
-    await apiService.post(`/posts/${storyId}/view`);
+    await apiService.post(API_ENDPOINTS.posts.byPostIdView(storyId));
   }
 
   async reactToStory(storyId: string, emoji: string): Promise<void> {
-    await apiService.post(`/posts/${storyId}/like`, { emoji });
+    await apiService.post(API_ENDPOINTS.posts.byPostIdLike(storyId), { emoji });
   }
 
   async removeReaction(storyId: string): Promise<void> {
-    await apiService.delete(`/posts/${storyId}/like`);
+    await apiService.delete(API_ENDPOINTS.posts.byPostIdLike(storyId));
   }
 
   async getViewers(storyId: string, limit = 20, offset = 0): Promise<StoryViewersResponse> {

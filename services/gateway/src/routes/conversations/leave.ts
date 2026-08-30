@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { isMemberCreator } from '@meeshy/shared/types/role-types'
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
@@ -30,6 +31,24 @@ export function registerLeaveRoutes(
           type: 'object',
           required: ['id'],
           properties: { id: { type: 'string' } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  conversationId: { type: 'string' },
+                  leftAt: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
         },
       },
       preValidation: [requiredAuth],

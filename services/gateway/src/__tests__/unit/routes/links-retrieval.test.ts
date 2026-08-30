@@ -36,12 +36,98 @@ const mockGetConversationMessages = jest.fn<any>().mockResolvedValue([]);
 const mockCountConversationMessages = jest.fn<any>().mockResolvedValue(0);
 const mockFormatMessageWithUnifiedSender = jest.fn<any>((msg: any) => msg);
 const mockCreateLegacyHybridRequest = jest.fn<any>();
+// #4165 — cinq requêtes CIBLÉES qui remplacent l'ancienne relation
+// `participants` chargée en bloc SANS `take` (voir `prisma-queries.ts`).
+// Plutôt que de réécrire les VINGT-QUATRE sites de ce fichier qui posent
+// `mockFindShareLinkByIdentifier.mockResolvedValue{,Once}(shareLinkFixture)`,
+// ces cinq doubles se DÉRIVENT de la fixture déjà en place : ils relisent le
+// DERNIER `shareLink` résolu par `findShareLinkByIdentifier` (`mock.results`,
+// que Jest tient à jour à CHAQUE appel) et filtrent
+// `conversation.participants` — exactement la donnée que la production lisait
+// avant #4165. Zéro fixture dupliquée, zéro site de test à toucher : la
+// bascule est invisible pour les 24 sites existants, qui continuent de poser
+// UNE SEULE fixture par scénario.
+async function lastResolvedShareLink(): Promise<any> {
+  const results = mockFindShareLinkByIdentifier.mock.results;
+  const last = results[results.length - 1];
+  if (!last || last.type !== 'return') return null;
+  try {
+    return await last.value;
+  } catch {
+    return null;
+  }
+}
+
+async function lastParticipants(): Promise<any[]> {
+  const shareLink = await lastResolvedShareLink();
+  return shareLink?.conversation?.participants ?? [];
+}
+
+const mockFindActiveUserParticipant = jest.fn<any>().mockImplementation(
+  async (_prisma: unknown, _conversationId: string, userId: string) => {
+    const participants = await lastParticipants();
+    const found = participants.find((p: any) => p.type === 'user' && p.userId === userId && p.isActive);
+    return found ? { id: found.id } : null;
+  }
+);
+const mockFindLinkMembers = jest.fn<any>().mockImplementation(async () => {
+  const participants = await lastParticipants();
+  return participants
+    .filter((p: any) => p.type === 'user')
+    .map((p: any) => ({ id: p.id, role: p.role, joinedAt: p.joinedAt, user: p.user }));
+});
+const mockFindLinkAnonymousParticipants = jest.fn<any>().mockImplementation(async () => {
+  const participants = await lastParticipants();
+  return participants
+    .filter((p: any) => p.type === 'anonymous')
+    .map((p: any) => ({
+      id: p.id, displayName: p.displayName, avatar: p.avatar, language: p.language,
+      isOnline: p.isOnline, lastActiveAt: p.lastActiveAt, joinedAt: p.joinedAt,
+      permissions: p.permissions, anonymousSession: p.anonymousSession,
+    }));
+});
+const mockCountLinkParticipantsByType = jest.fn<any>().mockImplementation(async () => {
+  const participants = await lastParticipants();
+  return {
+    totalMembers: participants.filter((p: any) => p.type === 'user').length,
+    totalAnonymousParticipants: participants.filter((p: any) => p.type === 'anonymous').length,
+  };
+});
+const mockCountOnlineAnonymousParticipants = jest.fn<any>().mockImplementation(async () => {
+  const participants = await lastParticipants();
+  return participants.filter((p: any) => p.type === 'anonymous' && p.isOnline).length;
+});
 
 jest.mock('../../../routes/links/utils/prisma-queries', () => ({
   findShareLinkByIdentifier: (...a: any[]) => mockFindShareLinkByIdentifier(...a),
   getConversationMessages: (...a: any[]) => mockGetConversationMessages(...a),
   countConversationMessages: (...a: any[]) => mockCountConversationMessages(...a),
+  findActiveUserParticipant: (...a: any[]) => mockFindActiveUserParticipant(...a),
+  findLinkMembers: (...a: any[]) => mockFindLinkMembers(...a),
+  findLinkAnonymousParticipants: (...a: any[]) => mockFindLinkAnonymousParticipants(...a),
+  countLinkParticipantsByType: (...a: any[]) => mockCountLinkParticipantsByType(...a),
+  countOnlineAnonymousParticipants: (...a: any[]) => mockCountOnlineAnonymousParticipants(...a),
 }));
+
+// `loadReaderHistoryFloor` fait sa PROPRE lecture Prisma (`participant.findFirst`,
+// indépendante de `prisma-queries.ts`) — `historyReaderFromAuthContext` reste
+// RÉEL (fonction pure, patron `jest.requireActual` du dépôt). Repli par
+// défaut : `null` (aucun plancher), correct pour tous les blocs SAUF « plancher
+// d'historique » ci-dessous, qui débraye ce double sur la VRAIE implémentation
+// (`actualHistoryFloor.loadReaderHistoryFloor`) le temps de ses quatre tests —
+// les RÈGLES de plancher (rôle admin, droit figé…) sont déjà couvertes par les
+// témoins propres de `historyFloor.ts` ; ici on ne vérifie que le CÂBLAGE.
+const mockLoadReaderHistoryFloor = jest.fn<any>().mockResolvedValue(null);
+jest.mock('../../../services/historyFloor', () => {
+  const actual = jest.requireActual('../../../services/historyFloor') as object;
+  return {
+    ...actual,
+    loadReaderHistoryFloor: (...a: any[]) => mockLoadReaderHistoryFloor(...a),
+  };
+});
+const actualHistoryFloor = jest.requireActual('../../../services/historyFloor') as {
+  loadReaderHistoryFloor: (...a: any[]) => Promise<Date | null>;
+};
 
 jest.mock('../../../routes/links/utils/message-formatters', () => ({
   formatMessageWithUnifiedSender: (...a: any[]) => mockFormatMessageWithUnifiedSender(...a),
@@ -117,14 +203,18 @@ const mockShareLink = {
 // (`createLegacyHybridRequest`). Par défaut ABSENT : la plupart des scénarios
 // de ce fichier portent sur l'accès, jamais sur la présence, et un
 // `authContext` absent résout `viewer = null` (visiteur non privilégié).
-async function buildApp(hybridRequest: any = {}, authContext?: any): Promise<FastifyInstance> {
+// `prisma` : optionnel, `{}` par défaut — SEUL le bloc « plancher d'historique »
+// en a besoin (`participant.findFirst`, quand `loadReaderHistoryFloor` y est
+// débrayé sur sa vraie implémentation, voir plus bas). Les 24 autres appels
+// à deux arguments sont inchangés.
+async function buildApp(hybridRequest: any = {}, authContext?: any, prisma: any = {}): Promise<FastifyInstance> {
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     if (authContext) req.authContext = authContext;
   });
   mockCreateLegacyHybridRequest.mockReturnValue(hybridRequest);
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', {} as any);
+  app.decorate('prisma', prisma as any);
   await registerRetrievalRoutes(app);
   await app.ready();
   return app;
@@ -673,11 +763,30 @@ describe('GET /links/:identifier — plancher d’historique du lecteur', () => 
     mockCountConversationMessages.mockClear();
   });
 
+  // #4165 — `retrieval.ts` délègue désormais le plancher à
+  // `loadReaderHistoryFloor` (SSOT partagée avec `/conversations/:id/reactions`
+  // et `/conversations/:id/status`) plutôt qu'à un scan de la relation
+  // `participants` chargée en bloc. Ces quatre témoins vérifient le CÂBLAGE
+  // (le plancher rendu par la lecture atteint bien `getConversationMessages`/
+  // `countConversationMessages`) — les RÈGLES qui décident CE plancher (rôle
+  // admin, droit figé, lien fermé…) sont la responsabilité de
+  // `loadReaderHistoryFloor` elle-même, déjà couverte ailleurs. D'où le
+  // débrayage sur sa VRAIE implémentation ici : ré-simuler ces règles dans le
+  // double serait dupliquer la production dans un helper de test (interdit,
+  // `services/gateway/CLAUDE.md` § Tests).
+  beforeAll(() => {
+    mockLoadReaderHistoryFloor.mockImplementation(actualHistoryFloor.loadReaderHistoryFloor);
+  });
+  afterAll(() => {
+    mockLoadReaderHistoryFloor.mockResolvedValue(null);
+  });
+
   it('borne un membre INSCRIT au droit figé fermé à son arrivée — page et total', async () => {
     mockFindShareLinkByIdentifier.mockResolvedValue(withParticipants([memberRow()]));
     const app = await buildApp(
       { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID, username: 'alice', systemLanguage: 'fr' } },
-      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } }
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } },
+      { participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow()) } }
     );
 
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
@@ -698,7 +807,8 @@ describe('GET /links/:identifier — plancher d’historique du lecteur', () => 
           displayName: 'Guest', language: 'fr', canSendMessages: true, canSendFiles: false, canSendImages: false,
         },
       },
-      { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: ANON_ROW_ID, participantId: ANON_ROW_ID }
+      { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: ANON_ROW_ID, participantId: ANON_ROW_ID },
+      { participant: { findFirst: jest.fn<any>().mockResolvedValue(anonymousRow()) } }
     );
 
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
@@ -711,7 +821,8 @@ describe('GET /links/:identifier — plancher d’historique du lecteur', () => 
     mockFindShareLinkByIdentifier.mockResolvedValue(withParticipants([memberRow({ role: 'admin' })]));
     const app = await buildApp(
       { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID, username: 'alice', systemLanguage: 'fr' } },
-      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } }
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } },
+      { participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow({ role: 'admin' })) } }
     );
 
     await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });

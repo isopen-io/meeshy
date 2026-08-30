@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isMemberAdmin } from '@meeshy/shared/types/role-types';
+import { isMemberAdmin, memberRoleCasings } from '@meeshy/shared/types/role-types';
 
 /**
  * QUI hérite d'une conversation dont le créateur s'en va — **une seule loi**,
@@ -38,6 +38,24 @@ import { isMemberAdmin } from '@meeshy/shared/types/role-types';
  * des candidats et la lecture de la trace replient tous deux par
  * `isMemberAdmin`, en JavaScript — aucun `where` Prisma ne compare un rang.
  *
+ * ## Ce que la succession n'est PAS : une question d'autorité
+ *
+ * `utils/conversation-authority.ts` (#3892) dit qu'un ADMIN ou BIGBOSS de la
+ * plateforme, une fois MEMBRE d'un fil, **agit avec les droits du créateur**.
+ * C'est le voisin d'apparence interchangeable de cette loi-ci, et l'employer
+ * ici serait un contresens : `effectiveConversationRole` répond « ce geste
+ * est-il permis à cet acteur ? », jamais « qui hérite ? ». Un administrateur de
+ * plateforme simple membre AGIT comme le créateur ; il n'a pas pour autant été
+ * administrateur DE CETTE CONVERSATION, seul rang que la décision porteur
+ * classe. Le faire hériter d'office rendrait la succession dépendante d'un rang
+ * de PLATEFORME que personne n'a promu dans ce fil — exactement l'inversion
+ * que #3892 a déjà eu à écrire noir sur blanc pour `getEffectiveRole`.
+ *
+ * Corollaire du repli : un rang ILLISIBLE (`null`, valeur inconnue) ne devient
+ * pas administrateur — il reste un membre parmi les autres, classé par son
+ * `joinedAt`. Un repli mal choisi accorderait ici exactement ce qu'il croit
+ * refuser.
+ *
  * ## Hériter demande un compte
  *
  * Un participant sans `userId` — un visiteur venu par un lien partagé — n'est
@@ -58,6 +76,9 @@ type SuccessorCandidate = {
 };
 
 const PROMOTION_TYPE = 'member_promoted';
+
+/** Le plafond de la trace, généreux devant le plafond des candidats. */
+const SUCCESSION_PROMOTION_TRACE_LIMIT = 2000;
 
 const isPromotionToAdmin = (metadata: unknown): boolean => {
   if (!metadata || typeof metadata !== 'object') return false;
@@ -83,6 +104,11 @@ async function adminPromotionInstants(
     },
     select: { userId: true, createdAt: true, metadata: true },
     orderBy: { createdAt: 'asc' },
+    // Bornée comme toute lecture de ce dépôt (#4165). Un administrateur porte
+    // une poignée de lignes de rang sur une conversation ; au-delà du plafond,
+    // celui dont la seule trace tomberait après retombe sur son `joinedAt` —
+    // la DÉGRADATION que le repli total assume déjà, jamais une indécision.
+    take: SUCCESSION_PROMOTION_TRACE_LIMIT,
   });
 
   const instants = new Map<string, Date>();
@@ -121,6 +147,17 @@ async function isUnusedDirect(prisma: PrismaClient, conversationId: string): Pro
   return count > 0;
 }
 
+/**
+ * Les administrateurs d'une conversation se comptent en dizaines, jamais en
+ * milliers — mais aucune lecture de ce dépôt ne rend une collection ENTIÈRE
+ * (#4165). Le plafond est donc posé, et sa conséquence dite : au-delà, ce sont
+ * les 500 administrateurs les plus anciennement ARRIVÉS qui concourent, et le
+ * plus anciennement PROMU d'entre eux qui l'emporte.
+ */
+export const SUCCESSION_ADMIN_LIMIT = 500;
+
+const SUCCESSOR_SELECT = { id: true, userId: true, role: true, joinedAt: true } as const;
+
 export async function resolveConversationSuccession(params: {
   prisma: PrismaClient;
   conversationId: string;
@@ -130,24 +167,43 @@ export async function resolveConversationSuccession(params: {
 
   if (await isUnusedDirect(prisma, conversationId)) return { kind: 'close' };
 
-  const candidates = (await prisma.participant.findMany({
-    where: { conversationId, isActive: true, userId: { not: departingUserId } },
-    select: { id: true, userId: true, role: true, joinedAt: true },
+  // Le partant s'exclut, et l'invité sans compte aussi — les DEUX par la même
+  // colonne, d'où le `AND` : deux contraintes `not` sur `userId` ne tiennent pas
+  // dans un seul filtre.
+  const eligible = {
+    conversationId,
+    isActive: true,
+    AND: [{ userId: { not: departingUserId } }, { userId: { not: null } }],
+  };
+
+  const admins = (await prisma.participant.findMany({
+    // La casse ne peut PAS se replier ici : un `where` part tel quel vers la
+    // base et n'appelle aucune fonction. `memberRoleCasings` est l'outil du
+    // dépôt pour ça — sans lui, une ligne écrite `ADMIN` (l'ancien
+    // `InitService`) sortirait de l'ensemble sans erreur, seulement plus PETIT.
+    where: { ...eligible, role: { in: memberRoleCasings(['admin']) } },
+    select: SUCCESSOR_SELECT,
     orderBy: { joinedAt: 'asc' },
+    take: SUCCESSION_ADMIN_LIMIT,
   })) as SuccessorCandidate[];
 
-  const eligible = candidates.filter((c): c is SuccessorCandidate & { userId: string } =>
-    typeof c.userId === 'string' && c.userId.length > 0
-  );
-  if (eligible.length === 0) return { kind: 'close' };
+  if (admins.length > 0) {
+    const instants = await adminPromotionInstants(
+      prisma,
+      conversationId,
+      admins.map(a => a.userId).filter((id): id is string => typeof id === 'string')
+    );
+    const [first] = [...admins].sort(senioritySort(instants));
+    return { kind: 'transfer', participantId: first.id, userId: first.userId as string };
+  }
 
-  const admins = eligible.filter(c => isMemberAdmin(c.role ?? 'member'));
+  const [oldest] = (await prisma.participant.findMany({
+    where: eligible,
+    select: SUCCESSOR_SELECT,
+    orderBy: { joinedAt: 'asc' },
+    take: 1,
+  })) as SuccessorCandidate[];
 
-  // `eligible` arrive déjà trié par `joinedAt` : sans administrateur, la règle 2
-  // est sa tête de liste, sans un tri de plus.
-  const [successor] = admins.length > 0
-    ? [...admins].sort(senioritySort(await adminPromotionInstants(prisma, conversationId, admins.map(a => a.userId))))
-    : eligible;
-
-  return { kind: 'transfer', participantId: successor.id, userId: successor.userId };
+  if (!oldest) return { kind: 'close' };
+  return { kind: 'transfer', participantId: oldest.id, userId: oldest.userId as string };
 }

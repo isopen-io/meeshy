@@ -78,7 +78,24 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 import { ConflictError } from '../../../../errors/custom-errors';
@@ -103,6 +120,31 @@ function makePreValidationAuth(authenticated: boolean) {
     }
   };
 }
+
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
 
 async function buildApp(opts: {
   authenticated?: boolean;
@@ -130,8 +172,9 @@ async function buildApp(opts: {
       // batch d'impressions (chantier reposts cohérents, tâche 1). Défaut :
       // aucun repost dans le batch — même comportement qu'avant. L'unitaire
       // replie sa résolution dans le `select` de `update` (Important #2,
-      // revue), aucun `findUnique` séparé n'est plus nécessaire.
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      // revue), aucun `findUnique` séparé n'est plus nécessaire. Le même
+      // délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   };
 
@@ -618,6 +661,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
         update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn<any>(),
+        findFirst: aclAwareFindFirst(),
       },
     };
     const app = await buildApp({ prisma });
@@ -644,6 +688,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
         update: jest.fn<any>().mockResolvedValue({}),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findUnique: jest.fn<any>(),
+        findFirst: aclAwareFindFirst(),
       },
     };
     const app = await buildApp({ prisma });
@@ -659,7 +704,7 @@ describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
       postImpression: { create: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
-      post: { update: jest.fn<any>().mockResolvedValue({}) },
+      post: { update: jest.fn<any>().mockResolvedValue({}), findFirst: aclAwareFindFirst() },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
@@ -708,7 +753,7 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
       postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: aclAwareFindMany([
           { id: REPOST_A, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
           { id: REPOST_B, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
         ]),
@@ -723,7 +768,12 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
     expect(res.statusCode).toBe(200);
 
     // UNE requête pour résoudre repostOf/originalRepostOfId de tout le batch.
-    expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
+    // Comptée PARMI les appels au même délégué : depuis #4146 il porte aussi la
+    // passe d'audience, et un `toHaveBeenCalledTimes(1)` nu ne dirait plus
+    // laquelle des deux a été économisée.
+    const repostResolutionCalls = prisma.post.findMany.mock.calls
+      .filter(([args]: any[]) => args.where?.repostOfId !== undefined);
+    expect(repostResolutionCalls).toHaveLength(1);
     expect(prisma.post.findMany).toHaveBeenCalledWith({
       where: { id: { in: [REPOST_A, REPOST_B] }, repostOfId: { not: null } },
       select: { id: true, repostOfId: true, originalRepostOfId: true },
@@ -748,7 +798,7 @@ describe('POST /posts/impressions/batch — caps at 50 entries', () => {
       },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: aclAwareFindMany(),
       },
     };
     const app = await buildApp({ prisma });
@@ -765,7 +815,7 @@ describe('POST /posts/impressions/batch — service error', () => {
       postImpression: { createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: aclAwareFindMany(),
       },
     };
     const app = await buildApp({ prisma });
@@ -895,36 +945,15 @@ describe('POST /posts/:id/share — service error', () => {
   });
 });
 
-// ─── GET /posts/:id/share ─────────────────────────────────────────────────────
-
-describe('GET /posts/:id/share — unauthenticated', () => {
-  it('returns 401 when no auth', async () => {
-    const app = await buildApp({ authenticated: false });
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('GET /posts/:id/share — success', () => {
-  it('returns 200 with share link analytics', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('GET /posts/:id/share — service error', () => {
-  it('returns 500 when getPostShareLink throws', async () => {
-    mockGetPostShareLink.mockRejectedValueOnce(new Error('DB error'));
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
+// ─── GET /posts/:id/share — RETIRÉE (#4190) ──────────────────────────────────
+// Les trois témoins (401, 200, 500) sont partis avec la route : aucun des trois
+// clients ne l'appelait — le web n'émet que le POST (`posts.service.ts` →
+// `sharePost`), qui reste vivant JUSTE AU-DESSUS sur le MÊME chemin. C'est
+// pourquoi ce retrait ne pouvait pas se décider depuis l'URL, seulement depuis
+// le couple méthode+chemin, et pourquoi le double `mockGetPostShareLink` reste
+// câblé plus haut : `PostService.getPostShareLink` existe toujours, elle n'a
+// simplement plus de porte HTTP. Même forme que chez les deux frères déjà
+// ajustés, `interactions2.test.ts` et `interactions-extended.test.ts`.
 
 // ─── POST /posts/:id/pin ──────────────────────────────────────────────────────
 
@@ -1448,12 +1477,12 @@ describe('POST /posts/:id/repost — createPostRepostNotification rejects (line 
 // ─── Branch coverage: null-coalescing and ternary false branches ─────────────
 
 describe('POST /posts/:id/like — invalid emoji triggers fallback (lines 40-41)', () => {
-  it('returns 200 using default heart emoji when LikeSchema fails max(10)', async () => {
-    // An emoji longer than 10 chars fails z.string().max(10) → parsed.success = false → emoji = '❤️'
+  it('returns 200 using default heart emoji when LikeSchema length bound fails', async () => {
+    // An emoji longer than EMOJI_MAX_LENGTH fails z.string().max() → parsed.success = false → emoji = '❤️'
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/like`,
-      payload: { emoji: 'x'.repeat(11) },
+      payload: { emoji: 'x'.repeat(40) },
     });
     expect(res.statusCode).toBe(200);
     await app.close();

@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger';
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 import { authManager } from './auth-manager.service';
 import { generateClientMessageId } from '@/utils/client-message-id';
@@ -53,7 +54,7 @@ export class AnonymousChatService {
     }
 
     try {
-      const response = await fetch(buildApiUrl('/anonymous/refresh'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.anonymous.refresh), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -87,8 +88,9 @@ export class AnonymousChatService {
     }
 
     try {
+      const messagesEndpoint = `${API_ENDPOINTS.links.byIdentifierMessages(this.linkId)}?limit=${limit}&offset=${offset}`;
       const response = await fetch(
-        buildApiUrl(`/api/links/${this.linkId}/messages?limit=${limit}&offset=${offset}`),
+        buildApiUrl(messagesEndpoint),
         {
           method: 'GET',
           headers: {
@@ -139,7 +141,7 @@ export class AnonymousChatService {
     const { content, originalLanguage = 'fr', replyToId, clientMessageId } = params;
 
     try {
-      const response = await fetch(buildApiUrl(`/api/links/${this.linkId}/messages`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byIdentifierMessages(this.linkId)), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -181,7 +183,7 @@ export class AnonymousChatService {
     }
 
     try {
-      await fetch(buildApiUrl('/anonymous/leave'), {
+      await fetch(buildApiUrl(API_ENDPOINTS.anonymous.leave), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

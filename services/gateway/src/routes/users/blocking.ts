@@ -5,6 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import {
   bloquer, debloquer, listerBloques, repondreBlocage, LIMITE_MAX_BLOCAGES,
 } from '../directory/blocks';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 
 /**
  * Les trois ALIAS des routes de blocage (#4164).
@@ -15,6 +16,30 @@ import {
  * échouer un blocage que l'utilisateur croit posé — le cas le plus coûteux
  * qu'une route de blocage puisse produire.
  */
+
+/**
+ * Le sursis des trois alias (#4274).
+ *
+ * `depuis` est la date de fermeture de #4164 — le jour ou `/directory/blocks`
+ * est devenu l'ENSEMBLE. Aucun `retraitLe` : la regle de retrait (#4164 c.7 et
+ * c.8) exige que la file d'attente HORS LIGNE soit videe et que les appels
+ * Android soient COMPTES ; ce compteur est #4275. Une date inventee ferait
+ * echouer un blocage que l'utilisateur croit pose — le cout le plus cher que
+ * ce module puisse produire.
+ */
+const DEPUIS = '2026-08-29';
+
+/**
+ * Le successeur porte l'id RÉSOLU, jamais le gabarit `:userId` : un `Link`
+ * que le client ne peut pas suivre tel quel n'indique aucune migration.
+ */
+const blocDeLaCible = (request: FastifyRequest): string =>
+  `/api/v1/directory/blocks/${encodeURIComponent((request.params as { userId: string }).userId)}`;
+
+const ANNONCE = {
+  ensemble: { depuis: DEPUIS, successeur: '/api/v1/directory/blocks', retraitLe: dateDeRetrait(DEPUIS) },
+  membre: { depuis: DEPUIS, successeur: blocDeLaCible, retraitLe: dateDeRetrait(DEPUIS) },
+} as const;
 
 const paramsCible = {
   type: 'object',
@@ -32,7 +57,7 @@ const messageSchema = {
 
 export async function blockUser(fastify: FastifyInstance) {
   fastify.post<{ Params: { userId: string } }>('/users/:userId/block', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE.membre), fastify.authenticate],
     schema: {
       description: 'Block a user. Alias of PUT /directory/blocks/:userId.',
       tags: ['users'],
@@ -75,7 +100,7 @@ export async function blockUser(fastify: FastifyInstance) {
 
 export async function unblockUser(fastify: FastifyInstance) {
   fastify.delete<{ Params: { userId: string } }>('/users/:userId/block', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE.membre), fastify.authenticate],
     schema: {
       description: 'Unblock a user. Alias of DELETE /directory/blocks/:userId.',
       tags: ['users'],
@@ -101,7 +126,7 @@ export async function unblockUser(fastify: FastifyInstance) {
 
 export async function getBlockedUsers(fastify: FastifyInstance) {
   fastify.get('/users/me/blocked-users', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ANNONCE.ensemble), fastify.authenticate],
     schema: {
       description: 'Get the list of blocked users. Alias of GET /directory/blocks.',
       tags: ['users'],

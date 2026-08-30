@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import type {
   MessageSendData,
   MessageSendWithAttachmentsData,
@@ -143,6 +144,59 @@ export const SocketConversationLeaveSchema = z.object({
 
 export type SocketConversationLeaveData = z.infer<typeof SocketConversationLeaveSchema>;
 
+// ─── Live location sharing (location:live-start / …-update / …-stop) ─────────
+// La douzième et dernière famille socket portée sur la frontière Zod partagée.
+// Les bornes de coordonnées et de durée expriment en Zod PUR ce que gardaient
+// `_validateCoordinates` + la garde manuscrite de durée ; les messages métier
+// remontent via `validateSocketEvent` sous le préfixe unifié `'Validation
+// failed: …'`, donc le détail sémantique se préserve.
+const LOCATION_COORD_MSG = 'Invalid coordinates';
+const LOCATION_DURATION_MSG = 'Invalid duration (must be 1-480 minutes)';
+
+const latitudeSchema = z
+  .number({ error: LOCATION_COORD_MSG })
+  .min(-90, LOCATION_COORD_MSG)
+  .max(90, LOCATION_COORD_MSG);
+
+const longitudeSchema = z
+  .number({ error: LOCATION_COORD_MSG })
+  .min(-180, LOCATION_COORD_MSG)
+  .max(180, LOCATION_COORD_MSG);
+
+export const SocketLocationLiveStartSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+  latitude: latitudeSchema,
+  longitude: longitudeSchema,
+  // `.gt(0)` (et non `.min(1)`) préserve la plage EXACTE de la garde manuscrite
+  // (`durationMinutes <= 0` rejeté, une durée non entière acceptée), max 8 h.
+  durationMinutes: z
+    .number({ error: LOCATION_DURATION_MSG })
+    .gt(0, LOCATION_DURATION_MSG)
+    .max(480, LOCATION_DURATION_MSG),
+});
+
+export type SocketLocationLiveStartData = z.infer<typeof SocketLocationLiveStartSchema>;
+
+export const SocketLocationLiveUpdateSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+  latitude: latitudeSchema,
+  longitude: longitudeSchema,
+  // Télémétrie optionnelle relayée telle quelle (comme avant la frontière) ;
+  // gardée seulement comme nombre, sans borne — c'est ce que faisait le handler.
+  altitude: z.number().optional(),
+  accuracy: z.number().optional(),
+  speed: z.number().optional(),
+  heading: z.number().optional(),
+});
+
+export type SocketLocationLiveUpdateData = z.infer<typeof SocketLocationLiveUpdateSchema>;
+
+export const SocketLocationLiveStopSchema = z.object({
+  conversationId: z.string().min(1).max(255),
+});
+
+export type SocketLocationLiveStopData = z.infer<typeof SocketLocationLiveStopSchema>;
+
 export const SocketTypingSchema = z.object({
   conversationId: z.string(),
   userId: z.string().optional(),
@@ -152,7 +206,7 @@ export type SocketTypingData = z.infer<typeof SocketTypingSchema>;
 
 export const SocketReactionAddSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
   conversationId: z.string().optional(),
 });
 
@@ -160,7 +214,7 @@ export type SocketReactionAddData = z.infer<typeof SocketReactionAddSchema>;
 
 export const SocketReactionRemoveSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
   conversationId: z.string().optional(),
 });
 
@@ -169,7 +223,7 @@ export type SocketReactionRemoveData = z.infer<typeof SocketReactionRemoveSchema
 export const SocketCommentReactionAddSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
 });
 
 export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionAddSchema>;
@@ -177,7 +231,7 @@ export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionA
 export const SocketCommentReactionRemoveSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
 });
 
 export type SocketCommentReactionRemoveData = z.infer<typeof SocketCommentReactionRemoveSchema>;
@@ -198,14 +252,14 @@ export type SocketPostRoomActionData = z.infer<typeof SocketPostRoomActionSchema
 
 export const SocketPostReactionAddSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
 });
 
 export type SocketPostReactionAddData = z.infer<typeof SocketPostReactionAddSchema>;
 
 export const SocketPostReactionRemoveSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(10),
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
 });
 
 export type SocketPostReactionRemoveData = z.infer<typeof SocketPostReactionRemoveSchema>;
@@ -215,6 +269,22 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 });
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
+
+export const SocketAttachmentReactionAddSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+});
+
+export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentReactionAddSchema>;
+
+export const SocketAttachmentReactionRemoveSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+});
+
+export type SocketAttachmentReactionRemoveData = z.infer<typeof SocketAttachmentReactionRemoveSchema>;
 
 // Empty content is intentionally permitted: the message may carry attachments
 // (photo/audio/file) whose caption is being cleared. The attachment-aware

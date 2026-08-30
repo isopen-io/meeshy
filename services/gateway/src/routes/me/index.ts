@@ -13,9 +13,8 @@ import { FastifyInstance } from 'fastify';
 import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { handleGetMe, meRouteSharedOptions } from './get-me';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
@@ -30,68 +29,22 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
   // La racine du module, PAS '/me' : `route-registration.ts` monte déjà ce
   // plugin sous `${API_PREFIX}/me`, si bien que le chemin réel était
-  // `/api/v1/me/me` — une adresse qu'aucun client du dépôt n'appelle (vérifié
-  // sur web, iOS, SDK et Android : toutes les occurrences de `/me` y sont des
-  // routes de PAGE ou des liens profonds). La route était donc inatteignable,
-  // et le commentaire d'origine — « a root /me endpoint » — disait bien
-  // l'intention. Même défaut que #4141, trouvé par la garde de segment doublé
-  // posée dans le même lot ; l'unification du compte sous une seule adresse
-  // reste portée par #4178.
+  // `/api/v1/me/me` avant #4141 (garde de segment doublé, régression gardée
+  // par `identity-twins-retired.test.ts` et `route-auth-coverage.test.ts`).
+  //
+  // C'est désormais l'adresse CIBLE de #4178 : `GET /api/v1/me`, niveau S2
+  // (JWT OU X-Session-Token — `allowAnonymous: true`, ce que l'ancien stub
+  // n'offrait pas : `fastify.authenticate` est JWT SEUL). Le calcul lui-même
+  // — six champs contre le profil complet d'aujourd'hui, `security` sur
+  // `?expand=`, `?fields=` — vit dans `get-me.ts`, SEUL site, partagé avec
+  // l'alias déprécié `GET /auth/me` (`routes/auth/magic-link.ts`). Ne pas
+  // réécrire ce calcul ici : c'est exactement la divergence que #4178 ferme.
   fastify.get(
     '/',
     {
-      preValidation: [fastify.authenticate],
-      schema: {
-        description: 'Get current authenticated user information',
-        tags: ['me', 'user'],
-        summary: 'Get current user',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  username: { type: 'string' },
-                  email: { type: 'string' },
-                  displayName: { type: 'string' },
-                  avatar: { type: 'string', nullable: true },
-                  role: { type: 'string' }
-                }
-              }
-            }
-          },
-          401: errorResponseSchema,
-          404: errorResponseSchema
-        }
-      }
+      ...meRouteSharedOptions,
+      preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true, allowAnonymous: true })],
     },
-    async (request, reply) => {
-      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
-
-      if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
-
-      const user = await fastify.prisma.user.findUnique({
-        where: { id: authContext.userId },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          displayName: true,
-          avatar: true,
-          role: true
-        }
-      });
-
-      if (!user) {
-        return sendNotFound(reply, 'User not found');
-      }
-
-      return sendSuccess(reply, user);
-    }
+    handleGetMe
   );
 }

@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { ApiResponse, AgentType } from '@meeshy/shared/types';
 
 function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> & { cacheInvalidation?: { redisPublishOk: boolean; redisSubscribersNotified: number; httpInvalidateOk: boolean; anyChannelSucceeded: boolean } } {
@@ -472,148 +473,148 @@ export type ResetResult = {
 
 export const agentAdminService = {
   async getStats(): Promise<ApiResponse<AgentStatsData>> {
-    const response = await apiService.get('/admin/agent/stats');
+    const response = await apiService.get(API_ENDPOINTS.admin.agentStats);
     return unwrapResponse<AgentStatsData>(response);
   },
 
   async getConfigs(page = 1, limit = 20, search?: string): Promise<ApiResponse<AgentConfigData[]>> {
-    const response = await apiService.get('/admin/agent/configs', { page, limit, search });
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigs, { page, limit, search });
     return unwrapResponse<AgentConfigData[]>(response);
   },
 
   async getConfig(conversationId: string): Promise<ApiResponse<AgentConfigData>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationId(conversationId));
     return unwrapResponse<AgentConfigData>(response);
   },
 
   async upsertConfig(conversationId: string, data: AgentConfigUpsert): Promise<ApiResponse<AgentConfigData>> {
-    const response = await apiService.put(`/admin/agent/configs/${conversationId}`, data);
+    const response = await apiService.put(API_ENDPOINTS.admin.agentConfigsByConversationId(conversationId), data);
     return unwrapResponse<AgentConfigData>(response);
   },
 
   async deleteConfig(conversationId: string): Promise<ApiResponse<void>> {
-    const response = await apiService.delete(`/admin/agent/configs/${conversationId}`);
+    const response = await apiService.delete(API_ENDPOINTS.admin.agentConfigsByConversationId(conversationId));
     return unwrapResponse<void>(response);
   },
 
   async getRoles(conversationId: string): Promise<ApiResponse<AgentRoleData[]>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}/roles`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationIdRoles(conversationId));
     return unwrapResponse<AgentRoleData[]>(response);
   },
 
   async assignArchetype(conversationId: string, userId: string, archetypeId: string): Promise<ApiResponse<AgentRoleData>> {
-    const response = await apiService.post(`/admin/agent/roles/${conversationId}/${userId}/assign`, { archetypeId });
+    const response = await apiService.post(API_ENDPOINTS.admin.agentRolesByConversationIdByUserIdAssign(conversationId, userId), { archetypeId });
     return unwrapResponse<AgentRoleData>(response);
   },
 
   async unlockRole(conversationId: string, userId: string): Promise<ApiResponse<AgentRoleData>> {
-    const response = await apiService.post(`/admin/agent/roles/${conversationId}/${userId}/unlock`, {});
+    const response = await apiService.post(API_ENDPOINTS.admin.agentRolesByConversationIdByUserIdUnlock(conversationId, userId), {});
     return unwrapResponse<AgentRoleData>(response);
   },
 
   async getArchetypes(): Promise<ApiResponse<ArchetypeData[]>> {
-    const response = await apiService.get('/admin/agent/archetypes');
+    const response = await apiService.get(API_ENDPOINTS.admin.agentArchetypes);
     return unwrapResponse<ArchetypeData[]>(response);
   },
 
   async getLlmConfig(): Promise<ApiResponse<LlmConfigData | null>> {
-    const response = await apiService.get('/admin/agent/llm');
+    const response = await apiService.get(API_ENDPOINTS.admin.agentLlm);
     return unwrapResponse<LlmConfigData | null>(response);
   },
 
   async updateLlmConfig(data: LlmConfigUpdate): Promise<ApiResponse<LlmConfigData>> {
-    const response = await apiService.put('/admin/agent/llm', data);
+    const response = await apiService.put(API_ENDPOINTS.admin.agentLlm, data);
     return unwrapResponse<LlmConfigData>(response);
   },
 
   async getConversationSummary(conversationId: string): Promise<ApiResponse<AgentSummaryData>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}/summary`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationIdSummary(conversationId));
     return unwrapResponse<AgentSummaryData>(response);
   },
 
   async getGlobalConfig(): Promise<ApiResponse<AgentGlobalConfigData>> {
-    const response = await apiService.get('/admin/agent/global-config');
+    const response = await apiService.get(API_ENDPOINTS.admin.agentGlobalConfig);
     return unwrapResponse<AgentGlobalConfigData>(response);
   },
 
   async updateGlobalConfig(data: AgentGlobalConfigUpsert): Promise<ApiResponse<AgentGlobalConfigData>> {
-    const response = await apiService.put('/admin/agent/global-config', data);
+    const response = await apiService.put(API_ENDPOINTS.admin.agentGlobalConfig, data);
     return unwrapResponse<AgentGlobalConfigData>(response);
   },
 
   async getRecentActivity(limit = 20, search?: string): Promise<ApiResponse<RecentConversationActivity[]>> {
-    const response = await apiService.get('/admin/agent/recent-activity', { limit, search });
+    const response = await apiService.get(API_ENDPOINTS.admin.agentRecentActivity, { limit, search });
     return unwrapResponse<RecentConversationActivity[]>(response);
   },
 
   async getLiveState(conversationId: string): Promise<ApiResponse<LiveStateData>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}/live`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationIdLive(conversationId));
     return unwrapResponse<LiveStateData>(response);
   },
 
   async getSchedule(conversationId: string): Promise<ApiResponse<AgentScheduleData>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}/schedule`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationIdSchedule(conversationId));
     return unwrapResponse<AgentScheduleData>(response);
   },
 
   async triggerScan(conversationId: string): Promise<ApiResponse<TriggerResult>> {
-    const response = await apiService.post(`/admin/agent/configs/${conversationId}/trigger`, {});
+    const response = await apiService.post(API_ENDPOINTS.admin.agentConfigsByConversationIdTrigger(conversationId), {});
     return unwrapResponse<TriggerResult>(response);
   },
 
   async stopScan(conversationId: string): Promise<ApiResponse<void>> {
-    const response = await apiService.post(`/admin/agent/configs/${conversationId}/stop`, {});
+    const response = await apiService.post(API_ENDPOINTS.admin.agentConfigsByConversationIdStop(conversationId), {});
     return unwrapResponse<void>(response);
   },
 
   async getAgentMessages(conversationId: string, page = 1, limit = 20): Promise<ApiResponse<AgentMessageEntry[]>> {
-    const response = await apiService.get(`/admin/agent/configs/${conversationId}/messages`, { page, limit });
+    const response = await apiService.get(API_ENDPOINTS.admin.agentConfigsByConversationIdMessages(conversationId), { page, limit });
     return unwrapResponse<AgentMessageEntry[]>(response);
   },
 
   async getScanLogs(filters: ScanLogsFilters = {}): Promise<ApiResponse<ScanLogSummary[]>> {
-    const response = await apiService.get('/admin/agent/scan-logs', filters);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentScanLogs, filters);
     return unwrapResponse<ScanLogSummary[]>(response);
   },
 
   async getScanLogDetail(logId: string): Promise<ApiResponse<ScanLogDetail>> {
-    const response = await apiService.get(`/admin/agent/scan-logs/${logId}`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentScanLogsByLogId(logId));
     return unwrapResponse<ScanLogDetail>(response);
   },
 
   async getScanStats(params: { conversationId?: string; months?: number; bucket?: 'day' | 'week' } = {}): Promise<ApiResponse<ScanStatsData>> {
-    const response = await apiService.get('/admin/agent/scan-logs/stats', params);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentScanLogsStats, params);
     return unwrapResponse<ScanStatsData>(response);
   },
 
   async resetAll(): Promise<ApiResponse<ResetResult>> {
-    const response = await apiService.delete('/admin/agent/reset');
+    const response = await apiService.delete(API_ENDPOINTS.admin.agentReset);
     return unwrapResponse<ResetResult>(response);
   },
 
   async resetConversation(conversationId: string): Promise<ApiResponse<ResetResult>> {
-    const response = await apiService.delete(`/admin/agent/reset/conversation/${conversationId}`);
+    const response = await apiService.delete(API_ENDPOINTS.admin.agentResetConversationByConversationId(conversationId));
     return unwrapResponse<ResetResult>(response);
   },
 
   async resetUser(userId: string): Promise<ApiResponse<ResetResult>> {
-    const response = await apiService.delete(`/admin/agent/reset/user/${userId}`);
+    const response = await apiService.delete(API_ENDPOINTS.admin.agentResetUserByUserId(userId));
     return unwrapResponse<ResetResult>(response);
   },
 
   async getDeliveryQueue(conversationId?: string): Promise<ApiResponse<DeliveryQueueItem[]>> {
     const params = conversationId ? { conversationId } : {};
-    const response = await apiService.get('/admin/agent/delivery-queue', params);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentDeliveryQueue, params);
     return unwrapResponse<DeliveryQueueItem[]>(response);
   },
 
   async deleteDeliveryItem(id: string): Promise<ApiResponse<{ deleted: boolean }>> {
-    const response = await apiService.delete(`/admin/agent/delivery-queue/${id}`);
+    const response = await apiService.delete(API_ENDPOINTS.admin.agentDeliveryQueueById(id));
     return unwrapResponse<{ deleted: boolean }>(response);
   },
 
   async editDeliveryItem(id: string, content: string): Promise<ApiResponse<DeliveryQueueItem>> {
-    const response = await apiService.patch(`/admin/agent/delivery-queue/${id}`, { content });
+    const response = await apiService.patch(API_ENDPOINTS.admin.agentDeliveryQueueById(id), { content });
     return unwrapResponse<DeliveryQueueItem>(response);
   },
 
@@ -625,33 +626,34 @@ export const agentAdminService = {
 
   async listTopics(opts?: { activeOnly?: boolean }): Promise<ApiResponse<TopicCatalogItem[]>> {
     const params = opts?.activeOnly ? { active: 'true' } : {};
-    const response = await apiService.get('/admin/agent/topics', params);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentTopics, params);
     return unwrapResponse<TopicCatalogItem[]>(response);
   },
 
   async getTopic(id: string): Promise<ApiResponse<TopicCatalogItem>> {
-    const response = await apiService.get(`/admin/agent/topics/${id}`);
+    const response = await apiService.get(API_ENDPOINTS.admin.agentTopicsById(id));
     return unwrapResponse<TopicCatalogItem>(response);
   },
 
   async createTopic(input: TopicInput): Promise<ApiResponse<TopicCatalogItem>> {
-    const response = await apiService.post('/admin/agent/topics', input);
+    const response = await apiService.post(API_ENDPOINTS.admin.agentTopics, input);
     return unwrapResponse<TopicCatalogItem>(response);
   },
 
   async updateTopic(id: string, patch: Partial<TopicInput>): Promise<ApiResponse<TopicCatalogItem>> {
-    const response = await apiService.patch(`/admin/agent/topics/${id}`, patch);
+    const response = await apiService.patch(API_ENDPOINTS.admin.agentTopicsById(id), patch);
     return unwrapResponse<TopicCatalogItem>(response);
   },
 
   async deleteTopic(id: string, opts?: { hard?: boolean }): Promise<ApiResponse<{ id: string; deleted: 'soft' | 'hard' }>> {
     const params = opts?.hard ? '?hard=true' : '';
-    const response = await apiService.delete(`/admin/agent/topics/${id}${params}`);
+    const deleteTopicEndpoint = `${API_ENDPOINTS.admin.agentTopicsById(id)}${params}`;
+    const response = await apiService.delete(deleteTopicEndpoint);
     return unwrapResponse<{ id: string; deleted: 'soft' | 'hard' }>(response);
   },
 
   async testTopicRegex(id: string, sampleText: string): Promise<ApiResponse<{ matches: Record<string, number> }>> {
-    const response = await apiService.post(`/admin/agent/topics/${id}/test`, { sampleText });
+    const response = await apiService.post(API_ENDPOINTS.admin.agentTopicsByIdTest(id), { sampleText });
     return unwrapResponse<{ matches: Record<string, number> }>(response);
   },
 };

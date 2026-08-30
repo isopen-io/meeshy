@@ -51,6 +51,48 @@ class OutboxRepositoryTest {
         assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
     }
 
+    /**
+     * End to end through the real enqueue: a queued write answers `true` for its own kind
+     * and `false` for its lane-mate. `PreferencesSyncCoordinator` reads this to decide
+     * whether folding the server's block would revert a change the user already made here,
+     * so a kind that did not round-trip through the column would silently veto nothing.
+     */
+    @Test
+    fun `hasDeliverable answers for the queued kind only`() = runTest {
+        repository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_SETTINGS,
+                lane = OutboxLanes.SETTINGS,
+                targetId = "u1",
+                payload = "{}",
+                cmid = "s1",
+            ),
+        )
+
+        assertThat(repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_SETTINGS)).isTrue()
+        assertThat(
+            repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_PRIVACY_SETTINGS),
+        ).isFalse()
+    }
+
+    /** A delivered row is deleted, so nothing is owed any more. */
+    @Test
+    fun `hasDeliverable clears once the row is delivered`() = runTest {
+        repository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.UPDATE_SETTINGS,
+                lane = OutboxLanes.SETTINGS,
+                targetId = "u1",
+                payload = "{}",
+                cmid = "s1",
+            ),
+        )
+
+        repository.markSucceeded("s1")
+
+        assertThat(repository.hasDeliverable(OutboxLanes.SETTINGS, OutboxKind.UPDATE_SETTINGS)).isFalse()
+    }
+
     @Test
     fun `enqueue annihilates a reaction toggle and emits Cancelled`() = runTest {
         repository.enqueue(reaction(OutboxKind.ADD_REACTION, "add"))

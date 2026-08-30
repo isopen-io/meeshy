@@ -93,14 +93,14 @@ describe('AttachmentService', () => {
   describe('getAttachmentUrl', () => {
     it('returns the API URL for the given attachment id', () => {
       const url = AttachmentService.getAttachmentUrl('abc123');
-      expect(url).toBe('https://api.test/attachments/abc123');
+      expect(url).toBe('https://api.test/api/v1/attachments/abc123');
     });
   });
 
   describe('getThumbnailUrl', () => {
     it('returns the thumbnail API URL for the given attachment id', () => {
       const url = AttachmentService.getThumbnailUrl('abc123');
-      expect(url).toBe('https://api.test/attachments/abc123/thumbnail');
+      expect(url).toBe('https://api.test/api/v1/attachments/abc123/thumbnail');
     });
   });
 
@@ -256,7 +256,7 @@ describe('AttachmentService', () => {
       await promise;
       expect(mockXhrInstance.open).toHaveBeenCalledWith(
         'POST',
-        'https://api.test/attachments/upload'
+        'https://api.test/api/v1/attachments/upload'
       );
     });
 
@@ -734,7 +734,7 @@ describe('AttachmentService', () => {
       await AttachmentService.uploadText('my text', 'custom-token');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.test/attachments/upload-text',
+        'https://api.test/api/v1/attachments/upload-text',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ content: 'my text' }),
@@ -872,7 +872,7 @@ describe('AttachmentService', () => {
       await AttachmentService.deleteAttachment('att-42', 'tok');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.test/attachments/att-42',
+        'https://api.test/api/v1/attachments/att-42',
         expect.objectContaining({ method: 'DELETE' })
       );
     });

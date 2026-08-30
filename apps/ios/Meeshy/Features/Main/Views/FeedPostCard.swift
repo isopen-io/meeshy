@@ -246,13 +246,15 @@ struct FeedPostCard: View {
         return all.filter { $0 != activeLanguage }
     }
 
+    /// Le retour haptique appartient à `LanguageFlagChip` — seul appelant de
+    /// cette méthode — et non aux trois sorties de sa logique : une puce qui
+    /// vibre à l'appui, toujours, quel que soit ce que l'appui déclenche.
     private func handleFlagTap(_ code: String) {
         let isOriginal = code == post.originalLanguage?.lowercased()
         let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
 
         if !hasContent {
             onSelectLanguage?(post.id, code)
-            HapticFeedback.light()
             return
         }
 
@@ -267,7 +269,6 @@ struct FeedPostCard: View {
                 secondaryLangCode = isShowing ? nil : code
             }
         }
-        HapticFeedback.light()
     }
 
     /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
@@ -604,6 +605,7 @@ struct FeedPostCard: View {
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
+                    .commentMediaGallery(topLevel: post.comments)
             }
         }
         .background(
@@ -690,6 +692,9 @@ struct FeedPostCard: View {
                 allAttachments: attachments,
                 startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                 accentColor: accentColor,
+                captionMap: SocialMediaCaption.map(
+                    for: post.media, carrierText: post.displayContent
+                ),
                 senderInfoMap: senderMap
             )
         }
@@ -799,48 +804,25 @@ struct FeedPostCard: View {
 
                     let flags = buildAvailableFlags()
                     if !flags.isEmpty || post.translations?.isEmpty == false {
-                        Text("·")
+                        MetaSeparator()
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
 
                         ForEach(flags, id: \.self) { code in
-                            let display = LanguageDisplay.from(code: code)
-                            let isActive = code == secondaryLangCode
-                            VStack(spacing: 1) {
-                                Text(display?.flag ?? code.uppercased())
-                                    .font(isActive ? .caption : .caption2)
-                                    .scaleEffect(isActive ? 1.05 : 1.0)
-                                if isActive {
-                                    RoundedRectangle(cornerRadius: 1)
-                                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                        .frame(width: 10, height: 1.5)
-                                }
+                            LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
+                                handleFlagTap(code)
                             }
-                            .animation(.easeInOut(duration: 0.2), value: isActive)
-                            .onTapGesture { handleFlagTap(code) }
-                            .accessibilityLabel(String(localized: "feed.post.flag.a11y", defaultValue: "Afficher en \(display?.name ?? code)", bundle: .main))
-                            .accessibilityAddTraits(.isButton)
                         }
 
                         if post.translations?.isEmpty == false {
-                            Image(systemName: "translate")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                .frame(minWidth: 32, minHeight: 32)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    HapticFeedback.light()
-                                    showTranslationSheet = true
-                                }
-                                .accessibilityLabel(String(localized: "feed.post.translate.a11y", defaultValue: "Voir les traductions", bundle: .main))
-                                .accessibilityAddTraits(.isButton)
+                            TranslationsBadge { showTranslationSheet = true }
                         }
                     }
 
                     // Reach stats (impressions · views) — visible ONLY to the
                     // post's author, after the meta row (private analytics).
                     if isAuthor {
-                        Text("·").font(.caption).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
                             ReachMetricLabel(
                                 icon: "chart.bar.fill",
@@ -848,8 +830,7 @@ struct FeedPostCard: View {
                                 label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
                                 tint: theme.textMuted
                             )
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                                .accessibilityHidden(true)
+                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                             ReachMetricLabel(
                                 icon: "eye.fill",
                                 count: post.viewCount,
@@ -964,7 +945,7 @@ struct FeedPostCard: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.accentText(repost.authorColor))
 
-                    Text("·")
+                    MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
                     Text(timeAgo(from: repost.timestamp))
@@ -1270,6 +1251,8 @@ struct FeedPostCard: View {
     }
 
     // MARK: - Comments Preview (Top 3 Comments)
+    /// L'aperçu ne montre que trois commentaires — le plein écran, lui, feuillette
+    /// les médias de TOUS ceux que la carte connaît.
     private var commentsPreview: some View {
         Button {
             showCommentsSheet = true
@@ -1359,22 +1342,30 @@ struct FeedPostCard: View {
                             .foregroundColor(theme.accentText(comment.authorColor))
 
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-
-                            let origDisplay = LanguageDisplay.from(code: origLang)
-                            Text(origDisplay?.flag ?? "?")
-                                .font(.caption2)
+                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
 
                             let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
                             let targetLang = userLangs.first?.lowercased() ?? "fr"
-                            let targetDisplay = LanguageDisplay.from(code: targetLang)
-                            Text(targetDisplay?.flag ?? "?")
-                                .font(.caption2)
-
-                            Image(systemName: "translate")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                .accessibilityHidden(true)
+                            // Ces trois glyphes ne disent qu'UNE chose : « ce
+                            // commentaire a été traduit, de là vers ici ». Lus un
+                            // par un, VoiceOver annonçait deux PAYS — « drapeau du
+                            // Royaume-Uni, drapeau de la France ». Ils s'annoncent
+                            // donc en une phrase, et une seule. La paire n'est PAS
+                            // interactive ici (l'aperçu ouvre le commentaire) :
+                            // pas de `LanguageFlagChip`, qui est un contrôle.
+                            HStack(spacing: 4) {
+                                Text(LanguageFlagChip.flag(for: origLang))
+                                    .font(.caption2)
+                                Text(LanguageFlagChip.flag(for: targetLang))
+                                    .font(.caption2)
+                                Image(systemName: "translate")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundColor(MeeshyColors.indigo400)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(
+                                LanguageFlagChip.translationSummary(from: origLang, to: targetLang)
+                            )
                         }
                     }
 
@@ -1396,6 +1387,7 @@ struct FeedPostCard: View {
                             media: media,
                             accentColor: accentColor,
                             commentId: comment.id,
+                            carrierText: comment.displayContent,
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,

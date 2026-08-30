@@ -162,7 +162,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
 
-      const jwtToken = authService.generateToken(user);
+      // Le jeton NOMME la session qui vient de naître (#4264) : sans ce lien,
+      // révoquer cet appareil-ci depuis un autre laissait son JWT passer
+      // `POST /refresh` tant qu'une seule session du compte restait valide.
+      const jwtToken = authService.generateToken(user, session.id);
 
       // Mark session as trusted in background (non-blocking)
       if (rememberDevice && session.id) {
@@ -284,7 +287,9 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
 
-      const jwtToken = authService.generateToken(user);
+      // Même lien qu'au mot de passe : la seconde porte d'un compte protégé
+      // n'a aucune raison d'émettre un jeton plus pauvre (#4264).
+      const jwtToken = authService.generateToken(user, session.id);
 
       // Mark session as trusted in background after 2FA verification
       if (rememberDevice && session.id) {

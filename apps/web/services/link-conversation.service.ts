@@ -151,7 +151,7 @@ export class LinkConversationService {
     
     // L'endpoint API /api/links/:id accepte les deux types d'identifiants
     // Le backend se charge de déterminer le type et de récupérer les bonnes données
-    const endpoint = `/api/links/${identifier}`;
+    const endpoint = API_ENDPOINTS.links.byIdentifier(identifier);
     const url = new URL(buildApiUrl(endpoint));
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
@@ -184,7 +184,7 @@ export class LinkConversationService {
         
         for (const fallbackIdentifier of fallbacks) {
           try {
-            const fallbackEndpoint = `/api/links/${fallbackIdentifier}`;
+            const fallbackEndpoint = API_ENDPOINTS.links.byIdentifier(fallbackIdentifier);
             const fallbackUrl = new URL(buildApiUrl(fallbackEndpoint));
             fallbackUrl.searchParams.append('limit', limit.toString());
             fallbackUrl.searchParams.append('offset', offset.toString());
@@ -314,7 +314,7 @@ export class LinkConversationService {
       };
     };
   }> {
-    const endpoint = `/anonymous/link/${linkId}`;
+    const endpoint = API_ENDPOINTS.anonymous.linkByIdentifier(linkId);
     const response = await fetch(buildApiUrl(endpoint), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
@@ -362,7 +362,7 @@ export class LinkConversationService {
     linkId: string,
     authToken: string
   ): Promise<{ conversationId: string; redirectTo?: string }> {
-    const endpoint = `/conversations/join/${linkId}`;
+    const endpoint = API_ENDPOINTS.conversations.joinByLinkId(linkId);
     const url = buildApiUrl(endpoint);
     
     const headers: Record<string, string> = {

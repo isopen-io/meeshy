@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import bcrypt from 'bcryptjs';
-import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber, normalizePhoneWithCountry } from '../../utils/normalize';
+import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry } from '../../utils/normalize';
 import { buildPaginationMeta } from '../../utils/pagination';
 import {
   updateUserProfileSchema,
@@ -12,6 +12,21 @@ import {
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { depreciee } from '../../utils/deprecation';
+
+/**
+ * Le sursis des trois portes de profil (#4274).
+ *
+ * `depuis` est la date de fermeture de #4161 — le jour ou
+ * `/directory/people/:handle` est devenue l'adresse unique. Aucun `retraitLe` :
+ * #4161 c.9 et c.10 exigent l'extinction des versions iOS INSTALLEES et le
+ * comptage des appels Android. Un profil s'ouvre depuis un lien partage, et
+ * cette queue est longue ; le compteur est #4275.
+ */
+const ANNONCE_PROFIL = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/directory/people/:handle',
+} as const;
 import {
   userSchema,
   userMinimalSchema,
@@ -29,6 +44,16 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { annoncerDepreciation, dateDeRetrait, type AdresseDepreciee } from '../../utils/deprecation';
+
+const DEPUIS_PROFIL = '2026-08-29';
+
+/** L'annonce d'un alias de profil — le successeur porte le handle RÉSOLU. */
+const annonceProfil = (handle: string): AdresseDepreciee => ({
+  depuis: DEPUIS_PROFIL,
+  successeur: `/api/v1/directory/people/${encodeURIComponent(handle)}`,
+  retraitLe: dateDeRetrait(DEPUIS_PROFIL),
+});
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 import { searchTokensFor } from '../../utils/search-tokens';
@@ -72,7 +97,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
   fastify.patch('/users/me', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number uniqueness is enforced.',
+      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number are NOT accepted here (#4184) — use POST /users/me/change-email and /change-phone, which require proof of possession before writing.',
       tags: ['users'],
       summary: 'Update user profile',
       body: updateUserRequestSchema,
@@ -120,12 +145,15 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (body.firstName !== undefined) updateData.firstName = SecuritySanitizer.sanitizeText(capitalizeName(body.firstName));
       if (body.lastName !== undefined) updateData.lastName = SecuritySanitizer.sanitizeText(capitalizeName(body.lastName));
       if (body.displayName !== undefined) updateData.displayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(body.displayName));
-      if (body.email !== undefined) updateData.email = normalizeEmail(body.email);
-      if (body.phoneNumber !== undefined) {
-        updateData.phoneNumber = (body.phoneNumber === '' || body.phoneNumber === null)
-          ? null
-          : normalizePhoneNumber(body.phoneNumber);
-      }
+      // `email` et `phoneNumber` NE SONT PLUS lisibles sur `body` — retirés du
+      // schéma (#4184) précisément pour qu'aucune ligne ne puisse plus les
+      // écrire ici. Cette route les acceptait autrefois SANS preuve de
+      // possession et les posait directement en base sans jamais remettre
+      // `emailVerifiedAt`/`phoneVerifiedAt` à `null` : une session courte
+      // suffisait à un attaquant pour prendre le compte en un seul appel.
+      // Le bon geste — `POST /users/me/change-email` / `/change-phone`
+      // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
+      // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
@@ -136,37 +164,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       }
       if (body.customDestinationLanguage !== undefined) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
-      }
-
-      if (body.email) {
-        const normalizedEmail = normalizeEmail(body.email);
-        const existingUser = await fastify.prisma.user.findFirst({
-          where: {
-            email: {
-              equals: normalizedEmail,
-              mode: 'insensitive'
-            },
-            id: { not: userId }
-          }
-        });
-
-        if (existingUser) {
-          return sendBadRequest(reply, 'This email address is already in use');
-        }
-      }
-
-      if (body.phoneNumber && body.phoneNumber !== null && body.phoneNumber.trim() !== '') {
-        const normalizedPhone = normalizePhoneNumber(body.phoneNumber);
-        const existingUser = await fastify.prisma.user.findFirst({
-          where: {
-            phoneNumber: normalizedPhone,
-            id: { not: userId }
-          }
-        });
-
-        if (existingUser) {
-          return sendBadRequest(reply, 'This phone number is already in use');
-        }
       }
 
       const updatedUser = await withMutationLog({
@@ -764,6 +761,7 @@ export async function updateUsername(fastify: FastifyInstance) {
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
@@ -811,6 +809,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: UsernameParams }>, reply: FastifyReply) => {
     try {
       const { username } = request.params;
+      annoncerDepreciation(reply, annonceProfil(username));
 
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
@@ -835,6 +834,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
  */
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
@@ -877,6 +877,7 @@ export async function getUserById(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
+      annoncerDepreciation(reply, annonceProfil(id));
 
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
@@ -966,6 +967,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',
@@ -996,6 +998,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
+      annoncerDepreciation(reply, annonceProfil(id));
 
       /* istanbul ignore next — Fastify params schema (pattern:^[a-fA-F\d]{24}$) rejects invalid ids before handler */
       if (!isValidObjectId(id)) {

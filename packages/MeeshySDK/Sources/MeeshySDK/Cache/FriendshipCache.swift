@@ -178,11 +178,15 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
         do {
             // Fetch sent and received requests in parallel
-            async let sentTask = Self.fetchAllPages { offset, limit in
-                try await friendService.sentRequests(offset: offset, limit: limit)
+            async let sentTask = Self.fetchAllPages { cursor, limit in
+                try await friendService.friendRequests(
+                    direction: .sent, status: nil, q: nil, cursor: cursor, limit: limit
+                )
             }
-            async let receivedTask = Self.fetchAllPages { offset, limit in
-                try await friendService.receivedRequests(offset: offset, limit: limit)
+            async let receivedTask = Self.fetchAllPages { cursor, limit in
+                try await friendService.friendRequests(
+                    direction: .received, status: nil, q: nil, cursor: cursor, limit: limit
+                )
             }
 
             let (allSent, allReceived) = try await (sentTask, receivedTask)
@@ -280,16 +284,18 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Pagination Helper
 
     private static func fetchAllPages(
-        fetch: (Int, Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+        fetch: (String?, Int) async throws -> PaginatedAPIResponse<[FriendRequest]>
     ) async throws -> [FriendRequest] {
         var all: [FriendRequest] = []
-        var offset = 0
+        var cursor: String?
         let pageSize = 100
         while true {
-            let page = try await fetch(offset, pageSize)
+            let page = try await fetch(cursor, pageSize)
             all.append(contentsOf: page.data)
             guard page.pagination?.hasMore == true else { break }
-            offset += pageSize
+            cursor = page.pagination?.nextCursor
+            // Sans curseur, redemander la même page tournerait sans fin.
+            guard cursor != nil else { break }
         }
         return all
     }

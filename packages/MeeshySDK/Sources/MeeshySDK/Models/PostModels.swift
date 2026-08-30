@@ -421,6 +421,7 @@ extension APIPostMedia {
             duration: duration.map { $0 / 1000 },
             fileName: originalName ?? fileName,
             fileSize: fileSize.map { formatFileSize($0) },
+            caption: caption,
             transcription: transcription,
             translatedAudios: translatedAudios,
             imageVariants: imageVariants

@@ -1,6 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
@@ -38,6 +37,12 @@ import {
   type GlobalMembershipSocketManager,
 } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
+import {
+  signSessionToken,
+  verifySessionToken,
+  TOKEN_TTL,
+  type SessionBoundTokenPayload,
+} from './auth/session-jwt';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -62,11 +67,14 @@ export interface RegisterData {
   skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
 }
 
-export interface TokenPayload {
-  userId: string;
-  username: string;
-  role: string;
-}
+/**
+ * Charge utile d'un JWT — DÉFINIE dans `./auth/session-jwt`, ré-exportée ici
+ * pour les appelants historiques. Depuis #4264 elle porte `sid`, l'identifiant
+ * de la ligne `UserSession` qui a émis le jeton : sans lui, `POST /refresh` ne
+ * pouvait que COMPTER les sessions valides d'un compte, jamais refuser celle
+ * qu'on venait de révoquer.
+ */
+export type TokenPayload = SessionBoundTokenPayload;
 
 export interface AuthResult {
   user: SocketIOUser;
@@ -796,38 +804,24 @@ export class AuthService {
   }
 
   /**
-   * Générer un token JWT
+   * Générer un token JWT, RATTACHÉ à la session qui l'émet — le lien que
+   * #4213 n'avait pas : sa garde ne pouvait que COMPTER les sessions valides
+   * du compte, si bien que révoquer UNE session laissait le jeton volé passer
+   * tant que le propriétaire restait connecté ailleurs, le cas nominal.
+   * Émission et butoir de transition : `./auth/session-jwt`.
    */
-  generateToken(user: SocketIOUser): string {
-    const payload: TokenPayload = {
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    };
-
-    return jwt.sign(payload, this.jwtSecret, {
-      expiresIn: '24h'
+  generateToken(user: SocketIOUser, sessionId?: string | null): string {
+    return signSessionToken({
+      user,
+      secret: this.jwtSecret,
+      sessionId,
+      expiresIn: TOKEN_TTL,
     });
   }
 
-  /**
-   * Vérifier un token JWT.
-   * Retourne null si le token est expiré ou invalide.
-   * TokenExpiredError est un cas attendu (refresh flow) — loggé en debug, pas ERROR.
-   */
+  /** Vérifier un token JWT — `null` si expiré ou invalide. Voir `./auth/session-jwt`. */
   verifyToken(token: string): TokenPayload | null {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret) as TokenPayload;
-      return decoded;
-    } catch (error: any) {
-      if (error?.name === 'TokenExpiredError') {
-        // Expected during /auth/refresh — not an error, the client will refresh.
-        logger.debug('[AuthService] JWT expired (expected at refresh)', { exp: error.expiredAt });
-      } else {
-        logger.error('Error verifying token', error);
-      }
-      return null;
-    }
+    return verifySessionToken(token, this.jwtSecret);
   }
 
   /**

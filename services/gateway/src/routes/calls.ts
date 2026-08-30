@@ -15,10 +15,11 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
-import { CallService } from '../services/CallService.js';
+import { CallService, CallAlreadyEndedError } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
+import { validatePagination } from '../utils/pagination.js';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   initiateCallSchema,
@@ -330,6 +331,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{
     Params: CallParams;
+    Querystring: { offset?: string; limit?: string };
   }>('/calls/:callId/transcript', {
     preValidation: [requiredAuth, createValidationMiddleware(getCallSchema)],
     ...ROUTE_RATE_LIMITS.callOperations,
@@ -348,6 +350,13 @@ export default async function callRoutes(fastify: FastifyInstance) {
           }
         }
       },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Number of segments to skip (default 0)' },
+          limit: { type: 'string', description: 'Maximum segments per page (default 100, max 100)' }
+        }
+      },
       response: {
         200: {
           description: 'Call transcript retrieved successfully',
@@ -360,6 +369,8 @@ export default async function callRoutes(fastify: FastifyInstance) {
                 callId: { type: 'string' },
                 conversationId: { type: 'string' },
                 callStartedAt: { type: 'string', format: 'date-time' },
+                total: { type: 'number' },
+                hasMore: { type: 'boolean' },
                 segments: {
                   type: 'array',
                   items: {
@@ -420,7 +431,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // Volontairement AUCUN log du contenu — donnée sensible.
       logger.info('📞 REST: Getting call transcript', { callId, userId });
 
-      const transcript = await callService.getCallTranscript(callId, userId);
+      const { offset, limit } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 100 });
+
+      const transcript = await callService.getCallTranscript(callId, userId, offset, limit);
 
       return sendSuccess(reply, transcript);
     } catch (error: any) {
@@ -587,6 +600,21 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
+      // Issue #3581 — mirrors the socket `call:end` handler: `endCall()`
+      // throws `CallAlreadyEndedError` when the call is ALREADY terminal
+      // (retried request, or a race against another path that just resolved
+      // it). The caller's intent already holds, so this is a 200 with the
+      // call's current (terminal) session, not an error — and unlike the
+      // nominal path above, nothing here re-broadcasts `call:ended`,
+      // re-posts the call-summary, or touches `broadcastParticipantLeft`.
+      if (error instanceof CallAlreadyEndedError) {
+        logger.info('ℹ️ REST: call already ended — idempotent no-op', {
+          callId: request.params.callId, endReason: error.endReason
+        });
+        const currentSession = await callService.getCallSession(request.params.callId);
+        return sendSuccess(reply, toCallSessionResponse(currentSession));
+      }
+
       logger.error('❌ REST: Error ending call', error);
 
       const errorMessage = error.message || 'Failed to end call';
@@ -951,6 +979,22 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
+      // Vague 182 (#4202/Vague 181 follow-up) — mirrors the END route's own
+      // CallAlreadyEndedError handling above and the socket call:leave
+      // handler: leaveCall() throws it when this leave/kick lost the race
+      // to a concurrent terminal write, not when it genuinely failed. The
+      // caller's intent already holds, so this is a 200 with the call's
+      // current (terminal) session, not an error — nothing here
+      // re-broadcasts call:ended, re-posts the call-summary, or touches
+      // broadcastParticipantLeft.
+      if (error instanceof CallAlreadyEndedError) {
+        logger.info('ℹ️ REST: call already ended — idempotent no-op', {
+          callId: request.params.callId, endReason: error.endReason
+        });
+        const currentSession = await callService.getCallSession(request.params.callId);
+        return sendSuccess(reply, toCallSessionResponse(currentSession));
+      }
+
       logger.error('❌ REST: Error leaving call', error);
 
       const errorMessage = error.message || 'Failed to leave call';

@@ -2,7 +2,7 @@ import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
-import { CallService } from '../../services/CallService';
+import { CallService, CallAlreadyEndedError } from '../../services/CallService';
 import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
 import { SOCKET_SESSION_ID } from '../disconnectSession';
@@ -60,6 +60,16 @@ export interface AuthHandlerDependencies {
     userId: string;
     leaveError: unknown;
   }) => Promise<void>;
+  /**
+   * Vague 182 (#4202/Vague 181 follow-up) — idempotent no-op counterpart to
+   * `forceCleanupCallParticipant` above, curried down to
+   * `CallEventsHandler.absorbAlreadyEndedLeave`. `leaveCall()` throws
+   * `CallAlreadyEndedError` when this leave lost the race to a concurrent
+   * terminal write, not when it genuinely failed — the call is already
+   * correctly closed by whichever path won. Optional, same rationale as the
+   * callbacks above.
+   */
+  absorbAlreadyEndedCallLeave?: (opts: { callId: string; error: CallAlreadyEndedError }) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -73,6 +83,7 @@ export class AuthHandler {
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
   private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
+  private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -85,6 +96,7 @@ export class AuthHandler {
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
+    this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -555,6 +567,25 @@ export class AuthHandler {
               userId: userIdOrToken
             });
           } catch (error) {
+            // Vague 182 (#4202/Vague 181 follow-up) — leaveCall() throws
+            // CallAlreadyEndedError when this leave lost the race to a
+            // concurrent terminal write, not when it genuinely failed: the
+            // call is already correctly closed by whichever path won, which
+            // already ran the full call:ended broadcast/summary/missed-call
+            // fanout. Absorb it as the idempotent no-op it is instead of
+            // falling into the generic force-cleanup fallback below, which
+            // would force-end an already-ended call a second time.
+            if (error instanceof CallAlreadyEndedError) {
+              await this.absorbAlreadyEndedCallLeave?.({ callId: participation.callSessionId, error })
+                .catch((absorbError) => {
+                  logger.error('absorb-already-ended-leave failed on disconnect', {
+                    callId: participation.callSessionId,
+                    error: absorbError
+                  });
+                });
+              continue;
+            }
+
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
             // Parity with the registered-user path: a rejected leaveCall used
             // to leave this participation open until the ~120s GC. The

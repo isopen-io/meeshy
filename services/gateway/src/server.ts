@@ -34,6 +34,7 @@ import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { registerRouteUsageHook } from './plugins/route-usage.plugin';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
@@ -46,6 +47,7 @@ import { MutationLogService } from './services/MutationLogService';
 // ce fichier) — nécessaire pour que le test de garde des routes puisse
 // l'importer sans déclencher `meeshyServer.start()`.
 import { registerAllRoutes } from './route-registration';
+import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -522,7 +524,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       },
       staticCSP: true,
       transformStaticCSP: (header) => header,
-      transformSpecification: (swaggerObject) => swaggerObject,
+      // #4372 — l'OpenAPI publié écrit ses chemins comme les deux AUTRES
+      // descriptions de la même API : sans barre finale. `@fastify/swagger`
+      // émet la forme DÉCLARÉE, si bien qu'un module monté au préfixe
+      // `/api/v1/me` déclarant sa route en `'/'` publiait `/api/v1/me/` —
+      // quinze chemins dans ce cas, quand le manifeste (430) et le catalogue
+      // client (416) n'en portent aucun. Le serveur sert les deux formes, donc
+      // rien ne cassait ; mais toute comparaison entre l'OpenAPI et l'une des
+      // deux autres sources rendait quinze faux négatifs.
+      //
+      // Ici, et pas dans les huit modules concernés : déclarer `''` au lieu de
+      // `'/'` chez chacun marcherait, et laisserait le neuvième arriver. C'est
+      // le seul point par lequel la spec atteint un consommateur — vérifié,
+      // `fastify.swagger()` n'est appelée nulle part ailleurs.
+      transformSpecification: (swaggerObject) => {
+        const { spec, collisions } = canonicaliserCheminsOpenApi(swaggerObject as never);
+        if (collisions.length > 0) {
+          // Une collision n'est pas résolue en silence : la forme canonique
+          // l'emporte, mais on DIT ce qui n'a pas pu être fusionné.
+          logger.warn('OpenAPI : verbes en collision après canonisation des chemins', { collisions });
+        }
+        return spec as never;
+      },
       transformSpecificationClone: true
     });
 
@@ -616,6 +639,24 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       done();
     });
     logger.info('✅ Request timing hook registered');
+
+    // Compteur d'acces par route et par version cliente (#4275). Quatre issues
+    // — #4178, #4181, #4182, #4184 — font d'un compteur a ZERO le critere de
+    // retrait d'une adresse depreciee et INTERDISENT de le prouver par revue de
+    // code client : sans cette ligne, elles restent inatteignables par
+    // construction.
+    //
+    // Deux contraintes de POSE, et non une seule. Appel DIRECT sur la racine,
+    // jamais `register` : un hook pose dans un contexte encapsule ne verrait
+    // aucune des routes de production, et le compteur rendrait un tapis de
+    // zeros credible. Et arme sur `onResponse`, ou le routage est DEJA resolu :
+    // c'est ce qui fait rendre a `routeOptions.url` le GABARIT, jamais l'URL
+    // concrete — sans quoi un identifiant d'utilisateur entrerait dans la cle
+    // d'agregat au premier appel d'une route parametree.
+    //
+    // Cout mesure : 0,32 a 0,65 us par requete, aucune E/S, aucune promesse.
+    registerRouteUsageHook(this.server);
+    logger.info('✅ Route usage counter hook registered');
 
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
@@ -1118,7 +1159,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal
         // ringing budget instead of ringing until the GC tier.
-        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
+        // `.catch` OBLIGATOIRE sur une promesse détachée (leçon 230) : le
+        // `try/catch` de ce bloc n'attrape qu'un `throw` synchrone, et un rejet
+        // sans écouteur termine le process sous le `--unhandled-rejections=throw`
+        // par défaut de Node 22 — le démarrage de la passerelle emporté par une
+        // ré-hydratation d'appels dont tout le contrat est d'être best-effort.
+        void callEventsHandler
+          .rehydrateActiveCalls(cleanupManager.getIO())
+          .catch((error: unknown) => logger.warn('[GWY] rehydrateActiveCalls failed', { error }));
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }

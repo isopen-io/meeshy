@@ -2,6 +2,632 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the pure ThumbHash source-downscale planner landed — the JVM-testable half of the story
+> thumbHash write-path the prior run named as next** (slice `thumbhash-source-plan`, feature-parity
+> "thumbHash blur-placeholder per slide" `[~]` line, and the media `[~]` line at §P). `ThumbHash.encode`
+> was ported over a month ago but its contract rejects any side outside `1..100`; nothing computed the
+> downscale a real source raster needs before it, so the write-path had no legal way to feed it. iOS keeps
+> the same shape — `StorySlideRenderer` renders the composite to a low-res ~100px UIImage BEFORE
+> `toThumbHash()` (audit part-22 §StorySlideRenderer). The planning arithmetic (target dims) is pure and
+> device-free; only the `Bitmap` scale + RGBA read-back are device-bound. So the planner is pure
+> `:core:model`, not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4316/#4315/#4307/#4300/#4291/#4267
+> (all jcnm: web/shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`call-stats-reduce`) is on `main` (#4314). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count`
+> = 0/0). Diff verified `apps/android` only (1 main file + 1 new test file).
+>
+> **The change — one pure function, one data class.** `:core:model` `ThumbHashSourcePlan(width, height,
+> downscaled)` + `ThumbHash.sourcePlan(width, height)`: rejects a non-positive side (`require ≥1`, matching
+> `encode`); returns an already-in-budget source verbatim (`downscaled=false`, never upscales) so the caller
+> skips the resize; else scales the long edge exactly to 100, derives the short edge by aspect ratio
+> (round-half-up, reusing the object's own `roundHalfUp`), and clamps each side to `max(1, …)` so an extreme
+> banner ratio whose short edge would round to 0 still yields a legal encode input. Every returned side is
+> provably in `1..100` (short ≤ long, scale ≤ 1 ⇒ short·scale < 100). Blast radius: a new SSOT sibling of
+> `encode`, zero existing call sites touched.
+>
+> **Tests: +15, RED-proven.** `ThumbHashSourcePlanTest`: pass-through (50×80 unchanged; 100×100 boundary;
+> 1×1), downscale (200×200→100×100; 1080×1920→56×100 portrait; 1920×1080→100×56 landscape; 101×50→100×50
+> one-px-over), extreme ratios (1000×3→100×1 and 3×1000→1×100, the clamp), the `1..100` invariant across 11
+> sources, long/short-edge ordering preserved, and two illegal-source rejections (0-width, negative-height).
+> **RED**: drop the `max(1,…)` clamp → exactly the two extreme-ratio tests + the invariant test fail, no
+> collateral; change the budget guard `<=`→`<` → exactly the boundary pass-through test fails.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 7m 11s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 1 main + 1 test, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless planner, no `android.*`, no orchestration; SSOT — the planner is the single home for the
+> pre-`encode` downscale, no re-implementation; no tautological tests; no coverage floor lowered — new pure
+> logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the story thumbHash write-path's only remaining piece is the app-side `Bitmap`→plan-scale→RGBA
+> read-back → `ThumbHash.encode` at publish, which needs a real `Bitmap` and is not JVM-testable — it waits
+> for a device-capable run alongside the other device-bound Calls seams (WebRTC stats adapter, video-filter
+> actuators). Consider another pure-core Feed/Stories slice next, or a pure reducer in an earlier build-order
+> area. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **the pure WebRTC stats reducer + interval loss-ratio landed — the JVM-testable half of the
+> "live WebRTC stats source" the prior run named as next** (slice `call-stats-reduce`, feature-parity
+> "Connection-quality indicator" `[~]` line). Until now Android had `CallQualitySample(rttMs, packetLoss)` and
+> the tier ladder that consumes it, but nothing that turns a raw WebRTC stats report into that sample — the
+> `NoopCallQualitySampler` seam emitted nothing. iOS keeps this arithmetic in a pure, tested `CallStats.reduce`
+> (`WebRTCTypes.swift` §5.7) precisely so it is unit-testable without a live `RTCPeerConnection`; the framework
+> half is only `NSObject → Double` adaptation. So the reducer is pure `:core:model`, not device-bound
+> (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4307/#4300/#4291/#4267 (all jcnm:
+> shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-quality-rtt-longhaul-parity`) is on `main` (#4304). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (2 new files: 1 main + 1 test).
+>
+> **The change — two pure functions, one data class.** `:core:model` `CallStats` (rtt/packetsLost/bandwidth/
+> bytesReceived/codec/inbound-audio+video/outbound/availableOutgoingBitrate/jitter) + nested `CallStats.RawEntry`
+> (the framework-agnostic projection of one `RTCStatistics` entry) + `CallStats.reduce(entries)` (candidate-pair
+> rtt×1000 + BWE; inbound-rtp per-kind sums, audio-jitter mean, first-inbound codecId → `codec.mimeType` name
+> resolution `"audio/opus"`→`"opus"`; outbound-rtp sent/bandwidth sums; unknown types ignored; never throws).
+> `CallStats.intervalQualitySample(previous)` derives `CallQualitySample(rttMs, packetLoss)` where packetLoss is
+> the DELTA ratio `Δlost/(Δlost+Δreceived)` (a fraction, the input `VideoQualityLevel.from` wants — NOT iOS's
+> ×100 `packetLossPercent` which is only for the gateway report), each delta **clamped ≥ 0** so an ICE-restart
+> counter reset never reads as negative or spurious loss.
+>
+> **Tests: +25, RED-proven.** `CallStatsTest`: empty/defaults, unknown-type ignore, candidate-pair rtt-ms &
+> BWE-truncation & rtt-absent, inbound audio/video per-kind (video never contributes jitter), audio+video
+> totals, multi-stream loss sum, audio-jitter mean, outbound sums, codec resolution (present/first-wins/
+> unknown-id→null/no-inbound→null), interval sample (clean first tick, cumulative-first-tick ratio, delta ratio,
+> denom-0→0, full reset clamp, loss-counter-only reset never negative, total loss), and two end-to-end
+> reduce→sample→`.level()` classifications (EXCELLENT / CRITICAL). **RED**: three targeted mutations each fail
+> EXACTLY one test, no collateral — drop the reset clamp → the loss-counter-only-reset negative-loss test;
+> drop rtt×1000 → the ms test; codec last-wins instead of first → the first-inbound-wins test.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP 8.13 does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk itself).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 5m 53s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 2 new files, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless reducer, no `android.*`, no orchestration; SSOT — the reducer/sample ARE the single input the
+> existing `VideoQualityLevel`/`CallQualitySample` ladder consumes, no re-implementation; no tautological tests;
+> no coverage floor lowered — new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the only remaining piece of the connection-quality box is the DEVICE WebRTC stats-report adapter
+> (`RTCStatsReport → List<CallStats.RawEntry>` inside a real `CallQualitySampler`, then `reduce` +
+> `intervalQualitySample` → emit), which needs an emulator/WebRTC and is not JVM-testable — it waits for a
+> device-capable run. Other pure-core Calls candidates: the video-filter / dark-frame / thermal ACTUATOR seams
+> are all likewise device-bound. Consider stepping back to an earlier build-order area (Feed/Stories) for the
+> next pure slice — e.g. the Stories thumbHash **generation** write-path (needs `Bitmap`→RGBA, so structure the
+> pure part around the already-ported `ThumbHash.encode`). Read the chosen box's iOS audit part read-only first.
+
+> On 2026-08-29 **the Android call-quality RTT ladder now classifies a healthy intercontinental call at iOS
+> parity — it had been ported at iOS's PRE-recalibration boundaries and never followed the move** (slice
+> `call-quality-rtt-longhaul-parity`, feature-parity H. Calls — the "Connection-quality indicator" `[~]` line).
+> A genuine, user-facing parity BUG, not a new feature: `CallQualityThresholds` carried `VIDEO_FAIR_RTT_MS=200`
+> / `VIDEO_POOR_RTT_MS=300` / `POOR_RTT_MS=500`, the values iOS `QualityThresholds` (`WebRTCTypes.swift`) held
+> BEFORE it recalibrated the RTT ladder for real long-haul baselines (out to 300/500/800). Its own doc-comment
+> claimed "ported from iOS `QualityThresholds` … matching iOS" while diverging. An Africa↔Asia submarine backbone
+> is already 155-221 ms RTT (WACS 155, 2Africa 158, ACC-1 221) before the mobile last mile, so a healthy
+> intercontinental call routinely sits at 250-450 ms — and Android painted it red at 00:06: a 250 ms hop showed
+> FAIR not GOOD, a 350 ms call showed POOR (the weak-link error hue) not FAIR, a 550 ms link showed CRITICAL not
+> POOR. iOS (and the web mirror `use-call-quality.ts`) showed the same calls healthy. This is exactly the class the
+> roadmap calls a lenience/parity regression (dimensions 6/9/13), and it is pure logic — off-device JVM-testable.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4303/#4300/#4291/#4267 (all jcnm:
+> shared/gateway/ios), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-thermal-status-mapping`) is on `main` (#4295). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0).
+>
+> **The change — three constants, no new logic.** `CallQualityThresholds.{VIDEO_FAIR_RTT_MS→300, VIDEO_POOR_RTT_MS
+> →500, POOR_RTT_MS→800}`, now at exact iOS parity, with the long-haul calibration rationale moved into the doc
+> so the next reader sees WHY the boundaries sit where they do. `EXCELLENT_RTT_MS`(100) and every packet-loss band
+> (0.01/0.03/0.05/0.10 — the true congestion signal) were already correct and are untouched. Blast radius is a
+> single consumer: only `VideoQualityLevel.from(rttMs, packetLoss)` reads these (`grep` confirmed zero other
+> non-test call sites), so the fix cannot ripple into the survival policy or sender-cap plan, which consume the
+> enum tier, not the raw RTT.
+>
+> **Tests: +9 net, RED-proven.** `CallQualityTest` re-pinned both sides of all three moved boundaries
+> (300 stays GOOD / 300.1 → FAIR ; 500 stays FAIR / 500.1 → POOR ; 800 stays POOR / 800.1 → CRITICAL) and adds
+> three NAMED intercontinental regressions (250 ms → GOOD, 350 ms → FAIR, 550 ms → POOR) that each cite the
+> real-world scenario they defend. The stale `250 ms → FAIR` sample assertion was corrected to `350 ms → FAIR`.
+> `CallViewModelTest`'s stale `rtt 350 → indicator POOR` (which encoded the bug end-to-end) became `rtt 600 →
+> POOR`, preserving the "keeps updating through a reconnect" intent with a value genuinely POOR under the new
+> ladder; the `150 ms <= fair(200)` comment was refreshed to `videoFairRTT(300)`. **RED**: against the stale
+> constants exactly 9 CallQualityTest cases fail, compile healthy, no collateral — the recalibrated boundaries and
+> the three regressions, precisely the behaviour the fix restores. `CallAnalyticsTest`/`CallSignalManagerTest`/
+> `CallQualityReportTest` were checked and are unaffected (their RTT samples are loss-dominated → CRITICAL, or
+> pass an explicit `ConnectionQuality`).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/`build-tools;
+> 35.0.0`/`platform-tools`. Note: local cmdline-tools (11076708) + AGP 8.13.0 do NOT auto-map `compileSdk=37`
+> onto the published `android-37.0` package (only `android-37.x` are published, never a bare `android-37`), so a
+> local `platforms/android-37 → android-37.0` symlink is needed off-CI; CI's `setup-android` action handles this
+> itself (the workflow's "Provision compileSdk platform" step documents the exact same catalogue quirk).
+>
+> **Verified — targeted GREEN**: `:core:model:CallQualityTest` + `:feature:calls:CallViewModelTest` both **BUILD
+> SUCCESSFUL** after the fix. FULL `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> **BUILD SUCCESSFUL in 5m 40s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff `apps/android` only — 1 main constant file + 2 test
+> files; SDK purity — pure `:core:model` constants, no orchestration, no `android.os`; SSOT — the constants ARE
+> the single home `VideoQualityLevel.from` reads, now truthful to their "matching iOS" doc; no tautological tests;
+> no coverage floor lowered — boundary re-pins keep both-sides coverage and ADD three regressions).
+>
+> **Next**: the connection-quality box's only remaining piece is the live WebRTC stats source (`RTCStatsReport`
+> → `CallQualitySample`) that feeds real rtt/loss samples — needs an emulator/WebRTC, not JVM-testable, so it
+> waits for a device-capable run. Candidate pure-core slices still open in H. Calls: the "In-call translation
+> data channel (dual-stream clean audio)" model layer (but confirm it is genuinely built on iOS first — a prior
+> run flagged several Calls checklist lines as iOS-aspirational, not implemented). Otherwise the Stories
+> write-path thumbHash **generation** box. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **a raw Android `PowerManager.THERMAL_STATUS_*` reading now collapses to the exact `ThermalState`
+> tier the sender-cap plan consumes — the glue-free half of the iOS `ThermalStateMonitor` port** (slice
+> `call-thermal-status-mapping`, feature-parity H. Calls — the "Thermal-aware quality degradation" `[~]` line;
+> closes the "app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping" pending clause). Before this,
+> `ThermalState`'s own doc-comment named this mapping as `:app` glue that did not exist anywhere — the enum and
+> its `ThermalCeiling` fps/resolution tables shipped, but nothing turned the framework int into the enum, so the
+> policy `VideoSenderCapPlan.forConditions` had no way to be fed a real device tier. This is the pure decision
+> extracted out of the (emulator-only) actuator so it is unit-tested off-device (dimensions 1/2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4291 and #4267 (both gateway,
+> jcnm) — neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to
+> merge. Prior slice (`call-low-light-boost`) is on `main` (#4272). Branched off freshly-fetched `origin/main`;
+> local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android`
+> only (1 main modified + 1 new test).
+>
+> **The change — one pure companion function.** `:core:model` `ThermalState.fromAndroidThermalStatus(status: Int)`
+> collapses the seven documented `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers at iOS
+> parity: `NONE`(0) → NOMINAL; `LIGHT`(1)/`MODERATE`(2) → FAIR; `SEVERE`(3) → SERIOUS; `CRITICAL`(4)/`EMERGENCY`(5)/
+> `SHUTDOWN`(6) → CRITICAL. **SOTA hardening over a bare `when`:** the collapse is **monotonic and clamped at both
+> ends** — any value ≥ `CRITICAL`(4), including a future OS tier above `SHUTDOWN`, sheds the most encode load
+> (protective, never mistaken for cool), while a sub-`NONE`/negative reading (an absent/unreadable sensor, never a
+> real "cold" report) forwards untouched as NOMINAL so it never silently degrades a cool device's call quality. No
+> `android.os` import — three private constants mirror the framework values so `:core:model` stays JVM-pure and
+> the `:app` layer only forwards `getCurrentThermalStatus()`.
+>
+> **Tests: +11** `ThermalStateFromStatusTest` (behaviour via the public API, no Android): the seven documented
+> tiers each pinned; both-ends clamp — future tier (7, 99) → CRITICAL, invalid negative (-1, Int.MIN_VALUE) →
+> NOMINAL; the collapse is monotonic non-decreasing across 0..6; and it composes with the plan it exists to feed
+> (a `SHUTDOWN` reading yields the identical worst-case ceiling as `ThermalState.CRITICAL`). **Mutation-RED-
+> proven**: weakening the upper clamp (`>=` → `==`) reddens EXACTLY the 5 escalation tests (EMERGENCY, SHUTDOWN,
+> future-tier, monotonic, composition), the 6 lower-tier tests stay green; restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 7m 19s**, 973 actionable tasks, 0 failed. Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — a pure `:core:model` int→enum collapse, no orchestration, no
+> `android.os` import; SSOT — reuses `ThermalState`/`ThermalCeiling`, is the single home the app glue forwards to;
+> no tautological tests; no floor lowered).
+>
+> **Next**: the thermal box's only remaining piece is the live RTP-sender actuator (`VideoProcessor`/RTP encoding
+> params — needs an emulator/WebRTC, not JVM-testable). Candidate pure-core slices still open in H. Calls: the
+> "In-call translation data channel (dual-stream clean audio)" model layer, or the connection-quality-indicator
+> tier→label/colour mapping. Otherwise the Stories write-path thumbHash **generation** box (needs `Bitmap`→RGBA
+> glue, lower JVM yield). Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **a dim in-call video frame now carries a pure, exact-parity low-light-boost decision, folded
+> straight from the frame's luma** (slice `call-low-light-boost`, feature-parity H. Calls — the "In-call video
+> filters … low-light boost" `[~]` line; closes the "the low-light boost pass (folding `FrameLuminance`)"
+> pending clause at the policy layer). Before this, the automatic low-light pass iOS runs first in its
+> `VideoFilterPipeline` (§14.2.4) had no Android analogue at all — the two halves it needs (the per-frame luma
+> average `FrameLuminance`, and the boost-strength maths) existed apart, with nothing composing them. This is a
+> pure instant-app win for a dark scene (dimensions 4/8/13) and a strict SOTA upgrade on iOS (the clamp below).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4269 (iOS docs, jcnm) and #4267
+> (gateway Zod, jcnm) — neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of
+> mine to merge. Prior slice (`story-publish-queue-media-only`) is on `main` (#4262). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (1 new main + 1 new test).
+>
+> **The change — one pure policy + one folding seam.** (1) `:core:model` new `LowLightBoost` data class
+> (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation — the CIExposureAdjust/CINoiseReduction/
+> CIColorControls params the actuator writes). (2) `LowLightBoostPolicy.plan(averageBrightness: Float?)` returns
+> `null` (forward untouched) for no reading or normalized brightness `≥ 0.3`, else scales every param by
+> `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4 constant,
+> saturation 1+×0.2). **SOTA hardening:** `boostFactor` is **clamped to 0..1** so a degenerate negative reading
+> never over-boosts (iOS never clamps — its Y-plane luma is always 0..255). (3) `planForFrame(yPlane,…)` is the
+> actuator's one-call seam that folds `FrameLuminance.averageOfYPlane` straight into `plan` — literally the
+> "folding `FrameLuminance`" clause, composing the two existing pure cores instead of leaving them apart.
+>
+> **Tests: +13** `LowLightBoostPolicyTest` (behaviour via the public API, no Android/GPU/I-O): gate — null
+> reading / fully-bright / just-above-threshold (77) → no boost, just-below (76) → small boost; strength anchors
+> — pitch-black → full (EV 1.5, noise 0.02, sharpness 0.4, saturation 1.2), half-dark (38.25) → half (EV 0.75,
+> noise 0.01, saturation 1.1); behaviour — darker boosts more, sharpness constant across strengths, any active
+> boost raises saturation; hardening — negative reading clamps to full not over; folding — dark Y plane → boost,
+> bright Y plane → null, degenerate geometry → null. **Mutation-RED-proven**: dropping `.coerceIn(0f,1f)` reddens
+> EXACTLY the negative-reading test (13 tests, 1 failed, no collateral), restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 5m 25s**, 973 actionable tasks, 0 failed. Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — a pure `:core:model` policy, no orchestration; SSOT — reuses
+> `FrameLuminance`, pins constants to iOS, no luma re-impl; no tautological tests; no floor lowered).
+>
+> **Next**: the video-filter box's remaining pure boxes are largely exhausted (config/preset/degrade/low-light
+> all landed) — what's left there is the WebRTC `VideoProcessor`/`VideoSink` actuator (needs an emulator/GPU,
+> not JVM-testable). Candidate pure-core slices still open in H. Calls: the thermal-source mapping
+> (`PowerManager.THERMAL_STATUS_*` → `ThermalState`, a pure int→enum collapse the sender-cap plan already
+> consumes) or the "In-call translation data channel (dual-stream clean audio)" model layer. Otherwise the
+> Stories write-path thumbHash **generation** box (needs `Bitmap`→RGBA glue, lower JVM yield). Read the chosen
+> box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **a media-only (RAW background) story queued offline now surfaces its optimistic self-ring
+> and its failure-recovery strip, instead of being silently dropped** (slice `story-publish-queue-media-only`,
+> feature-parity E. Stories — the "Offline publish queue … RAW background publish-all" clause of the `[~]` line).
+> Before this, `StoryRepository.decodeStoryPublish` required NON-BLANK TEXT (`content?.takeIf { isNotBlank } ?:
+> return null`), so a story published with only an image/video background and no caption — exactly what the
+> composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`) — decoded to `null` and was
+> excluded from BOTH `pendingPublishes()` (no self-ring) AND `failedPublishes()` (silent loss on exhaustion, no
+> retry/discard). iOS queues an image/video-only story as a first-class publish; Android dropped it from the
+> queue projection entirely — a real robustness/parity gap (dimensions 1/8/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4261 (iOS a11y, jcnm) — not a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-slide-thumbhash-placeholder`) is on `main` (#4259). Branched off freshly-fetched `origin/main`; local
+> HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only.
+>
+> **The change — one decode gate widened + the two building blocks + a strip fallback.** (1) `:sdk-core`
+> `StoryRepository.decodeStoryPublish`: a publish is decodable when it has non-blank text OR ≥1 non-blank media id
+> (blank media ids filtered); a row with NEITHER is still skipped defensively. `content` on the decoded value
+> becomes nullable; `mediaIds` carried through. (2) `PendingStoryPublish` / `FailedStoryPublish`: `content: String`
+> → `String?` (null = media-only), new `mediaIds: List<String> = emptyList()`. (3) `:feature:stories`
+> `StoryPublishFailures.Item`: new `mediaCount`; `preview` is now the caption ("" for media-only). The strip
+> Composable (`StoryFailedRow`) renders `preview` when non-blank, else a localised `pluralStringResource`
+> media summary (`stories_publish_media_summary`, added in en/fr/es/pt) — i18n stays in Compose, logic stays
+> pure. `StoryOptimisticTray.toSyntheticStory` carries the null content unchanged; the tray grouping
+> (`type==STORY && author!=null`) rings a media-only self story fine.
+>
+> **Tests: +14** (7 `StoryRepositoryTest` — media-only pending decode / captioned media ids carried / blank media
+> ids filtered / neither-text-nor-media skipped / text-only leaves media empty / media-only failed surfaced;
+> 3 `StoryPublishFailuresTest` — text reports 0 media / media-only blank preview + count / captioned media keeps
+> both; 1 `StoryOptimisticTrayTest` — media-only null-content self ring; plus helper updates). **Mutation-RED-
+> proven**: neutering the decode gate to `if (content == null) return null` (dropping the media clause) reddens
+> EXACTLY the media-only tests, restored, full suite green.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `assembleDebug` + `testDebugUnitTest` (all modules). SDK
+> bootstrap needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` — with only android-37.0,
+> AGP 8.13.0 resolves compileSdk 37 to hash `android-37` and fails "Failed to find target"; the android-35 pair
+> unblocks resolution (NOTES updated). Reviewer **PASS** (diff `apps/android` only; SDK purity — the gate is
+> `:sdk-core` repository decode, the strip label is `:feature:stories`; SSOT — one decode function feeds both
+> projections; no tautological tests; no floor lowered).
+>
+> **Next**: write-path thumbHash **generation** (encode from the composed slide bitmap into `effects.thumbHash`
+> at publish; `ThumbHash.encode` already ported, needs `Bitmap`→RGBA glue) completes the thumbHash box; or a
+> media-only **preview thumbnail** in the optimistic ring (needs the local media URI carried on the outbox row,
+> a deeper change) ; or move to the next build-order area (**Calls**) — its remaining `[ ]` boxes (in-call
+> translation data channel, audio effects) are integration-heavy, so scout for a pure-core policy slice first.
+
+> On 2026-08-29 **a story slide shows an instant blur behind its loading background image — no black flash on
+> cold load** (slice `story-slide-thumbhash-placeholder`, feature-parity E. Stories — the "thumbHash
+> blur-placeholder per slide" line, now `[~]`: the DISPLAY/read half is done; write-path GENERATION stays a
+> Bitmap follow-up). Before this, the viewer's background `AsyncImage` painted nothing (black) while the full
+> image loaded — a visible cold-load flash iOS's `StorySlideRenderer` never has, because it decodes the slide's
+> ThumbHash into a blur placeholder. The hash was already on the model (`StoryEffects.thumbHash`,
+> `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`, `:core:model`) and the Compose painter
+> (`rememberThumbHashPainter`, `:sdk-ui`) already shipped and are used by the feed — only the story viewer never
+> consumed them. This is a pure instant-app win (dimensions 2/4/8).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4257 (iOS a11y, jcnm) — not a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-draft-persist-sticker-elements`) is on `main` (#4253, HEAD `c14593da`). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (2 main modified + 1 new main + 1 new test).
+>
+> **The change — one pure resolver + minimum wiring.** (1) `:feature:stories` new `StorySlidePlaceholder` object:
+> `resolve(effectsThumbHash, backgroundImageThumbHash)` returns the first non-blank trimmed of the two (slide-level
+> `effects.thumbHash` beats the flat `FeedMedia.thumbHash`), and a `resolve(item: StoryItem)` overload that reads
+> `storyEffects?.thumbHash` then the flat `media.firstOrNull { IMAGE && url != null }?.thumbHash` — mirroring the
+> viewer's own image-background selection so the blur shown is the blur of the image that is loading. (2)
+> `StoryViewerViewModel`: new `StorySlideView.backgroundThumbHash: String?`, populated in `toSlideView` via
+> `StorySlidePlaceholder.resolve(this)`. (3) `StoryViewerScreen`: the image branch's `AsyncImage` gains
+> `placeholder = rememberThumbHashPainter(slide.backgroundThumbHash)` — the exact idiom `FeedScreen` already uses;
+> the video branch (ExoPlayer surface, no placeholder slot) is untouched by design.
+>
+> **Tests: +13** `StorySlidePlaceholderTest` (behaviour via the public API, no Android/Compose/I-O): granular
+> cascade — effects beats background, null/blank effects falls through, both-absent/both-blank → null, surrounding
+> whitespace trimmed; item overload — effects hash used, falls back to flat image hash, a leading VIDEO is
+> skipped for the IMAGE hash, an image with a null url is not chosen, a blank flat hash → null, neither source →
+> null, a null `storyEffects` still reads the flat hash. **Mutation-RED-proven**: reversing the cascade order
+> (`listOfNotNull(background, effects)`) reddens EXACTLY `slide-level effects hash wins over the background image
+> hash` (13 tests, 1 failed), restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools` (compileSdk 37 → AGP's `android-37.0`, same as CI's provisioner).
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 4m 28s**, 973 actionable tasks, 0 failed; the new suite
+> 13/13 and the mutation proof (1 RED, restored). Reviewer **PASS** (diff `apps/android` only; SDK purity — the
+> resolver is `:feature:stories` orchestration, the decode/painter stay in `:core:model`/`:sdk-ui`; SSOT — one
+> resolver, mirrors the viewer's existing image selection; instant-app — this IS the cold-load blur win; no
+> tautological tests; no floor lowered).
+>
+> **Next**: write-path thumbHash **generation** (encode from the composed slide bitmap into `effects.thumbHash`
+> at publish) is the natural completion of this box but needs `Bitmap`→RGBA (the pure `ThumbHash.encode` is
+> already ported) — a mostly-glue slice, lower JVM-test yield. Higher-value pure-core boxes still open in E.
+> Stories: the `[~]` Offline publish queue's **preview-before-publish** and **RAW background publish-all**, or
+> move to the next build-order area (**Calls**) if Stories has no clean pure-core box left. Read the chosen box's
+> iOS audit part read-only before branching.
+
+> On 2026-08-29 **a story draft's on-canvas stickers survive leaving the composer — and the fidelity gate is
+> RETIRED** (slice `story-draft-persist-sticker-elements`, feature-parity E. Stories — the "Draft save/restore …"
+> line, now `[x]`; lifts the SIXTH and LAST rich dimension after the canvas transform, filter, pinned duration,
+> colour/media background and text elements). Before this, a slide's `StoryStickerElement` list (placed, scaled,
+> rotated emoji) was the single remaining dimension the primitive snapshot could not represent, so a deck
+> carrying a sticker was treated as *not yet persistable*: `resolve` PURGED any stored draft rather than
+> restoring lossily. With stickers now carried, **every** dimension of a composer slide round-trips — so the
+> gate itself is gone, not merely satisfied.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4252 (iOS a11y, jcnm) and #4246
+> (gateway Zod, jcnm) — neither a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`story-draft-persist-text-elements`) is on `main` (#4247, HEAD
+> `46f9961a`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before branching
+> (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — a flat primitive mirror (thinner than text elements) + a RETIRED gate.** (1) `core:model`: new
+> `StoryDraftStickerElementSnapshot` (`@Serializable`, all primitive/defaulted: id/emoji/x/y/scale/rotationDeg)
+> on `StoryDraftSlideSnapshot.stickers: List<…> = emptyList()`. No enums, no backing, no outline/fade/timing —
+> so no sub-value types; the canvas neutrals reuse `StoryDraftTextElementSnapshot.CANVAS_CENTER`/`UNIT_SCALE`
+> so the geometry defaults live in one place. `hasContent` gains `|| stickers.any { it.isPublishable }` (a
+> publishable non-blank-emoji sticker-only slide is worth restoring; a blank one is not). (2) `:feature:stories`
+> `StoryComposerAutosave`: `toDraftSnapshot`/`toDeck` map `StorySlide.stickers` ↔ the list via two private
+> mappers — `StoryStickerElement.toDraftSnapshot()` (scalars verbatim) and
+> `StoryDraftStickerElementSnapshot.toStickerElement()` (scalars verbatim then `.normalised()`, so an
+> out-of-range persisted blob decays into the canvas, exactly as the reader decoders do). (3) **The gate is
+> RETIRED, not left dead:** with every dimension representable `deckHasRichContent` would be constant `false`,
+> so its function, its `resolve` "rich content → purge" first arm and its `deckIsPristine` call are all removed;
+> `resolve` now projects a snapshot unconditionally and decides on `isWorthRestoring` + changed, and
+> `deckIsPristine` checks `it.stickers.isEmpty()` explicitly (so a silently-added sticker still counts as
+> touched). Class + mapper doc-comments rewritten from "fidelity gate" to "full-fidelity round-trip".
+>
+> **Tests: +21 (net, after retiring 6 dead-function tests).** 12 `StoryComposerDraftSnapshotTest` (sticker JSON
+> round-trip; stickers ride a slide through JSON; legacy blob → empty list; sticker blob → every default;
+> publishable×2; publishable-sticker-alone worth restoring; blank-sticker-alone not; changed sticker / added
+> sticker are different content), 7 `StoryComposerAutosaveTest` (toDraftSnapshot carries all fields; toDeck
+> restores all fields; placed sticker survives deck↔snapshot↔deck; toDeck re-normalises an out-of-range blob;
+> blank-sticker slide not pristine; sticker-only slide resolves to Save; adding a sticker to a saved draft
+> resolves to Save not None — plus the flipped `a draft that gained a sticker now saves it over the stale
+> stored draft`, formerly the purge test), 2 `StoryComposerViewModelTest` end-to-end (`persistDraft` saves the
+> selected slide's stickers — flipped from the old `does not save a draft carrying a sticker`; `onEnterComposer`
+> restores them). The six `deckHasRichContent is …` unit tests were removed WITH the function they tested — the
+> underlying "each dimension is persistable" behaviour is already covered by each dimension's own Save +
+> round-trip tests, so no behaviour coverage is lost. **Mutation-RED-proven THREE times**: dropping
+> `|| stickers.any { it.isPublishable }` from `hasContent` reddens EXACTLY `a publishable sticker alone makes a
+> snapshot worth restoring` (1); removing `it.stickers.isEmpty()` from `deckIsPristine` reddens EXACTLY `a
+> single slide carrying even a blank sticker is not pristine` (1); replacing the `toDeck` sticker map with
+> `emptyList()` reddens EXACTLY the 3 restore tests (toDeck restores / round-trip / re-normalise). Restored
+> after each; full gate green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`. compileSdk
+> is now the numeric `37`; AGP resolves it to the auto-installed `platforms;android-37.0` (the bare `android-37`
+> is unpublished — same as CI's best-effort provisioner). The first Gradle run raced the auto-install and failed
+> resolution once; a second run with `android-37.0` already present resolved cleanly.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest` (ALL
+> modules) **BUILD SUCCESSFUL in 4m 39s**, 973 actionable tasks, 0 failed; plus the three touched suites green
+> and all three mutation proofs (1 RED, 1 RED, 3 RED, restored after each). Reviewer **PASS** (diff `apps/android`
+> only — 2 main + 3 test; SDK purity — the snapshot is a `:core:model` primitive bag, the mappers/gate-retirement
+> are `:feature:stories` orchestration; SSOT — `StorySlide.stickers` stays the deck's SSOT, the snapshot projects
+> a flat mirror reusing the text-snapshot's canvas neutrals; no tautological tests; no coverage floor lowered;
+> the flipped/removed tests assert NEW correct behaviour or tested a now-deleted function, not a weakening).
+>
+> **Next**: the story-draft fidelity chain is COMPLETE — every composer dimension round-trips and the gate is
+> gone. Scout `feature-parity.md` E. Stories for the next unchecked box: the `[~]` **Offline publish queue**
+> line still has preview-before-publish and RAW background publish-all pending, and `[ ] thumbHash
+> blur-placeholder generation per slide` is a clean pure-logic slice. Alternatively move to the next build-order
+> area (Calls) if Stories has no high-value pure-core box left. Read the chosen box's iOS audit part read-only
+> before branching.
+
+> On 2026-08-29 **a story draft's on-canvas text elements survive leaving the composer** (slice
+> `story-draft-persist-text-elements`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> FIFTH dimension of the fidelity gate, after the canvas transform, the photo filter, the pinned duration and
+> the colour/media background). Before this, a slide's `StoryTextElement` list — the composer's primary rich
+> feature (typed, styled on-canvas text) — counted as unrepresentable "rich content": a user who added and
+> styled a text element and left came back to it gone, or (if it was the only touch) saw the whole draft
+> purged rather than restored lossily. This is the first of the two OBJECT-GRAPH dimensions, so unlike the
+> four scalar/wire-string dimensions before it, it needs a real nested `@Serializable` mirror — but designed to
+> stay primitive-only (no polymorphic serialiser), the deliberate cost being a flat bag reusing existing SSOTs.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4246 (`claude/brave-archimedes-qsuw9k`,
+> a gateway AttachmentReactionHandler Zod slice by jcnm) — not a `claude/apps/android/<slice-id>` routine slice,
+> no `apps/android` collision, nothing of mine to merge. Prior slice (`story-draft-persist-background`) is on
+> `main` (#4244, HEAD `b1eeb470`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before
+> branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (6 files: 3 main + 3 test).
+>
+> **The fix — a flat primitive mirror that reuses two existing SSOTs.** (1) `core:model`: new
+> `StoryDraftTextElementSnapshot` (`@Serializable`, all fields primitive/defaulted) on
+> `StoryDraftSlideSnapshot.elements: List<…> = emptyList()`. The three enums (`StoryTextStyle`/`Align`/`Size`,
+> which live in `:feature:stories`, not `:core:model`) ride as their Kotlin `.name` **strings** — keeping
+> `:core:model` free of the composer's enums — and the sealed `StoryTextBackground` rides as the already-
+> `@Serializable` `StoryTextBackgroundStyle` tagged union (reused, not re-spelled). `hasContent` gains
+> `|| elements.any { it.isPublishable }` so a publishable (non-blank) text-element-only slide is worth
+> restoring (iOS parity: a text-element-only slide publishes), a blank one is not. (2) `:feature:stories`
+> `StoryComposerAutosave`: `toDraftSnapshot`/`toDeck` map `StorySlide.elements` ↔ the list via two private
+> mappers — `StoryTextElement.toDraftSnapshot()` (`style.name`/`align.name`/`size.name`, `background.toStyleWire()`,
+> scalars verbatim) and `StoryDraftTextElementSnapshot.toTextElement()` (`entries.firstOrNull { it.name == … } ?:
+> default` for each enum, `color.ifBlank { DEFAULT_COLOR }`, `StoryTextBackground.resolve(background, null)` — all
+> tolerant, decaying to the element's own defaults on a corrupt blob, exactly as the reader decoders do). (3) The
+> gate is DECOUPLED: `deckHasRichContent` drops the elements arm (now holds only `stickers.isNotEmpty()`), and
+> `deckIsPristine` gains `it.elements.isEmpty()` so a silently-added text element still counts as touched. (4) VM
+> `persistDraft` doc-comment narrowed from "rich on-canvas content" to "sticker elements".
+>
+> **Tests: +21.** 10 `StoryComposerDraftSnapshotTest` (element JSON round-trip; elements ride a slide through
+> JSON; legacy blob → empty list; element blob → every default; publishable×2; publishable-element-alone worth
+> restoring; blank-element-alone not; changed element / added element are different content), 9
+> `StoryComposerAutosaveTest` (flipped `a draft with a text element resolves to Save carrying the caption and the
+> element` — was the `None` gate test; `deckHasRichContent` false for a text element; blank-element deck not
+> pristine; `toDraftSnapshot` carries all styled fields; `toDeck` restores all styled fields; styled element
+> survives deck↔snapshot↔deck; tolerant decode of an unknown enum name / blank colour → defaults; a
+> text-element-only slide resolves to Save; adding an element to a saved draft resolves to Save not None), 2
+> `StoryComposerViewModelTest` end-to-end (`persistDraft` saves a styled element; `onEnterComposer` restores it —
+> and the pre-existing VM rich-content purge test retargeted from a text element to a still-gated sticker). Every
+> test drives a real element/deck/snapshot through the mapper/gate and asserts the transformed result (non-
+> tautological). **Mutation-RED-proven THREE times**: re-adding `slide.elements.isNotEmpty()` to
+> `deckHasRichContent` reddens EXACTLY the 5 text-element persistence tests (4 autosave + 1 VM persist); removing
+> `&& it.elements.isEmpty()` from `deckIsPristine` reddens EXACTLY `a single slide carrying even a blank text
+> element is not pristine` (1); dropping `|| elements.any { it.isPublishable }` from `hasContent` reddens EXACTLY
+> `a publishable text element alone makes a snapshot worth restoring` (1). Restored after each; full gate green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`, then
+> `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). Pristine android-37.0 worked this
+> container.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest` (ALL
+> modules) **BUILD SUCCESSFUL in 4m 09s**, 0 failed tasks; plus the three touched suites green in isolation
+> (StoryComposerDraftSnapshotTest, StoryComposerAutosaveTest, StoryComposerViewModelTest) and all three mutation
+> proofs (5 RED, 1 RED, 1 RED, restored after each). Reviewer **PASS** (diff `apps/android` only — 3 main + 3
+> test; SDK purity — the snapshot is a `:core:model` primitive bag, the mappers/gate are `:feature:stories`
+> orchestration; SSOT — `StorySlide.elements` stays the deck's SSOT, the snapshot projects a flat mirror that
+> reuses `StoryTextBackgroundStyle`/`toStyleWire`/`resolve` rather than re-spelling the tagged union; no
+> tautological tests; no coverage floor lowered; the two flipped/retargeted tests assert the NEW correct
+> behaviour, not a weakening).
+>
+> **Next**: the LAST rich dimension is stickers (`StoryStickerElement` — id + emoji + position + scale +
+> rotation, a flat `@Serializable` mirror, thinner than text elements since no sub-value types). Once it lands
+> the fidelity gate collapses to nothing: `deckHasRichContent` becomes constant `false` (every dimension
+> representable) — at which point the gate AND its purge branch should be RETIRED, not left as dead code (the
+> `resolve` "rich content present → purge" arm, the `deckHasRichContent` call in `deckIsPristine`, and the
+> function itself). Scout `feature-parity.md` E. Stories + `StoryStickerElement.kt` read-only before branching.
+
+> On 2026-08-29 **a story draft's colour/media background survives leaving the composer** (slice
+> `story-draft-persist-background`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> FOURTH dimension of the fidelity gate, after the canvas transform, the photo filter and the pinned
+> duration). Before this, a slide's `StoryBackgroundValue` backdrop (solid/gradient) and its designated
+> looping-background media (`backgroundMediaId` + `backgroundLoop`) counted as unrepresentable "rich
+> content": a user who picked a backdrop and left came back to it gone — or, if that backdrop was the only
+> non-primitive touch, saw the whole draft purged rather than restored lossily. The backdrop already had a
+> total wire projection (`StoryBackgroundValue.serialized()`/`parse()`, C11), so it never needed a
+> polymorphic serialiser — the object-list dimensions (text/sticker elements) do, and stay gated.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → empty — nothing of mine to merge.
+> Prior slice (`story-draft-persist-duration`) is on `main` (#4229, HEAD `def5a765`). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count`
+> = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — three primitive fields (wire-string + media id + loop) + two mapper lines each side + a
+> decoupled gate** (mirrors the duration slice, but three fields because the backdrop and its media/loop
+> travel together). (1) `core:model`: `StoryDraftSlideSnapshot.background: String? = null` (the
+> `StoryBackgroundValue` wire string; `null` = no backdrop), `backgroundMediaId: String? = null`,
+> `backgroundLoop: Boolean = true` (matches the reader's `loop ?: true`; legacy blob and fresh slide both
+> decode to no-backdrop + looping). `hasContent` unchanged — a backdrop is fidelity, not restore-triggering
+> content (a colour with no other content is not publishable; a background media always rides an existing
+> `mediaIds` entry). (2) `:feature:stories` `StoryComposerAutosave`: `toDraftSnapshot` carries
+> `it.background?.serialized()` / `it.backgroundMediaId` / `it.backgroundLoop`; `toDeck` restores via the
+> tolerant `StoryBackgroundValue.parse` (a malformed value decays to a solid colour, never throws) +
+> verbatim media id/loop. (3) The gate is DECOUPLED: `deckHasRichContent` drops the two background arms (now
+> the gate holds only `elements`/`stickers`), and `deckIsPristine` gains `it.background == null &&
+> it.backgroundMediaId == null` so a silently-picked backdrop on an empty canvas still counts as touched
+> (`backgroundLoop` needs no check — it can only leave `true` once a media is designated, already rejected).
+>
+> **Tests: +18.** 6 `StoryComposerDraftSnapshotTest` (background/media/loop survive JSON round-trip; legacy
+> blob → null/looping default; colour-alone never worth restoring; changed/cleared background, changed media
+> id, changed loop are different content), 10 `StoryComposerAutosaveTest` (gate now false for a colour
+> background AND a background-media designation; blank slide with a backdrop not pristine; `toDraftSnapshot`
+> carries background/media+loop/undesignated-default; `toDeck` restores background/media+loop; colour bg AND
+> media+loop survive deck↔snapshot↔deck; a media slide with a colour bg resolves to **Save** carrying it;
+> choosing a bg on a saved draft resolves to **Save** not None), 2 `StoryComposerViewModelTest` end-to-end
+> (`persistDraft` saves the colour background; `onEnterComposer` restores it). The pre-existing
+> `deckHasRichContent is true for a background` test was flipped to assert the new persistable behaviour (a
+> genuine behaviour change, not a weakening). Non-tautological: each drives a real deck/snapshot through the
+> mapper/gate and asserts the transformed result. **Mutation-RED-proven TWICE**: re-adding
+> `slide.background != null || slide.backgroundMediaId != null` to `deckHasRichContent` reddens EXACTLY the 5
+> background gate/save tests (4 autosave + 1 VM persist); removing `&& it.background == null &&
+> it.backgroundMediaId == null` from `deckIsPristine` reddens EXACTLY `a single blank slide with a colour
+> background is not pristine` (1 failed); every other test stays green in both. Restored after each.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). **Pristine android-37.0
+> alone worked** this container — AGP mapped compileSdk 37 → android-37.0 on first `./gradlew`, no hash
+> error, no copy→patch needed.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest`
+> (ALL modules) **BUILD SUCCESSFUL in 4m 29s**, 0 failed tasks; plus the three touched suites green in
+> isolation (StoryComposerDraftSnapshotTest, StoryComposerAutosaveTest, StoryComposerViewModelTest) and both
+> mutation proofs (5 RED then 1 RED, restored after each). Reviewer
+> **PASS** (diff `apps/android` only — 2 main + 3 test; SDK purity — the three fields are `:core:model`
+> primitives, the mapper/gate are `:feature:stories` orchestration; SSOT — `StorySlide.background`/
+> `backgroundMediaId`/`backgroundLoop` stay the deck's SSOT, the snapshot projects the wire string; no
+> tautological tests; no coverage floor lowered; the one flipped test asserts the NEW correct behaviour).
+>
+> **Next**: the two remaining fidelity-gate dimensions are the object-list ones — text elements
+> (`StoryTextElement`) and stickers (`StoryStickerElement`) → their own `@Serializable` mirror snapshots,
+> largest, one slice each. These are the LAST rich dimensions; once both land, the fidelity gate collapses
+> to nothing and `deckHasRichContent` becomes `false` (every dimension representable) — at which point the
+> gate and its purge branch should be retired, not left as dead code. A text element carries id + text +
+> normalised position + style fields (font, colour, alignment, size, rotation, scale); a sticker carries id
+> + emoji + position + scale + rotation. Each maps to a flat `@Serializable` mirror (no polymorphism needed
+> — all primitives). Scout `feature-parity.md` E. Stories read-only before branching. Do text elements
+> first (the composer's primary rich feature), stickers second.
+
+> On 2026-08-28 **a story draft's pinned on-screen duration survives leaving the composer** (slice
+> `story-draft-persist-duration`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> THIRD dimension of the fidelity gate, after the canvas transform and the photo filter). Before this, a
+> slide's author-pinned `durationSecondsPin` (`Double?`, `effects.timelineDuration` on the wire) counted
+> as unrepresentable "rich content": a user who pinned a slide's timeline duration and left came back to
+> the pin gone — or, if that pin was the only non-primitive touch, saw the whole draft purged rather than
+> restored lossily. A duration pin is one nullable scalar — trivially serialisable — so it never needed
+> gating; the earlier slices simply hadn't reached it yet. The cheapest remaining scalar, mirrors the
+> transform/filter slices' pattern one-to-one.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4226 (`claude/keen-hamilton-p95vxq`,
+> a web offline-hydration slice) — not a `claude/apps/android/<slice-id>` routine slice, no `apps/android`
+> collision, nothing of mine to merge. Prior slice (`story-draft-persist-filter`) is on `main` (HEAD
+> `a3b9fbba`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before branching
+> (`git rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — one nullable primitive field + two mapper lines + a decoupled gate** (mirrors the filter
+> slice exactly, but even thinner — no nested snapshot type, the field is already a scalar). (1)
+> `core:model`: `StoryDraftSlideSnapshot.durationSecondsPin: Double? = null` (`null` = derived from
+> content, not pinned; legacy blob and fresh slide both decode to null). `hasContent` unchanged — a
+> duration is fidelity, not restore-triggering content. (2) `:feature:stories` `StoryComposerAutosave`:
+> `toDraftSnapshot` carries `it.durationSecondsPin`; `toDeck` restores it verbatim (already clamped to
+> `[2,600]` by `StoryDurationPin.clamp` at the only setter, `setSelectedDuration`). (3) The gate is
+> DECOUPLED: `deckHasRichContent` drops `slide.durationSecondsPin != null` (now representable), and
+> `deckIsPristine` gains `it.durationSecondsPin == null` so a silently pinned duration on an empty canvas
+> still counts as touched (old pristine semantics preserved exactly).
+>
+> **Tests: +13.** 5 `StoryComposerDraftSnapshotTest` (duration survives JSON round-trip; legacy blob →
+> null; duration-alone never worth restoring; changed / cleared duration are different content), 6
+> `StoryComposerAutosaveTest` (gate now false for a pinned duration; pinned blank slide not pristine;
+> `toDraftSnapshot` carries duration/no-pin→null; `toDeck` restores/null→no-pin; deck↔snapshot↔deck
+> round-trip; a media slide with a pin resolves to **Save** carrying it; pinning a saved draft resolves to
+> **Save** not None), 2 `StoryComposerViewModelTest` end-to-end (`persistDraft` saves the pin;
+> `onEnterComposer` restores it). The pre-existing `deckHasRichContent is true for a pinned duration` test
+> was flipped to assert the new persistable behaviour (a genuine behaviour change, not a weakening).
+> Non-tautological: each drives a real deck/snapshot through the mapper/gate and asserts the transformed
+> result. **Mutation-RED-proven TWICE**: re-adding `slide.durationSecondsPin != null` to
+> `deckHasRichContent` reddens EXACTLY the 4 duration gate/save tests (3 autosave + 1 VM persist); removing
+> `&& it.durationSecondsPin == null` from `deckIsPristine` reddens EXACTLY `a single blank slide with a
+> pinned duration is not pristine` (1 failed); every other test stays green in both. Restored after each.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). **Pristine android-37.0
+> alone worked** this container — AGP mapped compileSdk 37 → android-37.0 on first `./gradlew`, no hash
+> error, no copy→patch needed.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest`
+> (ALL modules) **BUILD SUCCESSFUL in 3m 52s**; plus the touched suites in isolation green
+> (StoryComposerDraftSnapshotTest 24/24, StoryComposerAutosaveTest 40/40, StoryComposerViewModelTest
+> 196/196) and both mutation proofs (4 RED then 1 RED, restored). Reviewer **PASS** (diff `apps/android`
+> only — 2 main + 3 test; SDK purity — the field is a `:core:model` primitive nullable Double, the mapper/
+> gate are `:feature:stories` orchestration; SSOT — one field, `StorySlide.durationSecondsPin` stays the
+> deck's duration-pin SSOT; no tautological tests; no coverage floor lowered; the one flipped test asserts
+> the NEW correct behaviour, a genuine behaviour change).
+>
+> **Next**: the remaining fidelity-gate dimensions are the two object-list ones — text elements
+> (`StoryTextElement`) and stickers (`StoryStickerElement`) → their own `@Serializable` mirror snapshots,
+> largest, one slice each — and the background (`StoryBackgroundValue` sealed → closed-polymorphic or a
+> wire-string projection; + `backgroundMediaId` String? / `backgroundLoop` Boolean). The scalars
+> (transform, filter, duration) are now all done; what's left are the object graphs and the sealed
+> background, which want their own slices. The background scalars (`backgroundMediaId`/`backgroundLoop`)
+> ride WITH the background value — persist them in the same background slice, not alone. Scout
+> `feature-parity.md` E. Stories read-only before branching.
+
 > On 2026-08-27 **a story draft's photo filter (and its intensity) survives leaving the composer** (slice
 > `story-draft-persist-filter`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
 > SECOND dimension of the fidelity gate, after the canvas transform). Before this, a slide's `StoryFilter`

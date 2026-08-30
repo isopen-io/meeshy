@@ -73,10 +73,12 @@ describe('createRateLimitConfig', () => {
   });
 
   // Piege documente du projet : un rate limit par-route SANS keyGenerator
-  // explicite herite du keyGenerator GLOBAL (seau IP plateforme derriere
-  // Traefik sans trustProxy -> IDENTIQUE pour tout le monde). Ces tests
-  // prouvent que la config fournit une cle PAR UTILISATEUR, jamais le seau
-  // plateforme brut `global:${request.ip}`.
+  // explicite herite du keyGenerator GLOBAL, soit `global:${request.ip}` —
+  // l'ADRESSE de l'appelant, `trustProxy` etant pose depuis #4137. Une limite
+  // qui se veut par compte et compte par adresse se trompe dans les deux sens
+  // (plusieurs comptes derriere une sortie partagent un credit ; un compte a
+  // plusieurs adresses en cumule autant). Ces tests prouvent que la config
+  // fournit une cle PAR UTILISATEUR, jamais la cle globale brute.
   it('keyGenerator uses a per-user key when authContext is present', () => {
     const cfg = createRateLimitConfig(5, '1 minute', 'initiate');
     const req = { authContext: { userId: 'user-42' }, ip: '10.0.0.5' } as any;

@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -175,8 +176,15 @@ private fun StoryFailedRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            val secondary = failure.preview.ifBlank {
+                pluralStringResource(
+                    R.plurals.stories_publish_media_summary,
+                    failure.mediaCount,
+                    failure.mediaCount,
+                )
+            }
             Text(
-                text = failure.preview,
+                text = secondary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,

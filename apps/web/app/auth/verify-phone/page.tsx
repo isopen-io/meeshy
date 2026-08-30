@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 
 // Composants inline légers
@@ -213,7 +214,7 @@ function VerifyPhoneContent() {
     setIsSending(true);
 
     try {
-      const apiUrl = buildApiUrl('/auth/send-phone-code');
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.sendPhoneCode);
       console.log('[VERIFY_PHONE] Envoi du code à:', apiUrl);
 
       const response = await fetch(apiUrl, {
@@ -251,7 +252,7 @@ function VerifyPhoneContent() {
     setIsVerifying(true);
 
     try {
-      const apiUrl = buildApiUrl('/auth/verify-phone');
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.verifyPhone);
       console.log('[VERIFY_PHONE] Vérification du code');
 
       const response = await fetch(apiUrl, {

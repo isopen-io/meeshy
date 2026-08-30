@@ -25,6 +25,35 @@ jest.mock('../../../../utils/withMutationLog', () => {
   return { withMutationLog: jest.fn(async (args: any) => args.op()), MutationResultGone };
 });
 
+/**
+ * La LOI de visibilité de la présence est doublée — pas réécrite.
+ *
+ * Ce qu'on veut prouver ici n'est pas que `PresenceVisibilityService` décide
+ * juste (ses propres suites le font), mais que ces routes la CONSULTENT avec le
+ * viewer de la requête et SERVENT son verdict. Le double rend donc un verdict
+ * choisi par le témoin ; si la route cessait d'appeler la loi, la présence
+ * brute de la fixture sortirait telle quelle et chaque assertion tomberait.
+ */
+const visibilitePar = new Map<string, { showOnline: boolean; showLastSeenTimestamp: boolean }>();
+const viewersVus: unknown[] = [];
+
+jest.mock('../../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: async (viewer: unknown, ids: string[]) => {
+      viewersVus.push(viewer);
+      const carte = new Map<string, { showOnline: boolean; showLastSeenTimestamp: boolean }>();
+      for (const id of ids) {
+        const verdict = visibilitePar.get(id);
+        if (verdict) carte.set(id, verdict);
+      }
+      return carte;
+    },
+  }),
+}));
+
+const VU = { showOnline: true, showLastSeenTimestamp: true };
+const MASQUE = { showOnline: false, showLastSeenTimestamp: false };
+
 import { directoryFriendRequestsRoutes } from '../../../../routes/directory/friend-requests';
 
 const PREFIXE = '/api/v1/directory';
@@ -32,7 +61,13 @@ const MOI = '507f1f77bcf86cd799439011';
 const AUTRE = '507f1f77bcf86cd799439022';
 const FR_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
-const PARTIE = { id: AUTRE, username: 'alice', firstName: 'Alice', lastName: 'A', displayName: 'Alice', avatar: null };
+const VU_LE = new Date('2026-08-29T10:00:00.000Z');
+const PARTIE = {
+  id: AUTRE, username: 'alice', firstName: 'Alice', lastName: 'A', displayName: 'Alice', avatar: null,
+  // La présence est chargée par `PROJECTION_PARTIE` — les trois clients la
+  // DÉCLARENT sur `FriendRequestUser` depuis toujours et ne la recevaient pas.
+  isOnline: true, lastActiveAt: VU_LE,
+};
 
 type Options = {
   receveur?: { id: string; deactivatedAt: Date | null; blockedUserIds: string[] } | null;
@@ -311,6 +346,154 @@ describe('Le listing fusionné', () => {
 
     const where = JSON.stringify((prisma.friendRequest.findMany as any).mock.calls[0][0].where);
     expect(where).toContain('ali');
+    await app.close();
+  });
+});
+
+/**
+ * La PRÉSENCE d'une partie de demande — chargée, et jamais servie brute (#4254).
+ *
+ * `PROJECTION_PARTIE` ne chargeait ni `isOnline` ni `lastActiveAt`, alors que
+ * les TROIS clients les déclarent sur la partie d'une demande : `FriendRequestUser`
+ * (iOS et son port Kotlin) et `FriendRequest.sender?: User` (web). Le coût
+ * n'était pas une pastille manquante mais deux TRIS morts —
+ * `FriendListAggregator.aggregate` ordonne la liste de contacts iOS sur
+ * `isOnline` puis `lastActiveAt`, et `useContactsV2` en dérive son ensemble
+ * `onlineUserIds` initial : sur des champs toujours nuls, l'ordre était celui
+ * du dictionnaire.
+ *
+ * Les charger OBLIGE à la loi du 2026-08-25 : hors amitié acceptée, ces deux
+ * colonnes ne sont JAMAIS servies. Et la loi s'applique aux TROIS producteurs
+ * de lignes, pas au seul listing — l'ENVOI s'adresse par définition à un
+ * inconnu, c'est là que la fuite serait la plus grave.
+ */
+describe('La présence des parties obéit à la loi, sur les trois producteurs', () => {
+  const lignePendante = {
+    id: 'a', senderId: AUTRE, receiverId: MOI, status: 'pending',
+    createdAt: new Date('2026-08-03'), sender: PARTIE, receiver: PARTIE,
+  };
+
+  beforeEach(() => {
+    visibilitePar.clear();
+    viewersVus.length = 0;
+  });
+
+  it("MASQUE la présence d'un non-ami dans le listing — la colonne est chargée, pas servie", async () => {
+    visibilitePar.set(AUTRE, MASQUE);
+    const { app, prisma } = await monter();
+    prisma.friendRequest.findMany = jest.fn<any>(async () => [lignePendante]);
+
+    const corps = (await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests` })).json();
+
+    expect(corps.data[0].sender.isOnline).toBe(false);
+    expect(corps.data[0].sender.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it("SERT la présence d'un ami accepté — sinon les deux tris clients restent morts", async () => {
+    visibilitePar.set(AUTRE, VU);
+    const { app, prisma } = await monter();
+    prisma.friendRequest.findMany = jest.fn<any>(async () => [lignePendante]);
+
+    const corps = (await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests` })).json();
+
+    expect(corps.data[0].sender.isOnline).toBe(true);
+    // `lastActiveAt` ne survit à fast-json-stringify que parce que la route le
+    // DÉCLARE localement : `userMinimalSchema` le tait, et le déclarer là-bas
+    // le pousserait sur des dizaines de réponses qui ne gatent pas.
+    expect(corps.data[0].sender.lastActiveAt).toBe(VU_LE.toISOString());
+    await app.close();
+  });
+
+  it('consulte la loi avec le VIEWER de la requête, jamais avec un rang par défaut', async () => {
+    visibilitePar.set(AUTRE, MASQUE);
+    const { app, prisma } = await monter();
+    prisma.friendRequest.findMany = jest.fn<any>(async () => [lignePendante]);
+
+    await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests` });
+
+    expect(viewersVus[0]).toEqual({ userId: MOI, role: 'USER' });
+    await app.close();
+  });
+
+  it("une entrée ABSENTE de la carte est MASQUÉE — la porte échoue fermée", async () => {
+    // Aucun verdict posé : le double rend une carte vide, comme le ferait la
+    // loi sur une cible qu'elle ne sait pas résoudre.
+    const { app, prisma } = await monter();
+    prisma.friendRequest.findMany = jest.fn<any>(async () => [lignePendante]);
+
+    const corps = (await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests` })).json();
+
+    expect(corps.data[0].sender.isOnline).toBe(false);
+    expect(corps.data[0].sender.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it("l'ENVOI ne révèle pas si l'inconnu qu'on ajoute est en ligne", async () => {
+    visibilitePar.set(AUTRE, MASQUE);
+    const { app } = await monter();
+
+    const corps = (await envoyer(app, AUTRE)).json();
+
+    expect(corps.data.receiver.isOnline).toBe(false);
+    expect(corps.data.receiver.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it("le REFUS ne révèle rien non plus — éconduire ne crée pas d'amitié", async () => {
+    visibilitePar.set(AUTRE, MASQUE);
+    const { app } = await monter();
+
+    const corps = (await agir(app, 'reject')).json();
+
+    expect(corps.data.sender.isOnline).toBe(false);
+    await app.close();
+  });
+
+  it("l'ACCEPTATION sert la présence du nouvel ami, et garde `conversation`", async () => {
+    visibilitePar.set(AUTRE, VU);
+    const { app } = await monter({ conversationExistante: { id: 'convid00000000000000009', identifier: 'x', type: 'direct' } });
+
+    const corps = (await agir(app, 'accept')).json();
+
+    expect(corps.data.sender.isOnline).toBe(true);
+    expect(corps.data.sender.lastActiveAt).toBe(VU_LE.toISOString());
+    expect(corps.data.conversation.id).toBe('convid00000000000000009');
+    await app.close();
+  });
+});
+
+/**
+ * Un curseur ILLISIBLE rend 400, pas 500 (#4254).
+ *
+ * Les deux clients s'apprêtent à PERSISTER ce curseur — cache disque iOS,
+ * cache React Query web — et à le renvoyer au réveil. `new Date('...')` sur une
+ * valeur tronquée ou d'un format d'une version voisine rend `Invalid Date`, que
+ * Prisma rejette : la liste répondait 500, un code sur lequel aucun client ne
+ * sait repartir de la première page.
+ */
+describe('Le curseur est un contrat, pas une chaîne libre', () => {
+  it('refuse un curseur illisible AVANT la requête', async () => {
+    const { app, prisma } = await monter();
+
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests?cursor=hier-soir` });
+
+    expect(res.statusCode).toBe(400);
+    expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('accepte un curseur ISO et le pose en borne stricte', async () => {
+    const { app, prisma } = await monter();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `${PREFIXE}/friend-requests?cursor=${encodeURIComponent('2026-08-02T00:00:00.000Z')}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const where = JSON.stringify((prisma.friendRequest.findMany as any).mock.calls[0][0].where);
+    expect(where).toContain('2026-08-02T00:00:00.000Z');
     await app.close();
   });
 });
