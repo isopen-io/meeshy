@@ -1857,7 +1857,7 @@ describe('Admin messages routes', () => {
   describe('GET /trends', () => {
     it('returns 403 when ANALYST role', async () => {
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue([]) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([{ hourly: [], weekday: [] }]) },
       };
       app = buildMessagesApp(prisma, makeAuthContext('ANALYST'));
       await app.ready();
@@ -1867,14 +1867,22 @@ describe('Admin messages routes', () => {
     });
 
     it('returns 200 with peak hour and weekday data', async () => {
-      const now = new Date();
-      const messages = [
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18) },
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18) },
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10) },
-      ];
+      // #4465 : `/trends` agrege desormais en base (`$facet` sur `$hour` et
+      // `$dayOfWeek`). Le double rend donc le DOCUMENT que le pipeline produit
+      // -- des seaux epars -- et non plus une ligne par message ; c'est la
+      // route qui deplie en 24 heures et 7 jours.
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue(messages) },
+        message: {
+          aggregateRaw: jest.fn<any>().mockResolvedValue([
+            {
+              hourly: [
+                { _id: 18, count: 2 },
+                { _id: 10, count: 1 },
+              ],
+              weekday: [{ _id: 2, count: 3 }],
+            },
+          ]),
+        },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
@@ -1894,7 +1902,9 @@ describe('Admin messages routes', () => {
 
     it('returns 200 with empty messages (zero activity)', async () => {
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue([]) },
+        message: {
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ hourly: [], weekday: [] }]),
+        },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
@@ -1907,8 +1917,12 @@ describe('Admin messages routes', () => {
     });
 
     it('returns 500 on DB error', async () => {
+      // Ce temoin passait pour la MAUVAISE raison depuis #4465 : la route
+      // n'appelant plus `findMany`, le 500 venait d'une methode ABSENTE sur le
+      // double, jamais d'une requete rejetee. Il rejette maintenant ce que la
+      // route appelle vraiment.
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+        message: { aggregateRaw: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
