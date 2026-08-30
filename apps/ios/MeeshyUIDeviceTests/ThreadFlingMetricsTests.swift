@@ -20,9 +20,27 @@ import XCTest
 ///
 /// ```
 /// xcodebuild test -project apps/ios/Meeshy.xcodeproj -scheme MeeshyDeviceMetrics \
-///   -destination "platform=iOS,id=<udid>" -allowProvisioningUpdates \
-///   -resultBundlePath /tmp/fling.xcresult
+///   -destination "platform=iOS,id=<udid-MATÉRIEL>" -allowProvisioningUpdates \
+///   -derivedDataPath apps/ios/Build -resultBundlePath /tmp/fling.xcresult
 /// ```
+///
+/// **L'identifiant n'est PAS celui de `devicectl`.** `xcrun devicectl list
+/// devices` sert un UUID CoreDevice (`5704145F-…`) que `-destination` ne
+/// connaît pas ; il veut l'identifiant MATÉRIEL (`00008140-…`). Le plus simple
+/// est de laisser `xcodebuild` échouer une fois : il liste alors lui-même les
+/// « Available destinations » avec le bon.
+///
+/// **Elle n'est compilée par AUCUN gate** — c'est la contrepartie de l'avoir
+/// sortie du scheme `Meeshy`. La compiler à la main après tout changement :
+/// `xcodebuild build-for-testing -scheme MeeshyDeviceMetrics …`. Un « build
+/// vert » ne dit rien d'un bundle que le build ne construit pas.
+///
+/// **Prérequis de signature, non réglé à ce jour** : le runner XCUITest porte
+/// le bundle id `me.meeshy.app.uitests.xctrunner`, qui exige son App ID au
+/// portail Apple. Sans lui, `-allowProvisioningUpdates` ne peut rien créer et
+/// le build device s'arrête sur « No profiles for
+/// 'me.meeshy.app.uitests.xctrunner' were found ». Même blocage, et même
+/// remède, que `me.meeshy.app.share-extension` en 2026-07 (cf. `project.yml`).
 ///
 /// Le `.xcresult` porte alors les trois métriques Apple — hitches de
 /// décélération, croissance mémoire après `pop`, CPU — et la mesure devient un
