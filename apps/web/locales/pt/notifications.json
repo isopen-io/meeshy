@@ -73,6 +73,7 @@
     },
     "titles": {
       "newMessage": "Mensagem de @{sender}",
+      "inConversation": "@{sender} em {title}",
       "reply": "Resposta de @{sender}",
       "mentioned": "@{sender} mencionou você",
       "reaction": "@{sender} reagiu {emoji}",
