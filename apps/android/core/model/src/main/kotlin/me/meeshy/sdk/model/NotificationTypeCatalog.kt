@@ -17,6 +17,7 @@ public enum class NotificationType {
     MENTION,
     REACTION,
     CONVERSATION,
+    INCOMING_CALL,
     MISSED_CALL,
     VOICEMAIL,
     POST_LIKE,
@@ -25,6 +26,7 @@ public enum class NotificationType {
     STORY_REACTION,
     COMMENT_REPLY,
     COMMENT_LIKE,
+    FRIEND_CONTENT,
     CONTACT_REQUEST,
     GROUP_INVITE,
     MEMBER_JOINED,
@@ -85,6 +87,10 @@ public object NotificationTypeCatalog {
             { it.conversationEnabled }, { p, e -> p.copy(conversationEnabled = e) },
         ),
         NotificationTypeDescriptor(
+            NotificationType.INCOMING_CALL, NotificationCategory.CALLS,
+            { it.callsEnabled }, { p, e -> p.copy(callsEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
             NotificationType.MISSED_CALL, NotificationCategory.CALLS,
             { it.missedCallEnabled }, { p, e -> p.copy(missedCallEnabled = e) },
         ),
@@ -115,6 +121,10 @@ public object NotificationTypeCatalog {
         NotificationTypeDescriptor(
             NotificationType.COMMENT_LIKE, NotificationCategory.SOCIAL,
             { it.commentLikeEnabled }, { p, e -> p.copy(commentLikeEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
+            NotificationType.FRIEND_CONTENT, NotificationCategory.SOCIAL,
+            { it.friendContentEnabled }, { p, e -> p.copy(friendContentEnabled = e) },
         ),
         NotificationTypeDescriptor(
             NotificationType.CONTACT_REQUEST, NotificationCategory.GROUPS,

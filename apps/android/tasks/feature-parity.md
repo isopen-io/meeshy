@@ -6848,11 +6848,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
       called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
       `ConversationSocketHandler.init`/`deinit` today) and sub-slice (3) (UI mount + navigation).
-- [ ] `callsEnabled` + `friendContentEnabled` notification toggles (model field + sync-body
+- [x] `callsEnabled` + `friendContentEnabled` notification toggles (model field + sync-body
       mapping + Settings ▸ Notifications rows) — iOS gates incoming-call and friend
-      feed/story/mood on these two per-type toggles (`UserNotificationPreferences+Filter.swift`);
-      Android's model has neither, so `NotificationTypeToggle` treats those types as
-      always-enabled. Follow-up to the per-type gate slice (2026-08-30).
+      feed/story/mood on these two per-type toggles (`UserNotificationPreferences+Filter.swift`).
+      **Shipped 2026-08-30** (slice `notification-prefs-calls-friend-content`): both fields added
+      to `UserNotificationPreferences` (default `true`, gateway `NotificationPreferenceSchema`
+      parity), carried in `NotificationPreferenceSyncBody` (`from`/`toPreferences`, gateway-schema
+      order) so a toggle set on any device round-trips; `NotificationTypeToggle` now gates
+      `incoming_call`/`call`/`CALL_INCOMING` on `callsEnabled` and
+      `friend_new_story`/`friend_new_post`/`friend_new_mood` on `friendContentEnabled` — those six
+      leave the always-on set, closing the last `isTypeEnabled` parity gap; and `NotificationTypeCatalog`
+      gains `INCOMING_CALL` (CALLS, before MISSED_CALL — iOS order) + `FRIEND_CONTENT` (SOCIAL, last),
+      so the Settings ▸ Notifications editor auto-renders two reachable rows (+2 labels ×4 locales).
+      +8 tests (calls/friend gating both ways with neighbour-toggle isolation; CALLS/SOCIAL section
+      order; catalog lens read/write; sync-body field set = gateway contract + round-trip). RED-proven
+      (mutating the `callsEnabled` gate to always-on fails exactly the calls-gating + all-off sweep).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge

@@ -2,6 +2,71 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **incoming-call and friend-content notifications now honour a REAL toggle instead of
+> being always-on — the last `isTypeEnabled` parity gap closes, and the user gets two reachable
+> Settings rows for them** (slice `notification-prefs-calls-friend-content`, feature-parity §M
+> "`callsEnabled` + `friendContentEnabled` notification toggles" `[ ]`→`[x]`). The prior slice
+> (`notification-toast-per-type-gate`, #4464) built the wire-type→toggle resolver but left
+> incoming-call and friend feed/story/mood in its always-on set with a stated boundary: "Android's
+> `UserNotificationPreferences` has neither `callsEnabled` nor `friendContentEnabled` field yet — a
+> tracked follow-up." This slice adds those two fields and wires them end-to-end.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice on
+> `main` (#4464 `notification-toast-per-type-gate`, commit `021a975f`). `origin/main` fetched (HEAD
+> `1a8ee5c6`); branched `claude/apps/android/notification-prefs-calls-friend-content` off it; local
+> HEAD == origin/main before branching. Diff verified `apps/android` only (4 core main + 4 core test +
+> 1 settings screen + 4 locale strings + tracking docs, no `local.properties`).
+>
+> **The change — two model fields, wired through catalog + sync + toast.** (1) `UserNotificationPreferences`
+> gains `callsEnabled` (after `missedCallEnabled`) and `friendContentEnabled` (after `commentLikeEnabled`),
+> both default `true` — exact iOS `defaults` + gateway `NotificationPreferenceSchema` parity (verified
+> against `packages/shared/types/preferences/notification.ts`). (2) `NotificationTypeToggle` moves
+> `incoming_call`/`call`/`CALL_INCOMING` out of `ALWAYS_ON` into a group gated on `callsEnabled`, and
+> `friend_new_story`/`friend_new_post`/`friend_new_mood` into one gated on `friendContentEnabled` — the raw
+> wire strings verified 1:1 against iOS `NotificationModels.swift` (`incomingCall="incoming_call"`,
+> `incomingCallAlert="call"`, `legacyCallIncoming="CALL_INCOMING"`). The always-on set now holds ONLY the
+> types iOS itself leaves toggle-less (translation/transcription/voice-clone, gamification, legacy
+> status/affiliate) — full `isTypeEnabled` parity. (3) `NotificationPreferenceSyncBody` carries both fields
+> in `from`/`toPreferences` (gateway-schema order) so a toggle set on iOS/web round-trips to Android and the
+> toast honours it. (4) `NotificationTypeCatalog` gains `INCOMING_CALL` (CALLS, before MISSED_CALL — iOS puts
+> `callsEnabled` ahead of `missedCall`) + `FRIEND_CONTENT` (SOCIAL, last — iOS Fil social order), with
+> get/set lenses; the pure `sections()` projection auto-renders two reachable rows in Settings ▸ Notifications
+> (+`settings_notif_type_incoming_call` / `settings_notif_type_friend_content` ×4 locales, exhaustive `when`
+> in `SettingsScreen` forces both arms). **SOTA over iOS:** the toggle grouping stays data-driven (one
+> class-load `BY_TYPE` map, no per-call switch re-walk), the catalog remains the single grouping SSOT, and the
+> sync body is the single gateway-contract projection — so the same two fields flow through one resolver, one
+> catalog, one wire body, never three divergent copies.
+>
+> **Tests: +8, RED-proven.** `NotificationTypeToggleTest` +2 (`callsToggleGovernsIncomingCallTypesButNotFinishedCalls`
+> — incoming trio off when `callsEnabled` off, finished-call trio still on; `friendContentToggleGovernsFriendFeedStoryAndMood`
+> — friend trio off, `friend_story_comment`→postComment + `post_like` untouched), plus the all-off sweep and
+> its always-on set corrected (calls/friend removed — now correctly silenced under all-off, a STRICTER
+> assertion). `NotificationTypeCatalogTest` +4 (CALLS order = INCOMING_CALL,MISSED_CALL,VOICEMAIL; SOCIAL ends
+> with FRIEND_CONTENT; both new lenses read/write the right field without clobbering neighbours).
+> `NotificationPreferenceSyncBodyTest` +2 (default block carries both toggles true; both survive the round trip
+> both ways) + the `gatewayFields` set corrected to the real 32-field contract. `PreferenceSyncBodyReadProjectionTest`
+> fixture gained the two keys (gateway sends every key) + a strengthened witness (wire `false` must override the
+> local `true` default). **RED proven by mutation:** flipping the production `incoming_call` gate from
+> `it.callsEnabled` to `true` fails EXACTLY `callsToggleGovernsIncomingCallTypesButNotFinishedCalls` +
+> `onlyTheToggleLessTypesSurviveEveryToggleOff` (18 tests, 2 failed), nothing else.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) + `platforms;android-35`/
+> `android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` via the `android-37 → android-37.0`
+> symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full `./apps/android/meeshy.sh check` BUILD SUCCESSFUL** (assembleDebug + all-module
+> `testDebugUnitTest`, 973 tasks; `:core:model` alone = 3273 tests green after the +8, up from 3271). Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — pure `:core:model` building blocks + settings label glue, no
+> `android.*` in the model; SSOT — one toggle resolver, one catalog, one sync body, no divergent copies;
+> instant-app — pure synchronous predicates, no I/O; UDF — n/a pure; no tautological tests — verdicts derived from
+> iOS `isTypeEnabled` + gateway schema, not the impl; no coverage floor lowered — fixtures corrected to the real
+> gateway contract and witnesses STRENGTHENED, never weakened; RED-proven).
+>
+> **Next**: the toast's STATEFUL orchestrator (2 s dedup window, 7 s auto-dismiss, `onConversationOpened/Closed`
+> hooks) and the UI mount + tap-to-navigate (`MeeshyNotificationToast` atom exists in `:sdk-ui`, still uncalled)
+> stay open in §M. For a pure-core next slice, a Chat/Feed value type. Read the chosen box's iOS audit part
+> read-only before branching.
+
 > On 2026-08-30 **the in-app real-time notification toast finally honours the user's PER-TYPE toggles —
 > a `member_left` or `comment_like` push whose toggle is off no longer pops a toast, while a
 > toggle-less type (translation, incoming-call, friend-content) still does** (slice
