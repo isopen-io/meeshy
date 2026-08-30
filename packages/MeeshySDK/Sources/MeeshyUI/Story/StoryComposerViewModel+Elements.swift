@@ -209,7 +209,10 @@ extension StoryComposerViewModel {
 
     var canAddText: Bool { textCount < 5 }
 
-    var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
+    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
+    /// collage que la pose refuserait ensuite en silence.
+    public var canAddMedia: Bool { mediaCount < 10 }
 
     var canAddImage: Bool {
         canAddMedia &&

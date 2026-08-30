@@ -331,6 +331,23 @@ extension MeeshyComposerHost {
             onRailDoor: { door in handleRailDoor(door) },
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
+            // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
+            // seule qui ne peut pas être une porte. `BlankCanvasPasteStarter`
+            // lit `\.storyPaste` lui-même (le meuble l'injecte déjà) et
+            // s'éteint quand le presse-papier n'a rien d'acceptable : c'est le
+            // système qui tient la loi 4 ici, pas nous.
+            railSystemEntry: AnyView(
+                BlankCanvasPasteStarter(canAddMedia: viewModel.canAddMedia) { items in
+                    handlePastedItems(items)
+                }
+                .labelStyle(.iconOnly)
+                // `.capsule` et non `.circle` : celle-ci est iOS 17+, et le
+                // plancher de l'app est iOS 16. Sur une cible de 44 pt, la
+                // capsule EST un cercle.
+                .buttonBorderShape(.capsule)
+            ),
+            // La maquette range COLLAGE entre STICKER et MENTION.
+            railSystemEntryAfter: .sticker,
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui

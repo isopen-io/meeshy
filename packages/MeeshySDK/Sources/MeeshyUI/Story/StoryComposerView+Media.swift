@@ -667,36 +667,14 @@ extension StoryComposerView {
         }
     }
 
+    /// **Le corps a migré sur le MODÈLE** (#4092,
+    /// `StoryComposerViewModel.attachPastedAudio`) : ses quatre gestes sont des
+    /// mutations, et sa place dans cette vue était le seul obstacle à coller un
+    /// son depuis le composer unifié.
+    ///
+    /// Ce nom reste — c'est celui que ses appelants connaissent, et le renommer
+    /// aurait mêlé un déplacement à une réécriture.
     func addRecordingToBackground(url: URL) {
-        Task {
-            let samples: [Float]
-            do {
-                samples = try await WaveformCache.shared.samples(from: url)
-            } catch {
-                samples = []  // waveform cosmétique : barres plates si l'analyse échoue
-            }
-            let asset = AVURLAsset(url: url)
-            var mediaDuration: Float?
-            if let cmDur = try? await asset.load(.duration) {
-                let secs = CMTimeGetSeconds(cmDur)
-                if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
-            }
-            await MainActor.run {
-                if let obj = viewModel.addAudioObject() {
-                    viewModel.loadedAudioURLs[obj.id] = url
-                    var effects = viewModel.currentEffects
-                    if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
-                        effects.audioPlayerObjects?[idx].waveformSamples = samples
-                        if let dur = mediaDuration {
-                            effects.audioPlayerObjects?[idx].duration = dur
-                        }
-                        viewModel.currentEffects = effects
-                    }
-                    if let dur = mediaDuration {
-                        viewModel.autoExtendDuration(forElementEnd: dur)
-                    }
-                }
-            }
-        }
+        viewModel.attachPastedAudio(url: url)
     }
 }

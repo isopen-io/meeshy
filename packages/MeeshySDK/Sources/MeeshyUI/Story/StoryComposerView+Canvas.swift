@@ -1827,13 +1827,25 @@ struct BlankCanvasStarterLabel: View {
 /// se désactive de lui-même quand le presse-papier ne porte rien d'acceptable —
 /// donc jamais d'affordance qui ne ferait rien. Son libellé vient du système :
 /// il est déjà traduit dans les sept langues de l'app, sans clé de catalogue.
-struct BlankCanvasPasteStarter: View {
+/// **`public` depuis le #4092** : le rail du composer unifié monte CE bouton.
+///
+/// Il ne pouvait pas devenir une porte ordinaire du rail — celles-ci sont des
+/// `Button` qui rappellent l'hôte, et le privilège décrit ci-dessus se perd dès
+/// qu'on le reconstruit à la main. C'est pourquoi le rail a gagné un slot où
+/// l'hôte rend la vue ENTIÈRE : la forme du contrôle a dicté la forme du rail,
+/// et non l'inverse.
+public struct BlankCanvasPasteStarter: View {
     let canAddMedia: Bool
     let onItems: ([StoryPastedItem]) -> Void
 
+    public init(canAddMedia: Bool, onItems: @escaping ([StoryPastedItem]) -> Void) {
+        self.canAddMedia = canAddMedia
+        self.onItems = onItems
+    }
+
     @Environment(\.storyPaste) private var provider
 
-    var body: some View {
+    public var body: some View {
         if StoryComposerView.offersPasteStarter(hasResolver: provider != nil,
                                                 canAddMedia: canAddMedia),
            let resolver = provider {
