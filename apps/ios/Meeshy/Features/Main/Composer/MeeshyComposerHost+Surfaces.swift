@@ -313,12 +313,24 @@ extension MeeshyComposerHost {
             // le fait sous l'atelier. Elle était retenue parce que « rien ne
             // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
             // meuble qui le fait désormais, en ouvrant sa zone basse.
-            railDoors: ComposerRailDoor.offered(
-                served: ComposerSceneCapabilities.doors,
-                format: selectedFormat,
-                allowsCapture: profile.allowsCapture
+            // **Le rail montre les portes, OU les contrôleurs de l'outil
+            // ouvert** (directive porteur 2026-08-30). La résolution est une
+            // règle pure : le meuble ne décide pas ici quel outil l'emporte,
+            // il fournit l'état.
+            railMode: ComposerRailMode.resolve(
+                drawing: viewModel.isDrawingActive,
+                textEditing: viewModel.textEditingMode.activeTextId != nil,
+                expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
+                expandedTextTool: viewModel.textEditingMode.expandedTool,
+                doors: ComposerRailDoor.offered(
+                    served: ComposerSceneCapabilities.doors,
+                    format: selectedFormat,
+                    allowsCapture: profile.allowsCapture
+                )
             ),
             onRailDoor: { door in handleRailDoor(door) },
+            onRailToolControl: { control in handleRailToolControl(control) },
+            onRailExitTool: { handleRailExitTool() },
             // Les contrôleurs que CE meuble sert — même règle, même raison.
             //
             // **L'empilement y est entré le 2026-08-30.** Le commentaire qui
@@ -335,6 +347,9 @@ extension MeeshyComposerHost {
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
+            // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
+            // d'où sa place tout en haut du rail et son séparateur.
+            onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -367,15 +382,12 @@ extension MeeshyComposerHost {
             // (stylo / marqueur / gomme), couleur, épaisseur, lissage,
             // annulation par trait. Une bande simplifiée écrite ici aurait
             // perdu quatre capacités que l'atelier a (leçon 336).
-            drawingToolbar: viewModel.isDrawingActive
-                ? AnyView(StoryDrawingToolbar(viewModel: viewModel))
-                : nil,
-            // Les contrôleurs du TEXTE, montés pendant l'édition seule (#4401).
-            // Ce sont ceux de l'atelier : les 18 styles, la couleur,
-            // l'alignement, le fond, le cadrage, le contour.
-            textToolbar: viewModel.textEditingMode.activeTextId != nil
-                ? AnyView(StoryTextEditToolbar(viewModel: viewModel))
-                : nil,
+            // **Les OPTIONS de l'outil déplié**, sous la scène. Les bulles sont
+            // au rail ; ce panneau porte ce qui a besoin de largeur — la
+            // palette, la glissière, les dix-huit styles. `MeeshyToolOptionsPanel`
+            // rend `EmptyView` quand rien n'est déplié, donc le montage est
+            // inconditionnel et la loi 4 est tenue par la vue elle-même.
+            toolOptions: AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)),
             editingTextId: viewModel.textEditingMode.activeTextId,
             onInlineTextChanged: { id, texte in
                 viewModel.updateTextContent(id: id, text: texte)

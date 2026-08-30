@@ -11,7 +11,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
     case thickness  // épaisseur
     case smoothing  // lissage : raw / curve / line
 
-    var sfSymbol: String {
+    public var sfSymbol: String {
         switch self {
         case .tool:      return "pencil.tip"
         case .color:     return "paintpalette.fill"
@@ -20,7 +20,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
         }
     }
 
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .tool:      return String(localized: "story.drawEdit.tool.tool", defaultValue: "Pinceau", bundle: .module)
         case .color:     return String(localized: "story.drawEdit.tool.color", defaultValue: "Couleur du trait", bundle: .module)
@@ -149,7 +149,7 @@ extension StoryComposerViewModel {
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
-    func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
+    public func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
         guard case .active(let strokeId, _) = drawingEditingMode else { return }
         drawingEditingMode = .active(strokeId: strokeId, expandedTool: tool)
     }
@@ -191,7 +191,7 @@ extension StoryComposerViewModel {
 
     /// Sélectionne un trait pour l'édition par-trait. `nil` désélectionne. Un id
     /// inexistant est ignoré (no-op). No-op si pas en mode édition.
-    func selectStroke(_ id: String?) {
+    public func selectStroke(_ id: String?) {
         guard case .active(_, let expandedTool) = drawingEditingMode else { return }
         if let id, !drawingStrokes.contains(where: { $0.id == id }) { return }
         drawingEditingMode = .active(strokeId: id, expandedTool: expandedTool)

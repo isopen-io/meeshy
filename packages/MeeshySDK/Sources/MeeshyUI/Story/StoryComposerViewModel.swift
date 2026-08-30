@@ -204,7 +204,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
-    @Published var drawingEditingMode: DrawingEditingMode = .inactive
+    /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié (directive
+    /// porteur 2026-08-30). L'écriture reste au module — elle passe par
+    /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
+    /// drapeaux par paires.
+    @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
     /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un

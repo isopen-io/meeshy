@@ -40,10 +40,36 @@ public struct StoryComposerSeed {
         case video(fileURL: URL, objectId: String)
     }
 
-    public let payload: Payload
+    /// Ce qui se pose sur le CANVAS. **Optionnel depuis #4025** : une graine de
+    /// TEXTE seul n'a rien à poser, et forcer un payload l'aurait obligée à
+    /// inventer une image vide — un objet qu'`runStoryUpload` aurait sauté en
+    /// journalisant « layer will be invisible to viewers ».
+    public let payload: Payload?
 
-    public init(payload: Payload) {
+    /// Ce qui pré-remplit la DESCRIPTION de la slide.
+    ///
+    /// **Pas un troisième cas de `Payload`**, et la distinction est le fond de
+    /// l'affaire : ce qu'on pose sur le canvas et ce qui décrit la slide sont
+    /// deux choses de nature différente, et un message porte souvent les DEUX —
+    /// une photo avec sa légende. Les ranger dans le même `enum` aurait forcé
+    /// à choisir entre les deux au moment précis où l'on veut les garder.
+    public let description: String?
+
+    public init(payload: Payload?, description: String? = nil) {
         self.payload = payload
+        self.description = description
+    }
+
+    /// **La fabrique de la graine de TEXTE.**
+    ///
+    /// `nil` quand le texte est vide ou fait d'espaces : un atelier ouvert sur
+    /// une description vide n'aurait rien semé, et la porte doit pouvoir le
+    /// DIRE plutôt que d'ouvrir sur rien. Même contrat que
+    /// `video(copying:)` — une fabrique qui refuse est une fabrique qui parle.
+    public static func text(_ raw: String) -> StoryComposerSeed? {
+        let taille = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !taille.isEmpty else { return nil }
+        return StoryComposerSeed(payload: nil, description: taille)
     }
 
     /// **La fabrique de la graine VIDÉO — le SEUL site qui copie.**
@@ -129,8 +155,22 @@ public extension StoryComposerViewModel {
     convenience init(seeding seed: StoryComposerSeed) {
         self.init()
 
+        // La DESCRIPTION d'abord, et sans condition : elle n'a besoin d'aucun
+        // actif chargé, donc elle survit même si la pose du média échoue
+        // ci-dessous (fichier balayé, plafond d'objets atteint). Un atelier qui
+        // s'ouvre avec la légende mais sans la photo reste utilisable ; l'inverse
+        // ferait perdre en silence ce que l'auteur avait écrit.
+        if let description = seed.description {
+            applyContentText(description)
+            isSeededSession = true
+        }
+
         switch seed.payload {
-        case .image(let bitmap):
+        case .none:
+            // Graine de texte seul : la description ci-dessus EST le semis.
+            break
+
+        case .image(let bitmap)?:
             // `slideImages`, et pas `loadedImages` : `runStoryUpload` n'envoie
             // un FOND que depuis `upload.slideImages[slide.id]`. Posé ailleurs,
             // le média s'afficherait sans jamais partir.
@@ -138,7 +178,7 @@ public extension StoryComposerViewModel {
             hasBackgroundImage = true
             isSeededSession = true
 
-        case .video(let copied, let objectId):
+        case .video(let copied, let objectId)?:
             // AUCUNE écriture disque ici : la copie a été faite UNE fois, à la
             // fabrique de la graine. Ce qui reste est une vérification —
             // le fichier a pu être balayé entre la fabrique et l'ouverture —,
