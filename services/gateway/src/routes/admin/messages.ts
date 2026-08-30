@@ -5,6 +5,50 @@ import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from 
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+
+/**
+ * Volume quotidien + longueur moyenne, agrégés côté MongoDB (#4391).
+ *
+ * `GET /admin/messages/stats` faisait un `findMany` sur TOUTE la fenêtre
+ * (`select: { createdAt, content }` — le texte intégral de chaque message, sans
+ * `take`) pour en tirer un histogramme par jour et une moyenne de longueur.
+ * Les deux se calculent en base, en UNE passe : `$facet` fait les deux
+ * agrégations sur le même `$match`, et ne rend qu'un document.
+ *
+ * Le patron (`aggregateRaw` + `$dateToString`) est celui de `admin/languages.ts`
+ * — le tour est pris là où `groupBy` ne sait pas dériver un jour depuis une date.
+ */
+type FenetreFacet = {
+  readonly daily?: ReadonlyArray<{ _id: string; count: number }>;
+  readonly length?: ReadonlyArray<{ avg: number | null }>;
+};
+
+function fenetreMessagesPipeline(since: Date): Prisma.InputJsonValue[] {
+  return [
+    { $match: { createdAt: { $gte: { $date: since.toISOString() } }, deletedAt: null } },
+    {
+      $facet: {
+        daily: [
+          {
+            $group: {
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } },
+              count: { $sum: 1 },
+            },
+          },
+        ],
+        // `filter(len > 0)` de la version JS : la moyenne ne porte que sur les
+        // messages au contenu NON VIDE. `$strLenCP` compte les points de code
+        // (la version JS comptait des unités UTF-16, qui doublent les emoji).
+        length: [
+          { $project: { len: { $strLenCP: { $ifNull: ['$content', ''] } } } },
+          { $match: { len: { $gt: 0 } } },
+          { $group: { _id: null, avg: { $avg: '$len' } } },
+        ],
+      },
+    },
+  ] as unknown as Prisma.InputJsonValue[];
+}
 
 // Middleware pour vérifier les permissions admin
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
@@ -93,17 +137,16 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         return acc;
       }, {} as Record<string, number>);
 
-      // Messages par période (timeline)
-      const messages = await fastify.prisma.message.findMany({
-        where: {
-          createdAt: { gte: startDate },
-          deletedAt: null
-        },
-        select: {
-          createdAt: true,
-          content: true
-        }
-      });
+      // Messages par période (timeline) + longueur moyenne — UNE agrégation
+      // MongoDB, un document en retour (#4391).
+      const facets = await fastify.prisma.message.aggregateRaw({
+        pipeline: fenetreMessagesPipeline(startDate)
+      }) as unknown as ReadonlyArray<FenetreFacet>;
+      const fenetre: FenetreFacet = facets[0] ?? {};
+
+      const comptesParJour = new Map<string, number>(
+        (fenetre.daily ?? []).map(ligne => [ligne._id, ligne.count])
+      );
 
       // Grouper par jour
       const dailyMessages: Record<string, number> = {};
@@ -113,15 +156,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dateKey = date.toISOString().split('T')[0];
-        dailyMessages[dateKey] = 0;
+        dailyMessages[dateKey] = comptesParJour.get(dateKey) ?? 0;
       }
-
-      messages.forEach(msg => {
-        const dateKey = msg.createdAt.toISOString().split('T')[0];
-        if (dailyMessages[dateKey] !== undefined) {
-          dailyMessages[dateKey]++;
-        }
-      });
 
       const messagesByPeriod = Object.entries(dailyMessages).map(([date, count]) => ({
         date,
@@ -129,15 +165,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       }));
 
       // Longueur moyenne des messages
-      const messageLengths = messages
-        .map(msg => msg.content?.length || 0)
-        .filter(len => len > 0);
-
-      const averageLength = messageLengths.length > 0
-        ? Math.round(
-            messageLengths.reduce((sum, len) => sum + len, 0) / messageLengths.length
-          )
-        : 0;
+      const averageLength = Math.round((fenetre.length ?? [])[0]?.avg ?? 0);
 
       // Messages traduits (ont au moins une traduction dans le JSON)
       const messagesWithTranslations = await fastify.prisma.message.count({

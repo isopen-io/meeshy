@@ -483,12 +483,7 @@ describe('PARTIE 4 — le balayage de suivabilité balaie bien ce qu’il préte
  * résout le VRAI handle et s'ajoute (le `Link` est cumulatif) une fois le
  * handler atteint — mais seulement sur les branches qui l'atteignent.
  */
-const DETTE_HORS_TERRITOIRE: ReadonlyArray<readonly [string, string]> = [
-  [
-    'users/profile.ts#ANNONCE_PROFIL',
-    "#4423 — `onRequest` sert `:handle` en gabarit sur TOUTE réponse (401/403 compris) ; annonceProfil(handle) ne corrige qu'après authentification/résolution — hors territoire (users/profile.ts)",
-  ],
-];
+const DETTE_HORS_TERRITOIRE: ReadonlyArray<readonly [string, string]> = [];
 
 describe('PARTIE 4 — le successeur ANNONCÉ émet une chaîne SUIVABLE, partout sauf la dette nommée', () => {
   it('aucun site, hors DETTE_HORS_TERRITOIRE, n’émet un successeur en gabarit', () => {
@@ -501,11 +496,16 @@ describe('PARTIE 4 — le successeur ANNONCÉ émet une chaîne SUIVABLE, partou
     expect(fautifs).toEqual(attendues);
   });
 
-  it.each(DETTE_HORS_TERRITOIRE)('%s reste fautif (%s) — sinon retirer sa ligne', (cle) => {
-    const trouve = BALAYAGE_SUCCESSEURS.findings.find((f) => f.cle === cle);
-    expect(trouve).toBeDefined();
-    expect(trouve?.suivable).toBe(false);
-  });
+  // `it.each` sur un tableau VIDE lève (Jest 30) plutôt que de ne produire
+  // aucun cas — la garde protège l'état visé par `DETTE_HORS_TERRITOIRE` lui-
+  // même : une liste vide, aucune dette hors territoire à confirmer fautive.
+  if (DETTE_HORS_TERRITOIRE.length > 0) {
+    it.each(DETTE_HORS_TERRITOIRE)('%s reste fautif (%s) — sinon retirer sa ligne', (cle) => {
+      const trouve = BALAYAGE_SUCCESSEURS.findings.find((f) => f.cle === cle);
+      expect(trouve).toBeDefined();
+      expect(trouve?.suivable).toBe(false);
+    });
+  }
 
   /**
    * Une garde négative dont le balayage rend `[]` reste verte pour rien

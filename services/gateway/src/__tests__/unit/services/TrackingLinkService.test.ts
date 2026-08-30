@@ -74,6 +74,7 @@ function makePrisma(overrides: {
   invitationResult?: any;
   linkCount?: number;
   clickCount?: number;
+  clickFacet?: Record<string, unknown>;
 } = {}) {
   const defaultLink = makeLink();
   const {
@@ -87,6 +88,7 @@ function makePrisma(overrides: {
     invitationResult = null,
     linkCount = 0,
     clickCount = 0,
+    clickFacet = {},
   } = overrides;
 
   return {
@@ -107,6 +109,9 @@ function makePrisma(overrides: {
       count: jest.fn<any>().mockResolvedValue(clickCount),
       update: jest.fn<any>().mockResolvedValue({}),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      // #4391 : `getTrackingLinkStats` agrège en base ($facet), il ne ramène
+      // plus une ligne par clic.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([clickFacet]),
     },
     conversationShareLink: {
       findFirst: jest.fn<any>().mockResolvedValue(invitationResult),
@@ -406,8 +411,8 @@ describe('TrackingLinkService.getTrackingLinkStats', () => {
     await expect(sut.getTrackingLinkStats('BAD')).rejects.toThrow('not found');
   });
 
-  it('returns zero-click stats when no clicks exist', async () => {
-    const prisma = makePrisma({ findUniqueResult: makeLink(), clickFindManyResult: [] });
+  it('returns zero-click stats when the aggregation is empty', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
     const sut = new TrackingLinkService(prisma as any);
 
     const stats = await sut.getTrackingLinkStats('ABC123');
@@ -415,48 +420,78 @@ describe('TrackingLinkService.getTrackingLinkStats', () => {
     expect(stats.totalClicks).toBe(0);
     expect(stats.confirmedClicks).toBe(0);
     expect(stats.topReferrers).toEqual([]);
+    expect(stats.clicksByCountry).toEqual({});
   });
 
   it('aggregates clicks by country, device, browser, os, language, date, socialSource and referrer', async () => {
-    const clicks = [
-      makeClick({ country: 'FR', device: 'mobile', browser: 'Safari', os: 'iOS', language: 'fr', socialSource: 'twitter', referrer: 'https://google.com', redirectStatus: 'confirmed' }),
-      makeClick({ id: 'click-2', country: 'US', device: 'desktop', browser: 'Chrome', os: 'Windows', language: 'en', socialSource: null, referrer: null }),
-    ];
     const link = makeLink({ uniqueClicks: 2 });
-    const prisma = makePrisma({ findUniqueResult: link, clickFindManyResult: clicks });
+    const prisma = makePrisma({
+      findUniqueResult: link,
+      clickFacet: {
+        total: [{ n: 2 }],
+        confirmed: [{ n: 1 }],
+        country: [{ _id: 'FR', n: 1 }, { _id: 'US', n: 1 }],
+        device: [{ _id: 'mobile', n: 1 }, { _id: 'desktop', n: 1 }],
+        browser: [{ _id: 'Safari', n: 1 }, { _id: 'Chrome', n: 1 }],
+        os: [{ _id: 'iOS', n: 1 }, { _id: 'Windows', n: 1 }],
+        language: [{ _id: 'fr', n: 1 }, { _id: 'en', n: 1 }],
+        socialSource: [{ _id: 'twitter', n: 1 }],
+        date: [{ _id: '2026-06-01', n: 2 }],
+        referrer: [{ _id: 'https://google.com', n: 1 }],
+        uniqueIps: [{ n: 2 }],
+      },
+    });
     const sut = new TrackingLinkService(prisma as any);
 
     const stats = await sut.getTrackingLinkStats('ABC123');
 
     expect(stats.totalClicks).toBe(2);
-    expect(stats.clicksByCountry['FR']).toBe(1);
-    expect(stats.clicksByCountry['US']).toBe(1);
+    expect(stats.clicksByCountry).toEqual({ FR: 1, US: 1 });
     expect(stats.clicksByDevice['mobile']).toBe(1);
     expect(stats.clicksByBrowser['Safari']).toBe(1);
     expect(stats.clicksByOS['iOS']).toBe(1);
     expect(stats.clicksByLanguage['fr']).toBe(1);
     expect(stats.clicksBySocialSource['twitter']).toBe(1);
+    expect(stats.clicksByDate).toEqual({ '2026-06-01': 2 });
     expect(stats.confirmedClicks).toBe(1);
     expect(stats.uniqueClicks).toBe(2);
-    expect(stats.topReferrers).toHaveLength(1);
-    expect(stats.topReferrers[0].referrer).toBe('https://google.com');
+    expect(stats.topReferrers).toEqual([{ referrer: 'https://google.com', count: 1 }]);
+  });
+
+  it('sert le compteur STOCKÉ hors fenêtre, et le cardinal RECALCULÉ sur une fenêtre', async () => {
+    const link = makeLink({ uniqueClicks: 99 });
+    const facet = { total: [{ n: 4 }], uniqueIps: [{ n: 3 }], uniqueFingerprints: [{ n: 2 }] };
+
+    const sansFenetre = await new TrackingLinkService(
+      makePrisma({ findUniqueResult: link, clickFacet: facet }) as any
+    ).getTrackingLinkStats('ABC123');
+    expect(sansFenetre.uniqueClicks).toBe(99);
+
+    const avecFenetre = await new TrackingLinkService(
+      makePrisma({ findUniqueResult: link, clickFacet: facet }) as any
+    ).getTrackingLinkStats('ABC123', { startDate: new Date('2026-06-01') });
+    // max(IPs, empreintes) — le compteur all-time casserait uniqueClicks ≤ totalClicks.
+    expect(avecFenetre.uniqueClicks).toBe(3);
   });
 
   it('applies startDate and endDate filters on clickedAt', async () => {
-    const prisma = makePrisma({ findUniqueResult: makeLink(), clickFindManyResult: [] });
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
     const sut = new TrackingLinkService(prisma as any);
     const start = new Date('2026-06-01');
     const end = new Date('2026-06-30');
 
     await sut.getTrackingLinkStats('ABC123', { startDate: start, endDate: end });
 
-    expect(prisma.trackingLinkClick.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          clickedAt: expect.objectContaining({ gte: start, lte: end }),
-        }),
-      })
-    );
+    const [{ pipeline }] = prisma.trackingLinkClick.aggregateRaw.mock.calls[0] as [{ pipeline: any[] }];
+    expect(pipeline[0].$match.clickedAt).toEqual({
+      $gte: { $date: start.toISOString() },
+      $lte: { $date: end.toISOString() },
+    });
+    expect(pipeline[0].$match.trackingLinkId).toEqual({ $oid: makeLink().id });
+    // Le budget de lignes lues est gardé par
+    // `__tests__/security/stats-routes-row-budget.test.ts` ; ici on atteste le
+    // MOYEN : plus aucune lecture ligne à ligne des clics.
+    expect(prisma.trackingLinkClick.findMany).not.toHaveBeenCalled();
   });
 });
 

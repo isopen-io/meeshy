@@ -2,6 +2,11 @@ import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import {
+  clickStatsPipeline,
+  foldClickStatsFacet,
+  type ClickStatsFacet,
+} from './trackingLinkClickAggregation';
 
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
 
@@ -421,129 +426,50 @@ export class TrackingLinkService {
       throw new Error('Tracking link not found');
     }
 
-    // Construire la requête de filtrage
-    const where: any = {
-      trackingLinkId: trackingLink.id
-    };
+    // UNE agrégation MongoDB, un document en retour — jamais une ligne par
+    // clic (#4391). Ce corps ramenait TOUS les clics de la période, sans
+    // `select` (donc IP, user-agent et empreinte d'appareil compris) et sans
+    // aucune borne de volume, pour n'en produire que douze agrégats.
+    const [facet] = (await this.prisma.trackingLinkClick.aggregateRaw({
+      pipeline: clickStatsPipeline({
+        trackingLinkId: trackingLink.id,
+        startDate: params?.startDate,
+        endDate: params?.endDate,
+      }),
+    })) as unknown as ReadonlyArray<ClickStatsFacet>;
 
-    if (params?.startDate || params?.endDate) {
-      where.clickedAt = {};
-      if (params.startDate) {
-        where.clickedAt.gte = params.startDate;
-      }
-      if (params.endDate) {
-        where.clickedAt.lte = params.endDate;
-      }
-    }
-
-    // Récupérer tous les clics
-    const clicks = await this.prisma.trackingLinkClick.findMany({
-      where
-    });
-
-    // Calculer les statistiques
-    const clicksByCountry: { [country: string]: number } = {};
-    const clicksByDevice: { [device: string]: number } = {};
-    const clicksByBrowser: { [browser: string]: number } = {};
-    const clicksByOS: { [os: string]: number } = {};
-    const clicksByLanguage: { [language: string]: number } = {};
-    const clicksByHour: { [hour: string]: number } = {};
-    const clicksBySocialSource: { [source: string]: number } = {};
-    const clicksByDate: { [date: string]: number } = {};
-    const referrerCounts: { [referrer: string]: number } = {};
-
-    clicks.forEach(click => {
-      // Par pays
-      if (click.country) {
-        clicksByCountry[click.country] = (clicksByCountry[click.country] || 0) + 1;
-      }
-
-      // Par appareil
-      if (click.device) {
-        clicksByDevice[click.device] = (clicksByDevice[click.device] || 0) + 1;
-      }
-
-      // Par navigateur
-      if (click.browser) {
-        clicksByBrowser[click.browser] = (clicksByBrowser[click.browser] || 0) + 1;
-      }
-
-      // Par OS
-      if (click.os) {
-        clicksByOS[click.os] = (clicksByOS[click.os] || 0) + 1;
-      }
-
-      // Par langue
-      if (click.language) {
-        clicksByLanguage[click.language] = (clicksByLanguage[click.language] || 0) + 1;
-      }
-
-      // Par heure (0-23, UTC — cohérent avec clicksByDate qui utilise toISOString)
-      const hour = click.clickedAt.getUTCHours().toString().padStart(2, '0');
-      clicksByHour[hour] = (clicksByHour[hour] || 0) + 1;
-
-      // Par source sociale
-      if (click.socialSource) {
-        clicksBySocialSource[click.socialSource] = (clicksBySocialSource[click.socialSource] || 0) + 1;
-      }
-
-      // Par date
-      const dateKey = click.clickedAt.toISOString().split('T')[0];
-      clicksByDate[dateKey] = (clicksByDate[dateKey] || 0) + 1;
-
-      // Par referrer
-      if (click.referrer) {
-        referrerCounts[click.referrer] = (referrerCounts[click.referrer] || 0) + 1;
-      }
-    });
-
-    // Top referrers
-    const topReferrers = Object.entries(referrerCounts)
-      .map(([referrer, count]) => ({ referrer, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Compter les clics uniques
-    const uniqueIps = new Set<string>();
-    const uniqueFingerprints = new Set<string>();
-    clicks.forEach(click => {
-      if (click.ipAddress) uniqueIps.add(click.ipAddress);
-      if (click.deviceFingerprint) uniqueFingerprints.add(click.deviceFingerprint);
-    });
+    const agrege = foldClickStatsFacet(facet);
 
     // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
     // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
     // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
     //
     // MAIS le compteur stocké est all-time : il ne connaît pas la fenêtre
-    // [startDate, endDate]. Dès qu'un filtre de date est appliqué, `clicks`
-    // (et donc totalClicks + les histogrammes) ne couvre que la fenêtre, alors
-    // que le compteur stocké resterait sur le total historique — cassant
-    // l'invariant `uniqueClicks ≤ totalClicks`. Sur une fenêtre, on recalcule
-    // donc depuis le set filtré ; sinon on garde le compteur stocké (cohérence
-    // cross-endpoint).
-    const recomputedUniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    // [startDate, endDate]. Dès qu'un filtre de date est appliqué, les agrégats
+    // ne couvrent que la fenêtre, alors que le compteur stocké resterait sur le
+    // total historique — cassant l'invariant `uniqueClicks ≤ totalClicks`. Sur
+    // une fenêtre, on recalcule donc depuis les cardinaux filtrés ; sinon on
+    // garde le compteur stocké (cohérence cross-endpoint).
+    const recomputedUniqueClicks = Math.max(agrege.uniqueIps, agrege.uniqueFingerprints);
     const isDateFiltered = Boolean(params?.startDate || params?.endDate);
     const uniqueClicks = isDateFiltered
       ? recomputedUniqueClicks
       : ((trackingLink as TrackingLink).uniqueClicks ?? recomputedUniqueClicks);
 
-    const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
-
     return {
       trackingLink: trackingLink as TrackingLink,
-      totalClicks: clicks.length,
+      totalClicks: agrege.totalClicks,
       uniqueClicks,
-      confirmedClicks,
-      clicksByCountry,
-      clicksByDevice,
-      clicksByBrowser,
-      clicksByOS,
-      clicksByLanguage,
-      clicksByHour,
-      clicksBySocialSource,
-      clicksByDate,
-      topReferrers
+      confirmedClicks: agrege.confirmedClicks,
+      clicksByCountry: agrege.clicksByCountry,
+      clicksByDevice: agrege.clicksByDevice,
+      clicksByBrowser: agrege.clicksByBrowser,
+      clicksByOS: agrege.clicksByOS,
+      clicksByLanguage: agrege.clicksByLanguage,
+      clicksByHour: agrege.clicksByHour,
+      clicksBySocialSource: agrege.clicksBySocialSource,
+      clicksByDate: agrege.clicksByDate,
+      topReferrers: [...agrege.topReferrers]
     };
   }
 

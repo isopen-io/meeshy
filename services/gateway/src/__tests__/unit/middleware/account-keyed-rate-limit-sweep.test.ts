@@ -128,20 +128,26 @@ const ADRESSE_AU_NIVEAU_DU_PLUGIN: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * Dette HORS TERRITOIRE de ce lot, nommée plutôt qu'ignorée.
+ * Dette HORS TERRITOIRE — SOLDÉE par #4429.
  *
- * `routes/admin/agent-topics.ts` porte le troisième exemplaire du défaut, sur
- * une route VIVANTE (`config: { rateLimit: TEST_ROUTE_RATE_LIMIT }`, l. 293) —
- * et son doc-comment affirme lui aussi la parité qu'il n'a pas : « compté par
- * COMPTE, là où l'appelant est enfin connu — même forme que
- * `createPostRouteRateLimitConfig` ». Il n'est pas corrigé ici parce qu'il est
- * hors du territoire de ce lot ; l'inscrire fait rougir le cliquet le jour où
- * quelqu'un le corrige sans retirer sa ligne, ce qui rend le nettoyage
- * VISIBLE au lieu de silencieux.
+ * `routes/admin/agent-topics.ts` portait le troisième exemplaire du défaut,
+ * sur une route VIVANTE (`config: { rateLimit: TEST_ROUTE_RATE_LIMIT }`), et
+ * son doc-comment affirmait lui aussi la parité qu'il n'avait pas : « compté
+ * par COMPTE, là où l'appelant est enfin connu — même forme que
+ * `createPostRouteRateLimitConfig` ». #4429 pose `hook: 'preHandler'`
+ * (explicitement — la mesure y a montré que cette route, à la différence des
+ * routes d'appels, n'en dépendait pas pour séparer les comptes : sa garde vit
+ * déjà en `onRequest`, la même phase que le défaut du plugin), des préfixes
+ * `acct:`/`ip:` disjoints, et `skipOnError: false` DÉCLARÉ — ce dernier étant
+ * le défaut RÉELLEMENT corrigé : sans lui, la config héritait en silence du
+ * `skipOnError: true` du plugin global. Témoin dédié :
+ * `agent-topics-test-route-counts-the-account.test.ts`.
+ *
+ * Ce tableau reste VIDE plutôt que supprimé — un état à DÉFENDRE, pas
+ * seulement atteint : le second `it.each` ci-dessous rougirait si une entrée
+ * y était ajoutée sans que la config correspondante soit RÉELLEMENT fautive.
  */
-const DETTE_HORS_TERRITOIRE: ReadonlyArray<readonly [string, string]> = [
-  ['routes/admin/agent-topics.ts#agent-topics:test:', 'POST /admin/agent/topics/test — à livrer'],
-];
+const DETTE_HORS_TERRITOIRE: ReadonlyArray<readonly [string, string]> = [];
 
 const EXCEPTIONS = [...ADRESSE_AU_NIVEAU_DU_PLUGIN, ...DETTE_HORS_TERRITOIRE];
 

@@ -38,7 +38,13 @@ import { join } from 'path';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
-const MESSAGE_READ = /\bprisma\.message\.(findMany|count)\s*\(/g;
+// `aggregateRaw` fait partie du balayage depuis #4391 : une agrégation MongoDB
+// sur `Message` EST une lecture de messages, et l'omettre créait un angle mort
+// — `admin/languages.ts` lisait déjà quatre fois la collection sans jamais
+// apparaître ici, et #4391 a converti une lecture de `admin/messages.ts` vers
+// cette forme. Un balayage qui rétrécit quand la lecture change de FORME
+// n'atteste plus rien.
+const MESSAGE_READ = /\bprisma\.message\.(findMany|count|aggregateRaw)\s*\(/g;
 const APPLY_HIDING = /\bapplyPersonalHistoryHiding\s*\(/g;
 
 type Classification =
@@ -120,7 +126,14 @@ const SURFACES: Record<string, Classification> = {
   },
   'admin/agent.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
   'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
+  // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
+  // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
+  // que le balayage élargi rend visible.
   'admin/messages.ts': { kind: 'exempt', reads: 11, why: 'Surface admin/modération.' },
+  // Déclarée par #4391 en même temps que l'élargissement du balayage : ses
+  // quatre lectures sont des `aggregateRaw` (paires de traduction, utilisateurs
+  // distincts par langue, volumes quotidiens), invisibles jusque-là.
+  'admin/languages.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/system-rankings.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   // 4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
   // lectures) est passée en régime SOUVERAIN et a été extraite dans son
