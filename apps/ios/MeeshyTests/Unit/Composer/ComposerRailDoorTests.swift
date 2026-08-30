@@ -558,3 +558,121 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("case.record:handleDocumentTool(.microphone)"))
     }
 }
+
+/// **Annuler et rétablir sur le plateau** (#4402).
+///
+/// L'atelier a son historique depuis C9 ; le composer unifié n'en câblait
+/// RIEN. Poser un sticker au mauvais endroit, avancer un objet d'un plan,
+/// changer le fond : aucun de ces gestes ne se défaisait, et le manque
+/// s'aggravait à chaque porte servie.
+final class ComposerHistoryServiceTests: XCTestCase {
+
+    /// **La scène sert l'historique, le document non — et ce n'est pas un
+    /// oubli.** Sur le document, le dernier geste est presque toujours du
+    /// texte, que le clavier annule déjà par son propre geste ; un « annuler »
+    /// qui remonterait une pose de fond faite deux écrans plus tôt PROMETTRAIT
+    /// d'annuler la frappe et ferait autre chose.
+    func test_seuleLaScene_sertLHistorique() {
+        XCTAssertTrue(ComposerHistoryService.servesHistory(on: .scene))
+        XCTAssertFalse(ComposerHistoryService.servesHistory(on: .document))
+        XCTAssertFalse(ComposerHistoryService.servesHistory(on: .mood))
+    }
+
+    /// Les deux libellés existent et se distinguent — VoiceOver lit le VERBE.
+    func test_lesDeuxLibelles_existentEtSeDistinguent() {
+        XCTAssertFalse(ComposerHistoryCopy.undo.isEmpty)
+        XCTAssertFalse(ComposerHistoryCopy.redo.isEmpty)
+        XCTAssertNotEqual(ComposerHistoryCopy.undo, ComposerHistoryCopy.redo)
+    }
+}
+
+/// Le câblage de l'historique — la collecte, les contrôles, et la garde qui
+/// les sépare.
+final class ComposerHistoryWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSourceDuMeuble_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("ComposerHistoryService"))
+    }
+
+    /// **La COLLECTE vit au-dessus de l'aiguillage, pas sur la surface.** Un
+    /// instantané pris seulement pendant que la scène est montée perdrait ce
+    /// que le document a posé avant elle, et le premier « annuler » sauterait
+    /// par-dessus les gestes que l'auteur vient de faire.
+    func test_laCollecte_estMonteeAuDessusDeLAiguillage() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains(".onReceive(viewModel.historyTrigger)"))
+        XCTAssertTrue(source.contains("viewModel.pushHistorySnapshot()"))
+        XCTAssertTrue(source.contains("viewModel.seedHistory()"),
+                      "Sans instantané d'ouverture, le plus ancien « annuler » ne ramène pas à l'écran vierge.")
+    }
+
+    /// Les CONTRÔLES, eux, passent par la règle — jamais par un test de surface
+    /// réécrit sur place.
+    func test_lesControles_passentParLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("ComposerHistoryService.servesHistory(on:mountedSurface)"))
+        XCTAssertTrue(source.contains("viewModel.canUndoGlobal"))
+        XCTAssertTrue(source.contains("viewModel.canRedoGlobal"))
+    }
+
+    /// **Le retour de `undoGlobal()` est GARDÉ.** `false` veut dire « rien à
+    /// défaire » : vibrer pour un geste sans effet est le retour trompeur que
+    /// la loi 4 combat.
+    func test_lesDeuxGestes_gardentLeRetourDuModele() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("guardviewModel.undoGlobal()else{return}"))
+        XCTAssertTrue(source.contains("guardviewModel.redoGlobal()else{return}"))
+    }
+}
+
+/// La barre haute — les deux contrôles n'existent que s'ils agissent.
+final class ComposerTopBarHistoryGuardTests: XCTestCase {
+
+    private func topBarSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSource_estLisible() throws {
+        let s = try topBarSource()
+        XCTAssertGreaterThan(s.count, 800)
+        XCTAssertTrue(s.contains("struct ComposerTopBar"))
+    }
+
+    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.** Un
+    /// « annuler » grisé occupe la place et l'attention d'un contrôle pour ne
+    /// rien promettre, sur une barre qui porte déjà quatre choses.
+    func test_lesControles_nExistentQueSilsAgissent() throws {
+        let source = compact(try topBarSource())
+        XCTAssertTrue(source.contains("ifcanUndo||canRedo{"))
+        XCTAssertTrue(source.contains("ifcanUndo{"))
+        XCTAssertTrue(source.contains("ifcanRedo{"))
+        XCTAssertFalse(source.contains(".disabled(!canUndo)"),
+                       "Griser au lieu d'absenter contredit la loi 4.")
+    }
+
+    /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
+    /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
+    /// chaque frappe.
+    func test_laBarre_neRecoitAucunViewModel() throws {
+        let source = compact(try topBarSource())
+        XCTAssertFalse(source.contains("@ObservedObject"))
+        XCTAssertFalse(source.contains("@StateObject"))
+        XCTAssertTrue(source.contains("varcanUndo:Bool=false"))
+    }
+}

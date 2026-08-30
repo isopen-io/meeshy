@@ -474,6 +474,29 @@ extension MeeshyComposerHost {
     /// posent pas le même objet — un son emprunté DEVIENT le fond, une note
     /// vocale ne l'est jamais (doctrine de la vue `2c`) —, donc le choix ne
     /// peut pas être deviné : il se demande.
+    /// **Annuler — et ce que le meuble n'a PAS à faire ensuite.**
+    ///
+    /// L'atelier fait suivre `restoreCanvas(from:)` et
+    /// `loadCurrentSlideIntoTimeline()` : deux effets de PRÉSENTATION dus à sa
+    /// coquille, qui tient un état canvas local et une timeline chargée. Le
+    /// plateau n'a ni l'un ni l'autre — `EmbeddedSceneCanvas` lit la slide par
+    /// un `Binding` sur `viewModel.currentSlide`, donc appliquer l'instantané
+    /// SUFFIT à redessiner. Recopier les deux appels ici aurait couplé le
+    /// meuble à des helpers qu'il n'a pas, pour un effet déjà obtenu.
+    ///
+    /// Le retour de `undoGlobal()` est GARDÉ : `false` veut dire « rien à
+    /// défaire », et faire vibrer l'appareil pour un geste sans effet est
+    /// exactement le retour trompeur que la loi 4 combat.
+    func performHistoryUndo() {
+        guard viewModel.undoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
+    func performHistoryRedo() {
+        guard viewModel.redoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
     func presentSoundSources() {
         HapticFeedback.light()
         showsSoundSourceChooser = true

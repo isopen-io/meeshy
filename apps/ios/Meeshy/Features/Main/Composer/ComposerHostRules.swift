@@ -522,3 +522,45 @@ nonisolated enum ComposerSoundSourcePolicy {
 
     static var cancel: String { ComposerMediaSourcePolicy.cancel }
 }
+
+
+/// **Les libellés de l'historique** (#4402).
+///
+/// Ils sont ici, avec les autres règles pures du meuble, et pas dans la barre
+/// haute : c'est la barre qui les AFFICHE, mais c'est le meuble qui décide que
+/// l'historique existe. Un jour où une seconde surface servira l'historique,
+/// elle lira les mêmes mots sans dépendre de la vue qui les portait.
+nonisolated enum ComposerHistoryCopy {
+
+    static var undo: String {
+        String(localized: "composer.history.undo",
+               defaultValue: "Annuler", bundle: .main)
+    }
+
+    static var redo: String {
+        String(localized: "composer.history.redo",
+               defaultValue: "Rétablir", bundle: .main)
+    }
+}
+
+
+/// **Qui sert l'historique, et pourquoi pas tout le monde** (#4402).
+///
+/// L'historique du composer photographie `slides` — la SCÈNE et ses objets.
+/// Sur l'écran DOCUMENT, ce que l'auteur vient de faire est presque toujours du
+/// texte, que le clavier annule déjà par son propre geste ; y montrer un
+/// « annuler » qui remonte une pose de fond faite deux écrans plus tôt
+/// promettrait d'annuler la frappe et ferait autre chose. **Un contrôle qui
+/// défait autre chose que le dernier geste visible est pire qu'absent.**
+///
+/// La scène, elle, accumule des gestes qui ne se défont par rien d'autre :
+/// poser un sticker, avancer un objet d'un plan, changer le fond. C'est là que
+/// l'historique répond à une question que l'utilisateur se pose.
+nonisolated enum ComposerHistoryService {
+
+    /// - Parameter surface: la surface MONTÉE, pas le format — c'est la
+    ///   présence de la scène qui décide, et elle seule.
+    static func servesHistory(on surface: ComposerSurfaceKind) -> Bool {
+        surface == .scene
+    }
+}

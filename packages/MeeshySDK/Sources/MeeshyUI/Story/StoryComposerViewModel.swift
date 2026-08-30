@@ -127,8 +127,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// changement réel (sinon la boucle flags → objectWillChange → trigger →
     /// push ne se poserait jamais ; la dédup du store ferme le cycle).
     /// Setter interne (pas `private(set)`) : muté par l'extension `+History`.
-    @Published var canUndoGlobal = false
-    @Published var canRedoGlobal = false
+    @Published public internal(set) var canUndoGlobal = false
+    @Published public internal(set) var canRedoGlobal = false
 
     /// Intervalle du debounce de capture. `var` pour les tests uniquement
     /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
@@ -141,7 +141,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// TOTALE par construction (toute mutation passe par objectWillChange) ;
     /// la dédup du HistoryStore absorbe les émissions sans changement de
     /// `slides` (sélections, états d'UI…).
-    private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
         .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
         .map { _ in () }
         .eraseToAnyPublisher()

@@ -270,6 +270,17 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // **L'historique n'est servi QUE par la scène**
+            // (`ComposerHistoryService`) : c'est la seule surface où les gestes
+            // — poser un sticker, avancer un objet, changer le fond — ne se
+            // défont par rien d'autre. Sur le document, le dernier geste est
+            // presque toujours du texte, que le clavier annule déjà.
+            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canUndoGlobal,
+            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canRedoGlobal,
+            onUndo: { performHistoryUndo() },
+            onRedo: { performHistoryRedo() },
             slide: Binding(
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }

@@ -47,6 +47,15 @@ struct ComposerSceneSurface: View {
     var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
+    /// L'historique, en PRIMITIVES — voir `ComposerTopBar.canUndo` pour le
+    /// pourquoi du choix. La scène est la seule surface qui le sert
+    /// (`ComposerHistoryService`), parce qu'elle est la seule où les gestes ne
+    /// se défont par rien d'autre.
+    var canUndo: Bool = false
+    var canRedo: Bool = false
+    var onUndo: (() -> Void)?
+    var onRedo: (() -> Void)?
+
     // MARK: - La scène
 
     @Binding var slide: StorySlide
@@ -94,7 +103,11 @@ struct ComposerSceneSurface: View {
                 overflowMenu: overflowMenu,
                 onClose: onClose,
                 onRemoveMedia: onRemoveMedia,
-                onSelectMedia: onSelectMedia
+                onSelectMedia: onSelectMedia,
+                canUndo: canUndo,
+                canRedo: canRedo,
+                onUndo: onUndo,
+                onRedo: onRedo
             )
 
             VStack(spacing: 8) {

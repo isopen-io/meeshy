@@ -951,6 +951,24 @@ struct MeeshyComposerHost: View {
             Button(ComposerSoundSourcePolicy.cancel, role: .cancel) { }
         }
         .sheet(isPresented: $showsSoundLibrary) { soundLibrarySheet }
+        // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
+        // sur la surface qui l'affiche. Un instantané pris seulement pendant
+        // que la scène est montée perdrait tout ce que le document a posé
+        // avant elle — un fond choisi, un média attaché —, si bien que le
+        // premier « annuler » sauterait par-dessus les gestes que l'auteur
+        // vient de faire. Ce qui est SCÈNE-seul, c'est le CONTRÔLE, pas la
+        // collecte.
+        //
+        // `historyTrigger` est déjà débouncé côté SDK ; la dédup du store fait
+        // qu'un cycle sans changement réel des slides est un no-op.
+        .onReceive(viewModel.historyTrigger) { _ in
+            viewModel.pushHistorySnapshot()
+        }
+        // La trajectoire part de l'état d'OUVERTURE : sans ce premier
+        // instantané, le plus ancien « annuler » ramènerait au premier geste
+        // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
+        // tout défaire.
+        .task { viewModel.seedHistory() }
         .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
