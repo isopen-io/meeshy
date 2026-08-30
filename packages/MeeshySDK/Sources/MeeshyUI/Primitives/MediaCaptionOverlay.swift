@@ -28,7 +28,19 @@ import SwiftUI
 /// déplié, deux closures), aucune décision produit. L'hôte décide s'il monte la
 /// couche, ce qu'il met dedans, et ce que déplier fait au reste de son écran —
 /// notamment SUSPENDRE la lecture, qui est une décision d'hôte, pas d'atome.
-public struct MediaCaptionOverlay: View {
+/// Les deux nombres de la règle, hors du type générique.
+///
+/// Swift interdit les propriétés stockées statiques dans un type générique —
+/// et une règle de produit n'a de toute façon rien à faire dans un paramètre
+/// de rendu : elle est la même quel que soit ce qui peint le texte.
+public enum MediaCaptionRule {
+    /// Le SEUIL qui décide de replier.
+    public static let wordThreshold = 30
+    /// La TÊTE qu'on montre quand on replie. Toujours ≤ `wordThreshold`.
+    public static let wordHead = 15
+}
+
+public struct MediaCaptionOverlay<TextBody: View>: View {
 
     /// **Le SEUIL et la TÊTE sont deux nombres, pas un** (directive 2026-08-30).
     ///
@@ -42,27 +54,43 @@ public struct MediaCaptionOverlay: View {
     /// Entre les deux nombres il y a une bande — de 16 à 30 mots — où la légende
     /// sort ENTIÈRE bien qu'elle dépasse la tête. C'est voulu : replier n'a de
     /// sens que si le repli fait gagner de la place.
-    public static let defaultWordThreshold = 30
+    public static var defaultWordThreshold: Int { MediaCaptionRule.wordThreshold }
 
     /// Ce qu'on montre quand on replie. Toujours ≤ `defaultWordThreshold`.
-    public static let defaultWordHead = 15
+    public static var defaultWordHead: Int { MediaCaptionRule.wordHead }
 
     private let caption: String
     private let isExpanded: Bool
     private let wordThreshold: Int
     private let wordHead: Int
     private let onToggle: () -> Void
+    private let render: (String, CGFloat) -> TextBody
 
+    /// **Ce que les surfaces partagent est la RÈGLE, pas le moteur de texte.**
+    ///
+    /// Le composant décide de replier, compte les mots, pose l'invite, ancre et
+    /// voile ; l'hôte rend la chaîne qu'on lui remet. C'est ce qui permet au
+    /// lecteur de réel de garder ses mentions et ses hashtags CLIQUABLES
+    /// (`MessageTextRenderer`) tout en obéissant à la même règle de repli que le
+    /// lecteur de story — une légende de story et une légende de post n'ont pas
+    /// les mêmes entités, mais elles se replient au même endroit (#4484).
+    ///
+    /// `render` reçoit le texte À AFFICHER — la tête repliée, ou la légende
+    /// entière — et la taille de police que l'état commande (14 replié, 15
+    /// déplié). La taille reste au composant : c'est une décision de
+    /// hiérarchie, pas de contenu.
     public init(caption: String,
                 isExpanded: Bool,
                 wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
                 wordHead: Int = MediaCaptionOverlay.defaultWordHead,
-                onToggle: @escaping () -> Void) {
+                onToggle: @escaping () -> Void,
+                @ViewBuilder render: @escaping (String, CGFloat) -> TextBody) {
         self.caption = caption
         self.isExpanded = isExpanded
         self.wordThreshold = wordThreshold
         self.wordHead = wordHead
         self.onToggle = onToggle
+        self.render = render
     }
 
     // MARK: - La règle
@@ -129,13 +157,10 @@ public struct MediaCaptionOverlay: View {
     /// bouton avec le reste — le défaut même que ce composant corrige.
     private var collapsedCaption: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(collapsed.head)
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(.white)
+            render(collapsed.head, 14)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .legibleOverCanvas()
-                .allowsHitTesting(false)
 
             if collapsed.isTruncated {
                 Button(action: onToggle) {
@@ -166,9 +191,7 @@ public struct MediaCaptionOverlay: View {
         GeometryReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(caption)
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                        .foregroundColor(.white)
+                    render(caption, 15)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .legibleOverCanvas()
@@ -239,5 +262,42 @@ private extension View {
         self
             .shadow(color: .black.opacity(0.75), radius: 2, x: 0, y: 1)
             .shadow(color: .black.opacity(0.35), radius: 7, x: 0, y: 2)
+    }
+}
+
+/// Le rendu par DÉFAUT : du texte simple, blanc, à la taille que l'état
+/// commande. C'est ce que rendait le composant avant qu'il s'ouvre à un rendu
+/// d'hôte (#4484) — conservé à l'identique pour ses appelants, qui n'ont rien
+/// à changer.
+public struct MediaCaptionPlainText: View {
+    private let text: String
+    private let size: CGFloat
+
+    public init(_ text: String, size: CGFloat) {
+        self.text = text
+        self.size = size
+    }
+
+    public var body: some View {
+        Text(text)
+            .font(MeeshyFont.relative(size, weight: .medium))
+            .foregroundColor(.white)
+    }
+}
+
+public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
+    /// La forme historique — texte simple. Les appelants existants
+    /// (`StoryViewerView+Canvas`) la gardent sans une ligne de changement.
+    init(caption: String,
+         isExpanded: Bool,
+         wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
+         wordHead: Int = MediaCaptionOverlay.defaultWordHead,
+         onToggle: @escaping () -> Void) {
+        self.init(caption: caption,
+                  isExpanded: isExpanded,
+                  wordThreshold: wordThreshold,
+                  wordHead: wordHead,
+                  onToggle: onToggle,
+                  render: { texte, taille in MediaCaptionPlainText(texte, size: taille) })
     }
 }
