@@ -83,6 +83,29 @@ function limiteDeBloc(texte: string, depart: number): number {
   return suite ? suite.index : texte.length;
 }
 
+/**
+ * Les frères d'un site découpé (#4284) : le fichier NOMMÉ par `Site.file`,
+ * plus tout `X-*.ts` du même répertoire — jamais une liste écrite à la main,
+ * qui se périmerait au prochain découpage (doctrine `AppSourceGuard.unit`,
+ * #4425). `users/profile.ts` a éclaté en quatre fichiers frères ; les trois
+ * marqueurs qui le visent ci-dessous ne vivent plus que dans
+ * `profile-lookups.ts`. Résoudre l'UNITÉ plutôt que le seul fichier nommé
+ * évite deux pièges symétriques : rougir à tort parce que le nom cité a
+ * changé d'adresse, ou s'aveugler parce qu'un prochain découpage déplace le
+ * marqueur ailleurs dans la même famille sans que `SITES` ne soit mis à jour.
+ */
+function uniteDeSite(fichierRelatif: string): readonly { readonly chemin: string; readonly texte: string }[] {
+  const dir = path.join(RACINE_ROUTES, path.dirname(fichierRelatif));
+  const base = path.basename(fichierRelatif, '.ts');
+  return fs.readdirSync(dir)
+    .filter((nom) => nom === path.basename(fichierRelatif) || (nom.startsWith(`${base}-`) && nom.endsWith('.ts')))
+    .sort()
+    .map((nom) => {
+      const chemin = path.join(dir, nom);
+      return { chemin, texte: fs.readFileSync(chemin, 'utf8') };
+    });
+}
+
 const SITES: readonly Site[] = [
   // `users/profile.ts` — trois alias de `GET /directory/people/:handle` (#4161, critère 9)
   { file: 'users/profile.ts', marker: "fastify.get('/u/:username'", label: 'GET /u/:username', via: 'annoncerDepreciation(' },
@@ -125,14 +148,22 @@ const SITES: readonly Site[] = [
 
 describe('Partie 1 — chaque route ALIAS de ce lot marque son sursis dans SON bloc', () => {
   it.each(SITES.map((s) => [s.label, s] as const))('%s appelle %s', (_label, site) => {
-    const chemin = path.join(RACINE_ROUTES, site.file);
-    const texte = fs.readFileSync(chemin, 'utf8');
+    const fichiers = uniteDeSite(site.file);
+    // BORNE : un glob qui ne résout aucun fichier passerait au vert pour la
+    // pire des raisons (répertoire ou base de nom mal calculés).
+    expect(fichiers.length).toBeGreaterThan(0);
 
+    // Le marqueur doit exister — DANS L'UNITÉ, et dans un fichier UNIQUE de
+    // cette unité. Sinon la route a bougé (renommée, retirée) et ce témoin
+    // serait vert SANS RIEN GARDER (piège nommé par la consigne 6) — ou elle
+    // s'est dupliquée dans deux frères, ce qui rendrait `limiteDeBloc` ambigu
+    // sur lequel des deux blocs borner.
+    const porteurs = fichiers.filter(({ texte }) => texte.includes(site.marker));
+    expect(porteurs.map((p) => path.relative(RACINE_ROUTES, p.chemin))).toHaveLength(1);
+
+    const { texte } = porteurs[0];
     const debut = texte.indexOf(site.marker);
-    // Le marqueur doit exister — sinon la route a bougé (renommée, retirée) et
-    // ce témoin serait vert SANS RIEN GARDER (piège nommé par la consigne 6).
-    expect(debut).toBeGreaterThanOrEqual(0);
-    expect(texte.indexOf(site.marker, debut + 1)).toBe(-1); // marqueur UNIQUE dans le fichier
+    expect(texte.indexOf(site.marker, debut + 1)).toBe(-1); // marqueur UNIQUE dans SON fichier
 
     const fin = limiteDeBloc(texte, debut);
     const bloc = texte.slice(debut, fin);
@@ -218,7 +249,16 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
     // les rendait invisibles à ce balayage — un fichier portant neuf alias n'y
     // apparaissait pas du tout.
     'admin/users-write.ts',
-    'users/profile.ts',
+    // `users/profile.ts` (#4284, budget de taille) a éclaté en quatre
+    // fichiers frères ; les trois commentaires « ALIAS de `…` » qui font
+    // ENTRER ce territoire dans le balayage LEXICAL (fichier par fichier, par
+    // construction — voir `fichiersAvecAutoDeclaration`) vivent désormais
+    // dans `profile-lookups.ts` seul. `profile.ts` n'est plus qu'une façade
+    // de ré-export de 40 lignes, sans aucun commentaire de ce vocabulaire.
+    // Cette entrée nomme le fichier où le balayage TROUVE réellement le
+    // motif ; Partie 1 ci-dessus, elle, résout l'UNITÉ par glob et reste
+    // robuste à un prochain découpage sans qu'on ait à y retoucher.
+    'users/profile-lookups.ts',
     'users/blocking.ts',
     // `anonymous.ts` (#4167) — trois alias de session invitée par lien de
     // partage, vers `POST /links/:key/members` et `PATCH|DELETE

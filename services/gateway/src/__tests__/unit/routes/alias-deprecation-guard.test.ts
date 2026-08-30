@@ -37,7 +37,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { join, relative, dirname, basename } from 'path';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
@@ -302,10 +302,29 @@ const DETTE: readonly { readonly cle: string; readonly issue: string }[] = [
  * Les trois portes de profil (#4161) se déclarent alias dans le CORPS de leur
  * handler, hors de la frontière balayée. Les nommer ici, avec l'empreinte qui
  * les identifie, empêche « non détecté » de se confondre avec « inexistant ».
+ *
+ * `fichier` nomme l'UNITÉ (#4284, budget de taille) : `users/profile.ts` a
+ * éclaté en quatre fichiers frères, et l'empreinte ci-dessous ne vit plus que
+ * dans `profile-lookups.ts`. `uniteDeFichiers` ci-dessous résout `fichier` ET
+ * ses `X-*.ts` par un GLOB — jamais une liste écrite à la main, qui se
+ * périmerait au prochain découpage (doctrine `AppSourceGuard.unit`, #4425).
  */
 const ALIAS_INVISIBLES_AU_BALAYAGE: readonly { readonly fichier: string; readonly empreinte: string }[] = [
   { fichier: 'users/profile.ts', empreinte: 'ALIAS de `GET /directory/people/:handle` (#4161, critère 9).' },
 ];
+
+/**
+ * Les frères d'un module découpé (#4284) : le fichier nommé, plus tout
+ * `X-*.ts` du même répertoire.
+ */
+function uniteDeFichiers(cheminRelatif: string): readonly string[] {
+  const dir = join(ROUTES_DIR, dirname(cheminRelatif));
+  const base = basename(cheminRelatif, '.ts');
+  return readdirSync(dir)
+    .filter((nom) => nom === basename(cheminRelatif) || (nom.startsWith(`${base}-`) && nom.endsWith('.ts')))
+    .sort()
+    .map((nom) => join(dir, nom));
+}
 
 /**
  * Les dix adresses du TERRITOIRE de #4274 — celles que ce lot pouvait toucher.
@@ -399,9 +418,20 @@ describe('La dette ne pourrit pas', () => {
     expect(perimees).toEqual([]);
   });
 
-  it('chaque alias invisible au balayage existe encore, à son empreinte', () => {
+  it('la résolution par unité voit bien plus d\'un fichier pour chaque entrée — sinon le glob s\'est vidé', () => {
+    // BORNE positive : sans elle, un glob cassé (répertoire ou base de nom
+    // mal calculés) résoudrait à UN SEUL fichier — celui nommé — et le témoin
+    // suivant redeviendrait, en silence, l'ancien témoin épinglé à un chemin
+    // littéral qu'il remplace.
+    for (const { fichier } of ALIAS_INVISIBLES_AU_BALAYAGE) {
+      expect(uniteDeFichiers(fichier).length).toBeGreaterThan(1);
+    }
+  });
+
+  it('chaque alias invisible au balayage existe encore, à son empreinte — dans son unité', () => {
     const absents = ALIAS_INVISIBLES_AU_BALAYAGE.filter(
-      ({ fichier, empreinte }) => !readFileSync(join(ROUTES_DIR, fichier), 'utf8').includes(empreinte)
+      ({ fichier, empreinte }) =>
+        !uniteDeFichiers(fichier).some((chemin) => readFileSync(chemin, 'utf8').includes(empreinte))
     ).map((a) => a.fichier);
 
     expect(absents).toEqual([]);
