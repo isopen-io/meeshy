@@ -48,7 +48,12 @@ const DOSSIERS_BALAYES = [join(ROUTES_DIR, 'posts'), join(ROUTES_DIR, 'social')]
 // silencieuse) : ceux-là ne portent jamais d'accolade ouvrante après `:`.
 const MOTIF_INTERDIT = /\.success\s*\?\s*[\w.]+\.data\s*:\s*\{/;
 
-const DETTE: readonly string[] = ['comments.ts'];
+// Soldée le 2026-08-30 (#4339) : les deux occurrences de `comments.ts`
+// refusent désormais en 400. La liste reste — VIDE — parce que c'est elle qui
+// donne au motif un endroit où être nommé plutôt qu'ignoré, et parce que le
+// témoin ci-dessous rougit sur toute entrée qui ne désigne plus rien : la
+// supprimer rendrait le prochain report de dette silencieux.
+const DETTE: readonly string[] = [];
 
 function fichiersSource(dossier: string): string[] {
   if (!existsSync(dossier)) return [];

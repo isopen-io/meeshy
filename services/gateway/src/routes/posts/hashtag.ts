@@ -75,44 +75,82 @@ export async function chargerPostsParHashtag(
     return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
   }
 
-  const links = await prisma.postHashtag.findMany({
-    where: { hashtagId: hashtag.id },
-    orderBy: { createdAt: 'desc' },
-    skip: cursor,
-    take: limit + 1,
-    select: { postId: true },
-  });
-  const hasMore = links.length > limit;
-  const pageLinks = hasMore ? links.slice(0, limit) : links;
-  const orderedIds = pageLinks.map((l) => l.postId);
-  const nextCursor = hasMore ? String(cursor + limit) : null;
+  const communityCoMemberIds = await getCommunityCoMemberIds(prisma, viewerUserId);
 
-  if (orderedIds.length === 0) {
-    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  // `hasMore` se calcule APRÈS le filtrage d'audience, jamais avant (#4339,
+  // critère 3 de #4149). L'ancienne forme lisait `limit + 1` LIENS
+  // `PostHashtag` et en tirait `hasMore` : sur un tag dont vingt posts sur
+  // vingt-trois sont privés, elle rendait trois posts avec `hasMore: false` —
+  // une FIN DE FIL annoncée à tort, et la page suivante jamais demandée. Le
+  // symptôme n'est pas « une page courte », que tout client tolère, mais
+  // « le fil s'arrête », que personne ne voit passer.
+  //
+  // On lit donc les liens par LOTS et on accumule jusqu'à `limit + 1` posts
+  // VISIBLES. Le curseur reste un décalage dans la collection des liens — la
+  // seule qui soit stable — et pointe le lien SUIVANT celui du dernier post
+  // servi, jamais la fin du lot lu : les liens filtrés du lot ne doivent pas
+  // être re-balayés, mais ceux qui suivent le dernier servi doivent l'être.
+  const TAILLE_LOT = Math.max(limit * 4, 20);
+  const LOTS_MAX = 5;
+
+  const servis: Array<{ readonly post: unknown; readonly decalageApres: number }> = [];
+  let decalage = cursor;
+  let lotsLus = 0;
+  let restentDesLiens = true;
+
+  while (servis.length <= limit && restentDesLiens && lotsLus < LOTS_MAX) {
+    const links = await prisma.postHashtag.findMany({
+      where: { hashtagId: hashtag.id },
+      orderBy: { createdAt: 'desc' },
+      skip: decalage,
+      take: TAILLE_LOT,
+      select: { postId: true },
+    });
+    lotsLus += 1;
+    restentDesLiens = links.length === TAILLE_LOT;
+    if (links.length === 0) break;
+
+    const posts = await prisma.post.findMany({
+      where: {
+        id: { in: links.map((l) => l.postId) },
+        type: { in: ['POST', 'REEL'] },
+        deletedAt: NOT_DELETED,
+        OR: [
+          { authorId: viewerUserId },
+          { visibility: 'PUBLIC' },
+          { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
+        ],
+      },
+      include: postInclude,
+    });
+    const postsById = new Map(posts.map((post) => [post.id, post]));
+
+    for (const [index, lien] of links.entries()) {
+      const post = postsById.get(lien.postId);
+      if (!post) continue;
+      servis.push({
+        post: withMentions(hoistLocationDeep(post), reader),
+        decalageApres: decalage + index + 1,
+      });
+      if (servis.length > limit) break;
+    }
+    decalage += links.length;
   }
 
-  const communityCoMemberIds = await getCommunityCoMemberIds(prisma, viewerUserId);
-  const posts = await prisma.post.findMany({
-    where: {
-      id: { in: orderedIds },
-      type: { in: ['POST', 'REEL'] },
-      deletedAt: NOT_DELETED,
-      OR: [
-        { authorId: viewerUserId },
-        { visibility: 'PUBLIC' },
-        { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
-      ],
-    },
-    include: postInclude,
-  });
-  const postsById = new Map(posts.map((post) => [post.id, post]));
+  // Deux raisons de dire « il y en a d'autres », et elles ne se confondent
+  // pas : on a servi plus que la page (cas nominal), ou on a atteint la borne
+  // de lots sans remplir la page — auquel cas le curseur repart d'où le
+  // balayage s'est arrêté, sans quoi les liens non lus seraient perdus.
+  const pageComplete = servis.length > limit;
+  const borneAtteinte = lotsLus >= LOTS_MAX && restentDesLiens;
+  const hasMore = pageComplete || borneAtteinte;
 
-  const data = orderedIds
-    .map((id) => postsById.get(id))
-    .filter((post): post is NonNullable<typeof post> => post !== undefined)
-    .map((post) => withMentions(hoistLocationDeep(post), reader));
+  const page = servis.slice(0, limit);
+  const nextCursor = !hasMore
+    ? null
+    : String(pageComplete && page.length > 0 ? page[page.length - 1].decalageApres : decalage);
 
-  return { data, pagination: { limit, hasMore, nextCursor } };
+  return { data: page.map((s) => s.post), pagination: { limit, hasMore, nextCursor } };
 }
 
 // #4346 — `/posts/hashtag/:tag` devient un ALIAS déprécié de `scope=hashtag`.
