@@ -68,7 +68,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
-        "StoryViewerView+Sidebar.swift",
         "StoryViewerView.swift",
         "WebRTCTypes.swift",
     ]
@@ -133,7 +132,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
     /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
     /// le cran est trop haut ne rougit pas : il attend.
-    private static let legacyLineCeiling = 74_759
+    /// **73 390 depuis #4084.** `StoryViewerView+Sidebar.swift` a quitté la
+    /// dette : il portait DEUX vues entières — le rail d'actions et l'en-tête —
+    /// pour 1 369 lignes, et l'en-tête est parti chez lui
+    /// (`StoryViewerView+Header.swift`, 598). Les deux moitiés sont sous le
+    /// budget, donc le nom sort de la liste ENTIER, plafond compris. C'est le
+    /// cliquet qui l'a exigé : la vue `2f` ajoutait à un fichier hors budget, ce
+    /// que la directive 2026-08-28 interdit — extraire d'abord, ajouter ensuite.
+    private static let legacyLineCeiling = 73_390
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

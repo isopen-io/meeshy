@@ -137,6 +137,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
+        // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
+        // le sien. Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // les deux tiers des clés épinglées ici seraient sorties de la garde
+        // sans qu'une seule assertion rougisse — une extraction fait franchir
+        // au code une frontière que les listes de fichiers ne voient pas.
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
         "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22

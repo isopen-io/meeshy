@@ -119,7 +119,12 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // un bouton en attente : ce qui suit garde la DÉCISION, pas un report.
 
     func test_feedPostCard_muteButton_isNeverMounted_cardIsSilentByConstruction() throws {
+        // #4078/#4084 — la rangée auteur a quitté `FeedPostCard.swift` pour
+        // `FeedPostCard+Header.swift`. Une garde NÉGATIVE laissée sur le seul
+        // hôte serait passée au vert sans plus rien protéger : c'est dans la
+        // moitié EXTRAITE qu'un bouton muet réapparaîtrait.
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+            + source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
         XCTAssertFalse(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
             "La carte ne doit JAMAIS monter de bouton muet : sa scène est muette par " +
@@ -140,11 +145,13 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     func test_feedPostCard_backgroundSoundBadge_stillMounted_noRegression() throws {
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertTrue(
-            text.contains("private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement"),
+            text.contains("var backgroundSoundAnnouncement: BackgroundAudioAnnouncement"),
             "La carte doit continuer d'exposer l'annonce résolue (E1)."
         )
+        // Le badge lui-même est parti dans l'extraction ; la valeur, non.
         XCTAssertTrue(
-            text.contains("announcement: backgroundSoundAnnouncement"),
+            try source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+                .contains("announcement: backgroundSoundAnnouncement"),
             "Le badge (E1) doit continuer de consommer cette valeur — non-régression."
         )
     }
@@ -347,7 +354,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // MARK: - Réel plein écran (ReelsPlayerView) — bouton local, RÉELLEMENT câblé au lecteur
 
     func test_reelsPlayerView_mountsMuteButton_gatedBySharedAnnouncement() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: announcement)"),
             "Le bouton muet du réel doit se monter via le prédicat partagé, sur la MÊME " +
@@ -368,7 +375,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// sur un cas où l'annonce vient d'ailleurs (ex. audio incrusté dans une
     /// vidéo) sans qu'aucun moteur pilotable n'existe.
     func test_reelsPlayerView_muteButton_wiresToLocalPlayer() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("audioPlayer.togglePlayPause()"),
             "Le tap doit basculer le lecteur RÉEL de la piste de fond empruntée — pas un " +
@@ -423,7 +430,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// meta auteur, un glyphe de 10pt sans zone de hit élargie ratait un tap
     /// sur deux à l'usage (précédent documenté sur la carte).
     func test_reelsPlayerView_muteButton_hasFortyFourPointHitTarget() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         let buttonBlock = block(
             from: "BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)",
             to: "reels.action.unmute",
