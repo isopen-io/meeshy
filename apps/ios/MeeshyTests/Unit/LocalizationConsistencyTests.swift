@@ -390,6 +390,22 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/CharacterCountLabel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift",  // 1
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationLoadingView.swift",  // 1
+        // 270i (#4364) — the four screens the eleven new catalog entries unblock.
+        // Each held a key that was ABSENT from the catalog, so its `defaultValue`
+        // shipped French to the six other locales; each is now translated in all
+        // seven. Three of the four are ACCESSIBILITY surfaces, where the gap was
+        // spoken rather than read.
+        "apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Components/AddParticipantSheet.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift",  // 4
+        // 270i — the first two sources OUTSIDE the app target ever pinned. They
+        // needed no work: both already passed BOTH rules against the widget
+        // catalog. What was missing was the map entry telling this suite which
+        // catalog serves them (`catalogByTargetFragment`), without which they were
+        // measured against the app catalog and looked untranslated.
+        "apps/ios/MeeshyWidgets/MeeshyWidgets.swift",  // 25
+        "apps/ios/MeeshyWidgets/LiveActivities.swift",  // 11
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
@@ -499,6 +515,88 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// **Added 270i (#4364). Every catalog shipped by a target is READ by this suite.**
+    ///
+    /// An app extension is a separate bundle, so a `String(localized:)` in its sources
+    /// resolves against the catalog shipped INSIDE it. `catalogByTargetFragment` is the
+    /// map that says which — and it named the share extension and the notification
+    /// extension while `MeeshyWidgets/Localizable.xcstrings` (39 keys, all seven
+    /// locales) sat unread beside them. Nothing went red: an unmapped target simply
+    /// falls back to the app catalog, where its keys do not exist, so its strings are
+    /// reported as untranslated when they are translated, and its sources can never be
+    /// pinned. A silent MIS-measure, not a failure.
+    ///
+    /// The omission was invisible from the map itself — a map is only ever read for the
+    /// entries it has. It becomes visible from the FILESYSTEM, which is what this guard
+    /// reads: every `.xcstrings` in the iOS tree is either the app catalog or mapped to
+    /// the fragment of the target that owns it. The reverse direction is checked too, so
+    /// a moved or renamed catalog cannot leave a dead entry behind — that would restore
+    /// the exact same silent fallback.
+    func test_everyPerTargetCatalogIsMapped() throws {
+        let env = try makeEnvironment()
+        let iosRoot = env.repoRoot.appendingPathComponent("apps/ios")
+
+        let catalogsOnDisk = catalogFiles(under: iosRoot)
+            .map { $0.path.replacingOccurrences(of: env.repoRoot.path + "/", with: "") }
+            .filter { $0 != Self.appCatalogPath }
+            .sorted()
+        XCTAssertFalse(
+            catalogsOnDisk.isEmpty,
+            "No per-target catalog found under apps/ios — the scan lost its way rather "
+            + "than the extensions losing their catalogs."
+        )
+
+        let mapped = Set(Environment.catalogByTargetFragment.values)
+        let unmapped = catalogsOnDisk.filter { !mapped.contains($0) }
+        XCTAssertTrue(
+            unmapped.isEmpty,
+            "These catalogs ship inside a target but are never read by this suite, so "
+            + "that target's keys are measured against the app catalog — where they do "
+            + "not exist. Add them to `catalogByTargetFragment`:\n"
+            + unmapped.joined(separator: "\n")
+        )
+
+        let onDisk = Set(catalogsOnDisk)
+        let dangling = mapped.filter { !onDisk.contains($0) }.sorted()
+        XCTAssertTrue(
+            dangling.isEmpty,
+            "These mapped catalogs no longer exist, so their target silently falls back "
+            + "to the app catalog:\n" + dangling.joined(separator: "\n")
+        )
+
+        // A mapped entry is only worth its line if a source under that fragment
+        // actually resolves to it: the map is consulted by `catalog(resolvedFor:)`,
+        // whose fallback is the app catalog — the very thing being guarded against.
+        for (fragment, path) in Environment.catalogByTargetFragment {
+            let probe = URL(fileURLWithPath: "\(env.repoRoot.path)\(fragment)Probe.swift")
+            let expected = try loadTranslations(env.repoRoot.appendingPathComponent(path))
+            XCTAssertEqual(
+                Set(env.catalog(resolvedFor: probe).translations.keys), Set(expected.keys),
+                "A source under \(fragment) does not resolve against \(path)"
+            )
+        }
+    }
+
+    /// Every `.xcstrings` under `directory`, build products excluded. Derived data is
+    /// skipped by DESCENT rather than by filtering its files: `apps/ios/Build` holds
+    /// tens of thousands of intermediates, and the catalog is copied into each of them.
+    private func catalogFiles(under directory: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        var catalogs: [URL] = []
+        for case let url as URL in enumerator {
+            if url.lastPathComponent == "Build" || url.lastPathComponent == ".build" {
+                enumerator.skipDescendants()
+                continue
+            }
+            if url.pathExtension == "xcstrings" { catalogs.append(url) }
+        }
+        return catalogs
+    }
+
     /// **Borne du scanner — il voit les DEUX écritures d'un appel (258i, #4292).**
     ///
     /// Le marqueur a été un littéral pendant huit itérations, et un appel réparti sur
@@ -569,11 +667,19 @@ final class LocalizationConsistencyTests: XCTestCase {
         // multi-line calls — they were always untranslated, merely uncountable, and
         // making them countable is the precondition for ever clearing them (#4293).
         //
+        // RE-PINNED at 270i (#4364) — 114 → 81, in two independent moves. −22 is pure
+        // measurement: `MeeshyWidgets` ships its own fully translated catalog and this
+        // suite had never read it, so 22 widget keys were counted against the app
+        // catalog, where they do not exist. −11 is real work: eleven keys entered the
+        // app catalog in all seven locales, ten of them copied verbatim from an entry
+        // that already carried the same French text (see the `contacts.phonebook` /
+        // `sync.pill.a11y` / `a11y.delivery` fills of that iteration).
+        //
         // The number must only ever go DOWN: a failure means a new key was introduced
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
         // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 114
+        let backlogCeiling = 81
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
@@ -741,9 +847,19 @@ final class LocalizationConsistencyTests: XCTestCase {
         /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
         /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
         /// inherit the enclosing type's global actor.
+        ///
+        /// **`MeeshyWidgets` joined at 270i (#4364).** It has shipped its own catalog —
+        /// 39 keys, all seven locales — since the target existed, and this map named two
+        /// of the three. Every guard in this suite therefore measured the home-screen
+        /// widgets and the Live Activities against the APP catalog, where their keys do
+        /// not exist: 22 keys counted as untranslated while fully translated in the
+        /// catalog that actually serves them, and the two widget sources unpinnable
+        /// though both already pass both rules. `test_everyPerTargetCatalogIsMapped` is the
+        /// witness that keeps the next extension from repeating it.
         static let catalogByTargetFragment: [String: String] = [
             "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
             "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+            "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
         ]
 
         let repoRoot: URL
