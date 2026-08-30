@@ -48,7 +48,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationMediaGalleryView.swift",
         "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
-        "ConversationView+Composer.swift",
         "ConversationView.swift",
         "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
@@ -73,7 +72,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "StoryViewerView+Content.swift",
         "StoryViewerView+Sidebar.swift",
         "StoryViewerView.swift",
-        "UniversalComposerBar.swift",
         "WebRTCTypes.swift",
     ]
 
@@ -109,7 +107,22 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// Le cliquet a fait exactement son travail : il a refusé l'ajout, et
     /// l'extraction qui s'en est suivie nomme le concept au lieu de le cacher
     /// dans un `body`.
-    private static let legacyLineCeiling = 82_767
+    /// **80 004 depuis le 2026-08-30**, soit la somme MESURÉE des 38 fichiers
+    /// qui restent en dette. `ConversationView+Composer.swift` (399 lignes) et
+    /// `UniversalComposerBar.swift` (379) sont redescendus sous le budget au
+    /// découpage : ils SORTENT de la liste, entiers, et le plafond suit.
+    ///
+    /// **Le plafond se MESURE, il ne se calcule pas de tête.** Posé d'abord à
+    /// 80 233 en soustrayant un chiffre lu dans le commentaire d'un AUTRE
+    /// découpage, il aurait laissé 229 lignes de mou — de quoi accueillir en
+    /// silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont le
+    /// cran est trop haut ne rougit pas : il attend.
+    ///
+    /// Le cliquet a d'ailleurs signalé leur départ de lui-même (« ces fichiers
+    /// sont repassés sous le budget — bravo, et les RETIRER »). C'est la moitié
+    /// SILENCIEUSE du travail de découpage : sans elle, la dette reste comptée
+    /// pour des fichiers qui ne la portent plus.
+    private static let legacyLineCeiling = 80_004
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
