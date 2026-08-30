@@ -24,13 +24,7 @@ import XCTest
 final class StatusComposerAccessibilityTests: XCTestCase {
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerHostSource()
     }
 
     /// Le CORPS d'une déclaration, par appariement d'accolades — et non une
@@ -57,7 +51,7 @@ final class StatusComposerAccessibilityTests: XCTestCase {
     }
 
     private func publishButtonBody() throws -> String {
-        try declarationBody(startingAt: "private var publishButton: some View", in: try hostSource())
+        try declarationBody(startingAt: "var publishButton: some View", in: try hostSource())
     }
 
     func test_publishButton_keepsAccessibleNameWhilePublishing() throws {
@@ -93,7 +87,7 @@ final class StatusComposerAccessibilityTests: XCTestCase {
             try publishButtonBody().contains(".accessibilityHint(publishBlockedHint)"),
             "La flèche doit dire POURQUOI elle refuse : le dégradé éteint ne le porte que visuellement."
         )
-        let hint = try declarationBody(startingAt: "private var publishBlockedHint: String", in: try hostSource())
+        let hint = try declarationBody(startingAt: "var publishBlockedHint: String", in: try hostSource())
         XCTAssertTrue(
             hint.contains("guard !canPublishDocument"),
             "L'indice doit être CONDITIONNEL au refus, sinon il est annoncé sur une flèche actionnable."

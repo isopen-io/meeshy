@@ -33,7 +33,7 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
 
     // 1 — le meuble NOMME sa langue : « Langue du post », jamais « Langue de l'audio ».
     func test_leMeubleNommeSaLangueDePost() throws {
-        let host = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let host = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(host.contains("structMeeshyComposerHost"), "MeeshyComposerHost introuvable ou vide")
         XCTAssertTrue(
             host.contains("title:\"Languedupost\""),
@@ -45,7 +45,7 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
 
     // 2 — le meuble NOMME sa feuille d'emoji par sa clé de contexte, jamais « Réactions ».
     func test_leMeubleNommeSaFeuilleEmoji_parSaCleDeContexte() throws {
-        let host = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let host = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             host.contains("EmojiPickerSheet(quickReactions:Self.quickEmojis"),
             "Le meuble doit toujours monter `EmojiPickerSheet` avec ses emojis de tête"

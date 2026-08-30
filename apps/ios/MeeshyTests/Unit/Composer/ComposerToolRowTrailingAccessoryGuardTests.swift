@@ -24,16 +24,13 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
     }
 
     private func hostSource() throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: hostURL(), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     private func surfaceURL() -> URL {
         composerRoot().appendingPathComponent("ComposerDocumentSurface.swift")
     }
 
-    private func hostURL() -> URL {
-        composerRoot().appendingPathComponent("MeeshyComposerHost.swift")
-    }
 
     private func composerRoot() -> URL {
         URL(fileURLWithPath: #filePath)
@@ -160,7 +157,7 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
     /// passerait au vert sur un dégradé qui n'occulte rien.
     func test_leMeuble_passeSaTeinteALaSurface() throws {
         let source = try hostSource()
-        guard let block = body(of: "private var documentSurface: some View {", in: source) else {
+        guard let block = body(of: "var documentSurface: some View {", in: source) else {
             return XCTFail("`documentSurface` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
@@ -185,7 +182,7 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
 
     func test_host_documentSurface_noLongerOverlaysTheLanguageCapsuleOnTheWholeSurface() throws {
         let source = try hostSource()
-        guard let block = body(of: "private var documentSurface: some View {", in: source) else {
+        guard let block = body(of: "var documentSurface: some View {", in: source) else {
             return XCTFail("`documentSurface` introuvable dans le meuble — la garde ne mesurerait rien.")
         }
         XCTAssertFalse(

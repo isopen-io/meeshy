@@ -141,7 +141,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
-        "Features/Main/Composer/MeeshyComposerHost.swift",
+        // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
+        // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
+        // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
+        // Le fichier principal n'en porte plus aucun : il sort de la liste et
+        // n'y revient jamais.
+        "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        "Features/Main/Composer/MeeshyComposerHost+Surfaces.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",

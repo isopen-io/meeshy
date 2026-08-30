@@ -68,7 +68,7 @@ final class ComposerAtelierHeaderTests: XCTestCase {
     }
 
     private func host() throws -> String {
-        try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        try AppSourceGuard.composerHostSource()
     }
 
     private func compact(_ t: String) -> String {
@@ -104,7 +104,7 @@ final class ComposerAtelierHeaderTests: XCTestCase {
     /// `layoutSubviews` — pour un effet que le système compose à coût nul.
     func test_leFlou_vientDuMateriau_jamaisDUnBlur() throws {
         let code = try host()
-        guard let couche = declarationBody(startingAt: "private var sceneDescriptionLayer: some View",
+        guard let couche = declarationBody(startingAt: "var sceneDescriptionLayer: some View",
                                            in: code) else {
             return XCTFail("`sceneDescriptionLayer` est introuvable")
         }

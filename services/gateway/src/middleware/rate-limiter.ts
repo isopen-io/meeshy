@@ -305,6 +305,57 @@ export function createSoundRouteRateLimitConfig(
  * - POST /keys: 5/minute (generate bundle - rare operation)
  * - POST /session/establish: 20/minute (session creation)
  */
+/**
+ * Limites des gestes de CHANGEMENT DE CONTACT (#4184, critères 3 à 5).
+ *
+ * Ces routes n'avaient AUCUN plafond, et deux d'entre elles font agir un tiers
+ * pour le compte de l'appelant : `change-phone` envoie un SMS vers un numéro
+ * qu'IL choisit, `change-email` un e-mail vers une adresse qu'il choisit. Sans
+ * limite, ce n'est pas seulement un canal de spam — c'est une primitive
+ * d'épuisement du budget SMS du produit, déclenchable par un seul compte.
+ *
+ * Le `keyGenerator` EXPLICITE n'est pas décoratif : `mergeParams` du plugin est
+ * un `Object.assign`, donc une config sans `keyGenerator` hérite du global,
+ * soit `global:${request.ip}`. Le gateway tourne sans `trustProxy` derrière
+ * Traefik : `request.ip` est l'IP du conteneur proxy, IDENTIQUE pour tout le
+ * monde. Un plafond « 3/h » deviendrait 3/h pour la plateforme entière — un
+ * seul utilisateur en priverait tous les autres, et le rendrait par là même
+ * inutile comme protection.
+ *
+ * - initiate : 3/h par COMPTE — c'est le geste qui fait partir le SMS ou l'e-mail
+ * - verify   : 10/h par compte, en plus du compteur d'essais PAR DEMANDE
+ *              (`contact-change.ts`), qui lui annule la demande à son cinquième
+ *              échec. Les deux sont nécessaires : le compteur borne une
+ *              recherche exhaustive sur UN code, le débit borne l'enchaînement
+ *              de demandes neuves.
+ * - resend   : 5/h par compte, au-dessus du délai de 60 s déjà posé dans le
+ *              handler (désormais fail-closed).
+ */
+export function createContactChangeRateLimitConfig(
+  type: 'initiate' | 'verify' | 'resend'
+): object {
+  const configs = {
+    initiate: { max: 3, label: 'initiate' },
+    verify: { max: 10, label: 'verify' },
+    resend: { max: 5, label: 'resend' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 hour',
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `contact-change:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de demandes de changement de contact. Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
 export function createSignalProtocolRateLimitConfig(
   type: 'keys_get' | 'keys_post' | 'session_establish'
 ): object {

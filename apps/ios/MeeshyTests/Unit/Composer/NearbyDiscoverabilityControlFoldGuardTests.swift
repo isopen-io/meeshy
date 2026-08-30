@@ -154,15 +154,7 @@ final class NearbyDiscoverabilityControlFoldGuardTests: XCTestCase {
     /// aurait fait disparaître de l'écran le lieu d'un post privé — et avec lui
     /// le seul moyen de le retirer.
     func test_theComposer_mountsTheCardOnThePlace_notOnTheOptIn() throws {
-        let hote = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"),
-            encoding: .utf8
-        )
+        let hote = try AppSourceGuard.composerHostSource()
         let code = AppSourceGuard.stripComments(hote)
         XCTAssertFalse(code.isEmpty, "Source du meuble introuvable — la garde serait verte par omission.")
 

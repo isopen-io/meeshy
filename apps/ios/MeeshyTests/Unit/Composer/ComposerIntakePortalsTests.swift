@@ -19,11 +19,7 @@ import XCTest
 final class ComposerIntakePortalsTests: XCTestCase {
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     private func compact(_ t: String) -> String {
@@ -52,8 +48,14 @@ final class ComposerIntakePortalsTests: XCTestCase {
         var found: Set<String> = []
         for ligne in code.components(separatedBy: .newlines) {
             let t = ligne.trimmingCharacters(in: .whitespaces)
-            guard t.hasPrefix("@State private var shows") else { continue }
-            let sansPrefixe = t.dropFirst("@State private var ".count)
+            // #4102 — le découpage du meuble a retiré `private` de ses membres
+            // (Swift ne le rend visible qu'aux extensions du même fichier). Les
+            // DEUX formes sont lues : l'inventaire doit rester vrai quel que
+            // soit le niveau d'accès, sinon il compte zéro et passe au vert.
+            let prefixe = ["@State private var shows", "@State var shows"]
+                .first(where: t.hasPrefix)
+            guard let prefixe else { continue }
+            let sansPrefixe = t.dropFirst(prefixe.count - "shows".count)
             let nom = sansPrefixe.prefix { $0.isLetter || $0.isNumber }
             found.insert(String(nom))
         }
@@ -78,7 +80,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// surface) ET sur sa récidive (un neuvième sélecteur ajouté sans lecteur).
     func test_chaqueSelecteurDuMeuble_estMonteAuDessusDeLAiguillage() throws {
         let code = try hostSource()
-        guard let portails = declarationBody(startingAt: "private var surfaceWithIntakePortals: some View",
+        guard let portails = declarationBody(startingAt: "var surfaceWithIntakePortals: some View",
                                             in: code) else {
             return XCTFail("Les portails doivent vivre dans `surfaceWithIntakePortals` — la vue qui "
                            + "enveloppe l'AIGUILLAGE, pas une surface. C'est là que le défaut se ferme.")
@@ -102,7 +104,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// la règle « un portail appartient au meuble » est fausse quelque part.
     func test_laSurfaceDocument_neMonteAucunPortail() throws {
         let code = try hostSource()
-        guard let document = declarationBody(startingAt: "private var documentSurface: some View",
+        guard let document = declarationBody(startingAt: "var documentSurface: some View",
                                              in: code) else {
             return XCTFail("`documentSurface` est introuvable — la garde doit être re-pointée")
         }
@@ -120,7 +122,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// document.
     func test_leControleDeDecouvrabilite_estMonteAuDessusDeLAiguillage() throws {
         let code = try hostSource()
-        guard let portails = declarationBody(startingAt: "private var surfaceWithIntakePortals: some View",
+        guard let portails = declarationBody(startingAt: "var surfaceWithIntakePortals: some View",
                                             in: code) else {
             return XCTFail("`surfaceWithIntakePortals` est introuvable")
         }

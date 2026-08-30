@@ -28,6 +28,7 @@ import {
   validateMentionCount,
   messageValidationHook,
   createPostRouteRateLimitConfig,
+  createContactChangeRateLimitConfig,
   createSignalProtocolRateLimitConfig,
   registerMessageRateLimiter,
   registerGlobalRateLimiter,
@@ -368,5 +369,46 @@ describe('registerGlobalRateLimiter', () => {
       expect(body.statusCode).toBe(429);
       expect(body.retryAfter).toBe(15);
     });
+  });
+});
+
+// ─── createContactChangeRateLimitConfig (#4184) ───────────────────────────────
+
+describe('createContactChangeRateLimitConfig', () => {
+  const cas: Array<[Parameters<typeof createContactChangeRateLimitConfig>[0], number]> = [
+    ['initiate', 3],
+    ['verify', 10],
+    ['resend', 5],
+  ];
+
+  it.each(cas)('%s plafonne a %i par heure', (type, max) => {
+    const cfg = createContactChangeRateLimitConfig(type) as any;
+    expect(cfg.max).toBe(max);
+    expect(cfg.timeWindow).toBe('1 hour');
+  });
+
+  /**
+   * Le temoin qui compte vraiment. Sans `keyGenerator`, `mergeParams` du
+   * plugin (un `Object.assign`) fait heriter la cle GLOBALE
+   * `global:${request.ip}` — et le gateway tourne sans `trustProxy` derriere
+   * Traefik, donc cette IP est celle du conteneur proxy, la MEME pour tout le
+   * monde. Le plafond « 3/h » deviendrait 3/h pour la plateforme entiere : un
+   * seul compte en priverait tous les autres, et la protection se retournerait
+   * en deni de service.
+   */
+  it('la cle est celle du COMPTE, jamais l\'IP partagee du proxy', () => {
+    const cfg = createContactChangeRateLimitConfig('initiate') as any;
+    const req = { authContext: { userId: 'u-42' }, ip: '10.0.0.7' };
+    expect(cfg.keyGenerator(req)).toBe('contact-change:initiate:u-42');
+  });
+
+  it('retombe sur l\'IP seulement en l\'absence de compte', () => {
+    const cfg = createContactChangeRateLimitConfig('verify') as any;
+    expect(cfg.keyGenerator({ ip: '10.0.0.7' })).toBe('contact-change:verify:ip:10.0.0.7');
+  });
+
+  it('rend un 429 structure', () => {
+    const cfg = createContactChangeRateLimitConfig('resend') as any;
+    expect(cfg.errorResponseBuilder()).toMatchObject({ success: false, statusCode: 429 });
   });
 });
