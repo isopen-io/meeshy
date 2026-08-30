@@ -79,7 +79,12 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { plusPrecis } from './lib/motifs.mjs';
+import {
+  groupeDe,
+  lireEntrees,
+  natureDeRoute,
+  plafondDeRoute,
+} from './lib/routes-emises.mjs';
 
 const KO = 1024;
 
@@ -87,52 +92,17 @@ const dixieme = (nombre) => Math.round(nombre * 10) / 10;
 
 const ko = (octets) => dixieme(octets / KO);
 
-const SEGMENTS_ANNEXES = new Set([
-  'layout',
-  'not-found',
-  'error',
-  'global-error',
-  'loading',
-  'template',
-  'default',
-  'forbidden',
-  'unauthorized',
-]);
-
-export const natureDeRoute = (route) => {
-  const dernier = route.slice(route.lastIndexOf('/') + 1);
-  if (dernier === 'route') return 'gestionnaire';
-  if (dernier === 'page') return 'page';
-  if (SEGMENTS_ANNEXES.has(dernier)) return 'annexe';
-  return 'inconnue';
-};
-
-export const estGestionnaireDeRoute = (route) => natureDeRoute(route) === 'gestionnaire';
-
-export const normaliseRoute = (route) => route.replace(/\/\([^)]+\)/g, '') || '/';
-
-export const lireEntrees = (manifestSource) => {
-  const pages = JSON.parse(manifestSource)?.pages;
-  if (!pages || typeof pages !== 'object') return [];
-  return Object.entries(pages).map(([route, chunks]) => ({
-    route,
-    chunks: Array.isArray(chunks) ? chunks : [],
-  }));
-};
-
-// Un motif s'écrit contre l'URL — la forme qu'un humain reconnaît. Un motif qui
-// porte lui-même un segment `(…)` s'écrit, lui, contre la clé BRUTE du
-// manifeste : c'est la seule façon de distinguer `(public)/page` de
-// `(connected)/page`, que la normalisation confond toutes deux en `/page`.
-const cibleDe = (route) => (motif) => (motif.includes('(') ? route : normaliseRoute(route));
-
-export const groupeDe = (route, groupes) => {
-  const { choix, ambigu } = plusPrecis(groupes, cibleDe(route));
-  return { groupe: choix ? choix.id : null, ambigu: ambigu.map((g) => g.id) };
-};
-
-export const plafondDeRoute = (route, routes) =>
-  plusPrecis(routes ?? [], cibleDe(route)).choix;
+// La lecture du manifeste et la reconnaissance de groupe vivent dans `lib/routes-emises.mjs` :
+// le gate axe du § 8.5 pose les mêmes questions, et un exécutable — celui-ci, avec son `main` —
+// ne se laisse pas charger par un harnais qui transpile ses entrées en CommonJS.
+export {
+  natureDeRoute,
+  estGestionnaireDeRoute,
+  normaliseRoute,
+  lireEntrees,
+  groupeDe,
+  plafondDeRoute,
+} from './lib/routes-emises.mjs';
 
 const p95 = (valeurs) => {
   if (valeurs.length === 0) return 0;

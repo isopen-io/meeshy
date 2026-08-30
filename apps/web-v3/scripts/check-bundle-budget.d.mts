@@ -1,15 +1,28 @@
-export type StatutDePlafond = 'GATE' | 'CIBLE' | 'À ÉTABLIR';
+import type { PorteurDeGroupe } from './lib/routes-emises.mjs';
 
-export type NatureDeRoute = 'page' | 'gestionnaire' | 'annexe' | 'inconnue';
+export type {
+  EntreeDeManifeste,
+  NatureDeRoute,
+  PorteurDeGroupe,
+} from './lib/routes-emises.mjs';
+
+export {
+  natureDeRoute,
+  estGestionnaireDeRoute,
+  normaliseRoute,
+  lireEntrees,
+  groupeDe,
+  plafondDeRoute,
+} from './lib/routes-emises.mjs';
+
+export type StatutDePlafond = 'GATE' | 'CIBLE' | 'À ÉTABLIR';
 
 export type Plafond = {
   readonly valeur: number | null;
   readonly statut: StatutDePlafond;
 };
 
-export type Groupe = {
-  readonly id: string;
-  readonly motifs: readonly string[];
+export type Groupe = PorteurDeGroupe & {
   readonly plafonds: {
     readonly socle_ko: Plafond;
     readonly ecran_ko: Plafond;
@@ -36,11 +49,6 @@ export type MesuresEnregistrees = {
   >;
 };
 
-export type EntreeDeManifeste = {
-  readonly route: string;
-  readonly chunks: readonly string[];
-};
-
 export type LigneDeGroupe = {
   readonly groupe: string;
   readonly ecrans: number;
@@ -62,24 +70,6 @@ export type RapportDeBudget = {
   readonly regressions: readonly string[];
   readonly anomalies: readonly string[];
 };
-
-export declare const natureDeRoute: (route: string) => NatureDeRoute;
-
-export declare const estGestionnaireDeRoute: (route: string) => boolean;
-
-export declare const normaliseRoute: (route: string) => string;
-
-export declare const lireEntrees: (manifestSource: string) => readonly EntreeDeManifeste[];
-
-export declare const groupeDe: (
-  route: string,
-  groupes: readonly Groupe[],
-) => { readonly groupe: string | null; readonly ambigu: readonly string[] };
-
-export declare const plafondDeRoute: (
-  route: string,
-  routes: readonly RegleDeRoute[] | undefined,
-) => RegleDeRoute | null;
 
 export declare const regressions: (
   lignes: readonly LigneDeGroupe[],

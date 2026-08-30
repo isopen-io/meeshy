@@ -16,8 +16,20 @@
 const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
   ? '__RUNTIME_BUILD_VERSION__'
   : `DEV_${Date.now()}`;
-const SW_VERSION = '1.3.2';
-const CACHE_NAME = `meeshy-cache-${APP_BUILD_VERSION}`;
+const SW_VERSION = '1.4.0';
+
+/**
+ * NAMESPACE DE CACHE — le Cache Storage est à l'échelle de l'ORIGINE, pas du
+ * worker. Tout script enregistré sur `meeshy.me` y écrit et peut y supprimer,
+ * y compris le worker de la zone v3 que le § 7 de la conception planifie
+ * « servi à la RACINE de l'URL par nécessité de portée ». Ce préfixe est donc
+ * la frontière de propriété : ce worker ne détruit QUE ce qu'il a écrit
+ * (§ ACTIVATION). JUMEAU de `LEGACY_CACHE_NAMESPACE`
+ * (`apps/web/utils/service-worker.ts`), qui purge les mêmes caches depuis la
+ * page — gardé par `__tests__/public/sw.v3-zone.test.ts`.
+ */
+const CACHE_NAMESPACE = 'meeshy-cache-';
+const CACHE_NAME = `${CACHE_NAMESPACE}${APP_BUILD_VERSION}`;
 
 // Assets critiques pour l'App Shell (chargement instantané)
 const PRECACHE_ASSETS = [
@@ -32,6 +44,37 @@ const PRECACHE_ASSETS = [
 // Log helper
 function log(...args) {
   console.log(`[SW ${SW_VERSION}]`, ...args);
+}
+
+// ============================================================================
+// FRONTIÈRE DE ZONE — ce worker n'a AUCUNE juridiction sur la v3
+// ============================================================================
+// JUMEAU CLIENT de la règle Traefik du routeur `frontend-v3`
+// (`docker-compose.prod.yml`, et son homologue de `/opt/meeshy/production/`).
+// Ce worker est enregistré sur `scope: '/'`, donc sur l'origine ENTIÈRE : sans
+// cette liste, il aiguille `meeshy.me` en second, derrière Traefik et sans
+// l'avoir déclaré. Ajouter ou retirer un `PathPrefix` étant un
+// `docker compose up -d` SANS rebuild, alors que `CACHE_NAME` est indexé sur
+// un horodatage posé au DÉMARRAGE du conteneur `frontend`
+// (`docker-entrypoint.sh:57-60`), son cache survit à l'opération dont il
+// fausse le résultat : le retour arrière du § 4.3 de la conception en devient
+// inerte côté client.
+//
+// ORDRE, dans UN sens seulement (§ 4.4 bis, § 10.4 étape 9) : un préfixe
+// ENTRE ici dans un commit ANTÉRIEUR — déployé, et activé chez les clients —
+// à celui qui l'ajoute au routeur `frontend-v3` ; il n'en SORT jamais. Cette
+// liste est monotone croissante, et c'est ce qui garde vrai le retour arrière
+// du § 4.3 : retirer un `PathPrefix` ne demande aucune contrepartie ici (ne
+// pas intercepter n'est jamais faux, seulement moins mis en cache), alors que
+// l'en retirer rouvrirait le défaut le temps d'une propagation de worker.
+// Gardé par `__tests__/public/sw.v3-zone.test.ts`, qui lit la règle réelle du
+// compose de production et exige `règle Traefik ⊆ cette liste`.
+const V3_ZONE_PREFIXES = ['/__v3'];
+
+function belongsToV3Zone(pathname) {
+  return V3_ZONE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 }
 
 // ============================================================================
@@ -58,11 +101,16 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Nettoyer ABSOLUMENT TOUS les anciens caches qui ne correspondent pas au build actuel
+      // Nettoyer les anciens caches DE CE WORKER — ceux du namespace, et eux
+      // seuls. Un `filter((name) => name !== CACHE_NAME)` sans préfixe est une
+      // purge à l'échelle de l'ORIGINE : elle détruit le cache d'un worker qui
+      // n'est pas celui-ci (la zone v3, § 4.4 bis de la conception), et ce
+      // troisième canal de juridiction serait resté ouvert après la garde du
+      // listener `fetch`.
       const cacheNames = await caches.keys();
       await Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith(CACHE_NAMESPACE) && name !== CACHE_NAME)
           .map((name) => {
             log('Deleting obsolete cache:', name);
             return caches.delete(name);
@@ -83,6 +131,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // 0. FRONTIÈRE DE ZONE — avant TOUT autre test, méthode comprise. Ne rien
+  //    intercepter, c'est laisser le navigateur parler au routeur : la règle
+  //    Traefik redevient la seule autorité, dans les DEUX sens (ajout ET
+  //    retrait d'un `PathPrefix`). Ce n'est pas une règle d'aiguillage parmi
+  //    d'autres — c'est l'absence de juridiction, donc elle passe en premier.
+  if (belongsToV3Zone(url.pathname)) {
+    return;
+  }
 
   // 1. Ignorer le streaming WebSocket et les uploads volumineux
   if (url.pathname.startsWith('/socket.io') || request.method !== 'GET') {

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3300",
+    "dev:https": "node scripts/dev-https.mjs -p 3300",
     "build": "next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
     "start": "next start -p 3300 -H 0.0.0.0",
     "lint": "eslint . && node scripts/check-jetons.mjs",
@@ -12,7 +13,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --maxWorkers=50%",
     "clean": "rm -rf .next node_modules",
-    "baseline": "node scripts/baseline.mjs"
+    "baseline": "node scripts/baseline.mjs",
+    "test:a11y": "playwright test e2e/visual/v3-a11y.spec.ts",
+    "test:lifecycle": "playwright test e2e/visual/v3-lifecycle.spec.ts"
   },
   "dependencies": {
     "@meeshy/design-tokens": "workspace:*",
@@ -22,7 +25,9 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.6",
+    "@playwright/test": "^1.62.1",
     "@next/eslint-plugin-next": "15.5.23",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

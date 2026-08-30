@@ -4,12 +4,24 @@
  "produit_par": "node apps/web-v3/scripts/baseline.mjs <url…>",
  "date": "2026-08-30",
  "etablie": false,
+ "profil": {
+  "nom": "Fast 3G — préréglage de Chrome DevTools, appliqué par Network.emulateNetworkConditions",
+  "download_bps": 188743,
+  "upload_bps": 86400,
+  "latence_ms": 562.5,
+  "repetitions": 5,
+  "percentile": 75,
+  "source": "§ 8.3 exprime le premier pixel utile en « 3G Fast simulé, p75 » ; une exécution unique en réseau local ne rend pas ce chiffre"
+ },
+ "repetitions": 5,
+ "percentile": 75,
  "point_ouvert": {
   "quoi": "La ligne de base n'est pas établie : aucune des cibles n'a rendu de chiffre. Ce fichier ne satisfait donc pas le critère « baseline.json commité avec des valeurs mesurées sur meeshy.me en production ».",
   "a_rejouer": "node apps/web-v3/scripts/baseline.mjs <les 6 urls, avec de vrais identifiants publics>",
   "prerequis": [
-   "un poste ou un runner CI dont le réseau sortant atteint meeshy.me (l’egress de la session de développement répond 403 à CONNECT meeshy.me:443)",
-   "de vrais identifiants publics de story / réel / post / humeur, à la place des placeholders"
+   "un poste ou un runner CI dont le réseau sortant atteint meeshy.me (l’egress de la session de développement répond 403 à CONNECT meeshy.me:443) — l’hôte livré est le workflow .github/workflows/v3-baseline.yml, à lancer en workflow_dispatch",
+   "de vrais identifiants publics de story / réel / post / humeur, à la place des placeholders, tous sous https://meeshy.me (une URL d’une autre origine est refusée : elle rendrait une ligne de base verte qui ne dit rien de la production)",
+   "du temps : les six cibles sont mesurées sous le profil 3G Fast de budgets.json et répétées pour rendre un p75 — une passe complète dure une vingtaine de minutes, et un « AVANT » pris sans ce profil ne se compare à aucun « APRÈS »"
   ],
   "verifier": "curl -sS -o /dev/null -w \"%{http_code}\\n\" https://meeshy.me/ — 000 avec « CONNECT tunnel failed, response 403 » signifie que la mesure ne peut pas être prise ici"
  },
@@ -18,7 +30,7 @@
    "url": "https://meeshy.me/",
    "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/",
    "statut": "à établir",
-   "raison": "page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://meeshy.me/ Call log: - navigating to \"https://meeshy.me/\", waiting until \"load\"",
+   "raison": "page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://meeshy.me/ Call log: - navigating to \"https://meeshy.me/\", waiting until \"load\" (exécution 1/5)",
    "http": null,
    "octets_transferes": null,
    "requetes": null,
