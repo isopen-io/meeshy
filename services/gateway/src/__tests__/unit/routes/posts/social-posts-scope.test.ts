@@ -4,11 +4,17 @@
  * Douze listes de posts vivaient derrière douze chemins ; huit d'entre elles
  * (celles que `feed.ts` servait déjà : home, stories, stories.mine, reels,
  * statuses [+ discover via `audience=public`], author, community, bookmarks)
- * convergent ici sur une SEULE route, validée par union discriminée Zod. Les
- * trois listes restantes (`hashtag`, `nearby`, `sound`) vivent dans des
- * fichiers hors du territoire de ce lot (`hashtag.ts`, `nearby.ts`,
- * `sounds.ts`) — absentes de l'énumération, donc rejetées en 400 comme tout
- * scope inconnu, jusqu'à leur propre fusion.
+ * convergent ici sur une SEULE route, validée par union discriminée Zod —
+ * c'est CE fichier qui les couvre.
+ *
+ * Les trois listes restantes (`hashtag`, `nearby`, `sound`) ont rejoint
+ * l'union au lot #4346, chacune ÉTENDUE depuis le schéma de sa route
+ * historique (`hashtag.ts`/`nearby.ts`/`sounds.ts`) — leurs témoins
+ * (parité avec la route historique, identifiant requis, gate d'audience,
+ * plafond de débit indépendant) vivent dans
+ * `social-posts-discovery-scopes.test.ts`, pas ici : ce fichier mocke
+ * `PostFeedService` en entier, alors que `hashtag`/`nearby`/`sound` parlent
+ * directement à Prisma (pas de service à mocker, un double de client requis).
  *
  * @jest-environment node
  */
@@ -88,7 +94,11 @@ beforeEach(() => {
 describe('GET /social/posts — scope validation', () => {
   it('rejects a scope missing from the enumeration with 400, never an empty page', async () => {
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=hashtag' });
+    // `hashtag`/`nearby`/`sound` ont rejoint l'énumération au lot #4346 — un
+    // scope vraiment absent de l'union est nécessaire pour tester CETTE
+    // propriété (voir `social-posts-discovery-scopes.test.ts` pour leurs
+    // propres témoins de validation).
+    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=made-up-scope' });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('VALIDATION_ERROR');
     await app.close();

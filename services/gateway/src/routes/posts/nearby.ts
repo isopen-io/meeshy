@@ -5,10 +5,12 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response';
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
-import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscoverability';
-import { createSocialDiscoveryRateLimitConfig } from './socialRateLimit';
+import { createSocialDiscoveryRateLimitConfig, checkSharedRateLimit, type SharedRateLimitVerdict } from './socialRateLimit';
+import { getCacheStore } from '../../services/CacheStore';
+import { depreciee } from '../../utils/deprecation';
 
 /**
  * GET /posts/nearby + GET /posts/nearby/density — recherche géospatiale de
@@ -33,7 +35,14 @@ const MAX_RADIUS_KM = 20000;
 // qui est SERVI, la ou le cout devient celui du lecteur.
 const MAX_DENSITY_CELLS = 2000;
 
-const NearbyQuerySchema = z.object({
+/**
+ * Exportée pour `routes/posts/feed.ts` (#4346, `scope=nearby`) : les bornes
+ * (coordonnées, rayon, curseur, limite) sont ÉTENDUES par
+ * `NearbyQuerySchema.extend({ scope: z.literal('nearby') })`, jamais
+ * recopiées — sans ce partage, un correctif de l'une (ex. `MAX_RADIUS_KM`)
+ * dérive silencieusement de l'autre (même leçon que `seed`, feed.ts).
+ */
+export const NearbyQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   radiusKm: z.coerce.number().positive().max(MAX_RADIUS_KM),
@@ -119,13 +128,116 @@ type GeoNearAggregateResult = { cursor?: { firstBatch?: GeoNearRow[] } };
 type DensityRow = { cellLat: number; cellLng: number; count: number };
 type DensityAggregateResult = { cursor?: { firstBatch?: DensityRow[] } };
 
+export type NearbyFeedResult = {
+  readonly data: unknown[];
+  readonly pagination: { readonly limit: number; readonly hasMore: boolean; readonly nextCursor: string | null };
+};
+
+/**
+ * Le NOYAU PARTAGÉ entre `GET /posts/nearby` (alias déprécié) et
+ * `GET /social/posts?scope=nearby` (#4346, critère 6 de #4149 : « une
+ * fusion qui recopie un handler recrée le doublon qu'elle prétend fermer »).
+ * `reader` voyage en paramètre plutôt que recalculé ici — les DEUX adresses
+ * en ont besoin, chacune depuis SA propre requête.
+ */
+export async function chargerPostsProches(
+  prisma: PrismaClient,
+  params: { lat: number; lng: number; radiusKm: number; cursor: number; limit: number },
+  reader: WireReader,
+): Promise<NearbyFeedResult> {
+  const { lat, lng, radiusKm, cursor, limit } = params;
+  const now = new Date();
+
+  const command = {
+    aggregate: 'Post',
+    pipeline: [
+      geoNearStage(lat, lng, radiusKm, now),
+      { $skip: cursor },
+      { $limit: limit + 1 },
+      { $project: { _id: 1, distanceMeters: 1 } },
+    ],
+    cursor: {},
+  };
+
+  const raw = (await prisma.$runCommandRaw(
+    command as unknown as Prisma.InputJsonObject
+  )) as unknown as GeoNearAggregateResult;
+  const rows = raw.cursor?.firstBatch ?? [];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const orderedIds = pageRows.map((row) => extractObjectId(row._id));
+  const distanceById = new Map(pageRows.map((row) => [extractObjectId(row._id), row.distanceMeters]));
+  const nextCursor = hasMore ? String(cursor + limit) : null;
+
+  if (orderedIds.length === 0) {
+    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  }
+
+  // Relecture Prisma standard, même enrichissement que le feed
+  // (postInclude + hoistLocationDeep — voir PostFeedService), réordonnée
+  // selon la distance : `id: { in }` ne garantit AUCUN ordre sur MongoDB.
+  const posts = await prisma.post.findMany({
+    where: {
+      id: { in: orderedIds },
+      ...buildPublicDiscoverablePrismaWhere(now),
+    },
+    include: postInclude,
+  });
+  const postsById = new Map(posts.map((post) => [post.id, post]));
+
+  const data = orderedIds
+    .map((id) => postsById.get(id))
+    .filter((post): post is NonNullable<typeof post> => post !== undefined)
+    .map((post) => ({
+      ...withMentions(hoistLocationDeep(post), reader),
+      distanceMeters: distanceById.get(post.id) ?? null,
+    }));
+
+  return { data, pagination: { limit, hasMore, nextCursor } };
+}
+
+// #4147 critère 5 : « chaque route porte SON PROPRE plafond, indépendant »
+// (docstring de `createSocialDiscoveryRateLimitConfig`, socialRateLimit.ts) —
+// `config.rateLimit` d'@fastify/rate-limit ne peut de toute façon PAS faire
+// partager un compteur entre deux ROUTES différentes (child store namespacé
+// par méthode+URL, cf. l'en-tête de socialRateLimit.ts). `GET /social/posts`
+// est une route DIFFÉRENTE de `GET /posts/nearby` : `scope=nearby` reçoit
+// donc son PROPRE seau de 30/min, de même taille, plutôt qu'un `config.rateLimit`
+// impossible à poser sur UN SEUL membre d'une union discriminée (`max`/`allowList`
+// dynamiques y feraient consommer le budget de `scope=nearby` par les AUTRES
+// scopes de la même route). Sans lui, un appelant contournerait exactement le
+// plafond que #4147 a fermé — il lui suffirait d'utiliser la nouvelle adresse.
+const DECOUVERTE_SCOPE_MAX = 30;
+const DECOUVERTE_SCOPE_WINDOW_MS = 60_000;
+
+export async function verifierPlafondDecouverteScope(viewerId: string): Promise<SharedRateLimitVerdict> {
+  return checkSharedRateLimit({
+    redis: getCacheStore().getNativeClient(),
+    key: `social:discovery:scope:${viewerId}`,
+    max: DECOUVERTE_SCOPE_MAX,
+    windowMs: DECOUVERTE_SCOPE_WINDOW_MS,
+  });
+}
+
+// #4346 — `/posts/nearby` devient un ALIAS déprécié de `scope=nearby` ; sans
+// `:id` ni query à reporter (lat/lng/radiusKm restent des query params des
+// DEUX côtés), le successeur est STATIQUE — comme `home`/`stories`/etc. dans
+// feed.ts. `/posts/nearby/density` (carte de densité, pas une page de posts)
+// N'EST PAS concernée : hors périmètre de #4346.
+const NEARBY_SCOPE_DEPUIS = '2026-08-30';
+
 export function registerNearbyRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
   requiredAuth: any
 ) {
   // GET /posts/nearby — pins triés par distance, contenu complet.
+  // ALIAS déprécié de GET /social/posts?scope=nearby (#4346) — même chemin,
+  // même forme de réponse, lecture déléguée à `chargerPostsProches` (le noyau
+  // partagé ci-dessus) : critère 6, « une fusion qui recopie un handler
+  // recrée le doublon qu'elle prétend fermer ».
   fastify.get('/posts/nearby', {
+    onRequest: depreciee({ depuis: NEARBY_SCOPE_DEPUIS, successeur: '/api/v1/social/posts?scope=nearby' }),
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialDiscoveryRateLimitConfig() },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -139,55 +251,14 @@ export function registerNearbyRoutes(
       if (!parsed.success) {
         return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
       }
-      const { lat, lng, radiusKm, cursor, limit } = parsed.data;
-      const now = new Date();
 
-      const command = {
-        aggregate: 'Post',
-        pipeline: [
-          geoNearStage(lat, lng, radiusKm, now),
-          { $skip: cursor },
-          { $limit: limit + 1 },
-          { $project: { _id: 1, distanceMeters: 1 } },
-        ],
-        cursor: {},
-      };
+      const resultat = await chargerPostsProches(
+        prisma,
+        parsed.data,
+        wireReaderFromRequest(request as UnifiedAuthRequest),
+      );
 
-      const raw = (await prisma.$runCommandRaw(
-        command as unknown as Prisma.InputJsonObject
-      )) as unknown as GeoNearAggregateResult;
-      const rows = raw.cursor?.firstBatch ?? [];
-      const hasMore = rows.length > limit;
-      const pageRows = hasMore ? rows.slice(0, limit) : rows;
-      const orderedIds = pageRows.map((row) => extractObjectId(row._id));
-      const distanceById = new Map(pageRows.map((row) => [extractObjectId(row._id), row.distanceMeters]));
-      const nextCursor = hasMore ? String(cursor + limit) : null;
-
-      if (orderedIds.length === 0) {
-        return sendSuccess(reply, [], { pagination: { limit, hasMore: false, nextCursor: null } });
-      }
-
-      // Relecture Prisma standard, même enrichissement que le feed
-      // (postInclude + hoistLocationDeep — voir PostFeedService), réordonnée
-      // selon la distance : `id: { in }` ne garantit AUCUN ordre sur MongoDB.
-      const posts = await prisma.post.findMany({
-        where: {
-          id: { in: orderedIds },
-          ...buildPublicDiscoverablePrismaWhere(now),
-        },
-        include: postInclude,
-      });
-      const postsById = new Map(posts.map((post) => [post.id, post]));
-
-      const data = orderedIds
-        .map((id) => postsById.get(id))
-        .filter((post): post is NonNullable<typeof post> => post !== undefined)
-        .map((post) => ({
-          ...withMentions(hoistLocationDeep(post), wireReaderFromRequest(request as UnifiedAuthRequest)),
-          distanceMeters: distanceById.get(post.id) ?? null,
-        }));
-
-      return sendSuccess(reply, data, { pagination: { limit, hasMore, nextCursor } });
+      return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
     } catch (error) {
       fastify.log.error(`[GET /posts/nearby] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

@@ -6,29 +6,38 @@ import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError, sendError } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { viewerFromRequest } from '../users/presence-gate';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
+import { HashtagPostsQuerySchema, chargerPostsParHashtag } from './hashtag';
+import { NearbyQuerySchema, chargerPostsProches, verifierPlafondDecouverteScope } from './nearby';
+import { MineQuerySchema as SoundPostsQuerySchema, OBJECT_ID as SOUND_ID_PATTERN, chargerPostsParSon } from './sounds';
 
 /**
- * Le fil social — DOUZE routes qui lisent la même ligne `Post`, distinguée
+ * Le fil social — QUINZE routes qui lisent la même ligne `Post`, distinguée
  * par son `type` (issue #4149).
  *
- * `GET /social/posts?scope=…` remplace HUIT des neuf routes que ce fichier
- * montait (home, stories, stories.mine, reels, statuses [+ discover via
- * `audience=public`], author, community, bookmarks) par UNE route validée
- * par union discriminée Zod — un scope hors énumération, ou un paramètre de
+ * `GET /social/posts?scope=…` remplace ONZE des douze routes que ce
+ * domaine montait — les huit de #4149 (home, stories, stories.mine, reels,
+ * statuses [+ discover via `audience=public`], author, community, bookmarks)
+ * PLUS `hashtag`, `nearby` et `sound` (#4346) — par UNE route validée par
+ * union discriminée Zod : un scope hors énumération, ou un paramètre de
  * scope malformé, rend 400 au lieu d'une page vide qui se lit comme
  * « pas de contenu ».
  *
- * `hashtag`, `nearby` et `sound` (les trois listes restantes du domaine)
- * vivent dans `hashtag.ts` / `nearby.ts` / `sounds.ts`, hors du territoire de
- * ce lot — leur fusion est un suivi distinct (voir le rapport de clôture).
+ * Les trois lecteurs `hashtag`/`nearby`/`sound` restent DÉFINIS dans
+ * `hashtag.ts` / `nearby.ts` / `sounds.ts` (`chargerPostsParHashtag`,
+ * `chargerPostsProches`, `chargerPostsParSon`, exportés) — feed.ts les
+ * IMPORTE plutôt que de les recopier, exactement le même geste que pour les
+ * huit `charger*` locaux ci-dessous : « une fusion qui recopie un handler
+ * recrée le doublon qu'elle prétend fermer » (critère 6). `GET
+ * /posts/nearby/density` (carte de densité, pas une page de posts) reste hors
+ * de cette union — question distincte, non concernée par #4346.
  *
- * ## Pourquoi les neuf ANCIENNES routes restent montées
+ * ## Pourquoi les DOUZE anciennes routes restent montées
  *
  * iOS, web et Android les appellent AUJOURD'HUI (critères 9/10) — aucune
  * bascule client n'est dans ce chantier, et Android n'a même pas
@@ -43,7 +52,28 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
  * des étapes, point 7) est un COMPTEUR d'usage résiduel, jamais un
  * calendrier — en poser un serait un mensonge que `utils/deprecation.ts`
  * refuse par construction (`retraitLe` n'est dérivé que d'une règle écrite
- * et chiffrée, ce qui n'est pas le cas ici).
+ * et chiffrée, ce qui n'est pas le cas ici). Les trois alias de #4346 portent
+ * leur PROPRE date de bascule (`HASHTAG_SCOPE_DEPUIS`/`NEARBY_SCOPE_DEPUIS`/
+ * `SOUND_SCOPE_DEPUIS`, `2026-08-30` — le jour où CE lot les rend doubles),
+ * distincte de `SOCIAL_POSTS_DEPUIS` ci-dessous (`2026-08-29`, celle de #4149) :
+ * `depuis` nomme le jour où une adresse EST devenue un alias, jamais une date
+ * partagée par commodité entre deux lots différents.
+ *
+ * ## `hashtag`/`sound` — identifiant requis, `nearby` — pas d'identifiant
+ *
+ * Même arbitrage que `author`/`community` (§ ci-dessous) : `tag` et
+ * `soundId` sont des IDENTIFIANTS requis (`.min(1)`, hérité de
+ * `HashtagPostsQuerySchema`/`MineQuerySchema` par `.extend()` — jamais
+ * recopié, § `NearbyQuerySchema` pour la même règle appliquée aux bornes de
+ * `nearby`). `nearby` n'a pas d'identifiant : ses paramètres requis sont les
+ * coordonnées et le rayon, déjà non-optionnels sur `NearbyQuerySchema`.
+ * `scope=nearby` porte en plus un plafond de débit INDÉPENDANT de celui de
+ * `GET /posts/nearby` (`verifierPlafondDecouverteScope`, nearby.ts) — un
+ * `config.rateLimit` d'@fastify/rate-limit ne peut physiquement pas être posé
+ * sur UN SEUL membre d'une union discriminée sans faire consommer son budget
+ * par les huit autres scopes de la même route (voir le commentaire de la
+ * fonction) ; sans lui, l'adresse neuve aurait rouvert exactement ce que
+ * #4147 a fermé.
  *
  * ## Le défaut que la fusion corrige au passage
  *
@@ -75,10 +105,16 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
  * jour où le type partagé porte nativement ces champs.
  */
 type CursorPaginationAvecForme = CursorPaginationMeta & {
-  /** `keyset` sur les huit scopes servis ici — `offset` est réservé à
-   * `scope=nearby`, hors territoire de ce lot (un tri par distance n'a pas
-   * de frontière keyset naturelle : propriété du scope, pas exception
-   * cachée — critère 4). */
+  /** `keyset` sur les huit scopes de #4149 qui passent par `envoyerFeedUnifie`
+   * ci-dessous — jamais `hashtag`/`nearby`/`sound` (#4346), dont la
+   * pagination est un OFFSET numérique simple (un tri par distance, ou un
+   * `skip` de liaisons, n'a pas de frontière keyset naturelle : propriété du
+   * scope, pas exception cachée — critère 4) et dont la réponse doit rester
+   * IDENTIQUE, clé à clé, à celle de leur route historique (#4346 § témoins)
+   * — l'enveloppe `form`/`meta` de `envoyerFeedUnifie` ajouterait des clés
+   * qu'aucune des trois routes historiques ne sert, cassant cette parité.
+   * Ces trois scopes construisent donc leur réponse directement via
+   * `sendSuccess`, sans passer par ce type ni par `envoyerFeedUnifie`. */
   readonly form: 'keyset';
 };
 
@@ -157,6 +193,14 @@ const SeedSchema = z.string().min(1).optional();
  * historique de `?projection=` (rétro-compatible, feed.ts:64 avant ce lot).
  * `authorId`/`communityId` sont eux des IDENTIFIANTS requis : absents ou
  * vides, ils rendent 400 — la distinction est délibérée, pas un oubli.
+ *
+ * `hashtag`/`sound`/`nearby` (#4346) suivent exactement ce même arbitrage :
+ * `tag`/`soundId` sont des IDENTIFIANTS requis (`.min(1)`) ; `nearby` n'en a
+ * pas, ses `lat`/`lng`/`radiusKm` étant déjà requis sur `NearbyQuerySchema`.
+ * Les trois membres ÉTENDENT (`.extend()`) le schéma que leur route
+ * historique valide déjà (`HashtagPostsQuerySchema`, `MineQuerySchema`,
+ * `NearbyQuerySchema` — importés, jamais recopiés) : mêmes bornes de
+ * `cursor`/`limit`/coordonnées des deux côtés, par construction.
  */
 const SocialPostsQuerySchema = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('home'), cursor: z.string().optional(), limit: LimiteSchema }),
@@ -188,6 +232,11 @@ const SocialPostsQuerySchema = z.discriminatedUnion('scope', [
     communityId: z.string().min(1),
   }),
   z.object({ scope: z.literal('bookmarks'), cursor: z.string().optional(), limit: LimiteSchema }),
+  // #4346 — trois listes de posts restantes, chacune ÉTENDUE depuis le
+  // schéma de SA route historique (partagé, jamais recopié — critère « seed »).
+  HashtagPostsQuerySchema.extend({ scope: z.literal('hashtag'), tag: z.string().min(1) }),
+  SoundPostsQuerySchema.extend({ scope: z.literal('sound'), soundId: z.string().min(1) }),
+  NearbyQuerySchema.extend({ scope: z.literal('nearby') }),
 ]);
 
 /** Même validation de `seed` que la route cible (`SeedSchema`) — DEUX
@@ -714,10 +763,12 @@ export function registerFeedRoutes(
         return envoyerFeedUnifie(reply, resultat, q.limit);
       }
 
-      // Les six scopes restants exigent un compte enregistré — même garde
-      // que les six alias historiques qu'ils remplacent (fail-closed : un
+      // Les neuf scopes restants exigent un compte enregistré — même garde
+      // que les neuf alias historiques qu'ils remplacent (fail-closed : un
       // scope qui ÉLARGIT l'audience ne doit jamais élargir ce que le
-      // lecteur a le droit de voir).
+      // lecteur a le droit de voir). `hashtag`/`sound`/`nearby` (#4346)
+      // rejoignent ce lot : leurs trois routes historiques exigent toutes
+      // `requiredAuth`, sans exception optionnelle comme `author`/`community`.
       if (!registeredUserId) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
@@ -763,6 +814,45 @@ export function registerFeedRoutes(
         case 'bookmarks': {
           const resultat = await chargerBookmarks(viewerId, { cursor: q.cursor, limit: q.limit }, reader);
           return envoyerFeedUnifie(reply, resultat, q.limit);
+        }
+        // #4346 — les trois scopes ci-dessous NE PASSENT PAS par
+        // `envoyerFeedUnifie` : leur réponse doit rester IDENTIQUE, clé à
+        // clé, à celle de leur route historique (témoin de parité, § tête de
+        // fichier) — l'enveloppe `form`/`meta` casserait cette parité.
+        case 'hashtag': {
+          const resultat = await chargerPostsParHashtag(prisma, q.tag, viewerId, { cursor: q.cursor, limit: q.limit }, reader);
+          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+        }
+        case 'sound': {
+          // Même garde de forme que l'alias historique (`OBJECT_ID.test`,
+          // sounds.ts) — partagée via `SOUND_ID_PATTERN`, jamais recopiée.
+          if (!SOUND_ID_PATTERN.test(q.soundId)) {
+            return sendBadRequest(reply, 'Invalid sound id', { code: 'VALIDATION_ERROR' });
+          }
+          const resultat = await chargerPostsParSon(prisma, q.soundId, { cursor: q.cursor, limit: q.limit });
+          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+        }
+        case 'nearby': {
+          // Plafond de débit INDÉPENDANT de celui de `GET /posts/nearby`
+          // (critère 5 de #4147 : chaque route porte SON plafond) — vérifié
+          // AVANT toute lecture Mongo, comme le `preHandler` du plugin sur
+          // l'alias historique.
+          const verdict = await verifierPlafondDecouverteScope(viewerId);
+          if (verdict.allowed === false) {
+            reply.header('retry-after', String(verdict.retryAfterSeconds));
+            return sendError(
+              reply,
+              429,
+              'Trop de requêtes de découverte géographique (social/discovery). Veuillez patienter.',
+              { code: 'RATE_LIMITED' },
+            );
+          }
+          const resultat = await chargerPostsProches(
+            prisma,
+            { lat: q.lat, lng: q.lng, radiusKm: q.radiusKm, cursor: q.cursor, limit: q.limit },
+            reader,
+          );
+          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
         }
       }
     } catch (error) {

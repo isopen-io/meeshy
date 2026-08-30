@@ -5,9 +5,10 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
-import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
+import { depreciee } from '../../utils/deprecation';
 
 /**
  * GET /posts/hashtag/:tag + GET /hashtags/trending — recherche et tendances
@@ -23,7 +24,13 @@ import { getCommunityCoMemberIds } from '../../services/posts/communityVisibilit
  * viewer fait partie de l'audience. Décision assumée (spec §Décisions).
  */
 
-const HashtagPostsQuerySchema = z.object({
+/**
+ * Exportée pour `routes/posts/feed.ts` (#4346, `scope=hashtag`) : les mêmes
+ * bornes de `cursor`/`limit`, ÉTENDUES par
+ * `HashtagPostsQuerySchema.extend({ scope: z.literal('hashtag'), tag: … })`,
+ * jamais recopiées.
+ */
+export const HashtagPostsQuerySchema = z.object({
   cursor: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -32,9 +39,91 @@ const TrendingQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-function normalizeTag(raw: string): string {
+export function normalizeTag(raw: string): string {
   return raw.trim().toLowerCase().replace(/^#/, '');
 }
+
+export type HashtagFeedResult = {
+  readonly data: unknown[];
+  readonly pagination: { readonly limit: number; readonly hasMore: boolean; readonly nextCursor: string | null };
+};
+
+/**
+ * Le NOYAU PARTAGÉ entre `GET /posts/hashtag/:tag` (alias déprécié) et
+ * `GET /social/posts?scope=hashtag` (#4346, critère 6 de #4149 : « une
+ * fusion qui recopie un handler recrée le doublon qu'elle prétend fermer »).
+ * `rawTag` normalise ICI, une seule fois — l'alias le tient d'un segment de
+ * chemin, l'union d'un `?tag=` : les deux adresses ne doivent pas pouvoir
+ * diverger sur la casse/le `#` intercalés.
+ *
+ * Visibilité volontairement PLUS ÉTROITE que le feed personnalisé complet —
+ * PUBLIC + COMMUNITY (co-membre) + soi-même, jamais FRIENDS-only (doc-comment
+ * de tête de fichier, spec §Décisions) — inchangée par cette extraction.
+ */
+export async function chargerPostsParHashtag(
+  prisma: PrismaClient,
+  rawTag: string,
+  viewerUserId: string,
+  params: { cursor: number; limit: number },
+  reader: WireReader,
+): Promise<HashtagFeedResult> {
+  const { cursor, limit } = params;
+  const tag = normalizeTag(rawTag);
+
+  const hashtag = await prisma.hashtag.findUnique({ where: { tag } });
+  if (!hashtag) {
+    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  }
+
+  const links = await prisma.postHashtag.findMany({
+    where: { hashtagId: hashtag.id },
+    orderBy: { createdAt: 'desc' },
+    skip: cursor,
+    take: limit + 1,
+    select: { postId: true },
+  });
+  const hasMore = links.length > limit;
+  const pageLinks = hasMore ? links.slice(0, limit) : links;
+  const orderedIds = pageLinks.map((l) => l.postId);
+  const nextCursor = hasMore ? String(cursor + limit) : null;
+
+  if (orderedIds.length === 0) {
+    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  }
+
+  const communityCoMemberIds = await getCommunityCoMemberIds(prisma, viewerUserId);
+  const posts = await prisma.post.findMany({
+    where: {
+      id: { in: orderedIds },
+      type: { in: ['POST', 'REEL'] },
+      deletedAt: NOT_DELETED,
+      OR: [
+        { authorId: viewerUserId },
+        { visibility: 'PUBLIC' },
+        { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
+      ],
+    },
+    include: postInclude,
+  });
+  const postsById = new Map(posts.map((post) => [post.id, post]));
+
+  const data = orderedIds
+    .map((id) => postsById.get(id))
+    .filter((post): post is NonNullable<typeof post> => post !== undefined)
+    .map((post) => withMentions(hoistLocationDeep(post), reader));
+
+  return { data, pagination: { limit, hasMore, nextCursor } };
+}
+
+// #4346 — `/posts/hashtag/:tag` devient un ALIAS déprécié de `scope=hashtag`.
+// Le `tag` voyage dans le CHEMIN historique : le successeur est une FONCTION
+// de la requête (comme `author`/`community` dans feed.ts), `encodeURIComponent`
+// en plus — un tag brut peut porter un espace ou un `&`, que
+// `utils/deprecation.ts` (`successeurDe`) rejette sans l'échappement, ce qui
+// ferait échouer la déclaration de dépréciation d'une requête par ailleurs
+// valide. `/hashtags/trending` (tendances) N'EST PAS concernée : ce n'est
+// pas la même question qu'une page de posts, hors périmètre de #4346.
+const HASHTAG_SCOPE_DEPUIS = '2026-08-30';
 
 export function registerHashtagRoutes(
   fastify: FastifyInstance,
@@ -42,6 +131,11 @@ export function registerHashtagRoutes(
   requiredAuth: any,
 ) {
   fastify.get('/posts/hashtag/:tag', {
+    onRequest: depreciee({
+      depuis: HASHTAG_SCOPE_DEPUIS,
+      successeur: (request) =>
+        `/api/v1/social/posts?scope=hashtag&tag=${encodeURIComponent((request.params as { tag: string }).tag)}`,
+    }),
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const authContext = (request as UnifiedAuthRequest).authContext;
@@ -54,51 +148,17 @@ export function registerHashtagRoutes(
       return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
     }
     const { cursor, limit } = parsedQuery.data;
-    const tag = normalizeTag((request.params as { tag: string }).tag);
+    const rawTag = (request.params as { tag: string }).tag;
 
-    const hashtag = await prisma.hashtag.findUnique({ where: { tag } });
-    if (!hashtag) {
-      return sendSuccess(reply, [], { pagination: { limit, hasMore: false, nextCursor: null } });
-    }
+    const resultat = await chargerPostsParHashtag(
+      prisma,
+      rawTag,
+      authContext.registeredUser.id,
+      { cursor, limit },
+      wireReaderFromRequest(request as UnifiedAuthRequest),
+    );
 
-    const links = await prisma.postHashtag.findMany({
-      where: { hashtagId: hashtag.id },
-      orderBy: { createdAt: 'desc' },
-      skip: cursor,
-      take: limit + 1,
-      select: { postId: true },
-    });
-    const hasMore = links.length > limit;
-    const pageLinks = hasMore ? links.slice(0, limit) : links;
-    const orderedIds = pageLinks.map((l) => l.postId);
-    const nextCursor = hasMore ? String(cursor + limit) : null;
-
-    if (orderedIds.length === 0) {
-      return sendSuccess(reply, [], { pagination: { limit, hasMore: false, nextCursor: null } });
-    }
-
-    const communityCoMemberIds = await getCommunityCoMemberIds(prisma, authContext.registeredUser.id);
-    const posts = await prisma.post.findMany({
-      where: {
-        id: { in: orderedIds },
-        type: { in: ['POST', 'REEL'] },
-        deletedAt: NOT_DELETED,
-        OR: [
-          { authorId: authContext.registeredUser.id },
-          { visibility: 'PUBLIC' },
-          { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
-        ],
-      },
-      include: postInclude,
-    });
-    const postsById = new Map(posts.map((post) => [post.id, post]));
-
-    const data = orderedIds
-      .map((id) => postsById.get(id))
-      .filter((post): post is NonNullable<typeof post> => post !== undefined)
-      .map((post) => withMentions(hoistLocationDeep(post), wireReaderFromRequest(request as UnifiedAuthRequest)));
-
-    return sendSuccess(reply, data, { pagination: { limit, hasMore, nextCursor } });
+    return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
   });
 
   fastify.get('/hashtags/trending', {
