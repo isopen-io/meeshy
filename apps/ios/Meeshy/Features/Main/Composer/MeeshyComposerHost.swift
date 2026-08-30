@@ -292,6 +292,20 @@ struct MeeshyComposerHost: View {
     /// placement ne dit rien du nombre. Le type somme, lui, rend l'état invalide
     /// IRREPRÉSENTABLE : une variable ne porte qu'une valeur, et ouvrir un
     /// portail ferme le précédent au lieu de l'empiler.
+    /// **Les mentions du texte de SCÈNE** (#4475).
+    ///
+    /// La bande existait sur deux champs de saisie sur trois — la description
+    /// et le texte du document. Taper `@arto` dans un objet texte posé sur la
+    /// scène écrivait littéralement « @arto » : aucune liste, aucun lien,
+    /// aucune notification. Une affordance qui RESSEMBLE à une mention sans en
+    /// être une est pire qu'une absence — c'est la loi 4 vue depuis le LECTEUR.
+    ///
+    /// Rien n'a été ajouté au canvas UIKit pour l'obtenir : `onInlineTextChanged`
+    /// remonte déjà le texte à chaque frappe, et c'est tout ce qu'une requête
+    /// `@` demande. Le canvas n'a aucune raison de connaître les amis de
+    /// l'auteur.
+    @StateObject var sceneMentionBox = ComposerMentionControllerBox()
+
     @State var presentedPortal: ComposerPortal?
 
     /// **Ce que le RAIL a posé** (directive porteur 2026-08-30).
@@ -980,6 +994,11 @@ struct MeeshyComposerHost: View {
         // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
         // tout défaire.
         .task { viewModel.seedHistory() }
+        // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
+        // acceptés que la bande du document, par la même source. Deux
+        // chargements auraient donné deux listes à faire diverger, et deux
+        // moments où « aucun ami » se lit différemment.
+        .task { sceneMentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
         // ici disait « montés ICI, sur le meuble, jamais dans
         // `ComposerDocumentSurface` » — et « ici » désignait l'expression

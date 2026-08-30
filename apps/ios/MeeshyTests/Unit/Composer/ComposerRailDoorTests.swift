@@ -1175,3 +1175,63 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("viewModel.exitTextEditingMode()"))
     }
 }
+
+/// **Taper « @ » dans un texte de SCÈNE appelle quelqu'un** (#4475).
+///
+/// La bande de mention existait sur deux champs de saisie sur trois — la
+/// description de la slide et le texte du document. Le troisième, l'objet texte
+/// posé sur la scène, écrivait littéralement « @arto » : aucune liste, aucun
+/// lien, aucune notification.
+///
+/// > **Une affordance qui RESSEMBLE à une mention sans en être une est pire
+/// > qu'une absence** — c'est la loi 4 vue depuis le LECTEUR plutôt que depuis
+/// > l'auteur. Le pseudo écrit sur la scène a l'air d'une mention pour qui la
+/// > lit ; la personne nommée ne le saura jamais.
+final class ComposerSceneMentionWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSource_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("sceneMentionStrip"))
+    }
+
+    /// **La frappe nourrit la requête** — et c'est tout ce qu'il a fallu.
+    /// `onInlineTextChanged` remonte déjà le texte à chaque caractère ; le
+    /// canvas UIKit n'a pas eu à changer d'un octet.
+    func test_laFrappe_nourritLaRequete() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("sceneMentionBox.controller.handleQuery(in:texte)"))
+    }
+
+    /// **Le choix écrit dans l'OBJET, par le même site que la frappe.** Un
+    /// `@State` intermédiaire aurait fait diverger ce que le canvas affiche de
+    /// ce que la publication emporte.
+    func test_leChoix_ecritDansLObjet() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.updateTextContent(id:id,text:remplace)"))
+    }
+
+    /// **Trois conditions, dont la troisième s'oublie** : sans
+    /// `!suggestions.isEmpty`, la bande de verre se peindrait VIDE quand aucun
+    /// ami accepté ne correspond — un état nominal, pas un chargement.
+    func test_laBande_neSePeintJamaisVide() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("sceneMentionBox.controller.activeQuery!=nil"))
+        XCTAssertTrue(source.contains("!sceneMentionBox.controller.suggestions.isEmpty"))
+        XCTAssertTrue(source.contains("viewModel.textEditingMode.activeTextId"))
+    }
+
+    /// **Les candidats viennent de la MÊME source que la bande du document.**
+    /// Deux chargements auraient donné deux listes à faire diverger, et deux
+    /// moments où « aucun ami » se lit différemment.
+    func test_lesCandidats_viennentDeLaSourcePartagee() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"))
+    }
+}
