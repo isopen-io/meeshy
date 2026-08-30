@@ -198,6 +198,29 @@ export async function messageValidationHook(
  * servies (`limit ≤ 100` déjà appliqué par `validatePagination`) combiné à un
  * budget quotidien — ce dernier reste à poser, cf. #4158.
  */
+/**
+ * Ce que TOUTE fabrique de ce fichier pose, et pourquoi (#4347).
+ *
+ * `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut au hook
+ * `onRequest`, qui court AVANT `preValidation`, donc avant que `unifiedAuth`
+ * ne pose `authContext`. Un `keyGenerator` qui lit `authContext?.userId` y
+ * reçoit `undefined` et retombe sur `ip:${request.ip}` — l'adresse du
+ * conteneur Traefik, le gateway tournant sans `trustProxy`, donc la MÊME pour
+ * tout le monde. Un plafond « 30/min par compte » devenait 30/min pour la
+ * PLATEFORME : le premier appelant privait tous les autres, et la protection
+ * se retournait en déni de service. Mesuré sur le vrai plugin, pas déduit.
+ *
+ * Le repli `ip:` reste LÉGITIME là où l'appelant peut être anonyme — c'est
+ * alors la seule identité disponible, et le déplacer au `preHandler` ne le
+ * dégrade pas : il ne s'applique plus qu'aux requêtes réellement sans compte.
+ *
+ * `skipOnError: false` — `registerGlobalRateLimiter` pose `skipOnError: true`,
+ * valeur GLOBALE qu'@fastify/rate-limit fusionne par `Object.assign` dans
+ * toute config qui ne la redéclare pas. Un Redis indisponible ouvrait donc
+ * ces limiteurs en grand : la panne du gardien devenait l'absence de garde.
+ */
+const GARDES_DE_CLE = { hook: 'preHandler' as const, skipOnError: false };
+
 export function createDirectoryRouteRateLimitConfig(
   type: 'search' | 'resolve'
 ): object {
@@ -209,6 +232,7 @@ export function createDirectoryRouteRateLimitConfig(
   return {
     max: cfg.max,
     timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const id = authContext?.userId ?? `ip:${request.ip}`;
@@ -237,6 +261,7 @@ export function createPostRouteRateLimitConfig(
   return {
     max: cfg.max,
     timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const id = authContext?.userId ?? `ip:${request.ip}`;
@@ -279,6 +304,7 @@ export function createSoundRouteRateLimitConfig(
   return {
     max: cfg.max,
     timeWindow: '1 minute',
+    ...GARDES_DE_CLE,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const id = authContext?.userId ?? `ip:${request.ip}`;
@@ -387,6 +413,7 @@ export function createSignalProtocolRateLimitConfig(
     keys_get: {
       max: 30,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
@@ -403,6 +430,7 @@ export function createSignalProtocolRateLimitConfig(
     keys_post: {
       max: 5,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {
@@ -419,6 +447,7 @@ export function createSignalProtocolRateLimitConfig(
     session_establish: {
       max: 20,
       timeWindow: '1 minute',
+      ...GARDES_DE_CLE,
       keyGenerator: (request: FastifyRequest) => {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (authContext && authContext.userId) {

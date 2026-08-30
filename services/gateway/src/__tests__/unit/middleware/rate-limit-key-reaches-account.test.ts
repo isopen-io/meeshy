@@ -134,24 +134,29 @@ const CONFORMES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['contact-change:verify', createContactChangeRateLimitConfig('verify') as Record<string, unknown>],
   ['contact-change:resend', createContactChangeRateLimitConfig('resend') as Record<string, unknown>],
   ['me:read', meRouteRateLimitConfig as unknown as Record<string, unknown>],
+  ['directory:search', createDirectoryRouteRateLimitConfig('search') as Record<string, unknown>],
+  ['directory:resolve', createDirectoryRouteRateLimitConfig('resolve') as Record<string, unknown>],
+  ['posts:create', createPostRouteRateLimitConfig('create') as Record<string, unknown>],
+  ['posts:like', createPostRouteRateLimitConfig('like') as Record<string, unknown>],
+  ['sounds:upload', createSoundRouteRateLimitConfig('upload') as Record<string, unknown>],
+  ['sounds:stream', createSoundRouteRateLimitConfig('stream') as Record<string, unknown>],
+  ['signal:keys_get', createSignalProtocolRateLimitConfig('keys_get') as Record<string, unknown>],
+  ['signal:keys_post', createSignalProtocolRateLimitConfig('keys_post') as Record<string, unknown>],
+  ['signal:session_establish', createSignalProtocolRateLimitConfig('session_establish') as Record<string, unknown>],
 ];
 
-/** Dette NOMMÉE — suivi ouvert, cf. le commentaire de tête. */
-const DETTE: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-  ['directory:search', createDirectoryRouteRateLimitConfig('search') as Record<string, unknown>],
-  ['posts:create', createPostRouteRateLimitConfig('create') as Record<string, unknown>],
-  ['sounds:upload', createSoundRouteRateLimitConfig('upload') as Record<string, unknown>],
-  ['signal:keys_post', createSignalProtocolRateLimitConfig('keys_post') as Record<string, unknown>],
-];
+/**
+ * La dette est SOLDÉE (#4347) — la liste reste, vide, et le troisième `it`
+ * la garde ainsi : une entrée qu'on y remettrait devrait être fautive pour
+ * que le témoin passe. Retirer la liste plutôt que la vider retirerait aussi
+ * ce qui empêche la dette de revenir sans qu'on le remarque.
+ */
+const DETTE: ReadonlyArray<readonly [string, Record<string, unknown>]> = [];
 
 describe('Toute fabrique qui prétend compter par compte le fait vraiment', () => {
   it.each(CONFORMES)('%s : hook preHandler et échec fermé', (_nom, cfg) => {
     expect(cfg.hook).toBe('preHandler');
     expect(cfg.skipOnError).toBe(false);
-  });
-
-  it.each(DETTE)('%s : dette CONNUE — compte encore par adresse partagée', (_nom, cfg) => {
-    expect(cfg.hook).toBeUndefined();
   });
 
   it('la liste de dette ne contient rien de déjà corrigé', () => {
