@@ -80,10 +80,21 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
     /// l'interstitiel prolonge — et aucune des deux ne peut ré-inliner son
     /// propre avatar/nom sans casser ce test.
     func test_bothIntroSurfaces_delegateIdentityToSharedCard() throws {
-        let canvasSource = try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        // **L'UNITÉ, pas le fichier — parce que ce témoin garde une PRÉSENCE.**
+        // `NeighborGroupCubeFace` vivait dans `+Canvas.swift` ; elle en est
+        // sortie au #4474 pour rendre ce fichier à son budget, et ce témoin est
+        // devenu rouge sur du code parfaitement juste : il cherchait la struct
+        // là où elle n'était plus. Une garde qui nomme un FICHIER se périme au
+        // premier découpage ; `AppSourceGuard.unit` globe `StoryViewerView+*`
+        // et suit la struct où qu'elle aille dans l'unité.
+        //
+        // Ce raisonnement ne vaut PAS pour une garde de LIEU — celle qui
+        // affirme « ceci n'est pas à tel endroit » : l'unité concatène et
+        // efface justement la distinction qu'un tel témoin mesure.
+        let unitSource = try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift")
         let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
 
-        let cubeFace = try body(of: "struct NeighborGroupCubeFace: View {", in: canvasSource, closing: "\n}")
+        let cubeFace = try body(of: "struct NeighborGroupCubeFace: View {", in: unitSource, closing: "\n}")
         let overlay = try body(
             of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
         )

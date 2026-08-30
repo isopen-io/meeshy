@@ -147,6 +147,9 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
+    /// de contenu porte la vue, le lecteur porte l'horloge.
+    @State var isCaptionExpanded = false // internal for cross-file extension access
     /// Spécifique au toggle long-press : `true` UNIQUEMENT entre le hold
     /// confirmé (200 ms) et le tap suivant de reprise. Distinct de `isPaused`,
     /// qui couvre **toutes** les pauses du timer (sheets, drag-to-dismiss,
@@ -640,6 +643,11 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            // **La légende se replie à CHAQUE changement de story.** Laissée
+            // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
+            // — qui ne repart alors jamais. Une pause dont la cause a disparu
+            // de l'écran est un gel, pas une pause (#4474).
+            isCaptionExpanded = false
             // Pas de haptic au changement de slide : ce onChange fire pour
             // TOUTE navigation (auto-advance compris) et doublait le tick du
             // point de geste — 2 à 3 vibrations par slide qui ralentissaient
@@ -735,6 +743,11 @@ struct StoryViewerView: View {
             if !isOpen { scrollableSurfaceTopY = nil }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            // **La légende se replie à CHAQUE changement de story.** Laissée
+            // dépliée, elle garde `shouldPauseTimer` vrai sur la story SUIVANTE
+            // — qui ne repart alors jamais. Une pause dont la cause a disparu
+            // de l'écran est un gel, pas une pause (#4474).
+            isCaptionExpanded = false
             skipUnplayableStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
@@ -1425,6 +1438,19 @@ struct StoryViewerView: View {
 
     /// Builds the story canvas for the supplied geometry. Extracted into the
     /// nominal `StoryCardView` struct (see StoryViewerView+Canvas.swift) so
+    /// Déplier / replier la légende posée sur le canvas.
+    ///
+    /// La pause suit toute seule : `shouldPauseTimer` agrège `isCaptionExpanded`
+    /// comme il agrège l'appui long ou les commentaires ouverts. Rien à
+    /// suspendre ni à reprendre ici — c'est ce qui rend la bascule sûre quand
+    /// deux causes de pause se chevauchent.
+    func toggleCaptionExpansion() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            isCaptionExpanded.toggle()
+        }
+        HapticFeedback.light()
+    }
+
     /// its ~10-layer `ZStack` is its own type-metadata unit.
     private func storyCard(geometry: GeometryProxy) -> StoryCardView {
         StoryCardView(
@@ -1439,6 +1465,8 @@ struct StoryViewerView: View {
             preloadedVideoURLs: preloadedVideoURLs,
             preloadedAudioURLs: preloadedAudioURLs,
             currentVoiceCaption: currentVoiceCaption,
+            isCaptionExpanded: isCaptionExpanded,
+            onCaptionExpansionToggled: toggleCaptionExpansion,
             isContentTranslated: isContentTranslated,
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,

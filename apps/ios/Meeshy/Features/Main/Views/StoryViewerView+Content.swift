@@ -697,6 +697,11 @@ extension StoryViewerView {
         // est automatique dès que l'axe retombe à 0 : le cas dégénéré se
         // rattrape tout seul au geste suivant.
         || gestureAxis != 0
+        // Légende dépliée : lire un texte plein écran pendant que la slide
+        // avance dessous n'a aucun sens. Cause PROPRE dans l'agrégat, jamais un
+        // `isPaused = true` — ce drapeau appartient déjà à d'autres causes, et
+        // le relâcher au repli relâcherait la leur (#4474).
+        || isCaptionExpanded
     }
 
     func startTimer() {
