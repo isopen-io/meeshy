@@ -22,11 +22,31 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { SUPPORTED_LANGUAGES, getLanguageInfo } from '@meeshy/shared/utils/languages';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import type { Message, BubbleTranslation, TranslationModel } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+
+/**
+ * Forme LÂCHE d'une traduction telle qu'elle arrive ici : le backend peut
+ * envoyer soit `BubbleTranslation` (`language` / `content`), soit
+ * `MessageTranslation` (`targetLanguage` / `translatedContent`). Ce type unique
+ * capte les deux jeux de clés, ce qui évite les accès `.language` sur `unknown`
+ * disséminés dans ce fichier — même intention que le commentaire « Supporte
+ * BubbleTranslation ou MessageTranslation » déjà présent aux sites de lecture.
+ */
+type LooseTranslation = {
+  readonly language?: string;
+  readonly targetLanguage?: string;
+  readonly content?: string;
+  readonly translatedContent?: string;
+  readonly confidence?: number;
+  readonly confidenceScore?: number;
+  readonly model?: string;
+  readonly translationModel?: string;
+};
 
 interface LanguageSelectionMessageViewProps {
   message: Message & {
@@ -44,7 +64,11 @@ interface LanguageSelectionMessageViewProps {
 export const LanguageSelectionMessageView = memo(function LanguageSelectionMessageView({
   message,
   currentDisplayLanguage,
-  _isTranslating = false,
+  // Prop acceptée mais non lue ici (l'état « en cours » est tenu localement par
+  // `translatingLanguages`) — renommée à la destructuration pour lire le vrai
+  // nom de prop `isTranslating` tout en restant ignorée (sans quoi `_isTranslating`
+  // ne correspond à aucune prop et `tsc` la refuse).
+  isTranslating: _isTranslating = false,
   onSelectLanguage,
   onRequestTranslation,
   onClose
@@ -169,14 +193,24 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     }
   };
 
-  // Grouper les traductions par langue
+  // Grouper les traductions par langue — clé NORMALISÉE (Prisme). Sans
+  // canonicalisation, une traduction région-taguée (`pt-BR`), 3-lettres (`por`)
+  // ou legacy (`iw`) désignait une langue DISTINCTE de sa forme canonique
+  // (`pt`, `he`) : elle dupliquait une ligne « disponible » ET reparaissait dans
+  // l'onglet « à générer » (double comptage du compteur « N / M langues »).
+  // `normalizeLanguageForDedup` est la SSOT partagée déjà consommée par
+  // `use-message-display` / `resolvePrismTranslation` — jamais une seconde loi
+  // de comparaison de langue.
   const translationsByLanguage = useMemo(() => {
-    const map = new Map<string, unknown[]>();
-    message.translations.forEach((translation: unknown) => {
+    const map = new Map<string, LooseTranslation[]>();
+    message.translations.forEach((translation) => {
+      const entry = translation as LooseTranslation;
       // Supporte BubbleTranslation (language) et MessageTranslation (targetLanguage)
-      const lang = translation.language || translation.targetLanguage;
+      const rawLang = entry.language || entry.targetLanguage;
+      if (typeof rawLang !== 'string' || rawLang.trim() === '') return;
+      const lang = normalizeLanguageForDedup(rawLang);
       const existing = map.get(lang) || [];
-      existing.push(translation);
+      existing.push(entry);
       map.set(lang, existing);
     });
     return map;
@@ -194,6 +228,10 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
 
     // Version originale
     const originalLang = message.originalLanguage || 'fr';
+    // Comparaison NORMALISÉE : une traduction dont la clé se réduit à la langue
+    // d'origine (`pt-BR` pour un original `pt`) n'est pas une « autre » langue —
+    // elle ne doit pas s'ajouter en double sous la version originale.
+    const normalizedOriginal = normalizeLanguageForDedup(originalLang);
     versions.push({
       language: originalLang,
       content: message.originalContent || message.content,
@@ -202,12 +240,12 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
 
     // Traductions
     translationsByLanguage.forEach((translations, lang) => {
-      if (lang !== originalLang) {
+      if (lang !== normalizedOriginal) {
         // Prendre la meilleure traduction pour cette langue
-        const bestTranslation = translations.reduce((best, current) => 
+        const bestTranslation = translations.reduce((best, current) =>
           (current.confidence || 0) > (best.confidence || 0) ? current : best
         );
-        
+
         versions.push({
           language: lang,
           // Supporte BubbleTranslation (content) et MessageTranslation (translatedContent)
@@ -224,12 +262,18 @@ export const LanguageSelectionMessageView = memo(function LanguageSelectionMessa
     return versions;
   }, [message, translationsByLanguage]);
 
-  // Langues manquantes
+  // Langues manquantes — l'ensemble des langues DÉJÀ servies est comparé sous
+  // forme normalisée, comme les codes de `SUPPORTED_LANGUAGES` : une langue déjà
+  // disponible (fût-ce via une clé région-taguée) n'est JAMAIS proposée à la
+  // traduction. C'est ce filtre qui garantit qu'une langue ne peut pas figurer
+  // à la fois dans « disponible » et dans « à générer ».
   const missingLanguages = useMemo(() => {
-    const existingLangs = new Set(availableVersions.map(v => v.language));
-    
+    const existingLangs = new Set(
+      availableVersions.map(v => normalizeLanguageForDedup(v.language))
+    );
+
     return SUPPORTED_LANGUAGES
-      .filter(lang => !existingLangs.has(lang.code))
+      .filter(lang => !existingLangs.has(normalizeLanguageForDedup(lang.code)))
       .map(lang => ({
         code: lang.code,
         name: lang.name,

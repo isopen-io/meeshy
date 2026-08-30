@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { LanguageSelectionMessageView } from '@/components/common/bubble-message/LanguageSelectionMessageView';
 
@@ -395,6 +395,91 @@ describe('LanguageSelectionMessageView', () => {
       // On verifie que les tooltips sont presents
       const tooltips = screen.getAllByTestId('tooltip-content');
       expect(tooltips.length).toBeGreaterThan(0);
+    });
+
+    // Prisme — une clé de traduction NON canonique (région-taguée `pt-BR`,
+    // 3-lettres `por`, legacy `iw`) désigne la MÊME langue que sa forme
+    // canonique. Sans `normalizeLanguageForDedup`, la langue reparaissait dans
+    // « à générer » alors qu'elle est DÉJÀ traduite, et le compteur double-comptait.
+    it('ne propose PAS une langue déjà traduite sous une clé région-taguée (pt-BR)', () => {
+      renderLanguageView({
+        message: createMockMessage({
+          originalLanguage: 'en',
+          translations: [createMockTranslation({ language: 'pt-BR', content: 'Olá mundo' })],
+        }),
+      });
+
+      // L'onglet « Generate » (langues manquantes) ne doit PAS reproposer le
+      // portugais : il est déjà servi par la traduction pt-BR.
+      const generateTab = screen.getByTestId('tab-content-generate');
+      expect(within(generateTab).queryByText('Portuguese')).not.toBeInTheDocument();
+
+      // Il reste bien dans « Available » (résolu à sa forme canonique `pt`).
+      const availableTab = screen.getByTestId('tab-content-available');
+      expect(within(availableTab).getByText('Portuguese')).toBeInTheDocument();
+      // La clé brute `pt-BR` ne fuit jamais comme un libellé de langue inconnu.
+      expect(screen.queryByText('pt-BR')).not.toBeInTheDocument();
+    });
+
+    it('normalise aussi une clé 3-lettres MessageTranslation (por → pt)', () => {
+      renderLanguageView({
+        message: createMockMessage({
+          originalLanguage: 'en',
+          // Forme MessageTranslation du backend : targetLanguage / translatedContent
+          translations: [{ targetLanguage: 'por', translatedContent: 'Olá', confidence: 0.9 }],
+        }),
+      });
+
+      const generateTab = screen.getByTestId('tab-content-generate');
+      expect(within(generateTab).queryByText('Portuguese')).not.toBeInTheDocument();
+    });
+
+    it('compte les langues possibles sans double-compter la langue déjà traduite', () => {
+      // Le compteur « N / M » est composé de nœuds texte séparés (`{a}/{b}`) :
+      // on lit le `textContent` du badge dont la forme est « chiffre/chiffre ».
+      const readCountBadge = () =>
+        screen.getAllByTestId('badge')
+          .map(el => el.textContent ?? '')
+          .find(txt => /^\d+\/\d+$/.test(txt));
+
+      // Clé CANONIQUE `pt` : compteur de référence.
+      const { unmount } = renderLanguageView({
+        message: createMockMessage({
+          originalLanguage: 'en',
+          translations: [createMockTranslation({ language: 'pt', content: 'Olá' })],
+        }),
+      });
+      const canonicalCount = readCountBadge();
+      unmount();
+
+      // Clé RÉGION-TAGUÉE `pt-BR` : même langue, DONC même compteur. Le double
+      // comptage brut ajoutait pt aux « manquantes » et gonflait le dénominateur.
+      renderLanguageView({
+        message: createMockMessage({
+          originalLanguage: 'en',
+          translations: [createMockTranslation({ language: 'pt-BR', content: 'Olá' })],
+        }),
+      });
+      const regionTaggedCount = readCountBadge();
+
+      expect(canonicalCount).toMatch(/^1\/\d+$/); // 1 traduction faite
+      expect(regionTaggedCount).toBe(canonicalCount); // parité stricte
+    });
+
+    it('dédup­lique deux clés d’une même langue (pt + pt-BR) en une seule version', () => {
+      renderLanguageView({
+        message: createMockMessage({
+          originalLanguage: 'en',
+          translations: [
+            createMockTranslation({ language: 'pt', content: 'Olá', confidence: 0.8 }),
+            createMockTranslation({ language: 'pt-BR', content: 'Olá BR', confidence: 0.95 }),
+          ],
+        }),
+      });
+
+      const availableTab = screen.getByTestId('tab-content-available');
+      // Une SEULE ligne « Portuguese », pas une par variante de clé.
+      expect(within(availableTab).getAllByText('Portuguese')).toHaveLength(1);
     });
 
     it('devrait appeler onRequestTranslation avec basic par defaut au clic sur la ligne', () => {
