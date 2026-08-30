@@ -7103,7 +7103,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
       player (seek bar, ±10s, speed 1.0–2.0×, swipe-to-dismiss); Picture-in-Picture
 - [ ] Single-active-player coordination across audio + video; save video to gallery
-- [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+- [~] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+      — **karaoke sync pure core shipped** (slice `transcription-active-segment-resolver`,
+      2026-08-30): pure `:core:model` `TranscriptionKaraokeResolver.activeSegmentIndex`
+      (segments + currentTime + progress + isPlaying → lit segment index | `null`), a faithful
+      port of iOS `AudioPlayerView.activeSegmentIndex` — the single source of truth iOS shares
+      between the bubble player and `MediaTranscriptionView`. Three layers: idle/empty → `null`
+      (iOS "BUG D" guard against false-highlighting segment 0 at rest); real timing → first
+      half-open `[start,end)` window containing the position (start inclusive, end exclusive),
+      `null` before-first / in-gap / past-last; no usable timing (all `start==end`) →
+      proportional `floor(progress·count)` clamped to range. Android's nullable segment bounds
+      read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
+      app-side glue (pending): the Compose flow-layout that paints the coloured spans +
+      tap-to-seek + auto-scroll, and video watch-progress reporting.
 - [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
 - [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
