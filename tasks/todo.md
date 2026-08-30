@@ -31,3 +31,22 @@ lane `release` (fastlane deliver lit `apps/ios/fastlane/metadata/`).
   `ITSAppUsesNonExemptEncryption=false` à faire arbitrer.
 - Reste à produire (hors repo) : captures d'écran 6.7"/6.5" selon le plan §4,
   App Preview vidéo du hook vocal, metadata des 5 autres langues du bundle.
+
+## Vérification du « reste » web — 2026-08-25
+
+Demandé : vérifier qu'il y a VRAIMENT à faire avant d'attaquer. Verdict mesuré
+sur le code (le recensement datait d'avant le travail web déjà livré) :
+
+| Surface | Verdict |
+|---|---|
+| `StoryViewer.tsx` | **RIEN** — `grep -cE "isLiked\|isBookmarked\|isReposted\|hasReacted\|myReaction\|userReaction"` rend **0**. Aucun état « c'est moi » n'y existe ; rien n'est renforçable |
+| réactions emoji (picker) | marginal — l'emoji choisi s'affiche DÉJÀ à la place du cœur, ce qui EST le signal |
+| `CommentItem.tsx` | **un seul site réel** — `isLiked` et `comment.authorId` disponibles → fait |
+
+Le web est donc épuisé lui aussi, à ceci près que le partage et le repost y sont
+bloqués par les mêmes états manquants que sur iOS.
+
+> **Annoncer « il reste X » sans le mesurer coûte deux fois** : une fois en
+> promesse, une fois en démenti. Ici « restent StoryViewer et les commentaires »
+> valait pour moitié — et c'est la moitié creuse qui aurait été attaquée en
+> premier si personne n'avait demandé de vérifier.
