@@ -410,6 +410,8 @@ public extension CanvasV3 {
         if let memento = media.mutedVolumeMemento {
             payload["mutedVolumeMemento"] = .number(exactDouble(memento))
         }
+        if let sourceStart = media.sourceStart { payload["sourceStart"] = .number(sourceStart) }
+        if let sourceEnd = media.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
         if let ducking = media.isDuckingDisabled { payload["isDuckingDisabled"] = .bool(ducking) }
         if media.placement != "media" { payload["placement"] = .string(media.placement) }
         if let fadeIn = media.fadeIn { payload["fadeIn"] = .number(fadeIn) }
@@ -459,6 +461,8 @@ public extension CanvasV3 {
         if let memento = audio.mutedVolumeMemento {
             payload["mutedVolumeMemento"] = .number(exactDouble(memento))
         }
+        if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
+        if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
         if let isBackground = audio.isBackground { payload["isBackground"] = .bool(isBackground) }
         if let loop = audio.loop { payload["loop"] = .bool(loop) }
         if let duration = audio.duration { payload["duration"] = .number(exactDouble(duration)) }
@@ -709,6 +713,8 @@ public extension StoryEffects {
             name: object.payload.string("name"),
             isDuckingDisabled: object.payload.bool("isDuckingDisabled"))
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
+        media.sourceStart = object.payload.double("sourceStart")
+        media.sourceEnd = object.payload.double("sourceEnd")
         return media
     }
 
@@ -775,6 +781,8 @@ public extension StoryEffects {
             soundAuthorUsername: object.payload.string("soundAuthorUsername"))
         audio.zIndex = object.z
         audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
+        audio.sourceStart = object.payload.double("sourceStart")
+        audio.sourceEnd = object.payload.double("sourceEnd")
         return audio
     }
 }

@@ -700,6 +700,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var fadeIn: Double?             // fade-in (secondes)
     public var fadeOut: Double?            // fade-out (secondes)
 
+    /// Point d'entrée dans la SOURCE, en secondes. `nil` = depuis le début.
+    public var sourceStart: Double?
+    /// Point de sortie dans la SOURCE, en secondes. `nil` = jusqu'à la fin.
+    public var sourceEnd: Double?
+
     // Heritage (kept)
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
@@ -742,6 +747,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
+        case sourceStart, sourceEnd
         case sourceLanguage, keyframes, thumbHash, name
         case isDuckingDisabled
     }
@@ -768,7 +774,9 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
                 name: String? = nil,
-                isDuckingDisabled: Bool? = nil) {
+                isDuckingDisabled: Bool? = nil,
+                sourceStart: Double? = nil,
+                sourceEnd: Double? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -785,6 +793,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.intrinsicDuration = intrinsicDuration
         self.startTime = startTime; self.duration = duration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.sourceStart = sourceStart; self.sourceEnd = sourceEnd
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
         self.thumbHash = thumbHash
@@ -825,6 +834,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         duration = try c.decodeIfPresent(Double.self, forKey: .duration)
         fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn)
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
+        sourceStart = try c.decodeIfPresent(Double.self, forKey: .sourceStart)
+        sourceEnd = try c.decodeIfPresent(Double.self, forKey: .sourceEnd)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
         // Decoder clamp : `didSet` ne se déclenche pas pendant init, donc on
@@ -859,6 +870,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(duration, forKey: .duration)
         try c.encodeIfPresent(fadeIn, forKey: .fadeIn)
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
+        try c.encodeIfPresent(sourceStart, forKey: .sourceStart)
+        try c.encodeIfPresent(sourceEnd, forKey: .sourceEnd)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
@@ -897,7 +910,9 @@ extension StoryMediaObject {
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
                 name: String? = nil,
-                isDuckingDisabled: Bool? = nil) {
+                isDuckingDisabled: Bool? = nil,
+                sourceStart: Double? = nil,
+                sourceEnd: Double? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -918,7 +933,9 @@ extension StoryMediaObject {
                   keyframes: keyframes,
                   thumbHash: thumbHash,
                   name: name,
-                  isDuckingDisabled: isDuckingDisabled)
+                  isDuckingDisabled: isDuckingDisabled,
+                  sourceStart: sourceStart,
+                  sourceEnd: sourceEnd)
     }
 }
 
@@ -964,6 +981,10 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var loop: Bool?                  // boucle automatique
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
+    /// Point d'entrée dans la SOURCE, en secondes. `nil` = depuis le début.
+    public var sourceStart: Double?
+    /// Point de sortie dans la SOURCE, en secondes. `nil` = jusqu'à la fin.
+    public var sourceEnd: Double?
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
     public var name: String?
@@ -993,6 +1014,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         case mutedVolumeMemento
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
+        case sourceStart, sourceEnd
         case keyframes
         // ⚠ Le `CodingKeys` de ce type est EXPLICITE : ajouter une propriété
         // sans ajouter son `case` compile sans le moindre avertissement, et le
@@ -1015,7 +1037,9 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 keyframes: [StoryKeyframe]? = nil,
                 mediaURL: String? = nil,
                 soundId: String? = nil,
-                soundAuthorUsername: String? = nil) {
+                soundAuthorUsername: String? = nil,
+                sourceStart: Double? = nil,
+                sourceEnd: Double? = nil) {
         self.soundId = soundId
         self.soundAuthorUsername = soundAuthorUsername
         self.id = id; self.postMediaId = postMediaId
@@ -1026,6 +1050,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.backgroundAudioVariants = backgroundAudioVariants
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.sourceStart = sourceStart; self.sourceEnd = sourceEnd
         self.sourceLanguage = sourceLanguage
         self.name = name
         self.keyframes = keyframes

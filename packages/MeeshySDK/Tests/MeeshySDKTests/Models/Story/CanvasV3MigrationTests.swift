@@ -484,4 +484,67 @@ struct CanvasV3MigrationTests {
 
         #expect(back.textObjects.first?.y == 0.90)
     }
+
+    // ------------------------------------------------------------------
+    // Bornes de rognage de la SOURCE (`sourceStart`/`sourceEnd`) — distinctes
+    // de `startTime`/`duration` (place du clip DANS LA TIMELINE de la slide) :
+    // ces deux-là disent QUELLE PORTION de la source joue. Voyagent dans le
+    // payload permissif de l'objet, au même motif que `mutedVolumeMemento`
+    // (`CanvasV3Migration.mediaPayload` / `.audioPayload`).
+    // ------------------------------------------------------------------
+
+    @Test func mediaSourceBounds_surviveTheBridge() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m-bounds", kind: .video, aspectRatio: 1,
+                                                 sourceStart: 2, sourceEnd: 7)]
+        let document = CanvasV3(migrating: effects)
+        let restored = try #require(StoryEffects(rendering: document, sceneIndex: 0).mediaObjects?.first)
+        #expect(restored.sourceStart == 2)
+        #expect(restored.sourceEnd == 7)
+    }
+
+    @Test func audioSourceBounds_surviveTheBridge() throws {
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [StoryAudioPlayerObject(id: "a-bounds",
+                                                             postMediaId: "64b0000000000000000000ee",
+                                                             sourceStart: 2, sourceEnd: 7)]
+        let document = CanvasV3(migrating: effects)
+        let restored = try #require(StoryEffects(rendering: document, sceneIndex: 0).audioPlayerObjects?.first)
+        #expect(restored.sourceStart == 2)
+        #expect(restored.sourceEnd == 7)
+    }
+
+    @Test func objectsWithoutSourceBounds_omitBothWireKeysAndDecodeToNil() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m-nobounds", kind: .video, aspectRatio: 1)]
+        effects.audioPlayerObjects = [StoryAudioPlayerObject(id: "a-nobounds",
+                                                             postMediaId: "64b0000000000000000000ef")]
+        let document = CanvasV3(migrating: effects)
+
+        let mediaPayload = try #require(object(document, "m-nobounds")?.payload)
+        #expect(mediaPayload["sourceStart"] == nil)
+        #expect(mediaPayload["sourceEnd"] == nil)
+        let audioPayload = try #require(object(document, "a-nobounds")?.payload)
+        #expect(audioPayload["sourceStart"] == nil)
+        #expect(audioPayload["sourceEnd"] == nil)
+
+        let restored = StoryEffects(rendering: document, sceneIndex: 0)
+        #expect(restored.mediaObjects?.first?.sourceStart == nil)
+        #expect(restored.mediaObjects?.first?.sourceEnd == nil)
+        #expect(restored.audioPlayerObjects?.first?.sourceStart == nil)
+        #expect(restored.audioPlayerObjects?.first?.sourceEnd == nil)
+    }
+
+    @Test func sourceBoundsAreIndependentFromTimelineTiming() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m-both", kind: .video, aspectRatio: 1,
+                                                 startTime: 1, duration: 4,
+                                                 sourceStart: 2, sourceEnd: 7)]
+        let document = CanvasV3(migrating: effects)
+        let restored = try #require(StoryEffects(rendering: document, sceneIndex: 0).mediaObjects?.first)
+        #expect(restored.startTime == 1)
+        #expect(restored.duration == 4)
+        #expect(restored.sourceStart == 2)
+        #expect(restored.sourceEnd == 7)
+    }
 }
