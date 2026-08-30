@@ -306,10 +306,11 @@ export async function handleGetMe(request: FastifyRequest, reply: FastifyReply):
 // ─── Débit : 600/min PAR COMPTE (critère 5 de #4178) ───────────────────────
 
 /**
- * La clé est `userId`, JAMAIS `request.ip` : le gateway tourne sans
- * `trustProxy` derrière Traefik (`server.ts:507`), donc `request.ip` vaut
- * l'IP du conteneur proxy pour TOUT le trafic — une limite « par IP » posée
- * ici serait un seul seau pour toute la plateforme, pas une limite par compte
+ * La clé est `userId`, JAMAIS `request.ip` : depuis #4137 `trustProxy` est
+ * posé, donc `request.ip` est l'ADRESSE de l'appelant — une limite posée
+ * dessus compterait par adresse et non par compte, se trompant dans les deux
+ * sens (plusieurs comptes derrière une sortie partagent un crédit ; un compte
+ * à plusieurs adresses en cumule autant)
  * (issue #4178, critère 5 ; même motif que `createDirectoryRouteRateLimitConfig`
  * et `createPostRouteRateLimitConfig`, `middleware/rate-limiter.ts`). Le repli
  * `ip:${request.ip}` ne sert qu'un appelant SANS `authContext` exploitable —

@@ -289,10 +289,12 @@ export function createPostRouteRateLimitConfig(
  *
  * Le `keyGenerator` EXPLICITE est le point capital. `mergeParams` du plugin est
  * un `Object.assign` : une config de route sans `keyGenerator` hérite du global,
- * soit `global:${request.ip}`. Or Fastify tourne sans `trustProxy` derrière
- * Traefik sur un réseau Docker — `request.ip` est l'IP du conteneur proxy,
- * IDENTIQUE pour tout le monde. Une limite « 20/min » serait alors 20/min pour
- * la plateforme entière, et un seul utilisateur en priverait tous les autres.
+ * soit `global:${request.ip}`. Depuis #4137 `trustProxy` est posé, donc cette
+ * clé n'est plus « tout le monde » mais « toutes les requêtes venant de cette
+ * ADRESSE » — ce qui reste faux dans les deux sens pour une limite censée
+ * compter par compte : plusieurs comptes derrière une même sortie (opérateur
+ * mobile, bureau, NAT) se partagent un crédit prévu pour un seul, et un même
+ * compte disposant de plusieurs adresses en obtient autant de crédits.
  *
  * - upload  : 20/min — écrit un fichier, la route la plus coûteuse du lot
  * - list    : 60/min — liste publique triée par popularité
@@ -351,9 +353,10 @@ export function createSoundRouteRateLimitConfig(
  *
  * Le `keyGenerator` EXPLICITE n'est pas décoratif : `mergeParams` du plugin est
  * un `Object.assign`, donc une config sans `keyGenerator` hérite du global,
- * soit `global:${request.ip}`. Le gateway tourne sans `trustProxy` derrière
- * Traefik : `request.ip` est l'IP du conteneur proxy, IDENTIQUE pour tout le
- * monde. Un plafond « 3/h » deviendrait 3/h pour la plateforme entière — un
+ * soit `global:${request.ip}`. Depuis #4137 `trustProxy` est posé, donc c'est
+ * l'ADRESSE de l'appelant — jamais son compte. Une limite qui se veut par
+ * compte et compte par adresse se trompe dans les deux sens (voir
+ * `GARDES_DE_CLE`). Un plafond « 3/h » deviendrait 3/h pour la plateforme entière — un
  * seul utilisateur en priverait tous les autres, et le rendrait par là même
  * inutile comme protection.
  *

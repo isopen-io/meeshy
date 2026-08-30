@@ -390,13 +390,14 @@ describe('createContactChangeRateLimitConfig', () => {
   /**
    * Le temoin qui compte vraiment. Sans `keyGenerator`, `mergeParams` du
    * plugin (un `Object.assign`) fait heriter la cle GLOBALE
-   * `global:${request.ip}` — et le gateway tourne sans `trustProxy` derriere
-   * Traefik, donc cette IP est celle du conteneur proxy, la MEME pour tout le
-   * monde. Le plafond « 3/h » deviendrait 3/h pour la plateforme entiere : un
-   * seul compte en priverait tous les autres, et la protection se retournerait
-   * en deni de service.
+   * `global:${request.ip}` — l'ADRESSE de l'appelant, `trustProxy` etant pose
+   * depuis #4137. Un plafond « 3/h par compte » compterait alors par adresse,
+   * ce qui se trompe dans les DEUX sens : plusieurs comptes derriere une meme
+   * sortie (operateur mobile, bureau, NAT) se partagent un credit prevu pour
+   * un seul, et un meme compte disposant de plusieurs adresses en obtient
+   * autant de credits.
    */
-  it('la cle est celle du COMPTE, jamais l\'IP partagee du proxy', () => {
+  it('la cle est celle du COMPTE, jamais l\'adresse de l\'appelant', () => {
     const cfg = createContactChangeRateLimitConfig('initiate') as any;
     const req = { authContext: { userId: 'u-42' }, ip: '10.0.0.7' };
     expect(cfg.keyGenerator(req)).toBe('contact-change:initiate:u-42');
