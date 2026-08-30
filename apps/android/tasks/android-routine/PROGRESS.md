@@ -2,6 +2,66 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **search-highlight became accent-insensitive — iOS `.diacriticInsensitive` parity, closing a real
+> gap in the in-conversation search bubble** (slice `search-accent-fold-highlight`, feature-parity §C "Rich text
+> rendering … search highlight"). iOS highlights search matches with `.folding(options: [.diacriticInsensitive,
+> .caseInsensitive])` (`GlobalSearchView.swift:741`, `SoundLibraryService`), so searching "cafe" highlights "café".
+> Android's `MessageTextParser.highlightRanges` only `.lowercase()`d — a query typed without accents highlighted
+> NOTHING in accented text (`RichMessageText` in the chat bubble is the live consumer via `ChatViewModel.highlightTerm`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4368/#4336/#4267 (all web/gateway), none a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-canvas-reprojection`) is on `main` (#4369). Branched off freshly-fetched `origin/main`; local HEAD ==
+> origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (1 new main
+> + 1 new test + 1 edited main + 1 edited test + tracking docs, no `local.properties`).
+>
+> **The change — one pure folder + one rewritten resolver.** (1) New pure `:core:model` `SearchTextFolder`
+> (`me.meeshy.sdk.model.search`): `fold(text)` NFD-decomposes, drops `\p{Mn}` combining marks, lowercases — the
+> Android port of iOS `.diacriticInsensitive`/`.caseInsensitive`. `foldWithMap(text)` additionally returns, per
+> folded char, the SOURCE char index in the original string (`FoldedText`), so a match found in folded space projects
+> back to ORIGINAL indices even when folding changes the length (accents dropped). Folding is done per source char so
+> the index map stays exact, and `fold` is the folded projection of `foldWithMap` — one code path. (2)
+> `MessageTextParser.highlightRanges` now folds both text (via `foldWithMap`) and term (via `fold`), matches in
+> folded space, and maps each hit back: `originStart = sourceIndexOf[idx]`, `originEndExclusive =
+> sourceIndexOf[endFolded]` (or `text.length` at the tail) — which naturally extends the range over a decomposed
+> grapheme's trailing combining marks so no half-grapheme is highlighted. A term that folds to nothing (only combining
+> marks) yields no ranges. **SOTA over iOS:** the range is computed on ORIGINAL char indices with an exact source
+> map, so a decomposed "e"+U+0301 is highlighted as one unit — Foundation's grapheme handling gives iOS the same,
+> but Android now matches it deterministically without relying on ICU grapheme walking. Blast radius: `SearchTextFolder`
+> all-new; `highlightRanges` internals rewritten, signature and every existing test unchanged (fold is a superset of
+> lowercase, so case-only tests still pass). Deliberately EXCLUDED (faithful boundary): no BM25/FTS ranking (that is
+> SQLite-provided on iOS, not a pure port), no local search-index leg (Room FTS is device-bound).
+>
+> **Tests: +17, proven against the exact production logic.** `SearchTextFolderTest` +13 (ascii lowercase; precomposed
+> é stripped; DECOMPOSED e+U+0301 stripped; uppercase-accent lowered+stripped together; empty; only-combining-marks →
+> empty; non-latin untouched; `foldWithMap.folded == fold`; identity map for ascii; precomposed → 1:1 map; a decomposed
+> mark skipped so the next char maps past it (0,1,2,3,5); map length == folded length). `MessageTextParserTest` +4
+> highlight (unaccented term matches precomposed accented text 0..3; decomposed grapheme range covers the trailing
+> mark 0..4; accented term matches plain text; term folding to nothing → no ranges) — all accented literals built from
+> explicit `\u` code points so precomposed vs decomposed is unambiguous in source (verified byte-for-byte:
+> é=U+00E9, e+U+0301, É=U+00C9, U+0301). **RED direction:** the four accent tests fail on the old lowercase-only impl
+> ("cafe".indexOf in "café" → not found → empty), the case-only tests keep passing.
+>
+> **Verification — local Android gate UNAVAILABLE (not skipped); pure logic proven standalone + Android CI is the gate.**
+> `dl.google.com` IS reachable here, but AGP 8.13 cannot resolve `compileSdk = 37`: the only published platform is the
+> preview `platforms;android-37.0`, whose target hash never satisfies the `android-37` AGP demands — reproduced on a
+> PRISTINE install, a symlink, and a fully-normalized copy (api-level/path/build.prop all forced to `37`); the copy even
+> registered as `platforms;android-37` yet `Failed to find target with hash string 'android-37'` persisted. This is an
+> AGP/preview-SDK incompatibility, NOT my diff, and NOT the `dl.google.com`-denied case the routine names — the outcome
+> is the same (no local Gradle task can run). To de-risk anyway, the EXACT production logic (`SearchTextFolder` +
+> `highlightRanges`, copied verbatim) was compiled with `kotlinc` (embeddable 2.0.21) and run against all 23 assertions
+> (the 17 new + 5 existing highlight + 1 fold-equality): **ALL PASS**. Prior `apps/android` slices merged green on the
+> **Android** CI check with this same `compileSdk = 37` (e.g. #4369, #4355), so CI is a reliable compiler here — the PR's
+> **Android** check is the merge gate. Reviewer **PASS** pending green CI (diff `apps/android` only; SDK purity — a pure
+> stateless `:core:model` building block, no `android.*`, no orchestration; SSOT — faithful port of iOS `.folding`, and
+> `highlightRanges` reuses it rather than re-implementing folding; no tautological tests; no coverage floor lowered —
+> new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the remaining search pieces are the local FTS/network-merge leg (`GlobalSearchRepository` already merges the
+> remote message batches; a cache-first LOCAL leg needs Room FTS, device-bound) and `SearchTextFolder` reuse in a
+> future sound-library / user filter. For a pure-core next slice, consider another Chat/Feed value type or the
+> Auth/Conversations areas. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-30 **the pure canvas-reprojection core landed — the JVM-testable heart of reposting a story's
 > canvas into a post of a different aspect ratio** (slice `story-canvas-reprojection`, feature-parity §F
 > "Quote / repost posts … canvas reprojection + 'items repositioned' banner" `[ ]`→`[~]`). Android had NO
