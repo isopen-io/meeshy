@@ -88,7 +88,7 @@ function checkConsentError(error: unknown): ConsentViolation[] | null {
  * const { data, updatePreferences, isLoading } = usePreferences('privacy');
  *
  * // Avec gestion du consentement
- * const { data, updatePreferences, consentViolations } = usePreferences('translation', {
+ * const { data, updatePreferences, consentViolations } = usePreferences('audio', {
  *   onConsentRequired: (violations) => {
  *     // Afficher le dialogue de consentement
  *     showConsentDialog(violations);

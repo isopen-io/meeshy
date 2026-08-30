@@ -18,19 +18,21 @@ export type {
   ApplicationPreference,
 } from '@meeshy/shared/types/preferences';
 
-export type PreferenceCategory =
-  | 'privacy'
-  | 'notification'
-  | 'audio'
-  | 'video'
-  | 'message'
-  | 'document'
-  | 'application'
-  | 'accessibility'
-  | 'translation';
-
-export type TranslationPreferences = Record<string, unknown>;
-export type AccessibilityPreferences = Record<string, unknown>;
+/**
+ * Les sept catégories que le serveur connaît — une par schéma de
+ * `packages/shared/types/preferences/` (miroir de la table
+ * `PREFERENCE_REGISTRY`, `services/gateway/.../preference-registry.ts`).
+ *
+ * DÉRIVÉE de `PreferenceTypeMap`, jamais une seconde liste recopiée à la
+ * main : avant #4497, cette union ÉNUMÉRAIT ses sept noms indépendamment de
+ * la carte ci-dessous, et les deux avaient dérivé ENSEMBLE vers deux entrées
+ * fantômes (`accessibility`, `translation`) sans aucun schéma serveur —
+ * c'est ce qui rendait `usePreferences('accessibility')` acceptable au
+ * typage. Une catégorie ne peut plus apparaître ici sans un type importé de
+ * `@meeshy/shared/types/preferences` en face dans la carte : la classe de
+ * défaut devient inexprimable plutôt que corrigée au cas par cas.
+ */
+export type PreferenceCategory = keyof PreferenceTypeMap;
 
 export interface PreferenceTypeMap {
   privacy: PrivacyPreference;
@@ -40,8 +42,6 @@ export interface PreferenceTypeMap {
   message: MessagePreference;
   document: DocumentPreference;
   application: ApplicationPreference;
-  accessibility: AccessibilityPreferences;
-  translation: TranslationPreferences;
 }
 
 export interface ConsentViolation {
