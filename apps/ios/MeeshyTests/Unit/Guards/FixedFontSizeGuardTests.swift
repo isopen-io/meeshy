@@ -147,7 +147,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // Le fichier principal n'en porte plus aucun : il sort de la liste et
         // n'y revient jamais.
         "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
-        "Features/Main/Composer/MeeshyComposerHost+Surfaces.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
@@ -217,8 +216,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
     private static let textCeiling = 36
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
-    /// correctif, 245 après (le glyphe et le chiffre de la tuile de profil).
-    private static let totalCeiling = 245
+    /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
+    /// profil), **244 depuis #4136** : l'icône de description a quitté la rangée
+    /// haute pour la rangée d'outils, et y a pris la forme canonique — donc
+    /// `.title3` au lieu d'un `size: 13` figé. Son fichier n'en portait qu'un,
+    /// sur une IMAGE : `textCeiling` ne bouge pas.
+    private static let totalCeiling = 244
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

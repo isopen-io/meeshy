@@ -57,14 +57,26 @@ extension MeeshyComposerHost {
         // jamais deux sélecteurs à l'écran, par l'exhaustivité de son `switch`
         // et non par un compte d'occurrences.
         .storyComposerHeaderLeadingAccessory {
-            HStack(spacing: 6) {
-                if mountsFormatFan
-                    && ComposerFormatFanPlacement.place(for: mountedSurface) == .atelierHeader {
-                    formatChip
-                }
-                atelierDescriptionButton
+            if mountsFormatFan
+                && ComposerFormatFanPlacement.place(for: mountedSurface) == .atelierHeader {
+                formatChip
             }
         }
+        // **L'icône de description DESCEND dans la rangée d'outils** (#4136,
+        // directive porteur 2026-08-28). Elle vivait dans la rangée haute
+        // depuis #4124, où elle avait été posée pour une raison de PLACE : à
+        // droite, le groupe d'actions passait à cinq pastilles et l'audience se
+        // tronquait en « F ». Cette raison est éteinte — le socle porte
+        // désormais l'audience, l'œil et la flèche (#4135), et la rangée haute
+        // n'a plus que la croix, le type et le `⋯`.
+        //
+        // Le déplacement est un CHOIX, pas un effet de bord : la description
+        // vise la SLIDE, comme les six outils visent la scène. De gauche à
+        // droite, la rangée descend les niveaux du modèle — le même ordre que
+        // le bas de l'écran tient de haut en bas. La laisser dans l'en-tête
+        // l'aurait rangée parmi ce qui QUALIFIE la publication, où elle n'est
+        // pas.
+        .storyComposerToolRowLeadingAccessory { atelierDescriptionButton }
     }
 
     /// **L'icône qui ouvre la description de la slide** (#4124).
@@ -91,24 +103,36 @@ extension MeeshyComposerHost {
             HapticFeedback.light()
             editsSceneDescription = true
         } label: {
+            // **La FORME est celle de la rangée, pas celle de l'en-tête**
+            // (#4136). Elle portait une pastille de verre, juste parce qu'elle
+            // vivait parmi les commandes de la rangée haute, qui en sont toutes.
+            // Descendue dans la rangée d'outils, cette pastille faisait d'elle
+            // la seule entrée cerclée d'une rangée qu'on venait précisément
+            // d'unifier — mesuré à l'écran, et voyant.
+            //
+            // **`glassControlForeground()`, jamais `textPrimary(isDark: true)`**
+            // — et la différence se voit. Le chrome du document vit sur un
+            // plateau SOMBRE en permanence, donc y coder « clair » marchait ;
+            // celui de l'atelier suit `canvasChromeScheme`, qui bascule avec
+            // le FOND du canvas. Un glyphe clair posé sur un fond de scène
+            // pastel disparaît, mesuré à l'écran.
             Image(systemName: "text.alignleft")
-                .font(.system(size: 13, weight: .bold))
-                // **`glassControlForeground()`, jamais `textPrimary(isDark: true)`**
-                // — et la différence se voit. Le chrome du document vit sur un
-                // plateau SOMBRE en permanence, donc y coder « clair » marchait ;
-                // celui de l'atelier suit `canvasChromeScheme`, qui bascule avec
-                // le FOND du canvas. Un glyphe clair posé sur un fond de scène
-                // pastel disparaît, mesuré à l'écran.
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
                 .glassControlForeground()
-                .frame(width: ComposerControlMetrics.visualDiameter,
-                       height: ComposerControlMetrics.visualDiameter)
-                .adaptiveGlass(in: Circle())
+                // 44 pt de cible malgré le glyphe nu — le débord est invisible,
+                // la même raison qui donne à `ComposerToolRow` son `hitSide`.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
                 .overlay(alignment: .topTrailing) {
                     if !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // **Le point signale un texte DÉJÀ écrit**, sans le lire :
+                        // un contrôle qui n'affiche jamais son état oblige à
+                        // l'ouvrir pour savoir s'il est vide.
                         Circle()
                             .fill(MeeshyColors.indigo400)
                             .frame(width: 7, height: 7)
-                            .offset(x: 1, y: -1)
+                            .offset(x: -6, y: 6)
                     }
                 }
         }

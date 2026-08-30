@@ -78,3 +78,38 @@ extension View {
                      StoryComposerHeaderAccessory { AnyView(content()) })
     }
 }
+
+// MARK: - L'accessoire de tête de la RANGÉE D'OUTILS (#4136)
+
+/// Ce que l'app pose en TÊTE de la rangée d'outils de l'atelier.
+///
+/// Symétrique de `storyComposerHeaderLeadingAccessory`, et pour la même raison :
+/// l'icône de description ouvre un éditeur dont le TEXTE appartient au meuble.
+/// Le SDK ne sait pas ce qu'est une description ; il sait qu'il y a une place en
+/// tête de sa rangée, et il la sert à qui l'occupe.
+///
+/// Elle vit en TÊTE, pas en queue : la description vise la **slide**, les six
+/// outils visent la **scène**. De gauche à droite, la rangée descend donc les
+/// niveaux du modèle — le même ordre que le bas de l'écran tient déjà de haut en
+/// bas (objet → scène → slide → publication).
+struct StoryComposerToolRowLeadingAccessoryKey: EnvironmentKey {
+    static let defaultValue: StoryComposerHeaderAccessory? = nil
+}
+
+public extension EnvironmentValues {
+    var storyComposerToolRowLeadingAccessory: StoryComposerHeaderAccessory? {
+        get { self[StoryComposerToolRowLeadingAccessoryKey.self] }
+        set { self[StoryComposerToolRowLeadingAccessoryKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Pose l'accessoire de tête de la rangée d'outils de l'atelier.
+    func storyComposerToolRowLeadingAccessory<Accessory: View>(
+        @ViewBuilder _ make: @escaping () -> Accessory
+    ) -> some View {
+        environment(\.storyComposerToolRowLeadingAccessory,
+                    StoryComposerHeaderAccessory { AnyView(make()) })
+    }
+}
+

@@ -49,8 +49,12 @@ final class StoryToolModeComposerOrderTests: XCTestCase {
     /// un par un laisse toujours passer le prochain doublon — c'est exactement
     /// ainsi qu'une quatrième table de glyphes avait survécu.
     func test_composerSurfaces_iterateTheCanonicalOrder() throws {
-        let fabColumn = try ComposerSourceGuard.source("Controls/ComposerFABColumn.swift")
-        XCTAssertTrue(fabColumn.contains("ForEach(StoryToolMode.composerOrder"))
+        // #4136 — le rail de pastilles est devenu une RANGÉE à la forme
+        // canonique, et le fichier a suivi le nom : `ComposerFABColumn` disait
+        // « colonne » pour une barre horizontale depuis le 2026-07-10. L'adresse
+        // d'une garde suit ce qu'elle mesure, jamais le nom qu'elle a connu.
+        let toolRow = try ComposerSourceGuard.source("Controls/ComposerToolRow.swift")
+        XCTAssertTrue(toolRow.contains("ForEach(StoryToolMode.composerOrder"))
 
         // S5 — il n'existe plus qu'UNE surface qui énumère les outils : le rail
         // de FABs. La grille d'état vide, seconde énumération (avec ses propres
@@ -60,7 +64,7 @@ final class StoryToolModeComposerOrderTests: XCTestCase {
         let enumerations = try ComposerSourceGuard.allStorySources()
             .filter { $0.code.contains("ForEach(StoryToolMode.composerOrder") }
         XCTAssertEqual(
-            enumerations.map(\.path), ["Controls/ComposerFABColumn.swift"],
+            enumerations.map(\.path), ["Controls/ComposerToolRow.swift"],
             "Surfaces énumérant les outils : \(enumerations.map(\.path)). Une seule est autorisée."
         )
 

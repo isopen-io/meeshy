@@ -2,18 +2,58 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-/// Barre HORIZONTALE des 6 outils du composer, centrée en bas du canvas
-/// (directive user 2026-07-10 : disposition type Instagram, mais en
-/// horizontal bas — les outils à portée de pouce, le canvas dégagé).
-/// Pure presentation — owns no state.
+/// **La rangée d'outils de l'atelier — à la FORME de la rangée canonique**
+/// (#4136, directive porteur 2026-08-28 : « les FABs deviennent similaires à la
+/// rangée canonique »).
 ///
-/// Inputs are primitives (`Int`, optional `BandCategory`) so the view is
-/// `Equatable` and skips re-evaluation when its inputs haven't changed.
+/// Elle fut six pastilles rondes de 48 pt, en `HStack` figé. Ce qu'on fixe ici
+/// n'est pas la mise en page d'un écran : c'est le **patron d'édition d'une
+/// slide** — en-tête, plateau, rangée canonique, socle — que toute surface
+/// éditant une slide reprendra.
 ///
-/// Grammaire gestuelle conservée : tap = ouvre/ferme le panneau, swipe-up
-/// sur un outil = ouvre, swipe-down n'importe où sur la barre = cache les
-/// outils (canvas nu + poignée fantôme C3).
-struct ComposerFABColumn: View, Equatable {
+/// ## Ce que la forme canonique apporte, et ce n'est pas cosmétique
+///
+/// La rangée du document (`ComposerDocumentSurface.toolRow`) DÉFILE. Le besoin
+/// est mesuré, pas supposé : à `accessibility-XXXL` une rangée figée de six
+/// outils dépasse la largeur de l'écran et se fait couper des deux côtés — des
+/// outils qu'aucun geste n'atteint. Six pastilles de 48 pt + 5 interstices
+/// tenaient sur 375 pt à taille NOMINALE ; c'est le raisonnement d'origine, et
+/// il ne dit rien des tailles accessibles.
+///
+/// ## Ce que la forme canonique N'apporte PAS, et qu'on garde
+///
+/// Deux états que la rangée du document ne porte pas, et les perdre serait une
+/// régression sèche :
+/// - le **compteur** par outil (« 3 éléments sur cette scène ») — sans lui,
+///   l'auteur doit ouvrir chaque outil pour savoir lequel porte du travail ;
+/// - l'outil **ACTIF**, teinté de son accent, exactement comme la palette de
+///   fond du document se teinte quand elle est dépliée.
+///
+/// ## Et ce qui DIFFÈRE volontairement de la canonique
+///
+/// La rangée du document peint ses icônes en `textSecondary(isDark: true)` —
+/// un gris clair, juste parce qu'elle vit sur un plateau toujours sombre. Le
+/// plateau de l'ATELIER prend la couleur du fond de la scène (#4124) : sur un
+/// fond pastel, ce gris disparaît. D'où `glassControlForeground()`, adaptatif,
+/// comme les autres commandes de l'atelier depuis #4124.
+///
+/// ## Ce que la ressemblance ne doit PAS laisser croire
+///
+/// Les deux rangées ne portent pas la même chose : celle du document ouvre des
+/// **portes d'ingestion** (photo, caméra, fichier, lieu, micro), celle-ci
+/// outille la **scène** (texte, dessin, fond, timeline). Unifier la forme sans
+/// le dire inviterait à recopier une entrée de l'une dans l'autre « par
+/// ressemblance de nom » — le défaut que `ComposerOverflowPolicy` documente
+/// déjà pour le `⋯`. La garde `ComposerToolRowSetsTests` l'interdit.
+///
+/// Grammaire gestuelle CONSERVÉE : tap = ouvre/ferme le panneau, swipe-up sur
+/// un outil = ouvre, swipe-down = cache les outils (canvas nu + poignée
+/// fantôme C3). Le défilement est HORIZONTAL, les deux gestes sont VERTICAUX :
+/// ils ne se disputent pas la même direction.
+///
+/// Inputs primitifs (`Int`, `BandCategory?`) pour rester `Equatable` et sauter
+/// la ré-évaluation quand rien n'a changé.
+struct ComposerToolRow: View, Equatable {
     let mediaBadge: Int
     let sonBadge: Int
     let textBadge: Int
@@ -26,28 +66,47 @@ struct ComposerFABColumn: View, Equatable {
     let onSwipeUp: (BandCategory) -> Void
     let onSwipeDownAny: () -> Void
 
+    /// **Le slot de tête, et c'est par lui que l'icône de description entre**
+    /// (#4136). Le SDK ne sait pas ce qu'est une description : son texte
+    /// appartient au meuble, qui l'injecte par
+    /// `storyComposerToolRowLeadingAccessory` — même patron que l'accessoire de
+    /// la rangée haute (#4124), et même raison (SDK purity).
+    var leadingAccessory: AnyView?
+
     @Environment(\.theme) private var theme
 
-    /// 48 pt : 6 outils + 5 interstices de 10 pt = 338 pt — tient sur la
-    /// largeur du plus petit iPhone supporté (SE, 375 pt) sans scroll.
-    private static let fabDiameter: CGFloat = 48
+    /// L'écart canonique de la rangée du document. Il remplace les 10 pt des
+    /// pastilles : sans cercle autour de l'icône, un interstice serré collait
+    /// les glyphes.
+    private static let spacing: CGFloat = 16
 
     var body: some View {
-        // Ordre canonique unique (`StoryToolMode.composerOrder`) : cette barre en
-        // EST la référence, la grille d'état vide et les chips de switch la
-        // suivent. Six appels manuels laissaient trois ordres diverger.
-        HStack(spacing: 10) {
-            ForEach(StoryToolMode.composerOrder, id: \.rawValue) { tool in
-                fab(tool: tool)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Self.spacing) {
+                if let leadingAccessory {
+                    leadingAccessory
+                }
+                // Ordre canonique unique (`StoryToolMode.composerOrder`) : cette
+                // rangée en EST la référence, la grille d'état vide et les chips
+                // de switch la suivent. Six appels manuels laissaient trois
+                // ordres diverger.
+                ForEach(StoryToolMode.composerOrder, id: \.rawValue) { tool in
+                    entry(tool: tool)
+                }
             }
+            // Le padding vertical vit ICI, dans le contenu défilant : posé sur
+            // le `ScrollView`, il rognerait la zone tactile des icônes au lieu
+            // de les aérer. C'est le raisonnement de la rangée canonique, repris
+            // au mot.
+            .padding(.vertical, 2)
+            .padding(.horizontal, Self.spacing)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
-    private func fab(tool: StoryToolMode) -> some View {
+    private func entry(tool: StoryToolMode) -> some View {
         let category = tool.bandCategory
-        let icon = tool.symbolName
         let badge = badge(for: tool)
         let isActive = activeCategory == category
         let accent: Color = {
@@ -68,31 +127,7 @@ struct ComposerFABColumn: View, Equatable {
                 gen.impactOccurred()
                 onTap(category)
             }) {
-                ZStack {
-                    if isActive {
-                        Circle().fill(MeeshyColors.brandGradient)
-                    } else {
-                        Circle().fill(.ultraThinMaterial)
-                        Circle().stroke(accent.opacity(0.4), lineWidth: 1)
-                    }
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(isActive ? .white : accent)
-                        .accessibilityHidden(true)
-                }
-                .frame(width: Self.fabDiameter, height: Self.fabDiameter)
-                .overlay(alignment: .topTrailing) {
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(accent)
-                            .clipShape(Capsule())
-                            .offset(x: 6, y: -6)
-                            .accessibilityHidden(true)
-                    }
-                }
+                glyph(tool: tool, accent: accent, isActive: isActive, badge: badge)
             }
             .buttonStyle(.plain)
             // Audit a11y it.88 : `String(describing: category)` annonçait les
@@ -115,7 +150,35 @@ struct ComposerFABColumn: View, Equatable {
                 : String(localized: "story.composer.fab.hint.open",
                          defaultValue: "Touchez deux fois pour ouvrir.", bundle: .module))
         }
-        .frame(width: Self.fabDiameter, height: Self.fabDiameter)
+        .frame(width: Self.hitSide, height: Self.hitSide)
+    }
+
+    /// **La cible tactile ne suit PAS l'icône.** Le glyphe canonique fait
+    /// ~22 pt ; le laisser porter la cible descendrait sous les 44 pt du HIG,
+    /// que les pastilles de 48 pt tenaient sans y penser. Le débord est INVISIBLE
+    /// (`contentShape`), la forme rendue reste l'icône nue.
+    private static let hitSide: CGFloat = 44
+
+    @ViewBuilder
+    private func glyph(tool: StoryToolMode, accent: Color, isActive: Bool, badge: Int) -> some View {
+        Image(systemName: tool.symbolName)
+            .font(.title3)
+            .symbolRenderingMode(.hierarchical)
+            .modifier(ToolRowForeground(accent: isActive ? accent : nil))
+            .accessibilityHidden(true)
+            .frame(width: Self.hitSide, height: Self.hitSide)
+            .contentShape(Rectangle())
+            .overlay(alignment: .topTrailing) {
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 15, minHeight: 15)
+                        .background(accent)
+                        .clipShape(Capsule())
+                        .accessibilityHidden(true)
+                }
+            }
     }
 
     /// Compteur d'éléments de l'outil. Les six pastilles arrivent en primitives
@@ -154,7 +217,7 @@ struct ComposerFABColumn: View, Equatable {
         }
     }
 
-    static func == (lhs: ComposerFABColumn, rhs: ComposerFABColumn) -> Bool {
+    static func == (lhs: ComposerToolRow, rhs: ComposerToolRow) -> Bool {
         lhs.mediaBadge == rhs.mediaBadge
             && lhs.sonBadge == rhs.sonBadge
             && lhs.textBadge == rhs.textBadge
@@ -162,6 +225,24 @@ struct ComposerFABColumn: View, Equatable {
             && lhs.textureBadge == rhs.textureBadge
             && lhs.timelineBadge == rhs.timelineBadge
             && lhs.activeCategory == rhs.activeCategory
+    }
+}
+
+/// Le premier plan d'une icône de la rangée : l'accent quand l'outil est ACTIF,
+/// le verre adaptatif sinon. Extrait en modifier parce que
+/// `glassControlForeground()` n'est pas un `Color` et ne peut pas entrer dans un
+/// ternaire avec l'accent — écrire les deux branches en ligne aurait dupliqué
+/// tout le glyphe.
+private struct ToolRowForeground: ViewModifier {
+    let accent: Color?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let accent {
+            content.foregroundStyle(accent)
+        } else {
+            content.glassControlForeground()
+        }
     }
 }
 
