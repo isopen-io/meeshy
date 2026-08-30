@@ -317,12 +317,18 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
             "lot 3) — il ne le recopie pas."
         )
 
+        // #4002 — RELOCALISATION, pas un second appelant. La consommation de la
+        // cascade a suivi la lecture disque dans `StoryCoverURLMemo`, qui la
+        // mémoïse ; `latestStoryThumbnailURL` délègue et n'appelle plus rien
+        // lui-même. Le COMPTE reste un — c'est ce que cette garde protège.
+        // Une garde qui nomme un FICHIER devient aveugle dès qu'on extrait :
+        // il faut la repointer, jamais l'élargir.
         let callers = sources.filter { $0.code.contains("StoryCoverThumbnail.preferredCoverURLString(") }.map(\.name)
         XCTAssertEqual(
-            callers, ["Features/Main/Views/StoryTrayView.swift"],
-            "La cascade pure (`preferredCoverURLString`) ne doit être consommée que par " +
-            "`latestStoryThumbnailURL`. Un second appelant serait une troisième écriture de " +
-            "l'ordre de préférence. Trouvé : \(callers)."
+            callers, ["Features/Main/Views/StoryCoverURLMemo.swift"],
+            "La cascade pure (`preferredCoverURLString`) ne doit être consommée qu'à UN endroit — " +
+            "la mémoire de couverture, seul site qui touche encore le disque. Un second appelant " +
+            "serait une troisième écriture de l'ordre de préférence. Trouvé : \(callers)."
         )
     }
 

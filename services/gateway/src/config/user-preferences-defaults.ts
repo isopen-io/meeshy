@@ -67,7 +67,6 @@ export interface ConversationPreferencesDefaults {
   isMuted: boolean;
   mentionsOnly: boolean;
   isArchived: boolean;
-  deletedForUserAt: Date | null;
   clearHistoryBefore: Date | null;
   tags: string[];
   categoryId: string | null;
@@ -83,7 +82,6 @@ export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults 
   isMuted: false,
   mentionsOnly: false,
   isArchived: false,
-  deletedForUserAt: null,
   clearHistoryBefore: null,
   tags: [],
   categoryId: null,

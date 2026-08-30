@@ -447,6 +447,12 @@ extension MeeshyComposerHost {
             selectedSceneItemKind = nil
         case .bringForward: viewModel.bringForward(id: id)
         case .sendBackward: viewModel.sendBackward(id: id)
+        case .trim:
+            // La bande BASCULE : re-toucher « Rogner » la referme. Un
+            // contrôleur qui n'ouvre que dans un sens laisse l'auteur chercher
+            // par où sortir, alors que le geste de sortie est celui d'entrée.
+            requestedSceneBand = requestedSceneBand == .timeline ? nil : .timeline
+            HapticFeedback.light()
         case .edit, .leaveScene:
             // Injoignables : `ComposerSceneCapabilities.controllers` ne les
             // contient pas, et le `switch` reste exhaustif pour que les servir

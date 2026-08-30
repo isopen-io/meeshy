@@ -415,23 +415,18 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
 /// troisième écriture de la même cascade (cover composite locale >
 /// `thumbnailUrl` serveur > `url` image > avatar), et la première à diverger.
 /// Garde : `LentilleChromeSourceGuardTests`.
+///
+/// **#4002 — la lecture disque a quitté le `body`.** Local-first : une cover
+/// composite rendue à la publication (texte + dessin + calques) l'emporte sur
+/// la vignette serveur (fond brut, sans surcouches). Cette résolution passe par
+/// le disque, et elle était faite ICI, dans le `body` d'une cellule répétée par
+/// anneau : 451 ms sur 100 s au Time Profiler, écran INACTIF, avec des pics à
+/// 34,5 % de CPU. `StoryCoverURLMemo` la mémoïse — et traite explicitement les
+/// deux craintes que le commentaire d'origine opposait à toute mémoïsation
+/// (cover écrite après coup, purge de logout), au lieu de les éviter en
+/// n'en faisant aucune.
 func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
-    guard let lastStory = group.stories.last else { return group.avatarURL }
-    // Local-first: a composite cover rendered at publish (text + drawing + all
-    // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous
-    // existence check — no actor hop, safe in the View body. Pas de memo : la
-    // purge de logout peut détruire le fichier, et servir une URL morte au
-    // relogin coûterait plus cher qu'un stat() par render événementiel.
-    let localCover = CacheCoordinator.thumbnailLocalFileURL(
-        for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
-    )
-    return StoryCoverThumbnail.preferredCoverURLString(
-        localCover: localCover,
-        serverThumbnailUrl: lastStory.media.first?.thumbnailUrl,
-        mediaUrl: lastStory.media.first?.url,
-        mediaIsImage: lastStory.media.first?.type == .image,
-        avatarURL: group.avatarURL
-    )
+    StoryCoverURLMemo.coverURL(for: group)
 }
 
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)

@@ -76,3 +76,45 @@ struct MediaCaptionOverlayTests {
         #expect(rendu.isTruncated == false)
     }
 }
+
+/// **Le SEUIL et la TÊTE sont deux nombres distincts** (directive 2026-08-30).
+///
+/// « On affiche les 15 premiers mots si le texte fait plus de 30 mots ; sinon
+/// on affiche tout, une fois. » Ces témoins sont écrits sur la BANDE — entre 16
+/// et 30 mots — où les deux règles divergent. Un témoin posé à 5 ou à 40 mots
+/// rendrait le même verdict sous l'ancienne règle (seuil unique de 10) et sous
+/// la nouvelle : il ne pourrait pas tomber.
+@Suite("MediaCaptionOverlay — seuil 30, tête 15")
+struct MediaCaptionOverlaySeuilTests {
+
+    private func mots(_ n: Int) -> String {
+        (1...n).map { "mot\($0)" }.joined(separator: " ")
+    }
+
+    @Test("vingt mots sortent ENTIERS — au-dessus de la tête, sous le seuil")
+    func vingtMotsEntiers() {
+        let rendu = MediaCaptionOverlay.collapse(mots(20), threshold: 30, head: 15)
+        #expect(rendu.isTruncated == false)
+        #expect(rendu.head == mots(20))
+    }
+
+    @Test("exactement trente mots sortent entiers — le seuil est STRICT")
+    func trenteMotsEntiers() {
+        let rendu = MediaCaptionOverlay.collapse(mots(30), threshold: 30, head: 15)
+        #expect(rendu.isTruncated == false)
+    }
+
+    @Test("trente-et-un mots se replient sur les QUINZE premiers, pas sur trente")
+    func trenteEtUnRepliesSurQuinze() {
+        let rendu = MediaCaptionOverlay.collapse(mots(31), threshold: 30, head: 15)
+        #expect(rendu.isTruncated == true)
+        #expect(rendu.head == mots(15))
+    }
+
+    @Test("les valeurs par défaut du composant portent la règle du porteur")
+    func defautsDuPorteur() {
+        #expect(MediaCaptionOverlay.defaultWordThreshold == 30)
+        #expect(MediaCaptionOverlay.defaultWordHead == 15)
+        #expect(MediaCaptionOverlay.defaultWordHead < MediaCaptionOverlay.defaultWordThreshold)
+    }
+}

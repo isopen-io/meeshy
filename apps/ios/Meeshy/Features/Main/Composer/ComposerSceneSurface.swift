@@ -88,6 +88,8 @@ struct ComposerSceneSurface: View {
     /// seconde loi 4 divergerait de la première, exactement comme pour les
     /// deux rails.
     var band: ComposerSceneBand?
+    /// Ce que la bande `timeline` montre — composé par le meuble (#4082).
+    var bandTimelineContent: AnyView?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
@@ -222,7 +224,8 @@ struct ComposerSceneSurface: View {
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening)
+                                          onPickOpening: onPickBandOpening,
+                                          timelineContent: bandTimelineContent)
                 }
 
             }

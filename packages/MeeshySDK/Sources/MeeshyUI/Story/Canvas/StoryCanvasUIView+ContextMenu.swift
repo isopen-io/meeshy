@@ -24,6 +24,14 @@ import MeeshySDK
 /// la primitive, et la vue les énumère par `id: \.self`.
 public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable, Hashable {
     case edit
+    /// **Rogner la SOURCE d'une vidéo ou d'un son (#4082) — des bornes, jamais
+    /// un fichier cuit.**
+    ///
+    /// Distincte d'`edit`, et la distinction porte : « Modifier » ouvre
+    /// l'inspecteur du type d'objet, quand celle-ci ouvre une bande sous la
+    /// scène et n'écrit que `sourceStart`/`sourceEnd`. Un objet peut admettre
+    /// l'une sans l'autre — une image se modifie et ne se rogne pas.
+    case trim
     case duplicate
     case bringForward
     case sendBackward
@@ -67,11 +75,16 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         isBackground: Bool,
         sharesPlaneWithAnother: Bool,
         hasEditor: Bool,
-        canLeaveScene: Bool = false
+        canLeaveScene: Bool = false,
+        hasTrimmableSource: Bool = false
     ) -> [StoryCanvasContextAction] {
         let empile = !isBackground && sharesPlaneWithAnother
         var servies: [StoryCanvasContextAction] = []
         if !isLocked, hasEditor { servies.append(.edit) }
+        // Le rognage suit l'édition, et se décide sur l'OBJET : une image et un
+        // texte n'ont pas de source à rogner. Le défaut FERME, comme
+        // `canLeaveScene` — un appelant qui ne se prononce pas n'offre rien.
+        if !isLocked, hasTrimmableSource { servies.append(.trim) }
         if !isLocked { servies.append(.duplicate) }
         if empile { servies.append(contentsOf: [.bringForward, .sendBackward]) }
         // Un FOND se sort aussi — c'est même le cas nominal en Post. La sortie
@@ -115,6 +128,9 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         case .edit:
             return String(localized: "story.canvas.action.edit",
                           defaultValue: "Modifier", bundle: .module)
+        case .trim:
+            return String(localized: "story.canvas.action.trim",
+                          defaultValue: "Rogner", bundle: .module)
         case .duplicate:
             return String(localized: "story.canvas.action.duplicate",
                           defaultValue: "Dupliquer", bundle: .module)
@@ -136,6 +152,7 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
     public var systemImage: String {
         switch self {
         case .edit:         return "pencil"
+        case .trim:         return "scissors"
         case .duplicate:    return "doc.on.doc"
         case .bringForward: return "square.3.stack.3d.top.filled"
         case .sendBackward: return "square.2.stack.3d.bottom.filled"
@@ -235,6 +252,16 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // post ». Il rend l'objet à l'hôte, qui décide de son sort.
         case .leaveScene:   onItemLeftScene?(id, kind)
         case .delete:       contextDelete(id: id)
+        case .trim:
+            // INJOIGNABLE depuis CE menu, et c'est la loi 4 qui le tient : ce
+            // site n'appelle pas `offered(hasTrimmableSource:)`, dont le défaut
+            // FERME — l'entrée ne peut donc pas y paraître. Rogner ouvre une
+            // bande SOUS la scène, une place que le menu d'appui long n'a pas
+            // et ne peut pas emprunter ; le chemin est le rail des contrôleurs
+            // (#4082). Le `switch` reste exhaustif pour que servir un jour le
+            // rognage ici oblige à passer par cette ligne plutôt qu'à hériter
+            // d'un `default` silencieux.
+            break
         }
     }
 

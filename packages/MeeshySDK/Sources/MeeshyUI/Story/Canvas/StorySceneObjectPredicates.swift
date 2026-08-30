@@ -36,6 +36,22 @@ public nonisolated enum StorySceneObjectPredicates {
             || slide.effects.audioPlayerObjects?.first(where: { $0.id == id })?.isBackground == true
     }
 
+    /// **Cet objet a-t-il une source à ROGNER ?** (#4082)
+    ///
+    /// Une image et un texte n'en ont pas : ils n'ont pas de temps propre, et
+    /// leur durée sur la scène se règle par la timeline de la slide, pas par
+    /// une fenêtre dans un fichier. Une vidéo et un son, si.
+    ///
+    /// Le prédicat interroge le MODÈLE et non un type d'UI, pour la même raison
+    /// que ses voisins : c'est ce qu'un objet ADMET, distinct de ce qu'un hôte
+    /// SAIT FAIRE — cette seconde moitié reste app-side, dans le jeu `served`.
+    public static func hasTrimmableSource(slide: StorySlide, id: String) -> Bool {
+        if slide.effects.mediaObjects?.contains(where: { $0.id == id && $0.kind == .video }) == true {
+            return true
+        }
+        return slide.effects.audioPlayerObjects?.contains(where: { $0.id == id }) == true
+    }
+
     /// **Un FRÈRE de plan, tous types confondus.**
     ///
     /// L'empilement raisonne sur les `zIndex` de TOUS les éléments — c'est ce

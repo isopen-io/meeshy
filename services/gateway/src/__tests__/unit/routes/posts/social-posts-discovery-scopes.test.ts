@@ -601,6 +601,36 @@ describe('scope=nearby — #4346 plafond de débit indépendant (piège 1, #4147
 
 // ─── Régression : agrandir l'union ne l'a pas rendue permissive ─────────────
 
+describe('`updatedSince` — refusé partout où il n\'est pas implémenté (#4339)', () => {
+  it("rend 400 sur un scope qui ne le porte pas, et NOMME le seul qui le porte", async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/social/posts?scope=home&updatedSince=2026-08-30T00:00:00.000Z',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('scope=stories');
+    await app.close();
+  });
+
+  it("le même appel SANS `updatedSince` passe — la garde vise le paramètre, pas le scope", async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=home' });
+    expect(res.statusCode).not.toBe(400);
+    await app.close();
+  });
+
+  it('`scope=stories` continue de l\'accepter — sinon la garde aurait retiré la seule implémentation', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/social/posts?scope=stories&updatedSince=2026-08-30T00:00:00.000Z',
+    });
+    expect(res.statusCode).not.toBe(400);
+    await app.close();
+  });
+});
+
 describe('scope inconnu — #4346 ne relâche pas la garde de #4149', () => {
   it('une valeur proche mais différente des onze scopes connus rend toujours 400', async () => {
     const { app } = await buildApp();

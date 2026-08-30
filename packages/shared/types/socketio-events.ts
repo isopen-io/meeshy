@@ -1593,7 +1593,6 @@ export interface ConversationPreferencesPayload {
   readonly reaction: string | null;
   /** `ReadingModePreference` (`types/reading-modes.ts`) : `auto` rend la main à l'orchestrateur. */
   readonly readingMode: string;
-  readonly deletedForUserAt: string | null;
   readonly clearHistoryBefore: string | null;
 }
 

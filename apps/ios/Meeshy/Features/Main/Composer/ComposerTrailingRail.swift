@@ -183,7 +183,12 @@ nonisolated enum ComposerTrailingRailPolicy {
             sharesPlaneWithAnother: StorySceneObjectPredicates.sharesPlaneWithAnother(
                 slide: slide, besides: selectedId),
             hasEditor: hasEditor,
-            canLeaveScene: canLeaveScene
+            canLeaveScene: canLeaveScene,
+            // Une image et un texte n'ont pas de source a rogner : le predicat
+            // interroge le MODELE, comme ses trois voisins ci-dessus. Ce que
+            // l'HOTE sait faire reste dans `served`, une ligne plus bas.
+            hasTrimmableSource: StorySceneObjectPredicates.hasTrimmableSource(
+                slide: slide, id: selectedId)
         )
         .filter(served.contains)
     }

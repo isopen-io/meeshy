@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
@@ -394,8 +395,15 @@ extension MeeshyComposerHost {
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
             // vit avec l'ensemble, dans `ComposerSceneCapabilities.bands`.
-            band: ComposerSceneBand.opened(requestedSceneBand,
-                                           served: ComposerSceneCapabilities.bands),
+            // **`timeline` n'entre au jeu servi que quand elle a de quoi se
+            // remplir** (#4082) : l'objet selectionne doit avoir une source a
+            // rogner. Sinon la bande serait ouvrable sur du vide, ce que la
+            // regle `opened(_:served:)` existe pour interdire.
+            band: ComposerSceneBand.opened(
+                requestedSceneBand,
+                served: ComposerSceneCapabilities.bands(
+                    canTrimSelection: trimmableSelection != nil)),
+            bandTimelineContent: composerTrimBand,
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
@@ -846,4 +854,75 @@ extension MeeshyComposerHost {
         .glassControlForeground()
     }
 
+
+    // MARK: - La bande de ROGNAGE (#4082)
+
+    /// L'objet sélectionné, quand il a une source à rogner — `nil` sinon.
+    ///
+    /// C'est ce `nil` qui tient la loi 4 des deux côtés : il retire `.timeline`
+    /// du jeu servi, donc la bande n'est pas ouvrable, ET il laisse
+    /// `composerTrimBand` à `nil`, donc elle n'aurait rien à montrer si elle
+    /// l'était. Une seule question posée une fois, deux conséquences.
+    var trimmableSelection: (url: URL, bounds: MediaTrimBounds,
+                             sourceDuration: Double, isVideo: Bool)? {
+        guard let id = selectedSceneItemId else { return nil }
+        return viewModel.sourceTrim(id: id)
+    }
+
+    /// **La bande : la source entière, la fenêtre gardée, deux poignées.**
+    ///
+    /// Le composant vient du SDK (`MediaTrimStrip`), qui ne sait rien du
+    /// produit : il reçoit une durée, des bornes et rend des bornes. Ce que ce
+    /// meuble ajoute est ce que le SDK ne peut pas savoir — quel objet est
+    /// sélectionné, où son fichier est chargé, et à qui remettre le résultat.
+    ///
+    /// **L'écriture est IMMÉDIATE** (loi 7 du milestone) : chaque image du
+    /// geste écrit sur le modèle, donc la scène, l'aperçu et la vignette
+    /// suivent le doigt. Un « Appliquer » ferait choisir à l'aveugle.
+    var composerTrimBand: AnyView? {
+        guard let id = selectedSceneItemId, let sel = trimmableSelection else { return nil }
+        // La durée MESURÉE prime sur celle du modèle : voir
+        // `trimSourceDurations`. Tant que la mesure n'est pas revenue, la
+        // valeur du modèle sert de minorant — la bande est utilisable
+        // aussitôt, elle s'élargit quand la vérité arrive.
+        let duree = max(trimSourceDurations[id] ?? 0, sel.sourceDuration)
+        return AnyView(
+            MediaTrimStrip(
+                content: sel.isVideo ? .video(sel.url) : .audio,
+                sourceDuration: duree,
+                bounds: MediaTrimRule.resolved(start: sel.bounds.start,
+                                               end: sel.bounds.end,
+                                               sourceDuration: duree),
+                waveform: trimWaveform(for: id),
+                accent: MeeshyColors.brandPrimary,
+                onChange: { bornes in
+                    viewModel.setSourceTrim(id: id, bounds: bornes, sourceDuration: duree)
+                }
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .task(id: sel.url) { await mesurerLaSource(id: id, url: sel.url) }
+        )
+    }
+
+    /// L'onde d'un SON, quand elle a été analysée. Une vidéo n'en porte pas sur
+    /// le modèle — la bande montre alors ses vignettes seules, ce qui suffit à
+    /// repérer un plan.
+    func trimWaveform(for id: String) -> [Float] {
+        viewModel.currentEffects.audioPlayerObjects?
+            .first(where: { $0.id == id })?
+            .waveformSamples ?? []
+    }
+
+    /// **Demander au FICHIER sa durée.** Le modèle ne la porte pas de façon
+    /// fiable (cf. `trimSourceDurations`), et c'est la seule mesure qui laisse
+    /// un rognage se DÉFAIRE : sans elle, chaque réouverture de la bande
+    /// montrerait une source rétrécie à la fenêtre précédente.
+    func mesurerLaSource(id: String, url: URL) async {
+        let asset = AVURLAsset(url: url)
+        guard let duree = try? await asset.load(.duration) else { return }
+        let secondes = CMTimeGetSeconds(duree)
+        guard secondes.isFinite, secondes > 0 else { return }
+        trimSourceDurations[id] = secondes
+    }
 }
