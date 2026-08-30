@@ -603,7 +603,13 @@ extension StoryComposerViewModel {
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
     @discardableResult
-    func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
+    /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
+    /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
+    /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
+    /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
+    /// pose le premier.
+    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         let obj = StoryAudioPlayerObject(

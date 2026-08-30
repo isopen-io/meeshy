@@ -373,7 +373,7 @@ extension MeeshyComposerHost {
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
         case .media:   presentMediaSources()
-        case .sound:   handleDocumentTool(.microphone)
+        case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
         case .description:
@@ -464,6 +464,41 @@ extension MeeshyComposerHost {
             return
         }
         showsMediaSourceChooser = true
+    }
+
+    /// **La porte son ouvre l'ÉTAGÈRE autant que le micro.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.microphone)` : le composer
+    /// unifié n'avait aucun chemin vers `SoundLibraryPicker`, alors que le
+    /// socle affiche déjà un crédit de son de fond. Les deux provenances ne
+    /// posent pas le même objet — un son emprunté DEVIENT le fond, une note
+    /// vocale ne l'est jamais (doctrine de la vue `2c`) —, donc le choix ne
+    /// peut pas être deviné : il se demande.
+    func presentSoundSources() {
+        HapticFeedback.light()
+        showsSoundSourceChooser = true
+    }
+
+    func presentSoundSource(_ source: ComposerSoundSource) {
+        switch source {
+        case .library: showsSoundLibrary = true
+        case .record:  handleDocumentTool(.microphone)
+        }
+    }
+
+    /// L'étagère des sons. Le picker vient du SDK — le meuble ne fait que le
+    /// présenter et remettre son résultat au viewModel, seul site qui sait ce
+    /// qu'un son EMPRUNTÉ vaut (`soundId` renseigné, `postMediaId` vide : c'est
+    /// ce couple qui dit au serveur « enregistre un usage, ne capture rien »).
+    var soundLibrarySheet: some View {
+        SoundLibraryPicker(
+            onPick: { sound in
+                viewModel.addBorrowedSound(sound)
+                showsSoundLibrary = false
+                HapticFeedback.light()
+            },
+            onCancel: { showsSoundLibrary = false }
+        )
     }
 
     func presentMediaIntake(_ intake: ComposerMediaIntake) {

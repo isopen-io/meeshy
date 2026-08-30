@@ -253,6 +253,15 @@ struct MeeshyComposerHost: View {
     /// La rangée du document a trois entrées distinctes (Photos · Caméra ·
     /// Fichier) ; le rail n'a qu'une porte, donc le choix se fait ici — sans
     /// quoi deux des trois sources disparaissent dès qu'une scène existe.
+    /// **Le choix de la PROVENANCE d'un son.** Emprunter à l'étagère et
+    /// enregistrer un vocal ne posent pas le même objet — le premier devient le
+    /// fond de la scène, le second jamais — donc la porte demande, elle ne
+    /// devine pas.
+    @State var showsSoundSourceChooser = false
+
+    /// L'étagère elle-même, une fois la provenance choisie.
+    @State var showsSoundLibrary = false
+
     @State var showsMediaSourceChooser = false
 
     @State var showsStickerPicker = false
@@ -931,6 +940,17 @@ struct MeeshyComposerHost: View {
             }
             Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
         }
+        .confirmationDialog(ComposerSoundSourcePolicy.chooserTitle,
+                            isPresented: $showsSoundSourceChooser,
+                            titleVisibility: .visible) {
+            ForEach(ComposerSoundSourcePolicy.offered, id: \.self) { source in
+                Button(ComposerSoundSourcePolicy.label(source)) {
+                    presentSoundSource(source)
+                }
+            }
+            Button(ComposerSoundSourcePolicy.cancel, role: .cancel) { }
+        }
+        .sheet(isPresented: $showsSoundLibrary) { soundLibrarySheet }
         .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait

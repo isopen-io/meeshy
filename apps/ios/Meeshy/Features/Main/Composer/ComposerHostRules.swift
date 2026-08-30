@@ -454,3 +454,71 @@ nonisolated enum ComposerMediaSourcePolicy {
         String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
     }
 }
+
+
+/// **D'où vient un son posé sur la scène** — et pourquoi la porte n'en servait
+/// qu'une provenance.
+///
+/// La porte `sound` du rail routait vers `handleDocumentTool(.microphone)` :
+/// elle n'ENREGISTRAIT que. Emprunter un son à l'étagère était impossible
+/// depuis le composer unifié — aucune occurrence de `SoundLibraryPicker` ni
+/// d'`addBorrowedSound` dans tout le meuble — alors que le socle de la vue `1b`
+/// affiche déjà un crédit de son (« ♫ NUITS BLANCHES · @lume · 0:28 »).
+///
+/// **Troisième fois sur le même écran** qu'une porte unique ne sert qu'une de
+/// ses sources, après le média (caméra et fichier perdus) et les capacités de
+/// la scène (sticker, empilement). Le motif se répète parce que rien n'oppose
+/// une porte à ce qu'elle PROMET : le rail dit « Ajouter un son », le handler
+/// en sert un seul type.
+///
+/// ## Les deux provenances ne posent pas le même objet, et c'est la doctrine
+///
+/// La vue `2c` le dit sans détour — « la provenance gouverne l'affichage » :
+///
+/// | provenance | ce qu'elle pose | conséquence |
+/// |---|---|---|
+/// | étagère | `addBorrowedSound` → objet audio `isBackground` | allume le crédit et le 🔇 des surfaces de lecture |
+/// | micro | une note vocale | **n'est JAMAIS un fond audio** |
+///
+/// Les fondre en un seul geste ferait d'une note vocale la bande-son de la
+/// publication — exactement ce que la doctrine interdit.
+///
+/// ## Aucun gate, et c'est mesuré
+///
+/// `allowsCapture` ne retire que la CAMÉRA (`ComposerDocumentToolPolicy.visibleTools`
+/// filtre `.camera`, jamais `.microphone`) : reprendre un contenu publié
+/// n'interdit pas d'y enregistrer un vocal. Et la porte `sound` étant de niveau
+/// OBJET, elle n'existe déjà que là où une scène peut recevoir le résultat.
+nonisolated enum ComposerSoundSource: Equatable, Hashable, CaseIterable {
+    /// L'étagère — un son EMPRUNTÉ, qui devient le fond de la scène.
+    case library
+    /// Le micro — une note vocale, qui ne le devient jamais.
+    case record
+}
+
+nonisolated enum ComposerSoundSourcePolicy {
+
+    /// L'ordre n'est pas décoratif : **emprunter d'abord**. C'est le geste
+    /// nominal d'une scène — on habille une composition avec un son qui existe
+    /// —, là où enregistrer est le geste rare. La vue `2c` les range dans cet
+    /// ordre pour la même raison.
+    static let offered: [ComposerSoundSource] = [.library, .record]
+
+    static func label(_ source: ComposerSoundSource) -> String {
+        switch source {
+        case .library:
+            return String(localized: "composer.rail.sound.library",
+                          defaultValue: "Emprunter un son", bundle: .main)
+        case .record:
+            return String(localized: "composer.rail.sound.record",
+                          defaultValue: "Enregistrer un vocal", bundle: .main)
+        }
+    }
+
+    /// Le titre de la feuille est **le libellé de la porte**, comme pour le
+    /// média : `composer.rail.sound` dit déjà « Ajouter un son » dans les sept
+    /// langues servies.
+    static var chooserTitle: String { ComposerRailCopy.label(.sound) }
+
+    static var cancel: String { ComposerMediaSourcePolicy.cancel }
+}

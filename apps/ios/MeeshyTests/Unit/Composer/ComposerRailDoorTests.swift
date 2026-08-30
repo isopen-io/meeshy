@@ -465,3 +465,96 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
                       "Sans ce garde-fou, un profil à source unique paie une feuille pour rien.")
     }
 }
+
+/// **La porte son ouvre l'ÉTAGÈRE autant que le micro** (#4081 · #4052 ·
+/// leçon 335, troisième instance sur le même écran).
+///
+/// `handleRailDoor(.sound)` allait droit à `handleDocumentTool(.microphone)` :
+/// le composer unifié n'avait AUCUNE occurrence de `SoundLibraryPicker` ni
+/// d'`addBorrowedSound`, alors que le socle de la vue `1b` affiche déjà un
+/// crédit de son de fond.
+final class ComposerSoundSourcePolicyTests: XCTestCase {
+
+    /// **Le fusible** — et l'ordre, qui n'est pas décoratif : emprunter est le
+    /// geste nominal d'une scène, enregistrer le geste rare.
+    func test_lesDeuxProvenances_sontOffertesDansLOrdreDeLaDoctrine() {
+        XCTAssertEqual(ComposerSoundSourcePolicy.offered, [.library, .record])
+    }
+
+    /// Aucune provenance n'est laissée sans libellé — VoiceOver comme le
+    /// bouton lisent le même mot.
+    func test_chaqueProvenance_aUnLibelleDistinct() {
+        let libelles = ComposerSoundSource.allCases.map(ComposerSoundSourcePolicy.label)
+        XCTAssertFalse(libelles.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(libelles).count, ComposerSoundSource.allCases.count,
+                       "Deux provenances qui s'annoncent pareil sont indiscernables.")
+    }
+
+    /// Le titre de la feuille est celui de la PORTE — `composer.rail.sound`
+    /// dit déjà « Ajouter un son » dans les sept langues.
+    func test_leTitre_estLeLibelleDeLaPorte() {
+        XCTAssertEqual(ComposerSoundSourcePolicy.chooserTitle,
+                       ComposerRailCopy.label(.sound))
+    }
+
+    /// **La liste est FERMÉE.** `offered` ne peut pas taire une provenance que
+    /// le type déclare : le jour où une troisième arrive (importer un fichier
+    /// audio, par exemple), cette garde rougit tant qu'elle n'est pas servie ou
+    /// délibérément retirée.
+    func test_aucuneProvenanceDeclaree_nEstOubliee() {
+        XCTAssertEqual(Set(ComposerSoundSourcePolicy.offered),
+                       Set(ComposerSoundSource.allCases))
+    }
+}
+
+/// Le câblage de la porte son.
+final class ComposerSoundSourceWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSourceDuMeuble_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("ComposerSoundSourcePolicy"))
+    }
+
+    /// **La garde du défaut d'origine.** La porte son n'enregistre plus
+    /// directement : c'était le raccourci qui rendait l'étagère inatteignable.
+    func test_laPorteSon_neVaPlusDroitAuMicro() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.sound:presentSoundSources()"))
+        XCTAssertFalse(source.contains("case.sound:handleDocumentTool(.microphone)"),
+                       "Ce raccourci rend l'étagère des sons inatteignable depuis le plateau.")
+    }
+
+    /// Les deux portails ont leur lecteur AU-DESSUS de l'aiguillage (#4120), et
+    /// les boutons SORTENT de la règle.
+    func test_lesDeuxPortails_sontMontesEtLisentLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("isPresented:$showsSoundSourceChooser"))
+        XCTAssertTrue(source.contains("isPresented:$showsSoundLibrary"))
+        XCTAssertTrue(source.contains("ForEach(ComposerSoundSourcePolicy.offered,id:\\.self)"))
+    }
+
+    /// **Un son emprunté passe par le VIEWMODEL** — c'est lui, et lui seul, qui
+    /// sait ce qu'un emprunt vaut (`soundId` renseigné, `postMediaId` vide :
+    /// « enregistre un usage, ne capture rien »).
+    func test_lEmprunt_passeParLeViewModel() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addBorrowedSound(sound)"))
+        XCTAssertTrue(source.contains("SoundLibraryPicker("))
+    }
+
+    /// **Les deux provenances ne se confondent pas.** Emprunter pose un fond,
+    /// enregistrer une note vocale qui n'en est jamais un (doctrine `2c`) :
+    /// leurs deux chemins doivent rester distincts dans l'aiguillage.
+    func test_lesDeuxProvenances_ontDesCheminsDistincts() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.library:showsSoundLibrary=true"))
+        XCTAssertTrue(source.contains("case.record:handleDocumentTool(.microphone)"))
+    }
+}
