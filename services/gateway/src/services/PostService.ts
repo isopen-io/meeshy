@@ -37,7 +37,7 @@ import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
@@ -626,11 +626,24 @@ export class PostService {
   static storyTextObjectText = storyTextObjectText;
 
   /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
-   *  des contacts, dédupliqués, hors 'en' (langue pivot), cap 10. */
+   *  des contacts, CANONICALISÉS, dédupliqués, hors 'en' (langue pivot), cap 10.
+   *
+   *  `systemLanguage` est persisté verbatim (`z.string().optional()`, aucune
+   *  normalisation à l'écriture), donc des valeurs BCP-47 région-taguées ou en
+   *  casse mixte (`'en-US'`, `'pt-BR'`, `'FR'`) issues du web (`Accept-Language`)
+   *  ou d'iOS (`Locale.current.identifier`) atteignent ce résolveur. Sans passer
+   *  par la SSOT de déduplication ({@link normalizeLanguageForDedup} : casse
+   *  repliée ET région strippée), `'en-US'` échapperait au filtre de pivot et
+   *  `'fr'`/`'fr-FR'` compteraient pour DEUX cibles NLLB distinctes — le
+   *  translator recevrait des cibles invalides et des travaux dupliqués. La
+   *  déduplication préserve l'ordre de première apparition (une langue plus
+   *  demandée dans l'audience passe avant sous le plafond). */
   static audienceLanguages(systemLanguages: Array<string | null | undefined>): string[] {
-    return [...new Set(
-      systemLanguages.filter((l): l is string => !!l && l !== 'en')
-    )].slice(0, 10);
+    const canonical = systemLanguages
+      .filter((l): l is string => !!l)
+      .map(normalizeLanguageForDedup)
+      .filter((l) => l !== '' && l !== 'en');
+    return [...new Set(canonical)].slice(0, 10);
   }
 
   /** G3 — langues cibles réelles de l'audience de `authorId` (participants de
