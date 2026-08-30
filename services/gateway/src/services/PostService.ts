@@ -626,23 +626,22 @@ export class PostService {
   static storyTextObjectText = storyTextObjectText;
 
   /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
-   *  des contacts, CANONICALISÉS, dédupliqués, hors 'en' (langue pivot), cap 10.
+   *  des contacts, CANONICALISÉS (via la SSOT `normalizeLanguageForDedup`),
+   *  dédupliqués, hors 'en' (langue pivot NLLB), cap 10 langues RÉELLES.
    *
    *  `systemLanguage` est persisté verbatim (`z.string().optional()`, aucune
-   *  normalisation à l'écriture), donc des valeurs BCP-47 région-taguées ou en
-   *  casse mixte (`'en-US'`, `'pt-BR'`, `'FR'`) issues du web (`Accept-Language`)
-   *  ou d'iOS (`Locale.current.identifier`) atteignent ce résolveur. Sans passer
-   *  par la SSOT de déduplication ({@link normalizeLanguageForDedup} : casse
-   *  repliée ET région strippée), `'en-US'` échapperait au filtre de pivot et
-   *  `'fr'`/`'fr-FR'` compteraient pour DEUX cibles NLLB distinctes — le
-   *  translator recevrait des cibles invalides et des travaux dupliqués. La
-   *  déduplication préserve l'ordre de première apparition (une langue plus
-   *  demandée dans l'audience passe avant sous le plafond). */
+   *  normalisation à l'écriture), donc les codes région-tagués / casse mixte
+   *  produits par le web (`Accept-Language`) et iOS (`Locale.current`) —
+   *  `'en-US'`, `'pt-BR'`, `'FR'`, `'fr_FR'` — arrivent ici intacts. Sans
+   *  canonicalisation AVANT le filtre de pivot et le `new Set`, trois défauts
+   *  mesurés : `'en-US'`/`'EN'` franchissent le filtre et deviennent une cible
+   *  que NLLB ne reconnaît pas ; `'fr'`/`'fr-FR'`/`'FR'` comptent pour trois
+   *  cibles ; le plafond de 10 se remplit de variantes au lieu de langues. */
   static audienceLanguages(systemLanguages: Array<string | null | undefined>): string[] {
     const canonical = systemLanguages
       .filter((l): l is string => !!l)
-      .map(normalizeLanguageForDedup)
-      .filter((l) => l !== '' && l !== 'en');
+      .map((l) => normalizeLanguageForDedup(l))
+      .filter((l) => l !== 'en');
     return [...new Set(canonical)].slice(0, 10);
   }
 

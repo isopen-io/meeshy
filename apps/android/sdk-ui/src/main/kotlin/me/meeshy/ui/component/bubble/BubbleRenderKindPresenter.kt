@@ -26,7 +26,11 @@ internal fun rememberBubbleRenderKind(
     expiresAtIso: String?,
     isViewOnce: Boolean = false,
     viewOnceCount: Int = 0,
+    isSystem: Boolean = false,
 ): BubbleRenderKind.Kind {
+    // A system notice is resolved FIRST (iOS `case .system` precedes every other kind):
+    // it never reads the clock, so it also short-circuits the ephemeral tick loop below.
+    if (isSystem) return BubbleRenderKind.Kind.System
     if (isDeleted) return BubbleRenderKind.Kind.Deleted
     if (isViewOnce && viewOnceCount > 0) return BubbleRenderKind.Kind.Burned
 

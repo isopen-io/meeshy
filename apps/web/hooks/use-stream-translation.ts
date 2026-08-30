@@ -14,6 +14,7 @@ import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 
 /**
  * Égalité de langue conforme au Prisme : `targetLanguage` (traductions reçues) et
@@ -144,15 +145,16 @@ export function useStreamTranslation({
       };
     });
 
-    // Vérifier si on a des traductions pertinentes pour cet utilisateur
-    const userLanguages = [
-      user.systemLanguage,
-      user.regionalLanguage,
-      user.customDestinationLanguage
-    ].filter(Boolean);
+    // Vérifier si on a des traductions pertinentes pour cet utilisateur.
+    // Le prisme du lecteur descend jusqu'au RANG 4 (locale appareil) : la SSOT
+    // getUserLanguagePreferences ordonne et déduplique system > regional > custom
+    // > deviceLocale. La liste bâtie à la main s'arrêtait au rang 3 — un lecteur
+    // dont le seul signal est la locale appareil ne voyait aucune statistique
+    // incrémentée. § Device Locale, apps/web/CLAUDE.md.
+    const userLanguages = getUserLanguagePreferences(user);
 
     const relevantTranslation = translations.find(t =>
-      userLanguages.some(lang => sameLanguage(lang as string, t.targetLanguage))
+      userLanguages.some(lang => sameLanguage(lang, t.targetLanguage))
     );
 
     if (relevantTranslation) {
