@@ -183,7 +183,23 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ConversationHelperViews.swift",
         "Features/Main/Views/ConversationListView+Overlays.swift",
         "Features/Main/Views/ConversationMediaFilmstrip.swift",
+        // #4014 — RELOCALISATION pure, même forme qu'au #4102 : la galerie est
+        // découpée (1259 lignes ⇒ racine / `+Rules` / `+Pages`), et quatre de
+        // ses sept sites figés ont suivi les PAGES. Tous sont des glyphes dans
+        // un CADRE FIXE — bouton poster 64 pt, glyphe d'état vide, libellé de
+        // taille monospace — donc la raison d'exemption voyage avec eux.
+        //
+        // La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling` ne
+        // changent, seul le nombre de NOMS augmente. La racine en garde trois
+        // et reste dans la liste.
+        //
+        // > Le piège que ce lot a payé : une découpe déplace du code d'un
+        // > fichier AMNISTIÉ vers un fichier NEUF, et l'amnistie ne suit pas.
+        // > Toutes les lignes existaient déjà ; c'est la liste qui les couvrait
+        // > qui a cessé de les couvrir. Toute extraction hors d'un fichier de
+        // > `bearingFiles` doit inscrire sa destination dans le MÊME commit.
         "Features/Main/Views/ConversationMediaGalleryView.swift",
+        "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
         "Features/Main/Views/ConversationView+ComposerAttachments.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
@@ -266,7 +282,19 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// ressemble à une dette de plus. **Un déménagement n'ajoute rien** ; seul
     /// un site NEUF le fait. Le plafond se mesure, il ne se déduit pas du
     /// nombre de noms dans la liste.
-    private static let totalCeiling = 245
+    /// **246 depuis le #4014** — la barre d'actions du plein écran gagne son
+    /// bouton « Créer avec ce média », un SF Symbol figé dans un cercle glass
+    /// de 40 pt. Même doctrine que ses deux voisins immédiats du même fichier
+    /// (fermer, enregistrer), qui la portent déjà mot pour mot : « chrome —
+    /// glyphe figé dans un cercle glass 40 pt, ne pas scaler ». Une police
+    /// relative y ferait grossir le glyphe sans que le cercle suive.
+    ///
+    /// Le cliquet a fait son travail deux fois dans ce lot : il a d'abord
+    /// attrapé une RELOCALISATION (des sites figés passés d'un fichier amnistié
+    /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
+    /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
+    /// et les confondre aurait masqué l'un des deux.
+    private static let totalCeiling = 246
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

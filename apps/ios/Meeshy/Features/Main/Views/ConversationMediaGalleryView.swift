@@ -46,6 +46,18 @@ struct ConversationMediaGalleryView: View {
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
+    /// **Créer une story, un réel ou un post avec CE média** (#4014).
+    ///
+    /// Une CLOSURE, et pas un chemin que la galerie prendrait elle-même : elle
+    /// ne connaît que des pièces jointes — jamais le `Message` ni le
+    /// `Comment` qui les porte. Résoudre le porteur est l'affaire de l'hôte,
+    /// qui seul tient la liste.
+    ///
+    /// `nil` ⇒ **aucun bouton**. C'est la loi 4 : un contrôle existe s'il a un
+    /// effet. Un hôte qui ne sait pas résoudre le porteur n'affiche pas une
+    /// action inerte — il n'en affiche pas du tout.
+    var onComposeWithMedia: ((MessageAttachment) -> Void)?
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
@@ -68,13 +80,15 @@ struct ConversationMediaGalleryView: View {
         startAttachmentId: String,
         accentColor: String,
         captionMap: [String: String] = [:],
-        senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
+        senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
+        onComposeWithMedia: ((MessageAttachment) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
         self.accentColor = accentColor
         self.captionMap = captionMap
         self.senderInfoMap = senderInfoMap
+        self.onComposeWithMedia = onComposeWithMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -399,6 +413,35 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
+    /// **La barre d'actions du média, à DROITE des informations de l'auteur**
+    /// (#4014) — la place que les deux issues du plein écran lui donnent.
+    ///
+    /// Verticale par destination : chaque action y entre par sa propre closure
+    /// optionnelle, si bien qu'un hôte n'en câble que ce qu'il sait servir.
+    /// Aucune action câblée ⇒ la barre ne rend RIEN, pas même son espace.
+    @ViewBuilder
+    private func mediaActionBar(_ att: MessageAttachment) -> some View {
+        if let onComposeWithMedia {
+            Button {
+                HapticFeedback.light()
+                onComposeWithMedia(att)
+            } label: {
+                // Chrome : glyphe figé dans un cercle glass 40 pt (doctrine
+                // 82i) — ne pas scaler. Le glass APRÈS le sizing.
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+            }
+            .accessibilityLabel(String(localized: "media.compose.title",
+                                       defaultValue: "Créer avec ce média", bundle: .main))
+            .accessibilityHint(String(localized: "media.compose.hint",
+                                      defaultValue: "Ouvre le composer avec ce média posé.",
+                                      bundle: .main))
+        }
+    }
+
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
         let info = senderInfoMap[att.id]
         return VStack(alignment: .leading, spacing: 6) {
@@ -421,8 +464,9 @@ struct ConversationMediaGalleryView: View {
                             .foregroundColor(.white.opacity(0.6))
                     }
                     Spacer()
+                    mediaActionBar(att)
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
             HStack(spacing: 8) {
                 // Glyphe de type média décoratif (apparié aux dimensions) —

@@ -1089,15 +1089,9 @@ struct ConversationView: View {
                     onDismiss: { composerState.composeMediaTarget = nil }
                 )
             }
-            .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
-                ConversationMediaGalleryView(
-                    allAttachments: viewModel.allVisualAttachments,
-                    startAttachmentId: startAttachment.id,
-                    accentColor: accentColor,
-                    captionMap: viewModel.mediaCaptionMap,
-                    senderInfoMap: viewModel.mediaSenderInfoMap
-                )
-            }
+            .modifier(ConversationMediaGalleryLayer(
+                viewModel: viewModel, scrollState: $scrollState,
+                composerState: $composerState, accentColor: accentColor))
             .fullScreenCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video":
