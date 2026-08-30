@@ -197,17 +197,22 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'admin/agent-configs.ts': 4,
   'admin/agent-observability.ts': 4,
   'admin/agent-topics.ts': 1,
-  'admin/invitations.ts': 1,
-  // 3 -> 2 : #4391 a RETIRE le `findMany` de `GET /admin/messages/stats`, qui
-  // ramenait `select: { createdAt, content }` sur TOUTE la fenetre — une ligne
-  // par message, texte integral compris — pour n'en tirer qu'un histogramme
-  // quotidien et une longueur moyenne. Les deux se calculent desormais en base,
-  // en une seule passe `aggregateRaw` + `$facet` (patron de `admin/languages.ts`).
-  // Les DEUX restants sont ailleurs dans le fichier : `GET /trends` (meme motif,
-  // hors des six routes nommees par #4391 — voir le rapport de cloture) et la
-  // relecture des participants du top-10 de `/stats`, bornee transitivement par
-  // le `take: 10` du `groupBy` qui l'alimente.
-  'admin/messages.ts': 2,
+  // `admin/invitations.ts` avait 1 (`GET /timeline/daily`) : #4465 l'a RETIRE.
+  // La ligne ne devient pas 0, elle DISPARAIT (`compterParFichier` n'accumule
+  // que les fichiers qui ont au moins un site) — meme mecanique que
+  // `conversations/messages-list-query.ts` deux cycles plus tot (1 -> 0 sur
+  // `/users/me/stats/timeline`, voir plus bas).
+  //
+  // 3 -> 2 -> 1 : #4391 avait deja retire le `findMany` de `GET
+  // /admin/messages/stats` (histogramme quotidien + longueur moyenne, remplaces
+  // par UN `aggregateRaw` + `$facet` — patron de `admin/languages.ts`). #4465
+  // retire le second : `GET /trends` ramenait `select: { createdAt }` sur 7
+  // jours pour un histogramme heure/jour-de-semaine — deux repliements MODULO,
+  // donc un second `$facet` (`$hour`/`$dayOfWeek`), pas un `count` par tranche
+  // contigue. Le SEUL restant est la relecture des participants du top-10 de
+  // `/stats`, bornee transitivement par le `take: 10` du `groupBy` qui
+  // l'alimente — ce compteur ne sait pas lire une borne transitive.
+  'admin/messages.ts': 1,
   'admin/posts.ts': 1,
   'admin/system-rankings.ts': 13,
   'auth/register.ts': 1,

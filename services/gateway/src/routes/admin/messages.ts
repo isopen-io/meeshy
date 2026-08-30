@@ -24,6 +24,47 @@ type FenetreFacet = {
   readonly length?: ReadonlyArray<{ avg: number | null }>;
 };
 
+/**
+ * Heure de pointe + jour le plus actif, agrégés côté MongoDB (#4465).
+ *
+ * `GET /admin/messages/trends` faisait un `findMany` sur les 7 derniers jours
+ * (`select: { createdAt }`, sans `take`) pour replier chaque ligne en JS dans
+ * un histogramme par heure (0-23) et par jour de semaine (0-6). Les deux
+ * bucketings sont des repliements MODULO — l'heure/le jour se répètent
+ * chaque jour de la fenêtre — donc pas le patron `count` par tranche
+ * contiguë de `admin/analytics.ts` (`/hourly-activity`, `/volume-timeline`) :
+ * `$hour`/`$dayOfWeek` font l'extraction, `$facet` fait les DEUX agrégations
+ * sur le même `$match` en un seul document (même tour que `fenetreMessagesPipeline`
+ * juste au-dessus).
+ *
+ * `timezone: 'UTC'` : ni le Dockerfile ni docker-compose.{prod,staging}.yml ne
+ * fixent `TZ` (seuls dev/local le forcent à Europe/Paris) — le process tourne
+ * donc en UTC en production comme en CI, exactement ce que `getHours()` /
+ * `getDay()` (JS, remplacés ici) y rendaient déjà puisqu'ils sont eux-mêmes
+ * dépendants du fuseau du process.
+ */
+type TendancesFacet = {
+  readonly hourly?: ReadonlyArray<{ _id: number; count: number }>;
+  readonly weekday?: ReadonlyArray<{ _id: number; count: number }>;
+};
+
+function tendancesMessagesPipeline(since: Date): Prisma.InputJsonValue[] {
+  return [
+    { $match: { createdAt: { $gte: { $date: since.toISOString() } }, deletedAt: null } },
+    {
+      $facet: {
+        hourly: [
+          { $group: { _id: { $hour: { date: '$createdAt', timezone: 'UTC' } }, count: { $sum: 1 } } },
+        ],
+        // $dayOfWeek: 1=dimanche..7=samedi ; Date#getDay() (JS): 0=dimanche..6=samedi.
+        weekday: [
+          { $group: { _id: { $dayOfWeek: { date: '$createdAt', timezone: 'UTC' } }, count: { $sum: 1 } } },
+        ],
+      },
+    },
+  ] as unknown as Prisma.InputJsonValue[];
+}
+
 function fenetreMessagesPipeline(since: Date): Prisma.InputJsonValue[] {
   return [
     { $match: { createdAt: { $gte: { $date: since.toISOString() } }, deletedAt: null } },
@@ -261,35 +302,29 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      // Récupérer tous les messages des 7 derniers jours
-      const messages = await fastify.prisma.message.findMany({
-        where: {
-          createdAt: { gte: sevenDaysAgo },
-          deletedAt: null
-        },
-        select: {
-          createdAt: true
-        }
-      });
+      // Heure de pointe + jour actif — UNE agrégation MongoDB, un document en
+      // retour (#4465, patron de fenetreMessagesPipeline juste au-dessus).
+      const facets = await fastify.prisma.message.aggregateRaw({
+        pipeline: tendancesMessagesPipeline(sevenDaysAgo)
+      }) as unknown as ReadonlyArray<TendancesFacet>;
+      const fenetre: TendancesFacet = facets[0] ?? {};
 
       // Analyser par heure
       const hourlyActivity: Record<number, number> = {};
       for (let i = 0; i < 24; i++) {
         hourlyActivity[i] = 0;
       }
+      (fenetre.hourly ?? []).forEach(ligne => {
+        hourlyActivity[ligne._id] = ligne.count;
+      });
 
       // Analyser par jour de semaine
       const weekdayActivity: Record<number, number> = {};
       for (let i = 0; i < 7; i++) {
         weekdayActivity[i] = 0;
       }
-
-      messages.forEach(msg => {
-        const hour = msg.createdAt.getHours();
-        const weekday = msg.createdAt.getDay();
-
-        hourlyActivity[hour]++;
-        weekdayActivity[weekday]++;
+      (fenetre.weekday ?? []).forEach(ligne => {
+        weekdayActivity[ligne._id - 1] = ligne.count;
       });
 
       // Trouver l'heure de pointe

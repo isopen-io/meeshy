@@ -52,10 +52,20 @@ jest.mock('../../utils/logger-enhanced', () => ({
 }));
 jest.mock('../../validation/helpers.js', () => ({
   validateQuery: () => async (_req: unknown, _reply: unknown) => {},
+  validateBody: () => async (_req: unknown, _reply: unknown) => {},
+  validateParams: () => async (_req: unknown, _reply: unknown) => {},
 }));
 jest.mock('../../validation/admin-schemas.js', () => ({
   AdminMessagesStatsQuerySchema: {},
   AdminMessagesEngagementQuerySchema: {},
+  // invitations.ts (#4465) enregistre TOUTES ses routes — y compris
+  // `/timeline/daily`, seule visée ici — dès `app.register(invitationRoutes)` :
+  // `PATCH /:id` construit son `preHandler` en appelant `validateParams(...)` /
+  // `validateBody(...)` immédiatement. Sans ces trois exports, l'enregistrement
+  // lève avant même d'atteindre la route qu'on veut tester.
+  InvitationsListQuerySchema: {},
+  InvitationIdParamSchema: {},
+  UpdateInvitationBodySchema: {},
 }));
 
 // =============================================================================
@@ -419,5 +429,99 @@ describe('GET /admin/messages/stats — budget de lignes lues', () => {
     expect(res.statusCode).toBe(200);
     expect(lignesLues(journal)).toBeLessThanOrEqual(128);
     expect(aAppele(journal, 'message', 'findMany')).toBe(false);
+  });
+});
+
+// =============================================================================
+// 7. GET /admin/messages/trends (#4465)
+//
+// L'heure de pointe et le jour actif sont des repliements MODULO (heure 0-23,
+// jour 0-6) sur toute la fenêtre — pas un partitionnement en tranches
+// contiguës. `message.findMany` reste câblé pour rendre 5 000 lignes : s'il
+// redevenait le chemin appelé, le budget exploserait, quelle que soit la
+// forme de la réponse.
+// =============================================================================
+
+describe('GET /admin/messages/trends — budget de lignes lues', () => {
+  it('agrège heure/jour-de-semaine en base : jamais une ligne par message', async () => {
+    const journal: Journal = { lectures: [] };
+    const prisma = instrumenter(
+      {
+        message: {
+          findMany: jest.fn(() => Promise.resolve(messagesEnBase())),
+          aggregateRaw: jest.fn(() => Promise.resolve([{ hourly: [], weekday: [] }])),
+        },
+      },
+      journal
+    );
+
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        userId: USER_ID,
+        registeredUser: { id: USER_ID, role: 'ADMIN' },
+      };
+    });
+    app.decorate('prisma', prisma);
+    const { messagesRoutes } = await import('../../routes/admin/messages');
+    await app.register(messagesRoutes);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/trends' });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(lignesLues(journal)).toBeLessThanOrEqual(8);
+    expect(aAppele(journal, 'message', 'findMany')).toBe(false);
+  });
+});
+
+// =============================================================================
+// 8. GET /admin/invitations/timeline/daily (#4465)
+//
+// Un `$group` par {jour, statut} rend AU PLUS 7 jours × (nombre de statuts
+// distincts, ~4 en pratique — pending/accepted/rejected/blocked) lignes,
+// jamais une par invitation. `friendRequest.findMany` reste câblé pour rendre
+// 5 000 lignes : la même preuve que ci-dessus, sur l'autre route.
+// =============================================================================
+
+const invitationsEnBase = () =>
+  Array.from({ length: LIGNES_EN_BASE }, () => ({ createdAt: new Date(), status: 'pending' }));
+
+describe('GET /admin/invitations/timeline/daily — budget de lignes lues', () => {
+  it('agrège par jour × statut en base : jamais une ligne par invitation', async () => {
+    const journal: Journal = { lectures: [] };
+    const prisma = instrumenter(
+      {
+        friendRequest: {
+          findMany: jest.fn(() => Promise.resolve(invitationsEnBase())),
+          aggregateRaw: jest.fn(() =>
+            Promise.resolve([{ _id: { date: '2026-08-24', status: 'pending' }, count: 3 }])
+          ),
+        },
+      },
+      journal
+    );
+
+    const app = Fastify({ logger: false });
+    app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        userId: USER_ID,
+        registeredUser: { id: USER_ID, role: 'ADMIN' },
+      };
+    });
+    app.decorate('prisma', prisma);
+    const { invitationRoutes } = await import('../../routes/admin/invitations');
+    await app.register(invitationRoutes);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/timeline/daily' });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(lignesLues(journal)).toBeLessThanOrEqual(32);
+    expect(aAppele(journal, 'friendRequest', 'findMany')).toBe(false);
   });
 });
