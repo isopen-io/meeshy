@@ -338,12 +338,25 @@ describe('[Q-146/R5-4] les 4 points d\'entrée légitimes, nommés', () => {
   });
 
   it('4. la lecture serveur du choix collant — alimente `suggestedMode` (G-121/G-123), hors apps/web', () => {
-    const gatewayCore = path.join(
+    // #4284 a scindé `conversations/core.ts` en `core-detail` / `core-list` /
+    // `core-lifecycle` / `core-selects`, et `core.ts` est devenu une coquille de
+    // ré-export. Une garde ancrée sur UN chemin mesure ce chemin, pas la
+    // propriété : elle balaie donc la FAMILLE, et prouve d'abord qu'elle la voit
+    // — sans quoi un répertoire renommé la rendrait verte à vide.
+    const coreDir = path.join(
       WEB_ROOT,
-      '../../services/gateway/src/routes/conversations/core.ts'
+      '../../services/gateway/src/routes/conversations'
     );
-    expect(fs.existsSync(gatewayCore)).toBe(true);
-    expect(fs.readFileSync(gatewayCore, 'utf8')).toContain('prefs?.readingMode');
+    const famille = fs
+      .readdirSync(coreDir)
+      .filter((f) => /^core.*\.ts$/.test(f))
+      .sort();
+    expect(famille.length).toBeGreaterThan(1);
+
+    const porteurs = famille.filter((f) =>
+      fs.readFileSync(path.join(coreDir, f), 'utf8').includes('prefs?.readingMode')
+    );
+    expect(porteurs).not.toEqual([]);
   });
 });
 
