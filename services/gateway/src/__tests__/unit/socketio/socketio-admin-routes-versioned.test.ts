@@ -141,11 +141,22 @@ describe("Aucun chemin d'API n'est écrit en dur dans ce module", () => {
    * tomberaient si quelqu'un réécrivait les chemins à la main en gardant les
    * mêmes valeurs — ce qui compile, passe, et refige la version.
    */
-  it("ne contient aucun littéral commençant par /api/v", () => {
+  //
+  // Les DEUX fichiers, et pas seulement celui qui porte les déclarations
+  // aujourd'hui. #4376 les a extraites de `MeeshySocketIOHandler.ts` vers
+  // `socketio-admin-routes.ts`, pour que le collecteur du manifeste monte le
+  // MÊME plugin que la production ; une garde restée pointée sur le fichier
+  // d'origine aurait continué de passer en ne gardant plus rien — un témoin
+  // vacant, qui est pire qu'un témoin absent parce qu'il occupe la place.
+  // Les deux sont donc lus : celui qui DÉCLARE et celui qui MONTE.
+  it.each([
+    ['socketio-admin-routes.ts'],
+    ['MeeshySocketIOHandler.ts'],
+  ])("%s ne contient aucun littéral commençant par /api/v", (fichier) => {
     const fs = require('fs') as typeof import('fs');
     const path = require('path') as typeof import('path');
     const source = fs.readFileSync(
-      path.join(__dirname, '..', '..', '..', 'socketio', 'MeeshySocketIOHandler.ts'),
+      path.join(__dirname, '..', '..', '..', 'socketio', fichier),
       'utf8'
     );
 
@@ -161,5 +172,22 @@ describe("Aucun chemin d'API n'est écrit en dur dans ce module", () => {
     const litteraux = sansCommentaires.match(/['"`]\/api\/v\d[^'"`]*['"`]/g) ?? [];
 
     expect(litteraux).toEqual([]);
+  });
+
+  /**
+   * La preuve que la garde ci-dessus peut TOMBER, portée en permanence : un
+   * témoin de source qui n'a jamais rougi n'atteste pas qu'il regarde le bon
+   * fichier — c'est exactement ce qui lui est arrivé au moment de l'extraction
+   * de #4376, où il a continué de passer en lisant un fichier vidé de ce qu'il
+   * gardait.
+   */
+  it('la garde TOMBE sur un module qui refigerait la version en dur', () => {
+    const source = "fastify.get('/api/v1/socketio/stats', {}, servirStats);";
+    const sansCommentaires = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    expect(sansCommentaires.match(/['"`]\/api\/v\d[^'"`]*['"`]/g) ?? []).toEqual([
+      "'/api/v1/socketio/stats'",
+    ]);
   });
 });
