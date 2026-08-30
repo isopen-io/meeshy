@@ -65,6 +65,19 @@ nonisolated extension ComposerOrigin {
 /// l'ouverture — c'est un champ, pas une identité (loi 9 de la spec).
 nonisolated enum ComposerFormat: Equatable { case story, post, reel, status }
 
+nonisolated extension ComposerFormat {
+    /// **L'ordre du menu de bascule, écrit UNE fois.**
+    ///
+    /// Post d'abord : c'est la porte d'entrée du composer, celle depuis
+    /// laquelle on bascule vers les trois autres. Ensuite la durée décroît —
+    /// Story et Réel vivent une journée, le Mood une heure.
+    ///
+    /// Cet ordre ne dépend PAS de ce qui est disponible : un format qui devient
+    /// choisissable parce qu'on vient d'ajouter une vidéo ne doit pas sauter de
+    /// place sous le doigt.
+    static let allComposable: [ComposerFormat] = [.post, .story, .reel, .status]
+}
+
 /// Le composer n'invente pas son vocabulaire : ses quatre formats sont les
 /// quatre `PostType` du SDK, ceux sous lesquels le serveur range ce qu'on lui
 /// envoie. Les deux `switch` sont exhaustifs — un cinquième type de publication
