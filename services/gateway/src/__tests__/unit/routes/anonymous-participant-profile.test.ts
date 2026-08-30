@@ -338,10 +338,31 @@ describe('GET …/profile — ce que le visiteur peut faire', () => {
     expect(data.entryCapabilities.canSendImages).toBe(true);
   });
 
-  it('énonce l’accès à l’historique', async () => {
+  /**
+   * **RETOURNÉ au #4056.** La fiche énonçait l'accès à l'historique à TOUT
+   * membre. Le porteur a tranché le 2026-08-27 que « qui a le droit de voir
+   * l'historique » est un fait de MODÉRATION ; #4009 l'a retiré de l'événement
+   * diffusé à la room, et cette route continuait de le servir — tant qu'un
+   * chemin sert le fait, le retrait de l'autre ne protège rien.
+   *
+   * La clé est ABSENTE, jamais `false` : un `false` affirmerait « ce visiteur
+   * ne voit pas l'historique », ce qui est exactement le fait qu'on refuse de
+   * divulguer. Le contrat de fil l'admet depuis #4009.
+   */
+  it('ne dit PAS l’accès à l’historique à un membre ordinaire', async () => {
     const data = await fetchProfile(setup('member'));
 
-    expect(data.entryCapabilities.canViewHistory).toBe(false);
+    expect(data.entryCapabilities).not.toHaveProperty('canViewHistory');
+    // Le reste du premier cercle survit : c'est UN droit qui sort, pas l'objet.
+    expect(data.entryCapabilities.canSendMessages).toBe(true);
+  });
+
+  it('l’énonce à un hôte, qui est le seul à pouvoir le poser', async () => {
+    for (const role of ['moderator', 'admin'] as const) {
+      const data = await fetchProfile(setup(role));
+
+      expect(data.entryCapabilities.canViewHistory).toBe(false);
+    }
   });
 
   it('n’en énonce aucune pour un participant qui a un compte', async () => {
