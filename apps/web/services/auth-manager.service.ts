@@ -29,6 +29,18 @@ export type SetCredentialsOptions = {
   readonly expiresIn?: number;
 };
 
+/**
+ * Options nommées d'`AuthManager.updateTokens` (#4491, miroir de
+ * `SetCredentialsOptions`). `authToken` est la seule valeur requise ;
+ * `refreshToken` reste accepté sans jamais être persisté (#4405, étape 3).
+ */
+export type UpdateTokensOptions = {
+  readonly authToken: string;
+  readonly refreshToken?: string;
+  readonly sessionToken?: string;
+  readonly expiresIn?: number;
+};
+
 class AuthManager {
   private static instance: AuthManager;
   private onClearCallbacks: Array<() => void> = [];
@@ -131,9 +143,21 @@ class AuthManager {
     this.setSessionCookie(user);
   }
 
-  // `refreshToken` (2e créneau) n'a plus de créneau de stockage (#4405, étape
-  // 3 — même raison que `setCredentials` ci-dessus) : accepté, plus lu.
-  updateTokens(authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number): void {
+  /**
+   * Persiste un token rafraîchi — seul point d'écriture pour `AUTH_TOKEN` /
+   * `SESSION_TOKEN` en dehors de `setCredentials`.
+   *
+   * Objet nommé (#4491, même défaut que #4450 sur `setCredentials`) : la
+   * forme positionnelle avait deux `string | undefined` consécutifs et
+   * indiscernables (`refreshToken`, `sessionToken`), puis un
+   * `number | undefined` traînant — exactement la forme qui a produit les
+   * quatre victimes de #4404. Un appel positionnel ne compile plus.
+   *
+   * `refreshToken` (champ nommé, désormais) n'a plus de créneau de stockage
+   * (#4405, étape 3 — même raison que `setCredentials` ci-dessus) : accepté,
+   * plus lu.
+   */
+  updateTokens({ authToken, sessionToken }: UpdateTokensOptions): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);

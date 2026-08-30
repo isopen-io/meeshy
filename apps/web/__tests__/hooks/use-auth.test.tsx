@@ -296,7 +296,7 @@ describe('useAuth', () => {
       });
 
       expect(mockSetUser).toHaveBeenCalledWith(mockUser);
-      expect(mockSetTokens).toHaveBeenCalledWith(mockToken, undefined, undefined, undefined);
+      expect(mockSetTokens).toHaveBeenCalledWith({ authToken: mockToken, sessionToken: undefined, expiresIn: undefined });
     });
   });
 
