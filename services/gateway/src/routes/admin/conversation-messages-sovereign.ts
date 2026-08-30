@@ -49,7 +49,13 @@ import { requireSovereign, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
-import { messageContentIsProtected } from './media-protection';
+// #4388 — le prédicat de CONTENU (et son select associé) vivait ICI, dans un
+// fichier de ROUTE, alors que `content.ts` l'importait déjà en second
+// appelant (#4384) : même défaut qu'un prédicat recopié, juste pas encore
+// dupliqué. Il est déplacé à côté de son jumeau MÉDIA
+// (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
+// voir son doc-comment pour le détail des six colonnes.
+import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 
 const REASON_MIN_LENGTH = 10;
 
@@ -175,12 +181,10 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
             editedAt: true,
             replyToId: true,
             createdAt: true,
-            isViewOnce: true,
-            isBlurred: true,
-            effectFlags: true,
-            expiresAt: true,
-            isEncrypted: true,
-            encryptionMode: true,
+            // #4388 — les six colonnes que `messageContentIsProtected` exige,
+            // désormais un select NOMMÉ et partagé avec `content.ts` plutôt
+            // que retapées ici à la main.
+            ...messageContentProtectionSelect,
             sender: {
               select: {
                 id: true,

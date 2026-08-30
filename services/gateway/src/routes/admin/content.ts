@@ -15,11 +15,14 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
-// #4333 bonus — `attachmentMediaSelect` est délibérément SANS drapeau de
-// sécurité (voir son doc-comment : « No consumption-tracking, no security
+// #4333 bonus, #4384 — `attachmentMediaSelect` est délibérément SANS drapeau
+// de sécurité (voir son doc-comment : « No consumption-tracking, no security
 // flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
 // qui gate déjà la protection en amont. Même classe de défaut que #4157 c.4 :
-// le prédicat PARTAGÉ, jamais une copie (`routes/admin/media-protection.ts`).
+// les prédicats PARTAGÉS, jamais une copie. MÉDIA et TEXTE vivent côte à côte
+// dans `routes/admin/media-protection.ts` depuis #4388, qui y a déplacé le
+// second — il vivait jusque-là dans un fichier de route
+// (`conversation-messages-sovereign.ts`), son seul autre appelant.
 import {
   attachmentProtectionSelect,
   messageProtectionSelect,
@@ -28,13 +31,6 @@ import {
   messageContentIsProtected,
   type MessageProtectionContext
 } from './media-protection';
-// #4384 — le prédicat de CONTENU, réutilisé et non recopié. Il vit chez la
-// lecture souveraine (`GET /admin/conversations/:id/messages`) parce que c'est
-// elle qui l'a écrit le premier ; la question qu'il tranche — « le texte de ce
-// message a-t-il le droit de voyager en clair ? » — est identique ici, sur la
-// même colonne du même modèle. Une seconde écriture ne pourrait que diverger,
-// et elle divergerait en silence : c'est exactement la classe de défaut que
-// `media-protection.ts` ferme pour les MÉDIAS.
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -269,11 +265,16 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             originalLanguage: true,
             isEdited: true,
             createdAt: true,
-            // #4388 — la forme du prédicat TEXTE, qui ÉTEND celle du prédicat
-            // MÉDIA de `isEncrypted` / `encryptionMode`. Ces deux colonnes
-            // étaient posées en clair ici (#4384) : les tenir avec le prédicat
-            // qui les lit est ce qui empêche « un champ de protection présent
-            // au modèle et absent de toute requête », qui ne garde rien.
+            ...messageProtectionSelect,
+            // #4384, #4388 — le select ASSOCIÉ à `messageContentIsProtected`
+            // (`media-protection.ts`), spreadé À CÔTÉ de celui du prédicat
+            // MÉDIA : cette route juge les DEUX sur la même ligne (le texte du
+            // message, et chacune de ses pièces jointes), donc charge les deux
+            // selects. Chevauchement sans effet sur les quatre colonnes
+            // communes (même clé, même valeur `true`) ; `isEncrypted` /
+            // `encryptionMode` n'existent que dans celui-ci — sans eux
+            // `messageContentIsProtected` répondrait « non protégé » sur un
+            // message CHIFFRÉ.
             ...messageContentProtectionSelect,
             sender: {
               select: {
@@ -331,8 +332,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           attachments, ...rest
         } = message;
         const messageContext: MessageProtectionContext = { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt };
-        // #4384 — le TEXTE, gardé par le prédicat que la lecture souveraine
-        // applique déjà à la même colonne. La ligne reste LISTÉE (auteur,
+        // #4384, #4388 — le TEXTE, gardé par le prédicat PARTAGÉ
+        // (`media-protection.ts`), au même régime que la lecture souveraine
+        // qui l'applique à la même colonne. La ligne reste LISTÉE (auteur,
         // dates, conversation, nombre de pièces jointes) : un modérateur doit
         // pouvoir CONSTATER qu'un message existe. Seul son contenu tombe.
         const contenuProtege = messageContentIsProtected(message);
