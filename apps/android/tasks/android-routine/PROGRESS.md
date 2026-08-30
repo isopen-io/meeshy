@@ -2,6 +2,71 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the in-app real-time notification toast finally honours the user's PER-TYPE toggles —
+> a `member_left` or `comment_like` push whose toggle is off no longer pops a toast, while a
+> toggle-less type (translation, incoming-call, friend-content) still does** (slice
+> `notification-toast-per-type-gate`, feature-parity §M — closes the gap the toast policy's own
+> doc-comment declared open on 2026-08-17). iOS gates the in-app banner on
+> `UserNotificationPreferences.isTypeEnabled` (`UserNotificationPreferences+Filter.swift`), an 80-case
+> switch over `MeeshyNotificationType`; Android's `NotificationToastPolicy` deliberately shipped WITHOUT
+> that check ("Android has no raw-wire-type→toggle resolver to reuse — building one is real, separate
+> work"), so every type passed once push+DND cleared. That resolver is now built.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`notification-center-category-filter`) is on `main` (#4435 was the last android merge, commit 79f769b6).
+> `origin/main` fetched (forced-update dc401b37→79f769b6); branched `claude/apps/android/notification-toast-per-type-gate`
+> off it; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (2 new core files + 2 edited core files + feature-parity.md + routine docs, no
+> `local.properties`).
+>
+> **The change — one pure wire-type→toggle resolver + one policy layer.** (1) New pure `:core:model`
+> `NotificationTypeToggle.isEnabled(type, preferences)` — a faithful port of iOS `isTypeEnabled`, keyed
+> DIRECTLY on the raw wire `type` string (both `new_message` and legacy `NEW_MESSAGE`) so no
+> `MeeshyNotificationType` enum is needed on Android. The 80-arm switch is expressed once as data
+> (`ToggleGroup(types, predicate)`) built into an immutable `BY_TYPE` map at class-load — SOTA over iOS's
+> per-call `switch` re-walk. Unknown types collapse onto `systemEnabled` via the EXISTING
+> `NotificationTypeVocabulary.canonical` (iOS `rawValue ?? .system`) — SSOT reuse, not a second collapse
+> table. The toggle grouping is its OWN SSOT (deliberately NOT the 11-chip filter grouping: `STORY_REPLY`
+> toggles `storyReactionEnabled` though it sits under the SOCIAL chip; `comment_reaction` toggles
+> `commentLikeEnabled`; `STATUS_UPDATE` is toggle-less though under the CONTACTS chip). (2)
+> `NotificationToastPolicy.decide` gains a third preference layer after push+DND — `isTypeEnabled` fail →
+> `BlockedByPreferences` (existing decision case reused, sealed interface unchanged). **Faithful boundary:**
+> iOS gates incoming-call on `callsEnabled` and friend feed/story/mood on `friendContentEnabled`; Android's
+> `UserNotificationPreferences` has neither field yet, so those types resolve to always-enabled exactly like
+> iOS's toggle-less power-user types (translation/gamification). Adding the two fields (model + sync body +
+> Settings row) is a NEW tracked box in §M, not invented here.
+>
+> **Tests: +21, RED-proven.** `NotificationTypeToggleTest` +17 (all-on sweep over `KNOWN_TYPES`; all-off
+> sweep leaving only the 17 toggle-less types; system-toggle governs exactly the 9 system types and no
+> collateral; per-toggle governance for newMessage/reply/missedCall-not-incoming/reaction-vs-storyReaction/
+> commentLike/contactRequest/memberLeft-vs-memberJoined/groupInvite/conversation/postComment/postLike/mention;
+> unknown+blank→system). `NotificationToastPolicyTest` +4 (toggle-off→blocked, toggle-on→show,
+> toggle-less→show even with neighbour toggles off, push-master overrides an enabled per-type toggle).
+> **RED proven TWICE this run:** (a) the initial `allOn = UserNotificationPreferences()` fixture was wrong —
+> `memberLeftEnabled`/`commentLikeEnabled` default to `false`, so the all-on sweep RED-failed until the
+> fixture forced them true (a real defaults gotcha, NOTES-logged); (b) mutating the production `story_reaction`
+> group from `storyReactionEnabled`→`reactionEnabled` fails exactly `reactionAndStoryReactionAreDistinctToggles`
+> and nothing else.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (slow, ~150 MB); cmdline-tools (11076708) +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37` via the
+> `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full `./apps/android/meeshy.sh check` BUILD SUCCESSFUL** (assembleDebug + all-module
+> `testDebugUnitTest`, 973 tasks, 4m47s; `:core:model` alone = 3264 tests green) and RED-proof confirmed.
+> Reviewer **PASS** (diff `apps/android` only — 2 core files + 2 core tests + feature-parity.md + routine
+> docs, no `local.properties`; SDK purity — pure `:core:model` building block, no `android.*`, no
+> orchestration; SSOT — reuses `NotificationTypeVocabulary.canonical`, own toggle grouping justified;
+> instant-app — pure synchronous predicate, no I/O; UDF — n/a pure function; no tautological tests — every
+> expected verdict derived from iOS semantics, not the impl's map; no coverage floor lowered — new pure logic
+> with all-on/all-off completeness sweeps, RED-proven).
+>
+> **Next**: the `callsEnabled` + `friendContentEnabled` model fields (new §M box) would let those two type
+> families honour a real toggle instead of always-on. The toast's remaining sub-slices stay open: the STATEFUL
+> orchestrator (2 s dedup window bookkeeping, 7 s auto-dismiss, `onConversationOpened/Closed` hooks) and the UI
+> mount + tap-to-navigate (the `MeeshyNotificationToast` atom exists in `:sdk-ui`, still uncalled). Read the
+> chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-30 **a system message renders as a centered notice, no longer as the arriver's own signed
 > bubble** (slice `chat-system-notice`, PR #4435, feature-parity "Message système → notice centrée" line).
 > Android had `Message.isSystemMessage` (`messageSource == "system"`) but used it ONLY for grouping — a

@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — `UserNotificationPreferences()` is NOT "all on" (slice `notification-toast-per-type-gate`)
+Two per-type booleans default to `false` in the model: `memberLeftEnabled` and `commentLikeEnabled`
+(`Preferences.kt`). A test fixture named `allOn = UserNotificationPreferences()` therefore lies — and the
+RED run caught it: `everyTypeIsAllowedWhenAllTogglesAreOn` failed at the `member_left`/`comment_like` types
+because their (correctly-mapped) toggle was off by default, not because the production mapping was wrong. The
+fix is in the FIXTURE (`copy(memberLeftEnabled = true, commentLikeEnabled = true)`), not the code. Lesson:
+when a sweep test asserts "every X is true under the default block", first check the default block actually
+sets every relevant field true — a data-class default is a silent third state between "on" and "the test's
+mental model". This is also why the toast policy's `decide_blocksWhenThisTypesPerTypeToggleIsOff` uses
+`member_left` with the bare default block: it's the one type that's blocked *without* having to flip anything.
+
+## 2026-08-30 — the per-type toggle gate keys on the WIRE string, not an enum (slice `notification-toast-per-type-gate`)
+iOS `isTypeEnabled` switches over the decoded `MeeshyNotificationType`; the caller does `rawValue ?? .system`.
+Android has no such enum and doesn't need one — `NotificationTypeToggle.isEnabled(type: String, prefs)` keys
+directly on the raw wire string (both `new_message` and legacy `NEW_MESSAGE`) and reuses the existing
+`NotificationTypeVocabulary.canonical` (unknown → `"system"`) for the exact same `?? .system` collapse. The
+toggle grouping is genuinely its OWN SSOT — it does NOT match the 11-chip filter grouping (`STORY_REPLY` sits
+under the SOCIAL chip but toggles `storyReactionEnabled`; `comment_reaction` under REACTIONS-adjacent but
+toggles `commentLikeEnabled`; `STATUS_UPDATE` under CONTACTS chip but is toggle-less). Don't try to reuse
+`NotificationFilterCategory.DEFAULT_MATCHING` as the toggle map — different question, different answer. The
+completeness guard is the all-off sweep over `KNOWN_TYPES`: any wire type not mapped (and not in the
+always-on set) surfaces as an assertion failure, so a future wire type can't silently fall through.
+
 ## 2026-08-30 — a field CONSUMED for one purpose is not WIRED for another (slice `chat-system-notice`)
 Android already carried `Message.isSystemMessage` (`messageSource == "system"`) and had ported the pure
 `BubbleRenderKind`, so the box looked "done at the model layer". But the flag was read in exactly ONE place —
