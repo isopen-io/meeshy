@@ -121,7 +121,14 @@ function makePrismaDouble(opts: {
       findUnique: jest.fn(async ({ where }: any) => opts.hashtagByTag?.get(where.tag) ?? null),
     },
     postHashtag: {
-      findMany: jest.fn(async ({ where }: any) => opts.linksByHashtagId?.get(where.hashtagId) ?? []),
+      // `skip` et `take` sont HONORÉS : un double qui les ignore rend la
+      // collection entière à chaque appel, et aucun témoin de pagination ne
+      // peut alors tomber — il mesure le double, pas la requête (#4339).
+      findMany: jest.fn(async ({ where, skip, take }: any) => {
+        const tous = opts.linksByHashtagId?.get(where.hashtagId) ?? [];
+        const depuis = typeof skip === 'number' ? skip : 0;
+        return typeof take === 'number' ? tous.slice(depuis, depuis + take) : tous.slice(depuis);
+      }),
     },
     communityMember: {
       // Aucun scénario de ce fichier n'exige de co-membre de communauté —
@@ -132,7 +139,17 @@ function makePrismaDouble(opts: {
       findMany: jest.fn(async ({ where }: any) => posts.filter((p) => matchesWhere(p, where))),
     },
     soundUsage: {
-      findMany: jest.fn(async ({ where }: any) => opts.usagesBySoundId?.get(where.soundId) ?? []),
+      // `take` et le curseur `createdAt.lt` sont HONORÉS, pour la raison
+      // donnée sur `postHashtag` ci-dessus. La collection de test est déjà
+      // triée par `createdAt` décroissant, comme la requête réelle.
+      findMany: jest.fn(async ({ where, take }: any) => {
+        const tous = opts.usagesBySoundId?.get(where.soundId) ?? [];
+        const borne = where?.createdAt?.lt as Date | undefined;
+        const apresCurseur = borne
+          ? tous.filter((u: any) => new Date(u.createdAt).getTime() < new Date(borne).getTime())
+          : tous;
+        return typeof take === 'number' ? apresCurseur.slice(0, take) : apresCurseur;
+      }),
     },
     $runCommandRaw: jest.fn(async () => opts.runCommandRawResult ?? { cursor: { firstBatch: [] } }),
   };
@@ -273,6 +290,81 @@ describe('scope=hashtag — #4346', () => {
   });
 });
 
+/**
+ * #4339, critère 3 de #4149 : `hasMore` se calcule APRÈS le filtrage
+ * d'audience.
+ *
+ * Ces deux témoins sont écrits sur un cas où **filtré ≠ non filtré** —
+ * c'est-à-dire là où la version fautive et la version juste rendent des
+ * verdicts DIFFÉRENTS. Sur un tag dont tous les posts sont visibles, les deux
+ * s'accordent, et un témoin écrit là ne peut pas tomber.
+ */
+describe('scope=hashtag — `hasMore` compte les posts SERVIS, jamais les liens lus (#4339)', () => {
+  const AUTRES_LIENS = Array.from({ length: 20 }, (_, i) => ({ postId: `zz${String(i).padStart(22, '0')}` }));
+
+  it("vingt-trois liens dont trois posts visibles rendent trois posts et hasMore FAUX — pas une fin de fil annoncée à tort", async () => {
+    const { app } = await buildApp({
+      posts: makeFixturePosts(),
+      hashtagByTag: new Map([['music', { id: 'h1' }]]),
+      linksByHashtagId: new Map([
+        ['h1', [
+          ...AUTRES_LIENS,
+          { postId: PUBLIC_POST_ID },
+          { postId: FRIENDS_POST_ID },
+          { postId: OWN_POST_ID },
+        ]],
+      ]),
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=hashtag&tag=music&limit=20' });
+    expect(res.statusCode).toBe(200);
+    const { data, pagination } = res.json();
+
+    // Les vingt premiers liens pointent des posts inexistants pour ce lecteur :
+    // l'ancienne forme lisait `limit + 1` LIENS, n'en voyait aucun de visible,
+    // et rendait une page VIDE avec `hasMore: true`.
+    expect(data.map((p: any) => p.id).sort()).toEqual([OWN_POST_ID, PUBLIC_POST_ID].sort());
+    expect(pagination.hasMore).toBe(false);
+    expect(pagination.nextCursor).toBeNull();
+
+    await app.close();
+  });
+
+  it('une page de deux se remplit à travers vingt liens filtrés, et son curseur pointe le lien SUIVANT le dernier post servi', async () => {
+    const { app } = await buildApp({
+      posts: makeFixturePosts(),
+      hashtagByTag: new Map([['music', { id: 'h1' }]]),
+      linksByHashtagId: new Map([
+        ['h1', [
+          ...AUTRES_LIENS,
+          { postId: PUBLIC_POST_ID },
+          { postId: OWN_POST_ID },
+        ]],
+      ]),
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=hashtag&tag=music&limit=1' });
+    expect(res.statusCode).toBe(200);
+    const { data, pagination } = res.json();
+
+    expect(data).toHaveLength(1);
+    expect(data[0].id).toBe(PUBLIC_POST_ID);
+    expect(pagination.hasMore).toBe(true);
+    // 20 liens filtrés + le lien servi ⇒ le suivant est le 21e (index 21).
+    // Un curseur posé à `cursor + limit` (l'ancienne forme) vaudrait 1 et
+    // rejouerait vingt liens déjà balayés à chaque page.
+    expect(pagination.nextCursor).toBe('21');
+
+    const suite = await app.inject({
+      method: 'GET',
+      url: `/social/posts?scope=hashtag&tag=music&limit=1&cursor=${pagination.nextCursor}`,
+    });
+    expect(suite.json().data.map((p: any) => p.id)).toEqual([OWN_POST_ID]);
+
+    await app.close();
+  });
+});
+
 // ─── scope=sound ──────────────────────────────────────────────────────────
 
 describe('scope=sound — #4346', () => {
@@ -338,6 +430,77 @@ describe('scope=sound — #4346', () => {
     expect(inconnu.json().data).toEqual([]);
     expect(inconnu.json().pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
 
+    await app.close();
+  });
+});
+
+/**
+ * #4339 : `hasMore` et le curseur portent sur la MÊME collection.
+ *
+ * Le défaut d'origine n'était pas cosmétique — c'était une PERTE. `hasMore`
+ * venait des POSTS (filtrés `PUBLIC`) et le curseur du dernier USAGE du lot
+ * lu : le saut passait par-dessus tous les usages compris entre le dernier
+ * post servi et la fin du lot, et ces posts-là n'étaient servis sur aucune
+ * page. Le témoin ci-dessous demande les pages l'une après l'autre et exige
+ * que leur UNION soit complète — la seule formulation qui attrape une perte,
+ * puisque chaque page prise isolément a l'air correcte.
+ */
+describe('scope=sound — le curseur ne saute aucun usage (#4339)', () => {
+  // Déclarés ICI : `SOUND_ID` du bloc précédent est local à son `describe`,
+  // et sa VALEUR est celle qu'on aurait spontanément prise pour un second
+  // post public — deux constantes homonymes de valeur identique auraient fait
+  // passer ce témoin pour la mauvaise raison.
+  const SOUND_ID = 'dddddddddddddddddddddddd';
+  const AUTRE_PUBLIC_ID = 'ffffffffffffffffffffffff';
+  const T = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
+
+  function fixture() {
+    return {
+      posts: [
+        ...makeFixturePosts(),
+        {
+          id: AUTRE_PUBLIC_ID, authorId: OTHER_USER_ID, visibility: 'PUBLIC', type: 'POST',
+          deletedAt: null, content: 'public-2', createdAt: NOW, likeCount: 0, viewCount: 0,
+        },
+      ],
+      usagesBySoundId: new Map([
+        [SOUND_ID, [
+          { postId: PUBLIC_POST_ID, createdAt: T(0) },
+          // Six usages de posts hors audience s'intercalent : c'est EUX que
+          // l'ancien curseur enjambait, en emportant le post qui suit.
+          ...Array.from({ length: 6 }, (_, i) => ({ postId: FRIENDS_POST_ID, createdAt: T(i + 1) })),
+          { postId: AUTRE_PUBLIC_ID, createdAt: T(10) },
+        ]],
+      ]),
+    };
+  }
+
+  it('deux pages de un servent les DEUX posts publics — aucun n\'est perdu entre les deux', async () => {
+    const { app } = await buildApp(fixture() as any);
+
+    const page1 = await app.inject({ method: 'GET', url: `/social/posts?scope=sound&soundId=${SOUND_ID}&limit=1` });
+    expect(page1.statusCode).toBe(200);
+    expect(page1.json().data.map((p: any) => p.id)).toEqual([PUBLIC_POST_ID]);
+    expect(page1.json().pagination.hasMore).toBe(true);
+
+    const curseur = page1.json().pagination.nextCursor;
+    expect(curseur).toBe(T(0).toISOString());
+
+    const page2 = await app.inject({
+      method: 'GET',
+      url: `/social/posts?scope=sound&soundId=${SOUND_ID}&limit=1&cursor=${encodeURIComponent(curseur)}`,
+    });
+    expect(page2.statusCode).toBe(200);
+    expect(page2.json().data.map((p: any) => p.id)).toEqual([AUTRE_PUBLIC_ID]);
+
+    await app.close();
+  });
+
+  it('une page assez large les sert tous les deux, et annonce la fin', async () => {
+    const { app } = await buildApp(fixture() as any);
+    const res = await app.inject({ method: 'GET', url: `/social/posts?scope=sound&soundId=${SOUND_ID}&limit=20` });
+    expect(res.json().data.map((p: any) => p.id)).toEqual([PUBLIC_POST_ID, AUTRE_PUBLIC_ID]);
+    expect(res.json().pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
     await app.close();
   });
 });

@@ -1,0 +1,157 @@
+# =============================================================================
+# LIGNE DE BASE « AVANT » de la web v3 — SON HÔTE
+# =============================================================================
+# Conception § 8.2 (3) et § 9.2, ligne « Ligne de base ».
+#
+# POURQUOI CE WORKFLOW EXISTE
+#
+# L'instrument existait — `apps/web-v3/scripts/baseline.mjs`, sa forme, ses six
+# cibles, sa sortie datée — et AUCUN hôte ne savait l'exécuter : l'egress des
+# sessions de développement répond 403 à `CONNECT meeshy.me:443`, donc la mesure
+# ne pouvait être prise nulle part. Un instrument qu'aucune commande ne lance
+# n'en est pas un ; celui-ci n'avait pas besoin de code supplémentaire, mais
+# d'une machine dont le réseau sortant atteint réellement la production.
+#
+# POURQUOI `workflow_dispatch` ET PAS UN DÉCLENCHEUR AUTOMATIQUE
+#
+# C'est une mesure de la PRODUCTION, pas un gate du dépôt : la lancer à chaque
+# push la ferait varier avec la charge de meeshy.me et non avec le code. Elle se
+# prend une fois, se commite, et se rejoue quand le legacy bouge — § 8.2 :
+# « sur apps/web EN PRODUCTION, une fois, commitée ».
+#
+# POURQUOI LES IDENTIFIANTS SONT DEMANDÉS À L'OPÉRATEUR
+#
+# Cinq des six cibles portent un identifiant de contenu. Les coder en dur ici
+# mesurerait des pages d'erreur, et `baseline.json` porterait des chiffres qui
+# ne disent rien du rôle premier — un fichier plein de chiffres faux est pire
+# qu'un fichier qui dit « à établir ». Le workflow REFUSE donc de deviner.
+#
+# POURQUOI LES ENTRÉES PASSENT PAR `env:` ET SONT CITÉES
+#
+# `${{ inputs.x }}` écrit DANS le script shell avant que le shell ne s'exécute :
+# une entrée portant `"; curl … | sh; "` s'exécuterait sur le runner. Les six
+# entrées voyagent donc par l'environnement, où elles restent des DONNÉES, et le
+# script les cite. Leur validation, elle, n'est pas ici : `baseline.mjs` refuse
+# toute URL hors de `https://meeshy.me` (une ligne de base de staging serait
+# verte et ne dirait rien de la production), et le job échoue alors par rc=1 —
+# une garde, un site.
+#
+# CE QU'IL NE FAIT PAS
+#
+# Il ne commite rien. `baseline.json` est un fichier de vérité du dépôt : il
+# entre par une revue, pas par un push de robot. Le workflow rend le fichier en
+# artefact et écrit dans le résumé du job la commande exacte qui l'applique.
+name: web-v3 baseline (production)
+
+on:
+  workflow_dispatch:
+    inputs:
+      lien:
+        description: 'Route /l/[token] — URL complète, sous https://meeshy.me/, d’un lien de partage PUBLIC et vivant'
+        required: true
+        type: string
+      story:
+        description: 'Route /story/[postId] — URL complète, sous https://meeshy.me/, d’une story publique'
+        required: true
+        type: string
+      reel:
+        description: 'Route /reel/[postId] — URL complète, sous https://meeshy.me/, d’un réel public'
+        required: true
+        type: string
+      post:
+        description: 'Route /post/[postId] — URL complète, sous https://meeshy.me/, d’un post public avec commentaires'
+        required: true
+        type: string
+      mood:
+        description: 'Route /mood/[postId] — URL complète, sous https://meeshy.me/, d’une humeur publique'
+        required: true
+        type: string
+      accueil:
+        description: 'Route / — l’apex de production'
+        required: false
+        default: 'https://meeshy.me/'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.19'
+
+jobs:
+  baseline:
+    name: Mesurer meeshy.me (apps/web en production)
+    runs-on: ubuntu-latest
+    # 6 cibles × 5 exécutions, chacune en 3G Fast simulé (188 kbit/s, 562 ms de
+    # latence) sous un plafond de navigation de 45 s : ~23 min de mesure au pire,
+    # plus l'installation de Chromium. Le plafond de 25 min hérité de la mesure
+    # en UNE passe coupait le job au milieu et publiait un artefact incomplet —
+    # pire qu'un échec, parce qu'il se commite.
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # `scripts/lib/navigateur.cjs` est le site UNIQUE de « où est Chromium » :
+      # il lit PLAYWRIGHT_BROWSERS_PATH et sait descendre dans `chromium-<rev>`.
+      # La version installée est celle que sa liste de paquets déclare — deux
+      # versions divergentes rendraient un protocole CDP différent de celui que
+      # `playwright-core` sait parler.
+      - name: Install Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+        run: npx --yes playwright@1.62.1 install --with-deps chromium
+
+      - name: Prepare the offline vendor cache
+        run: node -e "require('./scripts/lib/navigateur.cjs').ensureVendor()"
+
+      # rc=1 tant que `etablie` vaut false : une cible que le réseau n'a pas
+      # laissée joindre, ou un identifiant mort, doit faire ÉCHOUER le job —
+      # sinon la ligne de base se réputerait prise sur un fichier de `null`.
+      - name: Measure the six gestures of the primary role (Fast 3G, p75)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
+          ACCUEIL: ${{ inputs.accueil }}
+          LIEN: ${{ inputs.lien }}
+          STORY: ${{ inputs.story }}
+          REEL: ${{ inputs.reel }}
+          POST: ${{ inputs.post }}
+          MOOD: ${{ inputs.mood }}
+        run: |
+          node apps/web-v3/scripts/baseline.mjs \
+            "$ACCUEIL" \
+            "$LIEN" \
+            "$STORY" \
+            "$REEL" \
+            "$POST" \
+            "$MOOD"
+
+      - name: Publish the measured file
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-v3-baseline
+          path: apps/web-v3/e2e/visual/baseline.json
+          if-no-files-found: error
+
+      - name: Summarise what to commit
+        if: always()
+        run: |
+          {
+            echo '## Ligne de base « AVANT » — apps/web sur https://meeshy.me'
+            echo
+            echo 'Appliquer au dépôt :'
+            echo '```'
+            echo 'gh run download <run-id> -n web-v3-baseline -D apps/web-v3/e2e/visual/'
+            echo 'node scripts/v3-rapport.mjs   # la septième mesure doit passer au vert'
+            echo '```'
+            echo
+            echo '```json'
+            cat apps/web-v3/e2e/visual/baseline.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

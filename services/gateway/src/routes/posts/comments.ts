@@ -65,7 +65,15 @@ export function registerCommentRoutes(
     try {
       const { postId } = request.params;
       const query = FeedQuerySchema.safeParse(request.query);
-      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+      // Une requête malformée est REFUSÉE, jamais remplacée par des défauts
+      // (#4339, dette nommée par `no-silent-query-fallback-guard`). Le repli
+      // silencieux rendait la première page à qui demandait `?limit=abc` ou
+      // `?cursor=<expiré>` : l'appelant croyait paginer, et recevait
+      // indéfiniment le même début de fil sans qu'aucune erreur ne le dise.
+      if (!query.success) {
+        return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
+      }
+      const { cursor, limit } = query.data;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
@@ -111,7 +119,15 @@ export function registerCommentRoutes(
     try {
       const { commentId } = request.params;
       const query = FeedQuerySchema.safeParse(request.query);
-      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+      // Une requête malformée est REFUSÉE, jamais remplacée par des défauts
+      // (#4339, dette nommée par `no-silent-query-fallback-guard`). Le repli
+      // silencieux rendait la première page à qui demandait `?limit=abc` ou
+      // `?cursor=<expiré>` : l'appelant croyait paginer, et recevait
+      // indéfiniment le même début de fil sans qu'aucune erreur ne le dise.
+      if (!query.success) {
+        return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
+      }
+      const { cursor, limit } = query.data;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;

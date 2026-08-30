@@ -5,6 +5,18 @@
  */
 
 /**
+ * NAMESPACE DE CACHE DU LEGACY — JUMEAU de `CACHE_NAMESPACE`
+ * (`apps/web/public/sw.js`). Le Cache Storage est à l'échelle de l'ORIGINE :
+ * `caches.keys()` rend AUSSI les caches d'un autre worker de `meeshy.me`, dont
+ * celui de la zone v3 (§ 4.4 bis / § 7 de la conception, worker servi à la
+ * racine par nécessité de portée). Une invalidation « complète » de CETTE
+ * application ne détruit donc que SES caches.
+ * Gardé par `apps/web/__tests__/public/sw.v3-zone.test.ts` (le témoin de
+ * jumeau lit le littéral des deux fichiers).
+ */
+export const LEGACY_CACHE_NAMESPACE = 'meeshy-cache-';
+
+/**
  * Enregistre le service worker et initialise la détection de mise à jour.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -80,10 +92,12 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
       console.warn('[SW] Could not disconnect WebSocket:', e);
     }
 
-    // 1. Invalider tous les caches de l'API CacheStorage
+    // 1. Invalider les caches de CETTE application dans le CacheStorage —
+    //    ceux du namespace, et eux seuls (cf. LEGACY_CACHE_NAMESPACE).
     if ('caches' in window) {
       const cacheKeys = await caches.keys();
-      await Promise.all(cacheKeys.map(key => caches.delete(key)));
+      const owned = cacheKeys.filter(key => key.startsWith(LEGACY_CACHE_NAMESPACE));
+      await Promise.all(owned.map(key => caches.delete(key)));
       console.log('[SW] CacheStorage cleared.');
     }
 

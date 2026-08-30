@@ -15,6 +15,7 @@
     },
     "securityBasisLegend": {
       "no-standard-auth-hook": "Aucune garde d'authentification standard détectée (ni référence directe à fastify.authenticate dans onRequest/preHandler, ni enrobage connu qui l'appelle) — public par construction, donc S0 ou S1. Les deux ne se distinguent pas depuis le serveur assemblé : le limiteur de débit global (registerGlobalRateLimiter, middleware/rate-limiter.ts) est monté par server.ts, hors du graphe que registerAllRoutes — et donc ce collecteur — construit.",
+      "optional-identity": "Un résolveur d'identité OPTIONNEL est monté (createUnifiedAuthMiddleware avec requireAuth: false, qui DÉCLARE son régime sur la fonction rendue — voir AUTH_REGIME dans middleware/auth.ts) et aucune garde ne l'accompagne. Ce HOOK ne refuse donc jamais un appelant sans jeton : il sert l'anonyme et enrichit la réponse si un jeton est présent. Le niveau reste inconnu sur TOUTE l'échelle S0–S3, et c'est une affirmation, pas un aveu : la mesure montre que la moitié de ces routes sont réellement publiques (GET /u/:username, /links/:identifier, /tracking-links/*) et que l'autre moitié est gardée DANS le handler (GET /conversations, POST /conversations/:id/messages — l'appartenance au fil, que le hook ne peut pas connaître). Les annoncer publiques serait le défaut de #4318 à l'envers ; les annoncer S2/S3 était le défaut de #4489. Cette clé dit ce qui est SU : le hook ne garde pas, le handler peut. Sans la déclaration AUTH_REGIME, les deux régimes de la fabrique étaient indistinguables — l'appel a la même source compilée, `options` étant une variable capturée.",
       "sovereign": "requireSovereign() détecté (middleware/authorize.ts) — sans ambiguïté possible : cette garde n'admet que BIGBOSS, par définition (aucune route ne l'utilise au 2026-08-29 ; la détection reste structurelle et vaudra dès la première adoption).",
       "permission-gated": "Authentifié + requirePermission(...) détecté (middleware/authorize.ts), donc S4 ou S5. Les deux ne se distinguent pas mécaniquement : le NOM de la permission exigée est une variable capturée dans la fermeture, invisible depuis le serveur assemblé (voir Function.prototype.toString() en tête de fichier).",
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
@@ -224,10 +225,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2295,10 +2298,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2323,10 +2328,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2393,10 +2400,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2421,10 +2430,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2435,10 +2446,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2449,10 +2462,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2463,10 +2478,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2645,10 +2662,12 @@
       "mountPrefix": "/api/v1/directory",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2757,10 +2776,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2799,10 +2820,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2813,10 +2836,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2925,10 +2950,10 @@
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S2",
-        "S3"
+        "S0",
+        "S1"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "no-standard-auth-hook",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2939,10 +2964,10 @@
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S2",
-        "S3"
+        "S0",
+        "S1"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "no-standard-auth-hook",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2953,10 +2978,10 @@
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S2",
-        "S3"
+        "S0",
+        "S1"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "no-standard-auth-hook",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3373,10 +3398,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3513,10 +3540,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3569,10 +3598,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3737,10 +3768,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3765,10 +3798,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3891,10 +3926,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3961,10 +3998,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4031,10 +4070,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5528,10 +5569,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5542,10 +5585,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6102,10 +6147,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6242,10 +6289,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6396,10 +6445,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6886,10 +6937,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6900,10 +6953,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },

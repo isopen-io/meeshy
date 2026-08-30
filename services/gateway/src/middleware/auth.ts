@@ -616,6 +616,33 @@ export class AuthMiddleware {
 
 // ===== MIDDLEWARE FASTIFY =====
 
+/**
+ * La clé sous laquelle chaque middleware rendu par
+ * `createUnifiedAuthMiddleware` DÉCLARE son régime (#4489).
+ *
+ * Deux appels de la même fabrique produisent deux fonctions dont la SOURCE
+ * compilée est identique — `options` est une variable capturée, que
+ * `Function.prototype.toString()` ne montre pas. Un lecteur qui reconnaît
+ * l'appel ne peut donc pas savoir si ce middleware GARDE (`requireAuth: true`
+ * ⇒ 401 sans jeton) ou s'il ENRICHIT seulement (`requireAuth: false` ⇒ sert
+ * l'anonyme, et pose `authContext` si un jeton est présent). Le manifeste des
+ * routes annonçait pour cette raison dix-huit routes ouvertes comme gardées.
+ *
+ * La fabrique ATTACHE donc son régime à ce qu'elle rend, plutôt que de laisser
+ * un lecteur le déduire d'un texte qui ne le porte pas. `Symbol.for` — pas un
+ * symbole de module — pour que la clé survive à deux instanciations du module.
+ * Non énumérable : rien de ce qui sérialise un hook ne doit changer de forme.
+ */
+export const AUTH_REGIME = Symbol.for('meeshy.gateway.auth-regime');
+
+/** Ce que déclare un middleware d'authentification sur lui-même. */
+export interface AuthRegime {
+  /** `true` ⇒ refuse (401) un appelant sans identité. `false` ⇒ ne refuse jamais pour cette raison. */
+  readonly requireAuth: boolean;
+  /** `true` ⇒ un invité de lien partagé passe. */
+  readonly allowAnonymous: boolean;
+}
+
 export function createUnifiedAuthMiddleware(
   prisma: PrismaClient,
   options: {
@@ -626,7 +653,7 @@ export function createUnifiedAuthMiddleware(
 ) {
   const authMiddleware = new AuthMiddleware(prisma, options.statusService);
 
-  return async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
+  const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
@@ -692,6 +719,14 @@ export function createUnifiedAuthMiddleware(
       (request as UnifiedAuthRequest).authContext = await fallbackMiddleware.createAuthContext();
     }
   };
+
+  const regime: AuthRegime = {
+    requireAuth: options.requireAuth === true,
+    allowAnonymous: options.allowAnonymous === true,
+  };
+  Object.defineProperty(unifiedAuth, AUTH_REGIME, { value: regime, enumerable: false });
+
+  return unifiedAuth;
 }
 
 // ===== CACHE HELPERS =====

@@ -1346,26 +1346,40 @@ describe('DELETE /posts/:postId/comments/:commentId — adresse et audience de l
   });
 });
 
-// ─── Branch coverage: FeedQuerySchema false branches (lines 44, 76-79) ────────
+// ─── Une requête malformée est REFUSÉE, jamais complétée en silence ──────────
+//
+// Ces deux témoins affirmaient l'inverse jusqu'au 2026-08-30 : « returns 200
+// with default limit when limit is not a number ». Ils avaient été écrits
+// pour la COUVERTURE de la branche `query.success ? query.data : { … }`, et
+// c'est tout leur intérêt comme leçon — écrits pour atteindre une ligne, ils
+// ont épinglé le comportement de cette ligne. Le motif était par ailleurs
+// nommé comme dette dans `no-silent-query-fallback-guard.test.ts` : le dépôt
+// portait donc, sur le même code, une garde qui l'interdisait et deux témoins
+// qui l'exigeaient.
+//
+// Un test écrit pour la couverture décrit ce que le code FAIT ; il ne dit
+// jamais que le code a raison de le faire. Quand une garde de source et un
+// témoin de comportement se contredisent, c'est la garde qui porte une
+// INTENTION — le témoin ne porte qu'un constat.
+//
+// Dette soldée par #4339 : les deux adresses rendent 400.
 
-describe('GET /posts/:postId/comments — invalid limit query uses default (line 44)', () => {
-  it('returns 200 with default limit when limit is not a number', async () => {
+describe('GET /posts/:postId/comments — une requête malformée est refusée', () => {
+  it('rend 400 VALIDATION_ERROR quand `limit` n\'est pas un nombre, jamais la première page', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments?limit=notanumber` });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.pagination.limit).toBe(20);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Invalid query parameters' });
     await app.close();
   });
 });
 
-describe('GET /posts/:postId/comments/:commentId/replies — invalid limit query uses default (lines 76-79)', () => {
-  it('returns 200 with default limit when limit is not a number', async () => {
+describe('GET /posts/:postId/comments/:commentId/replies — une requête malformée est refusée', () => {
+  it('rend 400 VALIDATION_ERROR quand `limit` n\'est pas un nombre, jamais la première page', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/replies?limit=notanumber` });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.pagination.limit).toBe(20);
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Invalid query parameters' });
     await app.close();
   });
 });

@@ -321,9 +321,20 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
 
   // --- me/delete-account : flux de suppression de compte par email, tokens à usage limité ---
-  { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature" },
+  // Ces trois entrées ont été RETIRÉES puis REMISES le 2026-08-30, et ce
+  // qui s'est passé entre les deux vaut d'être écrit : elles rendaient 401
+  // dans le serveur assemblé, et le 401 venait de l'instrumentation du
+  // COLLECTEUR, pas du produit. En enveloppant `addHook` sur chaque contexte,
+  // elle reprenait son point d'appui DANS la chaîne de prototypes Fastify et
+  // faisait atterrir la garde de `me/preferences` sur un ancêtre — donc sur
+  // ses modules frères. Corrigé (voir `instrumentEncapsulatedAuthHooks`), les
+  // trois rendent 302, ce qu'elles ont toujours fait en production.
+  // La leçon n'est pas sur ces routes : un harnais peut fabriquer le défaut
+  // qu'il mesure, et une mesure faite À TRAVERS un observateur ne vaut que ce
+  // que vaut l'observateur.
+  { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature — mesuré 302 sans jeton le 2026-08-30" },
   { method: 'GET', url: '/api/v1/me/delete-account/cancel', why: 'idem (cancelTokenHash)' },
-  { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: "idem, exige en plus le statut GRACE_PERIOD_EXPIRED" },
+  { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: 'idem (purgeTokenHash) — les trois ne font plus aucune mutation depuis #4183, elles redirigent' },
 
   // --- Profils publics (design produit assumé) ---
   { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },

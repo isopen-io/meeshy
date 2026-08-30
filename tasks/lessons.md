@@ -20666,3 +20666,100 @@ Dernier détail qui compte : elle exige `== 1`, pas `<= 1`. Une garde de cardina
 laisse passer le retrait accidentel du montage — c'est-à-dire l'autre moitié du défaut qu'elle existe
 pour empêcher.
 
+
+## Leçon 350 — Un observateur qui se branche sur une chaîne de prototypes doit prendre son point d'appui HORS de la chaîne
+
+**Contexte (#4318 → #4489 → #4492, 2026-08-30).** Le collecteur du manifeste de routes devait savoir
+si un contexte Fastify encapsulé porte une garde d'authentification. Ces gardes sont posées par
+`fastify.addHook('preHandler', authMiddleware)` et ne sont recopiées sur aucune route : invisibles à
+toute inspection de `routeOptions`. J'ai donc enveloppé `addHook` sur chaque contexte, via le hook
+`onRegister` :
+
+```ts
+const original = instance.addHook.bind(instance);          // ← le défaut
+(instance as any).addHook = function (name, fn) { … ; return original(name, fn); };
+```
+
+**Une instance encapsulée Fastify hérite PROTOTYPALEMENT de son parent.** Pour un enfant,
+`instance.addHook` ne résout donc pas vers l'implémentation de Fastify : il résout vers l'enveloppe
+que je venais de poser sur le PARENT — dont la fermeture tient le registre du parent **et** son propre
+`original`, lié au parent. `bind` fixe `this` ; il ne change pas la fermeture qu'on appelle. Le hook
+finissait enregistré sur un **ancêtre**.
+
+**L'observateur MODIFIAIT le graphe qu'il prétendait décrire.** La garde de `me/preferences`
+atterrissait sur le contexte parent et s'appliquait à ses modules FRÈRES : `GET
+/me/delete-account/{confirm,cancel,delete-now}` rendaient 401 dans le serveur assemblé, et 302 partout
+ailleurs. Correctif : capturer l'implémentation PRISTINE une fois sur la racine, et l'appeler en
+`.call(instance, …)`.
+
+### Ce qui rend la leçon coûteuse : j'avais la contradiction sous les yeux
+
+Deux mesures, toutes deux justes :
+
+| mesure | verdict |
+|---|---|
+| commenter la ligne `addHook` de `me/preferences` fait passer la route de 401 à 302 | vrai — compatible avec les DEUX explications |
+| une reproduction MINIMALE de la même imbrication Fastify ne fuit pas | vrai — **incompatible** avec « c'est un défaut du produit » |
+
+J'ai écrit la contradiction dans l'issue (« le mécanisme est propre à ce code, pas à Fastify ») et j'en
+ai tiré la mauvaise moitié : j'ai conclu que le code avait un défaut exotique, au lieu de voir que la
+reproduction propre ne différait du cas réel que par **l'absence de mon instrument**. J'ai ouvert une
+issue de bug (#4492) et retiré de `PUBLIC_ROUTES` trois entrées qui disaient vrai depuis toujours.
+
+> **Une mesure faite À TRAVERS un observateur ne vaut que ce que vaut l'observateur.** Quand un
+> comportement n'apparaît que sous instrumentation et qu'une reproduction propre le contredit, le
+> premier suspect est l'instrument — pas le code observé. La reproduction minimale ne servait pas à
+> confirmer Fastify : elle isolait la seule variable qui restait, et cette variable était moi.
+
+**Le témoin qui l'aurait attrapé** : comparer le comportement servi AVEC et SANS instrumentation
+(`buildAssembledApp` face à un montage nu du même module). Une instrumentation qui ne change rien doit
+pouvoir le PROUVER, comme un balayage doit prouver qu'il balaie.
+
+**Corollaire de forme.** Ce piège vaut pour tout `Object.create`-based host : Fastify, les prototypes
+Express, `vm` contexts, les proxys de test. `X.method.bind(X)` capture ce que la chaîne rend
+AUJOURD'HUI, y compris une enveloppe posée par soi-même une itération plus tôt — c'est un
+auto-empilement silencieux, et il grandit avec la profondeur d'encapsulation.
+## Leçon 351 — deux mesures qui partagent un MODULE ne partagent pas ses CONDITIONS
+
+`apps/web-v3/scripts/mesure-reseau.mjs` est le site unique de la mesure CDP, et la
+conception s'en félicitait : « la même mesure sert le gate de la v3 ET la ligne de
+base ». Le module était bien partagé. Ses conditions ne l'étaient pas :
+`baseline.mjs` appelait `mesureUrls(urls, commandePour)` **sans troisième
+argument**, donc `options?.profil === undefined` (aucun `Network.emulateNetworkConditions`)
+et `options?.repetitions ?? 1` (aucun p75), pendant que le `main()` du même module
+appliquait le profil 3G Fast de `budgets.json`. L'« AVANT » aurait été pris en
+fibre de datacenter et l'« APRÈS » en 3G p75 — et **rien dans le fichier écrit ne
+l'aurait dit** : `composeBaseline` n'enregistrait ni `profil`, ni `repetitions`,
+ni `percentile`.
+
+> **Un paramètre optionnel est une divergence qui ne rougit pas.** Quand deux
+> appelants partagent une fonction dont les conditions passent par un `options?`,
+> l'un des deux finit par ne pas le passer, et le défaut est INVISIBLE : les deux
+> chiffres existent, ils ont l'air comparables, ils ne le sont pas. La question à
+> poser à un module partagé n'est pas « qui l'appelle ? » mais **« qui l'appelle
+> AVEC QUOI ? »** — et la réponse s'écrit DANS la donnée produite, jamais
+> seulement dans le code : un chiffre qui ne porte pas ses conditions ne s'oppose
+> à rien.
+
+Corollaires tirés du même lot (revue croisée de « baseline.json porte de vraies
+mesures ») :
+
+- **`page.goto` RÉUSSIT sur un 404.** `composeMesure` posait `statut: 'mesuré'`
+  sans jamais regarder `http` : un identifiant de contenu mort — ou deviné faux —
+  transformait une page d'erreur en chiffre commité. Le verrou vit au site qui
+  POSE le statut (`estCodeDeMesure`), pas chez l'appelant.
+- **Un verdict qui compte les lignes PLEINES ne dit pas ce qu'elles contiennent.**
+  `verdictDeLigneDeBase` n'attrapait que le mensonge le plus grossier (« établie
+  sans chiffres ») ; six lignes mesurées sur `127.0.0.1` sortaient VERTES, et le
+  seul garde-fou jest comparait des LONGUEURS (`lignes.length`), jamais des URLs.
+  Un verdict de provenance regarde l'ORIGINE, le CODE et la COUVERTURE.
+- **Une doctrine écrite dans un fichier ne vaut que si le code l'applique.**
+  L'en-tête jurait « un `null` se voit, un zéro se compare » et `maximum()` faisait
+  `l[champ] ?? 0` : un 404 sans peinture sortait en `lcp_max_ms: 0`.
+- **Un `${{ inputs.x }}` dans un `run:` est substitué AVANT le shell.** Les entrées
+  d'un `workflow_dispatch` passent par `env:` et se citent — sinon elles
+  s'exécutent. Leur VALIDATION, elle, reste au site unique qui les consomme.
+- **Une commande d'éprouvette recommandée dans un doc devient une commande
+  RÉELLE.** La conception invitait à lancer `baseline.mjs http://127.0.0.1:8931/`
+  « pour éprouver la chaîne » — ce qui écrivait un `baseline.json` de localhost,
+  vert. Éprouver une chaîne se fait avec l'outil dont c'est le métier.

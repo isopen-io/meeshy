@@ -94,6 +94,12 @@ export declare const percentile: (
   rang: number,
 ) => number | null;
 
+export declare const estCodeDeMesure: (http: number | null) => boolean;
+
+export declare const budgetsReseau: () => BudgetReseau | null;
+
+export declare const profilReseau: () => ProfilReseau | null;
+
 export declare const composeMesure: (args: {
   readonly url: string;
   readonly commande: string;
