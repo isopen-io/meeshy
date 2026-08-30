@@ -6,11 +6,18 @@
  * défaut. `onRequest` court AVANT `preValidation`, donc avant que
  * `unifiedAuth` ne pose `authContext` sur la requête : un `keyGenerator` qui
  * lit `request.authContext?.userId` reçoit `undefined` et retombe sur son
- * repli — ici `ip:${request.ip}`. Le gateway tournant sans `trustProxy`
- * derrière Traefik, cette adresse est celle du conteneur proxy, IDENTIQUE
- * pour tous : un plafond « 3/h par compte » devient 3/h pour la PLATEFORME,
- * et le premier appelant prive tous les autres. La protection se retourne en
- * déni de service.
+ * repli — ici `ip:${request.ip}`. Une limite annoncée « par compte » compte
+ * alors par ADRESSE, et se trompe dans les deux sens : plusieurs comptes
+ * derrière une même sortie (opérateur mobile, bureau, NAT) se partagent un
+ * crédit prévu pour un seul, et un même compte disposant de plusieurs
+ * adresses en obtient autant de crédits.
+ *
+ * Précision qui a coûté une rectification : `trustProxy` EST posé depuis
+ * #4137 (`config/trust-proxy.ts`, un maillon par défaut), donc `request.ip`
+ * est l'adresse réelle de l'appelant et non celle du conteneur Traefik. Les
+ * doc-comments antérieurs à #4137 disent le contraire ; les croire menait à
+ * décrire ce repli comme « un seul seau pour la plateforme », ce qu'il n'est
+ * plus. Le défaut de HOOK, lui, est mesuré ci-dessous et reste entier.
  *
  * Mesuré sur le vrai plugin, pas déduit : sans `hook`, le `keyGenerator` voit
  * `authContext === undefined` ; avec `hook: 'preHandler'`, il voit le compte.

@@ -19512,10 +19512,20 @@ le disque et le dépôt ne sont pas le même ensemble.
 `ip:${request.ip}`. Le gateway tournant sans `trustProxy` derrière Traefik, cette adresse est celle
 du conteneur proxy : **la même pour tout le monde**.
 
-Un plafond « 3/h par compte » devient donc 3/h pour la PLATEFORME. C'est pire qu'un plafond absent :
-le premier appelant prive tous les autres, la protection se retourne en déni de service, et elle le
-fait silencieusement — le limiteur fonctionne, rend des 429 au bon rang, et rien ne signale que le
-seau est commun.
+Une limite annoncée « par compte » compte alors par ADRESSE, et se trompe dans les **deux** sens :
+plusieurs comptes derrière une même sortie (opérateur mobile, bureau, NAT) se partagent un crédit
+prévu pour un seul, et un même compte disposant de plusieurs adresses en obtient autant de crédits.
+Silencieusement, de surcroît — le limiteur fonctionne, rend des 429 au bon rang, et rien ne signale
+que le seau n'est pas celui qu'on croit.
+
+> **CORRECTION, écrite le lendemain de la leçon et par la leçon elle-même.** La première version de
+> ce paragraphe disait « 3/h pour la PLATEFORME, le premier appelant prive tous les autres, déni de
+> service ». C'était faux : `trustProxy` EST posé depuis #4137, donc `request.ip` est l'adresse
+> réelle de l'appelant, pas celle du conteneur Traefik. J'avais repris l'affirmation des
+> doc-comments de `middleware/rate-limiter.ts`, antérieurs à #4137 et jamais mis à jour — dans le
+> lot même où j'écrivais qu'il faut prouver plutôt que croire. **J'ai prouvé le mécanisme et cru la
+> conséquence.** Une vérification n'est pas transitive : elle ne couvre que la proposition qu'elle
+> exerce. Sites périmés restants et garde contre leur propagation : issue #4357.
 
 **Comment je m'y suis pris pour ne pas le voir.** J'ai validé la clé en appelant le `keyGenerator`
 à la main et en lisant ce qu'il rendait. Cet appel-là ne peut PAS voir le défaut : il fournit

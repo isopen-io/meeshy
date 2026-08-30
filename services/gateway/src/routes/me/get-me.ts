@@ -333,10 +333,15 @@ export const ME_READ_RATE_LIMIT_MAX = 600;
  * AVANT `preValidation` — donc avant que `unifiedAuth` ne pose `authContext`.
  * `meRateLimitKeyGenerator` y recevait `undefined` et retombait sur
  * `ip:${request.ip}` : la clé « par compte » que le doc-comment ci-dessus
- * décrit valait, en pratique, l'adresse du conteneur Traefik — la même pour
- * tout le monde, c'est-à-dire exactement le défaut que ce doc-comment dit
- * éviter. Mesuré sur le vrai plugin, pas déduit. Découverte de #4147, portée
- * ici parce qu'elle vide de son effet une clé correctement écrite.
+ * décrit était donc, en pratique, une clé par ADRESSE. Mesuré sur le vrai
+ * plugin, pas déduit. Découverte de #4147, portée ici parce qu'elle vide de
+ * son effet une clé correctement écrite.
+ *
+ * Depuis #4137, `trustProxy` est posé et `request.ip` est l'adresse réelle de
+ * l'appelant : le repli n'était donc pas un seau unique pour la plateforme,
+ * mais il restait faux dans les deux sens — un bureau derrière une seule
+ * sortie partageait un crédit, un même compte à plusieurs adresses en
+ * cumulait autant.
  *
  * `skipOnError: true` est posé GLOBALEMENT par `registerGlobalRateLimiter` et
  * fusionné par `Object.assign` dans toute config qui ne le redéclare pas : un
