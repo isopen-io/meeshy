@@ -243,6 +243,73 @@
 > `callSummary`). Both are pure cores with a live consumer (this `.system` branch). Read the iOS
 > `BubbleSystemViews.swift` / `BubbleCallNoticeView.swift` first.
 
+> On 2026-08-30 **audio-transcription karaoke gained its pure sync heart — given the timed
+> segments, the playback position, the engine progress and the playing state, one function names
+> which segment is "lit"** (slice `transcription-active-segment-resolver`, feature-parity §P
+> "synchronized karaoke-style transcription (tap-to-seek)" `[ ]`→`[~]`). iOS keeps this as the
+> single source of truth `AudioPlayerView.activeSegmentIndex(segments:currentTime:progress:isPlaying:)`
+> shared between the bubble player and `MediaTranscriptionView`; Android had NO karaoke resolver at
+> all (a §P Complétude gap — the timed `MessageTranscriptionSegment` list existed but nothing turned a
+> playback clock into a lit word).
+>
+> **Step 0 — no open android-routine PR, and a STALE-tracking correction.** `list_pull_requests`
+> (open) → empty; nothing of mine to merge. But the PROGRESS/feature-parity read at the top was
+> **behind `main`**: the previous top entry is `notification-center-category-filter` (#4421), yet
+> `git log origin/main -- apps/android` shows #4464 (per-type toggle `isTypeEnabled` port), #4481
+> (incoming-call & friend-content real toggles), #4435 (system→centred notice) and #4493 (in-app toast
+> wired, pure `ToastDedupWindow` + orchestrator VM) all merged AFTER it without prepending a PROGRESS
+> entry. I first (wrongly) picked `notification-per-type-toggle-gate` off the stale "Next", started
+> writing it, and `git status` revealed `NotificationTypeToggle.kt` was `M` not `??` — the slice was
+> already on `main` (#4464/#4481). Restored the clobbered files (`git checkout`), and re-picked from
+> `git log`, not from PROGRESS. **Lesson (NOTES §): the routine's "Next" is advisory and can lag `main`;
+> the frontier is `git log origin/main -- apps/android`, and a new file must be confirmed absent on
+> `main` before it is written.** Branched `claude/apps/android/transcription-active-segment-resolver`
+> off freshly-fetched `origin/main` (`d485e072`).
+>
+> **The change — one pure function, no wiring churn.** New `:core:model`
+> `TranscriptionKaraokeResolver.activeSegmentIndex(segments, currentTimeSeconds, progress, isPlaying)`
+> → `Int?`, a faithful port of the iOS three-layer resolver: (1) `!isPlaying || empty` → `null`
+> (iOS "BUG D" guard — at rest `currentTime==0` and a segment starting at `0` would false-highlight
+> segment 0); (2) if ANY segment has real timing (`end > start`) → the FIRST segment whose half-open
+> window `[start, end)` contains the position (start inclusive, end exclusive), else `null`
+> (before-first / in-gap / past-last); (3) no usable timing (every `start==end`, e.g. `0…0`, so no
+> window could match) → proportional `floor(progress·count)` clamped to `0..count-1`. Android's
+> nullable `MessageTranscriptionSegment.startTime/endTime` read as `0.0`, matching iOS's non-optional
+> `TranscriptionDisplaySegment` default. **SOTA over iOS:** it operates on the real domain model (no
+> shadow display type), and every branch is an isolated JVM test rather than a `@ViewBuilder`-embedded
+> computed property. Blast radius: one new file + one new test file — no existing code touched (the
+> Compose flow-layout that paints the spans + tap-to-seek is app-side glue, left as a tracked §P
+> follow-up).
+>
+> **Tests: +19, RED-proven.** `TranscriptionKaraokeResolverTest` covers: paused→null (even with a
+> matching window); empty→null; inside-window; start-inclusive; end-exclusive (boundary belongs to the
+> next segment); before-first→null; in-gap→null; past-last→null; overlapping windows→first match;
+> single timed segment→0; one real segment flips the whole list to the timing branch (a non-matching
+> position→null, not proportional); null bounds count as 0-timing→proportional; proportional at
+> progress 0 / 0.5 / 1.0(clamp) / negative(clamp) / >1(clamp) / single-untimed. **RED:** flipping the
+> end-boundary `<`→`<=` fails exactly `windowStartIsInclusive`, `windowEndIsExclusive` and
+> `positionPastTheLastSegmentLightsNothing` (verified: 3 failed under the mutation, green after revert).
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37` cleanly. `local.properties` kept out
+> of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 core file +
+> 1 test file + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block,
+> no android.*, no singleton, no "when to play" orchestration; SSOT — one karaoke resolver, no
+> re-implementation; instant-app — a pure projection, no I/O; UDF — pure function of its inputs; no
+> tautological tests; no coverage floor lowered — new pure logic with near-total branch coverage,
+> RED-proven).
+>
+> **Next**: the karaoke Compose flow-layout (paint the coloured/bold spans, tap-a-word→seek,
+> auto-scroll the active span to centre — iOS `MediaTranscriptionView`) is the §P follow-up that
+> consumes this resolver; video watch-progress reporting is the other half of the same line. For a
+> pure-core next slice, an audio-player chrome/plan value type (iOS `AudioPlayerView.plan(for:)`) or a
+> Feed value type. **Confirm the target file is absent on `origin/main` before writing.**
+
+
 > On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
 > ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /
 > Contacts / Groups / Calls / Translations / System (or Unread)** (slice `notification-center-category-filter`,

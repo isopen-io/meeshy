@@ -2656,3 +2656,21 @@ Two porting specifics worth keeping:
   and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
   `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
   critical. Document which one you ported so the next reader doesn't "fix" it.
+
+## 2026-08-30 — the routine's "Next" can lag `main`; pick the slice from `git log`, and confirm the file is ABSENT before writing (slice `transcription-active-segment-resolver`)
+I opened PROGRESS.md, read its top entry (`notification-center-category-filter`, #4421) and its "Next", and
+picked `notification-per-type-toggle-gate` from it. Wrong: `git log origin/main -- apps/android` showed #4464,
+#4481, #4435 and #4493 all merged AFTER #4421 without prepending a PROGRESS entry — the per-type toggle gate was
+already on `main`. I only caught it because after `Write`-ing `NotificationTypeToggle.kt`, `git status` showed it
+as **`M` (modified), not `??` (untracked)** — the file already existed and I'd clobbered a committed version.
+Restored with `git checkout`.
+Lessons:
+- **The single source of the frontier is `git log origin/main -- apps/android`, not PROGRESS.md's "Next".** The
+  tracking files are prepended by disciplined slices, but a slice can merge without updating them, so "Next" is
+  advisory and can point at already-done work. Read the log first.
+- **Before writing any new file, confirm it is absent on `main`** (`git status` after `Write` must show `??`, or
+  grep `origin/main` for the type name up front). An `M` on a file you meant to create is the tell that the slice
+  is a duplicate.
+- A cheap guard against re-doing a merged slice: for any candidate, `grep -rl <TypeName>` under `apps/android`
+  BEFORE designing it. Here `NotificationTypeToggle`, `NotificationFilterCategory` and the toast dedup window all
+  already existed — the whole §M notification area is done through #4493.
