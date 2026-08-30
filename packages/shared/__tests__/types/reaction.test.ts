@@ -5,6 +5,7 @@ import {
   POPULAR_EMOJIS,
   EMOJI_MAX_LENGTH,
 } from '../../types/reaction.js';
+import { addReactionRequestSchema } from '../../types/api-schemas.js';
 
 describe('isValidEmoji', () => {
   describe('valid single emoji (Emoji_Presentation)', () => {
@@ -227,5 +228,22 @@ describe('EMOJI_MAX_LENGTH (length bound SSOT)', () => {
 
   it('leaves headroom beyond the longest measured RGI grapheme', () => {
     expect(EMOJI_MAX_LENGTH).toBeGreaterThanOrEqual(15);
+  });
+
+  // The REST reaction body is validated by Fastify/AJV against this shared
+  // JSON-Schema BEFORE the handler runs. Its emoji length bound must be the SSOT
+  // — not a hardcoded literal — or a family/couple/tinted RGI emoji (11–15 units)
+  // is rejected at the portillon over REST while the Socket.IO twin (which reads
+  // EMOJI_MAX_LENGTH) accepts it. This guards against the bound re-diverging.
+  it('REST addReactionRequestSchema binds the emoji bound to the SSOT, not a literal', () => {
+    expect(addReactionRequestSchema.properties.emoji.maxLength).toBe(EMOJI_MAX_LENGTH);
+  });
+
+  it('REST addReactionRequestSchema admits a multi-person family sequence (11 units)', () => {
+    const family = '👨‍👩‍👧‍👦';
+    expect(isValidEmoji(family)).toBe(true);
+    expect(family.length).toBeLessThanOrEqual(
+      addReactionRequestSchema.properties.emoji.maxLength
+    );
   });
 });
