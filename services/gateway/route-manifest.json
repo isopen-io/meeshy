@@ -1370,12 +1370,11 @@
       "path": "/api/v1/admin/conversations/:conversationId/messages",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
-      "securityLevel": "inconnu",
+      "securityLevel": "S6",
       "securityLevelCandidates": [
-        "S4",
-        "S5"
+        "S6"
       ],
-      "securityBasisKey": "permission-gated",
+      "securityBasisKey": "sovereign",
       "hierarchyGated": false,
       "adminPrefixed": true
     },

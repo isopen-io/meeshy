@@ -15,6 +15,17 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
+// #4333 bonus — `attachmentMediaSelect` est délibérément SANS drapeau de
+// sécurité (voir son doc-comment : « No consumption-tracking, no security
+// flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
+// qui gate déjà la protection en amont. Même classe de défaut que #4157 c.4 :
+// le prédicat PARTAGÉ, jamais une copie (`routes/admin/media-protection.ts`).
+import {
+  attachmentProtectionSelect,
+  messageProtectionSelect,
+  mediaAttachmentIsProtected,
+  type MessageProtectionContext
+} from './media-protection';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -242,6 +253,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             originalLanguage: true,
             isEdited: true,
             createdAt: true,
+            ...messageProtectionSelect,
             sender: {
               select: {
                 id: true,
@@ -270,7 +282,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 type: true
               }
             },
-            attachments: { select: attachmentMediaSelect },
+            attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect } },
             _count: {
               select: {
                 replies: true
@@ -284,7 +296,35 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, messages, {
+      // #4333 bonus — un média à vue unique / flouté / éphémère-expiré ne
+      // sort plus entier par cette liste platefome-entière : même prédicat,
+      // même forme que #4157 c.4 sur `GET /admin/users/:userId/media`. Les
+      // cinq colonnes de protection du MESSAGE (`...messageProtectionSelect`
+      // ci-dessus) ne servent qu'à ce calcul et ne sont pas déclarées dans
+      // `adminMessageRowSchema` : elles sont retirées ici, à la SOURCE,
+      // plutôt que laissées à une omission de schéma pour les taire.
+      const data = messages.map((message) => {
+        const { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt, attachments, ...rest } = message;
+        const messageContext: MessageProtectionContext = { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt };
+        return {
+          ...rest,
+          attachments: attachments.map((attachment) => {
+            const protege = mediaAttachmentIsProtected(attachment, messageContext);
+            // Comme #4157 c.4 : seul `isProtected` sort, jamais les trois
+            // drapeaux bruts qui l'ont décidé — la ligne annonce l'EFFET,
+            // pas le mécanisme.
+            const { isViewOnce: _iv, isBlurred: _ib, effectFlags: _ef, ...attachmentRest } = attachment;
+            return {
+              ...attachmentRest,
+              fileUrl: protege ? null : attachment.fileUrl,
+              thumbnailUrl: protege ? null : attachment.thumbnailUrl,
+              isProtected: protege
+            };
+          })
+        };
+      });
+
+      return sendPaginatedSuccess(reply, data, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,

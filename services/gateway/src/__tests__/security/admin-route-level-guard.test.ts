@@ -117,23 +117,30 @@ describe('Chaque route /admin/* montée déclare une garde de permission', () =>
   });
 
   // #4157, critère 2 : trois gestes montent en S6 (souverain, BIGBOSS seul).
-  // Deux vivent dans le territoire de ce lot (`agent.ts` — `PUT /llm`,
-  // `DELETE /reset`) ; le troisième (lecture d'une conversation privée,
-  // `GET /admin/conversations/:id/messages`) vit dans `admin/messages.ts`,
-  // hors territoire — non vérifié ici, laissé au lot qui le porte.
-  it('PUT /admin/agent/llm et DELETE /admin/agent/reset montent en S6 (souverain)', async () => {
+  // Les deux premiers (`agent.ts` — `PUT /llm`, `DELETE /reset`) sont livrés
+  // depuis #4157 ; le troisième (lecture d'une conversation privée,
+  // `GET /admin/conversations/:id/messages`) restait délibérément hors de ce
+  // test — la garde ci-dessous existait, mais n'était pas encore `sovereign`
+  // (#4333 c.3 l'y a fait monter ; la route vit dans
+  // `admin/conversation-messages-sovereign.ts`, appelée depuis
+  // `userAdminRoutes`, jamais dans un `admin/messages.ts` qui n'existe pas).
+  it('PUT /admin/agent/llm, DELETE /admin/agent/reset et GET /admin/conversations/:id/messages montent en S6 (souverain)', async () => {
     const artifact = await buildRouteManifest();
     const cible = (method: string, path: string) =>
       artifact.routes.find((r) => r.method === method && r.path === path);
 
     const putLlm = cible('PUT', '/api/v1/admin/agent/llm');
     const deleteReset = cible('DELETE', '/api/v1/admin/agent/reset');
+    const conversationMessages = cible('GET', '/api/v1/admin/conversations/:conversationId/messages');
 
     expect(putLlm).toBeDefined();
     expect(deleteReset).toBeDefined();
+    expect(conversationMessages).toBeDefined();
     expect(putLlm!.securityLevel).toBe('S6');
     expect(putLlm!.securityBasisKey).toBe('sovereign');
     expect(deleteReset!.securityLevel).toBe('S6');
     expect(deleteReset!.securityBasisKey).toBe('sovereign');
+    expect(conversationMessages!.securityLevel).toBe('S6');
+    expect(conversationMessages!.securityBasisKey).toBe('sovereign');
   });
 });

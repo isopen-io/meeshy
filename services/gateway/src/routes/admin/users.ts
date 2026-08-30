@@ -23,9 +23,15 @@ import {
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission, requireHierarchy } from '../../middleware/authorize';
-// #4157 c.4 — la MÊME garde que l'éventail de notifications, jamais une copie :
-// une seconde écriture de « ce média est-il masqué ? » ne peut que diverger.
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+// #4157 c.4 / #4333 — le prédicat PARTAGÉ (composant lui-même `maskedAttachment`,
+// la MÊME garde que l'éventail de notifications) : voir media-protection.ts.
+import {
+  attachmentProtectionSelect,
+  messageProtectionSelect,
+  mediaAttachmentIsProtected,
+  type MessageProtectionContext
+} from './media-protection';
+import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -656,26 +662,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         id: true, originalName: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
         fileSize: true, width: true, height: true, duration: true, createdAt: true
       } as const;
-      /**
-       * #4157 c.4 — la protection d'un média se lit aux DEUX niveaux qui la
-       * déclarent, et pas seulement à celui qui porte le fichier : le MESSAGE
-       * (`isViewOnce`/`isBlurred`/`effectFlags`, plus `expiresAt` et
-       * `deletedAt`) et la PIÈCE JOINTE elle-même. C'est la forme exacte que
-       * `messageNotificationFanOut` applique déjà — `protectedOverride` au
-       * niveau message, `maskedAttachment` au niveau pièce jointe — et la
-       * raison pour laquelle une seule des deux lectures ne suffit pas : un
-       * message à vue unique peut porter une pièce jointe qui, elle, ne
-       * déclare rien.
-       *
-       * `PostMedia` n'a AUCUNE de ces colonnes (vérifié au schéma) : un post
-       * n'est pas éphémère. Ce n'est donc pas un oubli si seul le versant
-       * `messageAttachment` les demande.
-       */
-      const protectionSelect = {
-        isViewOnce: true, isBlurred: true, effectFlags: true,
-        message: { select: { isViewOnce: true, isBlurred: true, effectFlags: true, expiresAt: true, deletedAt: true } },
-      } as const;
-
+      // #4157 c.4 / #4333 — la protection d'un média se lit aux DEUX niveaux
+      // qui la déclarent : le MESSAGE et la PIÈCE JOINTE elle-même (voir
+      // `media-protection.ts` pour la raison — une seule des deux lectures ne
+      // suffit pas). `PostMedia` n'a AUCUNE de ces colonnes (vérifié au
+      // schéma) : un post n'est pas éphémère, seul le versant
+      // `messageAttachment` les demande.
       const [postMedia, attachments, postCount, attCount] = await Promise.all([
         fastify.prisma.postMedia.findMany({
           where: postWhere,
@@ -685,7 +677,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }),
         fastify.prisma.messageAttachment.findMany({
           where: attWhere,
-          select: { ...mediaSelect, messageId: true, ...protectionSelect },
+          select: {
+            ...mediaSelect,
+            messageId: true,
+            ...attachmentProtectionSelect,
+            message: { select: messageProtectionSelect }
+          },
           orderBy: { createdAt: 'desc' },
           take: window
         }),
@@ -702,19 +699,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
        * modération d'un fait qu'elle a le droit de connaître ; servir l'URL la
        * ferait sortir du produit par une porte que le reste du produit ferme.
        */
-      const estProtege = (m: Record<string, unknown>): boolean => {
-        const message = m.message as Record<string, unknown> | null | undefined;
-        if (message) {
-          if (maskedAttachment(message as Parameters<typeof maskedAttachment>[0])) return true;
-          if (message.deletedAt) return true;
-          const expiresAt = message.expiresAt as Date | string | null | undefined;
-          if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return true;
-        }
-        return maskedAttachment(m as Parameters<typeof maskedAttachment>[0]);
-      };
-
       const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => {
-        const protege = source === 'message' && estProtege(m);
+        const protege = source === 'message' && mediaAttachmentIsProtected(
+          m as Parameters<typeof mediaAttachmentIsProtected>[0],
+          m.message as MessageProtectionContext | null | undefined
+        );
         return {
           id: m.id,
           originalName: m.originalName,
@@ -993,80 +982,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /admin/conversations/:conversationId/messages - Paginated messages of a
-   * conversation, newest first (for the messages modal in the admin user fiche).
-   * Deleted messages are included (moderation view) and flagged via deletedAt.
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/conversations/:conversationId/messages', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const { conversationId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
-
-      const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { id: true }
-      });
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      }
-
-      const where = { conversationId };
-      const [messages, total] = await Promise.all([
-        fastify.prisma.message.findMany({
-          where,
-          select: {
-            id: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            messageSource: true,
-            isEdited: true,
-            editedAt: true,
-            deletedAt: true,
-            replyToId: true,
-            createdAt: true,
-            sender: {
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            },
-            _count: { select: { attachments: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.message.count({ where })
-      ]);
-
-      const data = messages.map(({ _count, ...rest }) => ({
-        ...rest,
-        attachmentCount: _count?.attachments ?? 0
-      }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + messages.length < total
-      });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching conversation messages');
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
-    }
-  });
+  // GET /admin/conversations/:conversationId/messages — régime SOUVERAIN
+  // (#4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE
+  // /admin/agent/reset) : servait auparavant le contenu intégral de
+  // n'importe quelle conversation privée sous la seule garde `canViewUsers`
+  // — `requireSovereign()`, motif écrit et audit vivent désormais dans
+  // `conversation-messages-sovereign.ts`, une unité nommable à part entière
+  // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
+  registerConversationMessagesSovereignRoute(fastify);
 }

@@ -10,6 +10,9 @@
  *
  * Covers permission gating, 404 on unknown user, and the response shape
  * (pagination + membership flattening / media merge / report+message join).
+ * `GET /admin/conversations/:conversationId/messages` is SOVEREIGN (#4333
+ * c.3, BIGBOSS + written reason + AdminAuditLog + deletedAt/content gates) —
+ * see `conversation-messages-sovereign.ts` for the route itself.
  *
  * @jest-environment node
  */
@@ -76,9 +79,24 @@ function createMockPrisma(opts: PrismaOpts) {
       findMany: jest.fn(async () => opts.participants ?? []),
       count: jest.fn(async () => opts.participantsCount ?? (opts.participants?.length ?? 0)),
     },
+    // Le double HONORE `where.deletedAt` — leçon 300 : « quand une décision
+    // d'autorisation/de contenu vit dans un `where`, le faux Prisma doit
+    // appliquer ce `where`, sinon la garde est hors de portée du témoin ».
+    // Aucun autre appelant de `message.findMany` dans ce fichier ne pose
+    // `deletedAt: null` (vérifié : `reported-messages` filtre par
+    // `senderId`/`id` seuls) — le filtre est donc un NO-OP pour eux.
     message: {
-      findMany: jest.fn(async () => opts.messages ?? []),
+      findMany: jest.fn(async (args?: { where?: AnyRecord }) => {
+        const rows = opts.messages ?? [];
+        if (args?.where?.deletedAt === null) {
+          return rows.filter((m) => !m.deletedAt);
+        }
+        return rows;
+      }),
       count: jest.fn(async () => opts.messagesCount ?? (opts.messages?.length ?? 0)),
+    },
+    adminAuditLog: {
+      create: jest.fn(async (args: { data: AnyRecord }) => ({ id: 'audit-1', ...args.data })),
     },
   } as unknown as PrismaClient;
 }
@@ -361,67 +379,185 @@ describe('GET /admin/users/:userId/reported-messages', () => {
   });
 });
 
+/**
+ * #4333 c.3 — troisième geste souverain, frère de `PUT /admin/agent/llm` et
+ * `DELETE /admin/agent/reset`. Servait auparavant le contenu INTÉGRAL de
+ * n'importe quelle conversation privée sous `canViewUsers` (donc ADMIN,
+ * MODERATOR, AUDIT) : `requireSovereign()` restreint désormais à BIGBOSS —
+ * ADMIN, qui passait avant, est le témoin qui prouve la montée de garde.
+ */
 describe('GET /admin/conversations/:conversationId/messages', () => {
-  it('returns 403 for a role without canViewUsers (USER)', async () => {
-    const app = await buildApp(createMockPrisma({}), 'USER');
+  const REASON = 'Enquête sur un signalement de harcèlement (#9142)';
+
+  it('refuse un rôle non-souverain (ADMIN) — canViewUsers ne suffit plus', async () => {
+    const app = await buildApp(createMockPrisma({}), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(403);
     await app.close();
   });
 
-  it('returns 404 when the conversation does not exist', async () => {
-    const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
+  it('refuse USER (non-régression du seuil précédent)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'USER');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('refuse BIGBOSS sans motif — 400 au SCHÉMA, avant Prisma', async () => {
+    const app = await buildApp(createMockPrisma({}), 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('refuse BIGBOSS avec un motif trop court (< 10 caractères)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages?reason=trop+bref',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('returns 404 when the conversation does not exist', async () => {
+    const app = await buildApp(createMockPrisma({ conversationExists: false }), 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
     expect(res.statusCode).toBe(404);
     await app.close();
   });
 
-  it('returns the paginated messages with their sender (deleted ones included)', async () => {
-    const prisma = createMockPrisma({
-      messages: [
-        {
-          id: 'm2',
-          content: 'latest message',
-          originalLanguage: 'fr',
-          messageType: 'text',
-          messageSource: 'user',
-          isEdited: false,
-          editedAt: null,
-          deletedAt: null,
-          replyToId: null,
-          createdAt: new Date('2026-06-02').toISOString(),
-          sender: { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
-          _count: { attachments: 2 },
-        },
-        {
-          id: 'm1',
-          content: 'older, deleted',
-          originalLanguage: 'en',
-          messageType: 'text',
-          messageSource: 'user',
-          isEdited: true,
-          editedAt: new Date('2026-06-01').toISOString(),
-          deletedAt: new Date('2026-06-01').toISOString(),
-          replyToId: null,
-          createdAt: new Date('2026-06-01').toISOString(),
-          sender: { id: 'pt2', userId: 'u2', type: 'user', displayName: 'Bob', avatar: null, nickname: null, user: { id: 'u2', username: 'bob', displayName: 'Bob', avatar: null } },
-          _count: { attachments: 0 },
-        },
-      ],
-      messagesCount: 42,
-    });
-    const app = await buildApp(prisma, 'ADMIN');
+  function messagesFixture(): AnyRecord[] {
+    return [
+      {
+        id: 'm2',
+        content: 'latest message',
+        originalLanguage: 'fr',
+        messageType: 'text',
+        messageSource: 'user',
+        isEdited: false,
+        editedAt: null,
+        replyToId: null,
+        createdAt: new Date('2026-06-02').toISOString(),
+        isViewOnce: false,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+        isEncrypted: false,
+        encryptionMode: null,
+        sender: { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+        _count: { attachments: 2 },
+      },
+      {
+        id: 'm3',
+        content: 'a secret',
+        originalLanguage: 'fr',
+        messageType: 'text',
+        messageSource: 'user',
+        isEdited: false,
+        editedAt: null,
+        replyToId: null,
+        createdAt: new Date('2026-06-03').toISOString(),
+        // Vue unique : le CONTENU ne doit pas voyager, la ligne si.
+        isViewOnce: true,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+        isEncrypted: false,
+        encryptionMode: null,
+        sender: { id: 'pt3', userId: 'u3', type: 'user', displayName: 'Carol', avatar: null, nickname: null, user: { id: 'u3', username: 'carol', displayName: 'Carol', avatar: null } },
+        _count: { attachments: 0 },
+      },
+      {
+        id: 'm1',
+        content: 'older, deleted',
+        originalLanguage: 'en',
+        messageType: 'text',
+        messageSource: 'user',
+        isEdited: true,
+        editedAt: new Date('2026-06-01').toISOString(),
+        // Message supprimé : ne doit plus être SERVI du tout (au `where`).
+        deletedAt: new Date('2026-06-01').toISOString(),
+        replyToId: null,
+        createdAt: new Date('2026-06-01').toISOString(),
+        isViewOnce: false,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+        isEncrypted: false,
+        encryptionMode: null,
+        sender: { id: 'pt2', userId: 'u2', type: 'user', displayName: 'Bob', avatar: null, nickname: null, user: { id: 'u2', username: 'bob', displayName: 'Bob', avatar: null } },
+        _count: { attachments: 0 },
+      },
+    ];
+  }
+
+  it('exclut un message SUPPRIMÉ de la liste servie — deletedAt: null au where, jamais un flag amputé', async () => {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
     const res = await app.inject({
       method: 'GET',
-      url: '/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30',
+      url: `/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const ids = (body.data as Array<{ id: string }>).map((m) => m.id);
+    expect(ids).not.toContain('m1');
+    expect(ids).toEqual(['m2', 'm3']);
+    await app.close();
+  });
+
+  it('masque le CONTENU d\'un message à vue unique — la ligne reste listée, isProtected le dit', async () => {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const items = body.data as Array<Record<string, unknown>>;
+    const vueUnique = items.find((m) => m.id === 'm3');
+    const ordinaire = items.find((m) => m.id === 'm2');
+
+    expect(vueUnique).toBeDefined();
+    expect(vueUnique?.content).toBeNull();
+    expect(vueUnique?.isProtected).toBe(true);
+
+    // Contraste : un message ORDINAIRE garde son contenu — sinon le témoin
+    // passerait aussi si la route retirait `content` à tout le monde.
+    expect(ordinaire?.content).toBe('latest message');
+    expect(ordinaire?.isProtected).toBe(false);
+    await app.close();
+  });
+
+  it('returns the paginated messages with their sender and attachment count', async () => {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30&reason=${encodeURIComponent(REASON)}`,
       headers: { authorization: 'Bearer x' },
     });
 
@@ -432,9 +568,43 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     expect(body.data[0].sender).toMatchObject({ userId: 'u1' });
     expect(body.data[0].sender.user).toMatchObject({ username: 'alice' });
     expect(body.data[0].attachmentCount).toBe(2);
-    expect(body.data[1]).toMatchObject({ id: 'm1', isEdited: true });
-    expect(body.data[1].deletedAt).not.toBeNull();
-    expect(body.pagination).toMatchObject({ total: 42, offset: 0, limit: 30, hasMore: true });
+    expect(body.pagination).toMatchObject({ total: 2, offset: 0, limit: 30, hasMore: false });
+    await app.close();
+  });
+
+  it('trace le geste dans AdminAuditLog, APRÈS la lecture réussie, avec le motif écrit', async () => {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const auditCreate = (prisma as unknown as { adminAuditLog: { create: jest.Mock } }).adminAuditLog.create;
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    const written = auditCreate.mock.calls[0][0] as { data: AnyRecord };
+    expect(written.data).toMatchObject({
+      adminId: ADMIN_ID,
+      entity: 'Conversation',
+      entityId: 'conv-1',
+    });
+    expect(String(written.data.action)).toContain('CONVERSATION');
+    expect(String(written.data.metadata)).toContain(REASON);
+    await app.close();
+  });
+
+  it('ne trace RIEN quand le motif est refusé au schéma (400) — l\'audit ne suit qu\'une lecture réussie', async () => {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    const auditCreate = (prisma as unknown as { adminAuditLog: { create: jest.Mock } }).adminAuditLog.create;
+    expect(auditCreate).not.toHaveBeenCalled();
     await app.close();
   });
 });

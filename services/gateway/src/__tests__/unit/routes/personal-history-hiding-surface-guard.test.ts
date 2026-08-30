@@ -111,7 +111,26 @@ const SURFACES: Record<string, Classification> = {
   'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   'admin/messages.ts': { kind: 'exempt', reads: 11, why: 'Surface admin/modération.' },
   'admin/system-rankings.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
-  'admin/users.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
+  // 4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
+  // lectures) est passée en régime SOUVERAIN et a été extraite dans son
+  // propre fichier — voir l'entrée `admin/conversation-messages-sovereign.ts`
+  // ci-dessous, déjà EXEMPTE elle aussi. Aucune lecture n'a disparu : elle a
+  // changé de fichier, comme `users/preferences.ts` plus bas (#4161).
+  'admin/users.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  'admin/conversation-messages-sovereign.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      'Lecture SOUVERAINE (#4333 c.3 : BIGBOSS, motif écrit, tracée dans ' +
+      'AdminAuditLog) de l\'INTÉGRALITÉ d\'une conversation à des fins de ' +
+      "modération/investigation. Masquer les messages qu'un PARTICIPANT a " +
+      "supprimés de SA PROPRE vue irait à l'encontre de l'objet du geste : un " +
+      "administrateur enquêtant sur un signalement doit voir le message que " +
+      "son auteur a tenté d'effacer de son côté, pas une vue déjà nettoyée par " +
+      "l'un des participants. Le masquage PERSONNEL et la protection " +
+      "SOUVERAINE (isViewOnce/isBlurred/effectFlags/expiresAt/encryptionMode, " +
+      'appliquée par ce fichier) répondent à deux questions différentes.',
+  },
   'admin/analytics.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/dashboard.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   // 4 → 3 (#4161) : `GET /users/:userId/stats` recopiait `computeUserStats`
