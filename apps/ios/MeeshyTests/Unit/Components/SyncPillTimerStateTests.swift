@@ -38,4 +38,66 @@ final class SyncPillTimerStateTests: XCTestCase {
             "SyncPill.dotTimer must not be a `let` — see @State requirement above."
         )
     }
+
+    // MARK: - L'accent est ABANDONNÉ, pas oublié (#4018 / #4026 / #4050)
+
+    /// Tous les fichiers de l'unité `SyncPill*`, énumérés par GLOB.
+    ///
+    /// Une LISTE écrite à la main se périmerait en silence : un
+    /// `SyncPillAccent.swift` ajouté demain n'y figurerait pas, la garde
+    /// resterait verte, et elle ne garderait plus rien. C'est le mode d'échec
+    /// que les gardes NÉGATIVES ont en propre — elles passent au vert en
+    /// perdant leur protection.
+    private func unitSources() throws -> [(name: String, text: String)] {
+        let dossier = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Components/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Components")
+        let fichiers = try FileManager.default
+            .contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift"
+                && $0.deletingPathExtension().lastPathComponent.hasPrefix("SyncPill") }
+        XCTAssertFalse(fichiers.isEmpty, "le glob ne trouve plus AUCUN fichier SyncPill* — la garde ne mesure rien")
+        return try fichiers.map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
+    }
+
+    /// **La pastille ne grossit plus, et ce n'est pas un oubli.**
+    ///
+    /// L'accent a été repris TROIS fois en dix jours — pulse fixe (#4018),
+    /// lié à la durée du signal (#4026), fenêtre de six secondes réarmable
+    /// (#4050) — puis SUPPRIMÉ par `960f7d1df0` sur décision du porteur du
+    /// 2026-08-28 : « l'effet sur la SyncPill qui la grossit est inutile, il
+    /// existe un composant qui rend les informations en gros et c'est ce
+    /// composant qu'il faut utiliser lorsqu'un utilisateur commence la frappe ».
+    /// L'annonce de frappe appartient depuis à `IslandEmergingBanner`.
+    ///
+    /// Une décision reprise trois fois puis renversée a besoin d'un témoin,
+    /// sans quoi la quatrième reprise se fera de bonne foi : rien dans le
+    /// code ne dit qu'un accent a déjà été essayé et refusé.
+    func test_syncPill_carriesNoAccentAnymore() throws {
+        let interdits = ["scaleEffect", "isAccented", "accentScale", "setAccented",
+                         "accentHold", "accentDeadline", "applyAccentWindow"]
+        for (name, text) in try unitSources() {
+            for interdit in interdits {
+                XCTAssertFalse(
+                    text.contains(interdit),
+                    """
+                    \(name) porte « \(interdit) » : l'accent de la pastille a été                     ABANDONNÉ le 2026-08-28 (960f7d1df0), après trois reprises.                     Une annonce « en gros » se fait par IslandEmergingBanner —                     une capsule de STATUT n'en est pas le porteur. Si le porteur                     revient sur cette décision, c'est ce témoin qu'il faut retirer                     EXPLICITEMENT, avec la nouvelle décision écrite à sa place.
+                    """
+                )
+            }
+        }
+    }
+
+    /// La loi d'accent avait son propre fichier ET ses deux suites ; les trois
+    /// ont été SUPPRIMÉS, jamais vidés — une garde vidée de ses assertions
+    /// reste verte en ne mesurant plus rien. Le témoin vérifie qu'ils ne
+    /// reviennent pas par la porte du nom.
+    func test_theAccentLawFileIsGoneForGood() throws {
+        let noms = try unitSources().map(\.name)
+        XCTAssertFalse(noms.contains("SyncPillAccentLaw.swift"),
+                       "SyncPillAccentLaw.swift est revenu — voir le témoin ci-dessus")
+    }
 }
