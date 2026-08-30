@@ -109,7 +109,7 @@ struct StatusBarView: View {
                 Image(systemName: "plus")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(MeeshyColors.avatarRingGradient)
-                Text(String(localized: "status.bar.status", defaultValue: "Status", bundle: .main))
+                Text(String(localized: "status.bar.status", defaultValue: "Statut", bundle: .main))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }

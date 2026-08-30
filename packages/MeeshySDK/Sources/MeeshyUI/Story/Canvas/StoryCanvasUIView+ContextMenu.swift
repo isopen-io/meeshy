@@ -83,14 +83,53 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
         return servies
     }
 
+    /// **Six littéraux français vécurent ici** (#4431). Ils alimentaient un menu
+    /// d'appui long — une surface qu'on ouvre rarement, qu'aucun cliquet de
+    /// localisation ne balaie : le cliquet français surveille les
+    /// `defaultValue:` du catalogue de l'app, et ces chaînes n'y étaient pas.
+    /// Elles n'étaient pas des `defaultValue`, elles ÉTAIENT la valeur.
+    ///
+    /// Le rail *trailing* (#4063) les a rendues permanentes dès qu'un objet est
+    /// sélectionné, sur l'écran de composition le plus utilisé : un simulateur
+    /// en anglais rendait alors le rail de gauche en anglais et celui de droite
+    /// en français, à quelques points de distance.
+    ///
+    /// > **Une chaîne écrite en dur ne se signale que quand la surface qui la
+    /// > porte devient visible.** Le défaut n'est pas né avec le rail — le rail
+    /// > en a fait un spectacle.
+    ///
+    /// `bundle: .module` — ce sont des mots du SDK, servis depuis son
+    /// catalogue, comme leurs voisins `story.drawEdit.tool.*`.
+    ///
+    /// **`@MainActor` malgré le type `nonisolated`**, et c'est le motif que le
+    /// dépôt a déjà posé pour ce cas exact (`TextEditTool.accessibilityLabel`) :
+    /// `Bundle.module`, généré par SPM sans annotation, tombe sous l'isolation
+    /// par défaut du package. Seules des VUES lisent ce titre — le rail des
+    /// contrôleurs et le menu d'appui long ; les règles pures qui décident
+    /// QUELLES actions offrir (`offered`) n'en ont pas besoin et restent
+    /// nonisolated, ce qui est la seule chose qui compte pour les tests et pour
+    /// la politique app-side.
+    @MainActor
     public var title: String {
         switch self {
-        case .edit:         return "Modifier"
-        case .duplicate:    return "Dupliquer"
-        case .bringForward: return "Mettre au premier plan"
-        case .sendBackward: return "Mettre à l'arrière"
-        case .leaveScene:   return "Sortir de la scène"
-        case .delete:       return "Supprimer"
+        case .edit:
+            return String(localized: "story.canvas.action.edit",
+                          defaultValue: "Modifier", bundle: .module)
+        case .duplicate:
+            return String(localized: "story.canvas.action.duplicate",
+                          defaultValue: "Dupliquer", bundle: .module)
+        case .bringForward:
+            return String(localized: "story.canvas.action.bringForward",
+                          defaultValue: "Mettre au premier plan", bundle: .module)
+        case .sendBackward:
+            return String(localized: "story.canvas.action.sendBackward",
+                          defaultValue: "Mettre à l'arrière", bundle: .module)
+        case .leaveScene:
+            return String(localized: "story.canvas.action.leaveScene",
+                          defaultValue: "Sortir de la scène", bundle: .module)
+        case .delete:
+            return String(localized: "story.canvas.action.delete",
+                          defaultValue: "Supprimer", bundle: .module)
         }
     }
 

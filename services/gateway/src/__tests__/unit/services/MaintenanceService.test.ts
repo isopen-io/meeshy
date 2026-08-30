@@ -140,6 +140,89 @@ describe('startMaintenanceTasks', () => {
   });
 });
 
+// ─── les tâches périodiques ne laissent jamais un rejet sans écouteur ─────────
+
+/**
+ * Recense les rejets de promesse laissés SANS écouteur pendant `body`.
+ *
+ * Jumeau des helpers de `NotificationService.socketEmitIsolation.test.ts` et
+ * `MeeshySocketIOManager.test.ts` : une promesse détachée ne se prouve pas par
+ * le retour de son appelant — seul le verdict du runtime distingue « gardée »
+ * de « abandonnée ». D'où l'écoute de `unhandledRejection` et le passage par la
+ * phase « check » (`setImmediate`), où Node tranche.
+ */
+async function captureUnhandledRejections(body: () => Promise<void>): Promise<unknown[]> {
+  const captured: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { captured.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await body();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+  return captured;
+}
+
+/**
+ * Capture les callbacks passés à `setInterval` au lieu de les laisser courir
+ * sur l'horloge de 15 s / 1 h — on les déclenche à la main. Rend un `unref`
+ * factice pour que `this.maintenanceInterval.unref?.()` ne casse pas.
+ */
+function captureIntervalCallbacks(): { readonly callbacks: Array<() => void>; restore: () => void } {
+  const callbacks: Array<() => void> = [];
+  const spy = jest
+    .spyOn(global, 'setInterval')
+    .mockImplementation(((cb: () => void) => {
+      callbacks.push(cb);
+      return { unref: () => {} } as unknown as NodeJS.Timeout;
+    }) as never);
+  return { callbacks, restore: () => spy.mockRestore() };
+}
+
+describe('periodic tasks never leave an unhandled rejection', () => {
+  it('catches a maintenance-interval failure instead of crashing the process', async () => {
+    jest.useRealTimers();
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    // Rejette HORS du try/catch interne de la vraie méthode — exactement ce qui
+    // arriverait dès qu'une instruction non gardée précède son propre catch.
+    (sut as any).updateOfflineUsers = jest.fn<any>().mockRejectedValue(new Error('boom-maintenance'));
+
+    const timers = captureIntervalCallbacks();
+    const captured = await captureUnhandledRejections(async () => {
+      await sut.startMaintenanceTasks();
+      timers.callbacks[0]?.(); // la tâche de maintenance (15 s)
+    });
+    timers.restore();
+
+    expect(captured).toHaveLength(0);
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('catches a daily-cleanup-interval failure instead of crashing the process', async () => {
+    jest.useRealTimers();
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    // Résout à l'appel immédiat du démarrage, rejette quand l'intervalle le rappelle.
+    (sut as any).runDailyCleanup = jest
+      .fn<any>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValue(new Error('boom-daily'));
+
+    const timers = captureIntervalCallbacks();
+    const captured = await captureUnhandledRejections(async () => {
+      await sut.startMaintenanceTasks();
+      timers.callbacks[1]?.(); // le nettoyage journalier (1 h)
+    });
+    timers.restore();
+
+    expect(captured).toHaveLength(0);
+    expect(logger.error).toHaveBeenCalled();
+  });
+});
+
 // ─── stopMaintenanceTasks ─────────────────────────────────────────────────────
 
 describe('stopMaintenanceTasks', () => {

@@ -151,7 +151,7 @@ struct StoryViewerContainer: View {
                 ProgressView()
                     .tint(.white)
                     .scaleEffect(1.3)
-                Text(String(localized: "story.viewer.loading", defaultValue: "Loading...", bundle: .main))
+                Text(String(localized: "story.viewer.loading", defaultValue: "Chargement…", bundle: .main))
                     .foregroundColor(.white.opacity(0.6))
                     .font(.subheadline)
             }
@@ -174,7 +174,7 @@ struct StoryViewerContainer: View {
                     .foregroundColor(.white)
                     .font(.headline)
 
-                Text(String(localized: "story.viewer.notFound.description", defaultValue: "Impossible de charger cette story. Reessayez ou fermez.", bundle: .main))
+                Text(String(localized: "story.viewer.notFound.description", defaultValue: "Impossible de charger cette story. Réessayez ou fermez.", bundle: .main))
                     .multilineTextAlignment(.center)
                     .foregroundColor(.white.opacity(0.6))
                     .font(.footnote)
@@ -184,7 +184,7 @@ struct StoryViewerContainer: View {
                     Button {
                         Task { await retryFetch(uid: uid) }
                     } label: {
-                        Text(String(localized: "story.viewer.retry", defaultValue: "Reessayer", bundle: .main))
+                        Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 20)

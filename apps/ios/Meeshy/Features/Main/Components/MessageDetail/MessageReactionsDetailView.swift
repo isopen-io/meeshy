@@ -184,7 +184,7 @@ struct MessageReactionsDetailView: View {
                 .font(.system(size: 28, weight: .light)) // decorative empty-state glyph (parity with MessageViewsDetailView)
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
-            Text(String(localized: "message-detail.reactions.empty", defaultValue: "Aucune reaction", bundle: .main))
+            Text(String(localized: "message-detail.reactions.empty", defaultValue: "Aucune réaction", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -221,7 +221,7 @@ struct MessageReactionsDetailView: View {
         currentUserId: String,
         currentUserDisplayName: String
     ) -> [ReactionGroup] {
-        let unknownLabel = String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main)
+        let unknownLabel = String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         var usersByEmoji: [String: [ReactionUserDetail]] = [:]
         var emojiOrder: [String] = []
         for reaction in reactions {
@@ -251,7 +251,7 @@ struct MessageReactionsDetailView: View {
                 from: message.reactions,
                 currentUserId: user?.id ?? "",
                 currentUserDisplayName: user?.displayName ?? user?.username
-                    ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main)
+                    ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
             )
         }
         isLoadingReactions = reactionGroups.isEmpty

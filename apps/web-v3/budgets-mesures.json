@@ -1,0 +1,21 @@
+{
+ "role": "Les valeurs MESURÉES par check-bundle-budget.mjs — jamais des plafonds (ceux-là vivent dans budgets.json). § 8.3 attache au statut CIBLE un ratchet : « le gate enregistre la valeur mesurée et interdit toute régression ». Ce que le ratchet livré interdit exactement, c'est la croissance SILENCIEUSE : toute valeur au-dessus de celle enregistrée ici rend rc=1, et la faire monter exige --ratchet, donc un diff relu. Un ratchet strictement décroissant serait ininstallable pendant L1 — un écran neuf pèse par construction plus que pas d'écran.",
+ "produit_par": "cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs --ratchet",
+ "date": "2026-08-30",
+ "plancher_next_ko": 99.6,
+ "plancher_next": {
+  "quoi": "Ce que pèsent les chunks PARTAGÉS d'App Router pour une page RSC vide — le plancher que le § 8.1 assigne nommément à L-0.5, avant la première ligne de code produit.",
+  "detail_gzip_9_octets": {
+   "static/chunks/webpack-*.js": 1677,
+   "static/chunks/415ba63b-*.js": 54101,
+   "static/chunks/576-*.js": 45933,
+   "static/chunks/main-app-*.js": 253,
+   "total": 101964
+  },
+  "commande": "poser une page sonde jetable — mkdir -p 'apps/web-v3/app/(public)/stories/[id]' puis un page.tsx d'une ligne — et lancer `cd apps/web-v3 && npx next build && node scripts/check-bundle-budget.mjs` ; la sonde a été retirée, le manifeste qu'elle a produit est commité en fixture",
+  "fixture": "apps/web-v3/__tests__/fixtures/app-build-manifest-groupe-reel.json",
+  "next": "15.5.23",
+  "consequence": "99,6 Ko > 95 Ko — le plancher dépasse le plafond du RÔLE PREMIER (§ 8.3, lecture partagée) avant tout code produit. Déclaré en question ouverte : budgets.json → questions_ouvertes, conception § 11 question 12."
+ },
+ "groupes": {}
+}

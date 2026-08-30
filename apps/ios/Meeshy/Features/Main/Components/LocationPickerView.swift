@@ -337,7 +337,7 @@ struct LocationPickerView: View {
                 .foregroundColor(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
+            TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu…", bundle: .main), text: $searchText)
                 .font(MeeshyFont.relative(14))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
@@ -352,7 +352,7 @@ struct LocationPickerView: View {
                         .font(MeeshyFont.relative(14))
                         .foregroundColor(.secondary)
                 }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Clear search", bundle: .main))
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -475,12 +475,12 @@ struct LocationPickerView: View {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
+                            Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse…", bundle: .main))
                                 .font(MeeshyFont.relative(12))
                                 .foregroundColor(.secondary)
                         }
                     } else {
-                        Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
+                        Text(String(localized: "location.move-prompt", defaultValue: "Déplacez la carte pour choisir", bundle: .main))
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(.secondary)
                     }

@@ -274,8 +274,18 @@ struct SyncPill: View {
                 .fill(capsuleBackground)
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
-        // Accent (#4018) : la pastille grossit ×1.5 vers le BAS (ancrage .top)
-        // pour ne jamais empiéter sur la Dynamic Island au-dessus.
+        // **La pastille GARDE SA TAILLE.** Ce commentaire annonçait un accent
+        // ×1.5 (#4018) qui n'existe plus : il a survécu à son propre code,
+        // supprimé par `960f7d1df0` sur décision du porteur du 2026-08-28 —
+        // « l'effet sur la SyncPill qui la grossit est inutile, il existe un
+        // composant qui rend les informations en gros et c'est ce composant
+        // qu'il faut utiliser lorsqu'un utilisateur commence la frappe ».
+        // L'annonce de frappe appartient depuis à `IslandEmergingBanner` ;
+        // une capsule de STATUT n'est pas le porteur d'une annonce.
+        //
+        // Il est réécrit plutôt que retiré : l'accent a été repris TROIS fois
+        // en dix jours (#4018, #4026, #4050) avant d'être abandonné, et un
+        // fichier muet sur ce point invite une quatrième reprise.
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
         .onLongPressGesture(minimumDuration: 0.5) {

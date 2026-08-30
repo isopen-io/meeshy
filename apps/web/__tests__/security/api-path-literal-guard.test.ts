@@ -453,15 +453,29 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 //       correctif.
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
-  // `/api/og-image-dynamic` : AUCUNE route locale `app/api/og-image-dynamic/route.ts`
-  // n'existe (vérifié — cf. `nextLocalApiPrefixes`), et ces quatre sites ne
-  // passent NI par `buildApiUrl` NI par `apiService` : une image OG qui vise une
-  // adresse absente, famille exacte de #4219/#4222. Suivi : #4338.
+  // `/api/v1/og-image-dynamic` — SORTI de l'inventaire le 2026-08-30 (#4338),
+  // et la façon dont il en est sorti vaut d'être dite.
+  //
+  // Ces quatre sites comptaient ici parce que l'adresse était MORTE (aucune
+  // route locale, `404` mesuré sur staging — famille de #4219/#4222). #4338 a
+  // livré la route, et l'assertion des routes locales, plus haut, a rougi le
+  // jour même : le signal a fonctionné.
+  //
+  // Ils ne sont pas sortis pour autant : l'exemption locale teste le PREMIER
+  // segment du gabarit, et `` `${frontendUrl}/api/v1/og-image-dynamic?…` ``
+  // n'y met pas le chemin en premier. Ce n'était pas un défaut de ces sites —
+  // une balise `og:image` DOIT porter une URL ABSOLUE — et élargir l'exemption
+  // à tous les segments aurait exempté du même coup un `` `${baseURL}/api/…` ``
+  // visant le GATEWAY, la classe exacte que cette garde existe pour attraper.
+  // Une garde de sécurité ne s'élargit pas pour faire décroître un compteur :
+  // l'angle mort est nommé et suivi sous #4422.
+  //
+  // Ce qui les a fait sortir est le geste que la garde VISE depuis le début :
+  // le chemin est écrit UNE fois (`OG_IMAGE_PATH` / `ogImageUrl`, dans
+  // `lib/og-image-params.ts`), et les quatre pages l'appellent. Le littéral
+  // restant est nu — donc son premier segment EST le chemin, donc l'exemption
+  // joue. Quatre entrées de moins, aucune de plus.
   'app/api/metadata/route.ts': 2,
-  'app/chat/[id]/layout.tsx': 1,
-  'app/conversation/[conversationId]/page.tsx': 1,
-  'app/signup/affiliate/[token]/layout.tsx': 1,
-  'app/u/[id]/layout.tsx': 1,
   'lib/server-cache.ts': 1,
   'services/message-translation.service.ts': 2,
 };
@@ -471,16 +485,23 @@ describe('Le balayage LIT bien apps/web — sinon les gardes ci-dessous seraient
     expect(walkSourceFiles(WEB_ROOT).length).toBeGreaterThan(1000);
   });
 
-  it('dérive les cinq routes locales Next.js connues au 2026-08-29, ni plus ni moins', () => {
-    // Une SIXIÈME route locale ajoutée demain fait rougir CETTE assertion —
+  it('dérive les six routes locales Next.js connues au 2026-08-30, ni plus ni moins', () => {
+    // Une SEPTIÈME route locale ajoutée demain fait rougir CETTE assertion —
     // c'est le signal voulu : une nouvelle surface « BFF » mérite d'être vue,
     // jamais absorbée en silence dans les exemptions de la garde principale.
+    //
+    // La sixième est arrivée le 2026-08-30 et le signal a fonctionné comme
+    // annoncé : `/api/og-image-dynamic` (#4338) est la route que quatre pages
+    // ANNONÇAIENT dans leur `og:image` sans que rien ne la serve — mesuré
+    // `404` sur staging. L'assertion a rougi le jour où elle a été créée,
+    // c'est-à-dire au moment exact où l'arbitrage devait être vu.
     expect(nextLocalApiPrefixes(API_ROOT)).toEqual([
       '/api/client-error',
       '/api/health',
       '/api/metadata',
       '/api/upload/avatar',
       '/api/upload/banner',
+      '/api/v1/og-image-dynamic',
     ]);
   });
 });

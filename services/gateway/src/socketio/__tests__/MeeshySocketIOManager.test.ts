@@ -1262,7 +1262,7 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-t1');
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-1', targetLanguage: 'en' });
+      await handler({ messageId: convId('msg-1'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('authenticated') }));
     });
 
@@ -1276,7 +1276,7 @@ describe('MeeshySocketIOManager', () => {
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       for (let i = 0; i < 10; i++) {
-        await handler({ messageId: `msg-${i}`, targetLanguage: 'fr' });
+        await handler({ messageId: convId(`msg-${i}`), targetLanguage: 'fr' });
       }
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
     });
@@ -1293,7 +1293,7 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).socketRateLimits.set(rateLimitKey, Array(10).fill(now));
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-x', targetLanguage: 'en' });
+      await handler({ messageId: convId('msg-x'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
     });
 
@@ -1317,9 +1317,9 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
+      await handler({ messageId: convId('msg-cached'), targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({
-        messageId: 'msg-cached',
+        messageId: convId('msg-cached'),
       }));
     });
 
@@ -1359,18 +1359,18 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4c' });
       triggerConnection(socket);
 
-      await getTranslationHandler(socket)({ messageId: 'msg-contract', targetLanguage: 'fr' });
+      await getTranslationHandler(socket)({ messageId: convId('msg-contract'), targetLanguage: 'fr' });
 
       const call = (socket.emit as jest.Mock).mock.calls.find(
         ([event]) => event === SERVER_EVENTS.MESSAGE_TRANSLATION,
       );
       expect(call).toBeDefined();
       const payload = call![1];
-      expect(payload.messageId).toBe('msg-contract');
+      expect(payload.messageId).toBe(convId('msg-contract'));
       expect(Array.isArray(payload.translations)).toBe(true);
       expect(payload.translations).toHaveLength(1);
       expect(payload.translations[0]).toEqual(expect.objectContaining({
-        messageId: 'msg-contract',
+        messageId: convId('msg-contract'),
         sourceLanguage: 'en',
         targetLanguage: 'fr',
         translatedContent: 'Bonjour',
@@ -1401,7 +1401,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue(null);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-cached-foreign', targetLanguage: 'fr' });
+      await handler({ messageId: convId('msg-cached-foreign'), targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
     });
@@ -1424,7 +1424,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-t5' });
       const before = manager.getStats().translations_sent;
       triggerConnection(socket);
-      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-stat', targetLanguage: 'en' });
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: convId('msg-stat'), targetLanguage: 'en' });
       expect(manager.getStats().translations_sent).toBe(before + 1);
     });
 
@@ -1446,7 +1446,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-fresh' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-fresh', targetLanguage: 'en' });
+      await handler({ messageId: convId('msg-fresh'), targetLanguage: 'en' });
       expect(translationService.handleNewMessage).toHaveBeenCalledWith(expect.objectContaining({
         id: 'msg-fresh',
         targetLanguage: 'en',
@@ -1470,7 +1470,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue(null);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-foreign', targetLanguage: 'en' });
+      await handler({ messageId: convId('msg-foreign'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
       expect(translationService.handleNewMessage).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'msg-foreign' }));
     });
@@ -1482,8 +1482,57 @@ describe('MeeshySocketIOManager', () => {
       prisma.message.findUnique.mockResolvedValue(null);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
-      await handler({ messageId: 'msg-missing', targetLanguage: 'en' });
+      await handler({ messageId: convId('msg-missing'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('not found') }));
+    });
+
+    // ── Frontière Zod partagée (parité avec les douze familles de handlers) ──
+    // `messageId` filait jusqu'ici en clair dans `prisma.message.findUnique`
+    // sur une colonne ObjectId. Ces témoins prouvent que la charge malformée est
+    // rejetée AVANT toute requête (aucun `findUnique`, aucun `getTranslation`),
+    // avec le préfixe unifié `'Validation failed: …'`.
+    it('rejects a non-ObjectId messageId at the boundary before any DB query', async () => {
+      const socket = makeSocket('sock-t8');
+      (manager as any).socketToUser.set('sock-t8', 'user-t8');
+      prisma.message.findUnique.mockClear();
+      (translationService.getTranslation as jest.Mock).mockClear();
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'not-an-object-id', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.ERROR,
+        expect.objectContaining({ message: expect.stringContaining('Validation failed') }),
+      );
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+      expect(translationService.getTranslation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing targetLanguage at the boundary', async () => {
+      const socket = makeSocket('sock-t9');
+      (manager as any).socketToUser.set('sock-t9', 'user-t9');
+      prisma.message.findUnique.mockClear();
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: convId('msg-ok') });
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.ERROR,
+        expect.objectContaining({ message: expect.stringContaining('Validation failed') }),
+      );
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-object payload at the boundary', async () => {
+      const socket = makeSocket('sock-t10');
+      (manager as any).socketToUser.set('sock-t10', 'user-t10');
+      prisma.message.findUnique.mockClear();
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler(undefined);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.ERROR,
+        expect.objectContaining({ message: expect.stringContaining('Validation failed') }),
+      );
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
     });
   });
 
@@ -5490,7 +5539,7 @@ describe('MeeshySocketIOManager', () => {
       });
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-rw1' });
       triggerConnection(socket);
-      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-fresh2', targetLanguage: 'en' });
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: convId('msg-fresh2'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: expect.stringContaining('Rate limit') }));
     });
@@ -5844,7 +5893,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-err' });
       (translationService.handleNewMessage as any).mockRejectedValue(new Error('ZMQ send fail'));
       triggerConnection(socket);
-      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-err-demand', targetLanguage: 'en' });
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: convId('msg-err-demand'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Translation request failed' }));
     });
   });
@@ -5957,7 +6006,7 @@ describe('MeeshySocketIOManager', () => {
       // The socket is NOT in socketToUser, so lines 800-802 execute
       const socket = makeSocket('sock-direct-unauth');
       // socket is NOT added to socketToUser
-      await (manager as any)._handleTranslationRequest(socket, { messageId: 'msg-1', targetLanguage: 'en' });
+      await (manager as any)._handleTranslationRequest(socket, { messageId: convId('msg-1'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'User not authenticated' }));
     });
   });
@@ -5982,7 +6031,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-outer' });
       (translationService.getTranslation as any).mockRejectedValue(new Error('Redis crash'));
       triggerConnection(socket);
-      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-1', targetLanguage: 'en' });
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: convId('msg-1'), targetLanguage: 'en' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Failed to get translation' }));
     });
   });
@@ -6671,7 +6720,7 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-no-user-trans-b');
       // No socketToUser entry for this socket
       triggerConnection(socket);
-      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-no-user-b', targetLanguage: 'en' });
+      await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: convId('msg-no-user-b'), targetLanguage: 'en' });
       // Emits some error event indicating unauthenticated
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.any(Object));
     });

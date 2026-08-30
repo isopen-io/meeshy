@@ -147,7 +147,13 @@ final class FocalVoiceOverParityTests: XCTestCase {
         let parts = MessageAccessibilityLabelComposer.compose(content).components(separatedBy: ", ")
 
         let timeIndex = parts.firstIndex(of: "10:41")!
-        let deliveryIndex = parts.firstIndex(of: "lu")!
+        // The catalog, not the French word: `a11y.delivery.read` was ABSENT from the
+        // catalog until 270i, so `String(localized:)` returned its `defaultValue` —
+        // « lu » — in every locale, and this literal matched anywhere. Localizing the
+        // key made the CI simulator (English) compose « read », and the force-unwrap
+        // below trapped. A test that hardcodes a source-language string passes only
+        // while the string is NOT localized.
+        let deliveryIndex = parts.firstIndex(of: String(localized: "a11y.delivery.read", bundle: .main))!
         let editedIndex = parts.firstIndex(of: String(localized: "a11y.message.edited", bundle: .main))!
         let pinnedIndex = parts.firstIndex(of: String(localized: "a11y.message.pinned", bundle: .main))!
         let ephemeralIndex = parts.firstIndex(of: String(localized: "a11y.message.ephemeral", bundle: .main))!

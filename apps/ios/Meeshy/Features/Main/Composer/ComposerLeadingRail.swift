@@ -118,6 +118,9 @@ nonisolated enum ComposerRailCopy {
         case .place:
             return String(localized: "composer.rail.place",
                           defaultValue: "Ajouter un lieu", bundle: .main)
+        case .drawing:
+            return String(localized: "composer.rail.drawing",
+                          defaultValue: "Dessiner", bundle: .main)
         }
     }
 }

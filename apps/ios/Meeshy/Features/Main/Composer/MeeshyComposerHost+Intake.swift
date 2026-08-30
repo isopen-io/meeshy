@@ -373,7 +373,7 @@ extension MeeshyComposerHost {
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
         case .media:   presentMediaSources()
-        case .sound:   handleDocumentTool(.microphone)
+        case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
         case .description:
@@ -382,6 +382,25 @@ extension MeeshyComposerHost {
             // qu'un texte existait a été retiré sur directive porteur.
             HapticFeedback.light()
             editsSceneDescription = true
+        case .drawing:
+            // **Une porte à BASCULE, la seule du rail.** Les six autres font
+            // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui
+            // dure, et il faut pouvoir en sortir par là où l'on est entré —
+            // sinon le seul moyen de reprendre la main sur les objets serait de
+            // quitter l'écran.
+            //
+            // La bande suit le mode et n'est pas un état parallèle : deux
+            // booléens auraient permis « je dessine mais la bande est fermée »,
+            // c'est-à-dire un doigt qui trace sans qu'aucun réglage ne soit
+            // atteignable.
+            HapticFeedback.light()
+            if viewModel.isDrawingActive {
+                viewModel.exitDrawingEditingMode()
+                requestedSceneBand = nil
+            } else {
+                viewModel.enterDrawingEditingMode()
+                requestedSceneBand = .drawing
+            }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
             // la feuille est montée au-dessus de l'aiguillage des surfaces, pas
@@ -464,6 +483,64 @@ extension MeeshyComposerHost {
             return
         }
         showsMediaSourceChooser = true
+    }
+
+    /// **La porte son ouvre l'ÉTAGÈRE autant que le micro.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.microphone)` : le composer
+    /// unifié n'avait aucun chemin vers `SoundLibraryPicker`, alors que le
+    /// socle affiche déjà un crédit de son de fond. Les deux provenances ne
+    /// posent pas le même objet — un son emprunté DEVIENT le fond, une note
+    /// vocale ne l'est jamais (doctrine de la vue `2c`) —, donc le choix ne
+    /// peut pas être deviné : il se demande.
+    /// **Annuler — et ce que le meuble n'a PAS à faire ensuite.**
+    ///
+    /// L'atelier fait suivre `restoreCanvas(from:)` et
+    /// `loadCurrentSlideIntoTimeline()` : deux effets de PRÉSENTATION dus à sa
+    /// coquille, qui tient un état canvas local et une timeline chargée. Le
+    /// plateau n'a ni l'un ni l'autre — `EmbeddedSceneCanvas` lit la slide par
+    /// un `Binding` sur `viewModel.currentSlide`, donc appliquer l'instantané
+    /// SUFFIT à redessiner. Recopier les deux appels ici aurait couplé le
+    /// meuble à des helpers qu'il n'a pas, pour un effet déjà obtenu.
+    ///
+    /// Le retour de `undoGlobal()` est GARDÉ : `false` veut dire « rien à
+    /// défaire », et faire vibrer l'appareil pour un geste sans effet est
+    /// exactement le retour trompeur que la loi 4 combat.
+    func performHistoryUndo() {
+        guard viewModel.undoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
+    func performHistoryRedo() {
+        guard viewModel.redoGlobal() else { return }
+        HapticFeedback.light()
+    }
+
+    func presentSoundSources() {
+        HapticFeedback.light()
+        showsSoundSourceChooser = true
+    }
+
+    func presentSoundSource(_ source: ComposerSoundSource) {
+        switch source {
+        case .library: showsSoundLibrary = true
+        case .record:  handleDocumentTool(.microphone)
+        }
+    }
+
+    /// L'étagère des sons. Le picker vient du SDK — le meuble ne fait que le
+    /// présenter et remettre son résultat au viewModel, seul site qui sait ce
+    /// qu'un son EMPRUNTÉ vaut (`soundId` renseigné, `postMediaId` vide : c'est
+    /// ce couple qui dit au serveur « enregistre un usage, ne capture rien »).
+    var soundLibrarySheet: some View {
+        SoundLibraryPicker(
+            onPick: { sound in
+                viewModel.addBorrowedSound(sound)
+                showsSoundLibrary = false
+                HapticFeedback.light()
+            },
+            onCancel: { showsSoundLibrary = false }
+        )
     }
 
     func presentMediaIntake(_ intake: ComposerMediaIntake) {

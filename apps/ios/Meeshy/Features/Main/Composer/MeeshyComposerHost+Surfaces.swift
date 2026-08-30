@@ -270,6 +270,17 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // **L'historique n'est servi QUE par la scène**
+            // (`ComposerHistoryService`) : c'est la seule surface où les gestes
+            // — poser un sticker, avancer un objet, changer le fond — ne se
+            // défont par rien d'autre. Sur le document, le dernier geste est
+            // presque toujours du texte, que le clavier annule déjà.
+            canUndo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canUndoGlobal,
+            canRedo: ComposerHistoryService.servesHistory(on: mountedSurface)
+                && viewModel.canRedoGlobal,
+            onUndo: { performHistoryUndo() },
+            onRedo: { performHistoryRedo() },
             slide: Binding(
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
@@ -339,6 +350,30 @@ extension MeeshyComposerHost {
                 // l'espace pour montrer ce que l'écran montre déjà.
                 requestedSceneBand = nil
             },
+            bandOpeningEffect: viewModel.openingEffect,
+            // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
+            // la différence avec la couleur juste au-dessus : une couleur se
+            // voit sur la scène dès qu'elle est posée, un effet d'ouverture ne
+            // se joue qu'à la LECTURE. Refermer laisserait l'auteur sans aucun
+            // retour sur ce qu'il vient de choisir ; la rangée reste ouverte,
+            // avec sa puce sélectionnée pour tout témoin.
+            onPickBandOpening: { effect in
+                viewModel.openingEffect = effect
+                HapticFeedback.light()
+            },
+            // **Les deux montages du dessin** (#4092). La bande porte les
+            // réglages ; la surface porte le trait. Elles paraissent ENSEMBLE —
+            // la bande est ouverte par la même porte qui entre dans le mode —
+            // mais elles sont montées à deux endroits distincts, parce qu'elles
+            // ne vivent pas au même niveau : l'une sous la scène, l'autre
+            // dessus.
+            drawingBand: AnyView(MeeshyDrawingToolBand(viewModel: viewModel)),
+            // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
+            // reste : le canvas garde son calque persisté, il continue de
+            // recevoir les touches, et aucune surface ne se pose dessus.
+            drawingSurface: viewModel.isDrawingActive
+                ? AnyView(MeeshyDrawingSurface(viewModel: viewModel))
+                : nil,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )

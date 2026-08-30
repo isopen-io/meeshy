@@ -116,7 +116,7 @@ extension ConversationView {
                         Image(systemName: "lock.fill")
                             .font(MeeshyFont.relative(9, weight: .semibold))
                             .foregroundColor(theme.success)
-                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Encrypted conversation", bundle: .main))
+                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
                     }
 
                     // Category tag
@@ -369,7 +369,7 @@ private struct HeaderCallButtonsView: View {
             Button {
                 Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             callGlyph("phone.fill")

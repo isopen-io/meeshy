@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.62.1",
     "concurrently": "^9.2.1",
     "dotenv": "^17.4.2",
     "mongodb": "^7.5.0",
@@ -84,7 +84,7 @@
     "postcss": "8.5.13",
     "serialize-javascript": "7.0.3",
     "uuid": "11.1.1",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   }
 }

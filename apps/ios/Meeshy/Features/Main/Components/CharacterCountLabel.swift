@@ -76,7 +76,7 @@ struct CharacterCountLabel: View {
         String(
             format: String(
                 localized: "components.characterCount.a11y",
-                defaultValue: "%1$lld of %2$lld characters",
+                defaultValue: "%1$lld caractères sur %2$lld",
                 bundle: .main
             ),
             count,

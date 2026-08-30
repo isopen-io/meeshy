@@ -418,7 +418,7 @@ struct NewConversationView: View {
                 .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour d\u{00E9}marrer une conversation.", bundle: .main))
+            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour démarrer une conversation.", bundle: .main))
                 .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
@@ -516,7 +516,7 @@ struct NewConversationView: View {
     private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool, presence: PresenceState) -> String {
         var parts = [user.displayName ?? user.username, "@\(user.username)"]
         if isBlocked {
-            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqu\u{00E9}", bundle: .main))
+            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
         } else if presence == .online {
             parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
         }

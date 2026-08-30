@@ -59,17 +59,39 @@ final class ComposerRailDoorTests: XCTestCase {
 
     /// Aucune porte ne doit rester sans niveau : le `switch` est exhaustif au
     /// compilateur, ce témoin garde qu'aucune n'a été rangée par défaut.
+    ///
+    /// **`.scene` entre au #4092**, et l'élargissement de cette liste est
+    /// délibéré : le dessin n'agit ni sur la publication, ni sur une slide qui
+    /// survivrait sans toile, ni sur UN objet. Un quatrième niveau ajouté sans
+    /// cette raison ferait rougir ce témoin, et c'est ce qu'on lui demande.
     func test_chaquePorte_declareSonNiveau() {
         for porte in ComposerRailDoor.allCases {
-            XCTAssertTrue([.publication, .slide, .object].contains(porte.level), porte.rawValue)
+            XCTAssertTrue([.publication, .slide, .object, .scene].contains(porte.level),
+                          porte.rawValue)
+        }
+    }
+
+    /// **Le niveau `.scene` exige une toile, exactement comme `.object`.** Ce
+    /// témoin est le contrepoids du précédent : sans lui, ranger une porte en
+    /// `.scene` « parce que ça sonne juste » la ferait paraître sur un `status`.
+    func test_lesNiveauxQuiExigentUneToile_disparaissentDunStatus() {
+        let sansScene = ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                                 format: .status, allowsCapture: true)
+        for porte in sansScene {
+            XCTAssertNotEqual(porte.level, .object, porte.rawValue)
+            XCTAssertNotEqual(porte.level, .scene, porte.rawValue)
         }
     }
 
     // MARK: - L'ordre, qui est un contrat de mémoire musculaire
 
+    /// **`drawing` s'insère entre `sound` et `sticker` (#4092)**, et la place
+    /// n'est pas libre : la rangée d'outils de la vue `3b` range DESSIN avant
+    /// STICKER, avant MENTION, avant LIEU. Le rail garde donc l'ordre relatif
+    /// de la maquette, en y intercalant les portes qu'elle ne dessine pas.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .sticker, .mention, .place])
+                       [.description, .media, .sound, .drawing, .sticker, .mention, .place])
     }
 
     func test_leRailCanonique_neManqueAucunePorte() {
@@ -275,9 +297,16 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
 
     /// La bande de la scène passe par la même capacité — sans quoi le littéral
     /// qu'elle portait aurait survécu à la garde négative de la suite suivante.
-    func test_seuleLaPalette_estUneBandeServie() {
-        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette],
-                       "Une bande servie sans contenu occuperait le bas de l'écran pour rien.")
+    /// **Deux bandes servies depuis le #4092** — et la garde ne se relâche pas :
+    /// elle vérifie que chacune a un CONTENU, ce qui est la seule chose qui
+    /// justifiait « palette seule » quand elle était écrite. `timeline` et
+    /// `textStyles` restent dehors faute d'hôte.
+    func test_lesBandesServies_ontTouteUnContenu() {
+        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette, .drawing])
+        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.timeline),
+                       "La timeline vit dans l'atelier (#4075) — la servir peindrait une bande vide.")
+        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.textStyles),
+                       "Les 18 styles exigent un objet `text` sélectionné, qu'aucune porte ne pose (#4401).")
     }
 
     /// **Loi 4 — ce qui n'a pas de chemin reste ABSENT.** Cette garde est le
@@ -463,5 +492,448 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("guardsources.count>1else{"),
                       "Sans ce garde-fou, un profil à source unique paie une feuille pour rien.")
+    }
+}
+
+/// **La porte son ouvre l'ÉTAGÈRE autant que le micro** (#4081 · #4052 ·
+/// leçon 335, troisième instance sur le même écran).
+///
+/// `handleRailDoor(.sound)` allait droit à `handleDocumentTool(.microphone)` :
+/// le composer unifié n'avait AUCUNE occurrence de `SoundLibraryPicker` ni
+/// d'`addBorrowedSound`, alors que le socle de la vue `1b` affiche déjà un
+/// crédit de son de fond.
+final class ComposerSoundSourcePolicyTests: XCTestCase {
+
+    /// **Le fusible** — et l'ordre, qui n'est pas décoratif : emprunter est le
+    /// geste nominal d'une scène, enregistrer le geste rare.
+    func test_lesDeuxProvenances_sontOffertesDansLOrdreDeLaDoctrine() {
+        XCTAssertEqual(ComposerSoundSourcePolicy.offered, [.library, .record])
+    }
+
+    /// Aucune provenance n'est laissée sans libellé — VoiceOver comme le
+    /// bouton lisent le même mot.
+    func test_chaqueProvenance_aUnLibelleDistinct() {
+        let libelles = ComposerSoundSource.allCases.map(ComposerSoundSourcePolicy.label)
+        XCTAssertFalse(libelles.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(libelles).count, ComposerSoundSource.allCases.count,
+                       "Deux provenances qui s'annoncent pareil sont indiscernables.")
+    }
+
+    /// Le titre de la feuille est celui de la PORTE — `composer.rail.sound`
+    /// dit déjà « Ajouter un son » dans les sept langues.
+    func test_leTitre_estLeLibelleDeLaPorte() {
+        XCTAssertEqual(ComposerSoundSourcePolicy.chooserTitle,
+                       ComposerRailCopy.label(.sound))
+    }
+
+    /// **La liste est FERMÉE.** `offered` ne peut pas taire une provenance que
+    /// le type déclare : le jour où une troisième arrive (importer un fichier
+    /// audio, par exemple), cette garde rougit tant qu'elle n'est pas servie ou
+    /// délibérément retirée.
+    func test_aucuneProvenanceDeclaree_nEstOubliee() {
+        XCTAssertEqual(Set(ComposerSoundSourcePolicy.offered),
+                       Set(ComposerSoundSource.allCases))
+    }
+}
+
+/// Le câblage de la porte son.
+final class ComposerSoundSourceWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSourceDuMeuble_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("ComposerSoundSourcePolicy"))
+    }
+
+    /// **La garde du défaut d'origine.** La porte son n'enregistre plus
+    /// directement : c'était le raccourci qui rendait l'étagère inatteignable.
+    func test_laPorteSon_neVaPlusDroitAuMicro() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.sound:presentSoundSources()"))
+        XCTAssertFalse(source.contains("case.sound:handleDocumentTool(.microphone)"),
+                       "Ce raccourci rend l'étagère des sons inatteignable depuis le plateau.")
+    }
+
+    /// Les deux portails ont leur lecteur AU-DESSUS de l'aiguillage (#4120), et
+    /// les boutons SORTENT de la règle.
+    func test_lesDeuxPortails_sontMontesEtLisentLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("isPresented:$showsSoundSourceChooser"))
+        XCTAssertTrue(source.contains("isPresented:$showsSoundLibrary"))
+        XCTAssertTrue(source.contains("ForEach(ComposerSoundSourcePolicy.offered,id:\\.self)"))
+    }
+
+    /// **Un son emprunté passe par le VIEWMODEL** — c'est lui, et lui seul, qui
+    /// sait ce qu'un emprunt vaut (`soundId` renseigné, `postMediaId` vide :
+    /// « enregistre un usage, ne capture rien »).
+    func test_lEmprunt_passeParLeViewModel() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addBorrowedSound(sound)"))
+        XCTAssertTrue(source.contains("SoundLibraryPicker("))
+    }
+
+    /// **Les deux provenances ne se confondent pas.** Emprunter pose un fond,
+    /// enregistrer une note vocale qui n'en est jamais un (doctrine `2c`) :
+    /// leurs deux chemins doivent rester distincts dans l'aiguillage.
+    func test_lesDeuxProvenances_ontDesCheminsDistincts() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.library:showsSoundLibrary=true"))
+        XCTAssertTrue(source.contains("case.record:handleDocumentTool(.microphone)"))
+    }
+}
+
+/// **Annuler et rétablir sur le plateau** (#4402).
+///
+/// L'atelier a son historique depuis C9 ; le composer unifié n'en câblait
+/// RIEN. Poser un sticker au mauvais endroit, avancer un objet d'un plan,
+/// changer le fond : aucun de ces gestes ne se défaisait, et le manque
+/// s'aggravait à chaque porte servie.
+final class ComposerHistoryServiceTests: XCTestCase {
+
+    /// **La scène sert l'historique, le document non — et ce n'est pas un
+    /// oubli.** Sur le document, le dernier geste est presque toujours du
+    /// texte, que le clavier annule déjà par son propre geste ; un « annuler »
+    /// qui remonterait une pose de fond faite deux écrans plus tôt PROMETTRAIT
+    /// d'annuler la frappe et ferait autre chose.
+    func test_seuleLaScene_sertLHistorique() {
+        XCTAssertTrue(ComposerHistoryService.servesHistory(on: .scene))
+        XCTAssertFalse(ComposerHistoryService.servesHistory(on: .document))
+        XCTAssertFalse(ComposerHistoryService.servesHistory(on: .mood))
+    }
+
+    /// Les deux libellés existent et se distinguent — VoiceOver lit le VERBE.
+    func test_lesDeuxLibelles_existentEtSeDistinguent() {
+        XCTAssertFalse(ComposerHistoryCopy.undo.isEmpty)
+        XCTAssertFalse(ComposerHistoryCopy.redo.isEmpty)
+        XCTAssertNotEqual(ComposerHistoryCopy.undo, ComposerHistoryCopy.redo)
+    }
+}
+
+/// Le câblage de l'historique — la collecte, les contrôles, et la garde qui
+/// les sépare.
+final class ComposerHistoryWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSourceDuMeuble_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("ComposerHistoryService"))
+    }
+
+    /// **La COLLECTE vit au-dessus de l'aiguillage, pas sur la surface.** Un
+    /// instantané pris seulement pendant que la scène est montée perdrait ce
+    /// que le document a posé avant elle, et le premier « annuler » sauterait
+    /// par-dessus les gestes que l'auteur vient de faire.
+    func test_laCollecte_estMonteeAuDessusDeLAiguillage() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains(".onReceive(viewModel.historyTrigger)"))
+        XCTAssertTrue(source.contains("viewModel.pushHistorySnapshot()"))
+        XCTAssertTrue(source.contains("viewModel.seedHistory()"),
+                      "Sans instantané d'ouverture, le plus ancien « annuler » ne ramène pas à l'écran vierge.")
+    }
+
+    /// Les CONTRÔLES, eux, passent par la règle — jamais par un test de surface
+    /// réécrit sur place.
+    func test_lesControles_passentParLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("ComposerHistoryService.servesHistory(on:mountedSurface)"))
+        XCTAssertTrue(source.contains("viewModel.canUndoGlobal"))
+        XCTAssertTrue(source.contains("viewModel.canRedoGlobal"))
+    }
+
+    /// **Le retour de `undoGlobal()` est GARDÉ.** `false` veut dire « rien à
+    /// défaire » : vibrer pour un geste sans effet est le retour trompeur que
+    /// la loi 4 combat.
+    func test_lesDeuxGestes_gardentLeRetourDuModele() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("guardviewModel.undoGlobal()else{return}"))
+        XCTAssertTrue(source.contains("guardviewModel.redoGlobal()else{return}"))
+    }
+}
+
+/// La barre haute — les deux contrôles n'existent que s'ils agissent.
+final class ComposerTopBarHistoryGuardTests: XCTestCase {
+
+    private func topBarSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSource_estLisible() throws {
+        let s = try topBarSource()
+        XCTAssertGreaterThan(s.count, 800)
+        XCTAssertTrue(s.contains("struct ComposerTopBar"))
+    }
+
+    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.** Un
+    /// « annuler » grisé occupe la place et l'attention d'un contrôle pour ne
+    /// rien promettre, sur une barre qui porte déjà quatre choses.
+    func test_lesControles_nExistentQueSilsAgissent() throws {
+        let source = compact(try topBarSource())
+        XCTAssertTrue(source.contains("ifcanUndo||canRedo{"))
+        XCTAssertTrue(source.contains("ifcanUndo{"))
+        XCTAssertTrue(source.contains("ifcanRedo{"))
+        XCTAssertFalse(source.contains(".disabled(!canUndo)"),
+                       "Griser au lieu d'absenter contredit la loi 4.")
+    }
+
+    /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
+    /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
+    /// chaque frappe.
+    func test_laBarre_neRecoitAucunViewModel() throws {
+        let source = compact(try topBarSource())
+        XCTAssertFalse(source.contains("@ObservedObject"))
+        XCTAssertFalse(source.contains("@StateObject"))
+        XCTAssertTrue(source.contains("varcanUndo:Bool=false"))
+    }
+}
+
+/// **La scène se dessine** (#4092, vue `3b` — le dessin est le PREMIER outil
+/// que la maquette y pose).
+final class ComposerDrawingDoorTests: XCTestCase {
+
+    /// **Un niveau de plus, et il était nécessaire.** Ranger le dessin en
+    /// `.slide` l'aurait fait paraître sur un `status`, qui n'a pas de toile ;
+    /// le ranger en `.object` aurait promis des contrôleurs d'empilement à
+    /// quelque chose qui n'est pas un objet.
+    func test_leDessin_agitSurLaSCENE() {
+        XCTAssertEqual(ComposerRailDoor.drawing.level, .scene)
+    }
+
+    /// La porte est SERVIE, et elle atteint le rail sur un format à scène.
+    func test_laPorteDessin_atteintLeRail() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .story, allowsCapture: true)
+        XCTAssertTrue(portes.contains(.drawing))
+    }
+
+    /// **Et elle disparaît d'un `status`** — c'est ce que le niveau `.scene`
+    /// existe pour dire. Ce témoin tomberait si quelqu'un rangeait la porte en
+    /// `.slide` « parce que les traits vivent dans la slide ».
+    func test_laPorteDessin_disparaitDunStatus() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .status, allowsCapture: true)
+        XCTAssertFalse(portes.contains(.drawing))
+    }
+
+    /// L'ordre du rail suit celui de la maquette : le dessin précède le
+    /// sticker, comme dans la rangée d'outils de la vue `3b`.
+    func test_leDessin_precedeLeSticker() {
+        let rail = ComposerRailDoor.canonicalRail
+        guard let d = rail.firstIndex(of: .drawing),
+              let s = rail.firstIndex(of: .sticker) else {
+            return XCTFail("Les deux portes doivent être au rail canonique")
+        }
+        XCTAssertLessThan(d, s)
+    }
+
+    /// Chaque porte garde un libellé DISTINCT — VoiceOver ne peut pas nommer
+    /// deux portes pareil.
+    func test_leDessin_aSonPropreLibelle() {
+        XCTAssertFalse(ComposerRailCopy.label(.drawing).isEmpty)
+        XCTAssertEqual(Set(ComposerRailDoor.allCases.map(ComposerRailCopy.label)).count,
+                       ComposerRailDoor.allCases.count)
+    }
+
+    /// La bande des réglages de pinceau est SERVIE — sans elle, entrer en mode
+    /// dessin donnerait un doigt qui trace sans qu'aucun réglage soit
+    /// atteignable.
+    func test_laBandeDeDessin_estServie() {
+        XCTAssertTrue(ComposerSceneCapabilities.bands.contains(.drawing))
+        XCTAssertEqual(ComposerSceneBand.opened(.drawing,
+                                                served: ComposerSceneCapabilities.bands),
+                       .drawing)
+    }
+}
+
+/// Le câblage du dessin — la porte, le mode, les deux montages.
+final class ComposerDrawingWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func surfaceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_lesSources_sontLisibles() throws {
+        XCTAssertTrue(try hostSource().contains("MeeshyDrawingSurface"))
+        XCTAssertTrue(try surfaceSource().contains("struct ComposerSceneSurface"))
+    }
+
+    /// **Une porte à BASCULE — la seule du rail.** Les six autres font entrer
+    /// quelque chose et se referment ; celle-ci ouvre un MODE qui dure, dont il
+    /// faut pouvoir sortir par où l'on est entré.
+    func test_laPorte_basculeLeMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("ifviewModel.isDrawingActive{viewModel.exitDrawingEditingMode()"))
+        XCTAssertTrue(source.contains("viewModel.enterDrawingEditingMode()"))
+    }
+
+    /// **La bande suit le mode, elle n'est pas un état parallèle.** Deux
+    /// booléens auraient permis « je dessine mais la bande est fermée » — un
+    /// doigt qui trace sans réglage atteignable.
+    func test_laBande_suitLeMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("requestedSceneBand=.drawing"))
+    }
+
+    /// **Le canvas RETIRE son calque persisté pendant le dessin**, sinon le
+    /// trait s'affiche deux fois, à deux endroits (défaut 2026-05-27).
+    func test_leCanvas_retireSonCalquePendantLeDessin() throws {
+        let source = compact(try surfaceSource())
+        XCTAssertTrue(source.contains("isDrawingOverlayActive:drawingSurface!=nil"))
+    }
+
+    /// **Et il cesse de recevoir les touches** : sans cela, le doigt qui trace
+    /// déplacerait aussi l'objet sous lui — deux gestes pour un seul mouvement.
+    func test_leCanvas_neRecoitPlusLesTouchesPendantLeDessin() throws {
+        let source = compact(try surfaceSource())
+        XCTAssertTrue(source.contains(".allowsHitTesting(drawingSurface==nil)"))
+        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+    }
+
+    /// **La surface n'est montée QUE pendant le mode** (loi 4) — une couche de
+    /// capture posée en permanence volerait chaque touche de la scène.
+    func test_laSurface_nExistePasHorsDuMode() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("drawingSurface:viewModel.isDrawingActive"))
+    }
+}
+
+/// **Les six actions de l'objet parlent la langue du lecteur** (#4431).
+///
+/// Vu au simulateur en locale ANGLAISE : le rail *leading* rendait « Describe »,
+/// « Add media », « Add a sticker » — le catalogue de l'app faisait son travail
+/// — pendant que le rail *trailing*, à quelques points de distance, répondait
+/// « Dupliquer », « Mettre au premier plan », « Supprimer ».
+///
+/// La cause était six littéraux français rendus comme VALEUR, jamais comme
+/// `defaultValue:` — donc invisibles au cliquet de localisation, qui ne balaie
+/// que les seconds.
+final class StoryCanvasActionTitleLocalizationTests: XCTestCase {
+
+    private func sdkSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()   // .../apps
+            .deletingLastPathComponent()   // racine du dépôt
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContextMenu.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **Le fusible** — un chemin faux rendrait la garde négative verte par
+    /// omission, ce qui est exactement le piège qu'elle existe pour éviter.
+    func test_laSourceDuMenu_estLisible() throws {
+        let s = try sdkSource()
+        XCTAssertGreaterThan(s.count, 500)
+        XCTAssertTrue(s.contains("enum StoryCanvasContextAction"))
+    }
+
+    /// Les six titres passent par le catalogue du SDK.
+    func test_lesSixTitres_passentParLeCatalogue() throws {
+        let source = compact(try sdkSource())
+        for cle in ["story.canvas.action.edit", "story.canvas.action.duplicate",
+                    "story.canvas.action.bringForward", "story.canvas.action.sendBackward",
+                    "story.canvas.action.leaveScene", "story.canvas.action.delete"] {
+            XCTAssertTrue(source.contains("\"\(cle)\""), cle)
+        }
+    }
+
+    /// Le corps d'UNE propriété calculée — la garde négative ci-dessous doit
+    /// lire `title` et rien d'autre.
+    ///
+    /// **Sans ce cadrage, elle serait rouge en permanence** : `systemImage`, sa
+    /// voisine immédiate, rend six littéraux `case .edit: return "pencil"` qui
+    /// sont des noms de symboles SF — parfaitement légitimes, et de la même
+    /// FORME que l'interdit. Une garde négative posée sur un fichier entier
+    /// attrape les jumelles innocentes de ce qu'elle vise.
+    private func corpsDe(_ ancre: String, dans code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var corps = ""
+        for c in code[debut.lowerBound...] {
+            corps.append(c)
+            if c == "{" { profondeur += 1 }
+            if c == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return corps }
+            }
+        }
+        return nil
+    }
+
+    /// **La garde NÉGATIVE.** Elle rougit si un titre redevient un littéral nu —
+    /// la forme exacte du défaut, et la seule que le cliquet de localisation ne
+    /// voit pas.
+    func test_aucunTitre_neRedevientUnLitteralNu() throws {
+        guard let corps = corpsDe("public var title: String", dans: try sdkSource()) else {
+            return XCTFail("`title` est introuvable — la garde doit être re-pointée.")
+        }
+        let source = compact(corps)
+        XCTAssertTrue(source.contains("story.canvas.action.edit"),
+                      "Le corps lu n'est pas celui de `title` — la garde ne mesurerait rien.")
+        for interdit in ["case.edit:return\"", "case.duplicate:return\"",
+                        "case.bringForward:return\"", "case.sendBackward:return\"",
+                        "case.leaveScene:return\"", "case.delete:return\""] {
+            XCTAssertFalse(source.contains(interdit),
+                           "\(interdit) — un littéral rendu comme VALEUR échappe au cliquet.")
+        }
+    }
+
+    /// **Et la voisine reste libre.** `systemImage` DOIT continuer de rendre des
+    /// littéraux : ce sont des noms de symboles SF, pas des mots. Ce témoin
+    /// empêche qu'on « corrige » par excès de zèle ce qui n'est pas un défaut.
+    func test_lesNomsDeSymboles_restentDesLitteraux() throws {
+        guard let corps = corpsDe("public var systemImage: String", dans: try sdkSource()) else {
+            return XCTFail("`systemImage` est introuvable")
+        }
+        XCTAssertTrue(compact(corps).contains("case.edit:return\"pencil\""))
+        XCTAssertFalse(compact(corps).contains("String(localized:"),
+                       "Un nom de symbole SF n'est pas une chaîne à traduire.")
+    }
+
+    /// Les six titres restent DISTINCTS : deux actions qui s'annoncent pareil
+    /// sont indiscernables à VoiceOver, qui les lit dans le rail.
+    ///
+    /// `@MainActor` parce que `title` l'est — `Bundle.module` l'exige. Le
+    /// témoin lit donc le titre exactement comme la vue le lit.
+    @MainActor
+    func test_lesSixTitres_restentDistincts() {
+        let titres = StoryCanvasContextAction.allCases.map(\.title)
+        XCTAssertEqual(Set(titres).count, StoryCanvasContextAction.allCases.count)
+        XCTAssertFalse(titres.contains(where: \.isEmpty))
     }
 }

@@ -104,6 +104,16 @@ import { registerInteractionRoutes } from '../../../../routes/posts/interactions
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const POST_ID = '507f1f77bcf86cd799439022';
+/**
+ * Un SECOND identifiant de post, bien formé.
+ *
+ * Le lot d'impressions envoyait auparavant `'other-post-id'` — une chaîne
+ * qu'aucun post ne peut porter. Depuis #4044, `filterConsumablePostIds` écarte
+ * ce qui n'est pas un ObjectId au lieu de laisser Mongo faire lever la requête
+ * entière : la fixture fictive faisait donc tomber le compte pour la bonne
+ * raison, sur un cas qui ne se produit jamais en vrai.
+ */
+const OTHER_POST_ID = '507f1f77bcf86cd799439033';
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
@@ -287,7 +297,24 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('returns 200 with count when postIds provided', async () => {
     const res = await app.inject({
       method: 'POST', url: '/posts/impressions/batch',
-      payload: { postIds: [POST_ID, 'other-post-id'] },
+      payload: { postIds: [POST_ID, OTHER_POST_ID] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(2);
+  });
+
+  /**
+   * #4044 — un identifiant local ne fait plus perdre le lot ENTIER.
+   *
+   * Le `findMany` d'audience est borné par `{ id: { in: [...] } }` : avant la
+   * garde, un seul `pending_<uuid>` — une story encore en cours de publication
+   * traversant le fil — faisait lever la requête et emportait toutes les autres
+   * impressions du même défilement.
+   */
+  it('records the well-formed ids even when the batch carries a local one', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID, 'pending_9F3D-4A7B-8C1E', OTHER_POST_ID] },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(2);

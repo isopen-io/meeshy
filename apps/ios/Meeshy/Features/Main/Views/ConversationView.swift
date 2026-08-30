@@ -2894,7 +2894,7 @@ struct ConversationView: View {
             Button {
                 beginEdit(msg)
             } label: {
-                Label(String(localized: "action.edit", defaultValue: "Éditer", bundle: .main), systemImage: "pencil")
+                Label(String(localized: "action.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
             }
         case .translate:
             Button {
@@ -2949,7 +2949,7 @@ struct ConversationView: View {
                 _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
                 HapticFeedback.success()
             } label: {
-                Label(String(localized: "action.star", defaultValue: "Favori", bundle: .main), systemImage: "star.fill")
+                Label(String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main), systemImage: "star.fill")
             }
         case .unstar:
             Button {

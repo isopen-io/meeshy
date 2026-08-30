@@ -413,22 +413,22 @@ class IntentHandler: NSObject {
 struct SiriTipsView: View {
     let tips = [
         SiriTip(
-            phrase: String(localized: "siri.tip.sendMessage", defaultValue: "Send message to John on Meeshy", bundle: .main),
+            phrase: String(localized: "siri.tip.sendMessage", defaultValue: "Envoyer un message à John sur Meeshy", bundle: .main),
             icon: "message.fill",
             color: MeeshyColors.info
         ),
         SiriTip(
-            phrase: String(localized: "siri.tip.call", defaultValue: "Call Sarah on Meeshy", bundle: .main),
+            phrase: String(localized: "siri.tip.call", defaultValue: "Appeler Sarah sur Meeshy", bundle: .main),
             icon: "phone.fill",
             color: MeeshyColors.success
         ),
         SiriTip(
-            phrase: String(localized: "siri.tip.translate", defaultValue: "Translate this to Spanish on Meeshy", bundle: .main),
+            phrase: String(localized: "siri.tip.translate", defaultValue: "Traduire ceci en espagnol sur Meeshy", bundle: .main),
             icon: "translate",
             color: MeeshyColors.purple600
         ),
         SiriTip(
-            phrase: String(localized: "siri.tip.checkNotifications", defaultValue: "Check notifications on Meeshy", bundle: .main),
+            phrase: String(localized: "siri.tip.checkNotifications", defaultValue: "Consulter les notifications sur Meeshy", bundle: .main),
             icon: "bell.fill",
             color: MeeshyColors.warning
         )
@@ -436,7 +436,7 @@ struct SiriTipsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(String(localized: "siri.tips.header", defaultValue: "Try asking Siri:", bundle: .main))
+            Text(String(localized: "siri.tips.header", defaultValue: "Essayez de demander à Siri :", bundle: .main))
                 .font(.headline)
 
             ForEach(tips) { tip in

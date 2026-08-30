@@ -163,6 +163,113 @@ class CanvasV3ProjectionTest {
         assertThat(projected.timelineDuration).isEqualTo(4.5)
     }
 
+    /**
+     * Les traits éditables (`drawingStrokes`) traversent le pont exactement comme
+     * la forme v1 les décode à plat : le v3 les porte sur l'objet `kind:"drawing"`
+     * (`payload.strokes`), et une projection correcte rend depuis la seconde ce que
+     * la première lit directement. L'oracle est la PAIRE de fixtures partagée
+     * `v1-legacy-rich` — toute dérive entre clients rougit ici.
+     */
+    @Test
+    fun `les traits de dessin d'un document v3 projettent comme la forme v1`() {
+        val legacy = effects("v1-legacy-rich").drawingStrokes
+        val projected = effects("v1-legacy-rich.v3").drawingStrokes
+
+        assertThat(legacy).isNotNull()
+        assertThat(projected).isEqualTo(legacy)
+    }
+
+    /**
+     * L'assertion ci-dessus porte sur l'ÉGALITÉ structurelle complète, mais un
+     * champ qui se décoderait en silence à sa valeur par défaut y passerait
+     * inaperçu si l'oracle le portait aussi par défaut. On épingle donc les
+     * valeurs non-défaut du trait : outil, lissage, pression par point, largeur,
+     * `captureVersion` et `createdAt` — tout ce que le fil transporte.
+     */
+    @Test
+    fun `un trait projete conserve outil lissage pression et metadonnees`() {
+        val stroke = effects("v1-legacy-rich.v3").drawingStrokes!!.single()
+
+        assertThat(stroke.id).isEqualTo("stroke-1")
+        assertThat(stroke.tool).isEqualTo(StrokeTool.MARKER)
+        assertThat(stroke.smoothing).isEqualTo(StrokeSmoothing.CURVE)
+        assertThat(stroke.colorHex).isEqualTo("FF3B30")
+        assertThat(stroke.width).isEqualTo(12.0)
+        assertThat(stroke.captureVersion).isEqualTo(1)
+        assertThat(stroke.createdAt).isEqualTo(776000000.0)
+        assertThat(stroke.points.map { it.pressure }).containsExactly(0.4, 0.95).inOrder()
+    }
+
+    /**
+     * Un objet `drawing` ne portant que le blob PKDrawing legacy (`data`, base64,
+     * sans rendu Android) et aucun trait exploitable ne fabrique pas une couche de
+     * dessin vide : `drawingStrokes` reste `null`, comme les autres familles
+     * normalisent le vide.
+     */
+    @Test
+    fun `un objet drawing sans traits exploitables ne fabrique pas de couche vide`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "data": "AQIDBA==" } }
+              ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.drawingStrokes).isNull()
+    }
+
+    /**
+     * Un tableau `strokes` PRÉSENT mais VIDE ne diffère pas, à l'affichage, d'une
+     * absence de dessin : `drawingStrokes` reste `null` (chemin `takeIf` distinct de
+     * la clé absente ci-dessus), et non une liste vide qui laisserait croire à une
+     * couche.
+     */
+    @Test
+    fun `un objet drawing au tableau strokes vide reste null`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "strokes": [] } }
+              ] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.drawingStrokes).isNull()
+    }
+
+    /**
+     * Le payload v3 est permissif par contrat : une clé future inconnue au décodeur
+     * (`champInconnuFutur`) sur un trait ne doit jamais faire disparaître le trait
+     * — ni la scène — comme pour les autres familles.
+     */
+    @Test
+    fun `un trait avec des cles de payload inconnues traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "drawing", "kind": "drawing",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 }, "plane": "fg",
+                  "payload": { "strokes": [
+                    { "id": "s1", "colorHex": "00FF00", "width": 4,
+                      "points": [ { "x": 0.1, "y": 0.1 } ], "champInconnuFutur": 7 }
+                  ] } }
+              ] } ] }
+            """.trimIndent(),
+        )
+        val stroke = projected.drawingStrokes!!.single()
+
+        assertThat(stroke.id).isEqualTo("s1")
+        assertThat(stroke.tool).isEqualTo(StrokeTool.PEN)
+        assertThat(stroke.captureVersion).isEqualTo(0)
+        assertThat(stroke.createdAt).isNull()
+        assertThat(stroke.points.single().pressure).isEqualTo(1.0)
+    }
+
     /** Une clé de payload inconnue au décodeur Android ne doit jamais faire échouer la scène. */
     @Test
     fun `un sticker avec des cles de payload inconnues traverse la projection`() {

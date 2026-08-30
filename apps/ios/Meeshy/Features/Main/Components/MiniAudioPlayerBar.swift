@@ -201,7 +201,7 @@ struct MiniAudioPlayerBar: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(
                     coordinator.isPlaying
-                        ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
+                        ? String(localized: "mini_player.pause", defaultValue: "Mettre en pause", bundle: .main)
                         : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
                 )
 

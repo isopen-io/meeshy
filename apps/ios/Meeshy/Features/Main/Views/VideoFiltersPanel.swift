@@ -52,7 +52,7 @@ struct VideoFiltersPanel: View {
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
-            Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
+            Text(String(localized: "video.filter.title", defaultValue: "Filtres vidéo", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
             Spacer()
@@ -61,7 +61,7 @@ struct VideoFiltersPanel: View {
                     filterConfig = VideoFilterPreset.natural.config
                     filterConfig.isEnabled = false
                 } label: {
-                    Text(String(localized: "video.filter.reset", defaultValue: "Reset", bundle: .main))
+                    Text(String(localized: "video.filter.reset", defaultValue: "Réinitialiser", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
@@ -132,13 +132,13 @@ struct VideoFiltersPanel: View {
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
-                Text(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
+                Text(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arrière-plan", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.backgroundBlurEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
-                    .accessibilityLabel(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
+                    .accessibilityLabel(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arrière-plan", bundle: .main))
             }
 
             if filterConfig.backgroundBlurEnabled {
@@ -165,24 +165,24 @@ struct VideoFiltersPanel: View {
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
-                Text(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
+                Text(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage de la peau", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.skinSmoothingEnabled)
                     .tint(MeeshyColors.indigo500)
                     .labelsHidden()
-                    .accessibilityLabel(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
+                    .accessibilityLabel(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage de la peau", bundle: .main))
             }
 
             if filterConfig.skinSmoothingEnabled {
                 HStack(spacing: MeeshySpacing.sm) {
-                    Text(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
+                    Text(String(localized: "video.filter.intensity", defaultValue: "Intensité", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.skinSmoothingIntensity, in: 0...1)
                         .tint(MeeshyColors.indigo500)
-                        .accessibilityLabel(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
+                        .accessibilityLabel(String(localized: "video.filter.intensity", defaultValue: "Intensité", bundle: .main))
                         .accessibilityValue(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                     Text(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
@@ -205,7 +205,7 @@ struct VideoFiltersPanel: View {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(MeeshyFont.relative(10))
-                Text(String(localized: "video.filter.performanceDegraded", defaultValue: "Performance reduite — certains filtres desactives", bundle: .main))
+                Text(String(localized: "video.filter.performanceDegraded", defaultValue: "Performance réduite — certains filtres désactivés", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .medium))
             }
             .foregroundColor(MeeshyColors.warning)

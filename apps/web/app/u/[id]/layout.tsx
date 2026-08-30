@@ -4,6 +4,7 @@ import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';
+import { ogImageUrl } from '@/lib/og-image-params';
 
 interface UserProfileLayoutProps {
   children: ReactNode;
@@ -79,7 +80,7 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
           userName: displayName,
         });
 
-        const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
+        const dynamicImageUrl = ogImageUrl(frontendUrl, imageParams);
 
         return composeMetadata({
           locale,

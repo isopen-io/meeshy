@@ -63,10 +63,25 @@ function makeApp() {
   };
 }
 
+/**
+ * Le double doit exposer `status`, et pas seulement `code` : depuis #4434 le
+ * refus passe par `sendError` (`utils/response.ts`), qui appelle
+ * `reply.status(…).send(…)` — la porte UNIQUE de l'enveloppe d'erreur du
+ * dépôt, à la place de la charge que ce hook écrivait à la main.
+ *
+ * Ces témoins-ci restent des témoins de HOOK : ils prouvent qu'un refus a
+ * lieu et qu'aucun identifiant n'est attaché. Ce qui part sur le fil ne se
+ * mesure PAS ici — un double ne sérialise rien, et c'est précisément ce qui a
+ * laissé `error: { code, … }` passer pour correct pendant que le client
+ * recevait « [object Object] ». La valeur SERVIE est gardée par
+ * `clientMutationId-served-envelope.test.ts`, qui monte une vraie app avec le
+ * schéma d'erreur de production.
+ */
 function makeReply() {
-  const reply = {
-    code: jest.fn<any>().mockReturnThis(),
-    send: jest.fn<any>().mockReturnThis(),
+  const reply: any = {
+    status: jest.fn<any>(() => reply),
+    code: jest.fn<any>(() => reply),
+    send: jest.fn<any>(() => reply),
   };
   return reply;
 }
@@ -107,7 +122,7 @@ describe('registerClientMutationIdHook', () => {
 
     await app.getHook()!(req, reply);
 
-    expect(reply.code).not.toHaveBeenCalled();
+    expect(reply.status).not.toHaveBeenCalled();
     expect(req.clientMutationId).toBeUndefined();
   });
 
@@ -122,7 +137,7 @@ describe('registerClientMutationIdHook', () => {
     await app.getHook()!(req, reply);
 
     expect(req.clientMutationId).toBe(cmid);
-    expect(reply.code).not.toHaveBeenCalled();
+    expect(reply.status).not.toHaveBeenCalled();
   });
 
   it('returns 400 when header is an array (non-string)', async () => {
@@ -134,12 +149,9 @@ describe('registerClientMutationIdHook', () => {
 
     await app.getHook()!(req, reply);
 
-    expect(reply.code).toHaveBeenCalledWith(400);
+    expect(reply.status).toHaveBeenCalledWith(400);
     expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: false,
-        error: expect.objectContaining({ code: 'INVALID_MUTATION_ID' }),
-      })
+      expect.objectContaining({ success: false, error: 'INVALID_MUTATION_ID' })
     );
   });
 
@@ -152,11 +164,9 @@ describe('registerClientMutationIdHook', () => {
 
     await app.getHook()!(req, reply);
 
-    expect(reply.code).toHaveBeenCalledWith(400);
+    expect(reply.status).toHaveBeenCalledWith(400);
     expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.objectContaining({ code: 'INVALID_MUTATION_ID' }),
-      })
+      expect.objectContaining({ error: 'INVALID_MUTATION_ID' })
     );
   });
 
@@ -169,7 +179,7 @@ describe('registerClientMutationIdHook', () => {
 
     await app.getHook()!(req, reply);
 
-    expect(reply.code).toHaveBeenCalledWith(400);
+    expect(reply.status).toHaveBeenCalledWith(400);
   });
 
   it('does not set clientMutationId on invalid input', async () => {

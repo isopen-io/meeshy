@@ -5,6 +5,8 @@ import type { BubbleTranslation } from '@meeshy/shared/types';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { mentionsToLinks } from '@meeshy/shared/types/mention';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+import { buildTranslationRecord } from '@/utils/translation-record';
 
 /**
  * Égalité de langue conforme au Prisme : `currentDisplayLanguage`, `originalLanguage`
@@ -35,11 +37,20 @@ interface UseMessageDisplayProps {
     };
   };
   currentDisplayLanguage: string;
+  /**
+   * Prisme ORDONNÉ du lecteur (rangs 1→4, dont la locale appareil), utilisé pour
+   * descendre l'aperçu de réponse (`replyToContent`) — un contenu DISTINCT du
+   * principal, avec ses propres traductions. Optionnel : défaut
+   * `[currentDisplayLanguage]` reproduit l'ancien comportement rang-1 pour tout
+   * appelant qui ne le passe pas.
+   */
+  usedLanguages?: readonly string[];
 }
 
 export function useMessageDisplay({
   message,
   currentDisplayLanguage,
+  usedLanguages,
 }: UseMessageDisplayProps) {
   // Contenu traduit du message principal
   const displayContent = useMemo(() => {
@@ -64,26 +75,29 @@ export function useMessageDisplay({
     return mentionsToLinks(displayContent, '/u/{username}', [...validUsernames]);
   }, [displayContent, message.validatedMentions]);
 
-  // Contenu traduit du message de réponse (replyTo)
+  // Contenu traduit du message de réponse (replyTo). C'est un contenu DISTINCT du
+  // principal : ses propres traductions, sa propre langue d'origine. On descend le
+  // prisme ORDONNÉ du lecteur contre SES traductions (SSOT `resolvePrismTranslation`,
+  // comme le corps du message dans `messages-display.tsx`), plutôt que la seule
+  // langue élue pour le parent — sinon une traduction d'un rang inférieur du lecteur
+  // (ex. `en` rang 2 quand le rang 1 `fr` manque) était ignorée au profit de
+  // l'original. `currentDisplayLanguage` est placé en TÊTE du prisme pour qu'un
+  // toggle manuel du parent reste prioritaire ; le résolveur déduplique. `null` ⇒
+  // aucune traduction préférée ⇒ servir l'original.
   const replyToContent = useMemo(() => {
     if (!message.replyTo) return null;
 
-    if (sameLanguage(currentDisplayLanguage, message.replyTo.originalLanguage || 'fr')) {
-      return (message.replyTo as any).originalContent || message.replyTo.content;
-    }
+    const preferredLanguages = [currentDisplayLanguage, ...(usedLanguages ?? [])];
+    const resolved = resolvePrismTranslation({
+      translations: buildTranslationRecord(message.replyTo.translations),
+      originalLanguage: message.replyTo.originalLanguage || 'fr',
+      preferredLanguages,
+    });
 
-    const translation = message.replyTo.translations?.find((t: any) =>
-      sameLanguage(t?.language || t?.targetLanguage, currentDisplayLanguage)
-    );
+    if (resolved) return resolved.text;
 
-    if (translation) {
-      // BubbleTranslation et MessageTranslation ont des champs différents
-      const content = (translation as any).translatedContent || (translation as any).content;
-      return content || message.replyTo.content;
-    }
-
-    return message.replyTo.content;
-  }, [currentDisplayLanguage, message.replyTo]);
+    return (message.replyTo as any).originalContent || message.replyTo.content;
+  }, [currentDisplayLanguage, usedLanguages, message.replyTo]);
 
   // Versions disponibles (original + traductions)
   const availableVersions = useMemo(() => {
