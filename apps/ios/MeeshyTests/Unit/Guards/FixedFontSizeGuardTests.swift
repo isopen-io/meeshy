@@ -151,7 +151,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // cliquet lit des fichiers NEUFS qui « introduisent » des tailles
         // figées — alors que rien n'a été introduit, tout a été DÉPLACÉ.
         //
-        // C'est le pendant de la leçon 341 pour un cliquet : une liste qui
+        // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
         "Features/Main/Composer/ComposerFormatFan.swift",

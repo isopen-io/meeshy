@@ -27,7 +27,7 @@ final class ConversationEditDraftGuardTests: XCTestCase {
     ///
     /// Une garde de source qui nomme des FICHIERS se périme au premier fichier
     /// ajouté ; `AppSourceGuard.unit` globe `Type+*.swift` et survit au
-    /// découpage (leçon 341).
+    /// découpage (leçon 347).
     private func source(_ relativePath: String) throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/" + relativePath))
     }

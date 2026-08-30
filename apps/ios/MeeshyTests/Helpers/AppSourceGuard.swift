@@ -142,7 +142,7 @@ enum AppSourceGuard {
         // `publishMood`, `publishDocument` ou la vignette perdraient leur objet
         // en silence. Un découpage n'est pas fini quand le fichier passe sous le
         // budget : il l'est quand les gardes qui le nommaient pointent l'unité
-        // (leçon 341).
+        // (leçon 347).
         "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
         "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift"
     ]

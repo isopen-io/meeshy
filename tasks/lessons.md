@@ -20419,7 +20419,7 @@ Même famille que le « double PARTIEL d'un module » du `CLAUDE.md` du gateway,
 là un double perdait ce que le module GAGNAIT, ici il perd ce que son COLLABORATEUR gagne. Dans les
 deux cas, le double est un inventaire, et un inventaire ne prévient jamais qu'il est en retard.
 
-## Leçon 340 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
+## Leçon 346 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
 
 **Le fait.** Trois passes de gate consécutives échouées sur `ConversationMediaDoorTests.swift`, un fichier que
 je n'ai pas touché, pour un défaut que je n'ai pas introduit : une session voisine venait de rendre
@@ -20454,7 +20454,7 @@ contre celui-ci : des gates qui se gênent. C'est le bon échange — un gate bl
 un hunk perdu au merge ne se voit pas. Mais il faut le savoir, sans quoi on passe la journée à débuguer
 le travail des autres en croyant débuguer le sien.
 
-## Leçon 341 — un découpage de fichier n'est pas terminé quand le fichier passe sous le budget, mais quand les gardes qui le nommaient pointent l'UNITÉ
+## Leçon 347 — un découpage de fichier n'est pas terminé quand le fichier passe sous le budget, mais quand les gardes qui le nommaient pointent l'UNITÉ
 
 **Le fait.** Quatre gardes de source du composer levaient `GuardIsBlind` — « Ancre « var sendButton:
 some View { » introuvable : la garde ne garde plus rien ». Aucune n'avait été touchée. Leur cause
@@ -20487,11 +20487,11 @@ L'étape 3 se cherche par `grep -rn "<NomDuType>.swift" MeeshyTests` : ce sont l
 de perdre leur objet. Elle n'a pas été faite au découpage d'origine — d'où quatre gardes aveugles
 retrouvées des semaines plus tard, par une session tierce qui faisait tourner la suite entière.
 
-Voir la leçon 339 (une garde négative posée sur un FICHIER attrape les jumelles innocentes de sa cible)
+Voir la leçon 344 (une garde négative posée sur un FICHIER attrape les jumelles innocentes de sa cible)
 et la 340 (dans un arbre partagé, le gate d'une session mesure aussi le WIP des autres) : trois façons
 dont la PORTÉE d'une garde décide de ce qu'elle vaut.
 
-## Leçon 342 — `private` au niveau FICHIER ne survit pas au déplacement du type qui s'en sert
+## Leçon 348 — `private` au niveau FICHIER ne survit pas au déplacement du type qui s'en sert
 
 **Le fait.** Découper `ComposerDocumentSurface.swift` (1 101 lignes) par TYPE — la porte, la vignette,
 la vue — a compilé partout sauf en un point : `ComposerThumbnailDecoder`, un `private nonisolated enum`
@@ -20524,7 +20524,7 @@ garde tout dans la même unité de compilation logique et ne casse que `private`
 de voisinage. C'est le bon découpage, celui que la directive demande (« par responsabilité, pas par
 tranche ») ; il faut simplement savoir qu'il déplace aussi des liens qu'on ne voit pas.
 
-Voir la leçon 341 : le même découpage laisse trois dettes derrière lui — les gardes qui nomment le
+Voir la leçon 347 : le même découpage laisse trois dettes derrière lui — les gardes qui nomment le
 fichier, la dette de taille et la dette de police. Celle-ci est la quatrième, et la seule que le
 compilateur attrape.
 
