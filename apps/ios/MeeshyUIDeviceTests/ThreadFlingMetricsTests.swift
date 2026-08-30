@@ -27,7 +27,13 @@ import XCTest
 /// Le `.xcresult` porte alors les trois métriques Apple — hitches de
 /// décélération, croissance mémoire après `pop`, CPU — et la mesure devient un
 /// CHIFFRE rejouable plutôt qu'une lecture d'écran.
-final class ThreadFlingMetricsTests: XCTestCase {
+/// `nonisolated` : le projet compile en isolation MainActor par DÉFAUT (Swift 6.2),
+/// et `XCTestCase` déclare `setUp()`, `init(invocation:)` et consorts comme
+/// `nonisolated`. Sans ce modificateur, chaque override change l'isolation de
+/// ce qu'il redéfinit et la cible ne compile pas — un défaut que le gate ne
+/// peut PAS voir, puisque cette cible est délibérément hors du scheme `Meeshy`.
+/// C'est la contrepartie de l'avoir sortie du gate, et elle se paie ici.
+nonisolated final class ThreadFlingMetricsTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
