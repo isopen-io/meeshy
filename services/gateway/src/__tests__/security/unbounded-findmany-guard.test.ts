@@ -195,7 +195,17 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
   // (4). Le compte total est inchangé.
   'admin/agent-configs.ts': 4,
-  'admin/agent-observability.ts': 4,
+  // 4 -> 2 : #4465 a retiré les deux `findMany` nus de `GET /stats`
+  // (`agentUserRole.findMany({distinct:['userId']})`, remplacé par un
+  // `$group`+`$count`) et de `GET /scan-logs/stats` (`agentScanLog.findMany`
+  // sur toute la fenêtre, remplacé par un `$facet` à deux grains — voir les
+  // doc-comments de `distinctControlledUsersPipeline` et
+  // `scanLogsStatsPipeline`). Les DEUX qui restent vivent dans
+  // `GET /recent-activity`, hors périmètre de #4465 (`agentConfig.findMany`
+  // et `agentUserRole.findMany` bornés transitivement par le `take` de
+  // l'`agentAnalytic.findMany` qui alimente leur `conversationIds` — une
+  // borne transitive reste une borne, ce cliquet ne sait juste pas la lire).
+  'admin/agent-observability.ts': 2,
   'admin/agent-topics.ts': 1,
   // `admin/invitations.ts` avait 1 (`GET /timeline/daily`) : #4465 l'a RETIRE.
   // La ligne ne devient pas 0, elle DISPARAIT (`compterParFichier` n'accumule
