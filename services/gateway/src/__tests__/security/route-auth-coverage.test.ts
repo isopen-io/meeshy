@@ -55,7 +55,7 @@
  *    seul et retombe en erreur si la même route régresse un jour.
  */
 
-import { describe, it, expect, afterAll } from '@jest/globals';
+import { describe, it, expect, afterAll, beforeAll } from '@jest/globals';
 import type { FastifyInstance } from 'fastify';
 import fs from 'fs';
 import path from 'path';
@@ -440,12 +440,19 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   let app: FastifyInstance;
   let routes: CollectedRoute[];
 
+  // L'assemblage vit dans un `beforeAll`, jamais dans un `it` : monté depuis
+  // un témoin, il n'existe pas quand un `-t` filtre ce témoin-là, et tous les
+  // suivants tombent sur `routes` undefined — une panne de HARNAIS qui se lit
+  // comme un défaut de code.
+  beforeAll(async () => {
+    ({ app, routes } = await buildAssembledApp());
+  }, 120_000);
+
   afterAll(async () => {
     if (app) await app.close();
   });
 
-  it('assemble le serveur réel et énumère au moins une centaine de routes (garde-fou anti-régression du harnais lui-même)', async () => {
-    ({ app, routes } = await buildAssembledApp());
+  it('assemble le serveur réel et énumère au moins une centaine de routes (garde-fou anti-régression du harnais lui-même)', () => {
     expect(routes.length).toBeGreaterThan(100);
   });
 
@@ -735,4 +742,74 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     expect([...unusedPublic]).toEqual([]);
     expect([...unusedGaps]).toEqual([]);
   });
+
+  /**
+   * Le témoin qui manquait à #4318 : il compare ce que le manifeste ANNONCE à
+   * ce que le serveur SERT.
+   *
+   * Le témoin ci-dessus interroge le serveur et n'ouvre jamais
+   * `route-manifest.json` ; le cliquet du manifeste compare l'artefact à sa
+   * régénération et n'interroge jamais le serveur. Chacun était vert pendant
+   * que la table annonçait « public par construction » sur 304 routes dont dix
+   * tirées au hasard rendaient 401 (mesuré sur staging le 2026-08-29). Aucun
+   * des deux ne pouvait le voir : il n'existait aucun témoin qui les
+   * CONFRONTE.
+   *
+   * On lit l'artefact COMMITÉ, pas une régénération : c'est le fichier que les
+   * gardes de contrat client consomment (#4189), donc c'est lui qui doit dire
+   * vrai. Une table qui annonce public sur une route gardée est pire qu'une
+   * table absente — elle est crédible, et produite mécaniquement.
+   *
+   * Le verdict est `401` et lui seul. `403` ne contredit pas l'annonce (une
+   * route ouverte peut refuser un appelant sur autre chose que l'absence de
+   * jeton), `400` non plus (validation atteinte, donc garde franchie).
+   */
+  it("n'annonce PUBLIQUE aucune route qui exige un jeton — l'artefact commité confronté au serveur", async () => {
+    const manifestPath = path.resolve(__dirname, '../../../route-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
+      routes: Array<{ method: string; path: string; securityBasisKey: string }>;
+    };
+
+    const annoncesPubliques = manifest.routes.filter((r) => r.securityBasisKey === 'no-standard-auth-hook');
+
+    // Le balayage doit prouver qu'il BALAIE : une table vide, ou une clé
+    // renommée, rendrait ce témoin vert sans avoir rien confronté.
+    expect(annoncesPubliques.length).toBeGreaterThan(10);
+
+    const declareesPubliques = new Set([
+      ...PUBLIC_ROUTES.map((e) => `${e.method} ${e.url}`),
+      ...KNOWN_GAPS.map((e) => `${e.method} ${e.url}`),
+    ]);
+
+    // Confrontation DÉTERMINISTE : le témoin frère ci-dessus prouve que TOUTE
+    // route hors de ces deux listes rend 401/403 à un appelant anonyme. Une
+    // route annoncée « publique par construction » et absente des deux listes
+    // est donc, par construction, une route gardée que le manifeste annonce
+    // ouverte — sans qu'il faille la réinterroger.
+    const mensonges = annoncesPubliques
+      .map((r) => `${r.method} ${r.path}`)
+      .filter((cle) => !declareesPubliques.has(cle));
+
+    if (mensonges.length > 0) {
+      throw new Error(
+        `${mensonges.length} route(s) sont ANNONCÉES publiques par le manifeste alors que le serveur ` +
+        `exige un jeton (le témoin frère prouve le 401/403 de toute route hors PUBLIC_ROUTES/KNOWN_GAPS) :\n\n` +
+        mensonges.map((c) => `  ${c}`).join('\n') +
+        `\n\nLa détection de \`deriveSecurityLevel\` a un angle mort — voir ` +
+        `\`route-manifest/collect.ts\`, § « La QUATRIÈME forme d'authentification » et ` +
+        `\`GARDES_HORS_HOOK\`. Ne PAS corriger en ajoutant la route à PUBLIC_ROUTES : ` +
+        `c'est la DÉTECTION qui doit voir la garde, pas la liste des exceptions qui doit grossir.`
+      );
+    }
+
+    // Et la vérification SERVIE sur ce qui reste, pour les routes qui ne sont
+    // pas couvertes par le raisonnement ci-dessus : une route déclarée
+    // publique répond 401 sur un verdict MÉTIER (mauvais mot de passe, jeton
+    // du corps refusé), ce qui CONFIRME l'annonce au lieu de la contredire —
+    // les confondre rendrait ce témoin faux sur `/auth/login`, et un témoin
+    // faux se fait désarmer. Il ne reste donc rien à injecter tant que la
+    // confrontation ci-dessus est verte ; ce bloc existe pour le jour où une
+    // exception sera ajoutée sans que la garde le soit.
+    expect(mensonges).toEqual([]);
+  }, 120_000);
 });
