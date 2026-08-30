@@ -13,7 +13,9 @@
  *  3. la règle tombe-t-elle sur le manifeste RÉEL muté ? (la méta-preuve :
  *     mutation appliquée à l'artefact réel, en mémoire, pas à une fixture
  *     jouet — c'est la seule façon de prouver que le balayage voit un montage
- *     neuf DANS l'artefact qu'il garde, avec ses 545 lignes)
+ *     neuf DANS l'artefact qu'il garde, a sa taille reelle du jour -- le
+ *     compte n'est pas cite ici : il bouge a chaque route ajoutee, et une
+ *     prose qui l'epingle est perimee au lot suivant)
  */
 import { describe, it, expect } from '@jest/globals';
 import fs from 'fs';
