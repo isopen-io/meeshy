@@ -1680,6 +1680,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(deletedId) });
     };
 
+    // Handler for conversation:restored — inverse of conversation:deleted: the
+    // user undid a "delete for me" (`POST /conversations/:id/restore-for-me`,
+    // #4344) and the conversation must come back into their list, on every
+    // device. Same gesture as `conversation:new` / a lifted ban — a bounded
+    // read (`fetchConversationIntoCache` above), never a page replay.
+    const handleConversationRestored = (data: { userId: string; conversationId: string }) => {
+      const { conversationId: restoredId } = data;
+      if (!restoredId) return;
+      fetchConversationIntoCache(restoredId);
+    };
+
     // Handler for conversation:updated — metadata changed (title, settings) or lastMessage bump.
     const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
       const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
@@ -1798,6 +1809,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
+    const unsubscribeConversationRestored = meeshySocketIOService.onConversationRestored(handleConversationRestored);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
     const unsubscribeParticipantJoined = meeshySocketIOService.onConversationParticipantJoined(handleConversationParticipantJoined);
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
@@ -1831,6 +1843,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeParticipantRole?.();
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
+      unsubscribeConversationRestored();
       unsubscribeConversationUpdated?.();
       unsubscribeParticipantJoined?.();
       unsubscribeParticipantLeft?.();

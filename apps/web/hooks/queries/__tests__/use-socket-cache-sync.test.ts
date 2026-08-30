@@ -38,6 +38,17 @@ let capturedPreferencesReorderedListener: ((data: any) => void) | null = null;
 let capturedCommunityPreferencesReorderedListener: ((data: any) => void) | null = null;
 // Capture the unread-updated listener — REV-5/B1, maillon 3 (le pont ✦ voyage sur cet événement)
 let capturedUnreadUpdatedListener: ((data: any) => void) | null = null;
+// Capture the conversation:restored listener — issue #4389. Il passe par le
+// wrapper `onConversationRestored` comme ses dix voisins, et PAS par un
+// `socket.on` brut : un abonnement pose directement sur le socket ne
+// s'attache qu'a l'instance PRESENTE a cet instant, si bien qu'un
+// `getSocket()` nul au montage ne pose jamais l'ecouteur -- et l'effet ne se
+// rejoue pas pour reessayer. Le wrapper detient un Set que
+// `setupEventListeners(socket)` rebranche a chaque socket.
+let capturedConversationRestoredListener: ((data: { userId: string; conversationId: string }) => void) | null = null;
+const mockSocketOn = jest.fn();
+const mockSocketOff = jest.fn();
+const mockSocket = { on: mockSocketOn, off: mockSocketOff };
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -118,11 +129,16 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     }),
     onUserUpdated: jest.fn(() => () => {}),
     onStatusChange: jest.fn(() => () => {}),
+    getSocket: jest.fn(() => mockSocket),
+    onConversationRestored: jest.fn((listener: (data: { userId: string; conversationId: string }) => void) => {
+      capturedConversationRestoredListener = listener;
+      return () => { capturedConversationRestoredListener = null; };
+    }),
   },
 }));
 
 jest.mock('@/services/api.service', () => ({
-  apiService: { post: jest.fn().mockResolvedValue(undefined) },
+  apiService: { post: jest.fn().mockResolvedValue(undefined), get: jest.fn() },
 }));
 
 jest.mock('@/stores/auth-store', () => ({
@@ -174,7 +190,19 @@ jest.mock('@/hooks/lentille/use-reading-modes-flag', () => ({
 }));
 
 import { useSocketCacheSync, mergeConversationUpdate } from '../use-socket-cache-sync';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
+import { apiService } from '@/services/api.service';
+// Real constant, not a mock — `jest.mock('@meeshy/shared/...')` is INERTE
+// under this project's moduleNameMapper (apps/web/CLAUDE.md § Testing): the
+// factory never intercepts the module the code loads, so a witness that
+// wants to prove the actual (event name, payload) couple has to read the
+// same compiled constant production code reads.
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+
+// Mirrors the established cast idiom in this directory (see
+// `hooks/queries/__tests__/use-update-history-grant.test.ts`'s `mockPatch`).
+const mockApiGet = apiService.get as jest.Mock;
 
 function makeMessage(overrides: Partial<Message> & { id: string; conversationId: string }): Message {
   return {
@@ -1679,5 +1707,138 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
     const [row] = cachedConversations(queryClient);
     expect(row.unreadCount).toBe(2);
     expect(row.bridge).toEqual(bridge);
+  });
+});
+
+/**
+ * Issue #4389 — "Aucun client n'écoute conversation:restored" (volet web).
+ *
+ * `conversation:restored` is the missing UPWARD half of the deleted/restored
+ * pair in apps/web/CLAUDE.md's "grille CLOSE" (§ Appartenance à une
+ * conversation) : the DOWNWARD transition (`conversation:deleted` →
+ * `dropConversationFromCache`, tested above) already existed; this closes
+ * the pair with its exact mirror gesture, `fetchConversationIntoCache` — the
+ * SAME bounded `GET /conversations/:id` already used by `conversation:new`
+ * and a lifted ban, never a replay of `conversations.infinite()`.
+ *
+ * IDs below are 24-char hex strings on purpose: `fetchConversationIntoCache`
+ * gates on `/^[a-f\d]{24}$/i` before anything else, and the other describe
+ * blocks in this file (which never reach that gesture) use non-ObjectId ids
+ * like `'conv-1'` freely — reusing that convention here would silently
+ * short-circuit every test on the FORMAT guard instead of the behaviour
+ * under test.
+ */
+describe('useSocketCacheSync — conversation:restored (issue #4389, la montante manquante du couple deleted/restored)', () => {
+  const ACTIVE_CONVERSATION_ID = '507f1f77bcf86cd799439011';
+  const RESTORED_CONVERSATION_ID = '665f1a2b3c4d5e6f7a8b9c0d';
+
+  beforeEach(() => {
+    capturedConversationRestoredListener = null;
+    jest.clearAllMocks();
+  });
+
+  it('subscribes with the real (event name, handler) couple — not just an address', () => {
+    const { wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+    renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+    // Asserting the STRING is the point: a witness that only checked
+    // `capturedConversationRestoredListener !== null` would still pass had the
+    // hook subscribed under the wrong event name, or `undefined` — the exact
+    // failure mode `apps/web/CLAUDE.md` warns this grid already produced once.
+    expect(meeshySocketIOService.onConversationRestored).toHaveBeenCalledWith(expect.any(Function));
+    // L'abonnement ne doit PAS passer par le socket brut : c'est ce qui le
+    // rend independant du cycle de vie de la connexion.
+    expect(mockSocketOn).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_RESTORED, expect.any(Function));
+    expect(SERVER_EVENTS.CONVERSATION_RESTORED).toBe('conversation:restored');
+    expect(capturedConversationRestoredListener).not.toBeNull();
+  });
+
+  it('brings the row back into conversations.infinite() — the missing upward transition', async () => {
+    const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+    // createTestHarness seeds only ACTIVE_CONVERSATION_ID — the restored id is
+    // absent, exactly the state a prior "delete-for-me" on another device
+    // leaves behind.
+    mockApiGet.mockResolvedValueOnce({
+      success: true,
+      data: { id: RESTORED_CONVERSATION_ID, lastMessage: null, updatedAt: new Date().toISOString() },
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+    act(() => {
+      capturedConversationRestoredListener!({ userId: 'current-user', conversationId: RESTORED_CONVERSATION_ID });
+    });
+
+    expect(mockApiGet).toHaveBeenCalledWith(`/conversations/${RESTORED_CONVERSATION_ID}`);
+    await waitFor(() => {
+      const ids = cachedConversations(queryClient).map((c) => c.id);
+      expect(ids).toContain(RESTORED_CONVERSATION_ID);
+    });
+  });
+
+  it('never invalidates conversations.infinite() — the negative witness guarding the ban on page replay', async () => {
+    const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+    mockApiGet.mockResolvedValueOnce({
+      success: true,
+      data: { id: RESTORED_CONVERSATION_ID, lastMessage: null, updatedAt: new Date().toISOString() },
+    });
+    // A spy on the REAL method (not a replacement): a prefix invalidate would
+    // still run its normal effect (replaying every loaded page) if the
+    // handler regressed to it — this only records that it never happens.
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+    act(() => {
+      capturedConversationRestoredListener!({ userId: 'current-user', conversationId: RESTORED_CONVERSATION_ID });
+    });
+
+    await waitFor(() => {
+      const ids = cachedConversations(queryClient).map((c) => c.id);
+      expect(ids).toContain(RESTORED_CONVERSATION_ID);
+    });
+
+    // apps/web/CLAUDE.md § Data Fetching: `conversations.all` is a PREFIX of
+    // `conversations.infinite()` — invalidating it replays every loaded page
+    // and duplicates a row at every offset boundary. The only correct gesture
+    // is the bounded read already proven above; this is what forbids the
+    // regression back to a prefix invalidate.
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not re-fetch a conversation already in the list — idempotence measured, not assumed', () => {
+    const { queryClient, wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+    // Seed the SAME id the event will name, already present — the exact race
+    // the source comment above `fetchConversationIntoCache` describes
+    // (`conversation:new` and a lifted ban landing within milliseconds of
+    // each other): the pre-request guard must short-circuit on presence, not
+    // on the id format guard.
+    seedConversations(queryClient, [
+      { id: ACTIVE_CONVERSATION_ID, lastMessage: null, updatedAt: new Date().toISOString() } as any,
+      { id: RESTORED_CONVERSATION_ID, lastMessage: null, updatedAt: new Date().toISOString() } as any,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }), { wrapper });
+
+    act(() => {
+      capturedConversationRestoredListener!({ userId: 'current-user', conversationId: RESTORED_CONVERSATION_ID });
+    });
+
+    expect(mockApiGet).not.toHaveBeenCalled();
+  });
+
+  it('unsubscribes through the wrapper on unmount', () => {
+    const { wrapper } = createTestHarness(ACTIVE_CONVERSATION_ID);
+    const { unmount } = renderHook(
+      () => useSocketCacheSync({ conversationId: ACTIVE_CONVERSATION_ID, enabled: true }),
+      { wrapper }
+    );
+
+    expect(capturedConversationRestoredListener).not.toBeNull();
+    unmount();
+
+    // Le desabonnement passe par la fonction rendue par le wrapper, jamais
+    // par un `socket.off` : c'est le pendant de l'abonnement.
+    expect(capturedConversationRestoredListener).toBeNull();
+    expect(mockSocketOff).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_RESTORED, expect.any(Function));
   });
 });
