@@ -27,7 +27,11 @@ import XCTest
 /// d'accessibilité, et compare.
 final class RepostAttributionGuardTests: XCTestCase {
 
-    private static let cardFile = "Meeshy/Features/Main/Views/FeedPostCard.swift"
+    /// #4078 — la rangée AUTEUR, qui porte l'attribution de republication, a
+    /// quitté `FeedPostCard.swift` pour son extension. Le bloc n'a pas bougé
+    /// d'une ligne ; c'est le fichier qui a changé sous la garde, et elle a
+    /// cherché son marqueur là où il n'était plus.
+    private static let cardFile = "Meeshy/Features/Main/Views/FeedPostCard+Header.swift"
 
     /// Ouverture du bloc d'attribution dans `FeedPostCard`.
     private static let attributionMarker = "if post.repostAuthor != nil {"

@@ -104,6 +104,14 @@ final class MessageFrameBox {
         tracker = MessageFrameTracker(maxEntries: maxEntries)
     }
 
+    /// La cible app compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` :
+    /// sans cette ligne, la `deinit` synthétisée est ISOLÉE et double-libère sur
+    /// iOS 26.1. Elle manquait ici depuis #3946 — la boîte est née après le
+    /// balayage qui avait posé la règle partout ailleurs, et c'est exactement le
+    /// genre d'oubli qu'une classe NEUVE fait passer : la garde existait, rien
+    /// dans l'écriture d'un nouveau type ne la rappelle.
+    nonisolated deinit {}
+
     func update(_ newFrames: [String: CGRect]) {
         tracker.update(newFrames)
     }
