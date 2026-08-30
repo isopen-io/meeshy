@@ -32,6 +32,9 @@ const ANONYMOUS_PARTICIPANT_ID = '507f1f77bcf86cd799439088';
 const REGISTERED_USER_ID = '507f1f77bcf86cd799439077';
 const REGISTERED_PARTICIPANT_ID = '507f1f77bcf86cd799439066';
 const UNREAD_COUNT = 4;
+// #4349 critère 4 — DÉLIBÉRÉMENT différent d'`UNREAD_COUNT` : `markedCount` est
+// ce que le marquage a FIGÉ, jamais le compte de non-lus d'avant.
+const FROZEN_COUNT = 6;
 
 // --- module mocks (le préfixe `mock` est requis par le hoisting de jest) ---
 
@@ -163,12 +166,23 @@ describe('read-status routes — un participant sans compte', () => {
     mockResolveConversationId.mockReset().mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockReset().mockResolvedValue(false);
     mockGetUnreadCount.mockReset().mockResolvedValue(UNREAD_COUNT);
-    mockMarkMessagesAsRead.mockReset().mockResolvedValue(undefined);
+    mockMarkMessagesAsRead.mockReset().mockResolvedValue(FROZEN_COUNT);
     mockMarkMessagesAsReceived.mockReset().mockResolvedValue(undefined);
     mockGetLatestMessageSummary.mockReset().mockResolvedValue(null);
     mockGetConversationReadStatuses.mockReset().mockResolvedValue(new Map([[MESSAGE_ID, { readBy: [] }]]));
     mockGetMessageReadStatus.mockReset().mockResolvedValue({ readBy: [] });
     mockPrisma.message.findUnique.mockReset().mockResolvedValue({ id: MESSAGE_ID, conversationId: CONVERSATION_ID, senderId: 'someone-else' });
+    // #4349 — la garde d'appartenance de la COLLECTION lit les ids RAPPORTÉS
+    // par `findMany` (là où la porte d'avant lisait `findUnique`) et échoue
+    // FERMÉ quand la lecture ne les rend pas tous. Le double rejoue la ligne
+    // que `findUnique` décrit.
+    mockPrisma.message.findMany.mockReset().mockImplementation(async (args: any) => {
+      const ids: string[] = args?.where?.id?.in ?? [];
+      if (ids.length === 0) return [];
+      const row = await mockPrisma.message.findUnique();
+      if (!row || row.deletedAt || row.conversationId !== args?.where?.conversationId) return [];
+      return ids.map((id) => ({ id, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }));
+    });
     mockPrisma.participant.findMany.mockReset().mockResolvedValue([]);
     mockPrisma.participant.findUnique.mockReset().mockResolvedValue(null);
     mockAuthContext.current = anonymousContext();
@@ -188,7 +202,8 @@ describe('read-status routes — un participant sans compte', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().data.markedCount).toBe(UNREAD_COUNT);
+    expect(response.json().data.markedCount).toBe(FROZEN_COUNT);
+    expect(response.json().data.markedCount).not.toBe(UNREAD_COUNT);
     expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(
       ANONYMOUS_PARTICIPANT_ID,
       CONVERSATION_ID,

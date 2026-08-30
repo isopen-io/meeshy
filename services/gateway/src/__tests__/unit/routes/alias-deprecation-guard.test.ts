@@ -294,6 +294,18 @@ const DETTE: readonly { readonly cle: string; readonly issue: string }[] = [
   { cle: 'users/blocking.ts POST /users/:userId/block', issue: '#4164' },
   { cle: 'users/blocking.ts DELETE /users/:userId/block', issue: '#4164' },
   { cle: 'users/blocking.ts GET /users/me/blocked-users', issue: '#4164' },
+  // #4349 a fait des six portes d'accusés des ADAPTATEURS MINCES (même
+  // référence de gestionnaire, aucun corps dupliqué) vers la collection
+  // `/conversations/:conversationId/receipts`. Leur ANNONCE est un lot à part
+  // (#4423) : poser un en-tête sur cinq routes vivantes qu'appellent trois
+  // clients ne se décide pas en fin d'intégration. Ce sont bien des alias —
+  // c'est pourquoi ils sont ici et non dans la liste des SUCCESSEURS.
+  { cle: 'conversations/messages.ts POST /conversations/:id/mark-read', issue: '#4423' },
+  { cle: 'message-read-status.ts GET /messages/:messageId/read-status', issue: '#4423' },
+  { cle: 'message-read-status.ts GET /conversations/:conversationId/read-statuses', issue: '#4423' },
+  { cle: 'message-read-status.ts POST /conversations/:conversationId/mark-as-read', issue: '#4423' },
+  { cle: 'message-read-status.ts POST /conversations/:conversationId/mark-as-received', issue: '#4423' },
+  { cle: 'message-read-status.ts POST /conversations/:conversationId/messages/:messageId/delivery-receipt', issue: '#4423' },
 ];
 
 /**

@@ -53,6 +53,11 @@ const mockBuildPostReplyTo = jest.fn<any>().mockReturnValue({ id: 'post-1', cont
 const mockPostReplyToFromMetadata = jest.fn<any>().mockReturnValue(null);
 const mockIsBlockedBetween = jest.fn<any>().mockResolvedValue(false);
 
+// #4349 critère 4 — `markedCount` est ce que le marquage a FIGÉ, jamais le
+// compte de non-lus d'AVANT. Les deux valeurs sont DÉLIBÉRÉMENT différentes
+// dans tout ce fichier : c'est ce désaccord qui rend le témoin capable de
+// tomber si la porte se remettait à servir l'un pour l'autre.
+const FROZEN_COUNT = 7;
 const mockGetUnreadCount = jest.fn<any>().mockResolvedValue(5);
 const mockMarkMessagesAsRead = jest.fn<any>().mockResolvedValue(undefined);
 const mockMarkMessagesAsReceived = jest.fn<any>().mockResolvedValue(undefined);
@@ -445,7 +450,7 @@ beforeEach(() => {
   mockPostReplyToFromMetadata.mockReturnValue(null);
   mockIsBlockedBetween.mockResolvedValue(false);
   mockGetUnreadCount.mockResolvedValue(5);
-  mockMarkMessagesAsRead.mockResolvedValue(undefined);
+  mockMarkMessagesAsRead.mockResolvedValue(FROZEN_COUNT);
   mockMarkMessagesAsReceived.mockResolvedValue(undefined);
   mockGetLatestMessageSummary.mockResolvedValue({});
   mockShouldShowReadReceipts.mockResolvedValue(false);
@@ -1257,11 +1262,17 @@ describe('GET /conversations/:id/messages', () => {
 describe('POST /conversations/:id/mark-read', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('returns 403 when conversationId not found', async () => {
+  // #4349 — une conversation INTROUVABLE rend 404, comme les quatre portes
+  // sœurs (`mark-as-read`, `mark-as-received`, `delivery-receipt`,
+  // `read-statuses`) le faisaient déjà. Cette porte rendait 403 pour le même
+  // fait : deux verdicts pour une seule cause, sur deux adresses qui partagent
+  // désormais leur gestionnaire.
+  it('returns 404 when conversationId not found', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalled();
+    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('returns 403 when no participant found', async () => {
@@ -1301,7 +1312,7 @@ describe('POST /conversations/:id/mark-read', () => {
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(mockMarkMessagesAsRead).toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 3 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   it('error path → 500', async () => {
@@ -1315,6 +1326,10 @@ describe('POST /conversations/:id/mark-read', () => {
 
   it('forwards the reported messageIds so only displayed messages are frozen', async () => {
     mockGetUnreadCount.mockResolvedValue(3);
+    // #4349 critère 3 — la garde d'appartenance lit d'abord les ids rapportés.
+    prisma.message.findMany.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439013', senderId: OTHER_USER_ID, createdAt: new Date('2024-01-01') },
+    ]);
     const reply = makeReply();
     await getHandler_()(
       makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
@@ -1324,8 +1339,23 @@ describe('POST /conversations/:id/mark-read', () => {
       expect.anything(),
       expect.anything(),
       undefined,
-      { messageIds: ['507f1f77bcf86cd799439013'] }
+      expect.objectContaining({ messageIds: ['507f1f77bcf86cd799439013'] })
     );
+  });
+
+  // #4349 critère 3 — l'anti-spoof que SEULE `delivery-receipt` portait, exercé
+  // ici depuis un compte qui n'est PAS l'expéditeur : ce qui refuse est
+  // l'appartenance de l'id à la conversation, pas la propriété du message.
+  it("refuse un messageId qui n'appartient pas à la conversation, sans rien figer", async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    prisma.message.findMany.mockResolvedValue([]); // l'id ne matche pas la conversation
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
+      reply
+    );
+    expect(mockSendNotFound).toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).not.toHaveBeenCalled();
   });
 
   it('still marks read without a body — deployed clients post none', async () => {
@@ -1337,7 +1367,7 @@ describe('POST /conversations/:id/mark-read', () => {
     // figerait rien et perdrait la lecture pour ces versions.
     const options = mockMarkMessagesAsRead.mock.calls[0][3];
     expect(options?.messageIds).toBeUndefined();
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 3 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   it('rejects a malformed messageIds payload with 400', async () => {
@@ -1353,6 +1383,9 @@ describe('POST /conversations/:id/mark-read', () => {
     // vient d'afficher des messages situés APRÈS ce trou. Le raccourci
     // « 0 non-lu → ne rien faire » perdrait ces lectures.
     mockGetUnreadCount.mockResolvedValue(0);
+    prisma.message.findMany.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439013', senderId: OTHER_USER_ID, createdAt: new Date('2024-01-01') },
+    ]);
     const reply = makeReply();
     await getHandler_()(
       makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
@@ -2538,11 +2571,30 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
 describe('POST /conversations/:id/mark-read — coverage extension', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('canAccess=false → 403', async () => {
-    mockCanAccessConversation.mockResolvedValue(false);
+  // #4349 — `canAccessConversation` n'est plus consultée ICI : elle coûtait une
+  // lecture de plus pour rendre, sur tout ce qui n'est pas `meeshy`, le MÊME
+  // verdict que `resolveCallerParticipant` (appartenance active), que les
+  // quatre portes sœurs interrogeaient seules. La seule règle qu'elle portait
+  // en propre — la conversation GLOBALE n'admet aucun invité de lien — vit
+  // désormais dans le noyau partagé, pure et sans requête, donc appliquée par
+  // les CINQ écritures au lieu d'une. Le témoin exerce la RÈGLE, pas le double.
+  it("la conversation globale `meeshy` refuse un invité de lien (403)", async () => {
+    mockResolveConversationId.mockResolvedValue('meeshy');
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ authContext: makeAuthContext({ type: 'anonymous', isAnonymous: true, participantId: ANON_PART_ID }) }),
+      reply
+    );
+    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).not.toHaveBeenCalled();
+  });
+
+  it("la conversation globale `meeshy` reste ouverte à un compte inscrit", async () => {
+    mockResolveConversationId.mockResolvedValue('meeshy');
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Unauthorized access to this conversation');
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
   });
 
   it('shouldShowReadReceipts=true: emits READ_STATUS_UPDATED to conversation room', async () => {
@@ -2555,7 +2607,7 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
       'read-status:updated',
       expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
     );
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   // ── the actor read-sync pair travels on this route too ─────────────────────
@@ -2821,7 +2873,7 @@ describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverag
     await getHandler_()(makeRequest(), reply);
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
     expect(fastify._mockEmit).toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 1 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   it('participant with real userId: addressed by its user id', async () => {
@@ -2831,7 +2883,7 @@ describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverag
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${OTHER_USER_ID}`);
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   // L'arriéré de l'acteur ne concerne QUE l'acteur — jumeau exact du contrôle
@@ -2884,7 +2936,7 @@ describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverag
     fastify._mockTo.mockReturnValueOnce({ emit: fastify._mockEmit });
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 });
 
@@ -2951,7 +3003,7 @@ describe('broadcastReadStatus — branch coverage', () => {
     mockGetUnreadCount.mockResolvedValue(2);
     const reply = makeReply();
     await getMarkReadHandler()(makeRequest(), reply);
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 
   it('seenRooms dedup: duplicate participant userId skips second room chain', async () => {
@@ -2972,7 +3024,7 @@ describe('broadcastReadStatus — branch coverage', () => {
     await getMarkReadHandler()(makeRequest(), reply);
     expect(chainableEmitter.to).toHaveBeenCalledTimes(1);
     expect(chainableEmitter.emit).toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 3 });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: FROZEN_COUNT });
   });
 });
 

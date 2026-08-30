@@ -3,7 +3,6 @@ import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
-import { broadcastReadStatus } from '../../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
@@ -37,7 +36,6 @@ import {
   applyPersonalHistoryHiding,
   NO_PERSONAL_HIDING
 } from '../../services/personalHistoryFilter';
-import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
@@ -48,6 +46,14 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
+// #4349 — `POST /conversations/:id/mark-read` est un ADAPTATEUR de la
+// collection unique d'accusés : le gestionnaire, son dimensionnement de débit
+// et toutes ses gardes viennent d'ICI, jamais d'une copie locale.
+import {
+  createReceiptWriteRateLimitConfig,
+  receiptContext,
+  receiptHandlers,
+} from './receipts';
 import { isBlockedBetween } from '../../utils/blocking';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
@@ -61,8 +67,6 @@ import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
-import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -328,9 +332,11 @@ export function registerMessagesRoutes(
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = fastify.socketIOHandler;
-  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
-  // G-123 — cf. la même attache aux trois portes de `routes/message-read-status.ts`.
-  const bridgeService = new ConversationBridgeService(prisma);
+  // Les gestionnaires de la collection d'accusés, construits UNE fois — la
+  // diffusion `read-status:updated`, la préférence `showReadReceipts` et le
+  // pont ✦ (G-123) sont attachés là-bas, pour les cinq portes d'écriture à la
+  // fois. Ce fichier n'en instancie plus aucun collaborateur en propre.
+  const receipts = receiptHandlers(receiptContext(fastify, prisma));
 
   // `MessagingService` is stateless across requests, so it is built once and
   // reused. The POST /messages handler previously re-imported the module and
@@ -1491,9 +1497,33 @@ export function registerMessagesRoutes(
   });
 
 
+  /**
+   * POST /conversations/:id/mark-read — ADAPTATEUR de la collection unique
+   * (#4349, suivi de #4179).
+   *
+   * Le gestionnaire est `receiptHandlers(...).markReadAlias`, IMPORTÉ de
+   * `routes/conversations/receipts.ts` : la MÊME référence de fonction que
+   * celle servie à `POST /conversations/:conversationId/mark-as-read`
+   * (`routes/message-read-status.ts`). Les deux adresses portaient jusqu'ici
+   * deux copies du même geste — « mêmes `MarkReadBodySchema`,
+   * `markMessagesAsRead` et `broadcastReadStatus`, vérifié » (#4179) — et
+   * avaient déjà divergé : seule celle-ci portait le raccourci « aucun non-lu →
+   * ne rien figer » et sa cascade de notifications. Elles ne peuvent plus
+   * diverger : il n'y a plus qu'un seul calcul.
+   *
+   * Ce qui CHANGE pour l'appelant : `markedCount` est désormais le nombre
+   * d'entrées RÉELLEMENT FIGÉES, y compris en mode fenêtre où cette porte
+   * servait sous ce nom le compte de NON-LUS d'AVANT marquage. Voir le
+   * doc-comment de `receipts.ts` § « `markedCount` a UNE définition ».
+   *
+   * Le débit — 120/min par COMPTE, `hook: 'preHandler'` — arrive avec
+   * l'adaptateur : cette porte n'en portait AUCUN, alors que sa jumelle
+   * `mark-as-read` en portait un depuis toujours.
+   */
   fastify.post<{
     Params: ConversationParams;
   }>('/conversations/:id/mark-read', {
+    config: { rateLimit: createReceiptWriteRateLimitConfig() },
     schema: {
       description: 'Mark all messages in a conversation as read for the authenticated user',
       tags: ['conversations', 'messages'],
@@ -1513,124 +1543,20 @@ export function registerMessagesRoutes(
             data: {
               type: 'object',
               properties: {
-                markedCount: { type: 'number', description: 'Number of messages marked as read' }
+                markedCount: { type: 'number', description: 'Entrées de statut RÉELLEMENT figées par cet appel' }
               }
             }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
     preValidation: [participantAuth]
-  }, async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
-
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier les permissions d'accès
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Resolve participant ID for this user
-      const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
-
-      if (!currentParticipant) {
-        return sendForbidden(reply, 'Not a participant');
-      }
-
-      // Corps absent = client déjà distribué → repli fenêtre (surtout pas un
-      // lot vide, qui ne figerait rien et perdrait la lecture).
-      let reportedMessageIds: readonly string[] | undefined;
-      let reportedLanguage: string | undefined;
-      let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
-      let caughtUpToMessageId: string | undefined;
-      if (request.body !== undefined && request.body !== null) {
-        const bodyResult = MarkReadBodySchema.safeParse(request.body);
-        if (!bodyResult.success) {
-          return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
-        }
-        reportedMessageIds = bodyResult.data.messageIds;
-        reportedLanguage = bodyResult.data.language;
-        reportedMessageLanguages = bodyResult.data.messageLanguages;
-        caughtUpToMessageId = bodyResult.data.caughtUpToMessageId;
-      }
-
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-      const readStatusService = new MessageReadStatusService(prisma);
-
-      const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
-      // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
-      // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
-      // le client vient d'afficher des messages situés après ce trou.
-      if (unreadCount === 0 && !reportedMessageIds && !caughtUpToMessageId) {
-        // Le raccourci ne doit pas sauter la cascade notifications : une
-        // réaction/mention arrivée sur un message déjà lu a créé une
-        // notification alors que le compteur de messages est resté à 0.
-        Promise.resolve(
-          fastify.notificationService?.markConversationNotificationsAsRead?.(userId, conversationId)
-        ).catch(() => {});
-        return sendSuccess(reply, { markedCount: 0 });
-      }
-
-      // `markedCount` compte ce qui a RÉELLEMENT été figé. Le nombre d'ids
-      // rapportés sur-compterait (certains étaient déjà lus) et le compteur de
-      // non-lus inclurait des messages jamais rapportés.
-      const frozenCount = await readStatusService.markMessagesAsRead(
-        currentParticipant.id,
-        conversationId,
-        undefined,
-        reportedMessageIds || reportedLanguage || reportedMessageLanguages || caughtUpToMessageId
-          ? {
-              messageIds: reportedMessageIds,
-              language: reportedLanguage,
-              messageLanguages: reportedMessageLanguages,
-              caughtUpToMessageId
-            }
-          : undefined
-      );
-      // La troisième copie de ce fan-out vivait ici, en fermeture, et avait
-      // dérivé comme les autres. Une seule forme désormais : c'est elle qui
-      // consulte la préférence d'accusés, découpe le payload des pairs de celui
-      // de l'acteur, et recale le badge sur les DEUX branches de la préférence.
-      try {
-        await broadcastReadStatus(
-          {
-            io: socketIOHandler?.getManager?.()?.getIO(),
-            prisma,
-            readStatusService,
-            privacyPreferencesService,
-            bridgeService
-          },
-          {
-            conversationId,
-            participantId: currentParticipant.id,
-            userId,
-            isAnonymous: authRequest.authContext.type === 'anonymous',
-            type: 'read'
-          }
-        );
-      } catch (error) {
-        logger.error('Error broadcasting read status:', error);
-      }
-
-      return sendSuccess(reply, { markedCount: reportedMessageIds ? frozenCount : unreadCount });
-
-    } catch (error) {
-      logger.error('Error marking conversation as read', error);
-      return sendInternalError(reply, 'Erreur lors du marquage des messages comme lus');
-    }
-  });
+  }, receipts.markReadAlias);
 
   fastify.post<{
     Params: ConversationParams;
