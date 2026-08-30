@@ -130,6 +130,50 @@ struct ComposerSceneSurface: View {
     let descriptionPlaceholder: String
 
 
+    /// Les quatre gestes qui agissent SUR la scène — ✎ ☺ ♫ # — ou les
+    /// contrôleurs de l'outil ouvert, qui agissent sur elle tout autant.
+    private var floatingRail: AnyView {
+        let mode: ComposerRailMode = {
+            guard case .doors(let servies) = railMode else { return railMode }
+            return .doors(servies.filter(ComposerSceneFloatingRail.doors.contains))
+        }()
+        if case .doors(let d) = mode, d.isEmpty { return AnyView(EmptyView()) }
+        return AnyView(
+            ComposerLeadingRail(mode: mode,
+                                plateauTint: plateauTint,
+                                onDoor: onRailDoor,
+                                onToolControl: onRailToolControl,
+                                onExitTool: onRailExitTool,
+                                // Il FLOTTE : pas de ressort, sinon son socle
+                                // s'étire sur toute la hauteur de la scène et
+                                // la dernière entrée déborde sous elle.
+                                pushesToThumb: false)
+                .padding(.trailing, ComposerRailGeometry.outerMargin)
+        )
+    }
+
+    /// Ce qui FAIT ENTRER de la matière. Absente pendant qu'un outil est
+    /// ouvert : la rangée ferait alors concurrence aux contrôleurs de l'outil,
+    /// et l'arbitrage donne la priorité du bas à l'outil en cours.
+    private var lowToolRow: AnyView {
+        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        let portes = ComposerSceneFloatingRail.lowRow(from: servies)
+        guard !portes.isEmpty else { return AnyView(EmptyView()) }
+        return AnyView(
+            // L'ordre des arguments suit l'ordre de DÉCLARATION — lu, jamais
+            // deviné : c'est la cinquième fois de la session que je le paie.
+            ComposerLeadingRail(mode: .doors(portes),
+                                plateauTint: plateauTint,
+                                onDoor: onRailDoor,
+                                axis: .horizontal,
+                                systemEntry: railSystemEntry,
+                                systemEntryAfter: railSystemEntryAfter)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, ComposerRailGeometry.outerMargin)
+                .padding(.bottom, 4)
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ComposerTopBar(
@@ -179,18 +223,25 @@ struct ComposerSceneSurface: View {
                 // `.bottomTrailing` tombent sur le plateau, jamais sur la scène.
                 // C'est la loi 6 — un rail posé sur la scène ferait mentir
                 // l'aperçu sur le rendu final.
+                // **L'ordre compte** : l'overlay est posé AVANT le padding
+                // horizontal, sinon son repère inclut le couloir et le rail se
+                // pose À CÔTÉ de la scène au lieu d'être DESSUS — mesuré à
+                // l'écran, c'est exactement ce qui s'est produit au premier
+                // essai.
+                .overlay(alignment: .trailing) { floatingRail }
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
-                .overlay(alignment: .bottomLeading) {
-                    ComposerLeadingRail(mode: railMode,
-                                        plateauTint: plateauTint,
-                                        onDoor: onRailDoor,
-                                        onToolControl: onRailToolControl,
-                                        onExitTool: onRailExitTool,
-                                        systemEntry: railSystemEntry,
-                                        systemEntryAfter: railSystemEntryAfter)
-                        .padding(.leading, ComposerRailGeometry.outerMargin)
-                        .padding(.bottom, ComposerRailGeometry.gutter)
-                }
+                // **Le rail FLOTTE sur le bord DROIT, DANS la scène** (#4072,
+                // arbitrage du 2026-08-28 sur #4061).
+                //
+                // Il vivait dans le couloir GAUCHE, à huit entrées, et le
+                // doc-comment ci-dessus le justifiait par la loi 6 : « un rail
+                // posé sur la scène ferait mentir l'aperçu sur le rendu final ».
+                // L'argument est réel — et l'arbitrage l'a tranché après
+                // relecture des captures : la planche `1b` montre quatre
+                // pastilles flottant SUR la scène, à droite. Ce que la loi 6
+                // protège reste protégé par l'œil du socle, qui rend la scène
+                // sans son chrome ; ce que le couloir coûtait était la rangée
+                // basse entière.
                 .overlay(alignment: .bottomTrailing) {
                     ComposerTrailingRail(actions: trailingActions,
                                          plateauTint: plateauTint,
@@ -227,6 +278,13 @@ struct ComposerSceneSurface: View {
                                           onPickOpening: onPickBandOpening,
                                           timelineContent: bandTimelineContent)
                 }
+                // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
+                // ENTRER de la matière — une photo, un lieu, un tracé — quand le
+                // rail agit sur ce qui est déjà là. L'arbitrage la nomme
+                // explicitement comme conservée ; la surface n'en avait aucune,
+                // et choisir un fond faisait donc disparaître toutes les portes
+                // d'entrée d'un coup.
+                lowToolRow
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

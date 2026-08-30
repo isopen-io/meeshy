@@ -50,6 +50,28 @@ struct ComposerLeadingRail: View {
     /// Le `(x)` — termine l'outil en cours et rend le rail à ses portes.
     var onExitTool: (() -> Void)?
 
+    /// **L'AXE — vertical par défaut, horizontal pour la rangée basse (#4072).**
+    ///
+    /// Les deux places du composer peignent la MÊME famille de boutons : le rail
+    /// qui flotte sur la scène et la rangée qui fait entrer de la matière. Les
+    /// écrire deux fois aurait donné deux apparences à faire converger à chaque
+    /// ajustement — c'est le défaut que ce paramètre évite, pas un confort.
+    ///
+    /// Le ressort qui pousse les entrées vers le pouce n'a de sens QUE sur l'axe
+    /// vertical : à l'horizontale il les tasserait à droite, hors de la
+    /// symétrie que la maquette montre.
+    var axis: Axis = .vertical
+
+    /// **Le ressort qui pousse les entrées vers le pouce — vrai pour un rail de
+    /// COULOIR, faux pour un rail qui FLOTTE sur la scène (#4072).**
+    ///
+    /// Dans un couloir, le rail occupe toute la hauteur et le ressort met les
+    /// entrées à portée. Sur la scène, il fait l'inverse : le socle de verre
+    /// s'étire alors sur toute la hauteur de la carte — mesuré à l'écran, une
+    /// bande sombre continue au lieu des pastilles de la maquette — et la
+    /// dernière entrée déborde sous la scène.
+    var pushesToThumb: Bool = true
+
     /// **Le slot de bouton SYSTÈME** (#4092, le collage).
     ///
     /// Les sept portes sont des `Button` qui RAPPELLENT l'hôte : le rail peint
@@ -84,14 +106,23 @@ struct ComposerLeadingRail: View {
         }
     }
 
+    @ViewBuilder
+    private func railStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if axis == .vertical {
+            VStack(spacing: 10) { content() }
+        } else {
+            HStack(spacing: 10) { content() }
+        }
+    }
+
     var body: some View {
         if !isEmpty {
-            VStack(spacing: 10) {
+            railStack {
                 // Le ressort POUSSE les entrées vers le bas : c'est lui, et non
                 // un alignement, qui tient la décision 2 — un `VStack` centré
                 // remettrait les entrées hautes hors de portée du pouce dès que
-                // la scène rétrécit.
-                Spacer(minLength: 0)
+                // la scène rétrécit. À l'horizontale il n'a pas lieu d'être.
+                if axis == .vertical, pushesToThumb { Spacer(minLength: 0) }
                 switch mode {
                 case .doors(let doors):
                     ForEach(doors, id: \.rawValue) { door in
@@ -123,8 +154,9 @@ struct ComposerLeadingRail: View {
                     exitButton
                 }
             }
-            .frame(width: ComposerRailGeometry.railWidth)
-            .padding(.vertical, 8)
+            .frame(width: axis == .vertical ? ComposerRailGeometry.railWidth : nil,
+                   height: axis == .horizontal ? ComposerRailGeometry.railWidth : nil)
+            .padding(axis == .vertical ? .vertical : .horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2, style: .continuous)
                     .fill(plateauTint.opacity(0.55))

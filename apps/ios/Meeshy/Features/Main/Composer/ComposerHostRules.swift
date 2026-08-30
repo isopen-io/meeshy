@@ -100,6 +100,53 @@ nonisolated enum ComposerReelGate {
 /// Le seuil est `isAccessibilitySize` et non un palier choisi à la main : c'est
 /// la frontière que le système lui-même trace entre « plus grand » et « conçu
 /// pour l'accessibilité », et la recopier en dur la ferait diverger.
+/// **Le rail qui FLOTTE sur la scène — quatre gestes, bord droit, DEDANS
+/// (#4072, arbitrage du 2026-08-28 sur #4061).**
+///
+/// L'arbitrage a écarté la disposition « deux rails latéraux encastrant la
+/// scène » au motif qu'aucune capture ne la montre. Ce que la planche `1b`
+/// montre est UN rail, flottant sur le bord DROIT, à quatre actions
+/// (✎ ☺ ♫ #) — **et la rangée d'outils basse conservée**.
+///
+/// **Deux places, deux rôles**, et c'est tout le sens de la séparation :
+/// - le RAIL agit **sur** la scène — poser un texte, un sticker, un son, une
+///   mention sur ce qui est déjà là ;
+/// - la RANGÉE BASSE fait **entrer** de la matière — photo, caméra, fichier,
+///   lieu, dessin.
+///
+/// Les fondre en un seul rail de huit icônes, ce que l'app faisait, mélange les
+/// deux rôles ET coûte la rangée que le pouce atteint : mesuré au simulateur, la
+/// rangée disparaissait entièrement dès qu'un fond était choisi.
+///
+/// **Le dessin n'est pas dans le rail, et ce n'est pas un oubli.** L'arbitrage
+/// dit quatre ; la loi 1 dit qu'on ne retire rien. Les deux tiennent ensemble
+/// parce qu'un tracé ENTRE dans la scène — c'est de la matière, comme une
+/// photo — et sa place est donc la rangée basse.
+nonisolated enum ComposerSceneFloatingRail {
+
+    /// Les quatre de la planche, dans son ordre : ✎ ☺ ♫ #.
+    static let doors: [ComposerRailDoor] = [.text, .sticker, .sound, .mention]
+
+    /// **Loi 8** — un rail de scène sans scène n'a rien sur quoi agir. Il ne
+    /// s'estompe pas, il n'existe pas.
+    static func served(hasScene: Bool) -> [ComposerRailDoor] {
+        hasScene ? doors : []
+    }
+
+    /// **La RANGÉE BASSE — tout le reste, dans l'ordre où l'hôte les sert.**
+    ///
+    /// Le partage n'est pas un rangement : il suit les deux rôles. Ce qui reste
+    /// ici FAIT ENTRER de la matière — une photo, un lieu, un tracé — ou donne
+    /// le focus à la description. Le rail, lui, agit sur ce qui est déjà là.
+    ///
+    /// Elle se dérive du jeu SERVI plutôt que d'être écrite en dur : une porte
+    /// que l'hôte ne sert pas ne doit apparaître ni au rail ni à la rangée, et
+    /// deux listes écrites séparément auraient divergé au premier ajout.
+    static func lowRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
+        served.filter { !doors.contains($0) }
+    }
+}
+
 nonisolated enum ComposerSocleDensity {
     static func showsLabels(_ size: DynamicTypeSize) -> Bool {
         !size.isAccessibilitySize
