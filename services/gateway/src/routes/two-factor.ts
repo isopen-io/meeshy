@@ -6,7 +6,17 @@
  * - POST /auth/2fa/setup          - Démarrer la configuration 2FA (génère QR code)
  * - POST /auth/2fa/enable         - Activer le 2FA (vérifie le premier code)
  * - POST /auth/2fa/disable        - Désactiver le 2FA
- * - POST /auth/2fa/verify         - Vérifier un code 2FA
+ * - POST /auth/2fa/verify         - Vérifier un code 2FA POUR UNE SESSION DÉJÀ
+ *                                   OUVERTE (exige `fastify.authenticate`, un JWT
+ *                                   de session ; ne rend jamais de credentials).
+ *                                   PAS la route de complétion de login : celle-ci
+ *                                   est publique et vit dans `routes/auth/login.ts`
+ *                                   sous `POST /auth/login/2fa` (#4419 — le client
+ *                                   web appelait par erreur CETTE route-ci avec le
+ *                                   jeton temporaire de login en en-tête
+ *                                   `Authorization`, que `fastify.authenticate`
+ *                                   rejette structurellement : ce jeton n'est pas
+ *                                   un JWT).
  * - POST /auth/2fa/backup-codes   - Régénérer les codes de secours
  * - POST /auth/2fa/cancel         - Annuler la configuration en cours
  */
@@ -251,6 +261,17 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
   });
 
   // ==================== POST /auth/2fa/verify ====================
+  // Exige une session authentifiée (`preValidation: [fastify.authenticate]`
+  // ci-dessous) et ne rend jamais de credentials — voir `response.200.data`
+  // plus bas (`{ valid, usedBackupCode }` seulement). PAS la route de
+  // complétion d'un login en attente de second facteur : celle-ci est
+  // publique (`security: []`) et vit dans `routes/auth/login.ts` sous
+  // `POST /auth/login/2fa` — seule route qui authentifie le jeton temporaire
+  // émis par `POST /auth/login` (`requires2FA: true`) et rend la session
+  // complète. (#4419 : le client web visait par erreur CETTE route-ci avec
+  // ce jeton temporaire en en-tête `Authorization` — un jeton
+  // `crypto.randomBytes`, jamais un JWT, que `fastify.authenticate` rejette
+  // structurellement.)
   fastify.post<{ Body: VerifyBody }>('/verify', {
     schema: {
       description: 'Verify a 2FA code. Accepts both TOTP codes (6 digits) and backup codes (8 alphanumeric characters).',
