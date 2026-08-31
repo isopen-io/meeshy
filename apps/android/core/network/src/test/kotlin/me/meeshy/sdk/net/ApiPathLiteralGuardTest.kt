@@ -53,6 +53,13 @@ class ApiPathLiteralGuardTest {
     private val racineReseau: File get() = repertoire("src/main/kotlin/me/meeshy/sdk/net")
 
     /** Ce qui porte un prefixe d'API pour une raison dite. */
+    /** Le prefixe d'API, qui n'est pas une route. */
+    private val PREFIXE_API = "/api/v1"
+
+    /** Ce qu'un site doit ecrire pour qu'un chemin RECONNU (jamais appele) passe. */
+    private val MARQUE_JUSTIFICATION = "api-path:"
+    private val PORTEE_JUSTIFICATION = 6
+
     private val exceptionsNommees = setOf(
         "MeeshyConfig.kt",
         "RefreshAuthenticator.kt",
@@ -88,6 +95,114 @@ class ApiPathLiteralGuardTest {
             .flatten()
 
         assertThat(fautifs).isEmpty()
+    }
+
+    /**
+     * **Le motif ci-dessus ne voit que le PREFIXE, jamais la route** — et le
+     * titre de cette classe en promet plus.
+     *
+     * Mesure du 2026-08-31 : une sonde `"/api/v1/conversations"` posee hors
+     * interface la fait tomber ; la meme sonde ecrite `"/conversations"` la
+     * laisse VERTE. Or c'est cette seconde forme que les sites d'appel
+     * emploient — le prefixe est ajoute par la couche de transport.
+     *
+     * Ce temoin ferme l'ecart en confrontant chaque litteral au MANIFESTE des
+     * routes du serveur (`services/gateway/route-manifest.json`, produit
+     * mecaniquement depuis le Fastify assemble). Un litteral n'est denonce que
+     * s'il APPARIE une route servie : ni un chemin de fichier ni `"/150"` ne
+     * peuvent l'etre, donc le faux positif est structurellement impossible —
+     * la condition pour qu'une garde soit lue plutot que contournee.
+     */
+    @Test
+    fun `aucun litteral n'apparie une route servie, prefixe ou non`() {
+        val routes = routesServies()
+        assertThat(routes.size).isAtLeast(100)
+
+        val litteral = Regex("\"(/[A-Za-z0-9][A-Za-z0-9/_{}$.-]*)\"")
+        val fautifs = sourcesKotlin()
+            .filter { !it.path.contains("/api/") }
+            .filter { it.name !in exceptionsNommees }
+            .flatMap { fichier ->
+                fichier.readLines().withIndex().flatMap { (i, ligne) ->
+                    val nu = ligne.trim()
+                    if (nu.startsWith("//") || nu.startsWith("*") || nu.startsWith("/*")) {
+                        emptyList()
+                    } else if (justifie(fichier, i)) {
+                        emptyList()
+                    } else {
+                        litteral.findAll(ligne)
+                            .map { it.groupValues[1] }
+                            .filter { it.count { c -> c == '/' } >= 1 }
+                            .filter { apparie(it, routes) }
+                            .map { "${fichier.name}:${i + 1}  $it" }
+                            .toList()
+                    }
+                }
+            }
+
+        assertThat(fautifs).isEmpty()
+    }
+
+    /**
+     * **Une MARQUE au site, jamais une liste de fichiers.**
+     *
+     * `exceptionsNommees` exempte un FICHIER ENTIER : tout ce qu'on y ajoutera
+     * ensuite passera, sans que personne ne le sache — mesure du 2026-08-31,
+     * une sonde posee dans `RefreshAuthenticator.kt` est restee verte. Une
+     * liste se perime au premier ajout, et le fichier qui l'ajoute n'a aucune
+     * raison de la lire.
+     *
+     * La marque, elle, voyage avec le code qu'elle justifie et se lit la ou on
+     * decide. Elle couvre la ligne qu'elle precede et les cinq suivantes.
+     */
+    private fun justifie(fichier: File, indexLigne: Int): Boolean {
+        val lignes = fichier.readLines()
+        val debut = maxOf(0, indexLigne - PORTEE_JUSTIFICATION)
+        return lignes.subList(debut, minOf(indexLigne + 1, lignes.size))
+            .any { it.contains(MARQUE_JUSTIFICATION) }
+    }
+
+    /** Les chemins servis, canonises — tout segment variable vaut `*`. */
+    private fun routesServies(): List<List<String>> {
+        val manifeste = File(racineDepot(), "services/gateway/route-manifest.json")
+        check(manifeste.isFile) { "manifeste introuvable : ${manifeste.absolutePath}" }
+        return Regex("\"path\"\\s*:\\s*\"([^\"]+)\"")
+            .findAll(manifeste.readText())
+            .map { canonise(it.groupValues[1]) }
+            .distinct()
+            .toList()
+    }
+
+    private fun canonise(chemin: String): List<String> =
+        chemin.substringBefore('?')
+            .split('/')
+            .map { if (it.startsWith(":") || it == "*" || it.startsWith("{")) "*" else it }
+
+    private fun apparie(litteral: String, routes: List<List<String>>): Boolean {
+        if (litteral == PREFIXE_API) return false
+        val nu = canonise(litteral)
+        val prefixe = if (litteral.startsWith("/api")) nu else canonise("$PREFIXE_API$litteral")
+        return listOf(nu, prefixe).any { candidat ->
+            routes.any { route ->
+                route.size == candidat.size &&
+                    route.indices.all { route[it] == "*" || candidat[it] == "*" || route[it] == candidat[it] }
+            }
+        }
+    }
+
+    /**
+     * La racine du depot, trouvee en REMONTANT jusqu'au manifeste — jamais en
+     * comptant les composants du chemin, qui se perime des que Gradle change
+     * de repertoire de travail (ce que `repertoire()` documente deja plus haut).
+     */
+    private fun racineDepot(): File {
+        var courant: File? = File(".").absoluteFile
+        repeat(8) {
+            val ici = courant ?: return@repeat
+            if (File(ici, "services/gateway/route-manifest.json").isFile) return ici
+            courant = ici.parentFile
+        }
+        error("racine du depot introuvable depuis ${File(".").absolutePath}")
     }
 
     @Test
