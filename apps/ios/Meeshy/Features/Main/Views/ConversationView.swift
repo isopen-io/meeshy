@@ -1787,11 +1787,11 @@ struct ConversationView: View {
                         scrollState.isScrollingActiveList = isActive
                     }
                 },
-                onMessagesSeen: { seenIds in
+                onMessagesSeen: { seenIds, visibleIds in
                     // Seule source de vérité de la lecture : ces identifiants
                     // ont été RÉELLEMENT affichés assez longtemps.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
-                    viewModel.markAsRead(messageIds: seenIds)
+                    viewModel.markAsRead(messageIds: seenIds, visibleIds: visibleIds)
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the

@@ -143,7 +143,9 @@ final class MessageListViewController: UIViewController {
     /// temporelle, qui déclarait lus 200 messages quand 10 tenaient à l'écran.
     ///
     /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    var onMessagesSeen: (([String]) -> Void)?
+    /// `(vus, visibles)` — #3902, deux questions distinctes : ce que la liste a
+    /// vu ASSEZ LONGTEMPS, et ce qu'elle MONTRE. La seconde dit le rattrapage.
+    var onMessagesSeen: (([String], [String]) -> Void)?
     /// Invoked when the user taps a story reply preview inside a bubble.
     /// Receives the story id (NOT the message id). Wire to the parent's
     /// story viewer presentation logic.
@@ -2873,7 +2875,7 @@ extension MessageListViewController {
     func flushSeenMessages() {
         let seen = seenAccumulator.drain(at: Self.nowMs())
         guard !seen.isEmpty else { return }
-        onMessagesSeen?(seen)
+        onMessagesSeen?(seen, visibleServerMessageIds())
     }
 
     /// Signale IMMÉDIATEMENT tout ce qui est à l'écran, seuil de présence
@@ -2902,8 +2904,14 @@ extension MessageListViewController {
         lastSeenActivityMs = now
         let seen = seenAccumulator.promoteAndDrain(at: now)
         guard !seen.isEmpty else { return false }
-        onMessagesSeen?(seen)
+        onMessagesSeen?(seen, visibleServerMessageIds())
         return true
+    }
+
+    /// Ce que la liste MONTRE, servi à chaque drain en regard du lot (#3902).
+    func visibleServerMessageIds() -> [String] {
+        guard isViewLoaded, dataSource != nil else { return [] }
+        return collectionView.indexPathsForVisibleItems.compactMap(serverMessageId(at:))
     }
 
     static func nowMs() -> Int {

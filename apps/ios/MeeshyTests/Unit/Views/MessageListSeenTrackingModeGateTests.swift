@@ -50,7 +50,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_whenReadingModeIsRiver_emitsNoReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -68,7 +68,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_whenReadingModeIsSummary_emitsNoReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -89,7 +89,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_inARenderedMode_stillEmitsTheReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         noteFirstItemAppeared(on: vc)
         vc.flushSeenNow()
@@ -106,7 +106,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
         // déduplique par id (`reported`).
         let vc = try await makeMountedSUT(initialMode: .river)
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         noteFirstItemAppeared(on: vc)
         vc.flushSeenNow()
@@ -126,7 +126,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_returningToARenderedMode_reNotesAlreadyVisibleCells() async throws {
         let vc = try await makeMountedSUT(initialMode: .river)
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         let visible = vc.focalCollectionViewForTesting?.indexPathsForVisibleItems ?? []
         try XCTSkipIf(visible.isEmpty, "UIKit n'a réalisé aucune cellule : rien à re-noter, le témoin serait vide de sens")
@@ -145,7 +145,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_reNoteVisibleCellsAsSeen_underAnOpaquePane_notesNothing() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -194,7 +194,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_readsAcquiredBeforeSwitchingToRiver_areStillFlushedAtDismantle() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Acquiert la lecture en Bulles : apparition puis disparition
         // séparées de plus de `dwellMs` (300 ms par défaut,

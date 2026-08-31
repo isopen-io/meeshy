@@ -3767,8 +3767,10 @@ class ConversationViewModel: ObservableObject {
     ///   que compte le badge.
     ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    func markAsRead(messageIds: [String]? = nil) {
-        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds))
+    /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
+    ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
+    func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds, visible: visibleIds))
     }
 
     /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux
@@ -3851,30 +3853,18 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    /// Identifiant SERVEUR du message le plus récent, quand le lecteur vient
-    /// de l'atteindre — donc quand la conversation n'a plus de retard.
-    ///
-    /// Trois conditions, toutes nécessaires :
-    /// - la fenêtre chargée est bien au SOMMET (`!hasNewerMessages`) : après un
-    ///   saut vers un message cité, le bas de l'écran n'est pas le bas de la
-    ///   conversation, et croire l'inverse viderait un badge encore dû ;
-    /// - l'appelant est INFORMÉ (`seen != nil`) : un appel aveugle laisse le
-    ///   gateway sur son repli par fenêtre, qui vide déjà le compteur ;
-    /// - le lot contient le dernier message connu du serveur.
-    ///
-    /// Le repli sur `lastCaughtUpMessageId` rend le rattrapage COLLANT :
-    /// remonter dans l'historique après avoir touché le bas ne remet pas la
-    /// conversation en retard tant qu'aucun message plus récent n'est arrivé.
-    /// Sans lui, un lot ultérieur portant des messages anciens supplanterait
-    /// dans l'outbox (coalescence par conversation) celui qui portait le
-    /// rattrapage, et le badge repartirait au prochain sync.
-    private func caughtUpMessageId(seen: [String]?) -> String? {
-        guard let seen, !hasNewerMessages, let newest = newestServerMessageId() else { return nil }
-        if seen.contains(newest) {
-            lastCaughtUpMessageId = newest
-            return newest
-        }
-        return lastCaughtUpMessageId == newest ? newest : nil
+    /// La LOI vit dans `ConversationCatchUpLaw`, pure et interrogeable sans ce
+    /// modèle ; ce site lui fournit l'état et retient ce qu'elle rend.
+    private func caughtUpMessageId(seen: [String]?, visible: [String]) -> String? {
+        let id = ConversationCatchUpLaw.caughtUpId(
+            newestServerId: newestServerMessageId(),
+            windowIsAtTip: !hasNewerMessages,
+            seen: seen,
+            visible: visible,
+            memoized: lastCaughtUpMessageId
+        )
+        if let id { lastCaughtUpMessageId = id }
+        return id
     }
 
     /// Le message le plus récent que le SERVEUR connaît : une bulle

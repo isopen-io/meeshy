@@ -501,7 +501,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Voir
     /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    var onMessagesSeen: (([String]) -> Void)?
+    var onMessagesSeen: (([String], [String]) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?

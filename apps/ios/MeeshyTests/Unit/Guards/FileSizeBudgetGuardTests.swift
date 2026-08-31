@@ -155,7 +155,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// de ce que la bulle contient. L'hôte reste en dette (1 610) ; le plafond
     /// descend au cumul RÉEL — le mou laissé en route est exactement ce qui
     /// accueille en silence l'ajout suivant.
-    private static let legacyLineCeiling = 73_205
+    /// **73 203 depuis #3902.** Le fait « ce que la liste MONTRE » a été câblé
+    /// à travers trois hôtes hors budget, et la LOI qu'il alimente est partie
+    /// dans son propre fichier (`ConversationCatchUpLaw`) plutôt que d'épaissir
+    /// le modèle. Net : −2. Le plafond suit le cumul RÉEL — laisser le mou
+    /// accueillerait en silence l'ajout suivant.
+    private static let legacyLineCeiling = 73_203
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
