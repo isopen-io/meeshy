@@ -665,7 +665,13 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
         configureDataSource()
         observeStore()
-        startSeenTracking()
+        // `syncThreadQuiescence()` et non `startSeenTracking()` : le mode de
+        // lecture est PERSISTANT et arrive AVANT le chargement de la vue, si
+        // bien que son `didSet` y sort sur `isViewLoaded`. Une conversation
+        // ouverte DIRECTEMENT en Rivière ou en Résumé — le cas nominal, pas un
+        // cas limite — démarrait donc son timer 4 Hz et ne le voyait jamais
+        // s'arrêter, faute de changement de mode ultérieur (#3947).
+        syncThreadQuiescence()
         // Apply the initial snapshot from whatever the store already holds.
         // The store's `messagesDidChange` PassthroughSubject is fire-and-forget:
         // any emission that happened before this VC subscribed is lost. The
