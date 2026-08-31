@@ -1280,7 +1280,7 @@ struct ConversationListBottomBar: View {
             HStack(spacing: 10) {
                 ForEach(ConversationFilter.allCases) { filter in
                     ThemedFilterChip(
-                        title: filter.rawValue,
+                        title: filter.displayName,
                         color: filter.color,
                         isSelected: conversationViewModel.selectedFilters.contains(filter)
                     ) {
