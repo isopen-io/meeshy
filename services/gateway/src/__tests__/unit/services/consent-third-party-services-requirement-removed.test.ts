@@ -279,16 +279,28 @@ describe('#4343 — les deux préférences que personne ne pouvait activer s\'ac
       expect(parsed).not.toHaveProperty('thirdPartyServicesConsentAt');
     });
 
-    it('le pipeline RÉEL de PATCH/PUT /me/preferences/application (parseSubmittedKeys) confirme la disparition de bout en bout', () => {
+    it('le pipeline RÉEL de PATCH/PUT (parseSubmittedKeys) la REFUSE désormais, au lieu de la retirer en silence', () => {
+      // #4589 a changé ce fait, et le changement est la bonne direction : la
+      // clé n'est plus STRIPPÉE (200 muet, écriture perdue) mais REFUSÉE, en
+      // étant nommée. Le témoin garde donc le nouveau comportement — et le
+      // `.parse()` nu du schéma, deux `it` plus haut, continue de mesurer le
+      // mode *strip* du TYPE, qui lui n'a pas changé : la rigueur vit à la
+      // FRONTIÈRE, pas sur le schéma exporté.
       const clientBody = {
         betaFeaturesEnabled: true,
         thirdPartyServicesConsentAt: NOW.toISOString(),
       };
 
-      const submitted = parseSubmittedKeys('application', clientBody);
+      expect(() => parseSubmittedKeys('application', clientBody)).toThrow();
 
-      expect(submitted).not.toHaveProperty('thirdPartyServicesConsentAt');
-      expect(submitted.betaFeaturesEnabled).toBe(true);
+      try {
+        parseSubmittedKeys('application', clientBody);
+      } catch (erreur) {
+        const issues = (erreur as { issues?: Array<{ code: string; keys?: string[] }> }).issues ?? [];
+        expect(issues.find((i) => i.code === 'unrecognized_keys')?.keys).toContain(
+          'thirdPartyServicesConsentAt'
+        );
+      }
     });
   });
 });

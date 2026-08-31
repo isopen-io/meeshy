@@ -21,6 +21,7 @@
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { zodIssueSchema, issuesServies } from '../../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
@@ -169,7 +170,17 @@ export function createPreferenceRouter(
                 data: { type: 'object', additionalProperties: true }
               }
             },
-            400: errorResponseSchema,
+            400: {
+              ...errorResponseSchema,
+              properties: {
+                ...errorResponseSchema.properties,
+                issues: {
+                  type: 'array',
+                  items: zodIssueSchema,
+                  description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+                },
+              },
+            },
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
@@ -192,8 +203,9 @@ export function createPreferenceRouter(
         }
 
         try {
-          // Validation Zod
-          const validated = schema.parse(request.body);
+          // Validation Zod, STRICTE (#4589) : une clé non déclarée LÈVE ici
+          // plutôt que d'être retirée en silence par le mode *strip*.
+          const validated = schema.strict().parse(request.body);
 
           // #4578 — la garde lit les clés que le corps NOMME, pas celles que
           // `schema.parse` vient d'injecter depuis les `default()`. Sur ce
@@ -261,7 +273,15 @@ export function createPreferenceRouter(
           return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            // #4589 — le refus NOMME ce qu'il refuse. Il servait
+            // `VALIDATION_ERROR` nu : le serveur savait exactement quelle clé
+            // était en cause, et ne le disait pas. Même défaut que #4487 sur
+            // `/me/consents`, et même correctif — `details` étale à la racine,
+            // et `issues` est DÉCLARÉ au schéma de réponse ci-dessus, sans quoi
+            // `fast-json-stringify` l'effacerait au dernier mètre.
+            return sendBadRequest(reply, 'VALIDATION_ERROR', {
+              details: { issues: issuesServies(error.issues ?? []) },
+            });
           }
 
           fastify.log.error({ error, category }, 'Error updating preferences');
@@ -288,7 +308,17 @@ export function createPreferenceRouter(
                 data: { type: 'object', additionalProperties: true }
               }
             },
-            400: errorResponseSchema,
+            400: {
+              ...errorResponseSchema,
+              properties: {
+                ...errorResponseSchema.properties,
+                issues: {
+                  type: 'array',
+                  items: zodIssueSchema,
+                  description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+                },
+              },
+            },
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
@@ -408,7 +438,15 @@ export function createPreferenceRouter(
           return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'VALIDATION_ERROR');
+            // #4589 — le refus NOMME ce qu'il refuse. Il servait
+            // `VALIDATION_ERROR` nu : le serveur savait exactement quelle clé
+            // était en cause, et ne le disait pas. Même défaut que #4487 sur
+            // `/me/consents`, et même correctif — `details` étale à la racine,
+            // et `issues` est DÉCLARÉ au schéma de réponse ci-dessus, sans quoi
+            // `fast-json-stringify` l'effacerait au dernier mètre.
+            return sendBadRequest(reply, 'VALIDATION_ERROR', {
+              details: { issues: issuesServies(error.issues ?? []) },
+            });
           }
 
           fastify.log.error({ error, category }, 'Error partially updating preferences');

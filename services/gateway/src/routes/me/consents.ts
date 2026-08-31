@@ -79,6 +79,7 @@ import {
   type ConsentPurpose,
 } from '@meeshy/shared/types/consents';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { zodIssueSchema, issuesServies } from '../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { logError } from '../../utils/logger';
 import {
@@ -234,22 +235,6 @@ const derivedSchema = {
  * version de Zod, et `path` seul ne dit pas tout (une clé refusée par
  * `.strict()` vit dans `keys`, `path` restant vide).
  */
-const zodIssueSchema = {
-  type: 'object',
-  properties: {
-    code: {
-      type: 'string',
-      description: 'Code Zod : invalid_type, unrecognized_keys, too_small…',
-    },
-    path: { type: 'array', items: { type: 'string' }, description: 'Chemin du champ fautif' },
-    keys: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Clés refusées quand `path` est vide (unrecognized_keys)',
-    },
-    message: { type: 'string', description: 'Message Zod, déjà lisible' },
-  },
-} as const;
 
 const badRequestResponseSchema = {
   ...errorResponseSchema,
@@ -453,14 +438,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
           // clé refusée par `strict` laisse `path` vide en nommant la clé
           // dans `keys` — deux faits mesurés, pas déduits.
           return sendBadRequest(reply, 'VALIDATION_ERROR', {
-            details: {
-              issues: error.issues.map((issue) => ({
-                code: issue.code,
-                path: issue.path.map(String),
-                ...('keys' in issue ? { keys: (issue as { keys: string[] }).keys } : {}),
-                message: issue.message,
-              })),
-            },
+            details: { issues: issuesServies(error.issues) },
           });
         }
         throw error;
