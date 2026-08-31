@@ -169,17 +169,26 @@ nonisolated enum ComposerObjectChips {
                       in slide: StorySlide,
                       locale: Locale = .current,
                       openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
-        guard let id else { return [] }
-        if let texte = slide.effects.textObjects.first(where: { $0.id == id }) {
-            return chips(for: texte, locale: locale, openableBands: openableBands)
+        guard let id, let objet = slide.sceneObject(id: id) else { return [] }
+        // **La cascade est fermée** (#4591) : `sceneObject(id:)` la porte UNE
+        // fois, dans le modèle. Ce qui reste ici est le dispatch par kind — la
+        // seule chose que cette règle avait à décider.
+        //
+        // Le `switch` est EXHAUSTIF, et c'est le gain réel : l'ancienne cascade
+        // de trois `if let` rendait `[]` en silence pour un lieu ou un son. Une
+        // sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
+        // qu'elle inspecte.
+        switch objet {
+        case .text(let o):    return chips(for: o, locale: locale, openableBands: openableBands)
+        case .media(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
+        case .sticker(let o): return chips(for: o, locale: locale, openableBands: openableBands)
+        case .location, .audio:
+            // Ni l'un ni l'autre n'a d'inspecteur : le lieu ne porte que son
+            // nom, et le son n'a pas encore de forme sur la scène (#4579). Ce
+            // `return []` est le MÊME comportement qu'avant — la différence est
+            // qu'il est désormais ÉCRIT au lieu d'être un défaut de cascade.
+            return []
         }
-        if let media = (slide.effects.mediaObjects ?? []).first(where: { $0.id == id }) {
-            return chips(for: media, locale: locale, openableBands: openableBands)
-        }
-        if let sticker = (slide.effects.stickerObjects ?? []).first(where: { $0.id == id }) {
-            return chips(for: sticker, locale: locale, openableBands: openableBands)
-        }
-        return []
     }
 
     // MARK: - Le BADGE de l'objet sélectionné
@@ -206,20 +215,30 @@ nonisolated enum ComposerObjectChips {
     static func badge(forSelected id: String?,
                       in slide: StorySlide,
                       locale: Locale = .current) -> String? {
-        guard let id else { return nil }
-        if let texte = slide.effects.textObjects.first(where: { $0.id == id }) {
-            return badge(kind: ComposerObjectChipsCopy.kindText, isBackground: false,
-                         zIndex: texte.zIndex, locale: locale)
+        guard let id, let objet = slide.sceneObject(id: id) else { return nil }
+        // Le PLAN et le RANG viennent de la somme, qui les résout pour les cinq
+        // familles — y compris l'asymétrie du `zIndex` optionnel de l'audio.
+        // Seul le MOT reste à décider ici : c'est du vocabulaire produit.
+        guard let mot = badgeKind(objet.kind) else { return nil }
+        return badge(kind: mot, isBackground: objet.isBackground,
+                     zIndex: objet.zIndex, locale: locale)
+    }
+
+    /// **Le mot d'un kind — `nil` ⇒ pas de badge.**
+    ///
+    /// Le lieu et le son n'en ont pas, et ce n'est pas un oubli : leur mot
+    /// n'existe pas au catalogue (#4559 en tient les dix-neuf), et en inventer
+    /// un ici le mettrait hors de portée du cliquet de localisation.
+    ///
+    /// Le `switch` exhaustif remplace le `return nil` implicite de l'ancienne
+    /// cascade : même comportement, décision ÉCRITE.
+    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String? {
+        switch kind {
+        case .text:    return ComposerObjectChipsCopy.kindText
+        case .media:   return ComposerObjectChipsCopy.kindMedia
+        case .sticker: return ComposerObjectChipsCopy.kindSticker
+        case .location, .audio: return nil
         }
-        if let media = (slide.effects.mediaObjects ?? []).first(where: { $0.id == id }) {
-            return badge(kind: ComposerObjectChipsCopy.kindMedia, isBackground: media.isBackground,
-                         zIndex: media.zIndex, locale: locale)
-        }
-        if let sticker = (slide.effects.stickerObjects ?? []).first(where: { $0.id == id }) {
-            return badge(kind: ComposerObjectChipsCopy.kindSticker, isBackground: false,
-                         zIndex: sticker.zIndex, locale: locale)
-        }
-        return nil
     }
 
     /// Les trois parties se composent ICI et pas au site d'appel : la forme du

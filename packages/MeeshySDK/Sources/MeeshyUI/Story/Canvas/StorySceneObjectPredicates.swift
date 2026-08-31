@@ -26,14 +26,16 @@ public nonisolated enum StorySceneObjectPredicates {
     /// dénature l'attribution : édition, duplication, suppression, sortie de
     /// scène. L'empilement lui reste : il ne touche pas au contenu.
     public static func isLocked(slide: StorySlide, id: String) -> Bool {
-        slide.effects.textObjects.first(where: { $0.id == id })?.isLocked == true
+        // `isLocked` n'existe que sur un TEXTE — le badge d'attribution d'une
+        // republication en est le seul porteur.
+        if case .text(let objet) = slide.sceneObject(id: id) { return objet.isLocked == true }
+        return false
     }
 
     /// Un objet du plan `background`. **Deux places** y vivent — un visuel ET un
     /// son (#4052) —, d'où les deux lectures.
     public static func isBackground(slide: StorySlide, id: String) -> Bool {
-        slide.effects.mediaObjects?.first(where: { $0.id == id })?.isBackground == true
-            || slide.effects.audioPlayerObjects?.first(where: { $0.id == id })?.isBackground == true
+        slide.sceneObject(id: id)?.isBackground == true
     }
 
     /// **Cet objet a-t-il une source à ROGNER ?** (#4082)
@@ -46,10 +48,11 @@ public nonisolated enum StorySceneObjectPredicates {
     /// que ses voisins : c'est ce qu'un objet ADMET, distinct de ce qu'un hôte
     /// SAIT FAIRE — cette seconde moitié reste app-side, dans le jeu `served`.
     public static func hasTrimmableSource(slide: StorySlide, id: String) -> Bool {
-        if slide.effects.mediaObjects?.contains(where: { $0.id == id && $0.kind == .video }) == true {
-            return true
+        switch slide.sceneObject(id: id) {
+        case .media(let objet): return objet.kind == .video
+        case .audio:            return true
+        case .text, .sticker, .location, nil: return false
         }
-        return slide.effects.audioPlayerObjects?.contains(where: { $0.id == id }) == true
     }
 
     /// **Un FRÈRE de plan, tous types confondus.**
@@ -59,17 +62,21 @@ public nonisolated enum StorySceneObjectPredicates {
     /// médias dirait « seul » d'un objet posé sous un texte, et retirerait une
     /// action qui a bel et bien un effet.
     public static func sharesPlaneWithAnother(slide: StorySlide, besides id: String) -> Bool {
-        let effets = slide.effects
-        var voisins = 0
-        for objet in effets.mediaObjects ?? [] where objet.id != id && objet.isBackground != true {
-            voisins += 1
-        }
-        for objet in effets.audioPlayerObjects ?? [] where objet.id != id && objet.isBackground != true {
-            voisins += 1
-        }
-        voisins += effets.textObjects.filter { $0.id != id }.count
-        voisins += (effets.stickerObjects ?? []).filter { $0.id != id }.count
-        voisins += slide.locationObjects.filter { $0.id != id }.count
-        return voisins > 0
+        // **Douze lignes, cinq tableaux, un seul prédicat** — c'est ce que
+        // l'absence de `MeeshySceneObject` coûtait ici (#4591).
+        //
+        // L'équivalence est terme à terme, vérifiée avant réécriture :
+        // - texte, sticker, lieu : toujours de premier plan, tous comptés — la
+        //   somme rend `isBackground == false` pour les trois, le modèle ne
+        //   leur donnant pas le champ ;
+        // - média : `isBackground` est un `Bool` non-optionnel, donc
+        //   `!= true` ≡ `!isBackground` ;
+        // - son : `isBackground` est optionnel, et la somme le résout en
+        //   `== true`, donc `!` rend exactement `!= true`.
+        //
+        // `contains` remplace un comptage : on ne cherchait jamais COMBIEN de
+        // voisins, seulement s'il en existait un — et la sortie anticipée était
+        // déjà due.
+        slide.sceneObjects.contains { $0.id != id && !$0.isBackground }
     }
 }
