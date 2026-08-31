@@ -69,7 +69,6 @@ const prefRow = (conversationId: string, version: number) => ({
   customName: null,
   reaction: null,
   readingMode: 'auto',
-  deletedForUserAt: null,
   clearHistoryBefore: null,
   version,
   category: null,

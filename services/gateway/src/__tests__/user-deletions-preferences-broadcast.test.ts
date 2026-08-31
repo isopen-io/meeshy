@@ -88,7 +88,6 @@ const buildLivePrisma = () => {
     orderInCategory: null,
     customName: null,
     reaction: null,
-    deletedForUserAt: null,
     clearHistoryBefore: null,
   };
 
@@ -312,12 +311,19 @@ describe('user-deletions routes — multi-device preference broadcast', () => {
 
     // #4332 retire delete-for-me/restore-for-me de ce mécanisme : la ligne
     // `UserConversationPreferences` de ce couple (user, conversation) n'a
-    // donc jamais existé avant ce `put`, et `deletedForUserAt` y reste à son
-    // défaut `null` — la corbeille vit désormais entièrement sur
-    // `Participant.deletedForMe`, une table différente.
+    // donc jamais existé avant ce `put` — la corbeille vit désormais
+    // entièrement sur `Participant.deletedForMe`, une table différente.
+    //
+    // `95ca2becd2` a ensuite retiré `deletedForUserAt` du contrat de fil,
+    // arbitrage (a) : un champ sans écrivain ne se contente pas de ne rien
+    // dire, il dit le CONTRAIRE de la vérité dès que la vérité cesse d'être
+    // sa valeur par défaut. L'assertion « vaut `null` » gelait donc sa
+    // PRÉSENCE ; celle-ci gèle son ABSENCE, ce qui est la forme forte de ce
+    // que ce témoin voulait dire — les deux tables sont sans rapport, et la
+    // ligne diffusée ne porte plus rien qui prétende le contraire.
     const [pinned] = prefEmissions();
     expect(pinned.preferences?.isPinned).toBe(true);
-    expect(pinned.preferences?.deletedForUserAt).toBeNull();
+    expect(pinned.preferences).not.toHaveProperty('deletedForUserAt');
   });
 
   it('emits nothing when the caller is not a member', async () => {
