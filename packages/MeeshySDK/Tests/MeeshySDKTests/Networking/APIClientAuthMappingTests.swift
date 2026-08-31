@@ -19,17 +19,17 @@ import XCTest
 final class APIClientAuthMappingTests: XCTestCase {
 
     func test_mapUnauthorized_loginEndpoint_returnsInvalidCredentialsWithServerMessage() {
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/login", serverMessage: "Mot de passe incorrect")
+        let result = APIClient.mapUnauthorized(AuthEndpoint.login, serverMessage: "Mot de passe incorrect")
         XCTAssertEqual(result, .invalidCredentials(message: "Mot de passe incorrect"))
     }
 
     func test_mapUnauthorized_loginEndpoint_fallsBackToDefaultMessage_whenServerMessageNil() {
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/login", serverMessage: nil)
+        let result = APIClient.mapUnauthorized(AuthEndpoint.login, serverMessage: nil)
         XCTAssertEqual(result, .invalidCredentials(message: "Identifiants invalides"))
     }
 
     func test_mapUnauthorized_twoFactorEndpoint_returnsInvalidCredentialsWithServerMessage() {
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/login/2fa", serverMessage: "Code invalide")
+        let result = APIClient.mapUnauthorized(AuthEndpoint.loginN2Fa, serverMessage: "Code invalide")
         XCTAssertEqual(result, .invalidCredentials(message: "Code invalide"))
     }
 
@@ -37,23 +37,23 @@ final class APIClientAuthMappingTests: XCTestCase {
         // The gateway never emits 401 for /auth/register (only 400 via
         // sendBadRequest), so this is a hypothetical input — the pure
         // function must not special-case it as a credential endpoint.
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/register", serverMessage: "Compte verrouille")
+        let result = APIClient.mapUnauthorized(AuthEndpoint.register, serverMessage: "Compte verrouille")
         XCTAssertEqual(result, .sessionExpired)
     }
 
     func test_mapUnauthorized_magicLinkValidateEndpoint_returnsSessionExpired() {
         // Same rationale — magic-link routes only ever return 400.
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/magic-link/validate", serverMessage: "Lien expire")
+        let result = APIClient.mapUnauthorized(AuthEndpoint.magicLinkValidate, serverMessage: "Lien expire")
         XCTAssertEqual(result, .sessionExpired)
     }
 
     func test_mapUnauthorized_refreshEndpoint_returnsSessionExpired_notInvalidCredentials() {
-        let result = APIClient.mapUnauthorized(endpoint: "/auth/refresh", serverMessage: "anything")
+        let result = APIClient.mapUnauthorized(AuthEndpoint.refresh, serverMessage: "anything")
         XCTAssertEqual(result, .sessionExpired)
     }
 
     func test_mapUnauthorized_regularEndpoint_returnsSessionExpired() {
-        let result = APIClient.mapUnauthorized(endpoint: "/conversations", serverMessage: nil)
+        let result = APIClient.mapUnauthorized(ConversationsEndpoint.root, serverMessage: nil)
         XCTAssertEqual(result, .sessionExpired)
     }
 }

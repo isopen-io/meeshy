@@ -333,8 +333,12 @@ struct MeeshyApp: App {
                             // Most settings endpoints return the updated user.
                             // We only care that the request succeeded; the
                             // optimistic UI already reflects the new value.
-                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.request(
-                                endpoint: action.endpoint,
+                            // Le chemin vient d'un enregistrement PERSISTÉ, écrit
+                            // par une version possiblement antérieure de l'app :
+                            // aucun type ne lui survit. C'est le seul appelant
+                            // légitime de cette entrée, et son nom le dit (#4282).
+                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.replayPersistedRequest(
+                                persistedPath: action.endpoint,
                                 method: action.httpMethod,
                                 body: action.payload
                             )
