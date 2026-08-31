@@ -127,7 +127,27 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
         slide.effects.textObjects = [texte]
 
         let badge = ComposerObjectChips.badge(forSelected: texte.id, in: slide,
-                                              locale: Locale(identifier: "fr_FR"))
-        XCTAssertEqual(badge, "TEXTE · PLAN FG · z 2")
+                                              locale: Locale(identifier: "fr_FR")) ?? ""
+
+        // **Le VOCABULAIRE ne s'épingle plus ici** — il est localisé depuis
+        // `e0b5718086`, et son épinglage vit chez sa source (les `defaultValue`
+        // du fichier de copie), pas dans une garde de câblage.
+        //
+        // > Ce témoin affirmait « TEXTE · PLAN FG · z 2 » et il était VERT.
+        // > Il l'était parce que le simulateur portait un `AppleLanguages =
+        // > ["fr"]` écrit par une vérification multilingue antérieure —
+        // > `simctl launch -Clé valeur` ÉCRIT la clé dans le `NSUserDefaults`
+        // > de l'app, et elle y reste. L'hôte de test EST l'app. Sur un
+        // > simulateur neuf, comme celui de la CI, il rendait
+        // > « TEXT · FG PLANE · z 2 ».
+        //
+        // La leçon n'est pas « pincer la locale » : le `locale:` passé ici ne
+        // gouverne que les NOMBRES, jamais les mots, qui viennent du bundle.
+        // C'est la NATURE de l'assertion qui était fautive — une garde de
+        // CÂBLAGE n'a pas à connaître la langue du lecteur.
+        XCTAssertFalse(badge.isEmpty, "la règle doit rendre une chaîne")
+        XCTAssertTrue(badge.contains("·"), "trois parties, un séparateur")
+        XCTAssertEqual(badge.components(separatedBy: "·").count, 3)
+        XCTAssertTrue(badge.hasSuffix("2"), "le RANG de l'objet, quelle que soit la langue")
     }
 }

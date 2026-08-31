@@ -973,6 +973,42 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     /// Variantes TTS par langue (rattachées à l'audio background historiquement).
     public var backgroundAudioVariants: [StoryAudioVariant]?
     /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    /// **Tout objet de scène se REDIMENSIONNE et TOURNE** (directive porteur
+    /// 2026-08-31, #4591) :
+    ///
+    /// > « Dans la V3, tout `MeeshySceneObject` a ces détails. Tout objet sur la
+    /// > scène peut scale et roter. Il n'existe sur la scène que des
+    /// > `MeeshySceneObject`. Il faut donc migrer. »
+    ///
+    /// **Le contrat V3 le disait déjà**, et depuis toujours :
+    /// `packages/shared/types/canvas-v3.ts` déclare `transform: { scale,
+    /// rotation, opacity }` en champ REQUIS de tout `ObjectV3`, et le
+    /// convertisseur du gateway fabriquait `scale: 1, rotation: 0` pour l'audio
+    /// — précisément parce que ce modèle ne les portait pas.
+    ///
+    /// > L'asymétrie n'était pas une vérité produit, c'était un TROU de ce
+    /// > modèle-ci, que le convertisseur bouchait en silence. Documenter un trou
+    /// > comme une intention le rend permanent.
+    ///
+    /// Additif et rétro-compatible : `decodeIfPresent ?? défaut` restitue
+    /// exactement ce que le convertisseur fabriquait, donc aucune publication
+    /// existante ne change d'apparence.
+    /// Optionnels SUR LE FIL, non-optionnels sur la SCÈNE.
+    ///
+    /// `StoryAudioPlayerObject` n'a pas de codec manuel : le décodeur synthétisé
+    /// de Swift **n'utilise pas les valeurs par défaut** d'une propriété — c'est
+    /// pourquoi les quatre autres familles ont un `decodeIfPresent(...) ?? 0`
+    /// écrit à la main pour `zIndex`. Déclarer `scale: Double = 1` ici l'aurait
+    /// rendu OBLIGATOIRE dans le JSON, et toute publication existante aurait
+    /// cessé de se décoder.
+    ///
+    /// `nil` signifie donc « absent du fil », et `MeeshySceneObject` le résout
+    /// en `1` et `0` — **les mêmes défauts que le convertisseur V3 du gateway
+    /// fabrique déjà** (`num(o.scale, 1)`, `num(o.rotation, 0)`). Le fil ne
+    /// change pas ; c'est la SCÈNE qui devient uniforme.
+    public var scale: Double?
+    public var rotation: Double?
+
     public var zIndex: Int?
 
     // Timeline timing
@@ -1013,6 +1049,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
         case mutedVolumeMemento
         case isBackground, backgroundAudioVariants, zIndex
+        case scale, rotation
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
         case sourceStart, sourceEnd
         case keyframes
