@@ -5193,13 +5193,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       watch-time; a blank statusId opens no session; ending twice records once (idempotent); ending a
       dwell that never opened records nothing (the own-status path); a failed dwell record does not
       disturb the bar. RED-proven: neutralising the `begin` fails exactly the 4 dwell-recording tests
-      while the 3 assert-no-record tests stay green. **Still open (deferred, deliberately narrower than
-      iOS):** the story-viewer surface (its `markViewed(slideId)` sink carries no duration arg — needs
-      an SDK look before wiring, unlike detail/status which already had a duration-capable `viewPost`),
+      while the 3 assert-no-record tests stay green. **Story-viewer surface shipped 2026-08-31** (slice
+      `story-viewer-dwell`): the 4th and LAST single-focus surface, bringing dwell tracking to full iOS
+      parity (reels + detail + status + story). `StoryViewerViewModel` now moves a `STORY_VIEWER`
+      `EngagementSessions` session WITH the slide on screen — begun on the slide landed on, ended on the
+      one left — via `transitionDwell` in `emit()` (the dwell twin of `transitionPostRoom`, guarded by
+      `currentDwellStoryId` so a same-slide re-emit neither closes nor restarts the running session).
+      The session also ends on dismiss (`emit` maps `isDismissed`→`null`) and on teardown
+      (`onCleared`→`endCurrentDwell`), and a qualified dwell records `postRepository.viewPost(slideId,
+      dwellMs)`. The SDK-look the prior note asked for resolved cleanly: **a story slide id IS a post
+      id** — `StoryApi.markViewed` already POSTs to `posts/{id}/view`, the identical route that carries
+      the optional `duration`, and the gateway (`routes/posts/interactions.ts`) already binds/persists
+      it (bounded [0,300000]ms) for the story case — so the measured watch-time rides the very endpoint
+      the impression uses, apps/android-only, no gateway/shared change. Same `(postId, userId)`-singleton
+      dedup as detail/status: the impression (`storyRepository.markViewed`) increments `viewCount` once,
+      the dwell only raises the stored `duration` to its max. +8 tests (`StoryViewerViewModelTest`, 96
+      total green): advancing past the floor records the left slide's measured watch-time; a sub-floor
+      glance records nothing; each advance records the slide it leaves re-arming the clock on the next;
+      stepping back records the slide left; `endCurrentDwell` records once then a second end is inert;
+      a same-slide re-emit does not restart the dwell clock; dismissing ends the current dwell; a failed
+      dwell record does not crash or disturb the viewer. RED-proven by mutation: neutralising the `begin`
+      fails EXACTLY the 6 dwell-recording tests while the 2 assert-no-record tests stay green.
+      **Still open (deferred, deliberately narrower than iOS):**
       watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
       now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
-      recording, and the durable outbox / crash-recovery net (iOS's SQLite outbox — Android has no
-      equivalent wiring point yet).
+      recording, and the durable outbox / crash-recovery net (iOS's SQLite `EngagementOutbox` +
+      `/posts/engagement/batch` — the Android dwell surfaces all ride the legacy `posts/{id}/view?duration`
+      sink, a faithfully narrower boundary; the batch subsystem is a much larger, multi-slice effort).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a

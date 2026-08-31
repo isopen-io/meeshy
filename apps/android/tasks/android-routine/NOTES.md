@@ -5,6 +5,32 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — a "blocked, needs an SDK look" surface can be unblocked by asking what the sink ALREADY is (slice `story-viewer-dwell`)
+The story-viewer dwell surface sat deferred for three slices with the note "`markViewed(slideId)` carries no
+duration arg → needs an SDK look first." The SDK look took ten minutes and unblocked it entirely: **`StoryApi
+.markViewed` already POSTs to `posts/{id}/view`** — the exact route `PostApi.viewPost` uses, which already
+carries the optional `duration`, and the gateway already binds/persists it for the story case (a story slide
+is fetched as a post there). A story slide id IS a post id. So the "missing duration-capable story sink" was
+a mirage — the duration-capable sink was the same endpoint, one `@Body` away. Lessons:
+- **Before believing a surface is blocked on a missing capability, read the endpoint it ALREADY hits.** The
+  block was stated in client terms ("markViewed has no duration"); the answer was in the route ("markViewed
+  and viewPost are the same route"). Two client methods that look unrelated can be the same server call.
+- **When a surface has a ViewModel-owned lifecycle signal, the dwell needs ZERO screen wiring.** Status-bubble
+  needed a `DisposableEffect(onDispose)` because a popover has no ViewModel dismiss signal. The story viewer
+  already owns `isDismissed` (mapped to a `null` dwell target in `emit()`) and `onCleared` — so the entire
+  begin/end lifecycle lives in the ViewModel state machine, driven by playback transitions. Prefer the
+  ViewModel-internal seam when one exists; it's fully JVM-testable and can't be forgotten by a future screen.
+- **The dwell twin of an existing "transition with the current item" method is where it belongs.** The story
+  viewer already had `transitionPostRoom(nextId)` (join/leave the post room as the slide changes, guarded by a
+  `currentRoomStoryId` cursor, called in `emit()`). `transitionDwell(nextId)` is its exact structural twin
+  (guarded by `currentDwellStoryId`, called right beside it) — so a same-slide re-emit (reaction, translation
+  merge) no-ops for dwell exactly as it already does for the room. Find the existing per-item transition seam
+  and mirror it, rather than inventing a new lifecycle.
+- **A `-q` gradle run hides BUILD SUCCESSFUL and can leave you unable to tell green from red.** `-q` suppresses
+  the success line (but not BUILD FAILED), so a passing run looks identical to a hung/empty one. Run
+  `--console=plain` (not `-q`) when you need to READ the outcome; rely on the report XML
+  (`build/test-results/.../TEST-*.xml`, `tests=/failures=/errors=`) as the authoritative tally.
+
 ## 2026-08-31 — where iOS bundles two side-effects in ONE method, fold them the same way on Android — the call site can't drift out of sync (slice `status-bubble-dwell`)
 The status surface fires an impression (`viewPost`) on popover open and needs a dwell begin at the same
 moment. iOS `StatusBubbleController.present(_:)` does BOTH in one method (fire `viewPost`, then

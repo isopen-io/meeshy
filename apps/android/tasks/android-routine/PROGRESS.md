@@ -2,6 +2,81 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **dwell-time tracking reached its FOURTH and LAST single-focus surface — the story
+> viewer now records a dwell-aware view beside its impression, bringing dwell to full iOS parity
+> (reels + detail + status + story), off the same `EngagementSessions` heart** (slice
+> `story-viewer-dwell`, feature-parity §F "Post view + dwell-time tracking" — the last deferred
+> surface).
+>
+> **Step 0 — merged the open android-routine PR first.** `list_pull_requests` (open) showed #4601
+> (`claude/apps/android/status-bubble-dwell`, the status-leg slice) open with the **Android** gate green,
+> `mergeable_state: unstable` — its only red check was `Quality (bun)`, a web type-debt ratchet
+> regression (`apps/web` 1184 vs baseline 1183, +1) with ZERO relation to the `apps/android`-only diff
+> (6 files: 2 `:feature:feed` + 1 test + 3 tracking docs). Textbook "CI red that isn't this PR's"
+> (base-branch/web failure, diff touches no web file); `unstable` (not `blocked`) confirms it isn't a
+> required gate. Squash-merged #4601 → `main` (commit cecd01d6) before branching. Then branched
+> `claude/apps/android/story-viewer-dwell` off freshly-fetched `origin/main`.
+>
+> **The gap + the SDK-look the prior note demanded, resolved.** iOS tracks dwell on four single-focus
+> surfaces; reels (#4593) / detail (#4597) / status (#4601) shipped, the story viewer was the last, held
+> back because `storyRepository.markViewed(slideId)` carried no duration arg. Two scout passes resolved
+> it cleanly: **a story slide id IS a post id** — `StoryApi.markViewed` already POSTs to `posts/{id}/view`,
+> the identical route that carries the optional `duration`, and the gateway
+> (`routes/posts/interactions.ts`) already binds/persists it (bounded [0,300000]ms) for the story case.
+> So the measured watch-time rides the very endpoint the impression uses — apps/android-only, no
+> gateway/shared/iOS change. (iOS actually uses a richer `/posts/engagement/batch` subsystem for stories;
+> the Android dwell surfaces all deliberately ride the legacy `posts/{id}/view?duration` sink — a
+> faithfully narrower boundary, consistent across all four surfaces.)
+>
+> **The change — the dwell session moves WITH the slide on screen, entirely inside the ViewModel.**
+> `StoryViewerViewModel` gains a `CacheClock` + `PostRepository` dep + a private `sessions =
+> EngagementSessions()` cursor and `currentDwellStoryId`. A new private `transitionDwell(nextId)` — the
+> dwell twin of the existing `transitionPostRoom` and wired right beside it in `emit()` — ends the slide
+> left (recording `postRepository.viewPost(slideId, dwellMs)` when it passed the 1000ms floor) and begins
+> the one landed on; it is guarded by `currentDwellStoryId` so a same-slide re-emit (a reaction, a
+> translation merge) neither closes nor restarts the running session. `emit()` maps `isDismissed`→`null`
+> so a swiped-away viewer ends its dwell immediately; `onCleared`→`endCurrentDwell()` is the teardown net.
+> **SOTA/right-choice:** the whole dwell lifecycle lives in the ViewModel state machine driven by
+> playback transitions — ZERO screen wiring needed (unlike status-bubble's `DisposableEffect`), because
+> the story viewer already owns a `isDismissed` signal and `onCleared`. Same `(postId, userId)`-singleton
+> gateway dedup as detail/status: the impression (`storyRepository.markViewed`, unchanged) increments
+> `viewCount` once, the dwell only raises the stored `duration` to its max — purely additive, no
+> double-count. Deliberately EXCLUDED (faithful, narrower boundary): watch-samples/completion (reels loop,
+> N/A), micro-actions, and the durable outbox / batch subsystem.
+>
+> **Tests: +8, RED-proven by mutation.** `StoryViewerViewModelTest` +8 (advancing past the floor records
+> the left slide's measured watch-time; a sub-floor glance records nothing; each advance records the slide
+> it leaves re-arming the clock on the next; stepping back records the slide left; `endCurrentDwell`
+> records once then a second end is inert; a same-slide re-emit does not restart the dwell clock;
+> dismissing ends the current dwell; a failed dwell record does not crash or disturb the viewer).
+> **Mutation:** neutralising the `begin` fails EXACTLY the 6 dwell-recording tests while the 2
+> assert-no-record tests stay green — the RED signature that proves the tests exercise the wiring, not a
+> constant. `StoryViewerViewModelTest` 96 tests, 0 failures.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`;
+> `compileSdk = 37` resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of
+> the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 edited `:feature:stories`
+> ViewModel + 1 edited test + tracking docs, no `local.properties`; SDK purity — the pure
+> `EngagementSessions` building block stays in `:core:model`, the *when* (begin/end via slide transition)
+> is orchestration in the `:feature:stories` ViewModel; SSOT — one `EngagementSessions`, the existing
+> `viewPost` sink reused, no re-implemented dwell logic; instant-app — analytics is fire-and-forget, no
+> spinner; UDF — immutable `StateFlow` UiState untouched, the dwell cursor lives beside the room cursor;
+> no dead-ends — every qualified view reaches a real endpoint; no tautological tests; no coverage floor
+> lowered — new orchestration wiring with mutation-proven coverage).
+>
+> **Next**: dwell tracking is now complete on all four single-focus surfaces. The remaining §F engagement
+> pieces are the durable outbox + `/posts/engagement/batch` subsystem (a large, multi-slice effort — iOS's
+> `EngagementOutbox`/`EngagementDispatcher`, no Android wiring point yet) and watch-samples/micro-actions.
+> Other open threads: the §M `NotificationToastPolicy` per-type toggle gate (a pure wire-type→toggle
+> resolver, iOS `UserNotificationPreferences+Filter.isTypeEnabled`, ~80 cases — bounded pure-logic slice),
+> the `NotificationCoordinator` unread/badge authority reducer (§M, `unmutedTotal` already partly pure on
+> iOS), and the local-FTS leg of §N (Room, device-bound). Read the chosen box's iOS audit part read-only
+> before branching.
+
 > On 2026-08-31 **dwell-time tracking reached its THIRD surface — the status bubble now records a
 > dwell-aware view beside its impression, off the same `EngagementSessions` heart** (slice
 > `status-bubble-dwell`, feature-parity §F "Post view + dwell-time tracking" — the deferred "other
