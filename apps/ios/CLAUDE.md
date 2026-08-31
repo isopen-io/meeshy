@@ -544,7 +544,7 @@ Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
 `MeeshyPublication`).
 
 **Le premier de ces noms EST un type depuis le 2026-08-31** :
-`MeeshySceneObject` (`packages/MeeshySDK/.../Models/MeeshySceneObject.swift`),
+`MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
 une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
 rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
 `isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
