@@ -250,6 +250,37 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 
 ---
 
+## Quelle SURFACE porte les 31 vues — et comment l'atteindre
+
+**Les vues de ce milestone vivent sur `ComposerSceneSurface`, et une seule route y mène.**
+`ComposerMountedView.mounted(surface:hasScene:)` tranche en trois lignes :
+
+```swift
+case .scene:    return .atelier          // profil STORY → l'atelier historique du SDK
+case .mood:     return .mood
+case .document: return hasScene ? .scene : .document
+```
+
+Le profil **STORY monte l'atelier**, toujours, quel que soit son fond. `ComposerSceneSurface`
+n'est atteinte que par le profil **DOCUMENT portant une scène** — c'est-à-dire un POST auquel
+on a ajouté un média. Ce n'est pas un défaut : c'est la loi 1 — l'ancien chemin reste routé
+tant que la matrice des 31 vues n'est pas complète, et le décommissionnement est un lot
+séparé.
+
+**Conséquence pour la vérification** : ouvrir le composer depuis le plateau des stories et
+chercher son rail *leading* ou sa rangée basse ne montre RIEN, et l'écran a l'air correct —
+c'est l'atelier faisant son travail. Une demi-heure y a été perdue le 2026-08-31. Le chemin
+qui sert :
+
+1. entrer par le composer de POST (le `+` du fil, ou la porte document) ;
+2. y **ajouter un média** — sans lui, `hasScene` est faux et c'est la surface document qui
+   monte ;
+3. la scène 9:16 apparaît alors avec ses deux rails et sa rangée basse.
+
+> Avant de conclure qu'une vue n'est pas montée, **vérifier quelle surface l'écran montre**.
+> La question « est-ce POSÉ ? » a une couche au-dessus d'elle : « quelle SURFACE est
+> posée ? » — et aucune des deux ne rougit toute seule.
+
 ## Pièges mesurés
 
 | Piège | Symptôme | Parade |
@@ -261,6 +292,9 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 | ids de planches commençant par un chiffre | `'#1a' is not a valid selector` | `[id="1a"]` |
 | Playwright sans navigateur installé | `Executable doesn't exist` | Chrome installé, via `capture-cibles.js` |
 | `git commit` emporte tout l'index | le WIP d'une autre session part avec | `git commit -- <chemins>` |
+| `test-without-building` après un build ROUGE | suites nommées, comptes plausibles, **vert** — sur le bundle d'AVANT | gater : `grep -q "TEST BUILD SUCCEEDED"` avant de lancer les tests |
+| `idb ui tap` deux fois pour un double-tap | ~1,1 s par appel : le geste dégénère (éditeur d'objet, zoom viewport) | aucun double-tap n'est synthétisable — éprouver le layer, pas la capture |
+| Composer ouvert depuis le plateau des STORIES | ni rail *leading*, ni rangée basse, et l'écran a l'air correct | c'est l'atelier — entrer par le POST + un média (§ ci-dessus) |
 
 ## Ce qui ferme une issue
 
