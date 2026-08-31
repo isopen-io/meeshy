@@ -353,10 +353,45 @@ export function registerInteractionRoutes(
   });
 
   // POST /posts/:postId/view
+  //
+  // #4150 — le corps est DÉCLARÉ, et `duration` borné à la frontière.
+  //
+  // Il était lu en `(request.body as any) ?? {}` : aucun schéma, aucune borne,
+  // et le seul `any` de ce module. La valeur était bien assainie en aval
+  // (`recordView` la ramène dans [0, 300 000] ms), mais une borne posée chez
+  // l'appelé n'est pas une borne — elle vaut pour CET appelé, et le jour où un
+  // second consommateur lit le champ, il hérite d'un entier libre. Le schéma
+  // refuse désormais ce qui n'est pas un nombre dans l'intervalle, AVANT que
+  // le handler s'exécute ; l'assainissement d'aval reste, comme seconde
+  // barrière pour les appelants qui ne passent pas par cette route.
   fastify.post('/posts/:postId/view', {
+    schema: {
+      params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
+      // `['object', 'null']` et non `'object'` : les clients appellent cette
+      // route SANS corps (une vue n'a rien à dire de plus que son existence),
+      // et Fastify remet alors `null`. Un schéma `object` nu refuserait ces
+      // appels — la rigueur fermerait une porte qu'elle n'a pas à fermer.
+      body: {
+        oneOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              duration: {
+                type: 'integer',
+                minimum: 0,
+                maximum: 300_000,
+                description: 'Durée de consultation en millisecondes (plafond : 5 minutes)',
+              },
+            },
+          },
+        ],
+      },
+    },
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('view') },
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: PostParams; Body?: { duration?: number } }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
@@ -364,7 +399,7 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const { duration } = (request.body as any) ?? {};
+      const { duration } = request.body ?? {};
       const viewerId = authContext.registeredUser.id;
       const isNewView = await postService.recordView(postId, viewerId, duration);
 
