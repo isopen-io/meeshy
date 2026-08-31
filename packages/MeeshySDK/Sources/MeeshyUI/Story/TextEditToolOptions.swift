@@ -41,9 +41,19 @@ enum TextEditLabels {
     }
 }
 
-struct TextEditToolOptions: View {
+/// **Public depuis le 2026-08-31** (#4634). C'est un ATOME au sens de la règle
+/// de pureté du SDK : il reçoit un outil et un `Binding`, ne connaît aucun
+/// singleton Meeshy, et n'encode aucune règle produit du type « quand
+/// afficher ». L'écran qui les EMPILE tous — l'éditeur d'objet plein écran —
+/// est de l'orchestration, et reste côté app.
+public struct TextEditToolOptions: View {
     let tool: TextEditTool
     @Binding var textObject: StoryTextObject
+
+    public init(tool: TextEditTool, textObject: Binding<StoryTextObject>) {
+        self.tool = tool
+        self._textObject = textObject
+    }
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -55,7 +65,7 @@ struct TextEditToolOptions: View {
     static let chipMinWidth: CGFloat = 46
     static let chipFontSize: CGFloat = 11
 
-    var body: some View {
+    public var body: some View {
         // Rangée nue : pas de conteneur de panneau propre (fond arrondi,
         // contour). C'est `StoryTextEditToolbar` qui pose l'îlot de verre
         // autour de cette rangée — évite le panneau-dans-panneau et la

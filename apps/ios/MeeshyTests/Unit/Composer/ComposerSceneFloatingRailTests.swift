@@ -168,6 +168,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
                        [.media, .text, .drawing, .sticker],
                        "quatre entrées à gauche — le compte des quatre pastilles de la planche 1b")
         XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies),
-                       [.description, .mention, .place])
+                       [.description, .mention, .hashtag, .place],
+                       "`.hashtag` rejoint la ligne canonique (#4636) — un hashtag classe "
+                       + "ce qui part, il n'apparaît pas sur la scène.")
     }
 }

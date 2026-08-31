@@ -339,9 +339,11 @@ extension MeeshyComposerHost {
             onItemEdit: { id, kind in
                 switch kind {
                 case .text:
-                    selectedSceneItemId = id
-                    selectedSceneItemKind = kind
-                    viewModel.enterTextEditingMode(textId: id)
+                    // **Le MÊME site que la création** (#4634) : `openObjectEditor`
+                    // est la seule façon d'éditer un texte, quelle que soit la
+                    // porte. Recopier ici les trois lignes qu'il contient était
+                    // exactement ce qui faisait diverger les deux chemins.
+                    openObjectEditor(id)
                     HapticFeedback.medium()
                 case .media, .sticker, .location:
                     break

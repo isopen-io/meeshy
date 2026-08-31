@@ -274,6 +274,9 @@ nonisolated enum ComposerRailCopy {
         case .sticker:
             return String(localized: "composer.rail.sticker",
                           defaultValue: "Ajouter un sticker", bundle: .main)
+        case .hashtag:
+            return String(localized: "composer.rail.hashtag",
+                          defaultValue: "Ajouter un hashtag", bundle: .main)
         case .mention:
             return String(localized: "composer.rail.mention",
                           defaultValue: "Nommer quelqu'un", bundle: .main)

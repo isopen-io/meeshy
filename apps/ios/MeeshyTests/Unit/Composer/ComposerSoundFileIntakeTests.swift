@@ -31,6 +31,17 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
+    /// **Les gardes lisent l'UNITÉ du meuble, jamais un fichier** (2026-09-01).
+    ///
+    /// `AppSourceGuard.composerHostSource()` concatène `MeeshyComposerHost.swift`,
+    /// ses compagnons et tout `MeeshyComposerHost+*.swift`. Épingler un fichier
+    /// précis rend la garde otage du prochain découpage : le budget de 1 100
+    /// lignes en impose un régulièrement, et une garde qui ne trouve plus son
+    /// ancre passe au vert en ne mesurant plus rien.
+    private func hostUnit() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
     private func compact(_ t: String) -> String {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
@@ -39,9 +50,9 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// vert par OMISSION le jour où un chemin change — le mode d'échec le plus
     /// discret de ce dépôt.
     func test_lesSourcesLues_sontNonVides() throws {
-        XCTAssertTrue(try source("MeeshyComposerHost+Intake.swift")
+        XCTAssertTrue(try hostUnit()
             .contains("func presentSoundSource"))
-        XCTAssertTrue(try source("MeeshyComposerHost+Portals.swift")
+        XCTAssertTrue(try hostUnit()
             .contains("var surfaceWithIntakePortals"))
     }
 
@@ -101,7 +112,7 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// **La moitié « présentation ».** La porte fichier ferme le portail et
     /// pose son intention ; elle n'ouvre RIEN dans la même transaction.
     func test_laPorteFichier_fermeLePortailAuLieuDOuvrirParDessus() throws {
-        let code = compact(try source("MeeshyComposerHost+Intake.swift"))
+        let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("case.systemImporterAfterDismiss:"),
                       "`presentSoundSource` doit aiguiller sur `ComposerSoundHandoff`, "
                       + "sinon la règle est écrite et personne ne l'applique.")
@@ -112,18 +123,22 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// **Et la reprise existe, et retombe.** Un drapeau resté vrai rouvrirait
     /// l'importateur à la fermeture du portail SUIVANT, quel qu'il soit.
     func test_laReprise_consommeSonDrapeau() throws {
-        let code = compact(try source("MeeshyComposerHost+Intake.swift"))
-        XCTAssertTrue(code.contains("funcresumePendingFileImport()"))
-        XCTAssertTrue(code.contains("guardpendingFileImportelse{return}"))
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("funcresumePendingPresentation()"))
+        // Le drapeau est LU puis remis à faux — la forme du test (`guard` ou
+        // `if`) n'est pas ce que la garde affirme, et l'épingler l'a fait rougir
+        // sur une réécriture parfaitement correcte.
+        XCTAssertTrue(code.contains("ifpendingFileImport{"))
         XCTAssertTrue(code.contains("pendingFileImport=false"))
+        XCTAssertTrue(code.contains("showsFileImporter=true"))
     }
 
     /// **Le lecteur de la reprise est le `onDismiss` de la feuille.** Sans lui,
     /// l'intention serait posée et jamais consommée — le bouton resterait
     /// inerte, avec un état de plus pour le prouver.
     func test_leOnDismissDeLaFeuille_consommeLIntentionEnAttente() throws {
-        let code = compact(try source("MeeshyComposerHost+Portals.swift"))
-        XCTAssertTrue(code.contains("onDismiss:{resumePendingFileImport()}"),
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("onDismiss:{resumePendingPresentation()}"),
                       "La feuille des portails doit reprendre l'import en attente à sa "
                       + "fermeture EFFECTIVE — c'est le seul instant où le présentateur "
                       + "est libre.")
@@ -132,7 +147,7 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// **La moitié « destination », celle que le premier défaut cachait.** Un
     /// fichier audio va sur la SCÈNE avec son rôle, jamais dans la liste média.
     func test_unFichierAudio_estPoseSurLaScene_avecSonRole() throws {
-        let code = compact(try source("MeeshyComposerHost+Intake.swift"))
+        let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcingestSoundFiles("))
         XCTAssertTrue(code.contains("viewModel.attachPastedAudio(url:destination,role:chosenSoundRole)"),
                       "Le rôle choisi dans la feuille doit suivre le fichier — il survit "
@@ -143,14 +158,14 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// poser sur la scène le fichier suivant, même arrivé par la rangée du
     /// document — la classe de défaut que `railPosesNextMedia` documente déjà.
     func test_lIntention_valutPourUneSeuleOuverture() throws {
-        let code = compact(try source("MeeshyComposerHost+Intake.swift"))
+        let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("letintention=fileImportIntent"))
         XCTAssertTrue(code.contains("fileImportIntent=.media"))
     }
 
     /// **Le filtre du sélecteur suit l'intention, il n'est plus figé.**
     func test_leSelecteur_demandeCeQueLIntentionDeclare() throws {
-        let code = compact(try source("MeeshyComposerHost+Portals.swift"))
+        let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("allowedContentTypes:fileImportIntent.contentTypes"))
         XCTAssertTrue(code.contains("allowsMultipleSelection:fileImportIntent.allowsMultipleSelection"))
         XCTAssertFalse(code.contains("allowedContentTypes:[.item],"),

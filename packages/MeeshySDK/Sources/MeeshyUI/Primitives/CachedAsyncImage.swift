@@ -64,7 +64,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: targetSize)) {
                 cachedFull = sized
             } else {
-                cachedFull = CacheCoordinator.warmedImage(for: resolved)
+                cachedFull = WarmImageProbe.warmedImage(for: resolved)
             }
         } else {
             cachedFull = nil
@@ -118,7 +118,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             // disque.
             let cached = targetSize.flatMap {
                 DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+            } ?? WarmImageProbe.warmedImage(for: resolved)
             image = cached
             // Refresh the ThumbHash blur for the new url — cells are reused, so
             // stale @State from the previous message must not bleed through.
@@ -267,7 +267,7 @@ public struct CachedAvatarImage: View {
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             cachedFull = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
-                ?? CacheCoordinator.warmedImage(for: resolved)
+                ?? WarmImageProbe.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -292,7 +292,7 @@ public struct CachedAvatarImage: View {
             guard let newUrl, !newUrl.isEmpty else { image = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             image = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
-                ?? CacheCoordinator.warmedImage(for: resolved)
+                ?? WarmImageProbe.warmedImage(for: resolved)
         }
     }
 
@@ -341,7 +341,7 @@ public struct CachedBannerImage: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = CacheCoordinator.warmedImage(for: resolved)
+            cachedFull = WarmImageProbe.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -371,7 +371,7 @@ public struct CachedBannerImage: View {
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = CacheCoordinator.warmedImage(for: resolved) {
+            if let cached = WarmImageProbe.warmedImage(for: resolved) {
                 image = cached
             } else {
                 image = nil
@@ -463,7 +463,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
             cachedFull = targetSize.flatMap {
                 DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+            } ?? WarmImageProbe.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -472,7 +472,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // Tier 1: idem pour le thumbnail si le full n'est pas encore disponible.
         if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
-            _thumbnailImage = State(initialValue: CacheCoordinator.warmedImage(for: resolved))
+            _thumbnailImage = State(initialValue: WarmImageProbe.warmedImage(for: resolved))
         }
 
         // Tier 0: decode ThumbHash instantly (< 0.1ms, always available if provided)
@@ -523,14 +523,14 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             guard fullImage == nil else { return }
             guard let newUrl, !newUrl.isEmpty else { thumbnailImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            thumbnailImage = CacheCoordinator.warmedImage(for: resolved)
+            thumbnailImage = WarmImageProbe.warmedImage(for: resolved)
         }
         .adaptiveOnChange(of: fullUrl) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             let cached = targetSize.flatMap {
                 DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? CacheCoordinator.warmedImage(for: resolved)
+            } ?? WarmImageProbe.warmedImage(for: resolved)
             if let cached {
                 fullImage = cached
             } else {

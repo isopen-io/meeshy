@@ -34,12 +34,44 @@ final class MessageListTimerQuiescenceGuardTests: XCTestCase {
 
     // MARK: - L'horloge suit le mode
 
-    func test_theReadingModeDidSet_syncsTheQuiescence() throws {
-        XCTAssertTrue(
-            try host().contains("syncThreadQuiescence()"),
-            "Le `didSet` de `readingMode` est le SEUL instant où l'on apprend qu'un pane vient "
-            + "de couvrir la liste — ou de la découvrir. Sans cet appel, le timer survit au "
-            + "passage en Rivière et se réveille 4 fois par seconde pour personne."
+    /// **DEUX sites, et le second est celui qu'on oublie.** Le `didSet` de
+    /// `readingMode` apprend les CHANGEMENTS de mode ; `viewDidLoad` apprend
+    /// celui avec lequel on OUVRE. Le mode étant persistant, il arrive avant le
+    /// chargement de la vue — et le `didSet` y sort sur `isViewLoaded`. Sans
+    /// l'appel au montage, une conversation ouverte DIRECTEMENT en Rivière
+    /// démarrait son horloge et ne la voyait jamais s'arrêter.
+    ///
+    /// Compter, et non seulement chercher, est ce qui distingue « posé » de
+    /// « posé partout ». La preuve par le COMPORTEMENT vit à côté, dans
+    /// `MessageListSeenTrackingModeGateTests` — c'est elle qui a trouvé le
+    /// trou du montage direct, qu'aucune garde de source ne pouvait voir.
+    func test_theQuiescence_isSyncedAtBothSites() throws {
+        let source = try host()
+        // Les sites sont ancrés par leur CORPS, jamais par un comptage global :
+        // compter les occurrences du fichier attrape aussi les mentions en
+        // commentaire, et surtout ne dit pas si l'appel est au bon endroit.
+        for site in ["override func viewDidLoad() {",
+                     "var readingMode: ConversationReadingMode = .bubbles {"] {
+            guard let body = Self.body(of: site, in: source) else {
+                XCTFail("Corps introuvable : \(site)"); continue
+            }
+            XCTAssertTrue(
+                body.contains("syncThreadQuiescence()"),
+                "`\(site)` doit synchroniser la veille. Le MONTAGE apprend le mode avec lequel "
+                + "on OUVRE — persistant, il arrive avant `viewDidLoad`, et le `didSet` y sort "
+                + "sur `isViewLoaded` ; le CHANGEMENT apprend les bascules. Un seul des deux "
+                + "laisse un trou que rien d'autre ne ferme."
+            )
+        }
+    }
+
+    func test_viewDidLoad_neverStartsTheClockBlindly() throws {
+        let source = try host()
+        XCTAssertFalse(
+            source.contains("observeStore()\nstartSeenTracking()")
+                || source.contains("observeStore()startSeenTracking()"),
+            "`viewDidLoad` ne doit plus démarrer l'horloge sans consulter le mode : "
+            + "`syncThreadQuiescence()` le fait à sa place."
         )
     }
 

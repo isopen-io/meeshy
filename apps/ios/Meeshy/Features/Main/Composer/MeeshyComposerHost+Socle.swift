@@ -233,18 +233,19 @@ extension MeeshyComposerHost {
     ///
     /// Il n'est peint que là où il a un objet, et il n'en a qu'un : le DOCUMENT.
     /// Sous la scène l'atelier peint le sien ; sous le mood, le ruban du bloc 3.
+    ///
+    /// **Ce n'est plus un `Menu` depuis le 2026-08-31** (#4636, directive
+    /// porteur) : la pastille ouvre la vue `2l`, en feuille.
+    ///
+    /// > Un menu contextuel peut lister des CHOIX ; il ne peut pas montrer leurs
+    /// > CONSÉQUENCES — combien de personnes, qui est mentionné et sous quel
+    /// > mode, quels hashtags partent avec, et le fait que l'audience appartient
+    /// > à la publication et non à une slide. Or ces conséquences sont tout ce
+    /// > que l'écran a à dire ; le choix lui-même tient en un mot.
     var audienceChip: some View {
-        Menu {
-            ForEach(offeredAudiences) { candidate in
-                Button {
-                    chooseAudience(candidate)
-                } label: {
-                    Label(
-                        candidate.label,
-                        systemImage: composerVisibility == candidate ? "checkmark" : candidate.icon
-                    )
-                }
-            }
+        Button {
+            HapticFeedback.light()
+            presentedPortal = .audience
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: composerVisibility.icon)
@@ -265,6 +266,7 @@ extension MeeshyComposerHost {
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
         // accessible dès qu'il porte un état. La valeur est annoncée comme
         // valeur, ce que VoiceOver sait lire séparément.
+        .buttonStyle(.plain)
         .accessibilityLabel(Text("composer.socle.audience", bundle: .main))
         .accessibilityValue(Text(composerVisibility.label))
         .sheet(item: $audiencePickerMode) { mode in
