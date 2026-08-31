@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType } from '@meeshy/shared/prisma/client';
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
@@ -387,6 +388,26 @@ export function registerInteractionRoutes(
             },
           },
         ],
+      },
+      // Le succès est DÉCLARÉ (#4531) : sans clé `response`, rien n'oblige la
+      // charge servie à rester celle qu'on annonce, et le contrat de la route
+      // n'existe que dans son handler. Une vue n'a qu'une chose à dire — elle
+      // a été enregistrée.
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                viewed: { type: 'boolean', description: 'La vue a été enregistrée' },
+              },
+            },
+          },
+        },
+        401: errorResponseSchema,
+        500: errorResponseSchema,
       },
     },
     preValidation: [requiredAuth],
