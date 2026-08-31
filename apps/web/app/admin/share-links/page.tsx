@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { readPaginatedList } from '@/services/paginated-list';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
@@ -162,7 +163,7 @@ export default function AdminShareLinksPage() {
   // survit) : la liste se relit après, la ligne y reste, inactive.
   const handleDeleteLink = async (shareLinkId: string) => {
     try {
-      await apiService.delete(`/admin/share-links/${shareLinkId}`);
+      await apiService.delete(API_ENDPOINTS.admin.shareLinksById(shareLinkId));
       toast.success(t('shareLinks.deleteSuccess'));
       await loadShareLinks();
     } catch (error) {

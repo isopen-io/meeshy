@@ -22,6 +22,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { adminService } from '@/services/admin.service';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 
 jest.mock('next/navigation', () => ({
@@ -165,7 +166,15 @@ describe('Console d’administration — fermer un lien de partage (#3734)', () 
     await closeTheLink();
 
     await waitFor(() => expect(apiService.delete).toHaveBeenCalledTimes(1));
-    expect(apiService.delete).toHaveBeenCalledWith(`/admin/share-links/${LINK_ROW_ID}`);
+    // Attendu DÉRIVÉ du catalogue, jamais réécrit à la main. Ce témoin épinglait
+    // `/admin/share-links/${id}` — le chemin nu — et il est tombé le jour où la
+    // page est passée par `API_ENDPOINTS` (le préfixe `/api/v1` apparaît alors
+    // dans l'appel). Réécrire le littéral aurait recréé la JUMELLE que
+    // `api-path-literal-guard` existe pour interdire : deux endroits énonçant
+    // le même chemin, dont un seul suit le catalogue. En dérivant, le témoin
+    // vérifie ce qui compte — que la page passe bien par la source unique et
+    // avec l'identifiant de la LIGNE — et il ne peut plus dériver d'elle.
+    expect(apiService.delete).toHaveBeenCalledWith(API_ENDPOINTS.admin.shareLinksById(LINK_ROW_ID));
   });
 
   it('confirme à l’administrateur et RELIT la liste — la ligne fermée doit disparaître', async () => {
