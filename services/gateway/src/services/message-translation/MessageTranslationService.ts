@@ -29,7 +29,7 @@ import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
@@ -446,16 +446,19 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Résout les langues cibles effectives d'un message : chaque code est ramené à
-   * sa forme canonique via le SSOT `normalizeLanguageCode` (le chemin client passe
-   * le code brut — `'EN'`, `'en-US'`), puis la langue source est retirée pour
-   * éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte et stocke une
-   * fausse traduction du message de l'utilisateur.
+   * sa forme canonique via la SSOT de dédup `normalizeLanguageForDedup` (le chemin
+   * client passe le code brut — `'EN'`, `'en-US'`), puis la langue source est
+   * retirée pour éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte
+   * et stocke une fausse traduction du message de l'utilisateur.
    *
    * La comparaison se fait sur les formes normalisées : `originalLanguage` est
    * persisté verbatim (les clients envoient `Locale.current`, ex. `'fr-FR'`, `'FR'`)
    * tandis que les cibles issues de `_extractConversationLanguages` sont déjà
-   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. `'auto'`
-   * (détection de langue) n'est jamais traité comme une source à filtrer.
+   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. La SSOT
+   * est région-aveugle même HORS catalogue NLLB (`'fil-PH'` → `'fil'`), si bien
+   * qu'une source `'fil-PH'` et une cible `'fil'` se reconnaissent comme la même
+   * langue. `'auto'` (détection de langue) n'est jamais traité comme une source à
+   * filtrer.
    */
   private _resolveTargetLanguages(
     originalLanguage: string | null | undefined,
@@ -463,12 +466,12 @@ export class MessageTranslationService extends EventEmitter {
   ): string[] {
     const source =
       originalLanguage && originalLanguage !== 'auto'
-        ? normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase()
+        ? normalizeLanguageForDedup(originalLanguage)
         : undefined;
 
     const result: string[] = [];
     for (const raw of targetLanguages) {
-      const code = normalizeLanguageCode(raw) ?? raw.toLowerCase();
+      const code = normalizeLanguageForDedup(raw);
       if (code === source) continue;
       result.push(code);
     }
@@ -477,7 +480,7 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Canonicalise la langue SOURCE envoyée au translator, avec la MÊME parité que
-   * les cibles ({@link _resolveTargetLanguages}, SSOT `normalizeLanguageCode`).
+   * les cibles ({@link _resolveTargetLanguages}, SSOT `normalizeLanguageForDedup`).
    *
    * Les clients transmettent `originalLanguage` verbatim (`Locale.current` :
    * `'fr-FR'`, `'FR'`, `'pt-BR'`) et le champ est persisté sans normalisation.
@@ -499,7 +502,7 @@ export class MessageTranslationService extends EventEmitter {
     if (!originalLanguage || originalLanguage === 'auto') {
       return originalLanguage as string;
     }
-    return normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase();
+    return normalizeLanguageForDedup(originalLanguage);
   }
 
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
@@ -532,7 +535,7 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
-      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      // normalizeLanguageForDedup) pour éviter les auto-traductions inutiles.
       const filteredTargetLanguages = this._resolveTargetLanguages(
         message.originalLanguage,
         targetLanguages
@@ -690,7 +693,7 @@ export class MessageTranslationService extends EventEmitter {
       }
       
       // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
-      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      // normalizeLanguageForDedup) pour éviter les auto-traductions inutiles.
       const filteredTargetLanguages = this._resolveTargetLanguages(
         existingMessage.originalLanguage,
         targetLanguages
@@ -751,12 +754,14 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Clé du garde d'ordonnancement : un message ET une langue, sous la forme
-   * canonique du SSOT `normalizeLanguageCode`. Les deux côtés (enregistrement
-   * au dispatch, lecture à la réception) doivent normaliser, sinon une cible
-   * demandée `'pt-BR'` et un résultat rendu `'pt'` ne se reconnaissent pas.
+   * canonique de la SSOT de dédup `normalizeLanguageForDedup` (région-aveugle
+   * même hors catalogue NLLB : `'pt-BR'` → `'pt'`, `'fil-PH'` → `'fil'`). Les
+   * deux côtés (enregistrement au dispatch, lecture à la réception) partagent la
+   * MÊME clé, sinon une cible demandée `'pt-BR'` et un résultat rendu `'pt'` ne
+   * se reconnaissent pas.
    */
   private _retranslationTaskKey(messageId: string, targetLanguage: string): string {
-    const code = normalizeLanguageCode(targetLanguage) ?? targetLanguage.toLowerCase();
+    const code = normalizeLanguageForDedup(targetLanguage);
     return `${messageId}::${code}`;
   }
 
@@ -898,16 +903,19 @@ export class MessageTranslationService extends EventEmitter {
             `language=${participant.language}`
           );
 
-          // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (anonymous join schema is a bare
-          // `z.string()`), so it may hold `'EN'` or `'en-US'`. Adding it verbatim
-          // would inject an uppercase/locale-cased target that never matches the
-          // lowercase-keyed MessageTranslation store — a duplicated NLLB request
-          // and a Prisme rule #1 miss (client falls back to the original).
+          // Normalise like the registered branch, through the SAME region-blind
+          // dedup SSOT. The registered branch region-strips via
+          // resolveUserLanguagesOrdered → normalizeInAppLanguage ('fil-PH' →
+          // 'fil'); an anonymous/bot participant stores `language` unvalidated
+          // (anonymous join schema is a bare `z.string()`), so it may hold 'EN',
+          // 'en-US' or a non-catalog region tag like 'fil-PH'. Adding it verbatim
+          // injected an uppercase/locale-cased target that never matches the
+          // lowercase-keyed MessageTranslation store, and — for non-catalog codes
+          // — a SECOND dedup key for a language the registered branch already
+          // collapsed. `normalizeLanguageForDedup` strips the region for EVERY
+          // code, so both branches contribute the same key.
           if (participant.language) {
-            languages.add(
-              normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
-            );
+            languages.add(normalizeLanguageForDedup(participant.language));
           }
         }
       }

@@ -148,6 +148,57 @@ describe('MessageTranslationService — source language sent to the translator',
     expect(requests[0].sourceLanguage).toBe('pt');
   });
 
+  it('region-strips a NON-CATALOG source language via the dedup SSOT (fil-PH → fil)', async () => {
+    // `normalizeLanguageCode('fil-PH')` is undefined (Filipino is not in the NLLB
+    // catalog), so the old inline `?? x.toLowerCase()` fallback kept 'fil-ph' — a
+    // code the translator maps to 'eng_Latn'. The dedup SSOT strips the region.
+    const prisma = {
+      message: {
+        findUnique: jest.fn(async () => ({ originalLanguage: 'fil-PH', translations: {} })),
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const { zmq, requests } = makeZmqMock();
+    injectZmq(svc, zmq);
+
+    await (svc as unknown as {
+      _processTranslationsAsync(message: unknown, targetLanguage?: string): Promise<void>;
+    })._processTranslationsAsync(
+      { id: 'm-fil', content: 'Kumusta ka?', originalLanguage: 'fil-PH', conversationId: 'c-fil' },
+      'en',
+    );
+
+    expect(requests).toHaveLength(1);
+    // Would be 'fil-ph' before the fix.
+    expect(requests[0].sourceLanguage).toBe('fil');
+  });
+
+  it('filters self-translation across a NON-CATALOG region tag (source fil-PH vs target fil)', async () => {
+    // Source 'fil-PH' and target 'fil' are the SAME language. The inline fallback
+    // left source as 'fil-ph', so 'fil' !== 'fil-ph' escaped the self-translation
+    // filter and a wasted NLLB request went out. The dedup SSOT collapses both.
+    const prisma = {
+      message: {
+        findUnique: jest.fn(async () => ({ originalLanguage: 'fil-PH', translations: {} })),
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const { zmq, requests } = makeZmqMock();
+    injectZmq(svc, zmq);
+
+    await (svc as unknown as {
+      _processTranslationsAsync(message: unknown, targetLanguage?: string): Promise<void>;
+    })._processTranslationsAsync(
+      { id: 'm-fil2', content: 'Kumusta ka?', originalLanguage: 'fil-PH', conversationId: 'c-fil2' },
+      'fil',
+    );
+
+    // No request: the only target equals the source once both are region-stripped.
+    expect(requests).toHaveLength(0);
+  });
+
   it("preserves the 'auto' detection sentinel unchanged", async () => {
     const prisma = {
       message: {

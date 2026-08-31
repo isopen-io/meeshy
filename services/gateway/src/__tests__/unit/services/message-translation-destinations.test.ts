@@ -232,6 +232,40 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages).not.toContain('ES-ES');
   });
 
+  it('region-strips a NON-CATALOG anonymous language so it dedupes with a registered bare form (fil-PH ⇄ fil)', async () => {
+    // `normalizeLanguageCode('fil-PH')` is undefined (Filipino is not in the NLLB
+    // catalog). The registered branch already region-strips via
+    // resolveUserLanguagesOrdered → normalizeInAppLanguage ('fil-PH' → 'fil'); the
+    // anonymous branch used the inline `?? x.toLowerCase()` fallback, keeping
+    // 'fil-ph'. The SAME input then produced TWO dedup keys depending on
+    // participant type — a duplicated, never-matching NLLB target. Both branches
+    // must land on the dedup SSOT so 'fil-PH' collapses onto 'fil' either way.
+    const { prisma } = makePrismaMock({
+      participants: [
+        {
+          type: 'user',
+          user: {
+            id: 'alice',
+            username: 'alice',
+            systemLanguage: 'fil',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        },
+        { type: 'anonymous', language: 'fil-PH' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-noncatalog');
+
+    // Before the fix: ['fil', 'fil-ph'] (two entries, one invalid).
+    expect(languages).toEqual(['fil']);
+    expect(languages).not.toContain('fil-ph');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,
