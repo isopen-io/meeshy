@@ -234,4 +234,38 @@ final class ComposerObjectChipsTests: XCTestCase {
         XCTAssertTrue(m.contains("volume"), "le son est propre au MÉDIA")
         XCTAssertEqual(t.intersection(m), ["size"], "seule la taille leur est commune")
     }
+
+    // MARK: - Quand la rangée PARAÎT
+
+    /// **Le défaut mesuré à l'écran, et que trois témoins de règle verts
+    /// n'avaient pas vu.**
+    ///
+    /// Le premier câblage demandait `toolOptions == nil`. L'hôte passe ce
+    /// panneau INCONDITIONNELLEMENT — il se vide lui-même quand aucun outil
+    /// n'est ouvert, et c'est ainsi qu'il tient la loi 4. La condition était
+    /// donc TOUJOURS fausse, et la rangée n'a jamais pu paraître : quinze
+    /// témoins verts sur ce qu'elle DIT, aucun sur le fait qu'elle EXISTE.
+    ///
+    /// > **Une vue qui existe toujours ne peut pas servir de témoin à « un
+    /// > outil est ouvert ».** La question se pose à ce qui la SAIT — le mode
+    /// > du rail — et la règle est écrite pour être éprouvable sans monter
+    /// > quoi que ce soit.
+    func test_laRangee_paraitQuandUnObjetEstSelectionne() {
+        XCTAssertTrue(ComposerObjectChips.isServed(
+            toolIsOpen: false, chips: chips(pour: texte())))
+    }
+
+    /// Un outil ouvert lui prend la place — les empiler ferait remonter la
+    /// scène de cinquante points sous le doigt.
+    func test_unOutilOuvert_luiPrendLaPlace() {
+        XCTAssertFalse(ComposerObjectChips.isServed(
+            toolIsOpen: true, chips: chips(pour: texte())))
+    }
+
+    /// **Le fusible.** Une règle qui rendrait toujours `true` peindrait un
+    /// cadre vide dès qu'aucun objet n'est sélectionné — ce qui n'aurait pas
+    /// l'air sobre, mais cassé.
+    func test_sansAucunJeton_aucuneRangee() {
+        XCTAssertFalse(ComposerObjectChips.isServed(toolIsOpen: false, chips: []))
+    }
 }

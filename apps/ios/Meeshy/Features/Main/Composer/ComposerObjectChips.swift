@@ -102,6 +102,29 @@ nonisolated enum ComposerObjectChips {
         }
     }
 
+    // MARK: - Quand la rangée PARAÎT
+
+    /// **La rangée paraît quand un objet est sélectionné ET qu'aucun outil
+    /// n'occupe le bas.**
+    ///
+    /// > **Le premier câblage a demandé `toolOptions == nil`, et la rangée n'a
+    /// > jamais pu paraître.** L'hôte passe ce panneau INCONDITIONNELLEMENT —
+    /// > il se vide lui-même quand aucun outil n'est ouvert, et c'est sa façon
+    /// > à lui de tenir la loi 4. Une vue qui existe toujours ne peut donc pas
+    /// > servir de témoin à « un outil est ouvert » : la condition était
+    /// > toujours fausse, et aucun témoin de RÈGLE ne pouvait le voir.
+    ///
+    /// La question se pose donc au MODE DU RAIL, qui la porte vraiment.
+    /// `toolIsOpen` est un booléen plutôt que le mode lui-même pour que la
+    /// règle reste éprouvable sans monter la moindre vue — et pour dire, par sa
+    /// signature, ce qu'elle interroge réellement.
+    ///
+    /// Vérifié À L'ÉCRAN le 2026-08-31 : c'est la seule chose qui séparait une
+    /// rangée correcte d'une rangée invisible.
+    static func isServed(toolIsOpen: Bool, chips: [Chip]) -> Bool {
+        !toolIsOpen && !chips.isEmpty
+    }
+
     // MARK: - La résolution par SÉLECTION
 
     /// **Le dispatch par kind vit ICI, pas dans la vue.**
