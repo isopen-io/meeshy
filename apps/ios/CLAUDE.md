@@ -468,6 +468,37 @@ Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais 
 liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
 niveau elle est, et son niveau la range tout seul.
 
+### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
+
+> « Dans l'icône (smile/sticker) il faudra juste proposer directement des
+> constructions permettant de mettre des chips de lieu (en prenant les lieux
+> autour), des chips de son (en permettant de choisir lequel), etc. — qu'on peut
+> positionner, grandir sur la scène. **Ça évite d'avoir plusieurs icônes
+> redondants aux icônes canoniques** qui concernent le document ou métadonnée du
+> slide. » (directive porteur 2026-08-31)
+
+Deux icônes qui se ressemblent et agissent sur deux NIVEAUX différents ne se
+distinguent pas à l'œil — le niveau est invisible, seul le glyphe se voit. Un ♪
+qui pose un son sur la scène et un ♫ qui choisit le son de fond de la
+publication sont, pour l'auteur, le même bouton à deux endroits.
+
+**La règle** : quand une intention nouvelle POSE un objet sur la scène, elle
+entre dans la **palette de constructions** (derrière l'entrée sticker), jamais
+dans la rangée comme une icône de plus. La rangée nomme des FAMILLES ; la palette
+nomme des constructions.
+
+| ce qu'on ajoute | où ça va |
+|---|---|
+| une construction qui pose un objet sur la scène (chip de lieu, chip de son, sondage, minuteur…) | la **palette**, derrière `sticker` |
+| une entrée qui vise la publication ou la slide | la **ligne canonique** |
+| une famille entièrement nouvelle de matière | et seulement alors, une porte |
+
+**Le témoin** : aucune porte de la rangée de gauche ne pose un objet qu'une
+entrée canonique pose déjà. C'est la formulation vérifiable de « éviter plusieurs
+icônes redondants » — elle s'éprouve sur les niveaux, pas sur les glyphes.
+
+Pilotage : #4579.
+
 ## Les gestes de glissement sont PROGRESSIFS et ANNULABLES (directive porteur 2026-08-30)
 
 > « Il faut préférer ce type de swipe À CHAQUE FOIS qu'on parle de mettre un
