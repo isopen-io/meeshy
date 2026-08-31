@@ -4,6 +4,11 @@
  *
  *   node docs/product/MeeshyWebV3Design/capture-cibles.js [dossier-de-sortie]
  *
+ * Cet outil n'honore AUCUN drapeau : tout premier argument commencant par `-`
+ * est refuse (code 2). Sans ce refus, `--vues linkRedirect` etait pris pour un
+ * dossier et creait `--vues/` a la racine du depot. La loi vit dans
+ * `apps/web-v3/scripts/lib/arguments-de-ligne.mjs`, avec ses temoins.
+ *
  * Sortie par defaut : docs/product/MeeshyWebV3Design/cible/
  * Chaque .png est la CIBLE d'implementation d'une vue ; vues.json en porte
  * le titre, le sous-titre et la ROUTE web. vues.md en est l'index lisible.
@@ -24,11 +29,11 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { pathToFileURL } = require('url');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
 const DOC = 'MeeshyWebV3.dc.html';
-const OUT = process.argv[2] || path.join(HERE, 'cible');
 const { CACHE, NODE_MODULES: NM, ensureVendor, chromiumPath, vendorRequire } =
   require(path.join(ROOT, 'scripts/lib/navigateur.cjs'));
 
@@ -76,6 +81,15 @@ function serve() {
 }
 
 (async () => {
+  const { dossierDeSortie } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/arguments-de-ligne.mjs')).href);
+  const demande = dossierDeSortie(process.argv.slice(2), path.join(HERE, 'cible'));
+  if (!demande.ok) {
+    process.stderr.write(`[capture] ARGUMENT REFUSE — ${demande.raison}\n`);
+    process.exit(2);
+  }
+  const OUT = demande.dossier;
+
   ensureVendor(m => process.stderr.write(m));
   const { chromium } = vendorRequire('playwright-core');
   const executablePath = chromiumPath();

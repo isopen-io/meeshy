@@ -20,11 +20,26 @@
  * C'est ce que « conformite = disposition, hierarchie, etats et gestes »
  * (CLAUDE.md) veut dire, et c'est ce qui bouge quand un ecran devie.
  * L'ecart pixel est rendu a titre INDICATIF, jamais comme gate.
+ *
+ * CODES DE SORTIE. 0 conforme · 1 hors cible ou hors budget · 2 echec du
+ * harnais · 3 selection NON COMPARABLE. « Je n'ai pas su mesurer » n'est pas
+ * « j'ai mesure et c'est hors cible » : les confondre fait d'un outil muet un
+ * outil accusateur. C'est exactement ce qui a laisse
+ * `--vues linkRedirect,linkExpired` rendre structure=0.42 et 0.34 sur un code
+ * conforme — les deux vues partagent la route `/l/:token`, que le validateur
+ * de jeton du § 5.1 refuse a bon droit, donc les deux etaient comparees a
+ * l'ecran clos, qui n'est la cible d'aucune des deux.
+ *
+ * La loi de selection vit dans `apps/web-v3/scripts/lib/vues-comparables.mjs`,
+ * avec ses temoins : une route parametree se sert par un jeton DECLARE par la
+ * vue (champ `jetons` de `vues.json`), et deux vues qui partagent une route
+ * ont besoin d'un ETAT — un jeton vivant, un jeton expire — pas d'une route.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
@@ -103,14 +118,28 @@ function ecartStructurel(a, b) {
 }
 
 (async () => {
+  // La selection se tranche AVANT le navigateur : un refus ne coute alors aucun
+  // lancement de Chromium, et il sort par la meme porte que le verdict.
+  const { selectionComparable, refusDeSelection } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/vues-comparables.mjs')).href);
+
+  const index = JSON.parse(fs.readFileSync(path.join(HERE, 'vues.json'), 'utf8'));
+  const selection = selectionComparable({ vues: index.vues, demandees: ONLY });
+  const refus = refusDeSelection(selection);
+  if (refus) {
+    refus.messages.forEach(m => process.stderr.write(`[compare] NON COMPARABLE — ${m}\n`));
+    process.exit(refus.rc);
+  }
+  if (selection.ignorees.length) {
+    process.stderr.write(
+      `[compare] ${selection.ignorees.length} route(s) parametree(s) ecartee(s) faute de --vues : ` +
+      `${selection.ignorees.join(', ')}\n`);
+  }
+  const vues = selection.comparables;
+
   const { chromium } = vendorRequire('playwright-core');
   const { PNG } = vendorRequire('pngjs');
   const pixelmatch = vendorRequire('pixelmatch');
-
-  const index = JSON.parse(fs.readFileSync(path.join(HERE, 'vues.json'), 'utf8'));
-  let vues = index.vues.filter(v => !/:/.test(v.route));
-  if (ONLY.length) vues = index.vues.filter(v => ONLY.includes(v.id));
-  if (!vues.length) throw new Error('Aucune vue a comparer (les routes parametrees sont ignorees sans --vues).');
 
   fs.mkdirSync(RENDU, { recursive: true });
   const browser = await chromium.launch({ executablePath: chromiumPath(), args: ['--no-sandbox'] });
@@ -135,10 +164,10 @@ function ecartStructurel(a, b) {
       });
       page.on('pageerror', e => erreurs.push(String(e.message)));
 
-      const entree = { vue: v.id, route: v.route, theme };
+      const entree = { vue: v.id, route: v.route, chemin: v.chemin, theme };
       try {
         const t0 = Date.now();
-        const resp = await page.goto(BASE + v.route, { waitUntil: 'networkidle', timeout: 45000 });
+        const resp = await page.goto(BASE + v.chemin, { waitUntil: 'networkidle', timeout: 45000 });
         entree.statut = resp ? resp.status() : 0;
         entree.ms = Date.now() - t0;
         entree.lcp = await page.evaluate(() => new Promise(res => {
