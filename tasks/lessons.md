@@ -21147,3 +21147,40 @@ fenêtre du double-tap. Deux invocations consécutives ne le synthétisent pas d
 (elles ouvrent l'éditeur de l'objet, ou zooment le viewport). Quand un état n'est atteignable
 que par un geste qu'aucun outil ne produit, **le test de LAYER est la preuve, pas un repli** :
 il est déterministe là où la capture est un coup de dés.
+
+## Leçon 359 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le PASSÉ
+
+**Le fait, trouvé deux fois la même nuit, par deux chemins différents.** Un
+`xcodebuild build-for-testing` qui ÉCHOUE laisse en place le bundle de tests précédent.
+Le `test-without-building` qui suit s'exécute alors normalement : suites nommées, comptes
+plausibles, **vert**. Il mesure un ARBRE qui n'existe plus.
+
+| entrée | comment le build a échoué |
+|---|---|
+| session A | une erreur de compilation ordinaire (ordre d'arguments), 129 tests « verts » ensuite |
+| session B | une référence retirée du `.pbxproj` par une régénération, deux rouges attribués à tort à son propre correctif |
+
+Dans les deux cas le seul témoin est **une ligne de log qu'on ne lit pas quand le résumé
+dit « passed »** — `** TEST BUILD FAILED **`, plusieurs centaines de lignes plus haut.
+
+> C'est la forme la plus dangereuse du faux vert, parce qu'elle ne ment pas sur le
+> RÉSULTAT mais sur son OBJET. Un test rouge fait chercher ; un test vert sur le mauvais
+> binaire fait CONCLURE. La session B a failli conclure que son correctif ne marchait pas ;
+> la session A, que le sien marchait.
+
+**La parade est mécanique, pas une discipline de lecture** — enchaîner les deux commandes
+en gardant la porte fermée :
+
+```sh
+xcodebuild build-for-testing … 2>&1 | grep -E "error:|TEST BUILD" > build.log
+if grep -q "TEST BUILD SUCCEEDED" build.log; then
+    xcodebuild test-without-building …
+else
+    echo "BUILD ROUGE — aucun test lancé"
+fi
+```
+
+Corollaire de méthode : **lire la ligne de build AVANT le compte de tests**, toujours, et
+se méfier d'un compte qui n'a pas bougé alors qu'on vient d'ajouter des témoins. Le COMPTE
+par classe est le second témoin — c'est déjà lui qui attrape le `-only-testing:` d'une
+classe absente du `.pbxproj`, silencieusement ignorée.
