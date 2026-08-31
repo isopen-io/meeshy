@@ -23,7 +23,9 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     /// Liste les liens de partage créés par l'utilisateur connecté
     public func listMyLinks(offset: Int = 0, limit: Int = 50) async throws -> [MyShareLink] {
         let response: APIResponse<[MyShareLink]> = try await api.request(
-            endpoint: "/links?offset=\(offset)&limit=\(limit)"
+            LinksEndpoint.root,
+            queryItems: [URLQueryItem(name: "offset", value: String(offset)),
+                         URLQueryItem(name: "limit", value: String(limit))]
         )
         return response.data
     }
@@ -103,7 +105,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     public func toggleLink(linkId: String, isActive: Bool) async throws {
         struct ToggleBody: Encodable { let isActive: Bool }
         let _: APIResponse<MyShareLink> = try await api.patch(
-            endpoint: "/links/\(linkId)",
+            LinksEndpoint.byLinkId(linkId: linkId),
             body: ToggleBody(isActive: isActive)
         )
     }
@@ -112,7 +114,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func deleteLink(linkId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/links/\(linkId)"
+            LinksEndpoint.byLinkId(linkId: linkId)
         )
     }
 }

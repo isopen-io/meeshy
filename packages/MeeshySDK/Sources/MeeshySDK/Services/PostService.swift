@@ -423,7 +423,10 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
-        try await api.request(endpoint: "/hashtags/trending?limit=\(limit)")
+        try await api.request(
+            HashtagsEndpoint.trending,
+            queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+        )
     }
 
     public func getReels(seedReelId: String? = nil, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {

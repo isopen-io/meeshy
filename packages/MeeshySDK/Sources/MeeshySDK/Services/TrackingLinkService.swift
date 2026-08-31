@@ -17,7 +17,9 @@ public final class TrackingLinkService: @unchecked Sendable {
     /// Liste les liens de tracking de l'utilisateur connecté
     public func listLinks(offset: Int = 0, limit: Int = 50) async throws -> [TrackingLink] {
         let response: APIResponse<TrackingLinksData> = try await api.request(
-            endpoint: "/tracking-links/user/me?offset=\(offset)&limit=\(limit)"
+            TrackingLinksEndpoint.userMe,
+            queryItems: [URLQueryItem(name: "offset", value: String(offset)),
+                         URLQueryItem(name: "limit", value: String(limit))]
         )
         return response.data.trackingLinks
     }
@@ -42,7 +44,9 @@ public final class TrackingLinkService: @unchecked Sendable {
     /// Détails + liste des clics pour un lien
     public func fetchClicks(token: String, offset: Int = 0, limit: Int = 50) async throws -> TrackingLinkDetail {
         let response: APIResponse<TrackingLinkDetail> = try await api.request(
-            endpoint: "/tracking-links/\(token)/clicks?offset=\(offset)&limit=\(limit)"
+            TrackingLinksEndpoint.byTokenClicks(token: token),
+            queryItems: [URLQueryItem(name: "offset", value: String(offset)),
+                         URLQueryItem(name: "limit", value: String(limit))]
         )
         return response.data
     }

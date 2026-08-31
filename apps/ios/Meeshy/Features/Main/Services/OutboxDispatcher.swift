@@ -449,8 +449,19 @@ struct OutboxDispatcher: OutboxDispatching {
     /// by the caller at enqueue time.
     private func dispatchUpdateSettings(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UpdateSettingsPayload.self)
+        // La catégorie arrive d'un enregistrement PERSISTÉ : elle peut porter
+        // n'importe quelle chaîne, y compris celle d'une version antérieure de
+        // l'app. L'interpoler telle quelle produisait un 404 SILENCIEUX au
+        // rejeu — l'action était consommée, la préférence jamais écrite.
+        // La convertir fait de ce cas une erreur qui se voit.
+        guard let category = PreferenceCategory(rawValue: payload.category) else {
+            throw MeeshyError.server(
+                statusCode: 0,
+                message: "Catégorie de préférences inconnue « \(payload.category) » — "
+                    + "aucune adresse ne la sert, l'action ne peut pas être rejouée.")
+        }
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/me/preferences/\(payload.category)",
+            category.endpoint,
             method: "PATCH",
             body: payload.body,
             queryItems: nil,

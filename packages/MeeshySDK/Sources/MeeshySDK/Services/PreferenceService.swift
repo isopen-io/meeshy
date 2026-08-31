@@ -124,13 +124,13 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {
         let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/me/preferences/\(category.rawValue)", body: body
+            category.endpoint, body: body
         )
     }
 
     public func resetPreferences(category: PreferenceCategory) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/me/preferences/\(category.rawValue)"
+            category.endpoint
         )
     }
 
