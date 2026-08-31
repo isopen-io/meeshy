@@ -415,6 +415,13 @@ extension MeeshyComposerHost {
             activeObjectChipId: ComposerObjectChips.activeChipId(
                 chips: sceneObjectChips, openedBand: requestedSceneBand),
             onObjectChip: { id in handleObjectChip(id) },
+            // **Ce que le canvas ENCADRE** (#4073). Le meuble tient déjà l'id
+            // de l'objet sélectionné pour les jetons et pour le rail — le lui
+            // faire descendre jusqu'au canvas est ce qui manquait pour que
+            // « un seul objet à la fois » se VOIE.
+            selectedItemId: selectedSceneItemId,
+            selectionBadge: ComposerObjectChips.badge(forSelected: selectedSceneItemId,
+                                                      in: viewModel.currentSlide),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence

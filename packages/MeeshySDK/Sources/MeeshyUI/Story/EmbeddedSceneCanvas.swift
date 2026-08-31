@@ -112,6 +112,15 @@ public struct EmbeddedSceneCanvas: View {
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
 
+    /// **L'objet SÉLECTIONNÉ et son badge** (#4073, vue `1c`). La scène
+    /// incrustée remontait `onItemTapped` sans que rien ne redescende désigner
+    /// l'objet : « un seul objet à la fois » n'avait aucun témoin à l'écran.
+    ///
+    /// Paramètres OPAQUES — un id et une chaîne déjà composée. Quel objet est
+    /// sélectionné et comment on le nomme restent des décisions app-side.
+    public var selectedItemId: String?
+    public var selectionBadge: String?
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
@@ -125,6 +134,8 @@ public struct EmbeddedSceneCanvas: View {
         editingTextId: String? = nil,
         onInlineTextChanged: ((String, String) -> Void)? = nil,
         onInlineTextEditEnded: ((String) -> Void)? = nil,
+        selectedItemId: String? = nil,
+        selectionBadge: String? = nil,
         referenceViewport: CGSize = CGSize(width: 402, height: 874)
     ) {
         self._slide = slide
@@ -139,6 +150,8 @@ public struct EmbeddedSceneCanvas: View {
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.selectedItemId = selectedItemId
+        self.selectionBadge = selectionBadge
         self.referenceViewport = referenceViewport
     }
 
@@ -170,6 +183,8 @@ public struct EmbeddedSceneCanvas: View {
                 editingTextId: editingTextId,
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,
+                selectedItemId: selectedItemId,
+                selectionBadge: selectionBadge,
                 onBackgroundTapped: onBackgroundTapped,
                 isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,

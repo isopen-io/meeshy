@@ -224,6 +224,11 @@ extension StoryCanvasUIView {
         }
 
         applyForegroundFrames()
+        // **Le marqueur se repose APRÈS les frames** (#4073) : `rebuildLayers`
+        // détache puis ré-attache tous les calques d'objet, et un cadre posé une
+        // seule fois désignerait une frame périmée dès le premier déplacement.
+        // Le recalcul est le prix d'un cadre qui suit le doigt.
+        refreshSelectionMarker()
         scheduleContentReadyEvaluation(for: bgKind)
         // Emit l'état initial de progression (généralement 0.0 hors color/gradient
         // qui passent immédiatement à backgroundContentReady=true via le path sync).

@@ -103,6 +103,15 @@ struct ComposerSceneSurface: View {
     var activeObjectChipId: String?
     var onObjectChip: ((String) -> Void)?
 
+    /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (#4073, vue `1c`).
+    ///
+    /// Déjà résolus par le meuble — cette vue ne re-filtre rien, exactement
+    /// comme pour les deux rails, la bande et les jetons. Le badge est une
+    /// chaîne DÉJÀ composée : sa forme est du vocabulaire produit, et la
+    /// composer ici la mettrait hors de portée d'un témoin.
+    var selectedItemId: String?
+    var selectionBadge: String?
+
     // MARK: - La bande contextuelle
 
     /// La bande OUVERTE — déjà résolue par `ComposerSceneBand.opened`. `nil` ⇒
@@ -253,7 +262,14 @@ struct ComposerSceneSurface: View {
                     isDrawingOverlayActive: drawingSurface != nil,
                     editingTextId: editingTextId,
                     onInlineTextChanged: onInlineTextChanged,
-                    onInlineTextEditEnded: onInlineTextEditEnded
+                    onInlineTextEditEnded: onInlineTextEditEnded,
+                    // **« Un seul objet à la fois » a enfin un témoin** (#4073,
+                    // vue `1c`). L'inspecteur, les contrôleurs du rail et le
+                    // menu d'appui long portaient tous sur un objet que rien ne
+                    // désignait sur la scène ; le seul indice était que la
+                    // rangée de jetons changeait de contenu.
+                    selectedItemId: selectedItemId,
+                    selectionBadge: selectionBadge
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 

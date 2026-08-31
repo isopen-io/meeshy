@@ -189,6 +189,59 @@ nonisolated enum ComposerObjectChips {
         return []
     }
 
+    // MARK: - Le BADGE de l'objet sélectionné
+
+    /// **Ce que le badge de la vue `1c` dit — « TEXTE · PLAN FG · z 2 ».**
+    ///
+    /// `nil` ⇒ rien n'est sélectionné, ou l'id ne désigne plus rien (un objet
+    /// supprimé pendant que la sélection tenait encore). Dans les deux cas le
+    /// canvas n'encadre rien, plutôt que d'encadrer du vide.
+    ///
+    /// ## Pourquoi le PLAN et le Z sont dans le badge
+    ///
+    /// Ce n'est pas de l'information technique offerte au passage. `bringForward`
+    /// et `sendBackward` vivent au rail *trailing*, mutent `zIndex` sur le
+    /// modèle, et ne rendent **aucun retour visible** : sur deux objets qui ne se
+    /// chevauchent pas, empiler ne change rien à l'écran. L'auteur empilait à
+    /// l'aveugle. Un badge qui porte `z 2` transforme une action muette en action
+    /// lisible — dimension 8, « feedback instantané ».
+    ///
+    /// Le PLAN complète la réponse : un média de fond ne se déplace pas comme un
+    /// objet de premier plan (règle produit 2026-07-11, le fond n'est mouvable
+    /// que par sa propre porte). Dire le plan explique donc pourquoi le doigt
+    /// n'obtient pas le même effet sur deux objets d'apparence semblable.
+    static func badge(forSelected id: String?,
+                      in slide: StorySlide,
+                      locale: Locale = .current) -> String? {
+        guard let id else { return nil }
+        if let texte = slide.effects.textObjects.first(where: { $0.id == id }) {
+            return badge(kind: "TEXTE", isBackground: false,
+                         zIndex: texte.zIndex, locale: locale)
+        }
+        if let media = (slide.effects.mediaObjects ?? []).first(where: { $0.id == id }) {
+            return badge(kind: "MÉDIA", isBackground: media.isBackground,
+                         zIndex: media.zIndex, locale: locale)
+        }
+        if let sticker = (slide.effects.stickerObjects ?? []).first(where: { $0.id == id }) {
+            return badge(kind: "STICKER", isBackground: false,
+                         zIndex: sticker.zIndex, locale: locale)
+        }
+        return nil
+    }
+
+    /// Les trois parties se composent ICI et pas au site d'appel : la forme du
+    /// badge — le séparateur, l'ordre, la casse — est une décision unique, et
+    /// trois recompositions divergeraient au premier ajustement.
+    ///
+    /// Le `z` reste MINUSCULE au milieu de deux mots capitalisés, comme la
+    /// maquette : c'est ce qui le fait lire comme une unité (« z 2 ») plutôt
+    /// que comme un troisième mot.
+    private static func badge(kind: String, isBackground: Bool,
+                              zIndex: Int, locale: Locale) -> String {
+        let plan = isBackground ? "PLAN BG" : "PLAN FG"
+        return "\(kind) · \(plan) · z \(LocalizedNumber.exact(zIndex, locale: locale))"
+    }
+
     // MARK: - L'état ENCADRÉ, et la bascule qui le produit
 
     /// **Le jeton actif est celui de la bande OUVERTE.** La planche l'encadre,

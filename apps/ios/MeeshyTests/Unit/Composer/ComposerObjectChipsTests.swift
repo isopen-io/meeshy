@@ -390,4 +390,80 @@ final class ComposerObjectChipsTests: XCTestCase {
                                                openableBands: [.timeline])
         XCTAssertEqual(ComposerObjectChips.toggled("size", in: jetons, opened: .timeline), .timeline)
     }
+
+    // MARK: - Le badge de l'objet sélectionné
+
+    /// **Le canvas n'avait AUCUNE notion d'objet sélectionné** (#4073).
+    ///
+    /// La vue `1c` s'appelle « Éditeur de scène — objet sélectionné » et sa
+    /// doctrine tient en une phrase : « Trois plans, **un seul objet à la
+    /// fois** ». Elle le dessine avec un cadre, quatre poignées et un badge
+    /// `TEXT · PLAN FG · z 2`. Rien de tout cela n'existait : l'inspecteur, les
+    /// contrôleurs du rail et le menu d'appui long portaient sur un objet que
+    /// rien ne désignait à l'écran.
+    ///
+    /// Le doc-comment de `editOverlayLayer` promettait pourtant « snap guides,
+    /// **selection markers** » depuis toujours. Seuls les guides existaient —
+    /// un commentaire qui décrit un mécanisme absent ne se fait contredire par
+    /// rien, et celui-ci a survécu à toutes les passes parce qu'il énonçait la
+    /// bonne intention au bon endroit.
+    private func slide(texte t: StoryTextObject? = nil,
+                       media m: StoryMediaObject? = nil,
+                       sticker s: StorySticker? = nil) -> StorySlide {
+        var effets = StoryEffects()
+        if let t { effets.textObjects = [t] }
+        if let m { effets.mediaObjects = [m] }
+        if let s { effets.stickerObjects = [s] }
+        var slide = StorySlide(id: "s1")
+        slide.effects = effets
+        return slide
+    }
+
+    func test_leBadge_diCeQueLObjetEST_sonPlanEtSonRang() {
+        var t = texte()
+        t.zIndex = 2
+        let badge = ComposerObjectChips.badge(forSelected: t.id, in: slide(texte: t),
+                                              locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(badge, "TEXTE · PLAN FG · z 2")
+    }
+
+    /// **Un fond le DIT**, et ce n'est pas cosmétique : le fond n'est mouvable
+    /// que par sa propre porte (règle produit 2026-07-11). Dire le plan explique
+    /// pourquoi le doigt n'obtient pas le même effet sur deux objets d'apparence
+    /// semblable.
+    func test_unMediaDeFond_annonceSonPlan() {
+        let m = StoryMediaObject(id: "bg", postMediaId: "pm", kind: .image,
+                                 aspectRatio: 16.0 / 9.0, isBackground: true, zIndex: 0)
+        XCTAssertEqual(ComposerObjectChips.badge(forSelected: "bg", in: slide(media: m),
+                                                 locale: Locale(identifier: "fr_FR")),
+                       "MÉDIA · PLAN BG · z 0")
+    }
+
+    func test_unSticker_porteSonPropreMot() {
+        var s = sticker()
+        s.zIndex = 5
+        XCTAssertEqual(ComposerObjectChips.badge(forSelected: s.id, in: slide(sticker: s),
+                                                 locale: Locale(identifier: "fr_FR")),
+                       "STICKER · PLAN FG · z 5")
+    }
+
+    /// **Le rang se dit dans la LOCALE**, comme tout ce que l'inspecteur montre.
+    /// `ar_SA` — jamais `ar` nue, qui emprunte la région de l'appareil — est la
+    /// seule locale où les deux écritures divergent ; comparaison `.literal`,
+    /// puisque par collation « ٢ » vaut « 2 ».
+    func test_leRang_suitLaLocale() {
+        var t = texte()
+        t.zIndex = 2
+        let badge = ComposerObjectChips.badge(forSelected: t.id, in: slide(texte: t),
+                                              locale: Locale(identifier: "ar_SA")) ?? ""
+        XCTAssertNil(badge.range(of: "z 2", options: .literal),
+                     "chiffre latin dans un badge arabe — \(badge)")
+    }
+
+    /// **Le fusible.** Un id qui ne désigne plus rien — un objet supprimé
+    /// pendant que la sélection tenait encore — n'encadre pas du vide.
+    func test_aucuneSelection_aucunBadge() {
+        XCTAssertNil(ComposerObjectChips.badge(forSelected: nil, in: slide(texte: texte())))
+        XCTAssertNil(ComposerObjectChips.badge(forSelected: "fantome", in: slide(texte: texte())))
+    }
 }
