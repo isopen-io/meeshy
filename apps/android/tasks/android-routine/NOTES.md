@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — where iOS bundles two side-effects in ONE method, fold them the same way on Android — the call site can't drift out of sync (slice `status-bubble-dwell`)
+The status surface fires an impression (`viewPost`) on popover open and needs a dwell begin at the same
+moment. iOS `StatusBubbleController.present(_:)` does BOTH in one method (fire `viewPost`, then
+`EngagementTracker.begin(.statusBubble)`), and every dismiss path calls `end`. The faithful Android port
+folds the `begin` INTO `markStatusViewed` rather than exposing a separate `beginStatusDwell` the screen
+must remember to pair with it. Lessons:
+- **A second public method the caller must always pair with the first is a drift hazard.** If a future
+  caller invokes `markStatusViewed` without the paired `beginStatusDwell`, the dwell silently stops
+  working and nothing goes red. Folding begin into the impression method makes the pair structural — one call,
+  both effects — exactly as iOS's `present()`. The existing `markStatusViewed` behaviour tests stay green
+  (they neither advance the clock nor call `end`), so the fold is invisible to them and safe.
+- **End a popover/overlay dwell from a `DisposableEffect(key){ onDispose{…} }` keyed on the item, not from
+  each dismiss callback.** The status popover has THREE dismiss paths (tap-outside, react, republish), all
+  setting `selected = null`. Wiring `end` into each is three chances to forget one; a single
+  `DisposableEffect` on the `selected?.let{}` block fires on every path uniformly — the composition
+  leaving IS the dismiss. This is the overlay analogue of the detail screen's `onDispose` seam.
+- **The viewer's OWN status is the "end with no begin" case — make `end` a no-op there, don't special-case
+  it.** Own status opens the popover (so the shared `DisposableEffect` runs its `onDispose`) but fires no
+  `markStatusViewed` (line 107), so no session was opened. `EngagementSessions.end` on an unknown surface
+  returns `null` → records nothing. Test it explicitly (`ending a dwell that never opened records nothing`)
+  so the no-op is a guarantee, not an accident. iOS gets the same shape from `present()`'s early `guard`
+  returning before `begin`.
+
 ## 2026-08-31 — a big iOS subsystem can yield a clean one-phase slice if you port the pure HEART and wire ONE surface to a sink that already exists (slice `reels-engagement-dwell`)
 iOS's engagement stack (`EngagementTracker` + `EngagementDispatcher` + `EngagementOutbox` + `EngagementModels`,
 plus a `POST /posts/engagement/batch` endpoint and a durable SQLite outbox) looks far too big for one phase.

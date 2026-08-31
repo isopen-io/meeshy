@@ -5178,13 +5178,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       one duration-carrying call); a sub-floor glance records no watch-time; a blank postId opens no
       session; ending twice records once (idempotent); a failed dwell record does not throw. RED-proven:
       neutralising `beginDwell` fails exactly the 4 tests that expect a recorded dwell while the two
-      assert-no-record tests stay green. **Still open (deferred, deliberately narrower than iOS):** the
-      remaining two surfaces (story/status — the pure core already supports them; both already fire a
-      dwell-less `viewPost`/`markViewed`, so each is the same additive enrichment as detail once its
-      begin/end lifecycle hooks are wired), watch-time samples + completion from the reels player (the
-      `end` params exist, fed dwell-only for now — Android reels loop `REPEAT_MODE_ONE`, so completion
-      is not meaningful there), micro-action recording, and the durable outbox / crash-recovery net
-      (iOS's SQLite outbox — Android has no equivalent wiring point yet).
+      assert-no-record tests stay green. **Status-bubble surface shipped 2026-08-31** (slice
+      `status-bubble-dwell`): `StatusesViewModel.markStatusViewed` now opens a `STATUS_BUBBLE` session
+      beside the impression it already fired, and a new `endStatusDwell()` — driven by `StatusBarView`'s
+      popover `DisposableEffect(entry.id) { onDispose { … } }` (every dismiss path: tap-outside, react,
+      republish) — records `viewPost(id, dwellMs)` when the popover stayed up past the dwell floor.
+      This is the port of iOS `StatusBubbleController`, whose `present(_:)` fires `viewPost` +
+      `EngagementTracker.begin(.statusBubble)` together and whose every dismiss calls `end(.statusBubble)`;
+      the viewer's OWN status opens the popover but records no view, so it opens no session (iOS's early
+      `guard`). Same gateway dedup as detail — `creditPostView` `(postId, userId)` singleton, so the
+      dwell call never re-increments `viewCount`, only raises the stored `duration` to its max. +7 tests
+      (`StatusesViewModelTest`): dwell past floor records the measured watch-time; the dwell enriches the
+      same view (impression fires exactly once + one duration call); a sub-floor glance records no
+      watch-time; a blank statusId opens no session; ending twice records once (idempotent); ending a
+      dwell that never opened records nothing (the own-status path); a failed dwell record does not
+      disturb the bar. RED-proven: neutralising the `begin` fails exactly the 4 dwell-recording tests
+      while the 3 assert-no-record tests stay green. **Still open (deferred, deliberately narrower than
+      iOS):** the story-viewer surface (its `markViewed(slideId)` sink carries no duration arg — needs
+      an SDK look before wiring, unlike detail/status which already had a duration-capable `viewPost`),
+      watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
+      now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
+      recording, and the durable outbox / crash-recovery net (iOS's SQLite outbox — Android has no
+      equivalent wiring point yet).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a
