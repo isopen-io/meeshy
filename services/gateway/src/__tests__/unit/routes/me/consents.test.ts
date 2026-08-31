@@ -20,6 +20,7 @@ import {
   CONSENT_PURPOSES,
   CONSENT_POLICY_VERSION,
 } from '../../../../routes/me/consents';
+import { CONSENT_POLICY_VERSION_DEFAULT } from '@meeshy/shared/types/consents';
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 
@@ -381,5 +382,50 @@ describe('Révocation de bout en bout — le défaut fermé par #4180, prouvé s
     );
     expect(regrantBody.data.granted).toBe(reGrantedEntry.granted);
     expect(regrantBody.data.grantedAt).toBe(reGrantedEntry.grantedAt);
+  });
+});
+
+/**
+ * #4487 — un refus de validation DIT quel champ manque, et la version attendue
+ * ne peut plus diverger entre les deux côtés de la frontière.
+ */
+describe('Un refus de consentement est LISIBLE (#4487)', () => {
+  it('sert les `violations` par CHAMP — plus un `VALIDATION_ERROR` nu', async () => {
+    const { app } = await buildApp();
+    const res = await putConsent(app, 'voice-cloning', { granted: true }, USER_ID);
+
+    expect(res.statusCode).toBe(400);
+    const corps = JSON.parse(res.body);
+    expect(corps.error).toBe('VALIDATION_ERROR');
+    // Le champ manquant est NOMMÉ. Avant, `details: { issues }` était étalé à
+    // la racine, non déclaré au schéma, et retiré par `fast-json-stringify` :
+    // le serveur savait, sérialisait, puis jetait au dernier mètre.
+    expect(Array.isArray(corps.violations)).toBe(true);
+    expect(JSON.stringify(corps.violations)).toContain('policyVersion');
+  });
+
+  it('le témoin porte sur la valeur SERVIE — un `violations` non déclaré au schéma serait effacé sans bruit', async () => {
+    const { app } = await buildApp();
+    const res = await putConsent(app, 'voice-cloning', { granted: 'oui' }, USER_ID);
+
+    // Chercher dans le CORPS BRUT, pas dans un champ nommé : c'est la
+    // sérialisation qui effaçait, et une assertion sur l'objet décodé après
+    // `JSON.parse` mesure la même chose — mais dire pourquoi évite qu'un lot
+    // suivant remplace ce témoin par une assertion sur l'objet d'entrée.
+    expect(res.body).toContain('violations');
+  });
+
+  it('la version servie est celle du site UNIQUE — la recopie ne peut plus diverger', async () => {
+    const { app } = await buildApp();
+    const res = await getConsents(app, USER_ID);
+
+    // Sans override d'environnement, la passerelle sert le DÉFAUT partagé, que
+    // le web cite désormais depuis le même fichier. Un 409 ne peut donc plus
+    // venir d'une recopie oubliée — seulement d'un override délibéré.
+    const versions = new Set(
+      JSON.parse(res.body).data.consents.map((c: { policyVersion: string }) => c.policyVersion)
+    );
+    expect([...versions]).toEqual([CONSENT_POLICY_VERSION_DEFAULT]);
+    expect(CONSENT_POLICY_VERSION).toBe(CONSENT_POLICY_VERSION_DEFAULT);
   });
 });
