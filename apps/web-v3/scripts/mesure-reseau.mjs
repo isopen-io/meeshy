@@ -210,6 +210,23 @@ const VALEUR_MESUREE = {
     m.octets_par_type
       ? Math.round(((m.octets_par_type.Stylesheet?.octets ?? 0) / 1024) * 10) / 10
       : null,
+  // LE DOCUMENT LUI-MÊME — les octets du HTML servi, en-têtes compris.
+  //
+  // Aucun gate ne le regardait : `check-bundle-budget.mjs` mesure des CHUNKS
+  // JS, et le document n'en est pas un. Or c'est là qu'un écran rendu par le
+  // serveur peut grossir sans que rien ne rougisse — un tableau de messages
+  // passé TEL QUEL à un composant client fait voyager, dans `self.__next_f` et
+  // dans le HTML, autant de textes que le Prisme a de langues, pour qu'un seul
+  // soit lu. La question du § 8.3 — « combien d'octets avant le premier pixel
+  // utile » — se pose d'abord ici.
+  //
+  // Le plafond, lui, n'est pas inventé : `budgets.json` le porte « À ÉTABLIR »
+  // tant que la mesure n'a pas été prise sur l'écran qui le porte. Ce qui
+  // manquait n'était pas le chiffre, c'était l'INSTRUMENT.
+  document_ko: (m) =>
+    m.octets_par_type
+      ? Math.round(((m.octets_par_type.Document?.octets ?? 0) / 1024) * 10) / 10
+      : null,
 };
 
 export const cheminDe = (url) => {

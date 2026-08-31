@@ -44,7 +44,7 @@ describe('le jeton invité sans DOM', () => {
 
   it('ne connaît aucune session et ne jette pas', () => {
     expect(lireSession(LIEN)).toBeNull();
-    expect(() => poseSession(LIEN, { jeton: 'j', participantId: 'p', pseudo: 'Invite' })).not.toThrow();
+    expect(() => poseSession(LIEN, { jeton: 'j', participantId: 'p', pseudo: 'Invite', langue: null, nom: null, conversationId: null, droits: null })).not.toThrow();
     expect(() => effaceSession(LIEN)).not.toThrow();
   });
 });

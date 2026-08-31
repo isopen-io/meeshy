@@ -58,6 +58,32 @@ const STATUT_ATTENDU: Readonly<Record<string, number>> = { '/_not-found': 404 };
 
 export const statutAttendu = (url: string): number => STATUT_ATTENDU[url] ?? 200;
 
+// LES VALEURS D'EXEMPLE des routes `(public)` DYNAMIQUES — ici, et pas dans le spec.
+//
+// Elles y ont d'abord vécu, et le témoin sans navigateur (`__tests__/a11y-gate.test.ts`) l'a
+// dit en tombant : il traverse la MÊME chaîne — manifeste réel, groupes réels — sans pouvoir
+// lire une table que seul le spec portait. Une déclaration que l'un des deux consommateurs ne
+// voit pas est la divergence que ce module existe pour empêcher (voir `exigeUnGroupe`, même
+// défaut trouvé à l'intérieur d'un module pourtant partagé).
+//
+// Une route dynamique qui entre au dépôt sans sa ligne ici fait ÉCHOUER le balayage, en se
+// nommant — jamais sauter.
+export const ECHANTILLONS: Readonly<Record<string, string>> = {
+  // Un identifiant de lien qui n'existe dans aucune base : la page doit tenir le gate sur ce
+  // qu'elle SERT alors — l'état « impossible de joindre la conversation », qui est un état de
+  // l'écran, pas une panne. L'écran de jonction lui-même, avec son aperçu, ses cinq états et
+  // son formulaire, est audité par `v3-join.spec.ts`, qui monte une passerelle de bouchon, et
+  // par `__tests__/join-vue.test.tsx` sur le HTML statique.
+  '/chats/[lien]': '/chats/mshy_exemple',
+  // Sans place — le cas nominal d'un balayage sans cookie : l'écran DIT qu'il
+  // faut entrer et montre la porte. C'est un état de l'écran, pas une panne, et
+  // c'est celui que le gate doit tenir. La galerie SERVIE (ses tuiles, ses
+  // cartes audio, ses quatre puces) est auditée par `v3-medias.spec.ts`, qui
+  // monte une passerelle de bouchon, et par `__tests__/medias-vue.test.tsx` sur
+  // le HTML statique.
+  '/chats/[lien]/medias': '/chats/mshy_exemple/medias',
+};
+
 // LES QUATRE COLONNES DE THÈME du § 9.6, appliquées au gate d'accessibilité pour la même raison
 // qu'au gate visuel.
 //
@@ -205,7 +231,7 @@ const exigeUnGroupe = (
 export const routesPubliques = ({
   entrees,
   groupes,
-  echantillons = {},
+  echantillons = ECHANTILLONS,
 }: {
   readonly entrees: readonly EntreeDeManifeste[];
   readonly groupes: readonly PorteurDeGroupe[];

@@ -54,6 +54,30 @@
 
 const RACINE = 'meeshy.guest.';
 
+/**
+ * CE QU'UNE PLACE OUVERTE DONNE LE DROIT DE FAIRE — les quatre booléens que la
+ * réponse de jonction sert, et rien d'autre.
+ *
+ * Ils sont ici, dans le module de la PLACE, et pas dans `adhesion.ts` : ce sont
+ * des faits qui SURVIVENT à l'appel qui les a rendus. L'écran `rights` les relit
+ * au rechargement, sans repasser par la passerelle, et le composeur de `thread`
+ * les relira du battement (§ 6.3 B : « les droits sont RE-LUS de la réponse :
+ * l'hôte a pu les changer »). Les ranger avec le jeton est ce qui rend cette
+ * relecture possible sans seconde source.
+ *
+ * La correspondance avec la passerelle est écrite ici, une fois : `ecrire` ←
+ * `participant.canSendMessages`, `fichiers` ← `participant.canSendFiles`,
+ * `images` ← `participant.canSendImages`, `historique` ←
+ * `conversation.allowViewHistory` (`participantConversationPayload`,
+ * `services/gateway/src/routes/conversations/link-admission.ts`).
+ */
+export type DroitsDeLaPlace = {
+  readonly ecrire: boolean;
+  readonly fichiers: boolean;
+  readonly images: boolean;
+  readonly historique: boolean;
+};
+
 /** Ce qui est persisté d'une place invitée — et rien de plus. */
 export type SessionInvitee = {
   /** Le jeton opaque du serveur. Aucun TTL, aucune signature horodatée. */
@@ -62,6 +86,56 @@ export type SessionInvitee = {
   readonly participantId: string;
   /** Ce que l'état F pré-remplit quand le lecteur reprend sa place au bouton. */
   readonly pseudo: string;
+  /**
+   * LE RANG 1 DU PRISME D'UN LECTEUR ANONYME — et il n'existait nulle part.
+   *
+   * Un invité n'a ni `systemLanguage`, ni `regionalLanguage`, ni
+   * `customDestinationLanguage` : la SEULE langue qu'il déclare est celle du
+   * champ « Langue parlée » du formulaire d'entrée, que la passerelle normalise
+   * et persiste en `Participant.language`, et qu'elle REND sur les deux réponses
+   * de la place (`participantConversationPayload` → `participant.language`, le
+   * 201 du join comme le 200 du refresh). Le parseur la jetait : l'écran qui
+   * CONFIRME l'entrée — celui-là même qui parle de traduction — ne savait pas
+   * dans quelle langue son lecteur allait lire.
+   *
+   * `null` quand la réponse ne l'a pas dite ; l'écran se tait alors sur la
+   * langue plutôt que d'en nommer une qu'il aurait devinée.
+   */
+  readonly langue: string | null;
+  /**
+   * Le TITRE de la conversation, tel que la réponse de la place le sert
+   * (`conversation.title`).
+   *
+   * Il est rangé ICI, avec le jeton, pour une raison qui n'est pas de confort :
+   * sans lui, l'écran des droits ne peut pas se peindre quand la passerelle est
+   * muette, puisque son seul autre porteur est l'APERÇU DU LIEN — un appel
+   * réseau, sur le chemin où précisément le réseau manque. Une place doit
+   * pouvoir s'afficher hors-ligne (§ 7).
+   */
+  readonly nom: string | null;
+  /**
+   * L'ADRESSE DU FIL — `conversation.id`, tel que les deux réponses de la place
+   * le servent.
+   *
+   * Il est rangé avec le jeton pour la même raison que le titre : sans lui,
+   * l'écran du fil ne peut pas demander ses messages quand la passerelle est
+   * muette, et il n'est déductible de RIEN — la clé du lien n'est pas
+   * l'identifiant de la conversation, et le segment d'URL encore moins.
+   *
+   * `null` quand la réponse ne l'a pas dit ; l'écran retombe alors sur l'écran
+   * des droits plutôt que d'appeler une porte avec une adresse inventée.
+   */
+  readonly conversationId: string | null;
+  /**
+   * Ce que la place OUVRE — `null` quand la réponse ne l'a pas dit.
+   *
+   * `null` n'est pas « aucun droit » : c'est « la porte n'a pas répondu à cette
+   * question ». Les deux ne se peignent pas pareil, et les confondre refuserait
+   * à l'écran des droits que le visiteur a réellement. Le cas est REEL : une
+   * entrée écrite par une version antérieure n'en porte aucun, et rien
+   * n'autorise à l'effacer pour autant (point 3 ci-dessus).
+   */
+  readonly droits: DroitsDeLaPlace | null;
 };
 
 const texte = (valeur: unknown): string | null =>
@@ -110,6 +184,51 @@ export const cleDeLien = (servi: LienServi): CleDeLien | null => {
 };
 
 /**
+ * Ce qu'une clé canonique peut CONTENIR — la seule chose que ce module sache
+ * dire d'un candidat sans avoir vu la réponse d'un serveur.
+ *
+ * Ce n'est PAS une reconnaissance de forme : les trois formes que la passerelle
+ * accepte (`linkId`, `identifier`, ObjectId) sont indiscernables (point 2 bis),
+ * et rien ici ne prétend le contraire. C'est une contrainte de NOM : la clé
+ * compose un nom de cookie et un nom d'entrée de stockage, et un candidat venu
+ * d'une URL est écrit par n'importe qui. Un candidat qui sort de cet alphabet
+ * n'est refusé qu'à ce titre.
+ */
+const NOMMABLE = /^[A-Za-z0-9._~-]{1,128}$/;
+
+/**
+ * La clé ATTESTÉE — l'unique chemin par lequel un CANDIDAT devient une clé.
+ *
+ * `cleDeLien` produit une clé depuis la RÉPONSE d'un serveur ; il n'y a pas de
+ * seconde fabrique, et le segment d'URL n'en sera jamais une. Mais une place
+ * DÉJÀ OUVERTE laisse une trace nommée d'après sa clé canonique, et cette trace
+ * est une attestation : si une entrée existe sous `meeshy.guest.<candidat>`,
+ * c'est que ce serveur l'y a écrite depuis un `linkId` qu'un serveur lui a
+ * rendu. Le candidat n'a donc rien PRODUIT — il a INDEXÉ.
+ *
+ * Cette nuance est ce qui permet de lire la place AVANT d'appeler la passerelle
+ * (§ 6.3 B : « rend d'abord le CACHE », « n'appelle JAMAIS `join` »). Sans elle,
+ * connaître sa propre place exigeait un aperçu du LIEN — c'est-à-dire de faire
+ * dépendre l'existence d'une place de l'état d'une porte qui ne la connaît pas,
+ * et qui refuse (410 `LINK_MAX_USES`) précisément parce que la place a été
+ * prise.
+ *
+ * `atteste` reçoit le NOM D'ENTRÉE complet, jamais le candidat : composer ce nom
+ * est le rôle de `cleDuLien`, et deux compositions feraient deux façons de
+ * nommer une place.
+ */
+export const cleAttestee = (
+  candidat: string,
+  atteste: (nom: string) => boolean,
+): CleDeLien | null =>
+  NOMMABLE.test(candidat) && atteste(cleDuLien(candidat as CleDeLien))
+    ? (candidat as CleDeLien)
+    : null;
+
+/** Un candidat peut-il seulement NOMMER une entrée ? — la moitié de `cleAttestee` qui ne lit rien. */
+export const estNommable = (candidat: string): boolean => NOMMABLE.test(candidat);
+
+/**
  * La clé du lien — SOURCE UNIQUE, y compris pour le cycle de vie.
  *
  * `lib/realtime/lifecycle.ts` en fait le nom de son `BroadcastChannel` et le
@@ -153,6 +272,32 @@ export const estLaCleDu = (lien: CleDeLien, cle: string | null): boolean =>
 const champ = (objet: object, nom: keyof SessionInvitee): unknown =>
   Object.getOwnPropertyDescriptor(objet, nom)?.value;
 
+/**
+ * Les quatre droits, ou RIEN.
+ *
+ * Une entrée partielle ne se complète pas par un défaut : compléter par `false`
+ * retirerait un droit accordé, compléter par `true` en promettrait un qui ne
+ * l'est pas. Les quatre sont là, booléens, ou la place ne sait pas — et l'écran
+ * le dit en retombant sur ce que le LIEN déclare.
+ */
+export const droitsDepuisLaValeur = (valeur: unknown): DroitsDeLaPlace | null => {
+  if (typeof valeur !== 'object' || valeur === null) return null;
+
+  const lu = (nom: keyof DroitsDeLaPlace): boolean | null => {
+    const droit = Object.getOwnPropertyDescriptor(valeur, nom)?.value;
+    return typeof droit === 'boolean' ? droit : null;
+  };
+
+  const ecrire = lu('ecrire');
+  const fichiers = lu('fichiers');
+  const images = lu('images');
+  const historique = lu('historique');
+
+  return ecrire === null || fichiers === null || images === null || historique === null
+    ? null
+    : { ecrire, fichiers, images, historique };
+};
+
 const estValide = (session: SessionInvitee): boolean =>
   texte(session.jeton) !== null && texte(session.participantId) !== null;
 
@@ -183,7 +328,15 @@ export const sessionDepuisLaValeur = (valeur: string | null): SessionInvitee | n
   const participantId = texte(champ(decodee, 'participantId'));
   if (jeton === null || participantId === null) return null;
 
-  return { jeton, participantId, pseudo: texte(champ(decodee, 'pseudo')) ?? '' };
+  return {
+    jeton,
+    participantId,
+    pseudo: texte(champ(decodee, 'pseudo')) ?? '',
+    langue: texte(champ(decodee, 'langue')),
+    nom: texte(champ(decodee, 'nom')),
+    conversationId: texte(champ(decodee, 'conversationId')),
+    droits: droitsDepuisLaValeur(champ(decodee, 'droits')),
+  };
 };
 
 /**
@@ -223,6 +376,10 @@ export const poseSession = (lien: CleDeLien, session: SessionInvitee): void => {
     jeton: session.jeton,
     participantId: session.participantId,
     pseudo: session.pseudo,
+    langue: session.langue,
+    nom: session.nom,
+    conversationId: session.conversationId,
+    droits: session.droits,
   };
 
   surLeStockage(undefined, (stockage) => stockage.setItem(cleDuLien(lien), JSON.stringify(entree)));

@@ -279,6 +279,15 @@ jobs:
       # cette étape le manifeste est absent et la garde de non-vacuité de
       # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
       # vert sur zéro route.
+      # `@meeshy/shared` s'expose par `dist/` : ce que la v3 en importe
+      # (`SUPPORTED_LANGUAGES`) n'existe qu'après son `tsc`. Les deux builds de la
+      # v3 ci-dessous entrent par `cd apps/web-v3`, donc HORS de turbo — le
+      # `dependsOn: ["^build"]` qui construit les dépendances des étapes lint /
+      # type-check / test ne s'applique pas à eux, et l'omettre rend « Module not
+      # found » au premier écran qui importe la table.
+      - name: Build packages/shared (la dépendance que le build de la v3 résout)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build --filter=@meeshy/shared
+
       - name: Build apps/web-v3 (le manifeste que le balayage lit)
         run: |
           cd apps/web-v3
@@ -372,6 +381,15 @@ jobs:
       # par le serveur — mais `playwright.config.ts` lève quand même `next start`
       # (la preuve d'un build se prend sur le serveur de production, leçon 339),
       # qui exige ce build.
+      # `@meeshy/shared` s'expose par `dist/` : ce que la v3 en importe
+      # (`SUPPORTED_LANGUAGES`) n'existe qu'après son `tsc`. Les deux builds de la
+      # v3 ci-dessous entrent par `cd apps/web-v3`, donc HORS de turbo — le
+      # `dependsOn: ["^build"]` qui construit les dépendances des étapes lint /
+      # type-check / test ne s'applique pas à eux, et l'omettre rend « Module not
+      # found » au premier écran qui importe la table.
+      - name: Build packages/shared (la dépendance que le build de la v3 résout)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build --filter=@meeshy/shared
+
       - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
         run: |
           cd apps/web-v3

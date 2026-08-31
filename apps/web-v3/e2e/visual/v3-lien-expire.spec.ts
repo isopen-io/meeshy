@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { expect, test } from '@playwright/test';
 
-import { contoursDeControle } from './lib/contours';
+import { contoursDeControle, contrasteDeLaLimite } from './lib/contours';
 import {
   chargeMesureReseau,
   CREATEUR_DU_LIEN,
@@ -340,13 +340,14 @@ test.describe('linkExpired — un lien fermé dit pourquoi', () => {
         colonne.nom,
       ).toBeGreaterThanOrEqual(4.5);
 
-      // WCAG 1.4.11 — le contour d'un contrôle SANS fond porte seul son
-      // affordance. L'écran en dessine au moins un ; zéro mesure serait un test
-      // vert qui n'a rien regardé.
+      // WCAG 1.4.11 — la LIMITE d'un contrôle porte l'information « il y a un
+      // contrôle ici », que ce soit son fond ou son trait qui la dessine.
+      // L'écran en dessine au moins un ; zéro mesure serait un test vert qui n'a
+      // rien regardé.
       expect(contours.length, colonne.nom).toBeGreaterThan(0);
       for (const contour of contours) {
         expect(
-          contraste(hex(contour.bordure), hex(contour.plan)),
+          contrasteDeLaLimite(contour, contraste, hex),
           `${colonne.nom} — ${contour.repere}`,
         ).toBeGreaterThanOrEqual(3);
       }

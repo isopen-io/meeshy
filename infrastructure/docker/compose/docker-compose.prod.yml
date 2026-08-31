@@ -469,6 +469,13 @@ services:
     environment:
       - NODE_ENV=production
       - MEESHY_GATEWAY_URL=http://gateway:3000
+      # L'adresse que le NAVIGATEUR d'un invité joint. Elle n'est pas
+      # MEESHY_GATEWAY_URL : celle-là est l'adresse INTERNE du réseau Docker,
+      # que personne hors du conteneur ne résout. L'îlot du fil bat, rattrape et
+      # envoie depuis le navigateur (§ 6.2, § 6.3 C), donc il lui faut celle-ci —
+      # et elle est lue au RENDU, jamais inlinée au build, sans quoi une même
+      # image servirait la passerelle de l'environnement qui l'a construite.
+      - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
       - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
     depends_on:
       gateway:

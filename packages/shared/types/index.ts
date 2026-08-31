@@ -33,6 +33,7 @@ export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
 export * from './api-schemas.js';
+export * from './api-schemas-attachments.js';
 export * from './migration-utils.js';
 
 // Message types are now consolidated - export only UIMessage and GatewayMessage to avoid conflicts with conversation.ts

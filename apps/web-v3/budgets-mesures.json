@@ -1,7 +1,7 @@
 {
- "role": "Les valeurs MESURÉES de la v3 — jamais des plafonds (ceux-là vivent dans budgets.json). Ce fichier a PLUSIEURS producteurs : chaque section porte la commande qui la rejoue (groupes ⇐ check-bundle-budget.mjs, sprite_phosphor ⇐ packages/icons/scripts/build-sprite.ts). § 8.3 attache au statut CIBLE un ratchet : « le gate enregistre la valeur mesurée et interdit toute régression ». Ce que le ratchet livré interdit exactement, c'est la croissance SILENCIEUSE : toute valeur au-dessus de celle enregistrée ici rend rc=1, et la faire monter exige --ratchet, donc un diff relu. Un ratchet strictement décroissant serait ininstallable pendant L1 — un écran neuf pèse par construction plus que pas d'écran.",
+ "role": "Les valeurs MESURÉES de la v3 — jamais des plafonds (ceux-là vivent dans budgets.json). Ce fichier a PLUSIEURS producteurs : chaque section porte la commande qui la rejoue ; les clés ci-dessous (groupes) sont celles de check-bundle-budget.mjs. § 8.3 : tant qu’un plafond est CIBLE, le gate interdit toute croissance SILENCIEUSE — la faire monter exige ce fichier, donc un diff relu.",
  "produit_par": "cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs --ratchet",
- "date": "2026-08-30",
+ "date": "2026-08-31",
  "plancher_next_ko": 99.6,
  "plancher_next": {
   "quoi": "Ce que pèsent les chunks PARTAGÉS d'App Router pour une page RSC vide — le plancher que le § 8.1 assigne nommément à L-0.5, avant la première ligne de code produit.",
@@ -35,7 +35,13 @@
   "next": "15.5.23",
   "consequence": "6 > 2 — le plancher dépasse le GATE que le § 8.3 pose sur /l/:token/expired, et ceux de /l/:token (1), de la lecture partagée (3) et de /chats/:key (4). Les deux écrans de /l/:token y échappent en étant des gestionnaires de route ; la question reste ouverte pour les écrans qui ont besoin d'une PAGE. Déclaré dans budgets.json → questions_ouvertes."
  },
- "groupes": {},
+ "groupes": {
+  "(public)": {
+   "socle_ko": 99.7,
+   "ecran_ko": 18,
+   "cumul_p95_ko": 117.7
+  }
+ },
  "sprite_phosphor": {
   "quoi": "Les octets des deux actifs commités de packages/icons — le sprite externe servi en une requête à cache immuable, et le sous-sprite critique inliné dans le layout (§ 8.5).",
   "source": "@phosphor-icons/core@2.1.1, assets/regular + assets/fill",
@@ -91,5 +97,29 @@
   "commande": "cd apps/web-v3 && bun run build && bun run e2e -- e2e/visual/v3-lien-expire.spec.ts",
   "date": "2026-08-30",
   "temoin": "apps/web-v3/e2e/visual/lib/contours.ts, consommé par v3-lien-expire.spec.ts § « sert la bonne table dans les quatre colonnes de thème »"
+ },
+ "chats_lien_sous_ressources": {
+  "quoi": "Ce que le document de /chats/:lien DÉCLARE comme sous-ressources — la borne INFÉRIEURE des requêtes avant le premier pixel, comptée sur le HTML servi plutôt que par CDP. Ce n'est PAS le p75 3G Fast que le § 8.3 oppose : c'est un inventaire, exact et rejouable, du document lui-même. Le p75 reste À MESURER — la suite qui le prendrait (v3-network-vitals) et celle qui monte la chaîne de cet écran (v3-join) ne peuvent pas tourner dans la même exécution Playwright, cf. le doc-tête de playwright.config.ts.",
+  "valeur": 7,
+  "detail": [
+   "document",
+   "static/css/*.css — la feuille de la coquille (app/globals.css)",
+   "static/css/*.css — la feuille de l'écran (ecran.module.css)",
+   "static/chunks/webpack-*.js (préchargé)",
+   "static/chunks/415ba63b-*.js",
+   "static/chunks/576-*.js",
+   "static/chunks/main-app-*.js"
+  ],
+  "non_compte": "static/chunks/polyfills-*.js, servi en `noModule` : aucun navigateur cible ne le demande.",
+  "document_octets": {
+   "brut": 35769,
+   "gzip": 7472
+  },
+  "commande": "cd apps/web-v3 && bun run build, puis lancer une passerelle de bouchon et `MEESHY_GATEWAY_URL=<bouchon> NODE_ENV=production ./node_modules/.bin/next start -p 3399`, enfin compter sur le document servi : curl -s http://127.0.0.1:3399/chats/mshy_lagos | grep -o '/__v3/_next/static/\\(css\\|chunks\\)/[^\"]*' | sort -u",
+  "date": "2026-08-31",
+  "next": "15.5.23",
+  "consequence": "7 > 4 — l'écran de jonction franchit le GATE du § 8.3 sur /chats/:key, et il le franchit AVANT sa première ligne de code produit : six des sept requêtes sont le plancher d'une PAGE d'App Router (cf. plancher_next_requetes), la septième est la feuille de l'écran. C'est exactement la question ouverte « plancher-next-au-dessus-du-gate-de-requetes » de budgets.json, sur le premier écran qui a BESOIN d'une page — /chats/:lien porte un formulaire et deux états, qu'un gestionnaire de route ne rend pas. Le franchissement est DÉCLARÉ, jamais effacé : soit le gate monte, soit les écrans de cette zone sortent eux aussi de l'hydratation d'App Router. Renvoi : conception § 11 question 12, issue #4496.",
+  "temoin": "aucun gate ne l'oppose encore : e2e/visual/v3-network-vitals.spec.ts ne mesure que /l/*. Le brancher sur /chats/:lien demande d'abord de séparer la coquille exécutable de mesure-reseau.mjs de ses fonctions — la tâche que playwright.config.ts nomme déjà.",
+  "note_de_revision": "Re-mesuré à la livraison de l'écran `thread` (issue #4524). Le COMPTE ne bouge pas — 7, dont deux feuilles : la coquille et l'écran. Ce qui a grandi est le DOCUMENT (26 905 → 35 769 o bruts, 5 702 → 7 472 o gzip), parce que la route porte désormais un îlot client et sa feuille. Le fil lui-même n'ajoute AUCUNE sous-ressource avant le premier pixel : le transport Socket.IO est un chunk asynchrone, chargé au seul engagement du composeur (gate : v3-lifecycle.spec.ts, « le transport n'est dans AUCUN chunk que la page réclame »)."
  }
 }

@@ -66,8 +66,24 @@ const cadreMobile = {
   },
 };
 
-/** Les suites qui mesurent une PAGE servie par le `webServer` ci-dessus. */
-const SUITES_DE_PAGE = ['**/v3-a11y.spec.ts', '**/v3-lifecycle.spec.ts'];
+/**
+ * Les suites qui importent `scripts/lib/routes-emises.mjs` par la chaîne d'`e2e/visual/lib/a11y.ts`
+ * — statiquement, donc sous le chargeur de Playwright.
+ *
+ * `v3-join.spec.ts` et `v3-rights.spec.ts` montent pourtant CHACUN leur propre chaîne (serveur v3
+ * + passerelle de bouchon), comme les suites du rôle premier : ils sont ici pour la seule raison
+ * qui gouverne cette partition — ils lisent le verdict d'axe et les quatre colonnes de thème au
+ * site unique qui les porte, et ce site importe le module `.mjs` que les suites de CHAÎNE
+ * chargent, elles, dynamiquement. Mélanger les deux régimes dans une exécution rend « does not
+ * provide an export named plusPrecis ».
+ */
+const SUITES_DE_PAGE = [
+  '**/v3-a11y.spec.ts',
+  '**/v3-lifecycle.spec.ts',
+  '**/v3-join.spec.ts',
+  '**/v3-rights.spec.ts',
+  '**/v3-medias.spec.ts',
+];
 
 export default defineConfig({
   testDir: './e2e',

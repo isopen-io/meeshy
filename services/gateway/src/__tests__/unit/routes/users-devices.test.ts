@@ -46,6 +46,16 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
+  // Le module réel est ÉTALÉ d'abord — PROLONGER, jamais REMPLACER
+  // (`services/gateway/CLAUDE.md` § « Un double PARTIEL d'un module perd en
+  // silence tout ce que le module GAGNE »). Une usine qui n'énumère que les
+  // schémas dont CE fichier a besoin rend `undefined` tous les autres : le
+  // jour où un module VOISIN en compose un au chargement — ce que fait
+  // `api-schemas-attachments.ts`, réexporté par le barillet `types/index.ts` —
+  // la suite entière cesse de se charger, sur un `TypeError` sans rapport avec
+  // ce qu'elle teste. Les surcharges ci-dessous restent PRIORITAIRES : elles
+  // sont posées après l'étalement.
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   userMinimalSchema: { type: 'object', additionalProperties: true },
   errorResponseSchema: {
     type: 'object',

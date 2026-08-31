@@ -1,0 +1,419 @@
+/* L'écran `thread` — le fil d'une conversation partagée (cible/thread.png).
+
+   Aucune couleur, aucun rayon, aucune graisse n'est écrit ici : tout vient de
+   `packages/design-tokens` (§ 3.2 corollaire 2, gate `scripts/check-jetons.mjs`).
+   La disposition, la hiérarchie, les états et les gestes sont ceux de la cible ;
+   la typographie vient du design system — écart assumé de la mission.
+
+   LA DISPOSITION EST UNE COLONNE À TROIS ÉTAGES, et le milieu est le seul qui
+   défile : l'en-tête ne doit pas partir au scroll (on perd le nom de la
+   conversation dès la troisième bulle) et le composeur ne doit pas descendre
+   sous le clavier virtuel. `100dvh` plutôt que `100vh` : sur iOS Safari, `vh`
+   compte la barre d'URL rétractée, donc le composeur tombe sous le pli — le
+   contrôle principal de l'écran, invisible, sans qu'aucun gate de bureau ne le
+   voie.
+
+   AUCUNE ANIMATION D'ARRIVÉE sur les bulles. Une entrée animée déplace ce qui
+   est déjà lu pendant qu'on le lit, et le § 7 est explicite : les messages
+   manqués « s'insèrent SANS FAIRE SAUTER le scroll ». */
+
+/* `height`, PAS `min-height` — et c'est ce qui rend la phrase ci-dessus vraie.
+   Avec `min-height`, la colonne GRANDIT avec son contenu : la liste reçoit sa
+   hauteur naturelle, ne déborde jamais, et c'est le DOCUMENT qui défile. Les
+   trois étages n'en étaient donc pas : l'en-tête partait au scroll, le composeur
+   descendait sous le pli, et `overflow-y: auto` sur la liste ne gouvernait rien
+   — donc rien ne pouvait non plus l'ancrer au présent. Mesuré : la dernière
+   bulle d'un fil de trente messages n'était pas dans le viewport à l'ouverture
+   (v3-lifecycle.spec.ts, cas D). */
+.cadre {
+  display: flex;
+  flex-direction: column;
+  max-width: 430px;
+  height: 100dvh;
+  margin: 0 auto;
+}
+
+.corps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.entete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.retour {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.retour svg {
+  width: 26px;
+  height: 26px;
+}
+
+.titres {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.titre {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+/* La ligne d'état du lecteur, avec le fantôme que `critique.json` réserve pour
+   l'en-tête d'une conversation rejointe sans compte. */
+.sous {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.sous svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+/* La puce « AUTO · <langue> » de la cible : elle DIT le prisme dans lequel le
+   fil est servi. Ce n'est pas un contrôle — le choix d'une autre langue est
+   l'écran `sheet:lang` (L3) et n'existe pas encore ; en faire un bouton serait
+   un contrôle inerte (loi 4). C'est donc un état, et il est lisible. */
+.puces {
+  display: flex;
+  gap: 10px;
+  padding: 0 18px 12px;
+}
+
+.puce {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.puce svg {
+  width: 18px;
+  height: 18px;
+}
+
+.horsLigne,
+.composeurFerme {
+  margin: 0;
+  padding: 12px 18px;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-align: center;
+}
+
+.horsLigne {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.avis {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 18px 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.avis strong {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.avis span {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.reprendre {
+  margin-top: 6px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/* LE PLI EST TENU PAR L'ÎLOT, ET `overflow-anchor` par le navigateur.
+   `auto` est la valeur par défaut et elle est écrite ICI parce qu'elle porte une
+   décision : quand une bulle s'insère AU-DESSUS du pli (le rattrapage remplit un
+   trou), l'ancrage natif garde sous les yeux ce qu'on était en train de lire.
+   La descendre à `none` ferait sauter le texte — exactement ce que le § 7
+   interdit. Ce que le navigateur ne sait pas faire, en revanche, c'est OUVRIR au
+   bas : c'est `defilement.ts` qui le fait. */
+.bulles {
+  flex: 1;
+  margin: 0;
+  padding: 0 18px 18px;
+  list-style: none;
+  overflow-y: auto;
+  overflow-anchor: auto;
+}
+
+/* LA LIGNE DE LA CIBLE : un avatar, puis la colonne nom / texte / pied. Toutes
+   les bulles sont à GAUCHE, « Vous » compris — la cible ne range rien à droite,
+   et un avatar à droite d'un texte à droite cesse d'être une ligne de
+   conversation. Ce qui distingue l'auteur est son NOM et la double coche. */
+.bulle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.corpsDeBulle {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* L'avatar de la cible (IB, MR, AD) : un disque à initiales, ou le fantôme d'un
+   auteur sans compte. `flex: 0 0 auto` — il ne rétrécit jamais, sinon un long
+   message l'écraserait en ellipse. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.avatar svg {
+  width: 24px;
+  height: 24px;
+}
+
+.moi .avatar {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.autre {
+  align-items: flex-start;
+}
+
+.auteur {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* La mention « anonyme » de la cible : à côté du pseudo, et d'un poids moindre —
+   elle qualifie l'auteur, elle ne le nomme pas. */
+.anonyme {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+.texte {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.pied {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* L'heure de la cible (« 12:01 »), poussée en fin de pied. `margin-left: auto`
+   plutôt qu'un `justify-content: space-between` : le pied porte un nombre
+   variable de glyphes, et seul l'écart AVANT l'heure doit s'étirer. */
+.heure {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.pied svg {
+  width: 16px;
+  height: 16px;
+}
+
+.raison {
+  color: var(--color-danger);
+}
+
+/* Le séparateur du § 7 : « des messages manquent ici ». Il est DANS le fil, à
+   sa place chronologique, parce que c'est là que le trou est. */
+.lacune {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lacune svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* LES FILS VIDES, DESSINÉS (dimension 8). Ils sont DANS la liste — c'est là que
+   le lecteur cherche des messages, donc c'est là qu'on lui dit qu'il n'y en a
+   pas, plutôt que dans une zone qu'il ne regarde pas. */
+.vide {
+  padding: 32px 8px;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  text-align: center;
+}
+
+/* LE RETOUR AU PRÉSENT — il n'apparaît QUE si le lecteur a remonté et que
+   quelque chose est arrivé sans lui. Un bouton toujours là serait un contrôle
+   sans effet la plupart du temps (loi 4). */
+.nonLus {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  margin: 0 auto 8px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.nonLus svg {
+  width: 18px;
+  height: 18px;
+}
+
+.composeur {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+}
+
+/* Le point d'état du § 7 — « de plein à creux », et rien de plus : ni bannière,
+   ni spinner, ni perte de position de scroll. Sa taille est celle d'un signe, pas
+   d'un contrôle : il ne se clique pas. */
+.etat {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+}
+
+.plein {
+  background: var(--color-success);
+}
+
+.creux {
+  border: 1px solid var(--color-text-muted);
+}
+
+.jointure,
+.envoyer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.jointure {
+  border: 1px solid var(--color-border-interactive);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.jointure[disabled] {
+  cursor: not-allowed;
+}
+
+.envoyer {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.jointure svg,
+.envoyer svg {
+  width: 24px;
+  height: 24px;
+}
+
+.champ {
+  flex: 1;
+  min-width: 0;
+  padding: 15px 18px;
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}

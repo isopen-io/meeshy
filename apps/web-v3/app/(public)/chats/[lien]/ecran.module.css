@@ -1,0 +1,396 @@
+/* L'écran `join` — l'aperçu d'un lien et le formulaire d'entrée.
+
+   Aucune couleur, aucun rayon, aucune graisse n'est écrit ici : tout vient de
+   `packages/design-tokens` (§ 3.2 corollaire 2, gate `scripts/check-jetons.mjs`).
+   Les VALEURS de police et de rayon de la planche sont l'écart assumé de la
+   mission : la disposition, la hiérarchie, les états et les gestes sont repris,
+   la typographie vient du design system.
+
+   La feuille du gestionnaire de route de `/l/:token` (`feuille.ts`) est une
+   CHAÎNE parce qu'un `route.ts` ne peut consommer aucun module CSS. Cet écran
+   est une PAGE : il passe par le pipeline, donc par un module CSS — la portée
+   par classe hachée est ce qui empêche deux écrans de se marcher dessus, et
+   c'est gratuit ici.
+
+   UN CONTOUR DE CONTRÔLE N'EST PAS UN SÉPARATEUR — et les deux jetons ne sont
+   pas interchangeables.
+
+   `--color-neutral-900` est une marche de la RAMPE, pas un rôle : #edeef6 sur
+   #f9fafd rend 1,11:1 en clair et #22243a sur #161826 rend 1,16:1 en sombre.
+   Posé sur le contour d'un `<input>` ou d'un `<select>`, il retire au contrôle
+   la seule chose qui dit « il y a un contrôle ici » — WCAG 1.4.11 lui demande
+   3:1 contre le plan qui le porte. Les champs de cet écran sont les SEULS
+   contrôles réels du rôle premier ; ils portaient cette valeur dans les deux
+   schémas, et aucun gate ne pouvait le voir : `axe` ne mesure que le contraste
+   du TEXTE, et le gate de jetons mesure la VALEUR d'un jeton, jamais celui
+   qu'un écran choisit.
+
+   Deux rôles, deux jetons, et c'est la même loi que `/l/:token` applique déjà
+   (`app/(public)/l/[token]/feuille.ts` : « LE CONTOUR D'UN BOUTON FANTÔME
+   N'EST PAS UN SÉPARATEUR ») :
+
+     • CONTRÔLE — `--color-border-interactive` (#767b94 : 4,00:1 sur
+       `--color-surface` clair, et `--color-neutral-600` en sombre, dont le
+       fichier de jetons dit qu'il tient 3:1 sur les quatre plans) ;
+     • SÉPARATEUR et contour de CARTE — `--color-border`, dont
+       `packages/design-tokens` écrit à l'endroit exact où il le définit que
+       « ce sont des séparateurs, pas des contours ».
+
+   La mesure vit au navigateur, dans les quatre colonnes de thème
+   (`e2e/visual/lib/contours.ts`, consommé par `v3-join.spec.ts`) : une feuille
+   ne sait pas dire lequel de ses sélecteurs est un contrôle, le DOM si. */
+
+.cadre {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+
+.marque {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 22px 8px;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.marque svg {
+  width: 30px;
+  height: 30px;
+  color: var(--color-primary);
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 8px 22px 0;
+}
+
+.sur {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}
+
+.titre {
+  margin: -14px 0 0;
+  font-size: var(--text-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.mot {
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+/* Un TEINTE de danger, pas le jeton `--color-danger-soft` : celui-ci est un
+   APLAT (#f87171 en sombre, #ef4444 en clair) prévu pour porter l'encre
+   `--color-on-status`. Le prendre pour un fond de bloc et y poser
+   `--color-text-muted` rendait un texte gris sur rouge vif — illisible, et
+   invisible pour `jest-axe`, qui n'évalue aucun contraste dans jsdom faute de
+   feuille chargée. Le motif de teinte est celui que `/l/:token` emploie déjà
+   pour sa pastille d'alerte : `color-mix` sur le fond réel de la page. */
+.refus {
+  margin: 0;
+  padding: 16px 18px;
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-bg));
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-lg);
+}
+
+.refus strong {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.refus span {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.points {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+
+.resume {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.resume::-webkit-details-marker {
+  display: none;
+}
+
+.resume > svg:first-child {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: var(--color-primary);
+}
+
+.resumeTexte {
+  flex: 1;
+}
+
+.resumeTitre {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.resumeSous {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.chevron {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-subtle);
+}
+
+.points[open] .chevron {
+  transform: rotate(180deg);
+}
+
+.liste {
+  margin: 0;
+  padding: 0 20px;
+  list-style: none;
+}
+
+.point {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Le glyphe d'état est celui des DEUX listes — l'accordéon de `join` et les
+   droits de `rights` partagent leur rendu de ligne, donc sa mesure. */
+.point > svg,
+.droit > svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+}
+
+.accorde > svg {
+  color: var(--color-success);
+}
+
+.refuse > svg {
+  color: var(--color-text-subtle);
+}
+
+.pointTitre {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.pointDetail {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.formulaire {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* `margin: 0` parce que le champ est un `<p>` : la marge par défaut du
+   navigateur s'ajouterait à la gouttière du `<form>`, doublant l'écart entre
+   deux champs — la planche les serre. */
+.champ {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.champ label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.champ input,
+.champ select {
+  width: 100%;
+  height: 62px;
+  padding: 0 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-xl);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+}
+
+/* Le `<span>` qui superpose le chevron au menu. `display: flex` pour qu'il
+   n'ajoute aucune hauteur, `position: relative` pour ancrer le glyphe. */
+.selecteur {
+  position: relative;
+  display: flex;
+}
+
+.champ select {
+  appearance: none;
+  padding-right: 52px;
+}
+
+/* `pointer-events: none` : le chevron est le DESSIN de l'affordance, jamais sa
+   cible — le clic doit atteindre le `<select>` qui est dessous. */
+.chevronDuChamp {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.aide {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.entrer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 62px;
+  margin-top: 4px;
+  background: var(--color-primary);
+  border: 0;
+  border-radius: var(--radius-2xl);
+  color: var(--color-on-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/* L'ÉCRAN `rights` — la place ouverte.
+
+   Sa liste n'est PAS une carte : la cible pose quatre lignes à même le plan,
+   séparées par un filet BAS (le dernier filet compris), là où l'accordéon de
+   `join` groupe les siennes dans une carte à filets HAUTS. C'est la seule
+   différence de cadre entre les deux, et c'est pourquoi la ligne elle-même
+   (`.point` / `.droit`) est le seul sélecteur qui change : le glyphe, le titre
+   et le détail restent ceux de `.pointTitre` / `.pointDetail`, rendus par le
+   même composant. Deux anatomies de ligne dériveraient ; deux cadres, non. */
+.accueil {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 22px 40px;
+}
+
+/* Le disque « invité ». La planche le pose sur `--color-neutral-900`, une
+   MARCHE de la rampe : elle se détache du plan en sombre (#22243a sur #0d0e16)
+   et pas en clair (#edeef6 sur #f1f3f9, 1,11:1). Le disque prend donc le rôle
+   que le reste de l'écran donne déjà à ses cartes — `--color-surface` bordé de
+   `--color-border` — qui, lui, se voit dans les deux schémas. Écart de valeur
+   assumé (§ 1 : la typographie et la palette viennent du design system) ;
+   la disposition, elle, est celle de la cible. */
+.badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  margin: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+}
+
+.badge svg {
+  width: 30px;
+  height: 30px;
+}
+
+.bienvenue {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.sous {
+  margin: -6px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+}
+
+.droits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.droit {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.portes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.porte {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 62px;
+  border-radius: var(--radius-2xl);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.portePrimaire {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.porteSecondaire {
+  border: 1px solid var(--color-border-interactive);
+  color: var(--color-text);
+}

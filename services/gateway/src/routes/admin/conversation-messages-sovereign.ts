@@ -37,7 +37,7 @@
  * que l'éventail de notifications — jamais une copie), l'expiration déjà
  * consommée et le chiffrement (`isEncrypted` / `encryptionMode`) gardent le
  * CONTENU, pas la ligne : exactement la forme que #4157 c.4 a établie pour
- * `GET /admin/users/:userId/media` (`routes/admin/media-protection.ts`) — un
+ * `GET /admin/users/:userId/media` (`utils/media-protection.ts`) — un
  * administrateur souverain, motif écrit et tracé, doit pouvoir CONSTATER
  * qu'un message existe (qui, quand, avec combien de pièces jointes) sans que
  * cela ouvre son contenu protégé. `content` tombe à `null` et `isProtected`
@@ -53,9 +53,9 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // fichier de ROUTE, alors que `content.ts` l'importait déjà en second
 // appelant (#4384) : même défaut qu'un prédicat recopié, juste pas encore
 // dupliqué. Il est déplacé à côté de son jumeau MÉDIA
-// (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
+// (`mediaAttachmentIsProtected`), dans `utils/media-protection.ts` —
 // voir son doc-comment pour le détail des six colonnes.
-import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
+import { messageContentIsProtected, messageContentProtectionSelect } from '../../utils/media-protection';
 
 const REASON_MIN_LENGTH = 10;
 

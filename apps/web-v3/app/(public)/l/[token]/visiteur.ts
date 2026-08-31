@@ -1,4 +1,4 @@
-import { DOCUMENT_LANGUAGE } from '@/app/document-language';
+import { langueDemandee, type LangueDemandee } from '@/lib/a11y/langues-demandees';
 
 /**
  * Ce que le SERVEUR sait du visiteur, lu dans ses en-têtes — et rien d'autre.
@@ -128,22 +128,22 @@ export type Appareil = {
   readonly type: 'mobile' | 'tablet' | 'desktop';
 };
 
-export type LangueDemandee = {
-  /** L'étiquette BCP-47 telle que l'agent la demande — `fr-FR`, `en`. */
-  readonly etiquette: string;
+/**
+ * La langue demandée, PLUS la liste brute que la télémétrie transporte telle
+ * quelle. La lecture, elle, vit dans `lib/a11y/langues-demandees.ts` : l'écran
+ * `join` en pré-remplit son champ « Langue parlée », et deux lectures de
+ * `Accept-Language` divergeraient au premier `q=` mal compris.
+ */
+export type LangueDuVisiteur = LangueDemandee & {
   /** La liste complète, transmise telle quelle à la télémétrie. */
   readonly liste: string | null;
-  /** Le nom de la langue, dans la langue du document. */
-  readonly libelle: string;
-  /** Le drapeau de la RÉGION, quand l'étiquette en porte une — jamais déduit d'une langue. */
-  readonly drapeau: string | null;
 };
 
 export type Visiteur = {
   readonly estUnRobot: boolean;
   readonly source: string;
   readonly appareil: Appareil;
-  readonly langue: LangueDemandee;
+  readonly langue: LangueDuVisiteur;
   readonly ip: string | null;
   readonly userAgent: string | null;
   readonly referrer: string | null;
@@ -179,40 +179,6 @@ const appareilDe = (agent: string): Appareil => ({
   type: typeDAppareil(agent),
 });
 
-const DRAPEAU = /^[a-z]{2,3}-([a-z]{2})$/;
-
-const drapeauDe = (etiquette: string): string | null => {
-  const region = DRAPEAU.exec(etiquette.toLowerCase())?.[1];
-  if (region === undefined) return null;
-  return [...region.toUpperCase()]
-    .map((lettre) => String.fromCodePoint(0x1f1e6 + lettre.charCodeAt(0) - 65))
-    .join('');
-};
-
-const libelleDe = (etiquette: string): string => {
-  const base = etiquette.split('-')[0] ?? etiquette;
-  try {
-    const nom = new Intl.DisplayNames([DOCUMENT_LANGUAGE], { type: 'language' }).of(base) ?? base;
-    return nom.charAt(0).toUpperCase() + nom.slice(1);
-  } catch {
-    return base;
-  }
-};
-
-const ETIQUETTE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
-
-const langueDemandee = (acceptLanguage: string | null): LangueDemandee => {
-  const premiere = acceptLanguage?.split(',')[0]?.split(';')[0]?.trim() ?? '';
-  const etiquette = ETIQUETTE.test(premiere) ? premiere : DOCUMENT_LANGUAGE;
-
-  return {
-    etiquette,
-    liste: acceptLanguage,
-    libelle: libelleDe(etiquette),
-    drapeau: drapeauDe(etiquette),
-  };
-};
-
 export const lisLeVisiteur = ({
   entetes,
   url,
@@ -224,12 +190,13 @@ export const lisLeVisiteur = ({
   const referrer = texte(entetes.get('referer'));
   const agent = (userAgent ?? '').toLowerCase();
   const reference = (referrer ?? '').toLowerCase();
+  const acceptLanguage = texte(entetes.get('accept-language'));
 
   return {
     estUnRobot: userAgent !== null && estUnRobot(agent),
     source: premier(SOURCE_PAR_REFERRER, reference) ?? premier(SOURCE_PAR_AGENT, agent) ?? 'Direct',
     appareil: appareilDe(agent),
-    langue: langueDemandee(texte(entetes.get('accept-language'))),
+    langue: { ...langueDemandee(acceptLanguage), liste: acceptLanguage },
     ip: texte(entetes.get('x-forwarded-for')?.split(',')[0]?.trim() ?? entetes.get('x-real-ip')),
     userAgent,
     referrer,

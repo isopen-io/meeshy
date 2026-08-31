@@ -7,9 +7,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import {
   messageAttachmentSchema,
-  messageAttachmentMinimalSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
+// Le schéma de la galerie vit à part : `api-schemas.ts` est hors budget, et la
+// règle du `CLAUDE.md` racine est qu'on EXTRAIT avant d'ajouter.
+import { conversationAttachmentSchema } from '@meeshy/shared/types/api-schemas-attachments';
 import type {
   AttachmentParams,
   ConversationParams,
@@ -260,7 +262,7 @@ export async function registerMetadataRoutes(
                 properties: {
                   attachments: {
                     type: 'array',
-                    items: messageAttachmentMinimalSchema
+                    items: conversationAttachmentSchema
                   }
                 }
               }

@@ -1,7 +1,26 @@
 /**
  * Le prédicat PARTAGÉ « ce média a-t-il le droit de voyager ? », extrait pour
- * être réutilisé par TOUTE route d'administration qui liste des pièces
- * jointes brutes (#4333, prolongeant #4157 c.4).
+ * être réutilisé par TOUTE surface qui liste des pièces jointes brutes
+ * (#4333, prolongeant #4157 c.4).
+ *
+ * ## Pourquoi il vit dans `utils/` et non plus dans `routes/admin/`
+ *
+ * Ses trois premiers appelants étaient des routes d'administration, et le
+ * module a d'abord vécu chez eux. Le quatrième ne l'est pas : la GALERIE d'une
+ * conversation (`AttachmentService.getConversationAttachments`, servie à un
+ * participant ANONYME par `GET /conversations/:id/attachments`) pose exactement
+ * la même question — « ce média a-t-il le droit de partir ? » — sur un chemin
+ * de transport qui n'a rien d'administratif. Un service qui importe d'un
+ * dossier de routes est une inversion de couche ; recopier le prédicat pour
+ * l'éviter serait la divergence que ce fichier existe pour fermer. Il monte
+ * donc d'un cran, à côté de `recipient-language.ts`, l'autre loi partagée que
+ * plusieurs couches lisent.
+ *
+ * > La question n'est pas « qui appelle ce prédicat aujourd'hui ? » mais
+ * > « quelle surface REMET un média sans le lui demander ? ». La galerie était
+ * > la réponse manquante : elle listait `fileUrl` en clair pour un média à vue
+ * > unique déjà consommé, un média flouté et un message éphémère expiré, sous
+ * > forme de lien permanent et rejouable.
  *
  * ## Ce qu'il ne réinvente pas
  *
@@ -22,7 +41,7 @@
  * jointe ELLE-MÊME, et le MESSAGE qui la porte (plus `expiresAt` et
  * `deletedAt`, qu'aucun `MessageAttachment` ne porte).
  *
- * ## Deux appelants, une seule forme
+ * ## Trois appelants, une seule forme
  *
  * - `routes/admin/users.ts` (`GET /admin/users/:userId/media`, #4157 c.4) :
  *   chaque ROW interrogée est une pièce jointe, avec le message NESTED sous
@@ -30,10 +49,17 @@
  * - `routes/admin/content.ts` (`GET /admin/messages`, #4333 bonus) : chaque
  *   ROW interrogée est un MESSAGE, avec ses pièces jointes dans un tableau
  *   `.attachments` — le message ambiant sert alors de contexte à CHACUNE.
+ * - `services/attachments/AttachmentService.ts`
+ *   (`GET /conversations/:id/attachments`) : même forme que le premier, et une
+ *   conséquence PLUS FORTE. Les deux routes d'admin gardent la ligne LISTABLE
+ *   et retirent `fileUrl` — un administrateur doit pouvoir constater qu'un
+ *   média existe. La galerie, elle, RETIRE LA LIGNE : elle n'a aucun lecteur à
+ *   qui l'existence d'un média protégé apprenne quoi que ce soit, et une tuile
+ *   sans adresse serait un contrôle sans effet (loi 4).
  *
- * Les deux formes s'appellent `mediaAttachmentIsProtected(attachment, message)` :
+ * Les trois formes s'appellent `mediaAttachmentIsProtected(attachment, message)` :
  * seul l'appelant décide qui est « l'attachment » et qui est « le message »
- * pour SA ligne.
+ * pour SA ligne, et seul lui décide de la FORME du masquage.
  *
  * ## Le jumeau TEXTE (#4388)
  *
@@ -46,7 +72,7 @@
  * ne s'est simplement pas encore dupliqué. Il est déplacé ici, à côté de son
  * jumeau média, pour la même raison que celui-ci y vit déjà.
  */
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+import { maskedAttachment } from '../services/notifications/NotificationService';
 
 /** Fragment de `select` Prisma pour les trois colonnes de protection PROPRES à `MessageAttachment`. */
 export const attachmentProtectionSelect = {

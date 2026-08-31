@@ -22,9 +22,12 @@
       "constat": "La MÊME contradiction, comptée en requêtes : une PAGE d'App Router qui ne monte AUCUN composant client émet 6 requêtes avant le premier pixel — le document, la feuille de la coquille, et les QUATRE chunks du runtime que Next pose dans le <head> de toute page rendue (webpack, chunk React, chunk partagé, main-app). Aucune option de Next 15.5.23 ne les retire. Le § 8.3 gate les écrans du rôle premier bien en dessous : /l/:token à 1, /l/:token/expired à 2 (« HTML + CSS »), la lecture partagée à 3, /chats/:key à 4. Tout écran de cette zone rendu par une PAGE franchit donc son gate avant la première ligne de code produit.",
       "mesure": "budgets-mesures.json → plancher_next_requetes",
       "commande": "cd apps/web-v3 && bun run build && bun run e2e -- e2e/visual/v3-lien-expire.spec.ts",
-      "consequence": "Les DEUX écrans de /l/:token y échappent en étant des GESTIONNAIRES DE ROUTE : un Route Handler compose sa réponse à la main (new Response(html)) sans traverser le pipeline de rendu de Next, donc son <head> ne porte aucun chunk framework — /l/:token sert 1 requête, /l/:token/expired 1 également (jetons et glyphes inlinés). C'est la seconde branche de l'arbitrage — « sortir les écrans du rôle premier de l'hydratation d'App Router » — prise là où elle était gratuite. Elle reste À TRANCHER pour la lecture partagée (/stories/:id, /posts/:id, /reels/:id, /moods/:id) et pour /chats/:key, qui ont besoin d'une page : soit le gate monte, soit ces écrans sortent eux aussi de l'hydratation. Tant que ce n'est pas tranché, tout franchissement est DÉCLARÉ et ratchété — jamais effacé.",
+      "consequence": "Les DEUX écrans de /l/:token y échappent en étant des GESTIONNAIRES DE ROUTE : un Route Handler compose sa réponse à la main (new Response(html)) sans traverser le pipeline de rendu de Next, donc son <head> ne porte aucun chunk framework — /l/:token sert 1 requête, /l/:token/expired 1 également (jetons et glyphes inlinés). C'est la seconde branche de l'arbitrage — « sortir les écrans du rôle premier de l'hydratation d'App Router » — prise là où elle était gratuite. Elle reste À TRANCHER pour la lecture partagée (/stories/:id, /posts/:id, /reels/:id, /moods/:id) et pour /chats/:key. Tant que ce n'est pas tranché, tout franchissement est DÉCLARÉ et ratchété — jamais effacé.",
       "renvoi": "conception § 11 — question 12 ; issue #4496",
-      "temoin": "apps/web-v3/e2e/visual/v3-lien-expire.spec.ts § « tient tous les plafonds réseau de budgets.json » (l'écran clos ne franchit plus rien) et apps/web-v3/__tests__/bundle-budget.test.ts § « le plancher mesuré contre le plafond du rôle premier »"
+      "temoin": "apps/web-v3/e2e/visual/v3-lien-expire.spec.ts § « tient tous les plafonds réseau de budgets.json » (l'écran clos ne franchit plus rien) et apps/web-v3/__tests__/bundle-budget.test.ts § « le plancher mesuré contre le plafond du rôle premier »",
+      "pourquoi_chats_ne_peut_pas_etre_un_gestionnaire_de_route": "La formule précédente — « /chats/:key … ont besoin d'une page » — était une AFFIRMATION NON INSTRUITE, et une revue l'a relevée à juste titre : elle servait de dispense. Elle est vérifiée depuis, et elle est VRAIE, mais pas pour la raison qu'on croyait. Ce n'est pas l'écran `join` qui a besoin d'une page : c'est la ROUTE. La matrice range TROIS écrans du lot L2 sur /chats/:lien — `join` (formulaire, 0 composant client), `rights` (les quatre droits du 201, 0 composant client) et le FIL (`/chats/:identifiant`, dont le critère de fin est le spec de cycle de vie C→H : Socket.IO, frappe, mise à jour optimiste, reprise après 10 min). Le § 6.3 B pose que c'est UNE route dans DEUX états — en fabriquer une seconde adresse casserait le retour arrière —, et Next interdit qu'un segment porte à la fois route.ts et page.tsx. Porter `join` en gestionnaire de route obligerait donc à l'en ressortir au lot L2, ou à séparer les deux états en deux adresses. Le porter reste POSSIBLE et défendable ; ce n'est simplement pas un « diff d'une ligne » et cela engage le § 6.3 B, donc c'est une décision du porteur, pas un correctif d'écran.",
+      "part_de_l_ecran_dans_le_franchissement": "MESURÉ, et c'est ce qui manquait à la déclaration : sur les 7 sous-ressources de /chats/:lien, l'écran lui-même en porte UNE (son module CSS) ; les six autres sont le document, la feuille de la coquille et les QUATRE chunks du runtime que Next pose dans le <head> de toute page. En octets, le rapport de build donne 577 B pour la route et 99,6 Ko pour le socle partagé — le franchissement est donc attribuable au PLANCHER, identique pour toute page de la zone, et non à ce que cet écran expédie. Ce qui se décide n'est pas « cet écran est-il trop lourd ? » mais « les écrans du rôle premier sortent-ils de l'hydratation d'App Router ? ».",
+      "ce_qui_trancherait": "Une décision écrite du porteur, dans l'un des deux sens : (a) monter le plafond de /chats/* du § 8.3 au plancher mesuré (budgets-mesures.json → plancher_next_requetes) plus le coût propre de l'écran, en assumant l'hydratation d'App Router pour le rôle premier ; ou (b) sortir de l'hydratation les écrans du rôle premier, ce qui suppose de trancher d'abord le § 6.3 B (une route, deux états) puisque le FIL ne peut pas être un gestionnaire de route."
     }
   ],
   "actifs_note": "Les plafonds du § 8.5 qui portent sur un ACTIF commité, et qu'aucun manifeste de build ne rend : ils se lisent sur le fichier lui-même. Le sous-sprite critique est borné par son NOMBRE de glyphes et non par un poids — le § 8.5 ne lui en donne aucun, et un poids non mesuré ne s'invente pas ; ses octets sont MESURÉS dans budgets-mesures.json → sprite_phosphor.",
@@ -55,7 +58,7 @@
         "/post/*",
         "/reels/*",
         "/moods/*",
-        "/chats/[key]/*",
+        "/chats/[lien]/*",
         "/login/*",
         "/signup/*",
         "/_not-found/page"
@@ -242,6 +245,11 @@
         ],
         "role": "aperçu de lien puis conversation anonyme",
         "plafonds": {
+          "document_ko": {
+            "valeur": null,
+            "statut": "À ÉTABLIR",
+            "source": "§ 8.3 pose la question en octets AVANT le premier pixel, et ne donne pas de plafond de DOCUMENT. Il en faut un ici : /chats/:lien est le seul écran de la zone dont le HTML porte du contenu utilisateur (la première page de messages, § 6.3 B), donc le seul qui puisse grossir avec les données plutôt qu'avec le code — ce qu'aucun gate de chunk ne voit. L'instrument existe depuis mesure-reseau.mjs → VALEUR_MESUREE.document_ko ; le chiffre se prend sur le FIL (état rejoint, cookie posé), pas sur l'état `join` que budgets-mesures.json → chats_lien_sous_ressources mesure aujourd'hui. Tant qu'il n'est pas mesuré, il n'est comparé à rien — un plafond qu'on n'a pas mesuré ne s'invente pas."
+          },
           "requetes_avant_premier_pixel": {
             "valeur": 4,
             "statut": "GATE",

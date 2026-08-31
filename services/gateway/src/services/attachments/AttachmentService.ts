@@ -31,6 +31,10 @@ import {
 } from './UploadProcessor';
 import { MetadataManager } from './MetadataManager';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
+import {
+  mediaAttachmentIsProtected,
+  messageProtectionSelect,
+} from '../../utils/media-protection';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
@@ -405,6 +409,44 @@ export class AttachmentService {
    * dépendent de personne, et il les pose APRÈS le filtre de l'appelant pour
    * que celui-ci ne puisse qu'ajouter — sortir de la conversation demandée ou
    * ressusciter une tombstone reste inexprimable.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * UNE GALERIE EST UN CHEMIN DE TRANSPORT, ET UN MÉDIA PROTÉGÉ N'Y VOYAGE PAS
+   * ───────────────────────────────────────────────────────────────────────────
+   *
+   * Le `select` LISAIT `isViewOnce` / `viewOnceCount` / `isBlurred` depuis
+   * toujours ; rien ne les REGARDAIT. Une pièce jointe à VUE UNIQUE déjà
+   * consommée dans le fil, une photo FLOUTÉE tant qu'on n'a pas tapé pour la
+   * révéler, et le média d'un message ÉPHÉMÈRE dont l'échéance est passée
+   * sortaient d'ici avec leur `fileUrl` en clair — c'est-à-dire sous forme de
+   * lien permanent et rejouable, dans une liste servie à un participant
+   * ANONYME. La garde existait pourtant déjà, écrite pour l'éventail de
+   * notifications au cycle 125 (`maskedAttachment`) puis extraite pour les
+   * routes d'administration (`utils/media-protection.ts`) : elle n'avait
+   * simplement jamais été reprise sur CE chemin-là.
+   *
+   * > Une protection de contenu se mesure sur tout ce que la charge TRANSPORTE.
+   * > La question n'est pas « la garde est-elle posée quelque part ? » mais
+   * > « quelles surfaces remettent ce média, et laquelle a été oubliée ? ».
+   *
+   * Le verdict est rendu par `mediaAttachmentIsProtected`, en JavaScript et en
+   * UN seul endroit, plutôt que recopié dans le `where` :
+   *
+   *   • `effectFlags` est un CHAMP DE BITS, et ni Prisma ni MongoDB ne savent
+   *     l'interroger. Un filtre écrit dans le `where` ne pourrait donc porter
+   *     que `isViewOnce` / `isBlurred`, en laissant passer tout média protégé
+   *     par son seul drapeau binaire : une garde INCOMPLÈTE qui aurait l'air
+   *     posée, exactement le défaut qu'on corrige ;
+   *   • deux expressions d'une même règle divergent au premier drapeau ajouté
+   *     d'un côté.
+   *
+   * Conséquence assumée : une page peut rendre MOINS d'éléments que `limit`.
+   * C'est le compte des médias réellement SERVIS, jamais un total inventé — la
+   * même propriété que la galerie de la v3 déclare déjà.
+   *
+   * Corollaire de schéma : `conversationAttachmentSchema` n'a donc PAS à
+   * déclarer `isViewOnce` / `isBlurred`. Un client ne peut pas les respecter
+   * puisqu'il ne verra jamais une ligne qui les porte à `true`.
    */
   async getConversationAttachments(
     conversationId: string,
@@ -466,10 +508,22 @@ export class AttachmentService {
         isEncrypted: true,
         transcription: true,
         translations: true,
+        /**
+         * Le champ de bits de la PIÈCE JOINTE, et les cinq colonnes du MESSAGE
+         * qui la porte — deux niveaux INDÉPENDANTS de déclaration
+         * (`utils/media-protection.ts`). Un message ordinaire peut porter une
+         * pièce jointe floutée ; un message à vue unique peut porter une pièce
+         * jointe qui ne déclare rien. Lire un seul des deux niveaux laisserait
+         * l'autre moitié des médias protégés partir.
+         */
+        effectFlags: true,
+        message: { select: messageProtectionSelect },
       }
     });
 
-    return attachments.map((att) => ({
+    return attachments
+      .filter((att) => !mediaAttachmentIsProtected(att, att.message))
+      .map((att) => ({
       id: att.id,
       messageId: att.messageId,
       fileName: att.fileName,

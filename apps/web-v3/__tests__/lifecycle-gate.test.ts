@@ -15,6 +15,7 @@ import {
   SCENARIO_QUI_NE_SUSPEND_PAS,
   SCENARIOS_DEFECTUEUX,
   casAPorter,
+  casBloquesHorsWeb,
   emisePendant,
   estBattement,
   estMutante,
@@ -329,36 +330,114 @@ describe('le scénario fabriqué — l’instrument ne peut pas se prouver sans 
   });
 });
 
-// Les six cas C→H du § 6.5 ont besoin d'un ÉCRAN pour avoir un sujet : ils arrivent avec `thread`
-// (L2). Ce qui est posé aujourd'hui, c'est l'instrument et la ligne anti-régression, sur scénario
-// fabriqué. La table le DIT — un instrument qui laisserait croire qu'il porte les six rendrait un
-// vert sur cinq cas que personne n'a joués.
-describe('la recette du § 6.5 — ce que cet instrument porte, et ce qu’il ne porte pas encore', () => {
-  it('énumère les six cas C→H et la ligne anti-régression', () => {
+// Les six cas C→H du § 6.5 avaient besoin d'un ÉCRAN pour avoir un sujet : ils l'ont depuis
+// `thread` (L2, issue #4524). La table le DIT — et les témoins ci-dessous interdisent les deux
+// mensonges symétriques : laisser croire qu'un cas est joué quand il ne l'est pas, et laisser un
+// cas sans porteur nommé alors qu'un fichier le joue.
+describe('la recette du § 6.5 — où chaque cas a son sujet', () => {
+  it('énumère les six cas C→H, leurs scissions, et la ligne anti-régression', () => {
     expect(CAS_DE_RECETTE.map((cas) => cas.id)).toEqual([
       'C',
+      'C-visible',
       'D',
+      'D-lacune',
+      'D-hasGap',
       'E',
+      'E-survie',
+      'F',
+      'G',
+      'H',
+      'H-bail',
+      'anti-régression',
+    ]);
+  });
+
+  /**
+   * UN ÉNONCÉ PORTE UN FAIT. C'est le témoin qui aurait fait tomber le défaut
+   * d'origine : le cas H disait « zéro leave observé ; la place se libère après
+   * N minutes » — deux faits, une seule ligne, un seul statut — et la moitié
+   * assertée couvrait la moitié qui ne l'est par rien. Un point-virgule dans un
+   * énoncé est le signe typographique de cette confusion.
+   */
+  it('ne laisse aucun énoncé porter DEUX faits sous un seul statut', () => {
+    CAS_DE_RECETTE.forEach((cas) => {
+      expect(`${cas.id} — ${cas.enonce}`).not.toContain(';');
+    });
+  });
+
+  /**
+   * Les sept sont joués sur l'ÉCRAN — plus aucun ne reste sans sujet. Le témoin
+   * n'est pas décoratif : c'est lui qui rougirait si un cas était ajouté à la
+   * recette sans qu'aucun fichier ne le joue, ce qui est la forme exacte du
+   * défaut que l'issue #4442 corrige (un gate qui atteste ce qu'il n'a pas vu).
+   */
+  it('n’en laisse AUCUN sans sujet, et le dit case par case', () => {
+    expect(CAS_DE_RECETTE.filter((cas) => cas.statut === 'écran').map((cas) => cas.id)).toEqual([
+      'C',
+      'C-visible',
+      'D',
+      'D-lacune',
+      'E',
+      'E-survie',
       'F',
       'G',
       'H',
       'anti-régression',
     ]);
+    expect(casAPorter()).toEqual([]);
   });
 
-  it('ne déclare porté que ce qui a un sujet aujourd’hui : un scénario fabriqué', () => {
-    expect(CAS_DE_RECETTE.filter((cas) => cas.statut === 'fabriqué').map((cas) => cas.id)).toEqual([
-      'E',
-      'anti-régression',
-    ]);
-  });
-
-  it('renvoie chaque cas restant à l’écran qui lui donnera un sujet', () => {
-    casAPorter().forEach((cas) => {
-      expect(cas.statut).toBe('à porter');
-      expect(cas.porteurAttendu).toContain('thread');
+  /**
+   * Chaque cas NOMME le fichier qui le joue. Un statut sans porteur nommé se
+   * lirait comme une promesse : « c'est couvert quelque part ».
+   *
+   * Les cas bloqués hors-web sont l'exception EXPLICITE : ils n'ont aucun
+   * fichier, et c'est précisément ce qu'ils déclarent.
+   */
+  it('nomme le fichier qui joue chaque cas, ou l’issue hors-web qui l’empêche', () => {
+    CAS_DE_RECETTE.forEach((cas) => {
+      if (cas.bloqueParHorsWeb !== null) {
+        expect(cas.porteurAttendu).toContain('aucun');
+        return;
+      }
+      expect(cas.porteurAttendu).toContain('v3-lifecycle.spec.ts');
     });
-    expect(casAPorter().map((cas) => cas.id)).toEqual(['C', 'D', 'F', 'G', 'H']);
+  });
+
+  /**
+   * LE TÉMOIN QUI MANQUAIT. `casAPorter()` vérifiait qu'un statut était POSÉ,
+   * jamais que le sujet couvrait l'énoncé ENTIER : un cas dont la moitié est
+   * structurellement intestable pouvait donc porter `statut: 'écran'`. Ce
+   * témoin oppose la moitié qui a été détachée, et exige qu'elle nomme le
+   * blocage plutôt que de disparaître.
+   */
+  it('déclare la libération du bail comme BLOQUÉE hors-web, jamais comme couverte', () => {
+    const ferme = CAS_DE_RECETTE.find((cas) => cas.id === 'H');
+    expect(ferme?.statut).toBe('écran');
+    expect(ferme?.enonce).not.toContain('N minutes');
+
+    const bail = CAS_DE_RECETTE.find((cas) => cas.id === 'H-bail');
+    expect(bail?.statut).toBe('à porter');
+    expect(bail?.bloqueParHorsWeb).toContain('gw:bail-anonyme');
+  });
+
+  it('déclare le gap de SÉQUENCE comme bloqué hors-web, et la lacune de TRONCATURE comme jouée', () => {
+    const sequence = CAS_DE_RECETTE.find((cas) => cas.id === 'D-hasGap');
+    expect(sequence?.statut).toBe('à porter');
+    expect(sequence?.bloqueParHorsWeb).toContain('gw:seq-anonyme');
+
+    expect(CAS_DE_RECETTE.find((cas) => cas.id === 'D-lacune')?.statut).toBe('écran');
+    expect(CAS_DE_RECETTE.find((cas) => cas.id === 'D')?.enonce).not.toContain('hasGap');
+  });
+
+  /**
+   * Ce qui est bloqué hors-web est ÉNUMÉRÉ, et l'énumération est comparée à une
+   * liste écrite : un blocage qui disparaît sans que son cas repasse en `écran`
+   * — parce que quelqu'un a effacé la ligne plutôt que de la lever — fait
+   * rougir ici.
+   */
+  it('énumère exactement les cas qu’aucun sujet web ne peut produire', () => {
+    expect(casBloquesHorsWeb().map((cas) => cas.id)).toEqual(['D-hasGap', 'H-bail']);
   });
 
   it('porte l’énoncé de chaque cas, pour qu’un cas ne se perde pas en changeant de lettre', () => {
@@ -490,8 +569,9 @@ describe('le § 8.5 de la conception nomme son instrument', () => {
     expect(ligneCycleDeVie()).toContain('__tests__/lifecycle-gate.test.ts');
   });
 
-  it('dit sur QUOI le gate porte aujourd’hui : un scénario fabriqué, pas un écran', () => {
+  it('dit sur QUOI le gate porte : des scénarios fabriqués ET l’écran qui les rend vrais', () => {
     expect(ligneCycleDeVie()).toMatch(/fabriqu/);
+    expect(ligneCycleDeVie()).toMatch(/thread/);
   });
 
   // La conception déclarait cette couverture LIVRÉE alors que l'instrument ne voyait qu'une fuite

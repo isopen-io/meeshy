@@ -1,0 +1,267 @@
+/* L'écran `media` — les médias partagés d'une conversation (cible/media.png).
+
+   Aucune couleur, aucun rayon, aucune graisse n'est écrit ici : tout vient de
+   `packages/design-tokens` (§ 3.2 corollaire 2, gate `scripts/check-jetons.mjs`).
+   La disposition, la hiérarchie, les états et les gestes sont ceux de la cible ;
+   la typographie vient du design system — écart assumé de la mission.
+
+   LA GRILLE NE RÉSERVE PAS UNE BOÎTE, ELLE LA FIXE. `aspect-ratio: 1` donne à
+   chaque tuile sa hauteur AVANT tout chargement : rien ne peut se déplacer
+   ensuite, donc le CLS de cet écran est nul par construction plutôt que par
+   réglage — et il le reste le jour où une vignette sera chargée à la demande
+   dans la boîte déjà tenue. */
+
+.cadre {
+  display: flex;
+  flex-direction: column;
+  max-width: 430px;
+  min-height: 100dvh;
+  margin: 0 auto;
+}
+
+.entete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.retour {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+}
+
+.retour svg {
+  width: 26px;
+  height: 26px;
+}
+
+.titres {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.titre {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+
+.sous {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* Les quatre puces. Elles DÉFILENT plutôt que de se replier : sur un écran
+   étroit, une puce qui passe à la ligne décale la grille d'une rangée entière
+   et la première tuile sort du pli. */
+.onglets {
+  padding: 6px 18px 4px;
+  overflow-x: auto;
+}
+
+.onglets ul {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onglet {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* La puce ouverte : un LAVIS du jeton primaire, la forme relative que le § 3.2
+   corollaire 2 autorise (la valeur reste dans la table). `--color-primary-softer`
+   y a d'abord été posé tel quel : c'est une teinte de RAMPE, pas un plan de
+   fond, et le jeton primaire posé dessus rendait 2,1:1 — sous les 4,5:1 de
+   WCAG AA, sur le seul contrôle de tri de l'écran.
+
+   LE POURCENTAGE EST MESURÉ, pas choisi : le lavis ASSOMBRIT le plan clair, donc
+   plus il est fort, moins le texte primaire s'y détache. À 16 % le gate rendait
+   4,47:1 — sous la barre d'un dixième. À 10 % il rend 4,92:1 en clair et 5,71:1
+   en sombre. Les deux chiffres viennent du gate axe des quatre colonnes
+   (`v3-medias.spec.ts`), jamais d'une estimation. */
+.ongletActif {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.corps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 18px 32px;
+}
+
+.grille {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* L'état « rien n'est téléchargé » — celui que la cible dessine, et le seul que
+   cet écran connaisse : la tuile porte le glyphe de sa famille et le prix de son
+   ouverture. Le tiret de la bordure est ce que la cible met sur sa tuile à
+   télécharger ; ici toutes le sont. */
+.tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  aspect-ratio: 1;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-subtle);
+  text-decoration: none;
+}
+
+.type {
+  width: 22px;
+  height: 22px;
+}
+
+.poids {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+}
+
+.poids svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cartes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.lecteur {
+  width: 100%;
+}
+
+.ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.transcription {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+}
+
+.avis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+}
+
+.avisTitre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+.avisTitre svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--color-warning);
+}
+
+.avisCorps {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.reprise {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+}
+
+.vide {
+  margin: 24px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  text-align: center;
+}

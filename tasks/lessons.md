@@ -21107,3 +21107,159 @@ fixture-média aurait seulement rendu l'échec plus difficile à lire. Avant de 
 Corollaire : retirer une valeur d'une attente est un geste dangereux — il rend vert
 « le site ne l'offre pas » ET « l'entrée n'existe plus nulle part ». Le fusible qui
 distingue les deux se pose dans le même commit.
+
+## Leçon 358 — Un objet gardé par l'état d'un AUTRE objet est éjecté par le succès de sa propre création
+
+**Le fait.** `/chats/:lien` sert deux écrans : le formulaire d'entrée, puis les droits d'une
+place ouverte. Il appelait l'aperçu du LIEN (`GET /anonymous/link/:identifier`) en premier et
+rendait un refus dès que cette porte n'était pas « ouverte » — **avant même de regarder si le
+visiteur avait une place**. Or l'aperçu rend `410 LINK_MAX_USES` dès que
+`currentUses >= maxUses`, et c'est le JOIN qui incrémente `currentUses` (`claimLinkUse`).
+
+Sur un lien `maxUses: 1` — l'invitation nominale à UNE personne — la redirection du join
+atterrissait donc sur un 410 : **le visiteur qui venait d'entrer avec succès lisait « ce lien a
+atteint sa limite », et l'écran de confirmation n'était JAMAIS rendu sur ce lien.** Le même
+mécanisme éjectait tous les invités déjà entrés dès que le lien expirait, était désactivé — ou,
+pire, dès que la passerelle ne répondait pas : la place disparaissait de l'écran parce que le
+RÉSEAU avait toussé.
+
+> **Une place et le lien qui l'a ouverte sont deux objets qui ne meurent pas ensemble.** Le
+> jeton d'un invité n'a aucune expiration : sa seule condition de validité est
+> `Participant.isActive`. Le lien, lui, s'épuise, expire, se désactive — et son épuisement est
+> précisément ce que l'entrée réussie a PRODUIT. Faire garder l'un par l'état de l'autre, c'est
+> construire une porte qui se referme sur celui qui vient de la franchir.
+
+**La question qui l'attrape**, à poser devant tout écran d'APRÈS : *cet écran interroge-t-il la
+porte qui connaît la chose qu'il affiche, ou une porte voisine ?* Ici la bonne porte existait et
+était documentée depuis le début (`POST /anonymous/refresh`, qui prend le JETON et rend
+`participantConversationPayload`) ; personne ne l'appelait.
+
+**Ce qui a caché le défaut : le bouchon servait un monde où il ne peut pas se produire.**
+`maxUses: 20, currentUses: 6` — l'aperçu y est TOUJOURS ouvert après le join, quelle que soit la
+suite des appels. Aucun des témoins de bout en bout ne pouvait donc tomber, et il y en avait
+huit. **Un bouchon dont les valeurs rendent une branche inatteignable met cette branche hors
+recette sans qu'aucun gate ne rougisse** — c'est la leçon 354 (« un champ EXISTE ne veut pas dire
+qu'il est ÉCRIT ») déplacée du code vers sa fixture. Écrire les valeurs du bouchon en pensant à
+la chaîne la plus SERRÉE que la production produit (ici : un lien à une place), pas à la plus
+confortable.
+
+**Corollaire de conception, payé dans le même lot.** Lire la place avant le réseau suppose de
+savoir la NOMMER sans le réseau — or le segment d'URL n'est pas la clé canonique (la passerelle
+accepte `linkId`, `identifier` et l'ObjectId, et `/l/:token` redirige vers `/chats/<token>`). La
+sortie n'est pas d'assouplir la règle « une place a UN nom » : c'est de distinguer **produire**
+une clé (seule une réponse de serveur le peut) de l'**indexer** (une entrée EXISTANTE sous ce nom
+atteste qu'un serveur l'y a écrite), et d'ajouter un ALIAS — un pointeur qui ne porte ni jeton ni
+droits, donc qui ne peut pas diverger de ce qu'il désigne.
+
+**Deux corollaires de témoin, pour la même famille de correctif :**
+
+- **`role="alert"` n'est pas à vous.** Next pose son propre annonceur de route
+  (`<div id="__next-route-announcer__" role="alert">`) dans chaque page : un
+  `locator('[role="alert"]')` non porté par un conteneur de l'écran attrape deux éléments, et
+  l'assertion « aucune alerte » est fausse **partout, tout le temps**. Ancrer sur `main`.
+- **`waitForLoadState` ne sait rien d'une action de serveur.** Le document est déjà chargé quand
+  on clique : l'attente rend la main avant que l'appel soit parti, et le journal réseau se lit
+  vide. Ce qui dit qu'un geste a ABOUTI est son EFFET à l'écran ; le journal se lit après lui.
+
+## Leçon 359 — Une GALERIE est un chemin de transport, et un chemin de transport n'hérite d'aucune garde
+
+**Le fait.** `GET /conversations/:id/attachments` (`AttachmentService.getConversationAttachments`)
+listait TOUTES les pièces jointes d'une conversation — vue unique déjà consommée, photo floutée,
+média d'un message éphémère expiré — avec leur `fileUrl` en clair. Le nouvel écran v3
+`/chats/:lien/medias` en fait des `<a href>` réels, permanents et rejouables, servis jusqu'à un
+participant ANONYME. Le `select` de la requête LISAIT pourtant `isViewOnce`, `viewOnceCount` et
+`isBlurred` depuis toujours ; rien ne les regardait.
+
+La garde existait, écrite deux fois : `maskedAttachment` pour l'éventail de notifications
+(cycle 125), puis `mediaAttachmentIsProtected` extraite pour les routes d'administration. Elle
+n'avait jamais été reprise sur CE chemin-là.
+
+> **La question n'est pas « la garde est-elle posée quelque part ? » mais « quelles surfaces
+> REMETTENT ce média, et laquelle a été oubliée ? »** Une protection de contenu se mesure sur
+> tout ce que la charge transporte (§ cycle 125) — et sur toutes les portes qui la transportent.
+
+**Trois corollaires, tous mesurés dans le lot :**
+
+- **Un prédicat partagé rangé dans `routes/admin/` déclare son périmètre par son chemin.** Le
+  quatrième appelant n'était pas une route d'admin ; l'importer depuis un service aurait été une
+  inversion de couche, le recopier la divergence que le fichier existe pour fermer. Il est monté
+  en `utils/media-protection.ts`, à côté de `recipient-language.ts`.
+- **Un champ de bits ne s'interroge pas dans un `where`.** Ni Prisma ni MongoDB ne savent lire
+  `effectFlags` ; un filtre de requête n'aurait porté que `isViewOnce`/`isBlurred` — une garde
+  INCOMPLÈTE qui aurait l'air posée. Le verdict est rendu en JavaScript, en UN endroit, par le
+  prédicat partagé. Conséquence assumée : une page rend parfois moins que `limit`.
+- **Un témoin posé au niveau de la ROUTE ne peut pas faire rougir un filtre de SERVICE**, la
+  suite de route moquant `getConversationAttachments`. La revue demandait la fixture au mauvais
+  étage ; elle est allée à `__tests__/unit/services/attachments-galerie-protection.test.ts`, où
+  la mutation la fait tomber (6 témoins sur 7).
+
+**Et vérifier un « aucun client n'appelait cette porte » avant de le croire.** La revue l'affirmait
+en ayant cherché dans `apps/web/src` — un répertoire qui n'existe pas. `apps/web` consomme cette
+porte depuis toujours (`services/attachmentService.ts`, `components/attachments/AttachmentGallery.tsx`) :
+la fuite avait un lecteur de plus que le constat ne le disait.
+
+## Leçon 360 — « Servir la valeur telle quelle » et « ne pas la reconstruire » ne sont pas la même règle
+
+**Le fait.** `MessageAttachment.fileUrl` porte un NOM d'URL et une valeur de CHEMIN :
+`UploadProcessor.getAttachmentPath` persiste `/api/v1/attachments/file/<encodé>`, sans origine —
+sa jumelle `getAttachmentUrl` rend l'absolu et n'est PAS celle qui écrit la colonne. Posé tel quel
+dans un `<a href>` ou un `<audio src>`, il se résout contre l'origine du DOCUMENT. En production,
+le routeur de la passerelle est `Host(gate.${DOMAIN})` SEUL, l'apex est pris par le routeur
+`frontend`, et aucune `rewrites` n'existe : **chaque tuile menait au 404 de Next et chaque lecteur
+audio restait muet** — un écran entier de contrôles inertes, sur l'écran du rôle premier.
+
+La cause n'est pas un oubli mais une ligne de conception AMBIGUË : « ne jamais reconstruire l'URL
+côté client » (§ 5.1). Elle interdit de recomposer le CHEMIN — la signature `?exp=&sig=` viendra
+dans la valeur servie — et elle a été lue comme « servir la valeur BRUTE ».
+
+> **Donner une ORIGINE n'est pas recomposer un CHEMIN.** Un correctif qui laisse la règle
+> ambiguë sera refait à l'envers par l'écran suivant : le § 5.1 porte désormais la distinction,
+> et la résolution vit dans la PROJECTION (`lib/api/*.ts`), jamais dans une vue — le second écran
+> qui rendra un média la trouvera déjà posée.
+
+**Ce qui a caché le défaut : les QUATRE jeux de fixtures posaient une URL absolue** que la base ne
+porte jamais. Le témoin « une tuile OUVRE le média » ne passait que parce que le bouchon avait
+fabriqué l'origine. C'est la leçon 358 (« un bouchon dont les valeurs rendent une branche
+inatteignable ») appliquée à la FORME d'un champ plutôt qu'à sa valeur : **une fixture s'écrit
+dans la forme que la BASE porte, pas dans celle qui arrange l'assertion.** Sur la forme réelle, les
+deux témoins de bout en bout tombent (mesuré).
+
+**Et l'adresse ne s'arrête pas au premier champ.** La piste TTS d'un vocal traduit
+(`translations[lang].url`) porte la même forme relative : un correctif posé sur le seul `fileUrl`
+aurait laissé muet exactement le média que le cycle 128 avait déjà coûté cher à faire parler.
+
+## Leçon 361 — « A répondu » n'est pas « a servi du contenu », et 403 n'est pas une coupure
+
+**Deux défauts d'ÉTAT sur le même écran, opposés dans leur sens :**
+
+**1. Un refus définitif peint en panne passagère.** `verdictDeLaReponse` ne nommait que 401 et
+410 ; tout le reste tombait dans `indisponible`, que la galerie traduit en « la connexion n'a pas
+abouti … réessayez plus tard ». Les trois membres de cette phrase sont faux sur un 403 : la
+connexion a abouti, la conversation n'est PLUS lisible, et réessayer n'aboutira jamais. Les deux
+chemins qui le produisent sont réels et atteignables (participant introuvable, participant
+rattaché à une autre conversation). L'écran transformait un cul-de-sac en invitation à boucler.
+
+**2. Une liste amputée peinte comme une liste complète.** L'arbitrage de plusieurs portes avalait
+l'indisponibilité dès qu'UNE avait répondu, fût-ce par une liste VIDE : `document` en 503 et
+`text` à `[]` rendaient `{ servi, [] }`, aucun avis n'était peint, et l'écran affichait « Aucun
+média dans cette conversation pour l'instant » — le mensonge sur une coupure que son propre
+doc-comment déclarait refuser.
+
+> **`etat === 'servi'` dit qu'une porte a RÉPONDU, jamais qu'elle a servi du CONTENU.** Un
+> arbitrage écrit pour le cas où l'autre porte sert quelque chose se relit comme un arbitrage
+> général — et son témoin, écrit dans le même mouvement, ne joue que cette variante-là, la seule
+> inoffensive.
+
+**Deux règles de forme :**
+
+- **Le verdict est le SITE UNIQUE.** Corriger le 403 dans la galerie aurait fait réécrire la même
+  confusion au prochain écran qui appelle une porte capable de 403. Il vit dans
+  `lib/api/messagerie.ts`, et sa copie dans `../etats.ts` — la même phrase sur le fil et sur la
+  galerie.
+- **Un état sans producteur ne s'écrit pas.** 404 a été instruit et REFUSÉ : aucune des portes que
+  ce module appelle ne le produit (un participant introuvable y tombe déjà en 403). Lui donner une
+  copie serait écrire un écran que personne ne peut voir.
+- **L'aveu d'incomplétude voyage avec la VALEUR SERVIE** (`GalerieServie.partielle`), pas dans un
+  état de plus : la lecture a bien réussi, elle rend simplement moins que ce qui existe. Un
+  cinquième état de `Verdict` obligerait tout appelant à le connaître, alors que seule la galerie
+  lit plusieurs portes.

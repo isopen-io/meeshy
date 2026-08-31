@@ -176,74 +176,213 @@ export const verdictDeBattement = ({
 
 // LA RECETTE DU § 6.5, et l'état RÉEL de sa couverture.
 //
-// Les six cas C→H ont besoin d'un ÉCRAN pour avoir un sujet — ils arrivent avec `thread` (L2, une
-// conversation anonyme, un lien, un jeton). Ce que cet instrument porte AUJOURD'HUI, c'est la
-// ligne anti-régression et la moitié « un seul porteur » du cas E, sur un scénario FABRIQUÉ. La
-// table le dit plutôt que de le taire : un instrument qui laisserait croire qu'il porte les six
-// rendrait un vert sur cinq cas que personne n'a joués.
-export type StatutDeCas = 'fabriqué' | 'à porter';
+// Les six cas C→H avaient besoin d'un ÉCRAN pour avoir un sujet : ils l'ont depuis `thread`
+// (L2, matrice ordre 5, issue #4524) — une conversation anonyme, un lien, un jeton, un cookie et
+// le serveur `next start` que la production lance. La table dit désormais où CHAQUE cas est joué,
+// et le témoin de `__tests__/lifecycle-gate.test.ts` interdit qu'un cas y reste sans sujet.
+//
+// UN ÉNONCÉ, UN FAIT — et c'est ce qui manquait. Un `statut` se pose sur une LIGNE, pas sur une
+// phrase : tant que le cas H disait « zéro leave observé ; la place se libère après N minutes »
+// en une seule ligne, la moitié assertée portait la moitié qui ne l'est par rien, et
+// `casAPorter()` — qui vérifie qu'un statut est POSÉ, jamais qu'il couvre l'énoncé entier —
+// rendait vert. Les énoncés qui portaient deux faits sont donc SCINDÉS (H / H-bail,
+// D / D-lacune / D-hasGap), et ce qu'aucun sujet web ne peut produire porte l'issue hors-web qui
+// le bloque (`bloqueParHorsWeb`) plutôt qu'un statut d'écran.
+//
+// Les scénarios FABRIQUÉS ci-dessous ne disparaissent pas pour autant, et ce n'est pas de la
+// conservation : un gate d'absence qui n'a jamais vu de présence ne prouve rien, et l'écran
+// conforme ne peut pas jouer ce rôle-là — par construction, il ne fuit pas. Ils restent les
+// témoins de CONTRÔLE de l'instrument.
+export type StatutDeCas = 'écran' | 'fabriqué' | 'à porter';
 
 export type CasDeRecette = {
   readonly id: string;
   readonly enonce: string;
+  /**
+   * Où le cas a son SUJET aujourd'hui : `écran` (l'écran réel le joue),
+   * `fabriqué` (seul un sujet fabriqué l'exerce), `à porter` (aucun sujet).
+   */
   readonly statut: StatutDeCas;
   readonly porteurAttendu: string;
+  /**
+   * L'issue HORS-WEB sans laquelle le cas n'a AUCUN sujet possible — `null`
+   * quand rien ne le bloque.
+   *
+   * Ce champ existe parce que la table a menti. Le cas H portait UN énoncé pour
+   * DEUX faits — « zéro `POST /anonymous/leave` » et « la place se libère après
+   * N minutes » — sous un seul `statut: 'écran'` : la première moitié est
+   * assertée (`appels(chaine, '/anonymous/leave') === 0`), la seconde ne l'est
+   * par RIEN et ne peut pas l'être, le balayage temporel qui libère un bail
+   * anonyme n'existant pas côté passerelle (grep `isActive.*false` sur
+   * `services/gateway/src` : seul `POST /anonymous/leave` et la purge 24 h de
+   * `MaintenanceService`, aucun balayage sur battement manqué). L'issue #4524
+   * le déclare elle-même : « Bloqué par (hors web) — `gw:bail-anonyme` ».
+   *
+   * `casAPorter()` ne pouvait pas l'attraper : il vérifie qu'un statut est
+   * POSÉ, jamais que le sujet couvre l'énoncé ENTIER. La correction n'est donc
+   * pas un test de plus — c'est la SCISSION de l'énoncé, un fait par ligne,
+   * pour qu'un fait sans assertion cesse d'être porté par la couverture de son
+   * voisin.
+   */
+  readonly bloqueParHorsWeb: string | null;
 };
+
+const SUR_L_ECRAN =
+  'v3-lifecycle.spec.ts — « la recette du cycle de vie, jouée sur l’écran thread »';
 
 export const CAS_DE_RECETTE: readonly CasDeRecette[] = [
   {
     id: 'C',
     enonce:
       "basculer d'application 10 min puis revenir ⇒ conversation ouverte, aucune modale, aucun re-join, et le premier message reçu pendant l'absence apparaît",
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
+  },
+  {
+    /**
+     * LE CAS QUE LA RECETTE N'AVAIT PAS, et qui est le comportement NOMINAL du
+     * titre du lot : quelqu'un qui LIT. Le cas C ne rattrape que parce que le
+     * test masque puis réaffiche l'onglet ; un onglet resté visible, dont le
+     * réseau ne tombe pas et dont on ne touche pas le composeur, n'affichait
+     * RIEN de neuf, indéfiniment.
+     */
+    id: 'C-visible',
+    enonce:
+      'un onglet VISIBLE, jamais masqué, dont on ne touche pas le composeur ⇒ un message arrivé côté serveur apparaît quand même (le battement rattrape)',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
   },
   {
     id: 'D',
     enonce:
-      'couper le réseau 5 min, envoyer 2 messages hors-ligne, revenir ⇒ les 2 partent dans l’ordre, hasGap peint son séparateur, le jeton est le même',
+      'couper le réseau 5 min, envoyer 2 messages hors-ligne, revenir ⇒ les 2 partent dans l’ordre et le jeton est le même',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
+  },
+  {
+    /**
+     * Le séparateur du § 7 a DEUX déclencheurs possibles, et un seul est
+     * atteignable par un invité. Celui-ci — une fenêtre de rattrapage que la
+     * passerelle n'a pas COUVERTE (`hasMore` / `truncated`, checkpoint tenu à
+     * `since`) — l'est, et c'est lui que l'écran peint.
+     */
+    id: 'D-lacune',
+    enonce:
+      'une fenêtre de rattrapage que la passerelle ne couvre pas (truncated + nextCursor épuisés) ⇒ le séparateur « des messages manquent ici » est peint',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
+  },
+  {
+    /**
+     * L'AUTRE déclencheur, et il est MORT pour l'unique audience de l'écran.
+     * `hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD`
+     * (`routes/sync/index.ts`), et `checkpointSeq` vaut 0 EN DUR pour une
+     * identité anonyme (« Une session anonyme n'a pas de curseur à lire » —
+     * `UserEventSeq` est indexée par `User.id`) avec `GAP_THRESHOLD = 10_000` :
+     * il faudrait `seq < -10000` là où le schéma borne `seq` à `nonnegative`.
+     * Aucun bouchon ne peut prouver ce cas : le poser à la main ne prouverait
+     * que la lecture d'un drapeau que la production ne lèvera jamais.
+     */
+    id: 'D-hasGap',
+    enonce:
+      'hasGap (le gap de SÉQUENCE de /sync) peint son séparateur pour une session anonyme',
     statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    porteurAttendu:
+      'aucun — le sujet n’existe pas côté web tant qu’une session anonyme n’a pas de curseur de séquence',
+    bloqueParHorsWeb:
+      'gw:seq-anonyme — donner un curseur de séquence aux sessions anonymes (`checkpointSeq` vaut 0 en dur, `seq` n’est jamais envoyé) ; sous-issue hors-web de #4524',
   },
   {
     id: 'E',
     enonce:
-      'deux onglets sur le même lien, fermer l’un ⇒ l’autre continue d’émettre et de recevoir ; une seule requête de battement observée sur 10 min',
-    statut: 'fabriqué',
-    porteurAttendu: 'écran thread (L2) pour la fermeture d’onglet ; le battement est déjà gagé ici',
+      'deux onglets sur le même lien ⇒ une seule requête de battement observée sur la fenêtre de recette',
+    statut: 'écran',
+    porteurAttendu:
+      'v3-lifecycle.spec.ts — « deux onglets, un seul porteur » (écran réel), les scénarios fabriqués en restant les témoins de contrôle',
+    bloqueParHorsWeb: null,
+  },
+  {
+    /**
+     * L'AUTRE moitié de l'énoncé du cas E, elle aussi longtemps portée par la
+     * couverture de sa voisine : le test ne fermait AUCUN onglet. Un porteur qui
+     * meurt sans successeur laisse le bail sans preuve de présence — c'est le
+     * même défaut que H-bail, vu du côté client.
+     */
+    id: 'E-survie',
+    enonce: 'fermer l’onglet PORTEUR ⇒ le survivant reprend le battement sans intervention',
+    statut: 'écran',
+    porteurAttendu: 'v3-lifecycle.spec.ts — « deux onglets, un seul porteur » (écran réel)',
+    bloqueParHorsWeb: null,
   },
   {
     id: 'F',
     enonce:
       'forcer isActive:false en base ⇒ bandeau + bouton, la lecture reste, AUCUN POST /anonymous/join observé sans clic',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
   },
   {
     id: 'G',
     enonce:
       'désactiver le lien pendant la lecture ⇒ composeur fermé avec sa raison, contenu lu conservé, file annulée et visible',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
   },
   {
     id: 'H',
-    enonce:
-      'fermer l’onglet ⇒ zéro POST /anonymous/leave observé ; la place se libère après N minutes',
+    enonce: 'fermer l’onglet ⇒ zéro POST /anonymous/leave observé',
+    statut: 'écran',
+    porteurAttendu: SUR_L_ECRAN,
+    bloqueParHorsWeb: null,
+  },
+  {
+    /**
+     * L'AUTRE MOITIÉ de l'ancien énoncé du cas H, et elle n'a aucun sujet.
+     * Le bail est le MÉCANISME sur lequel toute la décision « le navigateur
+     * n'appelle jamais leave » repose (§ 6.2, § 6.4) : tant que le balayage
+     * n'existe pas, une place fermée par un onglet tué reste occupée POUR
+     * TOUJOURS, et le compteur d'admission du lien s'épuise. Le dire ici est
+     * la seule façon que la table ne l'annonce pas comme couvert.
+     */
+    id: 'H-bail',
+    enonce: 'la place se libère après N minutes sans battement (le bail serveur du § 6.4)',
     statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    porteurAttendu:
+      'aucun — le web ne peut pas produire ce sujet : la libération est une transition SERVEUR',
+    bloqueParHorsWeb:
+      'gw:bail-anonyme — balayage compare-and-set (`updateMany({where:{id,isActive:true}})`, décrément si le compte rendu vaut 1, plancher à 0), N = 10 min par défaut ; nommé « Bloqué par (hors web) » dans l’issue #4524 elle-même',
   },
   {
     id: 'anti-régression',
     enonce:
       'visibilitychange:hidden seul ⇒ ZÉRO requête mutante, assertion sur le journal réseau (§ 6.5)',
-    statut: 'fabriqué',
-    porteurAttendu: 'scénario fabriqué de ce module, puis chaque écran qui tient une session',
+    statut: 'écran',
+    porteurAttendu:
+      'v3-lifecycle.spec.ts — « un onglet caché ne fait RIEN partir » (écran réel), et les quatre scénarios fabriqués de ce module',
+    bloqueParHorsWeb: null,
   },
 ];
 
+/**
+ * Les cas SANS SUJET ET SANS EXCUSE — ceux qu'un fichier de la v3 devrait
+ * jouer et que personne ne joue. C'est cette liste qui doit rester vide.
+ *
+ * Elle ne compte PAS les cas bloqués hors-web : un gate rouge en permanence
+ * n'est plus un gate, il devient le bruit qu'on apprend à ignorer. Ils sont
+ * comptés par `casBloquesHorsWeb()`, que le spec oppose au lecteur du rapport
+ * — la couverture qu'on ne peut pas produire se DÉCLARE, elle ne se tait pas.
+ */
 export const casAPorter = (): readonly CasDeRecette[] =>
-  CAS_DE_RECETTE.filter((cas) => cas.statut === 'à porter');
+  CAS_DE_RECETTE.filter((cas) => cas.statut === 'à porter' && cas.bloqueParHorsWeb === null);
+
+export const casBloquesHorsWeb = (): readonly CasDeRecette[] =>
+  CAS_DE_RECETTE.filter((cas) => cas.bloqueParHorsWeb !== null);
 
 // LE SCÉNARIO FABRIQUÉ — le sujet sans lequel l'instrument ne peut pas se prouver.
 //

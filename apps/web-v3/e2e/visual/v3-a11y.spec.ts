@@ -13,6 +13,7 @@ import { expect, test } from '@playwright/test';
 import {
   BUDGETS_V3,
   COLONNES_DE_THEME,
+  ECHANTILLONS,
   MANIFESTE_V3,
   exigeUnManifesteLu,
   lisGroupes,
@@ -23,10 +24,6 @@ import {
 } from './lib/a11y';
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { lireEntrees } from '../../scripts/lib/routes-emises.mjs';
-
-// Les valeurs d'exemple des routes `(public)` DYNAMIQUES. Une route dynamique qui entre au dépôt
-// sans sa ligne ici fait ÉCHOUER le balayage, en se nommant — jamais sauter.
-const ECHANTILLONS: Readonly<Record<string, string>> = {};
 
 const entrees = exigeUnManifesteLu(lireEntrees(readFileSync(MANIFESTE_V3, 'utf8')));
 const routes = routesPubliques({

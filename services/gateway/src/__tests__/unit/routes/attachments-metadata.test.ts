@@ -42,6 +42,20 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
+// La galerie lit son schéma de réponse dans son propre module (extrait de
+// `api-schemas.ts`, hors budget) : le moquer ici garde ce témoin sur ce qu'il
+// mesure — les GARDES de la route. Ce que le schéma laisse VRAIMENT passer est
+// mesuré par `attachments-galerie-projection.test.ts`, qui ne moque rien.
+jest.mock('@meeshy/shared/types/api-schemas-attachments', () => ({
+  conversationAttachmentSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      type: { type: 'string' },
+    },
+  },
+}));
+
 const mockGetAttachmentWithMetadata = jest.fn<any>();
 const mockGetAttachment = jest.fn<any>();
 const mockDeleteAttachment = jest.fn<any>();

@@ -286,6 +286,55 @@ describe('les seuils du § 8.3, comparés — et non seulement mesurés', () => 
     expect(franchis.map((f) => f.mesure)).toEqual(['css_ko']);
   });
 
+  /**
+   * LE DOCUMENT — les octets du HTML servi. Aucun instrument ne les lisait :
+   * `check-bundle-budget.mjs` mesure des CHUNKS, et le document n'en est pas
+   * un. Or c'est là qu'un écran rendu par le serveur grossit avec les DONNÉES
+   * plutôt qu'avec le code — un tableau de messages passé tel quel à un
+   * composant client fait voyager, dans le paquet Flight comme dans le HTML,
+   * autant de textes que le Prisme a de langues.
+   *
+   * Le plafond de /chats/* reste « À ÉTABLIR » dans budgets.json — un chiffre
+   * qu'on n'a pas mesuré ne s'invente pas —, mais l'instrument, lui, existe et
+   * compare dès qu'on lui donne une valeur.
+   */
+  it('lit les octets du DOCUMENT, et les compare dès qu’un plafond existe', () => {
+    const avecPlafond: BudgetReseau = {
+      transverses: {},
+      ecrans: [{ motifs: ['/chats/*'], plafonds: { document_ko: { valeur: 30, statut: 'GATE' } } }],
+    };
+    const lourde = {
+      ...mesure({ octets_par_type: { Document: { requetes: 1, octets: 40 * 1024 } } }),
+      url: 'http://127.0.0.1:3300/chats/mshy_lagos',
+    };
+
+    expect(franchissementsReseau(lourde, avecPlafond).map((f) => f.mesure)).toEqual(['document_ko']);
+
+    const legere = {
+      ...mesure({ octets_par_type: { Document: { requetes: 1, octets: 8 * 1024 } } }),
+      url: 'http://127.0.0.1:3300/chats/mshy_lagos',
+    };
+
+    expect(franchissementsReseau(legere, avecPlafond)).toEqual([]);
+  });
+
+  /**
+   * Et il ne compare RIEN tant que le plafond est « À ÉTABLIR » : un plafond
+   * nul n'est pas un plafond de zéro.
+   */
+  it('ne compare pas un document quand le plafond n’est pas établi', () => {
+    const sansPlafond: BudgetReseau = {
+      transverses: {},
+      ecrans: [{ motifs: ['/chats/*'], plafonds: { document_ko: { valeur: null, statut: 'À ÉTABLIR' } } }],
+    };
+    const lourde = {
+      ...mesure({ octets_par_type: { Document: { requetes: 1, octets: 40 * 1024 } } }),
+      url: 'http://127.0.0.1:3300/chats/mshy_lagos',
+    };
+
+    expect(franchissementsReseau(lourde, sansPlafond)).toEqual([]);
+  });
+
   it("signale sans casser un LCP au-dessus d'une CIBLE", () => {
     const verdict = composeVerdictReseau([mesure({ lcp_ms: 2500 })], reseau);
 

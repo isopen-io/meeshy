@@ -44,6 +44,7 @@
  */
 import { canalDuLien } from '../lib/realtime/lifecycle';
 import {
+  cleAttestee,
   cleDeLien,
   cleDuLien,
   effaceSession,
@@ -53,6 +54,7 @@ import {
   poseSession,
   sessionDepuisLaValeur,
   type CleDeLien,
+  type DroitsDeLaPlace,
   type SessionInvitee,
 } from '../lib/api/guest-session';
 
@@ -70,10 +72,16 @@ const LIEN_B = lienDe('mshy_BBB222');
 const LIEN_COURT = lienDe('mshy_support');
 const LIEN_LONG = lienDe('mshy_support-link');
 
+const DROITS: DroitsDeLaPlace = { ecrire: true, fichiers: false, images: true, historique: false };
+
 const sessionDe = (suffixe: string): SessionInvitee => ({
   jeton: `jeton-${suffixe}`,
   participantId: `participant-${suffixe}`,
   pseudo: `Invite ${suffixe}`,
+  langue: 'yo',
+  nom: `Conversation ${suffixe}`,
+  conversationId: `conversation-${suffixe}`,
+  droits: DROITS,
 });
 
 const clesDuStockage = (): readonly string[] =>
@@ -329,7 +337,15 @@ describe("le jeton n'a AUCUNE expiration (§ 6.1 point 1)", () => {
 
     const brut: unknown = JSON.parse(window.localStorage.getItem(cleDuLien(LIEN_A)) ?? 'null');
 
-    expect(Object.keys(brut as Record<string, unknown>).sort()).toEqual(['jeton', 'participantId', 'pseudo']);
+    expect(Object.keys(brut as Record<string, unknown>).sort()).toEqual([
+      'conversationId',
+      'droits',
+      'jeton',
+      'langue',
+      'nom',
+      'participantId',
+      'pseudo',
+    ]);
   });
 });
 
@@ -365,8 +381,8 @@ describe('une entrée qu’on ne comprend pas', () => {
 
 describe('un jeton valide ne s’efface jamais par accident (§ 7)', () => {
   it.each<readonly [string, SessionInvitee]>([
-    ['au jeton vide', { jeton: '  ', participantId: 'p', pseudo: 'x' }],
-    ['sans participant', { jeton: 'jeton-a', participantId: '', pseudo: 'x' }],
+    ['au jeton vide', { jeton: '  ', participantId: 'p', pseudo: 'x', langue: null, nom: null, conversationId: null, droits: null }],
+    ['sans participant', { jeton: 'jeton-a', participantId: '', pseudo: 'x', langue: null, nom: null, conversationId: null, droits: null }],
   ])('refuse d’écrire une session %s et garde la place en cours', (_cas, invalide) => {
     poseSession(LIEN_A, sessionDe('a'));
 
@@ -374,6 +390,149 @@ describe('un jeton valide ne s’efface jamais par accident (§ 7)', () => {
 
     expect(lireSession(LIEN_A)).toEqual(sessionDe('a'));
   });
+});
+
+/**
+ * CE QUE LA PLACE OUVRE VOYAGE AVEC LE JETON — et l'ignorance ne se confond pas
+ * avec le refus.
+ *
+ * L'écran `rights` relit les quatre droits au rechargement, sans repasser par la
+ * passerelle : ils doivent donc survivre à l'entrée. Une entrée écrite par une
+ * version qui ne les rangeait pas encore reste une place VALIDE — le jeton est
+ * bon tant qu'il est bon (point 1) — et rend `droits: null`, que l'écran peint
+ * en retombant sur ce que le lien déclare plutôt qu'en refusant quatre droits.
+ */
+describe('les droits d’une place ouverte (issue #4523)', () => {
+  it('range les quatre droits à côté du jeton, et les relit tels quels', () => {
+    poseSession(LIEN_A, sessionDe('a'));
+
+    expect(lireSession(LIEN_A)?.droits).toEqual(DROITS);
+  });
+
+  it.each([
+    ['une entrée d’une version qui ne les rangeait pas', { pseudo: 'Tolu' }],
+    ['des droits qui ne sont pas un objet', { pseudo: 'Tolu', droits: 'tous' }],
+    ['des droits PARTIELS — compléter refuserait ce qui est accordé', {
+      pseudo: 'Tolu',
+      droits: { ecrire: true, images: true },
+    }],
+    ['un droit qui n’est pas un booléen', {
+      pseudo: 'Tolu',
+      droits: { ecrire: 'oui', fichiers: true, images: true, historique: true },
+    }],
+  ])('garde la place et rend des droits INCONNUS pour %s', (_cas, entree) => {
+    window.localStorage.setItem(
+      cleDuLien(LIEN_A),
+      JSON.stringify({ jeton: 'jeton-a', participantId: 'participant-a', ...entree }),
+    );
+
+    const place = lireSession(LIEN_A);
+
+    expect(place).not.toBeNull();
+    expect(place?.droits).toBeNull();
+  });
+
+  it('distingue « aucun droit » de « droits inconnus »', () => {
+    const aucun: DroitsDeLaPlace = {
+      ecrire: false,
+      fichiers: false,
+      images: false,
+      historique: false,
+    };
+    poseSession(LIEN_A, { ...sessionDe('a'), droits: aucun });
+
+    expect(lireSession(LIEN_A)?.droits).toEqual(aucun);
+  });
+});
+
+/**
+ * LA LANGUE ET LE NOM — ce que la réponse d'admission transporte et que le
+ * parseur JETAIT (issue #4523, revue croisée).
+ *
+ * `participant.language` est le RANG 1 du Prisme d'un lecteur anonyme : il n'a
+ * ni `systemLanguage`, ni `regionalLanguage`, ni `customDestinationLanguage`, et
+ * la seule langue qu'il ait jamais déclarée est celle du formulaire d'entrée.
+ * `conversation.title` est ce qui permet à l'écran de se peindre quand la
+ * passerelle ne répond pas — sans lui, il dépend d'un appel réseau pour nommer
+ * la conversation dans laquelle le visiteur est DÉJÀ entré.
+ */
+describe('ce que la place porte du Prisme et de la conversation', () => {
+  it('range la langue déclarée et le titre à côté du jeton, et les relit tels quels', () => {
+    poseSession(LIEN_A, sessionDe('a'));
+
+    expect(lireSession(LIEN_A)?.langue).toBe('yo');
+    expect(lireSession(LIEN_A)?.nom).toBe('Conversation a');
+  });
+
+  it.each([
+    ['une entrée d’une version qui ne les rangeait pas', {}],
+    ['une langue qui n’est pas une chaîne', { langue: 42, nom: 7 }],
+    ['une langue vide, qui se peindrait comme un nom', { langue: '   ', nom: '  ' }],
+  ])('garde la place et ne fabrique NI langue NI nom pour %s', (_cas, entree) => {
+    window.localStorage.setItem(
+      cleDuLien(LIEN_A),
+      JSON.stringify({ jeton: 'jeton-a', participantId: 'participant-a', pseudo: 'Tolu', ...entree }),
+    );
+
+    const place = lireSession(LIEN_A);
+
+    expect(place).not.toBeNull();
+    expect(place?.langue).toBeNull();
+    expect(place?.nom).toBeNull();
+  });
+});
+
+/**
+ * LA CLÉ ATTESTÉE — comment on retrouve sa place SANS appeler la passerelle.
+ *
+ * `cleDeLien` produit une clé depuis la RÉPONSE d'un serveur, et il n'y a pas de
+ * seconde fabrique : un segment d'URL n'en sera jamais une. Mais une place déjà
+ * ouverte laisse une entrée NOMMÉE d'après sa clé canonique, et cette entrée est
+ * une attestation — elle n'existe que si ce serveur l'y a écrite.
+ *
+ * C'est ce qui a fermé le défaut bloquant de l'écran `rights` : sans ce chemin,
+ * connaître sa propre place exigeait un aperçu du LIEN, c'est-à-dire de faire
+ * dépendre l'existence d'une place d'une porte qui refuse (410 `LINK_MAX_USES`)
+ * précisément parce que la place a été prise.
+ */
+describe('retrouver sa place sans rien demander à personne', () => {
+  const atteste = (nom: string): boolean => window.localStorage.getItem(nom) !== null;
+
+  it('reconnaît la clé sous laquelle une entrée existe', () => {
+    poseSession(LIEN_A, sessionDe('a'));
+
+    expect(cleAttestee('mshy_AAA111', atteste)).toBe(LIEN_A);
+  });
+
+  it('ne reconnaît RIEN quand aucune entrée ne porte ce nom', () => {
+    expect(cleAttestee('mshy_AAA111', atteste)).toBeNull();
+  });
+
+  /**
+   * L'attestation porte sur le nom COMPLET, jamais sur un préfixe : c'est la
+   * même égalité que `estLaCleDu`, et pour la même raison — `mshy_support` est
+   * le préfixe de `mshy_support-link`, deux liens que rien n'empêche de
+   * coexister.
+   */
+  it('n’attribue pas à un lien l’entrée d’un lien dont il est le PRÉFIXE', () => {
+    poseSession(LIEN_LONG, sessionDe('long'));
+
+    expect(cleAttestee('mshy_support', atteste)).toBeNull();
+    expect(cleAttestee('mshy_support-link', atteste)).toBe(LIEN_LONG);
+  });
+
+  /**
+   * Le candidat vient d'une URL, donc de n'importe qui : il compose un nom de
+   * cookie et un nom d'entrée, et un nom n'accepte pas tout. Refuser ces
+   * candidats-là ne coûte rien — aucune clé servie par la passerelle n'en a la
+   * forme.
+   */
+  it.each(['', '   ', 'a b', 'a;b', 'a=b', '../autre', 'a'.repeat(129)])(
+    'refuse un candidat qui ne peut pas NOMMER une entrée (%j)',
+    (candidat) => {
+      expect(cleAttestee(candidat, () => true)).toBeNull();
+    },
+  );
 });
 
 describe('le décodage sert aussi ce que le cycle de vie annonce', () => {

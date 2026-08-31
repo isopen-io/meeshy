@@ -806,6 +806,29 @@ Et quand le module doublé n'expose que des CONSTANTES pures (`SERVER_EVENTS`,
 `ROOMS`), la bonne réponse n'est même pas `jest.requireActual` : c'est **pas de
 double du tout**.
 
+**QUATRIÈME exemplaire — et cette fois le double n'a rien perdu : c'est le
+module VOISIN qui est tombé.** L'extraction de `api-schemas-attachments.ts`
+(premier morceau du découpage de `api-schemas.ts`, hors budget) COMPOSE ses
+schémas au chargement : `...messageAttachmentMinimalSchema.properties`. Le
+barillet `packages/shared/types/index.ts` le réexporte ; les quinze suites de
+routes dont l'usine de `@meeshy/shared/types/api-schemas` énumérait des schémas
+À LA MAIN ont donc reçu `undefined.properties` **à l'import**, et
+**dix-huit suites — 62 témoins — ont cessé de se CHARGER**, sur un `TypeError`
+sans le moindre rapport avec ce qu'elles testent.
+
+> **Le rayon d'action d'un double partiel n'est pas le fichier qu'il double.**
+> Les trois premiers exemplaires perdaient une clé que la suite LISAIT ; ici la
+> suite ne lit rien du module ajouté — elle est renversée parce qu'un VOISIN du
+> module doublé le compose. Un double partiel est donc une dette portée par
+> tout module qui importera un jour celui qu'il remplace, et le lot qui EXTRAIT
+> un morceau d'un gros module doit relire les doubles de l'original avant de le
+> réexporter.
+
+Réparation appliquée (`...(jest.requireActual(…) as object)` en tête des quinze
+usines) : quatorze suites reviennent au vert d'un coup, la quinzième révélant un
+défaut qu'elle masquait — **une suite qui ne se charge pas ne cache pas
+seulement ses succès.**
+
 Et **poser au moins un témoin de SURFACE** : « cette route est-elle
 enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
 appelle depuis toujours n'était vu par personne.

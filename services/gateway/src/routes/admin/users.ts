@@ -30,7 +30,7 @@ import {
   messageProtectionSelect,
   mediaAttachmentIsProtected,
   type MessageProtectionContext
-} from './media-protection';
+} from '../../utils/media-protection';
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';

@@ -34,22 +34,29 @@
  *     lecture est bornée et l'expiration se lit comme une indisponibilité.
  */
 
-const PREFIXE = '/api/v1';
+import {
+  baseDeLaPasserelle,
+  champ,
+  cheminDeLaPasserelle,
+  codeDeRefus,
+  donneeDe,
+  instant,
+  lisLaCharge,
+  objet,
+  recupere,
+  texte,
+  type Recuperateur,
+} from './passerelle';
+
+import { CHEMIN_APERCU } from './adhesion';
 
 const CHEMIN_RESOLUTION = (jeton: string): string =>
-  `${PREFIXE}/tracking-links/${encodeURIComponent(jeton)}/resolve`;
+  cheminDeLaPasserelle(`/tracking-links/${encodeURIComponent(jeton)}/resolve`);
 
 const CHEMIN_CLIC = (jeton: string): string =>
-  `${PREFIXE}/tracking-links/${encodeURIComponent(jeton)}/click`;
+  cheminDeLaPasserelle(`/tracking-links/${encodeURIComponent(jeton)}/click`);
 
-const CHEMIN_APERCU = (identifiant: string): string =>
-  `${PREFIXE}/anonymous/link/${encodeURIComponent(identifiant)}`;
-
-/** Le délai au-delà duquel une passerelle muette devient une indisponibilité. */
-const DELAI_MS = 2500;
-
-/** Ce que la route injecte pour être testable sans réseau. */
-export type Recuperateur = (url: string, options?: RequestInit) => Promise<Response>;
+export type { Recuperateur };
 
 /**
  * Les types de cible que la v3 sait ouvrir, plus `INCONNU` — parce que la
@@ -195,26 +202,9 @@ const TYPES: readonly TypeDeCible[] = [
   'EXTERNAL',
 ];
 
-const texte = (valeur: unknown): string | null =>
-  typeof valeur === 'string' && valeur.trim() !== '' ? valeur : null;
-
-const champ = (objet: object, nom: string): unknown =>
-  Object.getOwnPropertyDescriptor(objet, nom)?.value;
-
-const objet = (valeur: unknown): object | null =>
-  typeof valeur === 'object' && valeur !== null ? valeur : null;
-
 const typeDeCible = (valeur: unknown): TypeDeCible => {
   const nom = texte(valeur)?.toUpperCase();
   return TYPES.find((connu) => connu === nom) ?? 'INCONNU';
-};
-
-/** Une date ISO servie par la passerelle, ou `null` — jamais un `NaN` qui se compare faux en silence. */
-const instant = (valeur: unknown): number | null => {
-  const brut = texte(valeur);
-  if (brut === null) return null;
-  const ms = Date.parse(brut);
-  return Number.isNaN(ms) ? null : ms;
 };
 
 /**
@@ -226,39 +216,7 @@ const instant = (valeur: unknown): number | null => {
  */
 const INTROUVABLE: Cloture = { etat: 'clos', genre: null, echeance: null };
 
-/**
- * La base de la passerelle. Lue à CHAQUE appel, jamais au chargement du
- * module : `next build` évalue les modules serveur, et une base figée à la
- * construction serait celle de l'image, pas celle du déploiement.
- */
-export const baseDeLaPasserelle = (): string =>
-  (process.env.MEESHY_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-    /\/+$/,
-    '',
-  );
-
-const lis = async (reponse: Response): Promise<object | null> => {
-  try {
-    return objet(await reponse.json());
-  } catch {
-    return null;
-  }
-};
-
-const recupere = async (
-  url: string,
-  options: RequestInit,
-  recuperer: Recuperateur | undefined,
-): Promise<Response> =>
-  (recuperer ?? ((u, o) => fetch(u, o)))(url, {
-    ...options,
-    // L'état d'un lien change sans prévenir — désactivé par son auteur, épuisé,
-    // expiré. Next met en cache les `fetch` de serveur par défaut selon la
-    // route ; l'écrire ici rend la règle indépendante de la configuration de
-    // rendu, et un lien fermé ne peut pas continuer d'ouvrir.
-    cache: 'no-store',
-    signal: AbortSignal.timeout(DELAI_MS),
-  });
+export { baseDeLaPasserelle };
 
 export const resoudreLien = async ({
   token,
@@ -279,8 +237,7 @@ export const resoudreLien = async ({
   if (reponse.status === 404 || reponse.status === 410) return INTROUVABLE;
   if (!reponse.ok) return { etat: 'indisponible', raison: `HTTP ${reponse.status}` };
 
-  const corps = await lis(reponse);
-  const donnee = corps === null ? null : objet(champ(corps, 'data'));
+  const donnee = await donneeDe(reponse);
   if (donnee === null) return { etat: 'indisponible', raison: 'réponse illisible' };
 
   const genre = champ(donnee, 'kind') === 'conversation' ? 'conversation' : 'tracking';
@@ -357,8 +314,7 @@ export const apercuDuLien = async ({
 
   if (reponse === null || !reponse.ok) return null;
 
-  const corps = await lis(reponse);
-  const donnee = corps === null ? null : objet(champ(corps, 'data'));
+  const donnee = await donneeDe(reponse);
   if (donnee === null) return null;
 
   const conversation = objet(champ(donnee, 'conversation'));
@@ -389,10 +345,6 @@ const CAUSE_PAR_CODE: Readonly<Record<string, CauseDeCloture>> = {
   CONVERSATION_CLOSED: 'conversation-terminee',
 };
 
-/** `sendError` pose le code dans `error` ; `code` reste son champ d'appoint. */
-const codeDeRefus = (corps: object): string | null =>
-  texte(champ(corps, 'error')) ?? texte(champ(corps, 'code'));
-
 /**
  * Le refus NOMMÉ, quand une porte le nomme — `null` partout ailleurs.
  *
@@ -413,7 +365,7 @@ const refusNomme = async (parametres: {
 
   if (reponse === null || reponse.status !== 410) return null;
 
-  const corps = await lis(reponse);
+  const corps = await lisLaCharge(reponse);
   const code = corps === null ? null : codeDeRefus(corps);
 
   return (code === null ? undefined : CAUSE_PAR_CODE[code]) ?? null;

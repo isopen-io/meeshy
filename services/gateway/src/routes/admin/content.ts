@@ -20,9 +20,9 @@ import { requirePermission, requireSovereign, withAudit } from '../../middleware
 // flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
 // qui gate déjà la protection en amont. Même classe de défaut que #4157 c.4 :
 // les prédicats PARTAGÉS, jamais une copie. MÉDIA et TEXTE vivent côte à côte
-// dans `routes/admin/media-protection.ts` depuis #4388, qui y a déplacé le
-// second — il vivait jusque-là dans un fichier de route
-// (`conversation-messages-sovereign.ts`), son seul autre appelant.
+// dans `utils/media-protection.ts` depuis #4388 (monté hors de `routes/admin/`
+// quand la galerie de conversation en est devenue le quatrième appelant —
+// voir son doc-comment), qui y a déplacé le second, jusque-là dans une route.
 import {
   attachmentProtectionSelect,
   messageProtectionSelect,
@@ -30,7 +30,7 @@ import {
   mediaAttachmentIsProtected,
   messageContentIsProtected,
   type MessageProtectionContext
-} from './media-protection';
+} from '../../utils/media-protection';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
