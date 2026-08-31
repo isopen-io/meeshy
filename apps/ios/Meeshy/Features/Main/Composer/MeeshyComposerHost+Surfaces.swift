@@ -327,6 +327,26 @@ extension MeeshyComposerHost {
                 selectedSceneItemId = id
                 selectedSceneItemKind = kind
             },
+            // **« Modifier » ouvre l'édition EN LIGNE du texte** (#4074, vue
+            // `1d`). Le meuble câble déjà les trois entrées de cette édition
+            // (`editingTextId`, `onInlineTextChanged`, `onInlineTextEditEnded`)
+            // — il ne manquait que la porte qui y mène depuis l'appui long.
+            //
+            // Le `switch` est exhaustif pour que l'ajout d'un éditeur MÉDIA
+            // (#4082) oblige à passer ici ET à élargir `editableSceneKinds` :
+            // servir l'un sans l'autre rendrait « Modifier » offert et inerte
+            // sur un média, exactement le défaut que ce lot ferme.
+            onItemEdit: { id, kind in
+                switch kind {
+                case .text:
+                    selectedSceneItemId = id
+                    selectedSceneItemKind = kind
+                    viewModel.enterTextEditingMode(textId: id)
+                    HapticFeedback.medium()
+                case .media, .sticker, .location:
+                    break
+                }
+            },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`

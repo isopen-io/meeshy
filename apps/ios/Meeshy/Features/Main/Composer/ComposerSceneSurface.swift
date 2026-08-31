@@ -55,6 +55,18 @@ struct ComposerSceneSurface: View {
     var sceneImages: [String: UIImage] = [:]
     var sceneImagesVersion: UInt64 = 0
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+
+    /// **« Modifier » — l'appui long, et l'action VoiceOver du même nom**
+    /// (#4074, vue `1d`).
+    ///
+    /// La scène ne transmettait pas ce rappel : `hasEditor` était faux et le
+    /// menu n'offrait que deux actions sur quatre. `editableKinds` dit à quels
+    /// objets le MEUBLE sait répondre — `[.text]` ici, tant qu'aucun éditeur
+    /// média n'y est monté (#4082) — pour que « Modifier » ne paraisse jamais
+    /// sur un objet que personne n'éditera.
+    var onItemEdit: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text]
+
     var onBackgroundTapped: (() -> Void)?
 
     // MARK: - Les deux rails
@@ -259,6 +271,8 @@ struct ComposerSceneSurface: View {
                     // ne connaissant que la carte.
                     canvasOverlay: drawingSurface,
                     onItemTapped: onItemTapped,
+                    onItemDoubleTapped: onItemEdit,
+                    editableKinds: editableSceneKinds,
                     onBackgroundTapped: onBackgroundTapped,
                     loadedImages: sceneImages,
                     loadedImagesVersion: sceneImagesVersion,

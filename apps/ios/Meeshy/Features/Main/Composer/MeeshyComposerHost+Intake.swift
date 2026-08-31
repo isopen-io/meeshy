@@ -479,11 +479,20 @@ extension MeeshyComposerHost {
             requestedSceneBand = requestedSceneBand == .timeline ? nil : .timeline
             HapticFeedback.light()
         case .edit, .leaveScene:
-            // Injoignables : `ComposerSceneCapabilities.controllers` ne les
-            // contient pas, et le `switch` reste exhaustif pour que les servir
-            // oblige à passer ici. `edit` attend l'inspecteur par kind (#4073) ;
-            // `leaveScene` attend qu'une règle dise ce que l'objet DEVIENT une
-            // fois dehors (#4038).
+            // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
+            // le `switch` exhaustif oblige à relire quand on les sert.
+            //
+            // `edit` a désormais son chemin — l'appui long et l'action
+            // VoiceOver « Modifier », câblés par `onItemEdit` (#4074) — mais
+            // pas ici : le rail *trailing* règle les DIMENSIONS d'un objet et
+            // l'histoire de la publication (directive porteur 2026-08-31).
+            // « Modifier » n'est pas une dimension ; l'y ajouter donnerait deux
+            // portes au même geste, ce que la règle « une porte n'a pas de
+            // jumelle » interdit.
+            //
+            // `leaveScene` attend, elle, qu'une règle dise ce que l'objet
+            // DEVIENT une fois dehors (#4038) — une décision produit, pas un
+            // câblage.
             break
         }
     }

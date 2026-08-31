@@ -121,12 +121,28 @@ public struct EmbeddedSceneCanvas: View {
     public var selectedItemId: String?
     public var selectionBadge: String?
 
+    /// **« Modifier », depuis l'appui long ou VoiceOver** (#4074, vue `1d`).
+    ///
+    /// La scène incrustée ne transmettait PAS ce rappel, si bien que
+    /// `StoryCanvasContextAction.offered` recevait `hasEditor: false` et que le
+    /// menu n'offrait que deux actions sur quatre. Le porteur du contrat, lui,
+    /// l'acceptait déjà avec un défaut `nil` — rien n'était à écrire côté
+    /// canvas, seulement à brancher.
+    ///
+    /// `editableKinds` dit à quels objets l'hôte sait répondre : la scène
+    /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté, pour
+    /// que « Modifier » ne soit jamais offert sur un objet qu'elle ignore.
+    public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
         cornerRadius: CGFloat = 22,
         canvasOverlay: AnyView? = nil,
         onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
         onBackgroundTapped: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
         loadedImagesVersion: UInt64 = 0,
@@ -143,6 +159,8 @@ public struct EmbeddedSceneCanvas: View {
         self.cornerRadius = cornerRadius
         self.canvasOverlay = canvasOverlay
         self.onItemTapped = onItemTapped
+        self.onItemDoubleTapped = onItemDoubleTapped
+        self.editableKinds = editableKinds
         self.onBackgroundTapped = onBackgroundTapped
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
@@ -180,6 +198,8 @@ public struct EmbeddedSceneCanvas: View {
             StoryComposerCanvasView(
                 slide: $slide,
                 onItemTapped: onItemTapped,
+                onItemDoubleTapped: onItemDoubleTapped,
+                editableKinds: editableKinds,
                 editingTextId: editingTextId,
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,

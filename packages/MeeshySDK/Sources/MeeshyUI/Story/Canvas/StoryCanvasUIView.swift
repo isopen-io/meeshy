@@ -181,8 +181,38 @@ public final class StoryCanvasUIView: UIView {
 
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
-    public enum CanvasItemKind: Sendable, Equatable {
+    public enum CanvasItemKind: Sendable, Equatable, Hashable, CaseIterable {
         case text, media, sticker, location
+    }
+
+    /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur** (#4074).
+    ///
+    /// `onItemDoubleTapped != nil` répond à « l'hôte a-t-il câblé un éditeur ? ».
+    /// C'est une question de CANVAS, et « Modifier » est une décision par
+    /// OBJET : l'atelier câble le rappel, puis fait `case .sticker, .location:
+    /// break` — le menu offrait donc « Modifier » sur un sticker, et rien ne se
+    /// produisait.
+    ///
+    /// > **Un booléen de canvas ne peut pas répondre à une question par objet.**
+    /// > Le menu a la `kind` sous la main (`contextMenu(for:kind:)`) ; ce qui
+    /// > manquait était de la CONSULTER.
+    ///
+    /// Défaut `[.text, .media]` — ce que le rappel de l'atelier traite
+    /// réellement. Un hôte qui n'en sait éditer qu'un le restreint (la scène
+    /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté).
+    public var editableKinds: Set<CanvasItemKind> = [.text, .media]
+
+    /// **Le site UNIQUE de la question « cet objet a-t-il un éditeur ? »**, lu
+    /// par le menu visuel ET par les actions VoiceOver.
+    ///
+    /// Les deux avaient déjà DIVERGÉ : l'accessibilité restreignait à
+    /// `kind == .text || kind == .media` en local, le menu visuel non — pendant
+    /// que le doc-comment de l'accessibilité affirmait appliquer « la MÊME règle
+    /// que le menu long-press ». Une règle déclarée partagée et écrite deux fois
+    /// diverge sans que rien ne le voie : chaque copie reste cohérente avec
+    /// elle-même.
+    func hasEditor(for kind: CanvasItemKind) -> Bool {
+        onItemDoubleTapped != nil && editableKinds.contains(kind)
     }
 
     /// Called when the user single-taps an item on the canvas. Used by the

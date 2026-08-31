@@ -33,6 +33,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Les kinds dont CET hôte sait ouvrir un éditeur — voir
+    /// `StoryCanvasUIView.editableKinds`. Un hôte qui ne traite que le texte le
+    /// dit ici, plutôt que d'offrir « Modifier » sur un objet qu'il ignore.
+    public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media]
     /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
     public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
@@ -117,6 +121,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
                 onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
@@ -141,6 +146,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
+        self.editableKinds = editableKinds
         self.onItemLeftScene = onItemLeftScene
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
@@ -197,6 +203,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         }
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
+        view.editableKinds = editableKinds
         view.onItemLeftScene = onItemLeftScene
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
@@ -238,6 +245,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged

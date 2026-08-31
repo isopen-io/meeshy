@@ -194,7 +194,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 isLocked: isLockedItem(id: id),
                 isBackground: isBackgroundItem(id: id),
                 sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
-                hasEditor: onItemDoubleTapped != nil,
+                hasEditor: hasEditor(for: kind),
                 canLeaveScene: canLeaveScene
             )
             .map { action in
