@@ -39,7 +39,7 @@
   ],
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
   "transform": {
-    "^.+\\.ts$": "ts-jest"
+    "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.test.json", "diagnostics": { "ignoreCodes": [2307, 2322, 2339, 2345, 2740] } }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "collectCoverage": false
