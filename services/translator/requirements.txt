@@ -39,7 +39,7 @@ pydantic==2.13.4
 # and be validated with
 # `uv pip compile --python-version 3.11 services/translator/requirements.txt -o <tmp>`
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
-grpcio==1.83.0
+grpcio==1.83.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6
