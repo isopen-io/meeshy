@@ -21,6 +21,7 @@ import {
   type AttachmentTranslateRowPayload,
 } from './attachments/attachmentIncludes';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { diffTranslationTargets } from '../utils/translation-targets';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslateService' });
 
@@ -336,10 +337,17 @@ export class AttachmentTranslateService {
       voiceQuality: t.quality || 0
     })) : [];
 
-    const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
+    // Canonicaliser cibles demandées et clés stockées via la SSOT partagée : une
+    // cible région-taguée (`'en-US'`) ou en casse mixte (`'FR'`) doit matcher la
+    // clé canonique du store (`'en'`, `'fr'`), et deux variantes d'une même langue
+    // ne comptent que pour une cible NLLB.
+    const targetDiff = diffTranslationTargets(
+      options.targetLanguages,
+      existingTranslations.map(t => t.targetLanguage)
+    );
 
     // Filtrer les langues qui ne sont pas encore traduites
-    const languagesToTranslate = options.targetLanguages.filter(lang => !existingLanguages.has(lang));
+    const languagesToTranslate = targetDiff.missing;
 
     const isForwarded = attachment.isForwarded || attachment.forwardedFromAttachmentId;
 
@@ -367,7 +375,7 @@ export class AttachmentTranslateService {
           confidence: 1.0
         },
         translations: existingTranslations
-          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .filter(t => targetDiff.wasRequested(t.targetLanguage))
           .map(t => ({
             targetLanguage: t.targetLanguage,
             translatedText: t.translatedText,
@@ -472,7 +480,7 @@ export class AttachmentTranslateService {
       let fullResult = syncResult as AudioTranslationResult;
       if (existingTranslations.length > 0 && fullResult.translations) {
         const cachedForRequest = existingTranslations
-          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .filter(t => targetDiff.wasRequested(t.targetLanguage))
           .map(t => ({
             targetLanguage: t.targetLanguage,
             translatedText: t.translatedText,
