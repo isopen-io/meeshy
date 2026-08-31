@@ -198,7 +198,7 @@ final class MessageListViewController: UIViewController {
             guard !affected.isEmpty else { return }
             var snap = dataSource.snapshot()
             snap.reconfigureItems(affected)
-            dataSource.apply(snap, animatingDifferences: false) { [weak self] in
+            applyToDataSource(snap) { [weak self] in
                 // Focal : une reconfiguration remet la cellule à plat et sans
                 // carte (registration) — la passe la repose aussitôt, sinon la
                 // carte du message en focus disparaît jusqu'au prochain tick
@@ -1828,6 +1828,12 @@ final class MessageListViewController: UIViewController {
     private var deferredReconfigureScope: SnapshotReconfigureScope = .changedRecords
 
     private func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {
+        // VEILLE (#3947) — on sort AVANT la construction, pas seulement
+        // avant l'application : c'est la PRÉPA qui coûte (O(n) reversed +
+        // map + groupByDay + reconstruction de la carte serverId), et elle
+        // précède l'entonnoir. Le réveil réapplique `.allItems` depuis
+        // `store.messages`, jamais suspendu — il subsume cette passe.
+        guard rendersThread else { return }
         let _spState = PerfSignpost.signposter.beginInterval("applySnapshot")
         defer { PerfSignpost.signposter.endInterval("applySnapshot", _spState) }
         // Sous-segments pour pinpointer le coût des 75ms mesurés sur device :
@@ -2095,7 +2101,7 @@ final class MessageListViewController: UIViewController {
         (collectionView.collectionViewLayout as? MessageListLayout)?
             .noteUpcomingDeletionCompensation(height: deletedBelowWindowHeight)
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
-        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+        applyToDataSource(snapshot) { [weak self] in
             PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
             guard let self else { return }
             // La pill flottante doit refléter le nouveau top du flux dès que
@@ -2393,7 +2399,7 @@ final class MessageListViewController: UIViewController {
         let existing = visibleItems.filter { snapshot.indexOfItem($0) != nil }
         guard !existing.isEmpty else { return }
         snapshot.reconfigureItems(existing)
-        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+        applyToDataSource(snapshot) { [weak self] in
             // Focal : une reconfiguration remet la cellule à plat et sans
             // carte (registration) — la passe la repose aussitôt, sinon la
             // carte du message en focus disparaît jusqu'au prochain tick
@@ -2483,7 +2489,7 @@ final class MessageListViewController: UIViewController {
         guard !existingItems.isEmpty else { return }
 
         snapshot.reconfigureItems(existingItems)
-        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+        applyToDataSource(snapshot) { [weak self] in
             // Focal : une reconfiguration remet la cellule à plat et sans
             // carte (registration) — la passe la repose aussitôt, sinon la
             // carte du message en focus disparaît jusqu'au prochain tick
@@ -3406,17 +3412,21 @@ extension MessageListViewController {
         guard focalDetailedLocalId != target else { return }
         let previous = focalDetailedLocalId
         focalDetailedLocalId = target
-        reconfigureFocalItems([previous, target].compactMap { $0 }, dataSource: dataSource)
+        reconfigureFocalItems([previous, target].compactMap { $0 })
     }
 
-    private func reconfigureFocalItems(_ localIds: [String], dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>) {
+    /// Le data source n'est plus un PARAMÈTRE : depuis #3947 l'application
+    /// passe par `applyToDataSource`, donc la propriété. Garder l'argument
+    /// aurait laissé croire qu'on peut viser un autre data source que celui
+    /// où l'on applique.
+    private func reconfigureFocalItems(_ localIds: [String]) {
         var snapshot = dataSource.snapshot()
         let present = Set(snapshot.itemIdentifiers)
         let items = localIds.map { MessageListItem.message(localId: $0) }.filter { present.contains($0) }
         guard !items.isEmpty else { return }
         snapshot.reconfigureItems(items)
         focalReconfigureInFlight = true
-        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+        applyToDataSource(snapshot) { [weak self] in
             guard let self else { return }
             self.focalReconfigureInFlight = false
             self.applyFocalPerspectiveToVisibleCells()

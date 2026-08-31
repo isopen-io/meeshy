@@ -661,6 +661,24 @@ struct MessageListView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: MessageListViewController, context: Context) {
         vc.update(isDark: colorScheme == .dark, accentColor: accentColor)
+        // WS-6 (F-085) : posé AVANT `applyBottomInset`/`applyTopInset` plus bas
+        // — mêmes raisons que `makeUIViewController`. Le `didSet` côté
+        // contrôleur ne rejoue le pass QUE si la valeur change réellement
+        // (garde `oldValue != newValue`) : une réaffectation identique à
+        // chaque tick SwiftUI est un no-op.
+        //
+        // #3947 — ET LE MODE D'ABORD, avant tout ORDRE POSITIONNEL. Ce
+        // `didSet` est l'instant du RÉVEIL : c'est lui qui réapplique
+        // `.allItems` quand un pane opaque cesse de couvrir la liste, que
+        // l'entonnoir `applyToDataSource` a tenue en veille pendant. Les
+        // trois déclencheurs ci-dessous — défilement bas, vidange du suivi de
+        // lecture, saut vers un message — commandent une POSITION : les
+        // servir avant le réveil viserait un data source qui n'a pas encore
+        // repris ce qui est arrivé sous le pane. Le saut de la Rivière et du
+        // Résumé (« répondre à cette personne », « ouvrir cet épisode »)
+        // emprunte exactement ce chemin, et dans le MÊME passage :
+        // `select(.script)` puis `scrollState.scrollToMessageId`.
+        vc.readingMode = readingMode
         // If the trigger changed since last update, scroll to latest.
         if scrollToBottomTrigger != context.coordinator.lastScrollToBottomTrigger {
             context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
@@ -692,12 +710,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.isHeaderExpanded = isHeaderExpanded
-        // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
-        // ci-dessous — mêmes raisons que `makeUIViewController`. `didSet`
-        // du côté du contrôleur ne rejoue le pass QUE si la valeur change
-        // réellement (garde `oldValue != newValue`) : une réaffectation
-        // identique à chaque tick SwiftUI est un no-op.
-        vc.readingMode = readingMode
         // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
         //
         // La Rivière (`RiverConversationHost`) et le Résumé
@@ -712,8 +724,10 @@ struct MessageListView: UIViewControllerRepresentable {
         // `isHidden` retire le RENDU sans toucher aux DONNÉES : le contrôleur
         // reste vivant, ses abonnements aussi, son `contentOffset` intact —
         // donc le retour au fil est instantané et à la bonne place, sans
-        // rechargement. Suspendre les abonnements ferait payer au RETOUR ce
-        // qu'on économise pendant, et le retour est la promesse du milestone.
+        // rechargement. Les abonnements ne sont toujours pas SUSPENDUS (les
+        // reprendre exigerait de savoir lesquels se rejouent) : depuis #3947
+        // c'est leur PUITS qui est fermé — `applyToDataSource` n'applique
+        // rien sous un pane, et le réveil réapplique `.allItems`.
         //
         // La condition n'est pas réécrite : `rendersThread` est déjà la loi
         // qui distingue ces deux modes (elle gouverne le suivi de lecture
