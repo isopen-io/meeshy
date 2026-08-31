@@ -2882,3 +2882,24 @@ render path, and the failure branch is a one-liner (`if (fallback != null) keep 
   by id is a free SOTA win in the pure port. But the Android bubble layer carries NO author id and NO video
   flag — so the `BubbleContent → ClientStatMessage` mapper coarsens (own→`__me__`, video→image). Keep such
   coarsening in the WIRING mapper, never in the pure core, and document it: the server split stays authoritative.
+
+## 2026-08-31 — "a preference is only real where it is APPLIED, and a message has more than one delivery path" (slice `push-foreground-presentation-gate`)
+The in-app toast (`NotificationToastPolicy`) already honoured push-master / quiet-hours / per-type toggles, so the
+notification preferences LOOKED done. But the SAME message reaches the user by a SECOND path — a FCM banner — and
+`MeeshyFcmService.handleMessagePush` posted one for every foreground push with ZERO gate: a muted type, quiet hours,
+even the conversation on screen still buzzed, and a socket-delivered event double-showed (banner + toast). iOS had
+lived this exact bug and fixed it with `NotificationPresentationResolver`.
+- **The lesson generalises the Prisme "who AFFICHE / what travels À CÔTÉ" family to PREFERENCES:** the question to a
+  preference is not "is it read somewhere?" but "is it read on EVERY path that surfaces the thing it governs?". A
+  toggle honoured on one delivery path and ignored on another is a control without full effect (loi 4).
+- **Reuse beat re-derivation:** the gate is `DndWindow.isActive` + `NotificationTypeToggle.isEnabled` composed with
+  two new branches (on-screen thread, socket-alive dedup) — NOT a second copy of the DND/type logic. A divergent
+  second gate is how the toast and the banner would drift apart the next time a type is added.
+- **A background component needs a process-level seam for nav truth.** The active-thread id lived only inside a
+  ViewModel; the FCM service has none. A `@Singleton ActiveConversationStore` written at the ONE existing nav-truth
+  site (the banner host's active-context effect) carries it across the process boundary — cheaper and safer than
+  threading it through the push payload. Deferred (tracked): fold the toast/banner VMs' own per-instance tracking
+  onto this store so there is a single active-thread SSOT.
+- **`.badge` is an iOS-only presentation option.** Android's app-icon badge is a side effect of a posted
+  notification, not an independent option, so "badge only" collapses to Suppress. Documented in the policy, not
+  silently dropped.
