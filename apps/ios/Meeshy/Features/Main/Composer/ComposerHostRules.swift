@@ -376,7 +376,7 @@ nonisolated extension ComposerIntent {
     /// le composer historique nommé, et rien d'autre.
     /// Le gate du réel n'entre PAS dans ce calcul, et ce n'est pas une
     /// approximation : le routage legacy est le même pour les deux valeurs du
-    /// gate, sur les neuf portes — `ComposerIntentTests` le prouve porte par
+    /// gate, sur les huit portes — `ComposerIntentTests` le prouve porte par
     /// porte plutôt que de le laisser se supposer. La composition vide est donc
     /// lue ici pour ce qu'elle est, une valeur neutre, et non recopiée en
     /// littéral : le `false` en dur est exactement ce que V1 a eu à retrouver

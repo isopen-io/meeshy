@@ -289,7 +289,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let portesDuMeuble: [(nom: String, origine: ComposerOrigin, surface: ComposerSurfaceKind)] = [
             (nom: "storyTray", origine: .storyTray, surface: .scene),
             (nom: "feedComposer", origine: .feedComposer, surface: .document),
-            (nom: "reelTab", origine: .reelTab, surface: .scene),
             // Lot 4.6 / 4.7 : la porte du mood et la republication d'un mood
             // rejoignent le tableau. La table est ADDITIVE — en retirer une
             // entrée sans la remplacer perd une porte de la mesure, en silence.
@@ -355,7 +354,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let portesSansMood: [(nom: String, origine: ComposerOrigin)] = [
             (nom: "storyTray", origine: .storyTray),
             (nom: "feedComposer", origine: .feedComposer),
-            (nom: "reelTab", origine: .reelTab),
             (nom: "draft", origine: .draft(id: "brouillon-42")),
             (nom: "share", origine: .share),
             (nom: "conversationMedia",
@@ -1086,7 +1084,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// ordre. Sans ce témoin, la règle pourrait rétrécir l'offre de la CRÉATION
     /// sans que rien ne rougisse — la loi 4 mord dans les deux sens.
     func test_lOffre_dUneCreation_estLesSixNiveauxDuSDK() {
-        for origine in [ComposerOrigin.moodChip, .feedComposer, .storyTray, .reelTab] {
+        for origine in [ComposerOrigin.moodChip, .feedComposer, .storyTray] {
             XCTAssertEqual(
                 ComposerAudienceOffer.offered(for: origine),
                 PostVisibility.composerSelectableCases,

@@ -3,8 +3,8 @@ import XCTest
 
 /// **#4611 — une porte déclarée que personne ne peut ouvrir.**
 ///
-/// `ComposerOrigin` déclare NEUF portes. Cinq seulement sont construites par un
-/// site de production (mesuré le 2026-08-31) :
+/// `ComposerOrigin` déclare HUIT portes. Cinq sont construites par un site de
+/// production (mesuré le 2026-08-31) :
 ///
 /// | vivante | site |
 /// |---|---|
@@ -14,14 +14,19 @@ import XCTest
 /// | `.repost` | `RootView.swift`, `iPadRootView.swift` |
 /// | `.conversationMedia` | `ConversationMediaComposerDoor.swift` |
 ///
-/// Les quatre autres — `.reelTab`, `.edit`, `.draft`, `.share` — n'ont aucun
-/// appelant. Elles ont pourtant un profil complet, et **onze témoins verts**
-/// décrivent le comportement de `.reelTab`.
+/// Les trois autres — `.edit`, `.draft`, `.share` — n'ont aucun appelant. Elles
+/// ont pourtant un profil complet.
 ///
-/// > **Onze témoins verts décrivent une porte que personne ne peut ouvrir.**
-/// > Un témoin qui épingle une route ne prouve que la cohérence du code AVEC
-/// > LUI-MÊME : il dit qu'une intention est bien profilée, jamais qu'on peut la
-/// > former.
+/// > **Onze témoins verts décrivaient `.reelTab`, une porte que personne ne
+/// > pouvait ouvrir.** Un témoin qui épingle une route ne prouve que la
+/// > cohérence du code AVEC LUI-MÊME : il dit qu'une intention est bien
+/// > profilée, jamais qu'on peut la former.
+///
+/// **`.reelTab` a été RETIRÉE le 2026-08-31** (décision porteur, #4623) : le
+/// produit ne veut pas de porte par FORMAT — on entre par le fil ou par le
+/// « + » des stories, et le format se choisit DANS le composer. C'est le
+/// troisième état que cette garde admet, et le seul qui fasse RÉTRÉCIR
+/// l'inventaire : **une porte se monte, se retire, ou porte sa raison.**
 ///
 /// ## Ce que cette garde fait, et qu'aucune autre ne faisait
 ///
@@ -36,7 +41,7 @@ import XCTest
 /// 2. une porte de l'inventaire qui a GAGNÉ un appelant doit en sortir.
 ///
 /// Sans la seconde, l'inventaire deviendrait une amnistie permanente : le jour
-/// où `.reelTab` reçoit enfin son bouton, plus rien ne dirait qu'elle n'est plus
+/// où une porte reçoit enfin son bouton, plus rien ne dirait qu'elle n'est plus
 /// morte, et la liste mentirait en restant verte.
 ///
 /// ## Pourquoi la raison vit dans le CODE, pas ici
@@ -58,7 +63,6 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// — et la garde rougirait en accusant une raison absente qui, elle, est
     /// bien là.
     private static let declareesSansAppelant: [String: String] = [
-        "reelTab": "câblage HORS v1",
         "edit": "zéro occurrence, mesurée",
         "draft": "c'est elle qui n'a pas d'appelant",
         "share": "ne fait aujourd'hui que",
@@ -167,8 +171,8 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     func test_laGarde_litVraimentLesPortes() throws {
         let portes = try portesDeclarees()
         XCTAssertGreaterThanOrEqual(
-            portes.count, 9,
-            "Moins de neuf portes lues — l'analyse de `ComposerOrigin` a cessé de fonctionner."
+            portes.count, 8,
+            "Moins de huit portes lues — l'analyse de `ComposerOrigin` a cessé de fonctionner."
         )
         XCTAssertTrue(portes.contains("storyTray") && portes.contains("conversationMedia"),
                       "Portes attendues absentes de la lecture : \(portes.sorted())")
@@ -198,7 +202,8 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// **Seconde moitié : l'inventaire ne survit pas à la porte qu'il amnistie.**
     ///
     /// C'est la moitié qui pourrit. Sans elle, la liste resterait verte le jour
-    /// où `.reelTab` reçoit son bouton, et une amnistie deviendrait permanente.
+    /// où une porte de l'inventaire reçoit son bouton, et une amnistie
+    /// deviendrait permanente.
     func test_unePorteDeLInventaire_quiGagneUnAppelant_enSort() throws {
         let codes = try sourcesDeProduction()
         let ressuscitees = Self.declareesSansAppelant.keys

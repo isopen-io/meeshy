@@ -333,7 +333,7 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// Les huit AUTRES portes ne touchent ni l'une ni l'autre feuille
+    /// Les sept AUTRES portes ne touchent ni l'une ni l'autre feuille
     /// d'edition. Un cas neuf dans `LegacyComposer` est une valeur que n'importe
     /// quelle ligne de la table peut se mettre a rendre ; l'interdire ici est ce
     /// qui empeche une porte de creation d'atterrir sur une surface d'edition.
@@ -341,7 +341,6 @@ final class EditParityInventoryTests: XCTestCase {
         let portesQuiNEditentRien: [ComposerOrigin] = [
             .storyTray,
             .feedComposer,
-            .reelTab,
             .moodChip,
             .repost(ofPostId: "post-source", sourceFormat: .story),
             .draft(id: "brouillon-42"),

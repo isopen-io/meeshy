@@ -121,13 +121,13 @@ final class ComposerFormatFanTests: XCTestCase {
         )
     }
 
-    /// L'invariant qui rend le repli sûr, éprouvé sur les NEUF portes plutôt
+    /// L'invariant qui rend le repli sûr, éprouvé sur les HUIT portes plutôt
     /// que supposé : le premier format offert est toujours celui de la porte.
     /// Si une porte le violait un jour, le repli renverrait l'auteur sur un
     /// format que sa porte n'ouvre pas — et rien d'autre ne le dirait.
     func test_theFallbackTarget_isAlwaysTheDoorOwnFormat() {
         let doors: [ComposerOrigin] = [
-            .storyTray, .feedComposer, .reelTab, .moodChip,
+            .storyTray, .feedComposer, .moodChip,
             .repost(ofPostId: "p1", sourceFormat: .story),
             .edit(postId: "p2", documentFormat: .reel),
             .draft(id: "d1"), .share,

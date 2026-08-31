@@ -19,10 +19,29 @@ nonisolated struct ComposerIntent: Equatable {
     let origin: ComposerOrigin
 }
 
-/// Les neuf portes du composer. La GRAINE qu'une porte apporte n'a pas de champ
+/// Les huit portes du composer. La GRAINE qu'une porte apporte n'a pas de champ
 /// à elle : elle est matérialisée par les valeurs associées ci-dessous.
+///
+/// ## Il n'y a PAS de porte par FORMAT (décision porteur 2026-08-31, #4623)
+///
+/// > « On choisit de faire un réel à partir du Feed principal ou à partir du
+/// > **+** de story. On choisit **dans le composer** si on fait un post, une
+/// > story ou un réel / mood. »
+///
+/// `.reelTab` a donc été RETIRÉE. Elle nommait une entrée que le produit ne veut
+/// pas : une porte qui déclare son format d'avance, là où la décision doit se
+/// prendre APRÈS, quand l'auteur voit ce qu'il compose.
+///
+/// C'est la loi 9 tenue à la lettre — **le format est un CHAMP, pas une
+/// identité**. Une porte par format ferait de chaque format une identité qu'on
+/// choisit avant d'avoir composé.
+///
+/// Le réel reste atteignable, et il l'était déjà : `plusReel` l'ajoute à
+/// l'éventail de `.storyTray` et de `.feedComposer` dès que la composition
+/// qualifie. **La capacité existait ; c'est l'entrée dédiée dont le produit ne
+/// veut pas.**
 nonisolated enum ComposerOrigin: Equatable {
-    case storyTray, feedComposer, reelTab, moodChip
+    case storyTray, feedComposer, moodChip
     /// Deux portes PORTENT leur format au lieu de le deviner : l'appelant l'a
     /// déjà en main, puisqu'on tape « reposter » ou « modifier » sur une carte
     /// RENDUE. Ce format n'est pas une graine — il fait partie de l'identité de
@@ -55,7 +74,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .repost(let postId, _):
             return postId
-        case .storyTray, .feedComposer, .reelTab, .moodChip, .edit, .draft, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia:
             return nil
         }
     }
@@ -83,7 +102,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .draft(let id):
             return id
-        case .storyTray, .feedComposer, .reelTab, .moodChip, .edit, .repost, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia:
             return nil
         }
     }
@@ -349,20 +368,6 @@ nonisolated extension ComposerProfile {
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
-                allowsCapture: true,
-                routesToLegacy: nil
-            )
-
-        case .reelTab:
-            // Profil DÉFINI, câblage HORS v1 : aucun point d'entrée réels
-            // n'existe au dépôt — les Réels sont un overlay lancé depuis le fil,
-            // sans bouton de création (revue Fable n°5).
-            return ComposerProfile(
-                initialFormat: .reel,
-                offeredFormats: [.reel, .post],
-                showsSlides: false,
-                showsTimeline: true,
-                opensWith: .videoCameraReady,
                 allowsCapture: true,
                 routesToLegacy: nil
             )

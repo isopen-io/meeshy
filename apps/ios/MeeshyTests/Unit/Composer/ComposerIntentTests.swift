@@ -16,7 +16,7 @@ import MeeshyUI
 /// préconfiguration, et C2/C3 la consommeront comme une interface GELÉE.
 ///
 /// Cette suite éprouve DEUX choses, jamais la même deux fois :
-/// 1. les neuf portes, une par une — ce que CHAQUE origine décide (les neuf
+/// 1. les huit portes, une par une — ce que CHAQUE origine décide (les huit
 ///    `test_profile_*`, imposés par le plan) ;
 /// 2. les RÈGLES qui traversent la table — les invariants dont chaque ligne est
 ///    une conséquence. Une table recopiée ne se démontre pas elle-même : ce sont
@@ -37,7 +37,6 @@ final class ComposerIntentTests: XCTestCase {
     private static let toutesLesOrigines: [ComposerOrigin] = [
         .storyTray,
         .feedComposer,
-        .reelTab,
         .moodChip,
         .repost(ofPostId: "post-source", sourceFormat: .story),
         .edit(postId: "post-a-moi", documentFormat: .post),
@@ -50,7 +49,6 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .storyTray: return "storyTray"
         case .feedComposer: return "feedComposer"
-        case .reelTab: return "reelTab"
         case .moodChip: return "moodChip"
         case .repost: return "repost"
         case .edit: return "edit"
@@ -79,7 +77,7 @@ final class ComposerIntentTests: XCTestCase {
         }
     }
 
-    // MARK: - Les neuf portes
+    // MARK: - Les huit portes
 
     func test_profile_storyTray_ouvreUneStoryCameraPrete() {
         let profil = profil(.storyTray)
@@ -125,14 +123,6 @@ final class ComposerIntentTests: XCTestCase {
             "Et ce que le meuble lui monte est la surface DOCUMENT. Une porte recâblée qui atterrirait sur "
             + "l'atelier de scène aurait quitté sa feuille pour pire qu'elle."
         )
-    }
-
-    func test_profile_reelTab_ouvreLaCameraVideoSansDiapositives() {
-        let profil = profil(.reelTab)
-
-        XCTAssertEqual(profil.initialFormat, .reel)
-        XCTAssertEqual(profil.opensWith, .videoCameraReady, "Un réel naît d'une prise vidéo.")
-        XCTAssertFalse(profil.showsSlides, "Un réel est une prise continue, pas une suite de pages.")
     }
 
     /// **REFORMULÉE au lot 4.6, jamais affaiblie.** Elle affirmait « rien ne
@@ -292,7 +282,13 @@ final class ComposerIntentTests: XCTestCase {
 
     // MARK: - Règle : le corpus couvre toutes les portes
 
-    func test_corpus_couvreLesNeufPortes_uneSeuleFoisChacune() {
+    /// Le compte est passé de NEUF à HUIT le 2026-08-31 : `.reelTab` a été
+    /// retirée (décision porteur #4623 — pas de porte par format). C'est le
+    /// sens que ce témoin garde depuis toujours : **une porte ajoutée doit
+    /// entrer ici avec son profil, jamais s'ajouter en silence** — et une porte
+    /// retirée doit en sortir, sinon le corpus prétend éprouver un profil qui
+    /// n'existe plus.
+    func test_corpus_couvreLesHuitPortes_uneSeuleFoisChacune() {
         let noms = Self.toutesLesOrigines.map(nom(de:))
 
         XCTAssertEqual(
@@ -300,8 +296,8 @@ final class ComposerIntentTests: XCTestCase {
             "Deux entrées du corpus désignent la même porte : une porte resterait sans profil éprouvé."
         )
         XCTAssertEqual(
-            noms.count, 9,
-            "Neuf portes sont spécifiées (planche §3). Une porte ajoutée à `ComposerOrigin` doit entrer ici "
+            noms.count, 8,
+            "Huit portes sont spécifiées. Une porte ajoutée à `ComposerOrigin` doit entrer ici "
             + "avec son profil, jamais s'ajouter en silence."
         )
     }
@@ -346,7 +342,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .repost, .edit:
             return true
-        case .storyTray, .feedComposer, .reelTab, .moodChip, .draft, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia:
             return false
         }
     }
@@ -389,7 +385,7 @@ final class ComposerIntentTests: XCTestCase {
         for origin in Self.toutesLesOrigines {
             let profil = profil(origin)
             let estCamera = profil.opensWith == .cameraReady || profil.opensWith == .videoCameraReady
-            let estPorteDeCapture = nom(de: origin) == "storyTray" || nom(de: origin) == "reelTab"
+            let estPorteDeCapture = nom(de: origin) == "storyTray"
 
             XCTAssertEqual(
                 estCamera, estPorteDeCapture,
@@ -417,7 +413,7 @@ final class ComposerIntentTests: XCTestCase {
     /// republication d'un mood (`.repost(sourceFormat: .status)`), qui ouvre sur
     /// `.keyboardOnContent`.
     ///
-    /// Le corpus des neuf portes ne contient qu'un repost de STORY, si bien que
+    /// Le corpus des huit portes ne contient qu'un repost de STORY, si bien que
     /// l'équivalence y reste vraie — mais l'écrire comme une loi générale en
     /// aurait fait la loi que lirait la session suivante, celle qui déduirait la
     /// surface de l'OUVERTURE au lieu du FORMAT. Les deux sens sont donc
@@ -436,7 +432,7 @@ final class ComposerIntentTests: XCTestCase {
             let profil = profil(origin)
             XCTAssertEqual(
                 profil.opensWith == .moodGrid, profil.initialFormat == .status,
-                "\(nom(de: origin)) : parmi les neuf portes, la grille de moods EST l'ouverture du statut."
+                "\(nom(de: origin)) : parmi les huit portes, la grille de moods EST l'ouverture du statut."
             )
         }
 
@@ -453,7 +449,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .draft, .share, .edit:
             return true
-        case .storyTray, .feedComposer, .reelTab, .moodChip, .repost, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia:
             return false
         }
     }
@@ -607,7 +603,7 @@ final class ComposerIntentTests: XCTestCase {
 
         XCTAssertEqual(
             serviesParLeMeuble,
-            ["storyTray", "feedComposer", "reelTab", "moodChip", "draft", "share", "conversationMedia"],
+            ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia"],
             "Périmètre après le lot 4.6 : le tray, LE FIL, les réels (profil défini, câblage hors v1), LE "
             + "MOOD, le brouillon, le partage et le média de conversation (câblage lot G). Le repost de "
             + "story/post/réel et l'édition gardent leur composer actuel."
@@ -924,11 +920,44 @@ final class ComposerIntentTests: XCTestCase {
             )
         }
 
-        let formats = Self.toutesLesOrigines.map { profil($0).initialFormat }
+        // **Tout format est ATTEIGNABLE — par une porte OU par un éventail.**
+        //
+        // Cette assertion exigeait auparavant que les quatre formats soient
+        // chacun l'`initialFormat` d'une porte. La décision porteur du
+        // 2026-08-31 (#4623) l'a rendue fausse en retirant `.reelTab` :
+        //
+        // > « On choisit DANS LE COMPOSER si on fait un post, une story ou un
+        // > réel / mood. »
+        //
+        // Le produit ne veut pas d'une porte par format — ce serait la loi 9 à
+        // l'envers, le format redevenant une identité qu'on choisit avant
+        // d'avoir composé. **Baisser le compte de 4 à 3 aurait enterré la
+        // règle avec la porte** ; ce qui compte n'a jamais été qu'une porte
+        // OUVRE le format, mais qu'aucun format ne soit hors d'atteinte.
+        //
+        // `.reel` n'est donc plus l'ouverture de personne, et reste offert par
+        // l'éventail de `.storyTray` et de `.feedComposer` dès que la
+        // composition qualifie.
+        let ouvertures = Set(Self.toutesLesOrigines.map { profil($0).initialFormat })
+        let offerts = Set(Self.toutesLesOrigines.flatMap {
+            ComposerProfile.profile(for: $0,
+                                    compositionQualifiesAsReel: true,
+                                    compositionQualifiesAsMood: true).offeredFormats
+        })
 
         XCTAssertEqual(
-            Set(formats.map { $0.postType.rawValue }).count, 4,
-            "Les neuf portes couvrent les quatre formats — aucun format n'est déclaré sans porte."
+            ouvertures.union(offerts).count, 4,
+            "Un format qu'aucune porte n'ouvre ET qu'aucun éventail n'offre est INATTEIGNABLE : "
+                + "il se déclare, se publie au serveur, et personne ne peut le composer."
+        )
+        XCTAssertFalse(
+            ouvertures.contains(.reel),
+            "Aucune porte ne doit OUVRIR en réel (#4623) : le format se choisit dans le composer, "
+                + "pas à l'entrée. Une porte par format ferait de chaque format une identité."
+        )
+        XCTAssertTrue(
+            offerts.contains(.reel),
+            "…et le réel doit rester offert par un éventail, sinon il devient inatteignable."
         )
     }
 
@@ -1028,11 +1057,6 @@ final class ComposerIntentTests: XCTestCase {
                 )
             }
         }
-    }
-
-    func test_reelTab_offreReelEtPost_sansConditionDeQualification() {
-        XCTAssertEqual(eventail(.reelTab, reel: false), [.reel, .post])
-        XCTAssertEqual(eventail(.reelTab, reel: true), [.reel, .post])
     }
 
     func test_moodChip_nOffreQueLeStatut() {
