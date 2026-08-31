@@ -5,6 +5,27 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — Before writing a new pure `:core:model` type, grep for the SSOT it would duplicate (slice `notification-banner-dedup-ssot`)
+The "Next" pointed at the §M notification-toast dedup window as if it were unbuilt. I wrote a fresh pure
+`NotificationDedupWindow` + full test (RED+GREEN both real) before reading §M closely — and found the SSOT
+**already shipped** as `ToastDedupWindow` (2026-08-30). My type was a would-be THIRD copy of the same 2 s
+window: `ToastDedupWindow` (used by the tested-but-orphan `NotificationToastViewModel`), a private
+`LinkedHashMap` inside the LIVE `NotificationBannerViewModel`, and mine. Deleted mine; repointed the slice
+at the real defect (converge the live VM onto the existing SSOT).
+- **Lesson.** A PROGRESS "Next" that says "build X" is a *hypothesis*, not a fact. Before creating any
+  `:core:model` value type, `grep -rl "<concept>Window\|<concept>Cache\|<concept>Policy"` across
+  `core/model` **and** the `:feature` VMs. A pure type that already has a consumer is the SSOT; re-deriving
+  it is the divergent-twin anti-pattern the root CLAUDE.md forbids (dimension 11).
+- **Second, sharper lesson — count the orchestrators, not the building blocks.** The building block was
+  single (`ToastDedupWindow`); the *orchestrators around it* had silently forked into two whole
+  ViewModel+Host pairs (`NotificationToast*` orphan, `NotificationBanner*` live) wrapping the SAME
+  `MeeshyNotificationToast` atom off the SAME socket seam. "The pure core is SSOT" did not make the feature
+  SSOT. When two slices each add "the glue that finally makes X real," suspect a twin — grep for every VM
+  that collects the same socket flow (`notificationReceived`) before adding a third.
+- **Mechanical note.** Reusing an existing Hilt-bound seam (`NotificationToastClock`) needs NO new module:
+  add the ctor param, and `hiltViewModel()` call sites don't change. That made the untested live VM
+  test-pinnable (clock + socket fakes) at zero wiring cost — the same harness as `NotificationToastViewModelTest`.
+
 ## 2026-08-31 — RED-prove a guard by mutating the OUTERMOST arm, not the threshold (slice `video-dismiss-watch-report`)
 `VideoDismissWatchReport.shouldReport` has two arms: a duration guard (`complete || watched >= 3`) then the
 detachment gate (`return playerStillHoldsAttachment`). The #3908 defect lives entirely in the SECOND arm — a

@@ -6751,6 +6751,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
       **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
       `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
+- [x] In-app banner dedup — one SSOT window, not a re-coded twin — **shipped 2026-08-31** (slice
+      `notification-banner-dedup-ssot`): the LIVE orchestrator wired at the app scaffold is
+      `NotificationBannerHost`/`NotificationBannerViewModel` (#4457, richer framing than the toast:
+      group-name resolution, media/reaction summary, tap-to-navigate). It carried its OWN dedup
+      window — a private `LinkedHashMap<String, Long>` + hand-rolled `isDuplicate`/`pruneDedupWindow`
+      + local `DEDUP_WINDOW_MS`/`MAX_REMEMBERED`, plus a direct `System.currentTimeMillis()`/
+      `LocalDateTime.now()` — a re-implementation of the pure `ToastDedupWindow` the toast twin
+      already used (dimension 11 divergent twin; the buried window was also entirely UNTESTED, no
+      `NotificationBannerViewModelTest` existed). This slice converges it: the banner VM now uses the
+      shared `ToastDedupWindow.admit(id, now)` (same 2 s window, admit-first ordering identical to
+      `NotificationToastViewModel`) and the injected `NotificationToastClock` seam, and its
+      auto-dismiss became a cancellable `dismissJob` (a banner arriving during another's window no
+      longer waits out the first's 4 s inside the collector, and a newer banner cancels the older
+      timer) — structurally the same shape as the toast VM. +12 tests (new `NotificationBannerViewModelTest`,
+      mirroring the toast harness: fresh→banner, 2 s dedup suppression, same-id-after-window re-shows,
+      active-conversation/post suppression, different-conversation still shows, push-disabled blocked,
+      conversation/post navigation payload, 4 s auto-dismiss, older-timer-doesn't-clobber-newer,
+      dismiss-clears). RED-proven (`isDuplicateDelivery = admit.isDuplicate`→`false` fails exactly the
+      dedup-suppression test). No new `:core:model` type — the SSOT already existed; the fix was to
+      DELETE the duplicate, not add one.
+      **Still open (§M) — the deeper twin:** two orchestrators (`NotificationBannerViewModel` LIVE
+      vs `NotificationToastViewModel` orphan) still wrap the SAME `MeeshyNotificationToast` atom off
+      the SAME socket seam. Dedup + clock are now shared, but the two VMs+Hosts should collapse into
+      ONE (the banner's framing+navigation is the superset; the toast's `onConversationOpened/Closed`/
+      `onPostOpened/Closed` hooks are richer than the banner's `setActiveContext`). A product-level
+      merge (retire the toast host, fold its hooks into the banner, then wire it) is a separate slice.
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
