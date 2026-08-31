@@ -162,15 +162,21 @@ describe('validateMagicLink — le second facteur (#4534)', () => {
 
     it("rend un twoFactorToken que POST /auth/login/2fa sait déjà consommer", async () => {
       // `completeAuthWith2FA` retrouve l'utilisateur par
-      // `phoneVerificationCode = sha256(twoFactorToken)` encore valide. C'est
-      // ce qui rend le correctif gratuit : aucun changement à l'étape 2.
+      // `twoFactorChallengeHash = sha256(twoFactorToken)` encore valide.
+      //
+      // Les colonnes s'appelaient `phoneVerificationCode` /
+      // `phoneVerificationExpiry` jusqu'à #4542 : le défi partageait alors sa
+      // mémoire avec la vérification de téléphone, et le mint était écrit DEUX
+      // FOIS — ici et dans `AuthService.authenticate`. Le site unique est
+      // désormais `services/auth/pending-two-factor.ts` ; le témoin porte sur
+      // ce qui est ÉCRIT, pas sur qui l'écrit.
       const result = await service.validateMagicLink(validation);
 
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: {
-          phoneVerificationCode: sha256(result.twoFactorToken ?? ''),
-          phoneVerificationExpiry: expect.any(Date)
+          twoFactorChallengeHash: sha256(result.twoFactorToken ?? ''),
+          twoFactorChallengeExpiresAt: expect.any(Date)
         }
       });
     });
@@ -231,9 +237,12 @@ describe('validateMagicLink — le second facteur (#4534)', () => {
 
       expect(result.requires2FA).toBeUndefined();
       expect(result.twoFactorToken).toBeUndefined();
+      // Le témoin suit la COLONNE, pas son ancien nom : depuis #4542 le défi
+      // vit dans `twoFactorChallengeHash`, et laisser cette négation pointer
+      // `phoneVerificationCode` la rendrait vraie sans plus rien garder.
       expect(mockPrisma.user.update).not.toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ phoneVerificationCode: expect.anything() })
+          data: expect.objectContaining({ twoFactorChallengeHash: expect.anything() })
         })
       );
     });

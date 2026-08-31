@@ -25,6 +25,20 @@ const log = enhancedLogger.child({ module: 'AttachmentDownload' });
  * la ressource avec ERR_BLOCKED_BY_RESPONSE.NotSameOrigin (avatars cassés au
  * rechargement de page). Hook onSend SYNCHRONE obligatoirement : un second
  * hook async provoque des double-send (voir commentaire sur la route file/*).
+ *
+ * La seconde ligne est une porte CORS à elle seule, et elle n'obéit pas à la
+ * règle unique des origines (#4538). Ce n'est pas un oubli : `'*'` sert
+ * l'embarquement des médias depuis meeshy.me, et il est inerte pour une requête
+ * créditée — `'*'` et `Access-Control-Allow-Credentials: true` s'excluent par
+ * spécification, donc aucun cookie ni jeton ne voyage ici. Ce qui garde les
+ * octets est `resolveAttachmentReadVerdict`, pas l'origine.
+ *
+ * L'arbitrage est DÉCLARÉ en donnée — `PORTES_HORS_REGLE` dans
+ * `config/cors-origins.ts` — et non ici : un commentaire n'aurait rien
+ * confronté au code le jour où quelqu'un resserre les origines. La valeur `'*'`
+ * ci-dessous est comparée à la valeur déclarée par
+ * `__tests__/cors-origin-emitter-sweep.test.ts` ; la faire passer sous la règle
+ * SANS retirer sa déclaration fait rougir ce cliquet, et l'inverse aussi.
  */
 function crossOriginMediaHeaders(
   _request: FastifyRequest,

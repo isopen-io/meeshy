@@ -18,6 +18,7 @@ import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 import { signSessionToken } from './auth/session-jwt';
+import { mintPendingTwoFactorChallenge } from './auth/pending-two-factor';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
@@ -28,9 +29,6 @@ const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
 const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
-
-/** La vie du jeton d'étape 2, alignée sur `AuthService.authenticate` (5 min). */
-const PENDING_TWO_FACTOR_TTL_MS = 5 * 60 * 1000;
 
 /**
  * L'état du second facteur d'un compte, en TROIS valeurs — pas deux (#4534).
@@ -378,7 +376,7 @@ export class MagicLinkService {
       }
 
       if (secondFactor === 'required') {
-        const twoFactorToken = await this.mintPendingTwoFactorToken(user.id);
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: this.prisma, userId: user.id });
 
         await this.logSecurityEvent(user.id, 'MAGIC_LINK_2FA_REQUIRED', 'LOW', {
           ipAddress: requestContext.ip,
@@ -495,33 +493,6 @@ export class MagicLinkService {
       logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }
-  }
-
-  /**
-   * Émettre le jeton d'étape 2 que `POST /auth/login/2fa` sait DÉJÀ consommer.
-   *
-   * Même forme et même mémoire que `AuthService.authenticate` : le SHA-256 du
-   * jeton dans `User.phoneVerificationCode`, sa péremption dans
-   * `phoneVerificationExpiry`. C'est ce qui rend le lien magique un producteur
-   * d'étape 1 de plus, sans qu'aucune ligne de l'étape 2 ne change.
-   *
-   * L'écriture n'est pas gardée : si elle échoue, l'exception remonte au
-   * `catch` de `validateMagicLink`, qui refuse — jamais une session ouverte
-   * sur un second facteur qu'on n'aurait pas su armer.
-   */
-  private async mintPendingTwoFactorToken(userId: string): Promise<string> {
-    const twoFactorToken = crypto.randomBytes(32).toString('hex');
-    const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        phoneVerificationCode: twoFactorTokenHash,
-        phoneVerificationExpiry: new Date(Date.now() + PENDING_TWO_FACTOR_TTL_MS)
-      }
-    });
-
-    return twoFactorToken;
   }
 
   /**
