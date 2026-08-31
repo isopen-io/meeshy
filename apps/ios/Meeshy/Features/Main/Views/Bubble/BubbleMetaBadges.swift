@@ -167,6 +167,6 @@ struct BubbleEphemeralBadge: View, Equatable {
                         .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
                 )
         )
-        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Ephemeral message, expires in \(timerText)", bundle: .main))
+        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message éphémère, expire dans \(timerText)", bundle: .main))
     }
 }

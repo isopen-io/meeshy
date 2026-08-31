@@ -292,7 +292,7 @@ qui sert :
 | ids de planches commençant par un chiffre | `'#1a' is not a valid selector` | `[id="1a"]` |
 | Playwright sans navigateur installé | `Executable doesn't exist` | Chrome installé, via `capture-cibles.js` |
 | `git commit` emporte tout l'index | le WIP d'une autre session part avec | `git commit -- <chemins>` |
-| `test-without-building` après un build ROUGE | suites nommées, comptes plausibles, **vert** — sur le bundle d'AVANT | gater : `grep -q "TEST BUILD SUCCEEDED"` avant de lancer les tests |
+| `test-without-building` après un build ROUGE | suites nommées, comptes plausibles, **vert** — sur le bundle d'AVANT | gater sur le CODE DE SORTIE du `build-for-testing` (`BUILD_RC=$?` en ligne suivante, sans tube). **Pas** sur `grep "TEST BUILD SUCCEEDED"` : avec `-quiet` la ligne n'est pas imprimée et un build vert est déclaré rouge |
 | `idb ui tap` deux fois pour un double-tap | ~1,1 s par appel : le geste dégénère (éditeur d'objet, zoom viewport) | aucun double-tap n'est synthétisable — éprouver le layer, pas la capture |
 | Composer ouvert depuis le plateau des STORIES | ni rail *leading*, ni rangée basse, et l'écran a l'air correct | c'est l'atelier — entrer par le POST + un média (§ ci-dessus) |
 

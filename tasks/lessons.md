@@ -21148,44 +21148,7 @@ fenêtre du double-tap. Deux invocations consécutives ne le synthétisent pas d
 que par un geste qu'aucun outil ne produit, **le test de LAYER est la preuve, pas un repli** :
 il est déterministe là où la capture est un coup de dés.
 
-## Leçon 359 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le PASSÉ
-
-**Le fait, trouvé deux fois la même nuit, par deux chemins différents.** Un
-`xcodebuild build-for-testing` qui ÉCHOUE laisse en place le bundle de tests précédent.
-Le `test-without-building` qui suit s'exécute alors normalement : suites nommées, comptes
-plausibles, **vert**. Il mesure un ARBRE qui n'existe plus.
-
-| entrée | comment le build a échoué |
-|---|---|
-| session A | une erreur de compilation ordinaire (ordre d'arguments), 129 tests « verts » ensuite |
-| session B | une référence retirée du `.pbxproj` par une régénération, deux rouges attribués à tort à son propre correctif |
-
-Dans les deux cas le seul témoin est **une ligne de log qu'on ne lit pas quand le résumé
-dit « passed »** — `** TEST BUILD FAILED **`, plusieurs centaines de lignes plus haut.
-
-> C'est la forme la plus dangereuse du faux vert, parce qu'elle ne ment pas sur le
-> RÉSULTAT mais sur son OBJET. Un test rouge fait chercher ; un test vert sur le mauvais
-> binaire fait CONCLURE. La session B a failli conclure que son correctif ne marchait pas ;
-> la session A, que le sien marchait.
-
-**La parade est mécanique, pas une discipline de lecture** — enchaîner les deux commandes
-en gardant la porte fermée :
-
-```sh
-xcodebuild build-for-testing … 2>&1 | grep -E "error:|TEST BUILD" > build.log
-if grep -q "TEST BUILD SUCCEEDED" build.log; then
-    xcodebuild test-without-building …
-else
-    echo "BUILD ROUGE — aucun test lancé"
-fi
-```
-
-Corollaire de méthode : **lire la ligne de build AVANT le compte de tests**, toujours, et
-se méfier d'un compte qui n'a pas bougé alors qu'on vient d'ajouter des témoins. Le COMPTE
-par classe est le second témoin — c'est déjà lui qui attrape le `-only-testing:` d'une
-classe absente du `.pbxproj`, silencieusement ignorée.
-
-## Leçon 355 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le passé
+## Leçon 359 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le passé
 
 **2026-08-31.** Deux sessions, deux entrées différentes, la même nuit, le même
 piège — c'est pour ça qu'elle est écrite à deux voix.
@@ -21207,12 +21170,29 @@ parfaitement normal : suites nommées, comptes plausibles, `EXIT=0`.
 
 ```bash
 xcodebuild build-for-testing … > build.log 2>&1
-if grep -q "TEST BUILD SUCCEEDED" build.log; then
+BUILD_RC=$?
+if [ "$BUILD_RC" -eq 0 ]; then
     xcodebuild test-without-building …
 else
     echo "BUILD ROUGE — aucun test lancé"; exit 1
 fi
 ```
+
+**Le gate porte sur le CODE DE SORTIE, pas sur un motif du journal** — et cette
+précision a coûté un faux ROUGE avant d'être écrite. La première version cherchait
+`grep -q "TEST BUILD SUCCEEDED"` ; **avec `-quiet`, xcodebuild n'imprime pas cette
+ligne**, et un build parfaitement vert était déclaré rouge. La parade contre un
+faux vert avait fabriqué un faux rouge, ce qui est le même défaut retourné : on
+juge un fait sur son ÉCHO plutôt que sur lui-même.
+
+Deux pièges de coquille vont avec :
+
+- **ne pas mettre de tube derrière la commande jugée.** `xcodebuild … | grep …`
+  fait de `$?` le statut de `grep`, jamais celui du build (`${PIPESTATUS[0]}` le
+  rattrape, mais le plus sûr est de rediriger vers un fichier et de filtrer
+  ensuite) ;
+- **capturer `$?` sur la ligne SUIVANTE**, avant tout autre appel — un `echo`
+  intercalé l'écrase.
 
 Deux corollaires qui ne se devinent pas :
 
@@ -21229,7 +21209,50 @@ Deux corollaires qui ne se devinent pas :
 Même famille que [[reference_status_channel_lies_about_the_fact]] : le canal
 de statut ment sur le fait — ici en disant vrai sur autre chose.
 
-## Leçon 356 — « La vue est-elle montée ? » a une jumelle : « quelle SURFACE est montée ? »
+## Leçon 360 — Trois surfaces, une nuit, le même angle mort : on éprouve ce qui ALIMENTE et ce qui DÉCIDE, jamais ce qui est POSÉ
+
+*(Sa jumelle d'échelle est la [leçon 361](#leçon-361) : la question « est-ce POSÉ ? » a une
+couche au-dessus d'elle — « quelle SURFACE est posée ? ».)*
+
+**Le fait.** Le 2026-08-31, trois features du composer sans aucun rapport entre elles ont
+été livrées avec leurs témoins au vert et n'atteignaient l'écran d'aucune façon. Les trois
+défauts sont différents ; leur FORME est la même.
+
+| surface | la règle | le défaut | ce qui l'aurait attrapé |
+|---|---|---|---|
+| bande de mentions `@` | juste | la vue était **construite puis jetée** (`if let` sans `return` dans un accesseur `AnyView?`) | une garde syntaxique sur les accesseurs de vue optionnelle |
+| letterbox ThumbHash | juste, 16 témoins | sa **seule source n'existe qu'à la publication** — inerte pendant toute la composition | une suite qui monte le `CALayer` et demande s'il a des pixels |
+| rangée de jetons `1c` | juste, 15 témoins | la **condition de montage ne pouvait pas devenir vraie** (`toolOptions == nil` sur un panneau passé inconditionnellement) | une règle `isServed(…)` posée sur ce qui SAIT, éprouvable sans vue |
+
+> **Un témoin de feature interroge presque toujours deux choses — ce qui alimente la vue et
+> ce qui la décide — et presque jamais la troisième : ce qui la POSE.** Les trois questions
+> sont indépendantes, et la troisième est la seule dont l'échec ressemble à un
+> fonctionnement normal : une bande absente ressemble à une bande qui n'a rien à dire, ce
+> que la loi 8 prescrit par ailleurs.
+
+**Les trois questions, dans l'ordre où il faut les poser** (elles prolongent les quatre du
+Prisme — bon rang ? qui l'affiche ? que transporte-t-il à côté ? a-t-il le droit d'être
+là ?) :
+
+1. **Qui l'ALIMENTE, et à quel MOMENT du cycle de vie ?** Une source née après un jalon
+   (publication, upload, synchro) est absente de tout ce qui précède — et un test unitaire
+   ne le voit jamais, puisqu'il fournit la donnée lui-même.
+2. **Qui la DÉCIDE ?** La règle, éprouvée hors de toute vue.
+3. **Qui la POSE, et cette condition peut-elle seulement devenir vraie ?** C'est ici que
+   `toolOptions == nil` a échoué — le sous-cas le plus vicieux étant **une condition dont
+   l'input est une valeur toujours présente**. Une vue qui existe toujours ne témoigne de
+   rien.
+
+**Corollaire de forme.** Une condition de montage écrite dans un `body` n'est interrogeable
+par aucun témoin. Sortie en règle — `isServed(toolIsOpen:chips:)` — elle le devient, et sa
+SIGNATURE dit ce qu'elle interroge : c'est en écrivant `toolIsOpen: Bool` plutôt que
+`toolOptions: AnyView?` qu'on s'aperçoit qu'on n'avait pas la bonne source.
+
+**Corollaire de méthode.** Aucune de ces trois n'a été trouvée par un gate ; les trois l'ont
+été **en regardant l'écran**. La loi 5 (« la fin se prouve, capture à l'appui ») n'est pas
+une formalité de clôture : c'est le seul instrument qui pose la troisième question.
+
+## Leçon 361 — « La vue est-elle montée ? » a une jumelle : « quelle SURFACE est montée ? »
 
 **2026-08-31, vue `3h` (#4098).** Carte de citation de story livrée, prouvée à
 l'écran sur `Meeshy-iOS18` : carte de scène, bandeau, tap qui ouvre la story.
@@ -21262,7 +21285,53 @@ arbitrage écrit. D'où une issue `décision-produit` plutôt qu'un correctif �
 mais la QUESTION devait être posée, et elle ne l'aurait pas été sans la seconde
 capture.
 
-## Leçon 360
+## Leçon 362 — Une erreur avalée en résultat VIDE est indiscernable d'un vide légitime
+
+**Le fait.** La bande de suggestions `@` du composer ne paraissait sur aucun des trois champs
+de saisie, au simulateur. Deux hypothèses plausibles ont été formulées — un correctif qui ne
+prenait pas, un compte sans ami accepté — et **les deux étaient fausses**.
+
+La production sert un commit qui **ignore tout le module `/directory/*`** :
+
+```
+GET https://gate.meeshy.me/health → build.commit = 9e5f7024d7   (2026-08-29)
+git cat-file -e 9e5f7024d7:services/gateway/src/routes/directory/friend-requests.ts
+→ ABSENT du commit déployé
+```
+
+`ComposerMentionFriendsSource.acceptedFriends()` appelle la NOUVELLE adresse, reçoit un
+**404**, et son `catch { return [] }` le rend comme « aucun ami accepté ».
+
+> **Le silence est correct à chaque étage.** Le service rend une liste vide, ce qui est un
+> résultat légitime ; la vue ne peint rien, ce que la loi 8 lui prescrit précisément pour un
+> vide. Aucun des deux ne ment. La feature est morte et rien ne le signale — parce que
+> **« je n'ai rien trouvé » et « je n'ai pas pu chercher » arrivent par le même canal.**
+
+**Ce que ça dit d'un `catch { return [] }`.** Ce n'est pas une tolérance, c'est une
+CONVERSION : elle transforme une panne en donnée. Le repli doit distinguer les deux —
+« vide » et « injoignable » sont deux états, et seul l'appelant sait ce qu'il en fait (la
+loi 8 gouverne le premier, elle ne dit rien du second). Même famille que
+[[reference_fabricated_fallback_hides_dead_reads]] et que la tolérance réglée chez
+l'appelant.
+
+**Ce que ça dit d'un DÉMÉNAGEMENT d'adresse.** Un client peut migrer vers une route neuve
+sans qu'aucun gate ne rougisse : les tests du client appellent la nouvelle, ceux du serveur
+la déclarent, et personne ne compare les deux CONTRE LE DÉPLOYÉ. Une garde utile
+comparerait les adresses appelées par les SDK aux routes déclarées par la passerelle ;
+aucune ne peut vérifier ce qui tourne réellement en production.
+
+**La recette d'ops qui tranche en deux commandes**, et qui vaut d'être connue avant de
+suspecter le client :
+
+```sh
+curl -s https://gate.meeshy.me/health   # → build.commit
+git cat-file -e <sha>:<chemin/du/fichier>   # existait-il dans le déployé ?
+```
+
+C'est le chemin le plus court entre « ça ne marche pas en prod » et « ça n'y est pas
+encore ». Détail : #4529.
+
+## Leçon 363
 
 **« `Closes #n` » n'est inerte que sur une branche qui n'est PAS la branche par
 défaut — et ici la branche par défaut est `dev`.**

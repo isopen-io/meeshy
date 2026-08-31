@@ -92,6 +92,14 @@ struct ComposerSceneSurface: View {
     /// droite, et le bas pour ce qui règle l'OUTIL ou l'OBJET du moment. Un
     /// objet sélectionné n'est aucune des deux premières places.
     var objectChips: [ComposerObjectChips.Chip] = []
+
+    /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
+    /// SAIT — voir `ComposerObjectChips.isServed`.
+    private var toolIsOpen: Bool {
+        if case .tool = railMode { return true }
+        return false
+    }
+
     var activeObjectChipId: String?
     var onObjectChip: ((String) -> Void)?
 
@@ -324,7 +332,12 @@ struct ComposerSceneSurface: View {
                 // deux règlent des choses différentes au même endroit, et les
                 // empiler ferait remonter la scène de cinquante points sous le
                 // doigt. La même exclusion que la bande, pour la même raison.
-                if toolOptions == nil, !objectChips.isEmpty {
+                // **Le témoin d'« outil ouvert » est le MODE DU RAIL, jamais
+                // la présence du panneau d'options** : l'hôte passe ce dernier
+                // inconditionnellement (il se vide lui-même), donc `toolOptions
+                // == nil` était toujours faux et la rangée n'a jamais pu
+                // paraître. Mesuré à l'écran, pas déduit.
+                if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
                                            activeChipId: activeObjectChipId,
                                            onSelect: onObjectChip)
