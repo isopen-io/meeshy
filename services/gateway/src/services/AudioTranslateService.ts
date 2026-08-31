@@ -351,11 +351,7 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Construire le chemin ABSOLU audio via filePath
-      // Le `/api/v1/attachments/file` ci-dessous est un littéral DÉLIBÉRÉ (#4324) :
-      // il découpe une `fileUrl` déjà STOCKÉE, pas une adresse qu'on compose. Le
-      // faire suivre `apiPath()` rendrait illisibles les URL écrites sous l'ancienne
-      // version le jour où `MEESHY_API_VERSION` change.
+      // Chemin ABSOLU via filePath — le `/api/v1/…` DÉCOUPE une `fileUrl` stockée, jamais composée (#4324)
       const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = attachment.filePath
         ? path.join(uploadBasePath, attachment.filePath)
@@ -515,11 +511,7 @@ export class AudioTranslateService extends EventEmitter {
         return { success: false, error: 'Not an audio attachment', errorCode: 'INVALID_TYPE' };
       }
 
-      // Construire le chemin ABSOLU audio via filePath
-      // Le `/api/v1/attachments/file` ci-dessous est un littéral DÉLIBÉRÉ (#4324) :
-      // il découpe une `fileUrl` déjà STOCKÉE, pas une adresse qu'on compose. Le
-      // faire suivre `apiPath()` rendrait illisibles les URL écrites sous l'ancienne
-      // version le jour où `MEESHY_API_VERSION` change.
+      // Chemin ABSOLU via filePath — le `/api/v1/…` DÉCOUPE une `fileUrl` stockée, jamais composée (#4324)
       const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
       const audioPath = attachment.filePath
         ? path.join(uploadBasePath, attachment.filePath)
