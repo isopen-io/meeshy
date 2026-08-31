@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the audio player gained its pure render-posture plan — given a chrome posture
+> (Card / FlatMinimal / FlatFocused), one function names WHO appears in the player: card background,
+> right chips, language strip, re-transcribe, transcribe-CTA, and the flat transcription with its
+> line/word limits and whether it follows playback** (slice `audio-player-chrome-plan`,
+> feature-parity §"Audio message player" `[ ]`→`[~]`). iOS keeps this as the value type
+> `AudioPlayerChromePlan.plan(for:)` (`packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift`),
+> extracted from the `@ViewBuilder` so the "who appears" decision is testable off the view; Android had
+> NO chrome plan at all — the audio player rendered one fixed card layout with no posture concept (a
+> Complétude gap vs iOS's card / bare-strip / focal-strip triad).
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4506
+> (`transcription-active-segment-resolver`, the karaoke resolver from the previous run) was open with the
+> **Android** required gate GREEN, diff strictly `apps/android` (1 core + 1 test + 3 docs), reviewer PASS.
+> Its only red check was `Quality (bun)` — a pre-existing `apps/web` type-debt ratchet regression (1184
+> vs baseline 1183), which an `apps/android`-only diff compiles nothing of and cannot move; `mergeable_state:
+> unstable` (non-required check failing, not blocked). Squash-merged #4506 to `main`, then fetched/reset
+> `origin/main` (`225e48d6`) and branched `claude/apps/android/audio-player-chrome-plan` off it. Confirmed
+> the target file absent on `main` (`ls` → No such file; `grep -rl ChromePlan apps/android` → empty) per the
+> NOTES lesson before writing.
+>
+> **The change — one pure enum + one pure value type + one factory, no wiring churn.** New `:core:model`
+> `AudioPlayerChrome` (3 cases) + `AudioPlayerChromePlan` (9 fields) + `plan(chrome)`: `.card` →
+> full rich card (background + all chips + no flat transcription); `.flatMinimal` → bare strip (nothing
+> shown but the flat transcription, capped at 2 lines, static — a karaoke cut to 2 lines would have nothing
+> to highlight past the cut); `.flatFocused` → enriched bare strip (chips/strip/retranscribe/CTA back, no
+> card background, full transcription that FOLLOWS playback, word-capped at the standard 30 → see-more to
+> fullscreen). Chrome is an OPAQUE posture — WHICH row gets WHICH posture stays app-side (SDK purity, same
+> rule as the transcription-language seed). **SOTA over iOS:** an `entries`-driven `data class` (structural
+> equality gives the "distinct plans" invariant test for free) rather than a `@ViewBuilder`-embedded static
+> `switch`. Blast radius: two new files (1 core + 1 test) — no existing code touched (the Compose player
+> chrome that paints these decisions is app-side glue, tracked §"Audio message player" follow-up).
+>
+> **Tests: +13, RED-proven.** `AudioPlayerChromePlanTest` covers each posture's field set (card shows the
+> full card chrome + renders no flat transcription; flatMinimal strips every enrichment + static 2-line
+> quote; flatFocused keeps enrichments minus card background + full karaoke-following word-capped
+> transcription) plus cross-case invariants (only the card shows a card background; only flatFocused follows
+> playback; every flat posture renders a flat transcription and the card does not; every chrome resolves to a
+> DISTINCT plan; the standard word limit is 30; a word limit is only ever set on the posture that follows
+> playback). **RED:** flipping flatFocused's `flatTranscriptionFollowsPlayback` true→false (and dropping its
+> word limit) fails exactly `onlyFlatFocusedFollowsPlayback` and
+> `flatFocusedRendersAFullKaraokeFollowingTranscription` (verified: 2 failed under the mutation, green after
+> revert).
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37` cleanly. `local.properties` kept out of the
+> diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (973 tasks). Reviewer **PASS** (diff `apps/android` only — 1 core file
+> + 1 test file + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block, no
+> android.*, no singleton, no "which row gets which posture" orchestration; SSOT — one chrome plan, no
+> re-implementation; instant-app — a pure projection, no I/O; UDF — pure function of its input; no tautological
+> tests; no coverage floor lowered — new pure logic with total branch coverage, RED-proven).
+>
+> **Next**: the Compose audio-player chrome that consumes this plan (speed control, seek, disk-cache-first
+> instant replay — iOS `AudioPlayerView` body) is the app-side §"Audio message player" follow-up; the
+> karaoke Compose flow-layout (§P) still pending from the prior slice. For a pure-core next slice, the
+> `AudioProgressDisplay` value type (iOS, fraction+elapsed+isLive) or `VideoDismissWatchReport`
+> (iOS `shouldReport` — the #3908 double-report guard). **Confirm the target file is absent on `origin/main`
+> before writing, and merge any open android PR first (rule 0).**
+
 > On 2026-08-30 **the in-app real-time notification toast is finally WIRED — the three pure §M building
 > blocks (`NotificationToastPolicy`, `NotificationTypeToggle`, the `MeeshyNotificationToast` atom), each
 > merged unwired by a prior slice, now come alive behind one orchestrator with a 2 s dedup window and a 7 s

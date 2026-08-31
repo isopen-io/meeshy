@@ -7116,7 +7116,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
       app-side glue (pending): the Compose flow-layout that paints the coloured spans +
       tap-to-seek + auto-scroll, and video watch-progress reporting.
-- [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+- [~] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+      — **render-posture pure core shipped** (slice `audio-player-chrome-plan`, 2026-08-30):
+      pure `:core:model` `AudioPlayerChrome` (Card / FlatMinimal / FlatFocused) +
+      `AudioPlayerChromePlan.plan(chrome)`, a faithful port of iOS
+      `AudioPlayerChromePlan.plan(for:)` — the value type deciding WHO appears in the player
+      (card background, right chips, language strip, re-transcribe, transcribe-CTA, flat
+      transcription + its line/word limits + whether it follows playback). `.card` = historic
+      rich card (bubble default); `.flatMinimal` = bare strip, static 2-line quote; `.flatFocused`
+      = enriched bare strip, full karaoke-following transcription word-capped at 30 → fullscreen.
+      Chrome is an OPAQUE posture — WHICH row gets WHICH posture stays app-side (SDK purity).
+      +13 branch tests, RED-proven. Remaining app-side glue (pending): the Compose player chrome
+      that paints these decisions, speed control, seek, disk-cache-first instant replay.
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
 - [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
       — **live-waveform pure core shipped** (slice `media-waveform-interpolation`, 2026-07-12):
