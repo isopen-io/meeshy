@@ -449,6 +449,19 @@ final class LocalizationConsistencyTests: XCTestCase {
         // measured against the app catalog and looked untranslated.
         "apps/ios/MeeshyWidgets/MeeshyWidgets.swift",  // 25
         "apps/ios/MeeshyWidgets/LiveActivities.swift",  // 11
+        // 232i (#4328) — les deux surfaces dont le remplissage a vide le cliquet.
+        //
+        // `MediaDownloadPreferences.swift` est la PREMIÈRE source du SDK épinglée
+        // ici : ses quatre appels n'ont pas de `bundle:`, donc ils résolvent contre
+        // le catalogue de l'APP, exactement comme une vue du target principal — la
+        // règle qui s'y applique est celle de l'app, et sa place est cette liste.
+        //
+        // `StorySentinelView.swift` est l'écran qu'un client trop ancien voit à la
+        // place d'une story d'un format plus récent. C'est la surface où un repli
+        // en langue source est le plus coûteux : elle ne s'affiche QUE devant
+        // quelqu'un qu'on est en train de perdre, et on lui parlait français.
+        "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
