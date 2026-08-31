@@ -35,7 +35,7 @@ const DEPUIS = '2026-08-29';
  * que le client ne peut pas suivre tel quel n'indique aucune migration.
  */
 const blocDeLaCible = (request: FastifyRequest): string =>
-  `/api/v1/directory/blocks/${encodeURIComponent((request.params as { userId: string }).userId)}`;
+  `${apiPath('/directory/blocks')}/${encodeURIComponent((request.params as { userId: string }).userId)}`;
 
 const ANNONCE = {
   ensemble: { depuis: DEPUIS, successeur: apiPath('/directory/blocks'), retraitLe: dateDeRetrait(DEPUIS) },

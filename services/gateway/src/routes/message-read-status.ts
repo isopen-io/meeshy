@@ -25,6 +25,7 @@
  */
 
 import { FastifyInstance, FastifyRequest } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { createUnifiedAuthMiddleware } from '../middleware/auth.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import {
@@ -73,7 +74,7 @@ const DEPUIS_ALIAS_RECEIPTS = '2026-08-30';
  * `delivery-receipt`) voyage de même façon, dans `messageIds` du corps.
  */
 const successeurReceiptsEcriture = (request: FastifyRequest): string =>
-  `/api/v1/conversations/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts`;
+  `${apiPath('/conversations')}/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts`;
 const ANNONCE_RECEIPTS_ECRITURE: AdresseDepreciee = {
   depuis: DEPUIS_ALIAS_RECEIPTS,
   successeur: successeurReceiptsEcriture,
@@ -83,7 +84,7 @@ const ANNONCE_RECEIPTS_ECRITURE: AdresseDepreciee = {
 const ANNONCE_READ_STATUSES: AdresseDepreciee = {
   depuis: DEPUIS_ALIAS_RECEIPTS,
   successeur: (request) =>
-    `/api/v1/conversations/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts?detail=summary`,
+    `${apiPath('/conversations')}/${encodeURIComponent((request.params as ReceiptParams).conversationId)}/receipts?detail=summary`,
 };
 
 /**

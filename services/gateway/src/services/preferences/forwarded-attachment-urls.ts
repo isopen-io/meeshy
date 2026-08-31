@@ -35,6 +35,19 @@ export type ForwardedAttachmentUrls = {
   readonly thumbnailUrl?: string | null;
 };
 
+/**
+ * Littéral DÉLIBÉRÉ, et non un oubli de la migration `apiPath()` (#4324).
+ *
+ * Ce chemin ne COMPOSE aucune adresse : il DÉCOUPE une URL déjà STOCKÉE en
+ * base (`MessageAttachment.fileUrl`, 198 documents sur staging). Le passer à
+ * `apiPath()` le ferait suivre `MEESHY_API_VERSION` — et le jour où la version
+ * change, `originOf` cesserait de reconnaître les URL écrites sous l'ancienne,
+ * donc rendrait `null` sur toute la population héritée.
+ *
+ * Un littéral qui LIT de la donnée écrite n'a pas la même règle qu'un littéral
+ * qui ÉCRIT une adresse : le premier est daté par la donnée, le second par la
+ * configuration. Même raison que les clés de `route-usage.service.ts`.
+ */
 const FILE_ROUTE = '/api/v1/attachments/file/';
 
 const isForwardedCopy = (attachment: ForwardedAttachmentUrls): boolean =>

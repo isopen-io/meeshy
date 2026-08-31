@@ -7,6 +7,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
@@ -1275,7 +1276,7 @@ export class MessageTranslationService extends EventEmitter {
         const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
         const expectedFilename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
         let localAudioPath = path.resolve(translatedDir, expectedFilename);
-        let localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
+        let localAudioUrl = `${apiPath('/attachments/file')}/translated/${expectedFilename}`;
 
         // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
         // Fallback sur base64 pour rétrocompatibilité
@@ -1848,7 +1849,7 @@ export class MessageTranslationService extends EventEmitter {
       const expectedFilename = `${data.attachmentId}_${data.language}.${ext}`;
       const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
       const localAudioPath = path.resolve(translatedDir, expectedFilename);
-      const localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
+      const localAudioUrl = `${apiPath('/attachments/file')}/translated/${expectedFilename}`;
 
       const audioBinary = data.translatedAudio._audioBinary;
       const audioBase64 = data.translatedAudio.audioDataBase64;
@@ -2188,7 +2189,7 @@ export class MessageTranslationService extends EventEmitter {
           // Cela garantit que l'URL du translator (/outputs/audio/translated/) n'est jamais exposée
           const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
           const localAudioPath = path.resolve(translatedDir, filename);
-          const localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
+          const localAudioUrl = `${apiPath('/attachments/file')}/translated/${filename}`;
 
           // MULTIPART: Priorité aux données binaires (efficace, pas de décodage)
           // Fallback sur base64 pour rétrocompatibilité
