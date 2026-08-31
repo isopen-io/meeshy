@@ -23,7 +23,9 @@ final class AuthManagerLogoutSettingsQueuePurgeTests: XCTestCase {
     func test_logout_purgesSettingsActionQueue() async throws {
         await SettingsActionQueue.shared.enqueue(
             SettingsAction(
-                UsersEndpoint.me,
+                // `SettingsAction` PERSISTE son chemin pour le rejouer : il lui
+                // faut une chaîne, pas une adresse typée (#4282).
+                endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me),
                 httpMethod: "PATCH",
                 payload: Data(#"{"displayName":"Compte A"}"#.utf8)
             )

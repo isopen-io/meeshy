@@ -269,7 +269,8 @@ final class AppVersionHeaderTests: XCTestCase {
     // MARK: - Le câblage : l'en-tête atteint vraiment la requête
 
     func test_buildURLRequest_porteLEnTeteDeVersionApplicative() async throws {
-        let request = try await APIClient.shared._buildURLRequestForTesting(PostsEndpoint.root)
+        let request = try await APIClient.shared._buildURLRequestForTesting(
+            endpoint: APIClient.shared.legacyPath(for: PostsEndpoint.root))
 
         XCTAssertEqual(
             request.value(forHTTPHeaderField: AppVersionHeader.versionHeaderName),
@@ -279,7 +280,8 @@ final class AppVersionHeaderTests: XCTestCase {
     }
 
     func test_buildURLRequest_annonceLaPlateformeQuiResoutLUrlDuStore() async throws {
-        let request = try await APIClient.shared._buildURLRequestForTesting(PostsEndpoint.root)
+        let request = try await APIClient.shared._buildURLRequestForTesting(
+            endpoint: APIClient.shared.legacyPath(for: PostsEndpoint.root))
 
         XCTAssertEqual(
             request.value(forHTTPHeaderField: AppVersionHeader.platformHeaderName),
@@ -289,7 +291,8 @@ final class AppVersionHeaderTests: XCTestCase {
     }
 
     func test_buildURLRequest_lEnTeteDePorte_neSeConfondPasAvecLaTelemetrie() async throws {
-        let request = try await APIClient.shared._buildURLRequestForTesting(PostsEndpoint.root)
+        let request = try await APIClient.shared._buildURLRequestForTesting(
+            endpoint: APIClient.shared.legacyPath(for: PostsEndpoint.root))
 
         XCTAssertNotNil(request.value(forHTTPHeaderField: "X-Meeshy-Version"),
                         "La télémétrie reste : deux contrats, deux en-têtes.")

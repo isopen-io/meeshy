@@ -122,7 +122,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // réseau, il a une table, et le chemin est la clé que les témoins
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
-        return try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
+        return try await request(typedEndpoint, method: "GET", body: nil, queryItems: nil)
     }
 
     func offsetPaginatedRequest<T: Decodable>(
@@ -134,7 +134,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // réseau, il a une table, et le chemin est la clé que les témoins
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
-        return try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
+        return try await request(typedEndpoint, method: "GET", body: nil, queryItems: nil)
     }
 
     func post<T: Decodable, U: Encodable>(
@@ -191,7 +191,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // réseau, il a une table, et le chemin est la clé que les témoins
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
-        return try await request(endpoint: endpoint, method: "DELETE", body: nil, queryItems: nil)
+        return try await request(typedEndpoint, method: "DELETE", body: nil, queryItems: nil)
     }
 
     func delete<T: Decodable, U: Encodable>(

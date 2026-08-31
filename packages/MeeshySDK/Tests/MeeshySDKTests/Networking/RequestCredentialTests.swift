@@ -87,7 +87,8 @@ final class RequestCredentialTests: XCTestCase {
     func test_siègeDeTest_poseLEnTêteAnonymeCommeLaProduction() async throws {
         APIClient.shared.setTokens(auth: nil, anonymous: "anon_seam")
 
-        let request = try await APIClient.shared._buildURLRequestForTesting(ConversationsEndpoint.root)
+        let request = try await APIClient.shared._buildURLRequestForTesting(
+            endpoint: APIClient.shared.legacyPath(for: ConversationsEndpoint.root))
 
         XCTAssertEqual(request.value(forHTTPHeaderField: "X-Session-Token"), "anon_seam")
         XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
@@ -99,7 +100,7 @@ final class RequestCredentialTests: XCTestCase {
         APIClient.shared.setTokens(auth: nil, anonymous: "anon_ignoré")
 
         let request = try await APIClient.shared._buildURLRequestForTesting(
-            ConversationsEndpoint.root,
+            endpoint: APIClient.shared.legacyPath(for: ConversationsEndpoint.root),
             authToken: "jwt.explicite"
         )
 
