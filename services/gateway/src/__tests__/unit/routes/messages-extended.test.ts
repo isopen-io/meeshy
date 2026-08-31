@@ -250,6 +250,24 @@ async function buildApp(opts: {
     conversationReadCursor: {
       findUnique: jest.fn().mockResolvedValue({ lastReadAt: new Date('2026-08-16T09:00:00Z') }),
     },
+    // `85494dee00` a soumis la diffusion de `attachment-status:updated` à la
+    // réciprocité `showReadReceipts` : le chemin d'émission lit désormais les
+    // préférences de confidentialité avant de choisir sa room. Ce faux prisma
+    // ne les servait pas, et l'échec partait dans le `catch` qui entoure toute
+    // la diffusion — la route rendait 200 pendant que l'émission n'avait pas
+    // lieu. Un test qui n'assère que le statut aurait été vert.
+    //
+    // Les deux modèles, parce que la résolution est en DEUX temps : le document
+    // `userPreferences` d'abord, puis le repli sur les lignes `userPreference`
+    // de janvier pour les utilisateurs qu'il ne couvre pas. Vides tous les deux
+    // ⇒ aucune préférence stockée ⇒ `showReadReceipts !== false` ⇒ diffusion à
+    // la room de conversation, ce que ces témoins mesurent.
+    userPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   });
 
   if (opts.translationService !== undefined) {

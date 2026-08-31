@@ -95,18 +95,24 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
       // fast-json-stringify le strippe. Il est ici parce qu'il vit dans le
       // MÊME document que les préférences déjà sélectionnées — le lire coûte
       // zéro requête, alors qu'une lecture séparée en aurait coûté une par
-      // chargement de liste. `deletedForUserAt` est dans le même cas (le wire
-      // ne connaît que sa projection booléenne `isDeletedForUser`).
+      // chargement de liste.
+      //
+      // `deletedForUserAt` figurait ici pour la même raison, et n'y figure
+      // plus : `95ca2becd2` l'a retiré du `select` en même temps que des deux
+      // contrats de fil (arbitrage (a) — un champ sans écrivain servait
+      // « pas supprimée » à une conversation RÉELLEMENT dans la corbeille).
+      // Un témoin qui gèle la composition d'un `select` tombe quand ce
+      // `select` change à dessein : c'est son travail, et c'est ici la seule
+      // ligne à en tirer.
       'clearHistoryBefore',
       'customName',
-      'deletedForUserAt',
       'isArchived',
       'isMuted',
       'isPinned',
       'reaction',
       // G-123 — choix collant du mode de lecture (G-121), lu pour l'entrée
       // d'orchestrateur du pont ✦ (workshop A6). SERVEUR-side uniquement,
-      // comme `clearHistoryBefore`/`deletedForUserAt` : le wire ne le
+      // comme `clearHistoryBefore` : le wire ne le
       // déclare pas, `fast-json-stringify` le strippe de la réponse.
       'readingMode',
       'tags'

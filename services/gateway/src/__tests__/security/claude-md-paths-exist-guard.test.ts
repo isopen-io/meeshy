@@ -106,6 +106,16 @@ const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{ chemin: string; raison:
     chemin: 'X/index.ts',
     raison: "gabarit générique du § « Un fichier `X.ts` à côté d'un répertoire `X/` », pas une adresse",
   },
+  {
+    chemin: 'dist/src/server.js',
+    raison:
+      "SORTIE DE BUILD, jamais un fichier du dépôt : la ligne citée est « `tsx watch` " +
+      'for dev, `tsc` + `node dist/src/server.js` for prod », une COMMANDE de production, ' +
+      "pas une adresse à ouvrir. Le répertoire `dist/` n'est ni commité ni construit par le " +
+      "job `Test gateway`, qui ne bâtit que `packages/shared` — cette garde y serait donc " +
+      'rouge en permanence, comme le témoin de `apps/web-v3` qui lisait ' +
+      '`.next/app-build-manifest.json` dans un job sans `next build` (#4528).',
+  },
 ];
 
 /**
