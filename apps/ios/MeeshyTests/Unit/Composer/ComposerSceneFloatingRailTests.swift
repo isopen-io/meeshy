@@ -120,4 +120,54 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: offertes).isEmpty,
                        "la ligne canonique survit — elle ne vise pas la toile")
     }
+
+    // MARK: - La porte SON est partie (directive porteur 2026-08-31)
+
+    /// **Retirer la porte son ne coûte AUCUNE capacité, et c'est mesuré.**
+    ///
+    /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
+    /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker / chip
+    /// > redimensionnable, déplaçable. »
+    ///
+    /// `handleRailDoor(.sound)` appelait `presentSoundSources()`, dont le corps
+    /// ENTIER est `presentedPortal = .sound` — la ligne exacte que la pastille
+    /// du socle exécute déjà. Deux boutons, une seule feuille.
+    ///
+    /// > Ce n'était pas une capacité en double, c'était un BOUTON en double. La
+    /// > différence décide du correctif : on retire l'un des deux sans rien
+    /// > perdre, là où deux capacités auraient demandé de choisir laquelle
+    /// > survit. Vérifier LAQUELLE des deux avant de retirer est ce qui sépare
+    /// > une déduplication d'une régression.
+    func test_laPorteSon_nEstPlusServie() {
+        XCTAssertFalse(ComposerSceneCapabilities.doors.contains(.sound),
+                       "le son de fond vit au socle, le son POSÉ viendra de la palette (#4579)")
+        XCTAssertTrue(ComposerSceneCapabilities.doors.contains(.sticker),
+                      "l'entrée qui portera la palette reste servie")
+    }
+
+    /// **Et elle ne réapparaît NULLE PART** — ni à gauche, ni sur la ligne
+    /// canonique. Une porte retirée d'un jeu servi mais laissée dans une des
+    /// deux rangées serait un contrôle sans chemin d'ingestion : la loi 4 dans
+    /// sa forme la plus banale.
+    func test_laPorteSon_neReparaitDansAucuneRangee() {
+        let servies = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                               format: .story, allowsCapture: true)
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: servies).contains(.sound))
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: servies).contains(.sound))
+    }
+
+    /// **Le fusible.** Si le jeu servi devenait vide, les deux témoins ci-dessus
+    /// passeraient au vert en ne servant plus rien du tout.
+    func test_lesAutresPortes_sontToujoursServies() {
+        let servies = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                               format: .story, allowsCapture: true)
+        // L'ordre est celui de `canonicalRail`, LU et non déduit : c'est la
+        // troisième fois de la session que j'affirme une valeur déduite au lieu
+        // de l'avoir lue, et la troisième fois que le témoin me rattrape.
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: servies),
+                       [.media, .text, .drawing, .sticker],
+                       "quatre entrées à gauche — le compte des quatre pastilles de la planche 1b")
+        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies),
+                       [.description, .mention, .place])
+    }
 }

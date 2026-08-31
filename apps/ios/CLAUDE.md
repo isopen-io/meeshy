@@ -468,6 +468,45 @@ Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais 
 liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
 niveau elle est, et son niveau la range tout seul.
 
+### 2 bis. Les TROIS zones du plateau, et sur quoi chacune agit (directive porteur 2026-08-31, révision)
+
+> « Ce qui est affiché **en bas du plateau lorsqu'aucun outil n'est actif** agit
+> sur le canvas de manière générale. À **gauche** du plateau, ce sont les
+> contrôles qui agissent sur les **objets du slide**. À **droite**, ça agit sur
+> les **dimensions des objets**, + undo/redo devrait y être, + création d'un
+> autre slide dès lors qu'on a déjà un slide de créé. »
+
+Cette formulation PRÉCISE celle du § 2. Elle ne parle plus de « ce qui apparaît
+visuellement » mais de **sur quoi le contrôle agit** — et les deux coïncident
+pour les portes, tout en tranchant ce que la première laissait flou : la place
+des contrôleurs, de l'historique et de la création de slide.
+
+| zone | agit sur | contenu |
+|---|---|---|
+| **bas du plateau** (aucun outil actif) | le CANVAS en général | ce qui vaut pour la scène entière ou la publication — fond, description, mention, lieu |
+| **gauche** | les OBJETS du slide | les portes qui posent ou éditent un objet — média, sticker, dessin, texte |
+| **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
+| **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
+
+**Ce que la révision déplace, et qui reste à faire :**
+
+- **undo / redo quittent le socle pour le rail DROIT.** Ils agissent sur ce qui
+  a été fait aux objets, pas sur l'envoi ; au socle, ils voisinaient avec
+  l'audience et le bouton publier, qui décident de la publication.
+- **la création d'une slide est CONDITIONNELLE** : « dès lors qu'on a déjà un
+  slide de créé ». Le `[+]` est aujourd'hui monté sans condition.
+
+**Le son n'a plus de porte** (même directive) : il n'y a qu'une façon d'ajouter
+un son sur le canvas — une chip redimensionnable et déplaçable, par la palette
+du § 3 — et le son de FOND reste au socle. La porte du rail ouvrait la MÊME
+feuille que la pastille du socle (`presentedPortal = .sound`, ligne pour ligne) :
+c'était un bouton en double, jamais une capacité en double.
+
+> **Vérifier LAQUELLE des deux avant de retirer est ce qui sépare une
+> déduplication d'une régression.** Deux boutons qui ouvrent la même feuille se
+> retirent l'un l'autre sans rien coûter ; deux boutons qui ouvrent deux
+> chemins obligent à choisir lequel survit — et à le dire.
+
 ### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
 
 > « Dans l'icône (smile/sticker) il faudra juste proposer directement des
