@@ -152,6 +152,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift",  // 16
