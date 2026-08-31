@@ -110,6 +110,7 @@ import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
+import { registerAdminShareLinkRoutes } from './admin/share-links';
 import { anonymousUsersAdminRoutes } from './admin/anonymous-users';
 import { systemRankingsRoutes } from './admin/system-rankings';
 import { broadcastRoutes } from './admin/broadcasts';
@@ -245,6 +246,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-languages', prefix: `${API_PREFIX}/admin/languages`, module: languagesRoutes },
   { name: 'admin-messages', prefix: `${API_PREFIX}/admin/messages`, module: AdminMessages.messagesRoutes },
   { name: 'admin-content', prefix: `${API_PREFIX}/admin`, module: registerContentRoutes },
+  // Même préfixe et même ressource que `admin-content` (qui monte `GET
+  // /admin/share-links` et `POST /admin/share-links/:id/reveal` via
+  // `admin/content-share-links.ts`) : la FERMETURE d'un lien par
+  // l'administration (#3734) est montée juste après, pour que l'adjacence des
+  // deux entrées dise ce que l'arborescence des fichiers ne dit pas encore.
+  { name: 'admin-share-links', prefix: `${API_PREFIX}/admin`, module: registerAdminShareLinkRoutes },
   { name: 'admin-anonymous-users', prefix: `${API_PREFIX}/admin`, module: anonymousUsersAdminRoutes },
   { name: 'admin-rankings', prefix: `${API_PREFIX}/admin`, module: systemRankingsRoutes },
   { name: 'admin-broadcasts', prefix: `${API_PREFIX}/admin/broadcasts`, module: broadcastRoutes },

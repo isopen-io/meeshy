@@ -33,6 +33,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
+import { apiService } from '@/services/api.service';
 import { readPaginatedList } from '@/services/paginated-list';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
@@ -151,13 +152,24 @@ export default function AdminShareLinksPage() {
     }
   };
 
-  const handleDeleteLink = async () => {
+  // `DELETE /admin/share-links/:id` (#3734) — jamais `DELETE /links/:linkId`,
+  // qui attend le `mshy_*` PUBLIC : `GET /admin/share-links` ne le sert plus
+  // depuis #4157 (le secret de jointure ne se distribue pas en liste), donc
+  // `shareLink.linkId` vaut `undefined` sur cette page. L'identifiant qu'on
+  // tient est celui de la LIGNE, et c'est celui que la route admin prend.
+  //
+  // Le geste est une FERMETURE DOUCE côté serveur (`isActive: false`, la ligne
+  // survit) : la liste se relit après, la ligne y reste, inactive.
+  const handleDeleteLink = async (shareLinkId: string) => {
     try {
-      // TODO: Implement actual delete API call
-      // await adminService.deleteShareLink(deleteDialog.linkId);
+      await apiService.delete(`/admin/share-links/${shareLinkId}`);
       toast.success(t('shareLinks.deleteSuccess'));
-      loadShareLinks();
+      await loadShareLinks();
     } catch (error) {
+      // Le refus de la passerelle (403 d'un rôle sans `canManageConversations`,
+      // 404 d'une ligne déjà partie) arrive en exception : `apiService.request`
+      // lève sur tout statut non-2xx. Ne JAMAIS annoncer un succès ici — le
+      // TODO que ce lot remplace toastait « supprimé » sans avoir rien appelé.
       console.error('Erreur lors de la suppression du lien:', error);
       toast.error(t('shareLinks.deleteError'));
     }
@@ -572,8 +584,10 @@ export default function AdminShareLinksPage() {
           open={deleteDialog.open}
           onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
           onConfirm={() => {
-            handleDeleteLink();
+            const targetId = deleteDialog.linkId;
             setDeleteDialog({ open: false, linkId: null });
+            if (!targetId) return;
+            void handleDeleteLink(targetId);
           }}
           title={t('shareLinks.deleteTitle')}
           description={t('shareLinks.deleteDescription')}
