@@ -77,8 +77,43 @@ public enum StoryLetterboxFill {
     /// `videoFitMode` porte trois valeurs et son nom n'en dit que deux :
     /// `nil` = mode libre (donc rempli), `"fill"` = rempli forcé, `"fit"` =
     /// ajusté. Seule la troisième laisse une bande.
-    public nonisolated static func isServed(fitMode: String?, hash: String?) -> Bool {
-        fitMode == "fit" && !(hash ?? "").isEmpty
+    ///
+    /// - Parameter hasSource: y a-t-il de quoi PEINDRE ? La question est posée
+    ///   en booléen, et non « le hachage est-il non vide ? », parce que le
+    ///   hachage n'est pas la seule source — voir `sourceKind(…)` ci-dessous.
+    ///   Poser la question sur le hachage rendait la règle aveugle au cas
+    ///   MAJORITAIRE : celui de l'atelier.
+    public nonisolated static func isServed(fitMode: String?, hasSource: Bool) -> Bool {
+        fitMode == "fit" && hasSource
+    }
+
+    /// Ce avec quoi on peint la bande, et **dans l'ordre qui compte**.
+    ///
+    /// > **Le ThumbHash seul ne suffisait pas, et c'est l'atelier qui le dit.**
+    /// > `StoryThumbHashEnricher` ne s'exécute qu'à la PUBLICATION : un média
+    /// > que l'auteur vient de choisir dans sa photothèque n'a **aucun**
+    /// > hachage. Une règle qui n'accepte que le hachage est donc inerte
+    /// > exactement là où le porteur l'a demandée — mesuré au simulateur, le
+    /// > jour même de son écriture, sur la bande d'une photo paysage restée nue.
+    ///
+    /// Le BITMAP déjà stampé passe donc en premier quand il existe : il est en
+    /// mémoire, il est exact, et réduit à trente-deux pixels il rend le même
+    /// flou que le hachage — qu'il approxime, justement. Le hachage garde le
+    /// cas où le bitmap n'est pas encore là : le démarrage à froid du lecteur,
+    /// où il est le seul matériau disponible et où il coûte une milliseconde.
+    public enum Source: Equatable, Sendable {
+        /// Le bitmap de fond déjà posé sur le canvas — exact, sans coût de décodage.
+        case stampedBitmap
+        /// Le hachage, matériau du démarrage à froid.
+        case thumbHash(String)
+        case none
+    }
+
+    public nonisolated static func source(hasStampedBitmap: Bool,
+                                          hashes: [String]) -> Source {
+        if hasStampedBitmap { return .stampedBitmap }
+        if let premier = hashes.first(where: { !$0.isEmpty }) { return .thumbHash(premier) }
+        return .none
     }
 
     /// Ce que la bande LAISSE VOIR du fond peint dessous. Assez opaque pour que

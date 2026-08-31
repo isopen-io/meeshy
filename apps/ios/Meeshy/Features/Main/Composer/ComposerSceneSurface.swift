@@ -81,6 +81,20 @@ struct ComposerSceneSurface: View {
     /// La frame `[+]` du rail *trailing* — créer une slide.
     var onAddSlide: (() -> Void)?
 
+    // MARK: - L'inspecteur de l'objet sélectionné (#4073, vue `1c`)
+
+    /// Les jetons SERVIS — déjà résolus par `ComposerObjectChips.chips(forSelected:in:)`.
+    /// Vide ⇒ aucun objet sélectionné, donc aucune rangée : cette vue ne
+    /// re-filtre rien, exactement comme pour les deux rails et la bande.
+    ///
+    /// **Ils vivent EN BAS, et c'est la sémantique de placement du porteur**
+    /// (2026-08-31) : les contrôles à gauche, le document et les slides à
+    /// droite, et le bas pour ce qui règle l'OUTIL ou l'OBJET du moment. Un
+    /// objet sélectionné n'est aucune des deux premières places.
+    var objectChips: [ComposerObjectChips.Chip] = []
+    var activeObjectChipId: String?
+    var onObjectChip: ((String) -> Void)?
+
     // MARK: - La bande contextuelle
 
     /// La bande OUVERTE — déjà résolue par `ComposerSceneBand.opened`. `nil` ⇒
@@ -299,6 +313,21 @@ struct ComposerSceneSurface: View {
                                           openingEffect: bandOpeningEffect,
                                           onPickOpening: onPickBandOpening,
                                           timelineContent: bandTimelineContent)
+                }
+                // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`) —
+                // au-dessus de la rangée d'outils, sous tout ce qui appartient
+                // à la scène. Il descend le même escalier que le reste du bas :
+                // l'OBJET d'abord, puis la scène, puis la slide, puis la
+                // publication.
+                //
+                // **Un outil ouvert lui prend la place**, et c'est voulu : les
+                // deux règlent des choses différentes au même endroit, et les
+                // empiler ferait remonter la scène de cinquante points sous le
+                // doigt. La même exclusion que la bande, pour la même raison.
+                if toolOptions == nil, !objectChips.isEmpty {
+                    ComposerObjectChipsRow(chips: objectChips,
+                                           activeChipId: activeObjectChipId,
+                                           onSelect: onObjectChip)
                 }
                 // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
                 // ENTRER de la matière — une photo, un lieu, un tracé — quand le

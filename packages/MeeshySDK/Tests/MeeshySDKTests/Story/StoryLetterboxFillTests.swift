@@ -69,16 +69,60 @@ final class StoryLetterboxFillTests: XCTestCase {
     /// défaut, donc le cas de l'écrasante majorité des scènes : y poser un layer
     /// serait un coût pur (loi 8).
     func test_leRemplissage_neSertQuEnModeAJUSTE() {
-        XCTAssertTrue(StoryLetterboxFill.isServed(fitMode: "fit", hash: "abc"))
-        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: "fill", hash: "abc"))
-        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: nil, hash: "abc"))
+        XCTAssertTrue(StoryLetterboxFill.isServed(fitMode: "fit", hasSource: true))
+        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: "fill", hasSource: true))
+        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: nil, hasSource: true))
     }
 
     /// Sans source, la bande garde le noir cinéma du canvas — jamais un
     /// rectangle fabriqué.
     func test_sansSource_leRemplissageNeSertPas() {
-        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: "fit", hash: nil))
-        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: "fit", hash: ""))
+        XCTAssertFalse(StoryLetterboxFill.isServed(fitMode: "fit", hasSource: false))
+    }
+
+    // MARK: - Avec QUOI on peint
+
+    /// **Le défaut mesuré au simulateur, le jour même de l'écriture de cette
+    /// règle.** Une photo paysage choisie dans la photothèque, passée en
+    /// AJUSTÉ : bande NUE. `StoryThumbHashEnricher` ne calcule les hachages
+    /// qu'à la PUBLICATION — un média que l'auteur vient de poser n'en a
+    /// aucun. Une règle qui n'accepte que le hachage est donc inerte
+    /// exactement là où elle a été demandée.
+    ///
+    /// > La question « qui AFFICHE ce que je viens de résoudre ? » a une
+    /// > jumelle qu'on oublie plus souvent : **« qui ALIMENTE ce que je viens
+    /// > de résoudre, et à quel moment ? »** Une source qui n'arrive qu'après
+    /// > la publication est absente de toute la composition.
+    func test_sansAucunHachage_leBitmapDejaStampePeintLaBande() {
+        XCTAssertEqual(
+            StoryLetterboxFill.source(hasStampedBitmap: true, hashes: []),
+            .stampedBitmap,
+            "l'atelier n'a QUE le bitmap — une règle qui l'ignore n'y peint rien")
+    }
+
+    /// Le bitmap PASSE DEVANT le hachage quand les deux existent : il est en
+    /// mémoire, il est exact, et le hachage n'en est qu'une approximation.
+    func test_leBitmap_passeDevantLeHachage() {
+        XCTAssertEqual(
+            StoryLetterboxFill.source(hasStampedBitmap: true, hashes: ["fond"]),
+            .stampedBitmap)
+    }
+
+    /// Le hachage garde le DÉMARRAGE À FROID du lecteur — le seul moment où le
+    /// bitmap n'est pas encore là, et celui où quelques dizaines d'octets
+    /// valent une image entière.
+    func test_sansBitmap_leHachagePeintLaBande() {
+        XCTAssertEqual(
+            StoryLetterboxFill.source(hasStampedBitmap: false, hashes: ["", "fond"]),
+            .thumbHash("fond"),
+            "…et une source vide n'est pas une source")
+    }
+
+    /// **Le fusible.** Une règle qui rendrait toujours une source ferait poser
+    /// un layer vide sur chaque scène ajustée.
+    func test_sansRien_aucuneSource() {
+        XCTAssertEqual(StoryLetterboxFill.source(hasStampedBitmap: false, hashes: []), .none)
+        XCTAssertEqual(StoryLetterboxFill.source(hasStampedBitmap: false, hashes: ["", ""]), .none)
     }
 
     // MARK: - La cascade des sources

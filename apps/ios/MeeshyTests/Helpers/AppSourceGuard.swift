@@ -114,7 +114,14 @@ enum AppSourceGuard {
     /// L'unité du meuble du composer : le type, ses trois extensions, et les
     /// règles pures qui en sont sorties au #4102.
     static let composerHostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
-    static let composerHostCompanions = ["Meeshy/Features/Main/Composer/ComposerHostRules.swift"]
+    static let composerHostCompanions = [
+        "Meeshy/Features/Main/Composer/ComposerHostRules.swift",
+        // Sortie de `ComposerHostRules` quand l'inspecteur a cessé de ne
+        // connaître que le texte (#4073). Elle reste DANS l'unité du meuble :
+        // une règle qui déménage sans emmener son adresse éteint en silence
+        // toutes les gardes négatives qui la balayaient.
+        "Meeshy/Features/Main/Composer/ComposerObjectChips.swift",
+    ]
 
     static func composerHostURLs() -> [URL] {
         unitURLs(composerHostPath, alsoIncluding: composerHostCompanions)

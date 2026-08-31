@@ -150,6 +150,10 @@ public final class StoryBackgroundLayer: CALayer {
     /// Les sources candidates, RETENUES pour le chemin rapide : lui ne repasse
     /// pas par la branche qui les connaît.
     nonisolated(unsafe) var letterboxFillHashes: [String] = []
+    /// Le bitmap de fond DÉJÀ posé — la source la plus fidèle de la bande, et
+    /// la seule dont dispose l'atelier : `StoryThumbHashEnricher` ne calcule les
+    /// hachages qu'à la PUBLICATION.
+    nonisolated(unsafe) var letterboxSourceImage: UIImage?
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
     private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
@@ -236,6 +240,7 @@ public final class StoryBackgroundLayer: CALayer {
                     override: self.transform3D.videoFitMode)
             }
         }
+        noteStampedBackground(display)
         markFinalContentStamped()
     }
 
@@ -496,6 +501,7 @@ extension StoryBackgroundLayer {
         contentLayer?.removeFromSuperlayer()
         letterboxFillLayer?.removeFromSuperlayer()
         letterboxFillLayer = nil
+        letterboxSourceImage = nil
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
         if let observer = backgroundLoopObserver {

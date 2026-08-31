@@ -128,4 +128,110 @@ final class ComposerObjectChipsTests: XCTestCase {
         XCTAssertNil(taille.range(of: "38", options: .literal),
                      "la TAILLE aussi est un nombre montré — \(taille)")
     }
+
+    // MARK: - Les autres kinds — « il change de contenu, jamais de place »
+
+    private func media(scale: Double = 1, rotation: Double = 0,
+                       volume: Float = 1, kind: StoryMediaKind = .video,
+                       debut: Double? = nil, duree: Double? = nil) -> StoryMediaObject {
+        StoryMediaObject(id: "m", postMediaId: "pm", kind: kind,
+                         aspectRatio: 16.0 / 9.0, scale: scale, rotation: rotation,
+                         volume: volume, startTime: debut, duration: duree)
+    }
+
+    private func sticker(scale: Double = 2.2, rotation: Double = 0) -> StorySticker {
+        StorySticker(emoji: "🎬", x: 0.5, y: 0.5, scale: scale, rotation: rotation)
+    }
+
+    private func libelles(_ jetons: [ComposerObjectChips.Chip]) -> [String] { jetons.map(\.label) }
+
+    /// **La taille ne manque JAMAIS, quel que soit le kind.** C'est ce qui
+    /// garantit qu'un objet sélectionné a toujours au moins un jeton : une
+    /// rangée vide ne dirait pas « rien à régler », elle aurait l'air cassée.
+    func test_chaqueKind_porteAuMoinsSonJetonDeTaille() {
+        for jetons in [ComposerObjectChips.chips(for: texte(), locale: Locale(identifier: "fr_FR")),
+                       ComposerObjectChips.chips(for: media(), locale: Locale(identifier: "fr_FR")),
+                       ComposerObjectChips.chips(for: sticker(), locale: Locale(identifier: "fr_FR"))] {
+            XCTAssertTrue(jetons.contains { $0.id == "size" }, "\(libelles(jetons))")
+        }
+    }
+
+    /// **Et l'espace avant le « % » n'est PAS une espace ordinaire.**
+    ///
+    /// Ce témoin a d'abord été écrit `== "TAILLE 140 %"` et il est tombé sur
+    /// deux chaînes visuellement identiques : le français veut une **espace
+    /// fine insécable** (U+202F), que `LocalizedNumber.percent` pose et qu'un
+    /// littéral tapé au clavier n'a pas. L'échec était la preuve que le
+    /// formatage localisé fait son travail — comparer à un littéral l'aurait
+    /// gardé vert en le contournant.
+    func test_lEchelleDunMedia_seLitEnPourcentage() {
+        let libelle = ComposerObjectChips.chips(for: media(scale: 1.4),
+                                                locale: Locale(identifier: "fr_FR"))
+            .first { $0.id == "size" }?.label ?? ""
+
+        XCTAssertTrue(libelle.hasPrefix("TAILLE 140"), libelle)
+        XCTAssertTrue(libelle.hasSuffix("%"), libelle)
+        XCTAssertFalse(libelle.contains("140 %"),
+                       "l'espace avant le % est celle de la LOCALE, jamais la nôtre — \(libelle)")
+    }
+
+    /// **Un objet DROIT n'annonce pas sa rotation.** « ROTATION 0° »
+    /// occuperait la place pour dire une absence (loi 8).
+    func test_unObjetDroit_nAnnoncePasSaRotation() {
+        XCTAssertFalse(ComposerObjectChips.chips(for: media(rotation: 0))
+            .contains { $0.id == "rotation" })
+        XCTAssertTrue(ComposerObjectChips.chips(for: media(rotation: 12))
+            .contains { $0.id == "rotation" })
+    }
+
+    /// **Le SON ne se dit que s'il existe ET qu'il a été touché.** Une image n'a
+    /// pas de son du tout, et une vidéo au volume nominal n'a rien à annoncer :
+    /// « SON 100 % » sur une photo enseignerait moins que rien.
+    func test_leSon_neSeDitQueSurUneVideoDontLeVolumeAChange() {
+        XCTAssertTrue(ComposerObjectChips.chips(for: media(volume: 0.6, kind: .video))
+            .contains { $0.id == "volume" })
+        XCTAssertFalse(ComposerObjectChips.chips(for: media(volume: 1, kind: .video))
+            .contains { $0.id == "volume" })
+        XCTAssertFalse(ComposerObjectChips.chips(for: media(volume: 0.6, kind: .image))
+            .contains { $0.id == "volume" },
+                       "une image n'a pas de son — le champ existe, la chose non")
+    }
+
+    /// La fenêtre de temps se lit à l'identique sur les trois kinds : c'est la
+    /// MÊME question, donc le même jeton, à la même place.
+    func test_laFenetreDeTemps_estLaMEMEsurLesTroisKinds() {
+        let attendu = "0:00 → 0:06"
+        XCTAssertEqual(
+            ComposerObjectChips.chips(for: texte(debut: 0, duree: 6),
+                                      locale: Locale(identifier: "fr_FR")).last?.label, attendu)
+        XCTAssertEqual(
+            ComposerObjectChips.chips(for: media(debut: 0, duree: 6),
+                                      locale: Locale(identifier: "fr_FR")).last?.label, attendu)
+    }
+
+    /// **Le TEMPS est toujours en dernier, l'apparence toujours devant.** Un
+    /// jeton qui apparaît ne doit pas déplacer ses voisins sous le doigt, et
+    /// c'est vrai d'un kind à l'autre : passer d'un texte à un média ne doit pas
+    /// réorganiser la rangée.
+    func test_leTemps_estToujoursEnDernier() {
+        let m = ComposerObjectChips.chips(for: media(scale: 1.4, rotation: 12,
+                                                     volume: 0.5, debut: 0, duree: 6)).map(\.id)
+        XCTAssertEqual(m, ["size", "rotation", "volume", "window"])
+
+        let s = ComposerObjectChips.chips(for: sticker(scale: 2.2, rotation: 8)).map(\.id)
+        XCTAssertEqual(s, ["size", "rotation"])
+    }
+
+    /// **Le fusible des trois kinds.** Une règle qui rendrait toujours la même
+    /// liste passerait les témoins d'ordre ci-dessus sans distinguer quoi que
+    /// ce soit — or c'est exactement ce que la planche demande : « il change de
+    /// CONTENU selon le kind, jamais de place ».
+    func test_lesTroisKinds_neDisentPasLaMemeChose() {
+        let t = Set(ComposerObjectChips.chips(for: texte(style: "neon", align: "center")).map(\.id))
+        let m = Set(ComposerObjectChips.chips(for: media(volume: 0.5)).map(\.id))
+        XCTAssertNotEqual(t, m)
+        XCTAssertTrue(t.contains("style"), "le style est propre au TEXTE")
+        XCTAssertTrue(m.contains("volume"), "le son est propre au MÉDIA")
+        XCTAssertEqual(t.intersection(m), ["size"], "seule la taille leur est commune")
+    }
 }

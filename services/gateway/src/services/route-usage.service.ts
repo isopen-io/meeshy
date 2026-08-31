@@ -693,6 +693,26 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   { method: 'PATCH', route: '/api/v1/friend-requests/:id', issue: 4283 },
   { method: 'DELETE', route: '/api/v1/friend-requests/:id', issue: 4283 },
 
+  // #4370 — les deux couples TUS montes SANS appelant confirme.
+  //
+  // #4190 a retire chirurgicalement des verbes du montage TUS et a laisse ces
+  // deux-la, en ecrivant pourquoi : « la confirmation precede le retrait, couple
+  // par couple — les retirer serait les retirer sur une SUPPOSITION, exactement
+  // le raisonnement que ce lot corrige ». La regle est juste ; il lui manquait
+  // l'instrument qui rend la confirmation possible.
+  //
+  // `POST /uploads/*` a une raison PROTOCOLAIRE : TUS autorise
+  // `POST + X-HTTP-Method-Override: PATCH` pour les clients qui ne peuvent pas
+  // emettre PATCH. Un client qui l'emprunte est invisible a un inventaire qui
+  // croise « gateway x clients » sur le verbe.
+  //
+  // `HEAD /uploads` n'en a aucune : la specification pose HEAD sur l'URL d'un
+  // televersement, jamais sur la collection. C'est le meilleur candidat au
+  // retrait — et c'est precisement pour ca qu'il faut le COMPTER avant, pas
+  // le supposer mort.
+  { method: 'POST', route: '/api/v1/uploads/*', issue: 4370 },
+  { method: 'HEAD', route: '/api/v1/uploads', issue: 4370 },
+
   // #4167 — les trois portes anonymes deleguent a la loi d'admission unique
   { method: 'POST', route: '/api/v1/anonymous/join/:linkId', issue: 4167 },
   { method: 'POST', route: '/api/v1/anonymous/refresh', issue: 4167 },
