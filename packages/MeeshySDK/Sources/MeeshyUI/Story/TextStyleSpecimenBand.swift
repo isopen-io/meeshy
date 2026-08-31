@@ -41,15 +41,31 @@ public struct TextStyleSpecimenBand: View {
     /// l'œil (défaut mesuré au simulateur le 2026-08-30 sur les puces
     /// d'ouverture, même cause).
     public let onDarkSurface: Bool
+
+    /// **La marge que l'HÔTE tient**, reçue plutôt que devinée.
+    ///
+    /// La première version n'en avait aucune : l'aperçu et la première vignette
+    /// démarraient à `x = 0` pendant que la rangée de jetons, douze points plus
+    /// bas, était encartée — mesuré au simulateur juste après la livraison.
+    /// Un texte au ras du bord ne se lit pas, et le décalage entre deux rangées
+    /// voisines se voit avant de se comprendre (dimension 8).
+    ///
+    /// Elle est un PARAMÈTRE parce que la valeur appartient au composer
+    /// (`ComposerRailGeometry.outerMargin`) : cette vue ne connaît ni les rails
+    /// ni leur géométrie, et la recopier ici en ferait une seconde source à
+    /// faire diverger.
+    public let horizontalInset: CGFloat
     public let onSelect: (StoryTextStyle) -> Void
 
     public init(text: String,
                 selection: StoryTextStyle,
                 onDarkSurface: Bool = false,
+                horizontalInset: CGFloat = 10,
                 onSelect: @escaping (StoryTextStyle) -> Void) {
         self.text = text
         self.selection = selection
         self.onDarkSurface = onDarkSurface
+        self.horizontalInset = horizontalInset
         self.onSelect = onSelect
     }
 
@@ -79,6 +95,7 @@ public struct TextStyleSpecimenBand: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, horizontalInset)
                 .accessibilityHidden(true)
         }
     }
@@ -97,6 +114,13 @@ public struct TextStyleSpecimenBand: View {
                 }
             }
             .padding(.vertical, 2)
+            // La marge vit sur le CONTENU, pas sur le `ScrollView` : les
+            // vignettes démarrent alignées sur la rangée de jetons, la dernière
+            // reçoit la même marge en fin de course, et le défilement continue
+            // de traverser toute la largeur — un `padding` posé sur le
+            // conteneur aurait rétréci la piste au lieu d'encarter ce qu'elle
+            // porte.
+            .padding(.horizontal, horizontalInset)
         }
     }
 

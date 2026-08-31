@@ -984,6 +984,10 @@ extension MeeshyComposerHost {
                 // Le plateau est sombre en permanence — sans ce drapeau les
                 // vignettes non choisies peignent du sombre sur du sombre.
                 onDarkSurface: true,
+                // **La MÊME marge que la rangée de jetons**, qui vit douze
+                // points plus bas. Deux rangées voisines qui ne commencent pas
+                // à la même abscisse se voient avant de se comprendre.
+                horizontalInset: ComposerRailGeometry.outerMargin,
                 onSelect: { style in
                     viewModel.updateTextStyle(id: texte.id, style: style)
                 }
