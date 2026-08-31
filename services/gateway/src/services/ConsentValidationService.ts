@@ -14,10 +14,21 @@
  *   └─> textTranslationEnabledAt
  *
  * `thirdPartyServicesConsentAt` N'EST PAS un consentement de cette hiérarchie
- * et n'en a jamais été un : aucune route ne l'écrivait, aucun schéma ne le
- * déclarait, aucune colonne `User` ne le portait. #4343 a tranché l'option
- * (b) — RETRAIT de l'exigence — après avoir constaté qu'aucun tiers ne reçoit
- * quoi que ce soit : il n'existe dans le dépôt ni scanner de logiciels
+ * et n'en a jamais été un : aucune ROUTE ne l'écrivait, aucun schéma ne le
+ * déclarait, aucune colonne `User` ne le portait.
+ *
+ * Il était pourtant PRÉSENT en base — non par un geste d'utilisateur, mais par
+ * la migration `enable_audio_features_in_preferences.js`, un `updateMany({})`
+ * de janvier 2026 qui l'a posé sur CHAQUE ligne existante. Mesuré sur staging
+ * le 2026-08-31 : 207 lignes de préférences sur 207 le portent, pour 223
+ * comptes — les 16 comptes SANS ligne de préférences étaient donc refusés,
+ * les 207 autres passaient. **Le verdict de la garde dépendait de la présence
+ * d'une ligne qu'une migration avait touchée**, jamais d'un consentement
+ * donné. Deux comptes, même produit, même geste, deux réponses, et rien dans
+ * l'interface ne pouvait l'expliquer.
+ *
+ * #4343 a tranché l'option (b) — RETRAIT de l'exigence — après avoir constaté
+ * qu'aucun tiers ne reçoit quoi que ce soit : il n'existe dans le dépôt ni scanner de logiciels
  * malveillants, ni traitement d'arrière-plan virtuel, et une fonctionnalité
  * bêta n'envoie rien nulle part. Les trois gardes qui le nommaient étaient
  * écrites au CONDITIONNEL (« pourrait nécessiter », « may require ») : une
@@ -146,15 +157,16 @@ export class ConsentValidationService {
     // vrai).
     //
     // `thirdPartyServicesConsentAt` était lu ICI, depuis le blob
-    // `application`, et n'y arrivait JAMAIS : le schéma ne le déclarait pas
-    // (Zod strippe en mode par défaut), aucune route ne l'écrivait, aucune
-    // colonne `User` ne le portait. `hasThirdPartyServicesConsent` valait
-    // donc `false` pour tout le monde, toujours — et les trois gardes qui
-    // le lisaient refusaient tout le monde en nommant une preuve que le
-    // produit n'avait aucun moyen de délivrer. #4343 a retiré la lecture ET
-    // les gardes plutôt que d'inventer l'écrivain manquant : un
-    // consentement doit être SPÉCIFIQUE et ÉCLAIRÉ, et « services tiers »
-    // ne nomme, dans ce dépôt, aucun traitement réel à autoriser.
+    // `application`. Aucun geste d'utilisateur ne pouvait l'y poser : le
+    // schéma ne le déclare pas (Zod strippe en mode par défaut), aucune route
+    // ne l'écrit, aucune colonne `User` ne le porte. Il y était néanmoins,
+    // posé en masse par une migration (voir l'en-tête du fichier) — si bien
+    // que la garde PASSAIT pour les comptes qu'elle avait touchés et REFUSAIT
+    // les autres. Un verdict de consentement qui dépend de la date de la
+    // ligne, pas du consentement. #4343 a retiré la lecture ET les gardes
+    // plutôt que d'inventer l'écrivain manquant : un consentement doit être
+    // SPÉCIFIQUE et ÉCLAIRÉ, et « services tiers » ne nomme, dans ce dépôt,
+    // aucun traitement réel à autoriser.
     const hasVoiceCloningConsent = !!voiceCloningEnabledAt && hasVoiceProfileConsent;
 
     // Calculer les capacités selon la hiérarchie de consentements

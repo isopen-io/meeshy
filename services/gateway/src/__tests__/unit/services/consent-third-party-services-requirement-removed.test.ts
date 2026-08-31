@@ -19,9 +19,26 @@
  *      mesuré ci-dessous** : c'est lui qui rendait l'option (a) coûteuse.
  *   3. `User` n'avait AUCUNE colonne miroir.
  *
- * Conséquence : `hasThirdPartyServicesConsent` valait FAUX pour tout le
- * monde, TOUJOURS — `betaFeaturesEnabled` et `scanFilesForMalware` étaient
- * inactivables par quiconque.
+ * Conséquence ATTENDUE de ces trois faits : `hasThirdPartyServicesConsent`
+ * faux pour tout le monde.
+ *
+ * ## Ce que la mesure sur STAGING a corrigé (2026-08-31)
+ *
+ * Faux — et le vrai était pire. Le champ EST présent en base, posé non par un
+ * geste d'utilisateur mais par la migration
+ * `enable_audio_features_in_preferences.js` (un `updateMany({})` de janvier
+ * 2026). Relevé sur staging : **207 lignes de préférences sur 207 le portent,
+ * pour 223 comptes**. La garde PASSAIT donc pour les comptes dotés d'une
+ * ligne, et REFUSAIT les 16 sans ligne.
+ *
+ * Un verdict de consentement qui dépend de la présence d'une ligne qu'une
+ * migration a touchée est indéfendable dans les DEUX sens : ceux qui passaient
+ * n'avaient rien consenti, ceux qui étaient refusés n'avaient aucun moyen de
+ * consentir. Cela ne change pas l'arbitrage — cela le renforce.
+ *
+ * Les fixtures ci-dessous restent donc justes pour ce qu'elles gardent (un
+ * blob VIDE = un compte sans ligne, le cas refusé), et le premier `describe`
+ * exerce en plus le blob PEUPLÉ, celui de la population migrée.
  *
  * ## L'arbitrage, et pourquoi (b)
  *
@@ -81,6 +98,35 @@ function makePrismaWithNoConsentAtAll(): PrismaClient {
   } as unknown as PrismaClient;
 }
 
+/**
+ * Un compte de la population MIGRÉE : son blob `application` porte
+ * `thirdPartyServicesConsentAt`, posé par `enable_audio_features_in_preferences.js`
+ * — pas par un geste d'utilisateur. C'est le cas majoritaire mesuré sur
+ * staging (207 lignes sur 207), et celui où la garde PASSAIT.
+ *
+ * Il est exercé ici pour une raison précise : sans lui, le fichier ne
+ * garderait que la moitié REFUSÉE de la population, et un retour de la garde
+ * lisant le blob resterait vert sur ce cas-là.
+ */
+function makePrismaWithMigratedBlob(): PrismaClient {
+  return {
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue({
+        dataProcessingConsentAt: null,
+        voiceDataConsentAt: null,
+        voiceProfileConsentAt: null,
+        voiceCloningEnabledAt: null,
+      }),
+    },
+    userPreferences: {
+      findUnique: jest.fn<any>().mockResolvedValue({
+        audio: {},
+        application: { thirdPartyServicesConsentAt: NOW },
+      }),
+    },
+  } as unknown as PrismaClient;
+}
+
 function makePrismaWithEveryAttainableConsent(): PrismaClient {
   return {
     user: {
@@ -106,6 +152,16 @@ function makePrismaWithEveryAttainableConsent(): PrismaClient {
 
 describe('#4343 — les deux préférences que personne ne pouvait activer s\'activent', () => {
   describe('option (b) livrée : ni consentement, ni exigence', () => {
+    it('betaFeaturesEnabled: true passe pour un blob PEUPLÉ par la migration — la population réelle de staging (207/207)', async () => {
+      const sut = new ConsentValidationService(makePrismaWithMigratedBlob());
+
+      const violations = await sut.validatePreferences('u1', 'application', {
+        betaFeaturesEnabled: true,
+      });
+
+      expect(violations).toHaveLength(0);
+    });
+
     it('betaFeaturesEnabled: true passe pour un utilisateur qui n\'a accordé AUCUN consentement', async () => {
       const sut = new ConsentValidationService(makePrismaWithNoConsentAtAll());
 

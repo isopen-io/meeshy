@@ -20,9 +20,13 @@ dataProcessingConsentAt (BASE OBLIGATOIRE)
 
 > **`thirdPartyServicesConsentAt` a été RETIRÉ de cette hiérarchie (#4343).**
 > Il n'y a jamais eu ni route pour l'écrire, ni clé de schéma pour le porter,
-> ni colonne `User` pour le stocker : les trois gardes qui l'exigeaient
-> refusaient donc tout le monde, en nommant une preuve que le produit n'avait
-> aucun moyen de délivrer. L'arbitrage retenu est le RETRAIT de l'exigence
+> ni colonne `User` pour le stocker. Il était pourtant PRÉSENT en base, posé en
+> masse par la migration `enable_audio_features_in_preferences.js`
+> (`updateMany({})`, janvier 2026) — mesuré sur staging le 2026-08-31 : **207
+> lignes de préférences sur 207**, pour 223 comptes. Les trois gardes
+> PASSAIENT donc pour les comptes dotés d'une ligne et REFUSAIENT les 16 sans
+> ligne, en nommant une preuve que le produit n'avait aucun moyen de délivrer.
+> **Le verdict dépendait de la date de la ligne, jamais d'un consentement.** L'arbitrage retenu est le RETRAIT de l'exigence
 > (option b), et non l'invention de l'écrivain manquant : aucun tiers ne
 > reçoit quoi que ce soit dans ce dépôt — il n'existe ni scanner de logiciels
 > malveillants, ni traitement d'arrière-plan virtuel, et un drapeau bêta
