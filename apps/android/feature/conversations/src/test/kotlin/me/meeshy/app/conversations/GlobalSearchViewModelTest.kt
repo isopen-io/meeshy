@@ -229,6 +229,84 @@ class GlobalSearchViewModelTest {
         coVerify(exactly = 2) { repository.search("belva", any(), any(), any()) }
     }
 
+    // Les resultats affiches portent la requete qui les a PRODUITS — pas la
+    // saisie en cours. Une recherche reussie ancre `resultsQuery` sur son terme
+    // (parite iOS `resultsQuery`, alimentee juste apres l'affectation des
+    // resultats). C'est cette requete, et non `query`, contre laquelle une ligne
+    // de resultat surligne son texte.
+    @Test
+    fun `a successful search anchors the results query on its term`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.resultsQuery).isEqualTo("belva")
+    }
+
+    // Le cache-hit ressert un resultat ET la requete qui l'a produit : sans quoi
+    // une ligne resservie depuis le cache surlignerait contre une requete vide.
+    @Test
+    fun `a cached hit reports the cached term as the results query`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+
+        vm.setQuery("b") // sous le seuil : vide
+        advanceUntilIdle()
+        assertThat(vm.state.value.resultsQuery).isEmpty()
+
+        vm.setQuery("belva") // cache-hit, TTL non ecoule
+        advanceUntilIdle()
+        coVerify(exactly = 1) { repository.search("belva", any(), any(), any()) }
+        assertThat(vm.state.value.resultsQuery).isEqualTo("belva")
+    }
+
+    // Revenir sous le seuil remet `resultsQuery` a vide en meme temps que les
+    // resultats (parite iOS `clearResults`) : plus rien n'est affiche, donc plus
+    // rien a surligner.
+    @Test
+    fun `shrinking below the threshold resets the results query`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.resultsQuery).isEqualTo("belva")
+
+        vm.setQuery("b")
+        advanceUntilIdle()
+        assertThat(vm.state.value.resultsQuery).isEmpty()
+    }
+
+    // Le coeur du correctif : pendant que l'utilisateur tape une NOUVELLE requete,
+    // les anciens resultats restent affiches et `resultsQuery` reste sur l'ancien
+    // terme jusqu'a ce que la nouvelle recherche aboutisse — la saisie vive
+    // (`query`) a deja change. Surligner contre `query` produirait un surlignage
+    // decale (contre un terme qui n'a pas produit ces lignes).
+    @Test
+    fun `the results query stays on the shown results while a newer query is being typed`() = runTest(dispatcher) {
+        coEvery { repository.search(any(), any(), any(), any()) } returns GlobalSearchResults(
+            users = listOf(UserSearchResult(id = "u1", username = "belva")),
+        )
+        val vm = viewModel()
+        vm.setQuery("belva")
+        advanceUntilIdle()
+        assertThat(vm.state.value.resultsQuery).isEqualTo("belva")
+
+        vm.setQuery("belva rocks")
+        advanceTimeBy(100) // debounce (300 ms) non ecoule : pas de nouvelle recherche
+
+        assertThat(vm.state.value.query).isEqualTo("belva rocks")
+        assertThat(vm.state.value.resultsQuery).isEqualTo("belva")
+        assertThat(vm.state.value.results.users).hasSize(1)
+    }
+
     // Un `conversation:deleted` recu par socket invalide aussi le cache.
     @Test
     fun `a conversation-deleted socket event invalidates the query cache`() = runTest(dispatcher) {

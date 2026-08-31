@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — a correct pure SSOT can still be fed the WRONG input; highlight against the query that PRODUCED the results (slice `global-search-results-query`)
+The prior slice shipped `MessageTextParser.highlightedSegments` and the message row washed its content —
+looked done. But the row was called with the LIVE `state.query`, while iOS highlights against
+`resultsQuery` (the term that produced the shown results). During the 300 ms debounce + network window the
+displayed results are the PREVIOUS query's; washing them against the live input highlights the wrong
+substring or nothing. Two lessons: (1) **a slice that adds a pure SSOT isn't finished when the SSOT is
+correct — check what QUERY/INPUT the call site feeds it.** The bug lived entirely at the call site, not in
+the tested pure function. (2) **A live-input field and a "what produced the current view" field are two
+different things**; conflating them is the same class as the Prisme "which term produced this?" and the
+`resultsQuery`/`searchText` split iOS keeps deliberately. RED-proof for a snapshot field: assert it stays
+on the OLD value while the live field has already moved (a mirror-of-live impl fails exactly that test).
+
+## 2026-08-31 — the session's bootstrap branch can lag `main`; read tracking from `origin/main`, not the checkout
+This run booted on a `dev`-based branch whose `apps/android/tasks/*` were behind `main` — several android
+slices (#4506/#4512/#4533/#4539/#4549) had already merged to `main` after the dev fork, and their pure
+SSOTs (`highlightedSegments`, `HighlightSegment`) simply weren't in the checkout (a `grep` for them came up
+empty and nearly sent me re-implementing a twin). The android routine merges to `main`; `main` is the
+authoritative tracking. **Always `git fetch origin main` and read PROGRESS/feature-parity from
+`origin/main` (and branch the slice off `origin/main`) rather than trusting the checked-out branch's copy.**
+
 ## 2026-08-31 — "Rendered in the result rows" is a two-part slice: the DECISION is pure, the WASH is glue (slice `global-search-result-highlight`)
 feature-parity §N listed "query highlighting rendered in the RESULT rows" as one open item. It is really two
 things at two altitudes, and only one of them is a test target:

@@ -296,7 +296,7 @@ private fun SearchResults(
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
                 MessageHitRow(
                     hit = hit,
-                    query = state.query,
+                    query = state.resultsQuery,
                     onClick = { onOpenConversation(hit.message.conversationId) },
                 )
             }
