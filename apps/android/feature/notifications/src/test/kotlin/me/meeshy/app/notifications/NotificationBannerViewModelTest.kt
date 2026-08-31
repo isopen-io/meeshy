@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
@@ -87,6 +88,7 @@ class NotificationBannerViewModelTest {
         preferencesStore = InMemoryNotificationPreferencesStore(preferences),
         conversationRepository = conversationRepository,
         clock = clock,
+        activeConversationStore = ActiveConversationStore(),
     )
 
     @Test

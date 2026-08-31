@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.NotificationBannerPresentation
 import me.meeshy.sdk.model.NotificationToastDecision
 import me.meeshy.sdk.model.NotificationToastPolicy
 import me.meeshy.sdk.model.ToastDedupWindow
+import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
 
@@ -60,6 +61,7 @@ class NotificationBannerViewModel @Inject constructor(
     private val preferencesStore: NotificationPreferencesStore,
     private val conversationRepository: ConversationRepository,
     private val clock: NotificationToastClock,
+    private val activeConversationStore: ActiveConversationStore,
 ) : ViewModel() {
 
     private val _banner = MutableStateFlow<InAppBanner?>(null)
@@ -101,6 +103,9 @@ class NotificationBannerViewModel @Inject constructor(
     fun setActiveContext(conversationId: String?, postId: String?) {
         activeConversationId = conversationId
         activePostId = postId
+        // Publish the on-screen thread process-wide so the FCM push service — which has no
+        // ViewModel — can suppress a foreground banner for the conversation being read.
+        activeConversationStore.setActive(conversationId)
     }
 
     fun dismiss() {

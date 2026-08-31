@@ -6564,6 +6564,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
       genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
       across EN/FR/ES/PT.
+      **Foreground-push presentation gate landed 2026-08-31** (slice `push-foreground-presentation-gate`)
+      — those preferences (push master · quiet hours · per-type toggles) were HONOURED by the in-app toast
+      (`NotificationToastPolicy`) but IGNORED by the FCM banner: `MeeshyFcmService.handleMessagePush` raised
+      a system banner for EVERY foreground push with no gate — push disabled, inside quiet hours, a muted
+      type, or the very conversation on screen still buzzed (the iOS pre-`NotificationPresentationResolver`
+      bug). New pure `:core:model` `PushPresentationPolicy.decide(...)` → `PushPresentationDecision`
+      (`Suppress` | `Alert(playSound)`): on-screen thread → suppress; socket alive → suppress (the toast
+      already surfaces it, no double banner); socket down → gate exactly as a background push
+      (`pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`, all REUSED, no
+      re-implementation); a raised banner follows `soundEnabled` via `setSilent`. New `:sdk-core`
+      `@Singleton ActiveConversationStore` carries the one on-screen-thread nav truth across the process
+      boundary (written at the root banner host's active-context effect, read by the service). +15 pure
+      tests, RED-proven. Matures dimensions 1/5/8/13 (right people/attention, accessibility of quiet hours,
+      offline-first delivery doctrine, completeness). iOS `.badge` presentation option has no Android analog
+      (the app-icon badge is a side effect of a posted notification) — deliberately not modelled.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**

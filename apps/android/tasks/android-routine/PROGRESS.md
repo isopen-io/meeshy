@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **a FOREGROUND FCM push now consults a presentation gate before raising a system
+> banner — the very preferences the app already honours for the in-app toast (push master, quiet
+> hours, per-type toggles) plus on-screen-thread and socket-alive suppression** (slice
+> `push-foreground-presentation-gate`, feature-parity §M). `MeeshyFcmService.handleMessagePush` was
+> UNGATED: it posted a system banner for EVERY foreground message push — push disabled, inside quiet
+> hours, a muted type, or the conversation the reader was in still buzzed, and a socket-delivered
+> event double-showed (system banner + in-app toast). This is the exact iOS pre-`NotificationPresentationResolver`
+> bug ("willPresent affichait bannière + son + badge sans consulter aucun toggle"). Dimensions 1/5/8/13.
+>
+> **Step 0 — the prior open android-routine PR was merged first.** `list_pull_requests` (open) → #4619
+> (`claude/apps/android/conversation-stats-client-fallback`, mine) + gateway/dependabot. #4619's **Android**
+> check was green; its only red was **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet
+> regression (baseline 1183 → 1184) that `ci.yml` has failed on for EVERY main commit since Aug 31 (verified
+> via `list_workflow_runs`), impossible for an `apps/android`-only diff to cause and forbidden to fix (web =
+> production logic). Squash-merged #4619 (commit `d3be4496`) exactly as the prior six android slices merged
+> on the same web-red. Then branched `claude/apps/android/push-foreground-presentation-gate` off freshly-synced
+> `origin/main`.
+>
+> **The change — one pure decision core + a process-level nav-truth seam + FCM wiring.** (1) New pure
+> `:core:model` `PushPresentationPolicy.decide(socketConnected, preferences, rawType, conversationId,
+> activeConversationId, now)` → `PushPresentationDecision` (`Suppress` | `Alert(playSound)`), the Android
+> counterpart of iOS `NotificationPresentationResolver.options`. Rules, first-match: on-screen thread →
+> suppress; socket alive → suppress (the in-app toast already surfaces it — no double banner); socket down →
+> gate exactly as a background push would be — `pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`,
+> all three REUSED (no re-implemented gate); a raised banner's sound follows `soundEnabled`. iOS's `.badge`
+> presentation option has no Android analog (the app-icon badge is a side effect of a posted notification), so
+> it is deliberately not modelled — suppression withholds the whole banner. (2) New `:sdk-core` `@Singleton
+> ActiveConversationStore` (a `StateFlow<String?>` holder) carries the one on-screen-thread nav truth across
+> the process boundary — a background FCM service has no ViewModel to read the active thread. Written at the
+> single nav-truth site (`NotificationBannerViewModel.setActiveContext`, already called from the root banner
+> host's `LaunchedEffect(activeConversationId)`), read by the service. (3) `MeeshyFcmService.handleMessagePush`
+> now injects `SocketManager` + `NotificationPreferencesStore` + `ActiveConversationStore`, computes the
+> decision, and returns on `Suppress`; `showNotification` gained a `playSound` param → `setSilent(!playSound)`.
+> The outbox flush still fires on every push (unchanged), only the banner is gated.
+>
+> **Tests: +15 pure, RED-proven.** `PushPresentationPolicyTest` (socket-down enabled awake → sounded alert;
+> on-screen thread suppresses even when everything else would alert; a DIFFERENT thread is not suppressed;
+> null conversationId skips the guard and still evaluates the gate; live socket suppresses; push-master-off
+> suppresses; inside quiet hours suppresses / awake alerts; a muted per-type toggle suppresses that type while
+> leaving another type alone; unknown type gated by system toggle off→suppress / on→alert; absent type treated
+> as system; sound-off → `Alert(playSound=false)`; branch-order — socket-alive dedup outranks the preference
+> gate). **RED:** dropping the socket-alive suppression (`if (socketConnected)`) fails exactly the
+> live-socket-suppresses test (`15 tests completed, 1 failed`, verified by rebuild). `NotificationBannerViewModelTest`
+> factory updated for the new `ActiveConversationStore` dep (real impl, not weakened — its assertions are unchanged).
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable; cmdline-tools 11076708 + `platforms;android-37.0`/
+> `android-35` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0` symlink resolved for
+> AGP 8.13 this time (contra the 2026-08-31 `conversation-stats-client-fallback` note where it failed after main
+> moved). Kept `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` BUILD SUCCESSFUL (6m 22s, 973
+> tasks, APK + all-module unit tests). Reviewer **PASS** (diff `apps/android` only — 3 new + 3 edited code files
+> + 2 tracking docs, no `local.properties`; SDK purity — pure `:core:model` policy + a stateless `:sdk-core`
+> singleton holder, orchestration in the `:app` FCM service; SSOT — the gate REUSES `DndWindow` +
+> `NotificationTypeToggle`, and the store is the one process-level active-thread truth written at a single site;
+> no coverage floor lowered; no tautological tests; RED-proven behaviour).
+>
+> **Next**: §M's remaining piece is unifying the in-app toast/banner VMs' per-instance active-conversation
+> tracking onto the new `ActiveConversationStore` (an SSOT tidy-up, deferred here to keep the slice tight). Or
+> the §C "Conversation info sheet: hero/direct headers" Compose-glue box, or an earlier build-order pure-core
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **the conversation stats dashboard gained a CLIENT-SIDE fallback — a failed or lagging
 > `/stats` fetch no longer blanks to an error screen; the sheet computes the same figures from the
 > messages already on screen (iOS's `clientComputed*` fallback), shown instantly and kept on failure**

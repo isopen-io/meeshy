@@ -4,7 +4,18 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat §C) — slice `chat-unread-separator` ✅
+## This loop (Phase: Notifications §M) — slice `push-foreground-presentation-gate` ✅
+Foreground FCM banners now consult a presentation gate before showing (parity iOS `NotificationPresentationResolver`):
+`MeeshyFcmService.handleMessagePush` was ungated (every foreground push buzzed — muted type, quiet hours, on-screen
+thread, socket dup all ignored). Pure `:core:model` `PushPresentationPolicy.decide → PushPresentationDecision`
+(Suppress | Alert(playSound)): on-screen thread → suppress; socket alive → suppress (toast covers it); socket down →
+reuse `DndWindow.isActive` + `NotificationTypeToggle.isEnabled` + `pushEnabled`; sound follows `soundEnabled`. New
+`:sdk-core @Singleton ActiveConversationStore` carries the on-screen-thread nav truth to the ViewModel-less service.
++15 pure tests, RED-proven (drop the socket branch → the live-socket-suppresses test fails). Full `assembleDebug
+testDebugUnitTest` GREEN. Diff = `apps/android` only. Reviewer PASS. Next: fold the toast/banner VM active-tracking
+onto `ActiveConversationStore` (SSOT tidy), or §C conversation info sheet header, or an earlier pure-core value type.
+
+## Prior loop (Phase: Chat §C) — slice `chat-unread-separator` ✅
 The "new messages" boundary above the first unread message on open — completes the "unread separator" pending
 sub-item of the §C date-headers box. Pure `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?`
 SSOT (port of iOS `unreadStartIndex = messages.count - initialUnreadCount`, guarded by `!candidate.isMe`: boundary
