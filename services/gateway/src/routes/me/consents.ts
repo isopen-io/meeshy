@@ -428,23 +428,37 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         body = PutConsentBodySchema.parse(request.body);
       } catch (error) {
         if (error instanceof z.ZodError) {
-          // #4487 — `violations`, PAS `details: { issues }`.
+          // #4487 — DEUX projections d'UNE source, à deux niveaux de déclaration.
           //
-          // `details` est étalé à la RACINE de l'enveloppe, et
-          // `errorResponseSchema` ne déclare pas `issues` : `fast-json-stringify`
-          // le retirait au dernier mètre. Le serveur savait exactement quel
-          // champ manquait, le sérialisait, et le jetait — l'appelant recevait
-          // `{"error":"VALIDATION_ERROR","message":"VALIDATION_ERROR"}`, sans
-          // rien.
+          // Ce n'est pas une jumelle divergente : les deux sortent de
+          // `error.issues`, dans cette expression, en un seul endroit. Elles ne
+          // peuvent pas diverger, exactement comme `message` ne peut pas
+          // diverger d'`error`. Ce qui les sépare est le NIVEAU où elles sont
+          // déclarées, et donc ce qu'elles ont le droit de porter :
           //
-          // Ce n'est pas théorique : c'est ce qui m'a fait conclure à tort à une
-          // route cassée en vérifiant #4348 sur staging, alors qu'il manquait
-          // seulement `policyVersion` au corps. Un client qui n'a pas le code
-          // sous les yeux n'a, lui, aucun recours.
+          // - `violations` est la clé GÉNÉRIQUE de l'enveloppe partagée
+          //   (`errorResponseSchema`), que toute route peut poser et qu'un
+          //   client traitant ses erreurs uniformément sait lire. Son schéma
+          //   déclare `items: { path: string, message: string }` — elle ne PEUT
+          //   pas porter autre chose, et son `path` est une chaîne.
+          // - `issues` est l'extension que CETTE route déclare
+          //   (`badRequestResponseSchema`, 170 lignes plus haut, lié au 400),
+          //   avec la forme que Zod émet réellement : `code`, `path` en
+          //   TABLEAU, `keys`, `message`.
           //
-          // `violations` EXISTE dans l'enveloppe et EST déclaré au schéma. La
-          // clé n'était pas à inventer : elle était à employer.
+          // La seconde n'est pas un luxe. Le doc-comment de `zodIssueSchema` le
+          // dit : `path` seul ne suffit pas, une clé refusée par `.strict()`
+          // laisse `path` VIDE et vit dans `keys`. Sur un refus
+          // `unrecognized_keys`, `violations` rend donc `path: ''` et ne nomme
+          // RIEN — c'est-à-dire précisément l'information que cette issue
+          // existe pour livrer. Servir `violations` seule rouvrait le défaut
+          // sous une autre clé.
+          //
+          // L'enveloppe partagée prévoit ce cas en toutes lettres : une route
+          // qui pose des clés propres « les déclare EN PLUS ». C'est ce que
+          // fait `badRequestResponseSchema`.
           return sendBadRequest(reply, 'VALIDATION_ERROR', {
+            details: { issues: error.issues },
             violations: error.issues.map((issue) => ({
               path: issue.path.join('.'),
               message: issue.message,
