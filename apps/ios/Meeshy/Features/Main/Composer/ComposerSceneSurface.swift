@@ -345,14 +345,27 @@ struct ComposerSceneSurface: View {
                 // l'outil ouvert qui a la priorité sur le bas de l'écran, et
                 // les deux ne coexistent jamais (ouvrir un outil ferme la
                 // bande, et réciproquement).
-                if let toolOptions { toolOptions }
-                else if let band {
-                    ComposerSceneBandView(band: band,
+                //
+                // **L'exclusion se lit sur `railMode`, jamais sur la présence
+                // du panneau** : l'hôte le passe inconditionnellement (il se
+                // vide lui-même), donc `toolOptions == nil` était toujours faux
+                // et `ComposerSceneBandView` n'a JAMAIS été montée ici — la
+                // palette de fond, la bande de rognage et tout jeton d'objet
+                // qui ouvre une bande étaient inertes. `ComposerLowZone` porte
+                // le détail et la règle ; la rangée de jetons, douze lignes
+                // plus bas, posait déjà la même question au même endroit.
+                switch ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
+                case .toolOptions:
+                    if let toolOptions { toolOptions }
+                case .band(let ouverte):
+                    ComposerSceneBandView(band: ouverte,
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
                                           onPickOpening: onPickBandOpening,
                                           timelineContent: bandTimelineContent)
+                case .nothing:
+                    EmptyView()
                 }
                 // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`) —
                 // au-dessus de la rangée d'outils, sous tout ce qui appartient
