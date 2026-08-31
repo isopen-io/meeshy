@@ -428,4 +428,96 @@ final class RiverConversationMappingTests: XCTestCase {
         )
     }
 
+    // MARK: - Ce qui invalide un rendu de bulles (#3946)
+
+    private func geometrie(_ thread: [MeeshyMessage]) -> RiverLaneResolver.RiverGeometry {
+        RiverConversationMapping.resolveGeometry(messages: thread, viewerId: "moi")
+    }
+
+    private func cle(
+        _ thread: [MeeshyMessage],
+        text: @escaping (MeeshyMessage) -> String = { $0.content },
+        presence: @escaping (MeeshyMessage) -> PresenceState? = { _ in nil },
+        storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
+        viewerId: String = "moi"
+    ) -> RiverConversationMapping.ContentsKey {
+        RiverConversationMapping.contentsKey(
+            geometry: geometrie(thread),
+            messages: thread,
+            viewerId: viewerId,
+            text: text,
+            presence: presence,
+            storyRing: storyRing
+        )
+    }
+
+    private var filDeDeux: [MeeshyMessage] {
+        [message("m1", sender: "moi", minutes: 0), message("m2", sender: "toi", minutes: 3)]
+    }
+
+    /// Sans quoi le cache ne mémoïserait RIEN : c'est le cas nominal, celui
+    /// qui doit être vrai des milliers de fois par minute.
+    func test_contentsKey_estStableQuandRienNeChange() {
+        let thread = filDeDeux
+        XCTAssertEqual(cle(thread), cle(thread))
+    }
+
+    /// **Le témoin central de #3946.** Une traduction qui arrive ne change ni
+    /// le nombre de messages ni leurs identifiants : l'EMPREINTE reste égale.
+    /// Une mémoïsation posée sur elle servirait donc « Hello » alors que
+    /// « Bonjour » vient d'arriver — le Prisme, c'est-à-dire le principe
+    /// produit lui-même, figé par une optimisation de performance.
+    ///
+    /// Ce témoin AFFIRME les deux moitiés : l'empreinte est aveugle, la clé
+    /// ne l'est pas. Sans la première assertion, il ne dirait pas POURQUOI la
+    /// clé doit être plus large que l'empreinte.
+    func test_uneTraductionQuiArriveNeBougePasLEmpreinte_maisInvalideLaCle() {
+        let thread = filDeDeux
+
+        XCTAssertEqual(
+            RiverConversationMapping.fingerprint(messages: thread),
+            RiverConversationMapping.fingerprint(messages: thread),
+            "l'empreinte ne hache que des identifiants — elle ne peut pas voir une traduction"
+        )
+
+        let original = cle(thread, text: { _ in "Hello" })
+        let traduit = cle(thread, text: { _ in "Bonjour" })
+
+        XCTAssertNotEqual(original, traduit, "le texte servi fait partie de ce qui invalide un rendu")
+    }
+
+    /// La pastille vivante décroît sur une horloge (règle 1/3/5) étrangère aux
+    /// messages : rien dans le fil ne bouge quand elle passe au gris.
+    func test_unePresenceQuiChangeInvalideLaCle() {
+        let thread = filDeDeux
+        XCTAssertNotEqual(
+            cle(thread, presence: { _ in .online }),
+            cle(thread, presence: { _ in .away })
+        )
+    }
+
+    /// L'anneau passe de `unread` à `read` sans qu'aucun message ne soit touché.
+    func test_unAnneauDeStoryQuiChangeInvalideLaCle() {
+        let thread = filDeDeux
+        XCTAssertNotEqual(
+            cle(thread, storyRing: { _ in .unread }),
+            cle(thread, storyRing: { _ in .read })
+        )
+    }
+
+    /// Un message qui arrive change l'ordre ET la géométrie : les bulles
+    /// rendues ne sont plus les mêmes.
+    func test_unMessageQuiArriveInvalideLaCle() {
+        let avant = filDeDeux
+        let apres = avant + [message("m3", sender: "toi", minutes: 7)]
+        XCTAssertNotEqual(cle(avant), cle(apres))
+    }
+
+    /// Le lecteur décide de quel côté penchent les bulles : changer de lecteur
+    /// change ce qui est rendu, à messages identiques.
+    func test_unLecteurDifferentInvalideLaCle() {
+        let thread = filDeDeux
+        XCTAssertNotEqual(cle(thread, viewerId: "moi"), cle(thread, viewerId: "toi"))
+    }
+
 }
