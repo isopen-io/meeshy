@@ -38,8 +38,14 @@ describe('Consent Validation - Defaults and Logic', () => {
   });
 
   describe('Privacy Preferences - Consent Fields', () => {
-    it('should have analytics enabled by default', () => {
-      expect(PRIVACY_PREFERENCE_DEFAULTS.allowAnalytics).toBe(true);
+    // La télémétrie est OPT-IN : `allowAnalytics` vaut FAUX par défaut. Ce
+    // témoin affirmait l'inverse — il portait le titre « enabled by default »
+    // et la valeur d'avant le basculement. Le titre ET l'assertion changent :
+    // garder le titre aurait laissé un témoin qui DIT le contraire de ce qu'il
+    // vérifie, ce qui est pire qu'un témoin faux, car il se lit comme une
+    // spécification.
+    it('should have analytics DISABLED by default — la télémétrie est opt-in', () => {
+      expect(PRIVACY_PREFERENCE_DEFAULTS.allowAnalytics).toBe(false);
     });
 
     it('should allow disabling analytics without additional consent', () => {
