@@ -685,7 +685,23 @@ export function registerLinkAdmissionRoutes(
           400: { description: 'Validation error', ...validationErrorResponseSchema },
           403: errorResponseSchema,
           404: errorResponseSchema,
-          409: errorResponseSchema,
+          // #4487 — `fast-json-stringify` RETIRE en silence toute propriété que
+          // le schéma ne déclare pas. Le 409 de cette porte compose un
+          // `suggestedNickname` (le pseudo libre proposé quand celui demandé est
+          // pris) que l'enveloppe nue supprimait avant l'envoi : l'invité lisait
+          // « ce pseudo est pris » sans jamais recevoir l'alternative calculée
+          // pour lui. On ÉTEND l'enveloppe, on ne la recopie pas — l'idiome déjà
+          // posé sur `POST /anonymous/join/:linkId`.
+          409: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              suggestedNickname: {
+                type: 'string',
+                description: 'Pseudo libre proposé quand celui demandé est déjà pris'
+              },
+            },
+          },
           410: errorResponseSchema,
           500: errorResponseSchema,
         },

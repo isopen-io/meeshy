@@ -80,7 +80,7 @@ import {
   sendUnauthorized,
   sendNotFound,
   sendBadRequest,
-  sendConflict,
+  sendError,
   sendInternalError,
 } from '../../utils/response.js';
 
@@ -222,6 +222,70 @@ const derivedSchema = {
 } as const;
 
 /**
+ * ## Pourquoi un refus doit DÉCLARER ce qu'il ajoute (#4487)
+ *
+ * `sendError` étale `details` à la RACINE de l'enveloppe, et
+ * fast-json-stringify RETIRE en silence toute propriété que le schéma de
+ * réponse ne déclare pas. Un champ d'appoint non déclaré est donc calculé,
+ * passé, sérialisé — puis jeté au dernier mètre : le serveur savait quel
+ * champ manquait et n'avait aucun moyen de le dire. C'est ce silence qui a
+ * fait conclure à tort à une route cassée pendant la vérification de #4348.
+ *
+ * L'enveloppe reste à site UNIQUE (`errorResponseSchema`) : on l'ÉTEND, on ne
+ * la recopie pas — recopier l'aurait figée au jour de ce lot. Et la forme
+ * déclarée est celle que Zod émet RÉELLEMENT, jamais une projection maison :
+ * une seconde forme divergerait de la première au premier changement de
+ * version de Zod, et `path` seul ne dit pas tout (une clé refusée par
+ * `.strict()` vit dans `keys`, `path` restant vide).
+ */
+const zodIssueSchema = {
+  type: 'object',
+  properties: {
+    code: {
+      type: 'string',
+      description: 'Code Zod : invalid_type, unrecognized_keys, too_small…',
+    },
+    path: { type: 'array', items: { type: 'string' }, description: 'Chemin du champ fautif' },
+    keys: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Clés refusées quand `path` est vide (unrecognized_keys)',
+    },
+    message: { type: 'string', description: 'Message Zod, déjà lisible' },
+  },
+} as const;
+
+const badRequestResponseSchema = {
+  ...errorResponseSchema,
+  properties: {
+    ...errorResponseSchema.properties,
+    issues: {
+      type: 'array',
+      items: zodIssueSchema,
+      description: 'Une entrée par champ refusé par le schéma du corps',
+    },
+    allowedPurposes: {
+      type: 'array',
+      items: { type: 'string', enum: [...CONSENT_PURPOSES] },
+      description: "Les purpose acceptés, quand celui de l'URL est inconnu",
+    },
+  },
+} as const;
+
+const policyConflictResponseSchema = {
+  ...errorResponseSchema,
+  properties: {
+    ...errorResponseSchema.properties,
+    expectedPolicyVersion: {
+      type: 'string',
+      description:
+        'La version EN VIGUEUR, lisible par une machine : un client dont la ' +
+        'constante a dérivé se recale sans relire GET /me/consents.',
+    },
+  },
+} as const;
+
+/**
  * `PUT` n'accepte QUE `{ granted, policyVersion }` — `.strict()` rejette
  * toute clé de plus, en particulier `grantedAt`/`revokedAt` : le serveur
  * pose la date, JAMAIS le client (#4180, répété par le critère 2 de #4335).
@@ -340,10 +404,10 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
               data: consentEntrySchema,
             },
           },
-          400: errorResponseSchema,
+          400: badRequestResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
-          409: errorResponseSchema,
+          409: policyConflictResponseSchema,
           429: errorResponseSchema,
           500: errorResponseSchema,
         },
@@ -359,6 +423,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       if (!isConsentPurpose(purpose)) {
         return sendBadRequest(reply, 'UNKNOWN_CONSENT_PURPOSE', {
           message: `purpose doit être l'un de : ${CONSENT_PURPOSES.join(', ')}`,
+          details: { allowedPurposes: [...CONSENT_PURPOSES] },
         });
       }
 
@@ -375,10 +440,11 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       }
 
       if (body.policyVersion !== CONSENT_POLICY_VERSION) {
-        return sendConflict(reply, 'CONSENT_POLICY_VERSION_MISMATCH', {
+        return sendError(reply, 409, 'CONSENT_POLICY_VERSION_MISMATCH', {
           message:
             `La politique de confidentialité a changé (version en vigueur : ` +
             `${CONSENT_POLICY_VERSION}) — relire GET /me/consents avant de renvoyer ce PUT.`,
+          details: { expectedPolicyVersion: CONSENT_POLICY_VERSION },
         });
       }
 
