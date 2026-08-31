@@ -118,7 +118,7 @@ const MAX_LINES = 1000;
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/__tests__/MeeshySocketIOManager.test.ts': 8158,
   '__tests__/unit/services/CallService.test.ts': 6145,
-  '__tests__/unit/services/MessageReadStatusService.test.ts': 5738,
+  '__tests__/unit/services/MessageReadStatusService.test.ts': 5264,
   'socketio/__tests__/CallEventsHandler.test.ts': 4650,
   '__tests__/unit/routes/messages-routes.test.ts': 4330,
   '__tests__/unit/handlers/MessageHandler.core.test.ts': 4263,
@@ -138,7 +138,6 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/services/MentionService.test.ts': 2063,
   '__tests__/unit/services/VoiceProfileService.test.ts': 1911,
   '__tests__/unit/services/PasswordResetService.test.ts': 1823,
-  '__tests__/unit/routes/posts/interactions.test.ts': 1733,
   '__tests__/unit/services/RedisDeliveryQueue.test.ts': 1723,
   '__tests__/unit/routes/posts/comments.test.ts': 1671,
   '__tests__/unit/routes/posts/core.test.ts': 1654,
