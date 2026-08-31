@@ -46,6 +46,7 @@ import { logger } from './messages-shared';
 import {
   buildAfterWatermarkClause,
   buildMessageListSelect,
+  loadCurrentUserConsumptionMap,
   loadMessageReadStatusMap,
   mapMessageRowForList,
   enrichForwardedMessagesForList,
@@ -557,6 +558,14 @@ export function registerMessagesListRoute(
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
+      // #3909 — la progression de lecture du participant sur les pièces
+      // jointes de CETTE page. Une requête, bornée aux identifiants rendus.
+      const consumptionMap = await loadCurrentUserConsumptionMap(
+        prisma,
+        messages,
+        currentParticipantId
+      );
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => mapMessageRowForList(message, {
         includeTranslations,
@@ -567,6 +576,7 @@ export function registerMessagesListRoute(
         readStatusMap,
         senderPresenceVis,
         listMissingEntry,
+        consumptionMap,
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

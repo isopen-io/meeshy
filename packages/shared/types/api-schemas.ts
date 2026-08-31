@@ -283,6 +283,27 @@ export const messageAttachmentSchema = {
     reactionSummary: { type: 'object', additionalProperties: { type: 'number' }, description: 'Per-image reaction counts (emoji→count)' },
     currentUserReactions: { type: 'array', items: { type: 'string' }, description: 'Emojis the current user reacted with on this attachment' },
 
+    // #3909 — la progression PERSONNELLE de lecture, DÉCLARÉE cette fois.
+    //
+    // Le gateway la calculait depuis juin 2026 (une requête bornée par page,
+    // scopée au participant) et fast-json-stringify la retirait à chaque
+    // réponse, faute de figurer ICI. #4177 a donc retiré le calcul — à raison :
+    // c'était du travail mort. Ce qu'il faut retenir est l'ordre : **déclarer
+    // le champ est le PRÉALABLE, pas la conséquence.** Réintroduire la
+    // projection sans cette déclaration la referait mourir en silence, et le
+    // client qui la lit resterait un contrôle non alimenté.
+    currentUserConsumption: {
+      type: 'object',
+      nullable: true,
+      description: "Current participant's playback progress on this attachment (null = never consumed)",
+      properties: {
+        lastPlayPositionMs: { type: 'number', nullable: true, description: 'Last audio position in ms' },
+        listenedComplete: { type: 'boolean', description: 'Audio listened to completion' },
+        lastWatchPositionMs: { type: 'number', nullable: true, description: 'Last video position in ms' },
+        watchedComplete: { type: 'boolean', description: 'Video watched to completion' },
+      },
+    },
+
     // User-provided metadata
     title: { type: 'string', nullable: true, description: 'Human-readable title' },
     alt: { type: 'string', nullable: true, description: 'Accessibility alt text' },
