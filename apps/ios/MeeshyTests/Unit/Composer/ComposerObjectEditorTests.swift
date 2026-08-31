@@ -122,6 +122,47 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertEqual(t.madePermanent.start, 2, "Rendre permanent ne déplace pas le début.")
     }
 
+    /// **Un objet permanent posé à zéro range DEUX `nil`** (défaut mesuré au
+    /// simulateur le 2026-09-01). `Plan2DLayout.bar()` ne rend une barre
+    /// FANTÔME que si le début ET la durée sont absents : écrire `startTime = 0`
+    /// faisait dessiner une barre PLEINE au plan pendant qu'APPARITION, douze
+    /// points plus haut, affichait « à la fin ».
+    func test_unObjetPermanentPoseAZero_rangeDeuxAbsences() {
+        let t = ComposerObjectTiming.timing(start: nil, duration: nil)
+        XCTAssertNil(t.storedStartTime)
+        XCTAssertNil(t.storedDuration)
+    }
+
+    /// Un début NON nul reste écrit, permanent ou pas : l'absence ne vaut que
+    /// pour « depuis le début ».
+    func test_unDebutNonNul_estToujoursRange() {
+        XCTAssertEqual(ComposerObjectTiming.timing(start: 2, duration: nil).storedStartTime, 2)
+    }
+
+    /// Et une fenêtre BORNÉE range son début, fût-il zéro — sans quoi le plan
+    /// perdrait l'origine de la barre.
+    func test_uneFenetreBornee_rangeSonDebut_memeAZero() {
+        let t = ComposerObjectTiming.timing(start: 0, duration: 4)
+        XCTAssertEqual(t.storedStartTime, 0)
+        XCTAssertEqual(t.storedDuration, 4)
+    }
+
+    /// **La surface du DESSOUS ne termine pas l'édition que l'écran plein
+    /// possède** (défaut majeur mesuré au simulateur : la porte TEXTE ouvrait un
+    /// éditeur VIDE).
+    ///
+    /// Présenter un `fullScreenCover` fait perdre le premier répondant au canvas
+    /// de la scène incrustée, qui annonce une fin de saisie qu'aucun doigt n'a
+    /// demandée ; `exitTextEditingMode` supprimait alors la coquille encore vide
+    /// que la porte venait de poser. Un événement de PRÉSENTATION ressemble, au
+    /// bout du câble, à un geste de l'utilisateur.
+    func test_laSurfaceDuDessous_neConclutPas_quandLEcranPleinEstMonte() throws {
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("guardeditedObject==nilelse{return}"),
+                      "Sans cette garde, ouvrir l'éditeur détruit l'objet qu'il vient "
+                      + "d'ouvrir — l'écran s'affiche sur un objet DÉJÀ supprimé.")
+    }
+
     // MARK: - Une seule façon d'éditer
 
     /// **LE témoin de la directive.** Créer et modifier passent par le même
