@@ -328,6 +328,38 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalises region-tagged targets so a variant is not a second target', async () => {
+      // `['fr', 'fr-FR']` are ONE real NLLB target. A raw `.toLowerCase()` dedup
+      // keeps them apart (`'fr'` + `'fr-fr'`), sending the translator a duplicate
+      // job — the most expensive stage of the pipeline. The sent set must share
+      // the canonical form that `pendingLanguages` and settle-matching already use.
+      await sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR'] }));
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr']);
+    });
+
+    it('canonicalises region/underscore variants across several languages', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['pt-BR', 'PT', 'de_DE', 'de'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['pt', 'de']);
+    });
+
+    it('sends exactly the languages it tracks as pending (no phantom target)', async () => {
+      // The sent target list and `pendingLanguages` must agree: every target the
+      // translator is asked to produce is one the sender waits for, and settling
+      // the real languages drains the request to empty.
+      const taskId = await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR', 'es-ES', 'es'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr', 'es']);
+      expect(sender.settleTranslationLanguage(taskId, 'fr')).toEqual({ remaining: ['es'] });
+      expect(sender.settleTranslationLanguage(taskId, 'es')).toEqual({ remaining: [] });
+      expect(sender.getPendingRequestsCount()).toBe(0);
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))

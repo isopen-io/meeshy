@@ -29,10 +29,13 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
 /**
- * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les cibles
- * partent telles que l'appelant les donne (`'EN'`, `'pt-BR'`) et le translator
- * rend la sienne : sans forme commune, une langue rendue ne se reconnaîtrait pas
- * dans le jeu des langues attendues.
+ * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). C'est la forme
+ * commune de TOUT le cycle d'une requête de traduction : les cibles partent
+ * canonicalisées (`'EN'` → `'en'`, `'pt-BR'` → `'pt'`), `pendingLanguages` les
+ * suit sous la même forme, et une langue rendue par le translator est ramenée ici
+ * avant d'être soldée. Sans forme commune, une langue rendue ne se reconnaîtrait
+ * pas dans le jeu des langues attendues, et une variante région-taguée compterait
+ * pour une cible distincte de sa langue.
  */
 const canonicalLanguage = (language: string): string =>
   normalizeLanguageCode(language) ?? language.toLowerCase();
@@ -81,8 +84,15 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Canonicaliser PUIS dédupliquer les langues cibles. Une variante
+    // région-taguée (`'fr-FR'`, `'en-US'`) ou en casse mixte est la MÊME cible
+    // NLLB que sa forme canonique : un `.toLowerCase()` brut les compterait comme
+    // deux cibles distinctes (`'fr'` + `'fr-fr'`), faisant faire au translator un
+    // travail dupliqué — l'étape la plus chère du pipeline — pour une seule langue.
+    // C'est aussi la forme sous laquelle `pendingLanguages` et
+    // `settleTranslationLanguage` raisonnent déjà : sans cette canonicalisation, le
+    // jeu ENVOYÉ et le jeu SUIVI divergeaient.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +128,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
