@@ -331,7 +331,7 @@ struct FocalGridCell: View {
                 .frame(width: 18, height: 18)
                 .background(Circle().fill(MeeshyColors.error.opacity(0.85)))
                 .padding(6)
-                .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")", bundle: .main)))
+                .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
         }
     }
 }
