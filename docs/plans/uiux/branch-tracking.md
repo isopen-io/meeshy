@@ -45,7 +45,8 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 270i | [#4368](https://github.com/isopen-io/meeshy/pull/4368) | `ba7af15c` | #4364 |
 >
 > - **Branche de travail** : `claude/intelligent-noether-u8iuu6`, **réinitialisée** (jamais supprimée) sur `origin/main` `09d94823` — base de 271i.
->   ⚠️ Elle pointait sur `dev` (91 commits, aucun travail iOS de cette piste) au démarrage du cycle : le protocole du haut de ce fichier a été appliqué tel quel (`git checkout -B <branche> origin/main`). `dev` reste intacte à `2e099690`.
+>   ⚠️ **Au démarrage du cycle, la ref DISTANTE n'existait plus** (`git ls-remote origin refs/heads/claude/intelligent-noether-u8iuu6` : vide) et le clone local pointait sur `dev` — 91 commits, aucun travail iOS de cette piste. Le protocole du haut de ce fichier a été appliqué tel quel (`git checkout -B <branche> origin/main`) et la branche RECRÉÉE ; `dev` reste intacte à `2e099690`, rien n'est perdu.
+>   Conséquence attendue, prévue par la note du protocole : les caches Actions étant scopés par ref, **le premier run du gate iOS de ce cycle repart à FROID**. C'est le coût de la suppression de la ref, pas de sa réinitialisation.
 >
 > ### 271i — une clé portait CINQ phrases, et la traduire les aurait réduites à une (#4540)
 >
