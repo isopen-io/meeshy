@@ -177,9 +177,12 @@ jobs:
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
       # tests d'une app. Sa première écriture vivait dans
       # `apps/web-v3/__tests__/` — elle remontait de trois crans pour atteindre
-      # sa surface et ne tournait dans AUCUN job (la matrice `test:` ne porte
-      # que shared/web/gateway/agent) : un contrôle inerte, qui laissait
+      # sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
+      # alors que shared/web/gateway/agent : un contrôle inerte, qui laissait
       # rouvrir au commit suivant la régression qu'il prétendait fermer.
+      # (`web-v3` A depuis rejoint la matrice ; cette phrase décrit le passé, et
+      # la lire au présent fait conclure à tort qu'une suite de la v3 ne tourne
+      # nulle part.)
       # Il déroule les cibles avec `make -n` : un `*_DIR` mort se lit dans le
       # texte, mais un `cd` vers un répertoire absent ne se voit qu'après
       # expansion des variables.
