@@ -373,7 +373,7 @@ describe('RouteUsageCounter — la charge porte ses angles morts', () => {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('ROUTES_SURVEILLEES — les adresses depreciees, instrumentees en priorite', () => {
-  it('couvre les vingt-trois issues qui attendent un zero', () => {
+  it('couvre les vingt-quatre issues qui attendent un zero', () => {
     // Quatre sont arrivees avec #4470 : les issues des alias servis HORS
     // `/api/v1/`, dont le zero de ce compteur est le seul argument de retrait
     // — #4277 (alias racine de l'analyse vocale), #4317 (delete-for-me de
@@ -385,10 +385,14 @@ describe('ROUTES_SURVEILLEES — les adresses depreciees, instrumentees en prior
     // figurer ici. Cette liste-ci reste un INVENTAIRE, donc une liste en
     // retard par construction — ce qui garantit la couverture est le balayage
     // `__tests__/security/deprecation-coverage-sweep.ts`, qui part du CODE.
+    // #4370 est la vingt-quatrieme, et elle attend un zero d'une nature
+    // differente des autres : les deux couples TUS ne sont pas DEPRECIES, ils
+    // sont montes sans appelant CONFIRME. #4190 avait pose la bonne regle — la
+    // confirmation precede le retrait — sans l'instrument qui la rend possible.
     const issues = new Set(ROUTES_SURVEILLEES.map((r) => r.issue));
     expect([...issues].sort()).toEqual([
       4149, 4154, 4155, 4158, 4161, 4164, 4167, 4169, 4170, 4178, 4181, 4182,
-      4184, 4277, 4283, 4317, 4324, 4346, 4349, 4350, 4351, 4353, 4376,
+      4184, 4277, 4283, 4317, 4324, 4346, 4349, 4350, 4351, 4353, 4370, 4376,
     ]);
   });
 
