@@ -149,7 +149,18 @@ export function registerSharingRoutes(
           requireNickname: { type: 'boolean', description: 'Require nickname for anonymous users' },
           requireEmail: { type: 'boolean', description: 'Require email for anonymous users' },
           requireBirthday: { type: 'boolean', description: 'Require birthday for anonymous users' },
-          allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes' },
+          // #4354 — ACCEPTÉ VIDE, REFUSÉ NON VIDE. Le champ n'est plus
+          // appliqué (#4167 : pas de base GeoIP), mais dix liens sur dix
+          // l'envoient à vide : un refus sur sa PRÉSENCE casserait toute
+          // création jusqu'à la mise à jour des clients. `maxItems: 0` refuse
+          // exactement là où l'utilisateur serait trompé — quand il DEMANDE
+          // une restriction.
+          allowedCountries: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 0,
+            description: "INERTE (#4167) — aucun filtre par pays n'est appliqué ; une valeur non vide est refusée"
+          },
           allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
           allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges' }
         }
