@@ -109,9 +109,9 @@ struct ComposerLeadingRail: View {
     @ViewBuilder
     private func railStack<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         if axis == .vertical {
-            VStack(spacing: 10) { content() }
+            VStack(spacing: ComposerRailGeometry.entrySpacing) { content() }
         } else {
-            HStack(spacing: 10) { content() }
+            HStack(spacing: ComposerRailGeometry.entrySpacing) { content() }
         }
     }
 
@@ -144,13 +144,35 @@ struct ComposerLeadingRail: View {
                                    height: ComposerRailGeometry.railWidth)
                     }
                 case .tool(let controls):
-                    ForEach(controls) { control in
-                        toolButton(control)
+                    // **La rangée DÉFILE, le `(x)` reste** (#4582, directive
+                    // porteur « faire très attention aux décalages hors du
+                    // viewport »).
+                    //
+                    // Sept contrôleurs de texte plus la sortie font huit
+                    // entrées : `8 × 44 + 7 × 10 = 422 pt`, quand un écran de
+                    // 393 pt en offre 373 une fois les marges retirées. Une
+                    // `HStack` trop large n'est pas clippée par SwiftUI — elle
+                    // DESSINE par-dessus les deux bords, moitié-moitié : mesuré
+                    // à l'écran, le `Aa` et le `✕` étaient coupés chacun de
+                    // moitié. Le débordement est arithmétique, pas conditionnel.
+                    //
+                    // **Le `(x)` est hors du défilement**, et c'est ce qui tient
+                    // la promesse du rail : « la position que le doigt apprend
+                    // pour sortir ne dépend pas du nombre de contrôleurs de
+                    // l'outil ouvert ». Le faire défiler avec le reste
+                    // l'enverrait hors champ précisément quand il y a trop de
+                    // contrôleurs — c'est-à-dire quand on en a le plus besoin.
+                    if axis == .horizontal {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: ComposerRailGeometry.entrySpacing) {
+                                ForEach(controls) { toolButton($0) }
+                            }
+                        }
+                    } else {
+                        ForEach(controls) { control in
+                            toolButton(control)
+                        }
                     }
-                    // **Le `(x)` est TOUJOURS le dernier.** La position que le
-                    // doigt apprend pour sortir ne doit pas dépendre du nombre
-                    // de contrôleurs de l'outil ouvert — quatre pour le dessin,
-                    // sept pour le texte.
                     exitButton
                 }
             }

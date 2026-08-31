@@ -188,4 +188,88 @@ final class ComposerRailGeometryTests: XCTestCase {
             compact(try surfaceSource()).contains(".padding(.horizontal,14)"),
             "L'encastrement de la scène est revenu à un littéral : la raison qui le produit a disparu avec.")
     }
+
+    // MARK: - Ce qu'une rangée requiert, et ce qui déborde (#4582)
+
+    /// **Le débordement de la rangée d'outils est ARITHMÉTIQUE.**
+    ///
+    /// Sept contrôleurs de texte plus le `(x)` font huit entrées. À 44 pt de
+    /// cible tactile et 10 pt d'écart : `8 × 44 + 7 × 10 = 422 pt`, quand un
+    /// iPhone de 393 pt en offre 373 une fois les marges retirées.
+    ///
+    /// Il ne dépend ni du contenu, ni de la locale, ni de la taille de texte —
+    /// il tient à un compte d'entrées. C'est ce qui le rend calculable, donc
+    /// éprouvable sans monter d'écran.
+    func test_huitEntrees_neTiennentPasSurUnTelephone() {
+        let requise = ComposerRailGeometry.rowWidth(entries: 8)
+        XCTAssertEqual(requise, 422, accuracy: 0.01)
+
+        let offerte = ComposerRailGeometry.availableRowWidth(screenWidth: 393)
+        XCTAssertEqual(offerte, 373, accuracy: 0.01)
+        XCTAssertGreaterThan(ComposerRailGeometry.rowOverflow(entries: 8, available: offerte), 0,
+                             "la rangée déborde — et SwiftUI ne la clippe pas, il la dessine par-dessus les bords")
+    }
+
+    /// **Et il commence bien AVANT l'appareil de développement.** Vu sur
+    /// 393 pt, il commence à 375 — le plus étroit iPhone supporté. Une rangée
+    /// se mesure LÀ.
+    func test_leDebordement_commenceAvantLAppareilDeDeveloppement() {
+        let etroit = ComposerRailGeometry.availableRowWidth(
+            screenWidth: ComposerRailGeometry.narrowestSupportedScreenWidth)
+        XCTAssertGreaterThan(ComposerRailGeometry.rowOverflow(entries: 8, available: etroit), 0)
+        XCTAssertGreaterThan(ComposerRailGeometry.rowOverflow(entries: 7, available: etroit), 0,
+                             "sept entrées ne tiennent pas non plus — #4379 le disait de l'axe vertical")
+    }
+
+    /// Le fusible : une règle qui rendrait toujours un débordement ferait
+    /// défiler des rangées qui tiennent, et coûterait le repère du doigt pour
+    /// rien.
+    func test_uneRangeeCourte_tientSansDefiler() {
+        let offerte = ComposerRailGeometry.availableRowWidth(screenWidth: 393)
+        XCTAssertEqual(ComposerRailGeometry.rowOverflow(entries: 4, available: offerte), 0)
+        XCTAssertEqual(ComposerRailGeometry.rowWidth(entries: 0), 0)
+        XCTAssertEqual(ComposerRailGeometry.rowWidth(entries: 1), ComposerRailGeometry.railWidth)
+    }
+
+    /// **La rangée horizontale DÉFILE, et le `(x)` reste hors du défilement.**
+    ///
+    /// Le faire défiler avec le reste l'enverrait hors champ précisément quand
+    /// il y a le plus de contrôleurs — c'est-à-dire quand on en a le plus
+    /// besoin. Le rail promet que « la position que le doigt apprend pour sortir
+    /// ne dépend pas du nombre de contrôleurs » ; un `(x)` qui défile en fait
+    /// une promesse creuse.
+    func test_laRangeeHorizontale_defile_etLaSortieResteEpinglee() throws {
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
+        let url = racine.appendingPathComponent(
+            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(brut.contains("struct ComposerLeadingRail"),
+                      "ce n'est pas le rail — la garde lirait à côté")
+        let code = AppSourceGuard.stripComments(brut)
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(code.contains("ScrollView(.horizontal,showsIndicators:false)"))
+        // Le `(x)` est posé APRÈS la fermeture du ScrollView, donc hors de lui.
+        let apresDefilement = code.components(separatedBy: "ScrollView(.horizontal").last ?? ""
+        XCTAssertTrue(apresDefilement.contains("exitButton"),
+                      "la sortie doit rester hors du défilement")
+    }
+
+    /// **L'écart vient de la RÈGLE, jamais d'un littéral recopié.** Deux
+    /// valeurs, l'une dans la vue et l'autre dans le calcul, rendraient la
+    /// mesure fausse sans que rien ne rougisse — la rangée déborderait
+    /// exactement de leur différence.
+    func test_lEcart_aUnSeulSite() throws {
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
+        let url = racine.appendingPathComponent(
+            "Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertFalse(code.contains("HStack(spacing:10)"),
+                       "l'écart doit venir de ComposerRailGeometry.entrySpacing")
+        XCTAssertFalse(code.contains("VStack(spacing:10)"))
+    }
 }

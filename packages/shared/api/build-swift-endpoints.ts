@@ -95,7 +95,7 @@ const HEADER = [
   '// catalogue TypeScript (packages/shared/api/build-catalog.ts). Régénérer après',
   '// tout changement de route :',
   '//',
-  '//   cd packages/shared && npm run api-endpoints:generate',
+  '//   cd packages/shared && npm run ios-endpoints:generate',
   '//',
   "// Les politiques d'authentification et de réessai ne sont PAS ici : ce sont des",
   '// décisions client, écrites à la main en redéfinition de `MeeshyEndpoint`.',

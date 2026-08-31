@@ -433,8 +433,27 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les portes du rail *leading*. Passées à `ComposerRailDoor.offered`, qui
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
+    /// **La porte SON n'y est plus** (directive porteur 2026-08-31) :
+    ///
+    /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
+    /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker /
+    /// > chip redimensionnable, déplaçable. »
+    ///
+    /// **Elle ne coûtait aucune capacité, et c'est mesuré** : `handleRailDoor(.sound)`
+    /// appelait `presentSoundSources()`, dont le corps entier est
+    /// `presentedPortal = .sound` — la ligne EXACTE que la pastille du socle
+    /// exécute déjà. Deux boutons, une seule feuille.
+    ///
+    /// > Ce n'était pas une capacité en double, c'était un BOUTON en double. La
+    /// > différence décide du correctif : on retire l'un des deux sans rien
+    /// > perdre, là où deux capacités auraient demandé de choisir laquelle
+    /// > survit.
+    ///
+    /// Le son POSÉ sur la scène (objet visible, déplaçable, redimensionnable)
+    /// revient par la palette de constructions (#4579), derrière l'entrée
+    /// sticker ; le son de FOND reste au socle, où il porte son crédit (#4071).
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
+        .description, .media, .text, .drawing, .sticker, .mention, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à

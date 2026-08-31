@@ -75,7 +75,13 @@ describe('renderSwiftEndpoints — un fichier par namespace', () => {
       'AuthEndpoint.swift'
     ) ?? '';
     expect(source).toContain('GÉNÉRÉ');
-    expect(source).toContain('api-endpoints:generate');
+    // La commande EXACTE, pas un fragment : la première écriture annonçait
+    // `api-endpoints:generate` — celle du catalogue TypeScript — et le témoin
+    // passait, `ios-endpoints:generate` n'étant pas un sur-ensemble mais un
+    // VOISIN. Un en-tête généré qui nomme la mauvaise commande envoie la
+    // prochaine main régénérer l'autre surface et conclure que rien ne bouge.
+    expect(source).toContain('npm run ios-endpoints:generate');
+    expect(source).not.toContain('npm run api-endpoints:generate');
   });
 
   it('la sortie est DÉTERMINISTE — même entrée, même octet', () => {

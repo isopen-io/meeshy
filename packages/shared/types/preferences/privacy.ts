@@ -27,7 +27,25 @@ export const PrivacyPreferenceSchema = z.object({
 
   // Données et analytics
   saveMediaToGallery: z.boolean().default(false),
-  allowAnalytics: z.boolean().default(true),
+  /**
+   * `false` par défaut depuis #4578, et ce n'est pas un durcissement gratuit.
+   *
+   * Cette préférence est GARDÉE par `dataProcessingConsentAt`
+   * (`ConsentValidationService.validatePrivacyPreferences`) et n'a AUCUN
+   * lecteur d'usage dans le dépôt — mesuré : hors schémas, tests et interface,
+   * les seules occurrences sont la garde elle-même. Sa valeur stockée est donc
+   * la seule chose qui existe, et un défaut `true` faisait affirmer par le
+   * système, pour un compte qui n'a rien consenti, exactement ce que la garde
+   * refuse. L'état PAR DÉFAUT violait le modèle de consentement.
+   *
+   * Conséquence directe, mesurée sur staging : la catégorie `privacy`
+   * était INACCESSIBLE à un compte neuf — un `PATCH {"profileVisibility":"private"}` était
+   * refusé en nommant ce champ-ci.
+   *
+   * Un consentement s'accorde, il ne se présume pas : c'est aussi ce que le
+   * RGPD attend d'un traitement analytique.
+   */
+  allowAnalytics: z.boolean().default(false),
   shareUsageData: z.boolean().default(false),
 
   // Blocage et filtrage
@@ -53,7 +71,7 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   allowGroupInvites: true,
   allowCallsFromNonContacts: false,
   saveMediaToGallery: false,
-  allowAnalytics: true,
+  allowAnalytics: false,
   shareUsageData: false,
   blockScreenshots: false,
   hideProfileFromSearch: false,

@@ -81,6 +81,12 @@ struct ComposerSceneSurface: View {
     /// La frame `[+]` du rail *trailing* — créer une slide.
     var onAddSlide: (() -> Void)?
 
+    /// **L'HISTORIQUE, descendu du socle au rail droit** (#4586, directive
+    /// porteur 2026-08-31). `nil` ⇒ rien à défaire, donc aucun bouton : la
+    /// surface ne re-décide rien, le meuble a déjà posé la question.
+    var onUndo: (() -> Void)?
+    var onRedo: (() -> Void)?
+
     // MARK: - L'inspecteur de l'objet sélectionné (#4073, vue `1c`)
 
     /// Les jetons SERVIS — déjà résolus par `ComposerObjectChips.chips(forSelected:in:)`.
@@ -314,7 +320,9 @@ struct ComposerSceneSurface: View {
                     ComposerTrailingRail(actions: trailingActions,
                                          plateauTint: plateauTint,
                                          onAction: onTrailingAction,
-                                         onAddSlide: onAddSlide)
+                                         onAddSlide: onAddSlide,
+                                         onUndo: onUndo,
+                                         onRedo: onRedo)
                         .padding(.trailing, ComposerRailGeometry.outerMargin)
                         .padding(.bottom, ComposerRailGeometry.gutter)
                 }
