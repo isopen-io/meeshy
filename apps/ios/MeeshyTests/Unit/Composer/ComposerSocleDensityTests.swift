@@ -88,7 +88,8 @@ final class ComposerSocleDensityTests: XCTestCase {
         let code = try hostSource()
         for ancre in ["var publishButton: some View {",
                       "var moodHeaderPublishButton: some View {",
-                      "var audienceChip: some View {"] {
+                      "var audienceChip: some View {",
+                      "var soundChip: AnyView {"] {
             guard let bloc = corps(de: ancre, dans: code) else {
                 return XCTFail("`\(ancre)` introuvable — la garde ne mesurerait rien.")
             }
@@ -108,13 +109,23 @@ final class ComposerSocleDensityTests: XCTestCase {
             "La règle doit avoir UNE lecture (`socleShowsLabels`) : deux appels seraient deux seuils à "
                 + "faire diverger, et l'un des deux se casserait en syllabes sans que rien ne le dise."
         )
-        // Trois depuis le 2026-08-28 (audience, flèche du socle document,
-        // flèche de l'en-tête mood) — toujours la MÊME règle, un consommateur
-        // de plus ne change pas le fusible : deux lectures DIVERGENTES le
-        // feraient tomber ci-dessus, et c'est ce que ce test mesure en premier.
+        // QUATRE depuis le 2026-08-31 : la pastille bande-son a rejoint le
+        // socle (#4071) et lit la même règle. Toujours UNE règle, un
+        // consommateur de plus ne change pas le fusible — deux lectures
+        // DIVERGENTES le feraient tomber ci-dessus, et c'est ce que ce test
+        // mesure en premier.
+        //
+        // **Ce compte a failli être perdu en le SUPPRIMANT.** Ajouter la
+        // pastille l'a fait rougir ; la première réaction a été d'effacer le
+        // fichier plutôt que d'incrémenter le nombre — ce qui aurait laissé une
+        // règle VIVANTE, à quatre sites, sans aucun témoin, et retiré du même
+        // coup la garde des 44 pt qui a justement trouvé que la pastille n'en
+        // avait pas. **Un cliquet qui rougit demande à être MIS À JOUR ; le
+        // supprimer est la seule réponse qui coûte la protection.**
         XCTAssertEqual(
-            code.components(separatedBy: "if socleShowsLabels").count - 1, 3,
-            "…et exactement TROIS consommateurs : l'audience, la flèche du socle et celle de l'en-tête mood."
+            code.components(separatedBy: "if socleShowsLabels").count - 1, 4,
+            "…et exactement QUATRE consommateurs : l'audience, la pastille son, la flèche du socle "
+                + "et celle de l'en-tête mood."
         )
     }
 

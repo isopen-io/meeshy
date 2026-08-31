@@ -181,16 +181,24 @@ nonisolated enum ComposerObjectChips {
     /// L'ordre suit la planche — ce qui change l'apparence d'abord, le temps en
     /// dernier — et il ne dépend PAS de ce qui est renseigné : un jeton qui
     /// apparaît ne doit pas déplacer ses voisins sous le doigt.
-    static func chips(for text: StoryTextObject) -> [Chip] {
+    /// - Parameter locale: la locale qui FORME les nombres du jeton. Elle est
+    ///   un paramètre plutôt qu'une lecture de `.current` parce qu'une règle
+    ///   pure doit pouvoir être éprouvée sur une locale AUTRE que celle de la
+    ///   machine qui la teste : un témoin qui lit `.current` rend le même
+    ///   verdict avec et sans localisation, donc ne prouve rien.
+    static func chips(for text: StoryTextObject,
+                      locale: Locale = .current) -> [Chip] {
         var jetons: [Chip] = []
         if let style = text.textStyle, !style.isEmpty {
             jetons.append(Chip(id: "style", label: "STYLE · \(styleName(style))"))
         }
-        jetons.append(Chip(id: "size", label: "TAILLE \(Int(text.fontSize.rounded()))"))
+        let taille = LocalizedNumber.exact(Int(text.fontSize.rounded()), locale: locale)
+        jetons.append(Chip(id: "size", label: "TAILLE \(taille)"))
         if let align = text.textAlign, !align.isEmpty {
             jetons.append(Chip(id: "align", label: "ALIGN · \(alignName(align))"))
         }
-        if let fenetre = window(start: text.startTime, duration: text.duration) {
+        if let fenetre = window(start: text.startTime,
+                                duration: text.duration, locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre))
         }
         return jetons
@@ -198,15 +206,25 @@ nonisolated enum ComposerObjectChips {
 
     /// `nil` ⇒ le texte est PERMANENT : il n'a pas de fin à annoncer, et un
     /// « 0:00 → 0:00 » mentirait sur sa durée.
-    static func window(start: Double?, duration: Double?) -> String? {
+    static func window(start: Double?, duration: Double?,
+                       locale: Locale = .current) -> String? {
         guard let duration, duration > 0 else { return nil }
         let debut = max(0, start ?? 0)
-        return "\(timecode(debut)) → \(timecode(debut + duration))"
+        return "\(timecode(debut, locale: locale)) → \(timecode(debut + duration, locale: locale))"
     }
 
-    static func timecode(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        return String(format: "%d:%02d", total / 60, total % 60)
+    /// **`String(format: "%d:%02d")` vécut ici, et gravait les chiffres
+    /// LATINS** — « 0:06 » dans une interface arabe, où la fenêtre de temps
+    /// s'écrit « ٠:٠٦ ». Le défaut n'a pas la forme qu'une garde de littéral
+    /// reconnaît : aucune chaîne interpolée, aucun `\(…)`, juste un formateur
+    /// qui rend un `String` déjà faux. `NumericAccessibilityValueGuardTests`
+    /// va donc le chercher à sa SOURCE, dans le corps du formateur.
+    ///
+    /// L'arrondi PRÉCÈDE le formatage et reste ici : `LocalizedNumber` tronque
+    /// vers zéro (c'est ce qu'une position de lecture demande), là où une
+    /// BORNE de fenêtre s'arrondit — 5,7 s de durée annoncent 6 s, pas 5.
+    static func timecode(_ seconds: Double, locale: Locale = .current) -> String {
+        LocalizedNumber.duration(seconds: max(0, Int(seconds.rounded())), locale: locale)
     }
 
     /// Les cinq styles du modèle, dans les mots de la planche. Un style inconnu

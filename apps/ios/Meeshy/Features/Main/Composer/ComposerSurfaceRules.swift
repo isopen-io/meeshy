@@ -309,7 +309,35 @@ nonisolated enum ComposerSocleSound {
     /// et aucun auteur, et lui en inventer un serait mentir sur la provenance.
     /// De même une durée inconnue ne devient pas « 0:00 » — un compteur faux se
     /// lit comme une piste vide.
-    static func label(for sound: StoryAudioPlayerObject?) -> String {
+    static func label(for sound: StoryAudioPlayerObject?,
+                      locale: Locale = .current) -> String {
+        compose(sound, locale: locale) { LocalizedNumber.duration(seconds: $0, locale: $1) }
+    }
+
+    /// **La pastille est LUE à voix haute, et « 0:12 » ne se dit pas.**
+    ///
+    /// L'hôte posait `.accessibilityLabel(Text(label(for:)))` — la chaîne
+    /// MONTRÉE, resservie telle quelle. VoiceOver y lit une horloge : « zéro
+    /// heure douze » pour un extrait de douze secondes. La doctrine du dépôt
+    /// sépare les deux depuis 247i — `LocalizedNumber.duration` pour ce qu'on
+    /// VOIT, `spokenDuration` pour ce qu'on ENTEND — et cette pastille était
+    /// le site où les deux étaient confondus.
+    ///
+    /// > Une chaîne qui sert à la fois de libellé visuel et de libellé
+    /// > d'accessibilité n'est pas une économie : c'est une décision prise pour
+    /// > l'un des deux lecteurs et subie par l'autre.
+    ///
+    /// Le titre et le crédit sont IDENTIQUES dans les deux — c'est la même
+    /// pastille — et c'est pourquoi la composition est un site UNIQUE : deux
+    /// fonctions écrites côte à côte auraient divergé au premier champ ajouté.
+    static func spokenLabel(for sound: StoryAudioPlayerObject?,
+                            locale: Locale = .current) -> String {
+        compose(sound, locale: locale) { LocalizedNumber.spokenDuration(seconds: $0, locale: $1) }
+    }
+
+    private static func compose(_ sound: StoryAudioPlayerObject?,
+                                locale: Locale,
+                                duree: (Int, Locale) -> String) -> String {
         guard let sound else { return emptyLabel }
         var morceaux: [String] = []
         morceaux.append(sound.name?.isEmpty == false ? sound.name! : emptyLabel)
@@ -317,8 +345,7 @@ nonisolated enum ComposerSocleSound {
             morceaux.append("@\(auteur)")
         }
         if let secondes = sound.duration, secondes > 0 {
-            let total = Int(secondes.rounded())
-            morceaux.append(String(format: "%d:%02d", total / 60, total % 60))
+            morceaux.append(duree(Int(secondes.rounded()), locale))
         }
         return morceaux.joined(separator: " · ")
     }

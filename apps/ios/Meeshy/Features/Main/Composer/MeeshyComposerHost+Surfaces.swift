@@ -273,7 +273,17 @@ extension MeeshyComposerHost {
            sceneMentionBox.controller.activeQuery != nil,
            !sceneMentionBox.controller.suggestions.isEmpty,
            let objet = viewModel.currentEffects.textObjects.first(where: { $0.id == id }) {
-            AnyView(
+            // **`return` — sans lui, cette bande était CONSTRUITE puis JETÉE.**
+            // La propriété rend `AnyView?` ; une expression nue dans un `if`
+            // n'est pas la valeur de retour d'un accesseur à corps multiple, et
+            // le `return nil` du bas gagnait TOUJOURS. La suggestion `@` du
+            // texte de scène n'a donc jamais pu paraître, sur aucun chemin.
+            //
+            // Le compilateur le disait — « result of 'AnyView' initializer is
+            // unused » — et un avertissement noyé dans un build vert ne se lit
+            // pas. C'est la loi 4 dans sa forme la plus coûteuse : le contrôle
+            // est écrit, testé de l'œil, et sans effet.
+            return AnyView(
                 ComposerMentionStrip(
                     controller: sceneMentionBox.controller,
                     currentText: objet.text,

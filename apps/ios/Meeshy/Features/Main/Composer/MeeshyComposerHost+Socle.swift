@@ -117,6 +117,12 @@ extension MeeshyComposerHost {
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            // **44 pt est un PLANCHER, pas une conséquence du contenu.** Réduite
+            // à sa seule note de musique aux paliers d'accessibilité, la
+            // pastille tomberait à une cible d'une vingtaine de points — la
+            // même règle que l'audience et la flèche de publication, posée au
+            // même endroit qu'elles.
+            .frame(minWidth: 44, minHeight: 44)
             .overlay(
                 Capsule().strokeBorder(
                     MeeshyColors.textSecondary(isDark: true).opacity(0.28), lineWidth: 1)
@@ -126,7 +132,7 @@ extension MeeshyComposerHost {
         // La pastille peut porter un titre long ; elle cède la place au reste
         // du socle plutôt que de pousser « Publier » hors de l'écran.
         .layoutPriority(0)
-        .accessibilityLabel(Text(ComposerSocleSound.label(for: fond))))
+        .accessibilityLabel(Text(ComposerSocleSound.spokenLabel(for: fond))))
     }
 
     /// **Annuler et rétablir, au SOCLE** (directive porteur 2026-08-30).

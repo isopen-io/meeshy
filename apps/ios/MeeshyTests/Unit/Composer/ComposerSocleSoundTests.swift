@@ -75,4 +75,61 @@ final class ComposerSocleSoundTests: XCTestCase {
         son.name = "SANS DURÉE"
         XCTAssertFalse(ComposerSocleSound.label(for: son).contains("0:00"))
     }
+
+    // MARK: - Ce qu'on VOIT et ce qu'on ENTEND ne sont pas la même chaîne
+
+    /// **La pastille était LUE comme une horloge.** L'hôte posait
+    /// `.accessibilityLabel(Text(label(for:)))` — la chaîne montrée, resservie
+    /// telle quelle — et VoiceOver y prononce « 0:28 » en heures et minutes,
+    /// pour un extrait de vingt-huit secondes.
+    ///
+    /// Le témoin n'interroge PAS le formateur : il demande ce qu'un lecteur
+    /// d'écran recevrait. Une durée dite porte des MOTS.
+    func test_laPastilleSeDIT_enMots_jamaisEnHorloge() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "NUITS BLANCHES"
+        son.duration = 28
+
+        let dit = ComposerSocleSound.spokenLabel(for: son, locale: Locale(identifier: "fr_FR"))
+
+        XCTAssertFalse(dit.contains("0:28"), "une horloge ne se dit pas — \(dit)")
+        XCTAssertTrue(dit.localizedCaseInsensitiveContains("seconde"),
+                      "la durée dite porte son unité — \(dit)")
+    }
+
+    /// **Et les deux libellés restent la MÊME pastille.** Le titre et le crédit
+    /// y sont identiques ; seule la durée change de forme. Sans ce témoin, la
+    /// séparation ci-dessus autoriserait deux pastilles qui divergent — un
+    /// utilisateur voyant et un utilisateur de VoiceOver ne parleraient plus du
+    /// même objet.
+    func test_lesDeuxLibelles_decriventLaMEMEpastille() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "NUITS BLANCHES"
+        son.soundAuthorUsername = "lume"
+        son.duration = 28
+
+        for libelle in [ComposerSocleSound.label(for: son),
+                        ComposerSocleSound.spokenLabel(for: son)] {
+            XCTAssertTrue(libelle.contains("NUITS BLANCHES"), libelle)
+            XCTAssertTrue(libelle.contains("@lume"), libelle)
+        }
+    }
+
+    /// **Les chiffres MONTRÉS suivent la locale.** `String(format: "%d:%02d")`
+    /// vécut ici et les gravait en latin ; `ar_SA` — jamais `ar` nue, qui
+    /// emprunte la région de l'appareil — est la locale où les deux écritures
+    /// divergent, donc la seule où un témoin prouve quelque chose. Comparaison
+    /// `.literal` : par collation, « ٢ » vaut « 2 ».
+    func test_laDureeMontree_suitLaLocale() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "NUITS BLANCHES"
+        son.duration = 28
+
+        let arabe = ComposerSocleSound.label(for: son, locale: Locale(identifier: "ar_SA"))
+        XCTAssertNil(arabe.range(of: "0:28", options: .literal),
+                     "chiffres latins dans une pastille arabe — \(arabe)")
+    }
 }

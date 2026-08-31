@@ -1379,7 +1379,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertFalse(sitesVus.isEmpty, "Aucun site ne monte le meuble — la garde ne mesurerait RIEN.")
         XCTAssertEqual(
             Set(sitesVus),
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "ComposerDocumentSurface.swift",
+            // `DocumentComposerDoor.swift` **remplace** `ComposerDocumentSurface.swift`
+            // depuis `70b04d2aeb` : le découpage au budget a sorti la PORTE de la
+            // surface, et le montage du meuble l'a suivie. Ce cliquet est le
+            // septième laissé derrière par cette extraction — un nom de FICHIER
+            // écrit dans une garde ne suit pas le code qui déménage.
+            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
              "ConversationMediaComposerDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
@@ -2938,8 +2943,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let end = rest.range(of: "case .")?.lowerBound ?? rest.endIndex
         let branche = String(rest[..<end])
 
+        // **Le mécanisme a changé de FORME, pas d'intention.** Les drapeaux
+        // `showsAudioComposer` / `showsReferencePicker` ont fusionné en un
+        // `presentedPortal` — une seule feuille ouverte à la fois, par
+        // construction plutôt que par discipline. La garde nommait l'ancien
+        // drapeau ; elle nomme désormais le portail, et continue de mesurer la
+        // MÊME chose : le bouton ouvre la feuille.
         XCTAssertTrue(
-            branche.contains("showsReferencePicker = true"),
+            branche.contains("presentedPortal = .reference"),
             "la branche doit OUVRIR la feuille de choix"
         )
         XCTAssertFalse(
