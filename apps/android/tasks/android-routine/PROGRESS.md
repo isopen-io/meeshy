@@ -2,6 +2,60 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **the video watch-report gained its double-fire guard — one pure function decides
+> whether a fullscreen dismiss should emit its watch-progress report, so a PAUSED close can no longer
+> erase the resume position the shared player just wrote** (slice `video-dismiss-watch-report`,
+> feature-parity §"Video watch-progress reporting"). iOS keeps this as the `nonisolated enum`
+> `VideoDismissWatchReport.shouldReport` (`packages/MeeshySDK/Sources/MeeshyUI/Media/VideoDismissWatchReport.swift`),
+> the fix for issue #3908. Android had NO such guard — the app-side fullscreen `.onDisappear` telemetry
+> is still pending, and would have carried the same defect the moment it was wired (a Complétude/Sécurité
+> gap: a second, zeroed report clobbering the first owner's persisted state).
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4512
+> (`audio-player-chrome-plan`, the render-posture plan from the previous run) was open with the **Android**
+> required gate GREEN, diff strictly `apps/android` (1 core + 1 test + 2 docs), reviewer PASS. Its only red
+> check was `Quality (bun)` — the pre-existing `apps/web` type-debt ratchet (job log listed `.tsx` files by
+> `any`-count, exit 1), which a Kotlin/markdown-only diff compiles nothing of and cannot move; `mergeable_state:
+> unstable` (non-required check failing, not blocked). Squash-merged #4512 to `main` (`f557d130`), then
+> fetched/reset `origin/main` and branched `claude/apps/android/video-dismiss-watch-report` off it. Confirmed
+> the target file absent on `main` (`grep -rl WatchReport apps/android` → only PROGRESS.md mention) before writing.
+>
+> **The change — one pure `object` + one factory function, no wiring churn.** New `:core:model`
+> `VideoDismissWatchReport` with `MINIMUM_PARTIAL_WATCH_SECONDS = 3.0` and
+> `shouldReport(complete, watchedSeconds, playerStillHoldsAttachment)`: the detachment check is the
+> OUTERMOST gate — once the shared player no longer holds this attachment it has already reported (via
+> `cleanup()`, with the real values), so the fullscreen dismiss stays silent regardless of time watched;
+> otherwise a partial watch reports only at/past the 3 s minimum (inclusive), and a completed watch escapes
+> that threshold entirely. Pure decision — two booleans and a duration, no clock, no view, no player read.
+> **SOTA over iOS:** kept the `nonisolated`-equivalent purity (a `:core:model` `object`, no `android.*`),
+> the "when to attach/detach + emit telemetry" orchestration staying app-side (SDK purity). Blast radius:
+> two new files (1 core + 1 test) — no existing code touched.
+>
+> **Tests: +9, RED-proven.** `VideoDismissWatchReportTest` covers the #3908 defect (detached player stays
+> silent even when complete; a qualifying long watch is still silenced by detachment; detached stays silent
+> regardless of time), the served path (attached + ≥3 s reports; attached + brief glance silent; complete
+> escapes the threshold), the inclusive 3 s boundary (exactly-min reports, min−0.01 silent) and the constant.
+> **RED:** mutating the detachment gate to `return true` fails exactly the three detached-silence tests
+> (`detachedPlayerStaysSilentEvenWhenComplete`, `aQualifyingWatchIsStillSilencedByDetachment`,
+> `detachedPlayerStaysSilentRegardlessOfTimeWatched`); green after revert.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37`. `local.properties` kept out of the diff.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (973 tasks). Reviewer **PASS** (diff `apps/android` only — 1 core + 1
+> test + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block, no `android.*`,
+> no singleton, no orchestration; SSOT — one guard, no re-implementation; pure UDF; no tautological tests; no
+> coverage floor lowered — new pure logic with total branch coverage, RED-proven).
+>
+> **Next**: the Compose fullscreen video player `.onDisappear` that consumes this guard before emitting
+> watch-progress telemetry is the app-side §"Video watch-progress reporting" follow-up; the karaoke Compose
+> flow-layout (tap-to-seek + auto-scroll) and the audio-player chrome that paints `AudioPlayerChromePlan`
+> remain pending from the prior slices. For a pure-core next slice, the `AudioProgressDisplay` value type
+> (iOS, fraction + elapsed + isLive). **Confirm the target file is absent on `origin/main` before writing,
+> and merge any open android PR first (rule 0).**
+
 > On 2026-08-30 **the audio player gained its pure render-posture plan — given a chrome posture
 > (Card / FlatMinimal / FlatFocused), one function names WHO appears in the player: card background,
 > right chips, language strip, re-transcribe, transcribe-CTA, and the flat transcription with its
