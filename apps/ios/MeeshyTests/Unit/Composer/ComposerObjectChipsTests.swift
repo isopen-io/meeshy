@@ -268,4 +268,126 @@ final class ComposerObjectChipsTests: XCTestCase {
     func test_sansAucunJeton_aucuneRangee() {
         XCTAssertFalse(ComposerObjectChips.isServed(toolIsOpen: false, chips: []))
     }
+
+    // MARK: - Ce qu'un jeton OUVRE — la moitié qui n'existait pas
+
+    /// **Le contrat portait `activeChipId` et `onSelect`, et AUCUN hôte ne les
+    /// remplissait.** La rangée peignait donc six capsules dont chacune
+    /// s'annonçait `.isButton` à VoiceOver, dont aucune n'avait le moindre
+    /// effet, et dont aucune ne pouvait jamais paraître active.
+    ///
+    /// C'est la loi 4 dans sa forme la plus coûteuse : le contrôle n'est pas
+    /// absent, il est INERTE — et il PROMET par son cadre, son retour haptique
+    /// et son trait d'accessibilité. Trouvé en cherchant, sur la surface de
+    /// scène, le motif que `PostCard` avait déjà rendu au cycle 123 : une zone
+    /// cliquable dont le clic ne change rien.
+    ///
+    /// > **Suivre une donnée jusqu'à son consommateur s'arrête un cran trop
+    /// > tôt : la suivre jusqu'au PIXEL.** Le témoin qui l'attrape n'interroge
+    /// > ni le libellé ni la présence — il demande ce que le doigt OBTIENT.
+    ///
+    /// La réponse tient en une phrase : **un jeton mène là où sa valeur se
+    /// CHANGE**, et une valeur qui ne se change nulle part ne mène nulle part.
+    func test_laFenetreDeTemps_meneAuRognage() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertEqual(jetons.first { $0.id == "window" }?.destination, .timeline,
+                       "une fenêtre de temps se règle à la timeline — \(libelles(jetons))")
+    }
+
+    /// **Une destination NON SERVIE n'est pas proposée**, et c'est ce qui
+    /// distingue ce câblage d'une promesse. `ComposerSceneBand.opened` refuse
+    /// déjà d'ouvrir une bande absente du jeu servi : attacher la destination
+    /// sans regarder ce jeu aurait fabriqué un jeton qui s'illumine, vibre, et
+    /// n'ouvre rien — exactement le défaut qu'on répare.
+    func test_uneDestinationNonServie_nEstPasProposee() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [])
+        XCTAssertNil(jetons.first { $0.id == "window" }?.destination,
+                     "aucune bande ouvrable ⇒ aucun jeton actionnable")
+    }
+
+    /// **Le style mène aux dix-huit styles** — la bande n'a pas encore d'hôte
+    /// (#4083), donc elle n'est pas servie aujourd'hui. La règle la nomme quand
+    /// même : le jour où la bande arrive, le jeton devient actionnable sans
+    /// qu'aucune ligne ne change ici. C'est le jeu SERVI qui décide, pas une
+    /// liste écrite à la main.
+    func test_leStyle_meneAuxDixHuitStyles() {
+        let jetons = ComposerObjectChips.chips(for: texte(style: "neon"),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.textStyles])
+        XCTAssertEqual(jetons.first { $0.id == "style" }?.destination, .textStyles)
+    }
+
+    /// **Une valeur qui ne se change NULLE PART ne ment pas sur son pouvoir.**
+    /// La taille, l'alignement, la rotation et le volume n'ont aujourd'hui
+    /// aucune bande — les annoncer cliquables serait la même promesse creuse un
+    /// cran plus bas.
+    func test_unJetonSansDestination_neSePresentePasCommeUnBouton() {
+        let jetons = ComposerObjectChips.chips(for: texte(style: "neon", align: "center"),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: Set(ComposerSceneBand.allCases))
+        for sansPorte in ["size", "align"] {
+            XCTAssertNil(jetons.first { $0.id == sansPorte }?.destination,
+                         "\(sansPorte) ne se règle dans aucune bande")
+        }
+    }
+
+    /// **Le jeton ACTIF est celui de la bande OUVERTE** — la planche l'encadre,
+    /// et c'est la seule chose que VoiceOver ne peut pas lire dans le libellé.
+    ///
+    /// Cet état est OBSERVABLE parce que la destination est une BANDE et non un
+    /// outil du rail : `isServed` cache la rangée dès qu'un outil s'ouvre, donc
+    /// un jeton qui mènerait à un outil ne pourrait jamais se montrer actif. Le
+    /// choix de destination n'est pas un rangement — c'est ce qui rend l'état
+    /// atteignable.
+    func test_leJetonActif_estCeluiDeLaBandeOuverte() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertEqual(ComposerObjectChips.activeChipId(chips: jetons, openedBand: .timeline),
+                       "window")
+    }
+
+    func test_aucuneBandeOuverte_aucunJetonActif() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertNil(ComposerObjectChips.activeChipId(chips: jetons, openedBand: nil))
+    }
+
+    /// **Une bande ouverte par AUTRE CHOSE n'allume aucun jeton.** La palette
+    /// de fond s'ouvre depuis la rangée d'outils basse et ne règle aucun objet ;
+    /// encadrer un jeton parce qu'une bande est ouverte, sans regarder LAQUELLE,
+    /// aurait fait clignoter la taille chaque fois qu'on choisit une couleur.
+    func test_uneBandeSansJeton_nEnAllumeAucun() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertNil(ComposerObjectChips.activeChipId(chips: jetons, openedBand: .palette))
+    }
+
+    /// **Taper le jeton actif REFERME sa bande.** Sans cette bascule, l'auteur
+    /// n'a aucun geste pour ranger ce qu'il vient d'ouvrir depuis le même
+    /// endroit — il doit aller chercher une autre sortie, ce qui fait de
+    /// l'ouverture un aller simple.
+    func test_taperLeJetonActif_refermeSaBande() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertEqual(ComposerObjectChips.toggled("window", in: jetons, opened: nil), .timeline)
+        XCTAssertNil(ComposerObjectChips.toggled("window", in: jetons, opened: .timeline))
+    }
+
+    /// **Un jeton sans destination laisse la bande EXACTEMENT où elle est.** Il
+    /// ne la referme pas : taper « TAILLE 140 % » pendant qu'on rogne fermerait
+    /// le rognage sans rien ouvrir, ce qui se lit comme une panne.
+    func test_unJetonSansDestination_neTouchePasALaBandeOuverte() {
+        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
+                                               locale: Locale(identifier: "fr_FR"),
+                                               openableBands: [.timeline])
+        XCTAssertEqual(ComposerObjectChips.toggled("size", in: jetons, opened: .timeline), .timeline)
+    }
 }

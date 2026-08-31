@@ -437,6 +437,31 @@ extension MeeshyComposerHost {
     /// **Le rail délègue au VIEWMODEL, jamais au canvas.** Muter la slide par
     /// le modèle est ce qui garde publication, reader et export d'accord ; le
     /// meuble n'a d'ailleurs aucune référence à la vue UIKit.
+    /// **Taper un jeton de l'inspecteur ouvre là où sa valeur se CHANGE**
+    /// (#4073).
+    ///
+    /// Le geste n'existait pas : `onObjectChip` était au contrat de la surface
+    /// et aucun meuble ne le remplissait. La rangée peignait donc six capsules
+    /// qui s'annonçaient `.isButton`, vibraient sous le doigt, et n'ouvraient
+    /// rien — un contrôle INERTE, ce qui coûte plus qu'un contrôle absent
+    /// puisqu'il PROMET (loi 4).
+    ///
+    /// La destination est décidée par la RÈGLE, qui a déjà regardé le jeu des
+    /// bandes ouvrables : ce meuble ne fait que poser le résultat. Un jeton
+    /// sans destination rend la bande INCHANGÉE — la refermer ferait de
+    /// « TAILLE 140 % », pendant un rognage, un bouton d'annulation déguisé.
+    func handleObjectChip(_ chipId: String) {
+        let suivante = ComposerObjectChips.toggled(chipId,
+                                                   in: sceneObjectChips,
+                                                   opened: requestedSceneBand)
+        // Le retour haptique suit l'EFFET, jamais le doigt : faire vibrer
+        // l'appareil pour un geste qui ne change rien est précisément le retour
+        // trompeur que la loi 4 combat.
+        guard suivante != requestedSceneBand else { return }
+        requestedSceneBand = suivante
+        HapticFeedback.light()
+    }
+
     func handleTrailingRailAction(_ action: StoryCanvasContextAction) {
         guard let id = selectedSceneItemId else { return }
         switch action {
