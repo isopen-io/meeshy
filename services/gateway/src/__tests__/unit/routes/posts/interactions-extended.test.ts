@@ -376,18 +376,22 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     expect(increments[OTHER]).toBe(1);
   });
 
-  it('caps at 50 occurrences', async () => {
+  // La garde de troncature borne à IMPRESSION_BATCH_CAP (100) — la MÊME valeur
+  // que le `maxItems` du schéma, plus jamais un 50 qui divergerait du contrat
+  // déclaré. Un lot de 51 à 100 occurrences est donc enregistré EN ENTIER ;
+  // seul l'excédent au-delà de 100 (que le schéma refuse déjà) serait tronqué.
+  it('records every occurrence up to the schema cap (100)', async () => {
     const prisma = (app as any).prisma;
     prisma.postImpression.createMany.mockClear();
 
     const res = await app.inject({
       method: 'POST', url: '/posts/impressions/batch',
-      payload: { postIds: Array(60).fill(POST_ID) },
+      payload: { postIds: Array(100).fill(POST_ID) },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.recorded).toBe(50);
-    expect((prisma.postImpression.createMany.mock.calls[0][0] as any).data).toHaveLength(50);
+    expect(res.json().data.recorded).toBe(100);
+    expect((prisma.postImpression.createMany.mock.calls[0][0] as any).data).toHaveLength(100);
   });
 });
 
