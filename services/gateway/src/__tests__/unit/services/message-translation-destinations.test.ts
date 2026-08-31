@@ -232,6 +232,40 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages).not.toContain('ES-ES');
   });
 
+  it('region-strips an unknown region-tagged anonymous participant.language so it dedups with the registered branch', async () => {
+    // The registered branch canonicalises via `resolveUserLanguagesOrdered`
+    // (→ `normalizeInAppLanguage`), which region-STRIPS a code unknown to
+    // `normalizeLanguageCode` ('yue-HK' → 'yue'). The anonymous branch fed the
+    // SAME Set but normalised inline with `normalizeLanguageCode(x) ?? x.toLowerCase()`,
+    // producing 'yue-hk' — so one real language became TWO NLLB targets, one of
+    // them ('yue-hk') a code the translator cannot honour. Both branches must
+    // pass through the dedup SSOT (`normalizeLanguageForDedup`) and collapse.
+    const { prisma } = makePrismaMock({
+      participants: [
+        {
+          type: 'user',
+          user: {
+            id: 'alice',
+            username: 'alice',
+            systemLanguage: 'yue-HK',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        },
+        { type: 'anonymous', language: 'yue-HK' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-yue');
+
+    expect(languages.sort()).toEqual(['yue']);
+    expect(languages).not.toContain('yue-hk');
+    expect(languages).not.toContain('yue-HK');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,

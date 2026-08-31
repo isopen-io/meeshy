@@ -29,7 +29,7 @@ import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
@@ -904,10 +904,17 @@ export class MessageTranslationService extends EventEmitter {
           // would inject an uppercase/locale-cased target that never matches the
           // lowercase-keyed MessageTranslation store — a duplicated NLLB request
           // and a Prisme rule #1 miss (client falls back to the original).
+          //
+          // Go through the dedup SSOT (`normalizeLanguageForDedup`), the SAME
+          // canonicalisation the registered branch reaches via
+          // `resolveUserLanguagesOrdered` → `normalizeInAppLanguage`. A raw
+          // `normalizeLanguageCode(x) ?? x.toLowerCase()` leaves an unknown
+          // region-tagged code region-tagged (`'yue-HK'` → `'yue-hk'`), so a
+          // registered reader on `'yue'` and an anonymous one on `'yue-HK'` would
+          // count as TWO Set entries — one of them (`'yue-hk'`) a target the
+          // translator cannot honour. The SSOT region-strips both to `'yue'`.
           if (participant.language) {
-            languages.add(
-              normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
-            );
+            languages.add(normalizeLanguageForDedup(participant.language));
           }
         }
       }
