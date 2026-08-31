@@ -83,13 +83,13 @@ nonisolated enum ComposerObjectChips {
                       openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
         var jetons: [Chip] = []
         if let style = text.textStyle, !style.isEmpty {
-            jetons.append(Chip(id: "style", label: "STYLE · \(styleName(style))",
+            jetons.append(Chip(id: "style", label: ComposerObjectChipsCopy.style(styleName(style)),
                                destination: porte(.textStyles, parmi: openableBands)))
         }
         let taille = LocalizedNumber.exact(Int(text.fontSize.rounded()), locale: locale)
-        jetons.append(Chip(id: "size", label: "TAILLE \(taille)"))
+        jetons.append(Chip(id: "size", label: ComposerObjectChipsCopy.size(taille)))
         if let align = text.textAlign, !align.isEmpty {
-            jetons.append(Chip(id: "align", label: "ALIGN · \(alignName(align))"))
+            jetons.append(Chip(id: "align", label: ComposerObjectChipsCopy.align(alignName(align))))
         }
         if let fenetre = window(start: text.startTime,
                                 duration: text.duration, locale: locale) {
@@ -126,14 +126,7 @@ nonisolated enum ComposerObjectChips {
     /// se rend TEL QUEL en majuscules plutôt que d'être tu : une valeur que le
     /// serveur a acceptée existe, et la cacher ferait croire à son absence.
     static func styleName(_ raw: String) -> String {
-        switch raw.lowercased() {
-        case "neon": return "NÉON"
-        case "bold": return "GRAS"
-        case "typewriter": return "MACHINE"
-        case "handwriting": return "MANUSCRIT"
-        case "classic": return "CLASSIQUE"
-        default: return raw.uppercased()
-        }
+        ComposerObjectChipsCopy.styleName(raw)
     }
 
     // MARK: - Quand la rangée PARAÎT
@@ -215,15 +208,15 @@ nonisolated enum ComposerObjectChips {
                       locale: Locale = .current) -> String? {
         guard let id else { return nil }
         if let texte = slide.effects.textObjects.first(where: { $0.id == id }) {
-            return badge(kind: "TEXTE", isBackground: false,
+            return badge(kind: ComposerObjectChipsCopy.kindText, isBackground: false,
                          zIndex: texte.zIndex, locale: locale)
         }
         if let media = (slide.effects.mediaObjects ?? []).first(where: { $0.id == id }) {
-            return badge(kind: "MÉDIA", isBackground: media.isBackground,
+            return badge(kind: ComposerObjectChipsCopy.kindMedia, isBackground: media.isBackground,
                          zIndex: media.zIndex, locale: locale)
         }
         if let sticker = (slide.effects.stickerObjects ?? []).first(where: { $0.id == id }) {
-            return badge(kind: "STICKER", isBackground: false,
+            return badge(kind: ComposerObjectChipsCopy.kindSticker, isBackground: false,
                          zIndex: sticker.zIndex, locale: locale)
         }
         return nil
@@ -238,8 +231,9 @@ nonisolated enum ComposerObjectChips {
     /// que comme un troisième mot.
     private static func badge(kind: String, isBackground: Bool,
                               zIndex: Int, locale: Locale) -> String {
-        let plan = isBackground ? "PLAN BG" : "PLAN FG"
-        return "\(kind) · \(plan) · z \(LocalizedNumber.exact(zIndex, locale: locale))"
+        let plan = isBackground ? ComposerObjectChipsCopy.planeBackground : ComposerObjectChipsCopy.planeForeground
+        return ComposerObjectChipsCopy.badge(kind: kind, plane: plan,
+                                             zIndex: LocalizedNumber.exact(zIndex, locale: locale))
     }
 
     // MARK: - L'état ENCADRÉ, et la bascule qui le produit
@@ -297,7 +291,7 @@ nonisolated enum ComposerObjectChips {
         // tout. Annoncer « SON 100 % » sur une photo enseignerait moins que rien.
         if media.kind == .video, abs(Double(media.volume) - 1) > 0.001 {
             jetons.append(Chip(id: "volume",
-                               label: "SON \(LocalizedNumber.percent(Int((Double(media.volume) * 100).rounded()), locale: locale))"))
+                               label: ComposerObjectChipsCopy.sound(LocalizedNumber.percent(Int((Double(media.volume) * 100).rounded()), locale: locale))))
         }
         if let fenetre = window(start: media.startTime,
                                 duration: media.duration, locale: locale) {
@@ -332,7 +326,7 @@ nonisolated enum ComposerObjectChips {
     /// espacement compris — « 140 % » en français, « 140% » en anglais.
     private static func sizeChip(scale: Double, locale: Locale) -> Chip {
         Chip(id: "size",
-             label: "TAILLE \(LocalizedNumber.percent(Int((scale * 100).rounded()), locale: locale))")
+             label: ComposerObjectChipsCopy.size(LocalizedNumber.percent(Int((scale * 100).rounded()), locale: locale)))
     }
 
     /// `nil` ⇒ l'objet est DROIT, et « ROTATION 0° » occuperait la place pour
@@ -340,15 +334,10 @@ nonisolated enum ComposerObjectChips {
     private static func rotationChip(_ degres: Double, locale: Locale) -> Chip? {
         let arrondi = Int(degres.rounded())
         guard arrondi != 0 else { return nil }
-        return Chip(id: "rotation", label: "ROTATION \(LocalizedNumber.exact(arrondi, locale: locale))°")
+        return Chip(id: "rotation", label: ComposerObjectChipsCopy.rotation(LocalizedNumber.exact(arrondi, locale: locale)))
     }
 
     static func alignName(_ raw: String) -> String {
-        switch raw.lowercased() {
-        case "left": return "GAUCHE"
-        case "center": return "CENTRÉ"
-        case "right": return "DROITE"
-        default: return raw.uppercased()
-        }
+        ComposerObjectChipsCopy.alignName(raw)
     }
 }

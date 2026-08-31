@@ -42,10 +42,52 @@ final class ComposerObjectChipsTests: XCTestCase {
         return t
     }
 
+    // MARK: - Assertions indépendantes de la LOCALE (#4559)
+    //
+    // Les libellés de la rangée sont passés au catalogue : leur texte dépend
+    // désormais de la langue de l'hôte de test, qui est `en-US` en intégration
+    // continue et pas nécessairement chez le développeur. Comparer à « TAILLE
+    // 38 » ne mesurerait plus la règle, mais la langue du simulateur.
+    //
+    // Ce que ces témoins vérifient reste ce qu'ils vérifiaient : que la valeur
+    // COURANTE de l'objet arrive dans le libellé, et qu'aucun spécificateur ne
+    // survit — la signature d'un type de placeholder qui ne correspond pas à
+    // l'argument (`InterpolatedLocalizationSubstitutionTests` en fait la
+    // doctrine). Les MOTS français de la planche, eux, sont épinglés à leur
+    // source par `test_lesMotsDeLaPlanche_sontCeuxDuCatalogue`.
+
+    private func assertNoSurvivingSpecifier(
+        _ produced: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        for specifier in ["%@", "%lld", "%1$", "%2$", "%3$"] {
+            XCTAssertFalse(
+                produced.contains(specifier),
+                "« \(specifier) » survit dans « \(produced) » : le type du placeholder au " +
+                "catalogue ne correspond pas à l'argument passé au site d'appel.",
+                file: file, line: line
+            )
+        }
+    }
+
+    private func assertBadge(
+        _ produced: String?, kind: String, plane: String, rank: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard let produced else {
+            return XCTFail("le badge est absent", file: file, line: line)
+        }
+        XCTAssertTrue(produced.contains(kind), "kind absent — \(produced)", file: file, line: line)
+        XCTAssertTrue(produced.contains(plane), "plan absent — \(produced)", file: file, line: line)
+        XCTAssertTrue(produced.contains(rank), "rang absent — \(produced)", file: file, line: line)
+        assertNoSurvivingSpecifier(produced, file: file, line: line)
+    }
+
     func test_laTaille_seLitSansOuvrirQuoiQueCeSoit() {
         let jetons = chips(pour: texte(taille: 38))
-        XCTAssertTrue(jetons.contains { $0.label == "TAILLE 38" },
+        let taille = jetons.first { $0.id == "size" }?.label ?? ""
+        XCTAssertTrue(taille.contains("38"),
                       "le jeton porte la valeur courante — \(jetons.map(\.label))")
+        assertNoSurvivingSpecifier(taille)
     }
 
     /// **Un style ABSENT ne fabrique pas un jeton « aucun ».** Loi 8 : le jeton
@@ -53,13 +95,15 @@ final class ComposerObjectChipsTests: XCTestCase {
     /// que rien : il occuperait la place en affirmant une valeur qui n'existe pas.
     func test_unStyleAbsent_neFabriquePasDeJeton() {
         let jetons = chips(pour: texte(style: nil))
-        XCTAssertFalse(jetons.contains { $0.label.hasPrefix("STYLE") })
+        XCTAssertFalse(jetons.contains { $0.id == "style" })
     }
 
     func test_unStylePose_seNommeEnMajuscules() {
         let jetons = chips(pour: texte(style: "neon"))
-        XCTAssertTrue(jetons.contains { $0.label == "STYLE · NÉON" },
+        let style = jetons.first { $0.id == "style" }?.label ?? ""
+        XCTAssertTrue(style.contains(ComposerObjectChipsCopy.styleName("neon")),
                       "la planche écrit « STYLE · NÉON » — \(jetons.map(\.label))")
+        assertNoSurvivingSpecifier(style)
     }
 
     /// La fenêtre de temps se lit `0:00 → 0:06`, et seulement quand l'objet en a
@@ -74,7 +118,10 @@ final class ComposerObjectChipsTests: XCTestCase {
 
     func test_lAlignement_seLitParSonMot() {
         let jetons = chips(pour: texte(align: "center"))
-        XCTAssertTrue(jetons.contains { $0.label == "ALIGN · CENTRÉ" }, "\(jetons.map(\.label))")
+        let align = jetons.first { $0.id == "align" }?.label ?? ""
+        XCTAssertTrue(align.contains(ComposerObjectChipsCopy.alignName("center")),
+                      "\(jetons.map(\.label))")
+        assertNoSurvivingSpecifier(align)
     }
 
     /// **Le fusible.** Une règle qui rendrait toujours une liste vide passerait
@@ -169,7 +216,7 @@ final class ComposerObjectChipsTests: XCTestCase {
                                                 locale: Locale(identifier: "fr_FR"))
             .first { $0.id == "size" }?.label ?? ""
 
-        XCTAssertTrue(libelle.hasPrefix("TAILLE 140"), libelle)
+        XCTAssertTrue(libelle.contains("140"), libelle)
         XCTAssertTrue(libelle.hasSuffix("%"), libelle)
         XCTAssertFalse(libelle.contains("140 %"),
                        "l'espace avant le % est celle de la LOCALE, jamais la nôtre — \(libelle)")
@@ -424,7 +471,8 @@ final class ComposerObjectChipsTests: XCTestCase {
         t.zIndex = 2
         let badge = ComposerObjectChips.badge(forSelected: t.id, in: slide(texte: t),
                                               locale: Locale(identifier: "fr_FR"))
-        XCTAssertEqual(badge, "TEXTE · PLAN FG · z 2")
+        assertBadge(badge, kind: ComposerObjectChipsCopy.kindText,
+                    plane: ComposerObjectChipsCopy.planeForeground, rank: "2")
     }
 
     /// **Un fond le DIT**, et ce n'est pas cosmétique : le fond n'est mouvable
@@ -434,17 +482,19 @@ final class ComposerObjectChipsTests: XCTestCase {
     func test_unMediaDeFond_annonceSonPlan() {
         let m = StoryMediaObject(id: "bg", postMediaId: "pm", kind: .image,
                                  aspectRatio: 16.0 / 9.0, isBackground: true, zIndex: 0)
-        XCTAssertEqual(ComposerObjectChips.badge(forSelected: "bg", in: slide(media: m),
-                                                 locale: Locale(identifier: "fr_FR")),
-                       "MÉDIA · PLAN BG · z 0")
+        assertBadge(ComposerObjectChips.badge(forSelected: "bg", in: slide(media: m),
+                                              locale: Locale(identifier: "fr_FR")),
+                    kind: ComposerObjectChipsCopy.kindMedia,
+                    plane: ComposerObjectChipsCopy.planeBackground, rank: "0")
     }
 
     func test_unSticker_porteSonPropreMot() {
         var s = sticker()
         s.zIndex = 5
-        XCTAssertEqual(ComposerObjectChips.badge(forSelected: s.id, in: slide(sticker: s),
-                                                 locale: Locale(identifier: "fr_FR")),
-                       "STICKER · PLAN FG · z 5")
+        assertBadge(ComposerObjectChips.badge(forSelected: s.id, in: slide(sticker: s),
+                                              locale: Locale(identifier: "fr_FR")),
+                    kind: ComposerObjectChipsCopy.kindSticker,
+                    plane: ComposerObjectChipsCopy.planeForeground, rank: "5")
     }
 
     /// **Le rang se dit dans la LOCALE**, comme tout ce que l'inspecteur montre.
@@ -466,4 +516,48 @@ final class ComposerObjectChipsTests: XCTestCase {
         XCTAssertNil(ComposerObjectChips.badge(forSelected: nil, in: slide(texte: texte())))
         XCTAssertNil(ComposerObjectChips.badge(forSelected: "fantome", in: slide(texte: texte())))
     }
+
+    // MARK: - Les MOTS de la planche, épinglés à leur SOURCE (#4559)
+
+    /// **Ce que les témoins ci-dessus ne peuvent plus dire.** Ils vérifient que
+    /// la valeur courante arrive dans le libellé, jamais que le libellé DIT ce
+    /// que la planche `1c` écrit — comparer à « STYLE · NÉON » mesurerait la
+    /// langue du simulateur, pas la règle.
+    ///
+    /// La doctrine se vérifie donc à la SOURCE, où le français est écrit une
+    /// fois et pour toutes : le `defaultValue` de chaque clé est la valeur
+    /// `fr` du catalogue (`LocalizationConsistencyTests` le prouve pour les
+    /// écrans épinglés), et il est indépendant de toute locale d'exécution.
+    ///
+    /// Sans ce témoin, traduire aurait fait DISPARAÎTRE la vérification du
+    /// vocabulaire : les sept mots de la planche deviendraient de simples
+    /// arguments, justes ou faux, et plus rien ne dirait lesquels.
+    func test_lesMotsDeLaPlanche_sontCeuxDuCatalogue() throws {
+        let copy = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift")
+
+        for mot in ["STYLE · %@", "TAILLE %@", "ALIGN · %@", "SON %@", "ROTATION %@°",
+                    "%1$@ · %2$@ · z %3$@",
+                    "NÉON", "GRAS", "MACHINE", "MANUSCRIT", "CLASSIQUE",
+                    "GAUCHE", "CENTRÉ", "DROITE",
+                    "TEXTE", "MÉDIA", "STICKER", "PLAN FG", "PLAN BG"] {
+            XCTAssertTrue(
+                copy.contains("defaultValue: \"\(mot)\""),
+                "« \(mot) » n'est plus le mot français de la planche `1c`. Le changer est " +
+                "une décision de produit : elle se prend dans le catalogue ET ici."
+            )
+        }
+    }
+
+    /// Fusible : le témoin ci-dessus est une suite de `contains` sur un fichier
+    /// lu au disque. Sur une lecture vide, il passerait au vert en ne regardant
+    /// rien — et la seule chose qu'il protège est justement un vocabulaire que
+    /// personne ne relit.
+    func test_leTemoinDesMots_litVraimentSaSource() throws {
+        XCTAssertGreaterThan(
+            try MyStoriesSourceCorpus.text(
+                of: "Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift").count,
+            2_000)
+    }
+
 }
