@@ -1441,7 +1441,7 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(result?.sessionToken).toBe('');
   });
 
-  it('should store hashed 2FA token and expiry when 2FA required', async () => {
+  it('should store hashed 2FA challenge in its OWN columns when 2FA required', async () => {
     const userWith2FA = {
       ...mockUser,
       twoFactorEnabledAt: new Date(),
@@ -1458,8 +1458,8 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
       where: { id: userWith2FA.id },
       data: {
-        phoneVerificationCode: expect.any(String),
-        phoneVerificationExpiry: expect.any(Date)
+        twoFactorChallengeHash: expect.any(String),
+        twoFactorChallengeExpiresAt: expect.any(Date)
       }
     });
   });

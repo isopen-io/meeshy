@@ -43,6 +43,11 @@ import {
   TOKEN_TTL,
   type SessionBoundTokenPayload,
 } from './auth/session-jwt';
+import {
+  mintPendingTwoFactorChallenge,
+  pendingTwoFactorWhere,
+  clearPendingTwoFactor,
+} from './auth/pending-two-factor';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -255,19 +260,9 @@ export class AuthService {
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
-        // Generate a temporary token for 2FA verification
-        const twoFactorToken = crypto.randomBytes(32).toString('hex');
-        const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
-
-        // Store the temporary token (expires in 5 minutes)
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            // Store hash of the token for security
-            phoneVerificationCode: twoFactorTokenHash, // Reusing this field temporarily
-            phoneVerificationExpiry: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-          }
-        });
+        // Le défi d'étape 2 se compose AILLEURS — `./auth/pending-two-factor`,
+        // site unique que le lien magique appelle aussi (#4542).
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: this.prisma, userId: user.id });
 
         // Return partial auth result requiring 2FA
         const socketIOUser = this.userToSocketIOUser(user);
@@ -372,14 +367,19 @@ export class AuthService {
     requestContext?: RequestContext
   ): Promise<AuthResult | { success: false; error: string }> {
     try {
-      // Hash the token to compare with stored value
-      const tokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+      // Le défi se lit par son site unique, qui rend `null` quand aucun défi
+      // ne PEUT être valide — un jeton vide n'atteint donc jamais la base.
+      const challenge = pendingTwoFactorWhere(twoFactorToken);
+
+      if (!challenge) {
+        logger.warn('[AUTH_SERVICE] ❌ Token 2FA absent ou vide');
+        return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
 
       // Find user with matching token
       const user = await this.prisma.user.findFirst({
         where: {
-          phoneVerificationCode: tokenHash,
-          phoneVerificationExpiry: { gt: new Date() },
+          ...challenge,
           isActive: true
         },
         select: {
@@ -493,8 +493,7 @@ export class AuthService {
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          phoneVerificationCode: null,
-          phoneVerificationExpiry: null,
+          ...clearPendingTwoFactor(),
           isOnline: true,
           lastActiveAt: new Date(),
           lastLoginIp: requestContext?.ip || user.lastLoginIp,
