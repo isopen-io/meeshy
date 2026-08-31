@@ -47,6 +47,9 @@ public class AuthExpiryInterceptor(
          * NORMALE d'un identifiant refuse. Deconnecter la-dessus ferait boucler
          * l'application sur son propre ecran de connexion.
          */
+        // l'intercepteur RECONNAÎT les portes d'entrée pour ne pas
+        // déconnecter sur un 401 qui n'est qu'un identifiant refusé. Il ne les
+        // appelle pas ; une interface Retrofit ne saurait pas exprimer ça.
         private val AUTH_ENTRY_POINTS = listOf("/auth/login", "/auth/register")
     }
 }

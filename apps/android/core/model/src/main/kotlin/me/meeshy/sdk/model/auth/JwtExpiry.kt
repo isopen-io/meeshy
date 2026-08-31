@@ -106,6 +106,11 @@ object TokenRefreshPolicy {
      * it). Every other endpoint is eligible.
      */
     fun isRefreshEligible(endpoint: String): Boolean {
+        // ces quatre familles SONT la poignée de main d'authentification.
+        // Ce n'est pas une adresse qu'on appelle, c'est un préfixe qu'on RECONNAÎT
+        // pour décider si un rafraîchissement a du sens — l'équivalent Kotlin de
+        // `MeeshyEndpointPolicy` côté iOS. Aucune interface Retrofit ne peut porter
+        // un prédicat (#4352).
         val isRefreshOrAuth = endpoint == "/auth/refresh" ||
             endpoint.startsWith("/auth/login") ||
             endpoint.startsWith("/auth/register") ||
@@ -149,6 +154,8 @@ object TokenRefreshPolicy {
      * gateway body never surfaces as an empty error).
      */
     fun mapUnauthorized(endpoint: String, serverMessage: String?): UnauthorizedMapping {
+        // un 401 sur la connexion dit « identifiants refusés », jamais
+        // « session expirée » — il n'y a pas encore de session. Prédicat, pas appel.
         if (!endpoint.startsWith("/auth/login")) return UnauthorizedMapping.SessionExpired
         val message = serverMessage?.takeIf { it.isNotBlank() } ?: DEFAULT_INVALID_CREDENTIALS_MESSAGE
         return UnauthorizedMapping.InvalidCredentials(message)
