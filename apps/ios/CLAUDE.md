@@ -414,6 +414,60 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
+## Le composer met ses portes SUR LE PLATEAU, et les répartit par NIVEAU (directive porteur 2026-08-31)
+
+> « Cette approche est meilleure, ce qui permet de manipuler tout le canvas sans
+> problème : on exploite la place du plateau sans encombrer le canvas. […] On
+> préserve des actions sur la ligne canonique comme la description du contenu,
+> l'ajout de son de fond, image et vidéo de fond, mention et localisation de la
+> publication ; et sur la rangée à gauche, ce sont les features qui apparaissent
+> sur le canvas visuellement. »
+
+### 1. Aucun contrôle ne se pose SUR la scène
+
+Les rails, les contrôleurs et les portes vivent **dans les couloirs du plateau**,
+jamais en surimpression du canvas. Deux raisons, et la seconde est celle que la
+directive ajoute :
+
+- **loi 6** — un contrôle posé sur la scène fait mentir l'aperçu sur le rendu
+  final : l'auteur compose avec des pixels qui ne partiront pas ;
+- **la manipulation** — un objet se déplace, se pince et se tourne *n'importe où*
+  dans le cadre. Un rail flottant vole les touches de la bande qu'il couvre, et
+  l'auteur découvre la zone morte en essayant d'y traîner quelque chose.
+
+Le plateau est de la place DISPONIBLE : la scène est figée en 9:16 et l'écran ne
+l'est pas. L'occuper ne coûte rien ; occuper le canvas coûte une zone morte.
+
+> Un arbitrage antérieur (2026-08-28) avait posé le rail **à droite, dans la
+> scène**, en s'appuyant sur les quatre bulles de la planche `1b`. Cette
+> directive le remplace. Un doc-comment qui décrit l'ancien arbitrage est un
+> piège au sens du § *contrôle inerte* : il énonce une raison juste pour une
+> disposition qui n'est plus celle du produit.
+
+### 2. La place d'une porte se lit à son NIVEAU, jamais à une liste
+
+`ComposerRailDoor.level` classe déjà chaque porte, avec un `switch` exhaustif :
+`.publication`, `.slide`, `.object`, `.scene`. **C'est lui qui décide où la porte
+se pose**, et aucune liste écrite à la main ne double cette décision.
+
+| ce que la porte vise | où elle se pose | pourquoi |
+|---|---|---|
+| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
+| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, image/vidéo de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
+
+**Le même média n'est pas la même porte selon son PLAN.** Une image de FOND
+appartient à la slide et vit en bas ; une image de PREMIER PLAN devient un
+`MeeshyObject` et vit à gauche. Idem pour le son : un son de fond est un attribut
+de la publication (il porte son crédit au socle), un son POSÉ est un objet
+visible. Ranger les deux sous une seule porte « média » ou « son » est ce qui
+rend la sémantique illisible pour l'auteur.
+
+### Le témoin
+
+Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais à une
+liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
+niveau elle est, et son niveau la range tout seul.
+
 ## Les gestes de glissement sont PROGRESSIFS et ANNULABLES (directive porteur 2026-08-30)
 
 > « Il faut préférer ce type de swipe À CHAQUE FOIS qu'on parle de mettre un
