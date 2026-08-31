@@ -401,6 +401,11 @@ extension MeeshyComposerHost {
             // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
             // d'où sa place tout en haut du rail et son séparateur.
             onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
+            // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`). La
+            // résolution par kind vit dans la RÈGLE, pas ici : le meuble ne
+            // tient qu'un id, c'est la slide qui sait de quel type il est.
+            objectChips: ComposerObjectChips.chips(forSelected: selectedSceneItemId,
+                                                   in: viewModel.currentSlide),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
