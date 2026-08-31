@@ -7116,6 +7116,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
       app-side glue (pending): the Compose flow-layout that paints the coloured spans +
       tap-to-seek + auto-scroll, and video watch-progress reporting.
+      **Watch-report double-fire guard shipped** (slice `video-dismiss-watch-report`,
+      2026-08-31): pure `:core:model` `VideoDismissWatchReport.shouldReport(complete,
+      watchedSeconds, playerStillHoldsAttachment)`, a faithful port of iOS
+      `VideoDismissWatchReport.shouldReport` (the fix for issue #3908). A watch is
+      reported by TWO owners — the shared player's `cleanup()` (persists resume position,
+      then zeroes its counters) and the fullscreen `.onDisappear` (runs after). Closing a
+      PAUSED video routed the second reporter through a DETACHED player that read zero and
+      ERASED the resume position the first owner just wrote. The guard asks one question
+      before reading the player — does it still hold this attachment? — and stays silent
+      once detached; a partial watch reports only past a 3 s minimum (inclusive), a
+      completed watch escapes that threshold. +9 branch tests, RED-proven (detachment gate
+      mutation fails exactly the 3 detached-silence tests). Remaining app-side glue
+      (pending): the Compose fullscreen player `.onDisappear` that calls this guard before
+      emitting the watch-progress telemetry.
 - [~] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
       — **render-posture pure core shipped** (slice `audio-player-chrome-plan`, 2026-08-30):
       pure `:core:model` `AudioPlayerChrome` (Card / FlatMinimal / FlatFocused) +

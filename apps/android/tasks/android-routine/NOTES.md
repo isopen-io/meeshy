@@ -5,6 +5,17 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — RED-prove a guard by mutating the OUTERMOST arm, not the threshold (slice `video-dismiss-watch-report`)
+`VideoDismissWatchReport.shouldReport` has two arms: a duration guard (`complete || watched >= 3`) then the
+detachment gate (`return playerStillHoldsAttachment`). The #3908 defect lives entirely in the SECOND arm — a
+detached player must stay silent even for a completed, hours-long watch. So the RED mutation that proves the
+slice is `return playerStillHoldsAttachment` → `return true` (the pre-#3908 form, which read the player
+unconditionally): it fails exactly the three detached-silence tests and NOTHING else, pinning the guard to its
+one job. Mutating the threshold instead would only prove the duration arm, which iOS already had. Lesson: when a
+pure decision layers a NEW gate on top of an existing one, the RED proof belongs on the NEW gate — pick the
+mutation that collapses precisely the behaviour the slice exists to add, and confirm the failing-test SET is the
+detachment cases, not a superset. Same shape as the root §261 "a rank witness fires on a non-first rank".
+
 ## 2026-08-30 — a behaviour test can't isolate a REDUNDANT guard, and that's correct (slice `notification-toast-orchestrator`)
 The toast VM cancels the pending 7 s dismiss when a newer toast appears (`dismissJob?.cancel()`, iOS parity)
 AND the dismiss body re-checks `_currentToast.value?.id == notification.id` before clearing. I tried to
