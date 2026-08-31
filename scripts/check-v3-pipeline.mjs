@@ -106,6 +106,21 @@ import {
   splitName,
 } from './lib/v3-disque.mjs';
 
+// La règle Traefik du routeur `frontend-v3` n'a qu'UN parseur, et il vit du côté
+// CONTRAINT — l'invariant (i) ci-dessous interdit à `apps/web-v3/` d'atteindre
+// `scripts/` par un chemin relatif, alors que ce garde descend sans rien casser.
+// Ce fichier en portait un second (`claimedPathsOf` + `captures`) : les deux ne
+// dupliquaient pas seulement la lecture, ils se CONTREDISAIENT — celui d'en face
+// jetait `Path(…)` en silence et cassait sur `PathPrefix(`/`)`, c'est-à-dire à
+// l'étape 7 du § 4.9 [revue #4414].
+import {
+  capture,
+  cheminsReclames,
+  PREFIXE_DE_ZONE,
+  regleDuRouteur,
+  ZONE_DACTIFS,
+} from '../apps/web-v3/scripts/lib/perimetre-de-zone.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const V3_WORKSPACE = '@meeshy/web-v3';
@@ -113,8 +128,10 @@ const V3_DIRECTORY = 'apps/web-v3';
 const V3_IMAGE = 'meeshy-web-v3';
 const V3_PORT = '3300';
 const V3_ROUTER = 'frontend-v3';
-const V3_PATH_PREFIX = '/__v3';
-const V3_ASSET_ZONE = `${V3_PATH_PREFIX}/_next`;
+// Le préfixe de la zone et sa part d'ACTIFS viennent du même site unique que le
+// parseur : trois déclarations de la même donnée valent une jumelle de plus.
+const V3_PATH_PREFIX = PREFIXE_DE_ZONE;
+const V3_ASSET_ZONE = ZONE_DACTIFS;
 const V3_APP_DIRECTORY = `${V3_DIRECTORY}/app`;
 const V3_PUBLIC_DIRECTORY = `${V3_DIRECTORY}/public`;
 const LEGACY_ROUTER = 'frontend';
@@ -576,30 +593,13 @@ const labelsOf = (compose, service) => {
   return block === null ? null : listValues(block, '    labels:');
 };
 
-const v3RuleOf = (world) => {
-  const labels = labelsOf(world.prod, V3_ROUTER);
-  const rule = labels?.find((label) =>
-    label.startsWith(`traefik.http.routers.${V3_ROUTER}.rule=`),
-  );
-  return rule === undefined ? null : rule.slice(rule.indexOf('=') + 1);
-};
-
-const claimedPathsOf = (rule) =>
-  [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, value]) => ({
-    matcher,
-    value,
-  }));
-
-const captures = ({ matcher, value }, url) =>
-  matcher === 'Path'
-    ? url === value
-    : url === value || url.startsWith(value.endsWith('/') ? value : `${value}/`);
+const v3RuleOf = (world) => regleDuRouteur(world.prod, V3_ROUTER);
 
 // SENS (a) — rien de ce que la zone sert à la RACINE n'échappe à la règle.
 const noRootServedAssetEscapesTheZone = (world) => {
   const rule = v3RuleOf(world);
   if (rule === null) return [];
-  const claimed = claimedPathsOf(rule);
+  const claimed = cheminsReclames(rule);
   const remedy =
     `l'ajouter nommément à la règle du routeur ${V3_ROUTER} (il est alors VOLÉ au legacy), ` +
     `ou le faire passer par le pipeline webpack pour qu'il atterrisse sous ${V3_ASSET_ZONE}/static/media/`;
@@ -613,7 +613,7 @@ const noRootServedAssetEscapesTheZone = (world) => {
       `${url} est un fichier de métadonnées servi à la RACINE`,
     ]),
   ]
-    .filter(([url]) => !claimed.some((claim) => captures(claim, url)))
+    .filter(([url]) => !claimed.some((claim) => capture(claim, url)))
     .map(
       ([url, constat]) =>
         `${constat} de l'URL — assetPrefix ne préfixe que ${V3_ASSET_ZONE} — donc derrière Traefik ` +
@@ -630,15 +630,15 @@ const theRouterClaimsNothingTheZoneDoesNotServe = (world) => {
     ...world.zone.metadataUrls,
     ...world.zone.publicFiles,
   ];
-  return claimedPathsOf(rule)
-    .filter((claim) => !claim.value.startsWith(V3_ASSET_ZONE))
-    .filter((claim) => !served.some((url) => captures(claim, url)))
+  return cheminsReclames(rule)
+    .filter((claim) => !claim.valeur.startsWith(V3_ASSET_ZONE))
+    .filter((claim) => !served.some((url) => capture(claim, url)))
     .map((claim) =>
-      claim.value === V3_PATH_PREFIX
+      claim.valeur === V3_PATH_PREFIX
         ? `la règle réclame ${V3_PATH_PREFIX} nu alors que la zone n'y sert que ${V3_ASSET_ZONE} : ` +
           `tout autre chemin sous ${V3_PATH_PREFIX} répondrait le 404 anglais du routeur Pages ` +
           `(sans <html lang>, sans le script anti-flash de thème)`
-        : `la règle réclame ${claim.value}, que rien dans ${V3_DIRECTORY}/app ne sert : ` +
+        : `la règle réclame ${claim.valeur}, que rien dans ${V3_DIRECTORY}/app ne sert : ` +
           `ce chemin est pris au legacy pour y répondre 404`,
     );
 };

@@ -39,6 +39,10 @@ backend/node_modules/
 # manque au clone et le type-check BLOQUANT tombe en « TS2882: Cannot find module
 # or type declarations for side-effect import ». Mesuré en déplaçant le fichier.
 !apps/web-v3/types/*.d.ts
+# Et pour `apps/web-v3/eslint/frontiere-de-zone.d.mts`, qui type le plugin de la
+# frontière de zone (§ 3.2 corollaire 4) que `__tests__/zone-lint.test.ts` monte
+# par l'API `Linter`. Même cause, même effet, même mesure : TS7016 au clone.
+!apps/web-v3/eslint/*.d.mts
 # `scripts/lib/navigateur.d.cts` type `scripts/lib/navigateur.cjs` — le site UNIQUE de
 # « où est Chromium » (conception § 9.2) — pour `apps/web-v3/playwright.config.ts`. Même
 # raison que ci-dessus : ignoré, il manque au clone et le type-check tombe en TS7016.
