@@ -206,6 +206,17 @@ jobs:
       - name: Compose host variables guard
         run: node scripts/check-compose-required-vars.mjs --self-test && node scripts/check-compose-required-vars.mjs
 
+      # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
+      # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
+      # les deux listes ne prouverait rien, deux copies coïncidant toujours le
+      # jour où on les écrit ; celui-ci injecte dans une copie de la table un
+      # nom TIRÉ AU HASARD à l'exécution et vérifie que le shell l'exige, sans
+      # qu'une ligne du shell ait été touchée. Un nom qui n'existe qu'à
+      # l'instant du test ne peut pas être écrit en dur : s'il devient
+      # exigible, il a été dérivé.
+      - name: Deployment validator derivation witness
+        run: bash scripts/deployment/deploy-validate-config.sh --self-test
+
       # Le rapport unique de la machine de vérification (§ 9 de la conception)
       # agrège cinq mesures dont quatre ont un prérequis (un build, un serveur,
       # un navigateur pour le gate axe — dont l'INVOCATION vit dans le job

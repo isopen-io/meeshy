@@ -63,6 +63,33 @@
 // comme DÉPLOYANT. Un `docker-compose.preprod.yml` ajouté demain hérite de la
 // règle stricte sans que personne n'ait à y penser.
 //
+// QUI LIT CETTE TABLE — ET POURQUOI ELLE EST ADRESSABLE [#4544]
+//
+// `scripts/deployment/deploy-validate-config.sh` tenait sa PROPRE liste de
+// variables exigées. Mesuré : elle réclamait `MEESHY_BIGBOSS_PASSWORD`, un nom
+// qu'AUCUN service ne lit, ignorait `ATABETH_PASSWORD` et ne vérifiait aucune
+// liste d'origines. Il pouvait donc PASSER là où le vrai nom manquait et
+// ÉCHOUER sur un hôte correctement provisionné — la troisième copie manuelle
+// d'une même règle en une nuit (#4480, #4537, celle-ci).
+//
+// Le remède n'a pas été d'ajouter des noms à la troisième liste : ç'aurait été
+// tenir un quatrième inventaire. La table ci-dessous est devenue ADRESSABLE —
+// `--required-vars` en sert la dérivation, une ligne par variable — et le
+// validateur shell n'a plus AUCUNE liste, ni de noms, ni de valeurs interdites.
+// Il échoue fermé si la garde est introuvable ou si sa dérivation est vide.
+//
+// Trois conséquences pour qui touche à cette table :
+//   - `secret` et `replis` ne sont pas décoratifs : le validateur mesure la
+//     force des premiers et refuse les seconds. `uneBloquanteEstServableAuValidateur`
+//     rougit sur une bloquante qui les tairait ;
+//   - la classification voyage DANS le monde (`world.classification`), ce qui
+//     la rend mutable par le `--self-test` — sans quoi les deux règles qui en
+//     dépendent seraient aveugles ;
+//   - le témoin de dérivation vit chez le consommateur
+//     (`deploy-validate-config.sh --self-test`) : il injecte une entrée dans une
+//     COPIE de cette table et vérifie que le shell l'exige, sans qu'une ligne
+//     du shell ait été écrite.
+//
 // CE QUE LE BALAYAGE VOIT — ET CE QU'IL NE VOIT PAS
 //
 // Il voit : tous les `docker-compose*.yml` de `infrastructure/docker/compose/`
@@ -112,37 +139,51 @@ const DEFAUT_ACCEPTABLE = 'defaut-acceptable';
 const SUBSTITUTIONS = Object.freeze({
   CORS_ORIGINS: {
     classe: BLOQUANTE,
+    secret: false,
+    replis: [],
     raison:
       "resolveAllowedOrigins() ne replie que sur une variable ABSENTE : '' est une liste DÉCLARÉE vide, " +
       'donc zéro origine servie et toute requête de navigateur refusée.',
   },
   ALLOWED_ORIGINS: {
     classe: BLOQUANTE,
+    secret: false,
+    replis: [],
     raison:
       'Même résolveur, même forme — et c\'est le repli qui aurait rattrapé CORS_ORIGINS : vide, il ne rattrape rien.',
   },
   JWT_SECRET: {
     classe: BLOQUANTE,
+    secret: true,
+    replis: ['default-jwt-secret', 'meeshy-secret-key-dev'],
     raison:
       "InitService.ts:35 replie sur 'default-jwt-secret', MagicLinkService.ts:339 et server.ts:89 sur " +
       "'meeshy-secret-key-dev' — des secrets PUBLIÉS dans ce dépôt signeraient les jetons de production.",
   },
   FRONTEND_URL: {
     classe: BLOQUANTE,
+    secret: false,
+    replis: ['http://localhost:3000'],
     raison:
       "PasswordResetService.ts:217 l'interpole SANS repli (le lien de réinitialisation devient relatif) et " +
       "routes/users/contact-change.ts:347 replie sur http://localhost:3000 — des e-mails partent avec de mauvais liens.",
   },
   ADMIN_PASSWORD: {
     classe: BLOQUANTE,
+    secret: true,
+    replis: ['admin123'],
     raison: "InitService.ts:219 replie sur 'admin123' : le compte ADMIN de production naît avec un mot de passe public.",
   },
   MEESHY_PASSWORD: {
     classe: BLOQUANTE,
+    secret: true,
+    replis: ['bigboss123'],
     raison: "InitService.ts:147 replie sur 'bigboss123' — et ce compte-là est BIGBOSS.",
   },
   ATABETH_PASSWORD: {
     classe: BLOQUANTE,
+    secret: true,
+    replis: ['admin123'],
     raison: "InitService.ts:423 replie sur 'admin123'.",
   },
 
@@ -287,15 +328,87 @@ export const readWorld = (root) => {
       .map((line) => /^\s*([A-Za-z_][A-Za-z0-9_]*)=/.exec(line)?.[1])
       .filter(Boolean),
   }));
-  return { files, templates, links: rootLinks(root) };
+  return { files, templates, links: rootLinks(root), classification: SUBSTITUTIONS };
 };
 
-const classOf = (name) => SUBSTITUTIONS[name]?.classe;
+/**
+ * La classification voyage DANS le monde, jamais lue en direct depuis le module.
+ * Deux raisons, et la seconde est la plus chère :
+ *  - le `--self-test` peut alors muter la TABLE elle-même (un repli qui
+ *    disparaît, un secret qui cesse de se déclarer) et prouver que les règles
+ *    qui en dépendent ne sont pas aveugles ;
+ *  - `scripts/deployment/deploy-validate-config.sh` la lit par `--required-vars`.
+ *    Tant qu'elle est un paramètre du monde, il n'existe qu'UNE déclaration ;
+ *    dès qu'un second site la recopierait, la divergence de #4544 renaîtrait.
+ */
+const classOf = (world, name) => world.classification[name]?.classe;
+
+/**
+ * Les noms qu'un déploiement DOIT porter : BLOQUANTE, et réellement substitué
+ * par un fichier qui déploie. Ni un inventaire, ni une opinion — une DÉRIVATION
+ * de la table et des compositions.
+ */
+const bloquantesExigees = (world) =>
+  [
+    ...new Set(
+      world.files
+        .filter((file) => file.deploys)
+        .flatMap((file) => file.substitutions)
+        .filter((substitution) => classOf(world, substitution.name) === BLOQUANTE)
+        .map((substitution) => substitution.name),
+    ),
+  ].sort();
+
+/**
+ * La projection SERVIE — à `uneBloquanteEstDocumentee` ici, et à
+ * `scripts/deployment/deploy-validate-config.sh` par `--required-vars`.
+ * `secret` dit s'il faut mesurer une force ; `replis` porte les valeurs que le
+ * CODE sert quand la variable manque — les seules qu'un hôte ne doit jamais
+ * poser à la main, et que le validateur n'a donc pas à réinventer.
+ */
+export const variablesExigees = (world) =>
+  bloquantesExigees(world).map((name) => {
+    const entree = world.classification[name];
+    return {
+      name,
+      secret: entree.secret === true,
+      replis: Array.isArray(entree.replis) ? entree.replis : [],
+    };
+  });
+
+/**
+ * Une bloquante SERVIE à un consommateur externe doit être complètement
+ * déclarée. Sans cette règle, `variablesExigees` normaliserait le silence :
+ * un `replis` oublié rendrait `[]`, et le validateur cesserait de refuser le
+ * mot de passe public SANS que rien ne rougisse — la forme fail-open que
+ * #4537 combat, déplacée d'un cran.
+ */
+const FORME_SECRET = /_(PASSWORD|SECRET|KEY|TOKEN)$/;
+
+const uneBloquanteEstServableAuValidateur = (world) =>
+  bloquantesExigees(world).flatMap((name) => {
+    const entree = world.classification[name];
+    const manques = [];
+    if (!Array.isArray(entree.replis)) {
+      manques.push(
+        `${name} est BLOQUANTE et ne déclare pas « replis ».\n` +
+          `  Le validateur de déploiement lit ce champ pour refuser la valeur que le CODE sert par défaut.\n` +
+          `  Poser replis: [] si le code n'a AUCUN repli, la liste des valeurs mesurées sinon.`,
+      );
+    }
+    if (FORME_SECRET.test(name) && entree.secret !== true) {
+      manques.push(
+        `${name} porte un nom de secret et ne déclare pas « secret: true ».\n` +
+          `  Sans lui, la validation de déploiement cesse silencieusement d'en mesurer la force.`,
+      );
+    }
+    return manques;
+  });
 
 const uneSubstitutionNueEstClassee = (world) =>
   world.files.flatMap((file) =>
     file.substitutions
-      .filter((substitution) => substitution.form === NUE && classOf(substitution.name) === undefined)
+      .filter((substitution) => substitution.form === NUE && classOf(world, substitution.name) === undefined)
       .map(
         (substitution) =>
           `${file.path}:${substitution.line} : \${${substitution.name}} est substituée NUE et n'est classée nulle part.\n` +
@@ -308,11 +421,11 @@ const uneSubstitutionNueEstClassee = (world) =>
 const uneBloquanteNEstJamaisNue = (world) =>
   world.files.flatMap((file) =>
     file.substitutions
-      .filter((substitution) => substitution.form === NUE && classOf(substitution.name) === BLOQUANTE)
+      .filter((substitution) => substitution.form === NUE && classOf(world, substitution.name) === BLOQUANTE)
       .map(
         (substitution) =>
           `${file.path}:${substitution.line} : \${${substitution.name}} est BLOQUANTE et substituée NUE.\n` +
-          `  ${SUBSTITUTIONS[substitution.name].raison}\n` +
+          `  ${world.classification[substitution.name].raison}\n` +
           `  Écrire \${${substitution.name}:?message} — la seule forme qui fasse échouer \`docker compose up\`.`,
       ),
   );
@@ -324,12 +437,14 @@ const uneBloquanteQuiDeploiePorteLeRefus = (world) =>
       file.substitutions
         .filter(
           (substitution) =>
-            classOf(substitution.name) === BLOQUANTE && substitution.form !== NUE && !substitution.form.endsWith('?'),
+            classOf(world, substitution.name) === BLOQUANTE &&
+            substitution.form !== NUE &&
+            !substitution.form.endsWith('?'),
         )
         .map(
           (substitution) =>
             `${file.path}:${substitution.line} : \${${substitution.name}${substitution.form}…} porte un REPLI dans un fichier qui déploie.\n` +
-            `  ${SUBSTITUTIONS[substitution.name].raison}\n` +
+            `  ${world.classification[substitution.name].raison}\n` +
             `  Un repli servirait une valeur que personne n'a demandée. Seul \${${substitution.name}:?message} convient ici.`,
         ),
     );
@@ -367,15 +482,8 @@ const leMessageNeCassePasLeYaml = (world) =>
 
 const uneBloquanteEstDocumentee = (world) => {
   const documented = new Set(world.templates.flatMap((template) => template.keys));
-  const required = new Set(
-    world.files
-      .filter((file) => file.deploys)
-      .flatMap((file) => file.substitutions)
-      .filter((substitution) => classOf(substitution.name) === BLOQUANTE)
-      .map((substitution) => substitution.name),
-  );
-  return [...required]
-    .sort()
+  return variablesExigees(world)
+    .map(({ name }) => name)
     .filter((name) => !documented.has(name))
     .map(
       (name) =>
@@ -409,7 +517,10 @@ const leBalayageNEstPasVide = (world) => {
     failures.push("aucun modèle d'environnement lu : la règle de documentation ne pourrait rien exiger.");
   }
   const bloquantes = new Set(
-    world.files.flatMap((file) => file.substitutions).filter((s) => classOf(s.name) === BLOQUANTE).map((s) => s.name),
+    world.files
+      .flatMap((file) => file.substitutions)
+      .filter((substitution) => classOf(world, substitution.name) === BLOQUANTE)
+      .map((substitution) => substitution.name),
   );
   if (bloquantes.size === 0) {
     failures.push(
@@ -422,6 +533,7 @@ const leBalayageNEstPasVide = (world) => {
 
 const CHECKS = Object.freeze([
   leBalayageNEstPasVide,
+  uneBloquanteEstServableAuValidateur,
   uneSubstitutionNueEstClassee,
   uneBloquanteNEstJamaisNue,
   uneBloquanteQuiDeploiePorteLeRefus,
@@ -526,6 +638,28 @@ const MUTATIONS = Object.freeze([
     "aucun modèle d'environnement lu",
   ],
   [
+    "une bloquante perd la liste de ses replis mesurés",
+    (world) => {
+      world.classification = {
+        ...world.classification,
+        JWT_SECRET: { ...world.classification.JWT_SECRET, replis: undefined },
+      };
+      return world;
+    },
+    'JWT_SECRET est BLOQUANTE et ne déclare pas « replis »',
+  ],
+  [
+    'un secret bloquant cesse de se déclarer secret',
+    (world) => {
+      world.classification = {
+        ...world.classification,
+        MEESHY_PASSWORD: { ...world.classification.MEESHY_PASSWORD, secret: false },
+      };
+      return world;
+    },
+    'MEESHY_PASSWORD porte un nom de secret et ne déclare pas « secret: true »',
+  ],
+  [
     'un compose INCONNU arrive avec une substitution nue et hérite de la règle stricte',
     (world) => {
       world.files = [
@@ -560,7 +694,10 @@ const selfTest = (world) => {
 const summarize = (world) => {
   const substitutions = world.files.reduce((total, file) => total + file.substitutions.length, 0);
   const bloquantes = new Set(
-    world.files.flatMap((file) => file.substitutions).filter((s) => classOf(s.name) === BLOQUANTE).map((s) => s.name),
+    world.files
+      .flatMap((file) => file.substitutions)
+      .filter((substitution) => classOf(world, substitution.name) === BLOQUANTE)
+      .map((substitution) => substitution.name),
   );
   const broken = world.links.filter((link) => !link.resolved).map((link) => link.entry);
   console.log(
@@ -577,9 +714,38 @@ const summarize = (world) => {
   }
 };
 
+/**
+ * La déclaration SERVIE en texte, une ligne par variable, champs séparés par
+ * une TABULATION : NOM, « secret » ou « libre », puis les replis mesurés.
+ *
+ * C'est le seul chemin par lequel `scripts/deployment/deploy-validate-config.sh`
+ * apprend ce qu'un hôte doit porter. Il ne tient AUCUNE liste : #4544 a mesuré
+ * ce que coûte une troisième copie — un validateur qui exigeait
+ * MEESHY_BIGBOSS_PASSWORD, un nom qu'aucun service ne lit, tout en ignorant
+ * ATABETH_PASSWORD et les deux listes d'origines.
+ *
+ * Une dérivation VIDE est un échec, jamais un silence : sans cela, une garde
+ * cassée rendrait zéro ligne et le validateur conclurait « rien à exiger ».
+ */
+const requiredVars = (world) => {
+  const exigees = variablesExigees(world);
+  if (exigees.length === 0) {
+    console.error(
+      "aucune variable BLOQUANTE n'a pu être dérivée des compositions qui déploient.\n" +
+        '  Un consommateur recevrait « rien à exiger » — refus plutôt que silence.',
+    );
+    return 1;
+  }
+  exigees.forEach(({ name, secret, replis }) =>
+    console.log([name, secret ? 'secret' : 'libre', ...replis].join('\t')),
+  );
+  return 0;
+};
+
 const main = () => {
   const world = readWorld(REPO_ROOT);
   if (process.argv.includes('--self-test')) return selfTest(world);
+  if (process.argv.includes('--required-vars')) return requiredVars(world);
   const failures = inspect(world);
   if (failures.length > 0) {
     failures.forEach((failure) => console.error(failure));
