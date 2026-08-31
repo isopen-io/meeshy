@@ -226,7 +226,6 @@ const estTemoin: SelecteurDeFichier = (chemin) => isHandWrittenTest(chemin);
  * rougit rien, par construction des règles 2 et 3.
  */
 const DETTE_PRODUCTION: Readonly<Record<string, number>> = {
-  'types/api-schemas.ts': 3995,
   'types/socketio-events.ts': 3238,
   'utils/validation.ts': 2697,
   'utils/languages.ts': 1718,
