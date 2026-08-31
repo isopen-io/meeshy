@@ -747,3 +747,92 @@ nonisolated enum ComposerHistoryService {
         view == .scene || view == .atelier
     }
 }
+
+/// **Ce qu'une provenance de son EXIGE de la présentation** (#4632).
+///
+/// ## Le défaut que ce type ferme
+///
+/// `ComposerPortal` a rendu deux feuilles simultanées non représentables : une
+/// variable ne porte qu'une valeur, et ouvrir la seconde ferme la première. La
+/// règle a tenu — pour les feuilles. **Elle ne dit rien des présentations qui
+/// n'en sont pas.**
+///
+/// Le bouton « Fichiers » de la feuille du son posait `showsFileImporter = true`
+/// en laissant `presentedPortal = .sound` monté. Les deux présentations sont
+/// attachées au MÊME corps de vue ; iOS n'en présente pas une seconde depuis un
+/// présentateur déjà occupé. **Le bouton était INERTE** — aucun crash, aucune
+/// trace, rien à l'écran.
+///
+/// Sa voisine `.library` n'avait pas ce défaut, et c'est ce qui a caché le
+/// défaut un mois : elle REMPLACE le portail (`.soundLibrary`), donc elle passe
+/// par la propriété structurelle du type somme. Les deux branches se
+/// ressemblaient au point d'être lues comme équivalentes ; elles empruntent deux
+/// mécanismes de présentation différents, dont un seul est protégé.
+///
+/// > **Une garantie STRUCTURELLE ne protège que ce qu'elle représente.** Un
+/// > `ComposerPortal?` rend impossibles deux FEUILLES concurrentes ; il ne peut
+/// > rien contre une feuille et un sélecteur système, parce que le second n'est
+/// > pas une de ses valeurs. Ce qui échappe au type échappe à sa preuve.
+nonisolated enum ComposerSoundHandoff: Equatable {
+
+    /// La provenance ouvre un autre PORTAIL — le type somme ferme le premier
+    /// tout seul, aucune précaution à prendre.
+    case portal
+
+    /// La provenance ouvre une présentation SYSTÈME. Elle ne peut pas paraître
+    /// tant qu'une feuille occupe le présentateur : il faut FERMER, puis ouvrir
+    /// à la fermeture effective (`onDismiss`), jamais dans la même transaction.
+    case systemImporterAfterDismiss
+
+    /// Le micro est la surface de la feuille elle-même — il n'y a rien à ouvrir.
+    case sheetSurface
+
+    static func handoff(for source: ComposerSoundSource) -> ComposerSoundHandoff {
+        switch source {
+        case .library: return .portal
+        case .files:   return .systemImporterAfterDismiss
+        case .record:  return .sheetSurface
+        }
+    }
+}
+
+/// **Ce que l'importateur de fichiers va RAPPORTER** (#4632).
+///
+/// Le meuble n'a qu'UN `.fileImporter`, et c'est voulu : deux sélecteurs frères
+/// rejoueraient exactement le conflit de présentation que `ComposerSoundHandoff`
+/// documente. Ce qui change d'une porte à l'autre n'est donc pas le sélecteur
+/// mais ce qu'on lui demande — et ce qu'on fait du résultat.
+///
+/// **La destination est le VRAI correctif.** Même l'importateur ouvert, tout
+/// fichier partait dans `documentLocalMedia`, la liste média du DOCUMENT : un
+/// audio choisi pour la scène n'y arrivait jamais comme son. C'est le défaut que
+/// #4483 avait fermé pour l'enregistrement (« le résultat va sur la SCÈNE,
+/// jamais dans la liste média ») et que la branche fichier n'avait pas suivi.
+nonisolated enum ComposerFileImportIntent: Equatable {
+
+    /// La rangée du document et la porte média — tout ce qui compose la
+    /// publication.
+    case media
+
+    /// La porte SON : un fichier audio, posé sur la scène avec son rôle.
+    case sound
+
+    /// **Le filtre suit l'intention.** `.item` sur la porte du son laisserait
+    /// choisir un PDF pour un son de fond : une erreur que l'utilisateur
+    /// n'apprend qu'après coup, quand rien ne se passe.
+    var contentTypes: [UTType] {
+        switch self {
+        case .media: return [.item]
+        case .sound: return [.audio]
+        }
+    }
+
+    /// Un son de scène est UNIQUE — la scène n'en porte qu'un par rôle. Offrir
+    /// la sélection multiple promettrait une pose que le modèle ne tient pas.
+    var allowsMultipleSelection: Bool {
+        switch self {
+        case .media: return true
+        case .sound: return false
+        }
+    }
+}

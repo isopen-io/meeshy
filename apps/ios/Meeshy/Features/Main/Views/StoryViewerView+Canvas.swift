@@ -1409,7 +1409,7 @@ struct StoryCardView: View {
             : progress
     }
 
-    private var canvasFitSize: CGSize {
+    var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
         // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
         // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
         // 16:9 si l'auteur a importé un fond paysage).
@@ -1438,9 +1438,9 @@ struct StoryCardView: View {
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
     /// l'ombre et l'animation de la carte en phase avec le cadrage.
-    private var canvasIsExpanded: Bool { canvasPresentation == .free }
+    var canvasIsExpanded: Bool { canvasPresentation == .free } // internal : idem
 
-    private var readerCanvasFraming: StoryCanvasFraming.Result {
+    var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
         StoryCanvasFraming.resolve(.init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
@@ -1538,7 +1538,13 @@ struct StoryCardView: View {
             }
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
-            if let story = currentStory {
+            // La SENTINELLE prend la place de la scène quand ce build ne sait pas
+            // la peindre (#4088). La bifurcation est ICI, au-dessus de la chaîne
+            // d'accessibilité du canvas : plus bas, `children: .ignore` aplatirait
+            // ses deux boutons — le seul geste utile deviendrait inatteignable.
+            if currentStoryIsUnpaintable {
+                sentinelLayer
+            } else if let story = currentStory {
                 // La porte v3 et les fils du viewer vivent dans
                 // `currentContentHost(_:)`.
                 currentContentHost(story)

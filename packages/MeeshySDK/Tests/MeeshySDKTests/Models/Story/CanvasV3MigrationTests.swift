@@ -313,6 +313,57 @@ struct CanvasV3MigrationTests {
         #expect(re.scenes[0].objects[0].kind == .reserved("interactive"))
     }
 
+    // MARK: - La rupture se DIT au lecteur (vue `2j`, #4088)
+
+    /// **Un kind que ce build ne sait pas peindre laisse une TRACE.**
+    ///
+    /// Le décodeur le garde en `.reserved(raw)` ; la conversion le saute. Sans
+    /// le mémo, le lecteur recevait une scène AMPUTÉE et n'avait aucun moyen de
+    /// le savoir — il peignait ce qui restait comme si c'était la composition
+    /// de l'auteur.
+    @Test func unKindInconnu_laisseUneTraceQueLeLecteurPeutLire() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"o","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(effets.carriesUnpaintableContent)
+        #expect(effets.unpaintableKinds == ["poll"])
+    }
+
+    /// **Une MENTION n'est pas une rupture.** C'est un kind CONNU que la scène
+    /// ne peint délibérément pas — une mention est une métadonnée. Les
+    /// confondre ferait paraître la sentinelle sur toute story qui cite
+    /// quelqu'un, c'est-à-dire précisément sur les stories les plus ordinaires.
+    @Test func uneMention_neDeclencheJamaisLaSentinelle() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"m","kind":"mention","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(!effets.carriesUnpaintableContent)
+        #expect(effets.unpaintableKinds.isEmpty)
+    }
+
+    /// Une scène entièrement peignable ne porte aucune trace : la sentinelle ne
+    /// doit jamais s'interposer devant une story que ce build sait rendre.
+    @Test func uneSceneEntierementPeignable_neDeclencheRien() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"t","kind":"text","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"text":"Bonjour"}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(!effets.carriesUnpaintableContent)
+    }
+
+    /// Deux objets du MÊME kind inconnu ne le nomment qu'une fois, et deux
+    /// kinds distincts sortent triés — la liste sert un message, pas un
+    /// comptage.
+    @Test func lesKindsInconnus_sontUniquesEtTries() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"a","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},{"id":"b","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},{"id":"c","kind":"gif3d","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(effets.unpaintableKinds == ["gif3d", "poll"])
+    }
+
     // MARK: - Rattrapage de revue B8b — le son vit au DOCUMENT
 
     @Test func soundWithoutAnyObject_survivesTheRoundTrip() throws {

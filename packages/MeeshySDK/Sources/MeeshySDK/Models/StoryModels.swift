@@ -1833,6 +1833,35 @@ public struct StoryEffects: Codable, Sendable {
     var wireBandEdge: [String: ObjectAnchor.Edge]?
     var wireTimingEnd: [String: Double]?
     var wireAnchorPoint: [String: String]?
+
+    /// **Les kinds d'un document PLUS RÉCENT que ce build** (vue `2j`, #4088).
+    ///
+    /// Le décodeur les garde en `ObjectKind.reserved(raw)` — « le SDK ne perd
+    /// jamais un kind qu'un futur serveur accepterait » — puis la conversion les
+    /// SAUTE (`case .mention, .reserved: continue`). Sans ce mémo, le lecteur
+    /// reçoit une scène AMPUTÉE et n'a aucun moyen de le savoir : il peint ce
+    /// qui reste comme si c'était la composition de l'auteur.
+    ///
+    /// > C'est le seul des quatre mémos qui ne serve pas la fidélité de
+    /// > l'aller-retour, mais **la vérité dite au LECTEUR**. Les trois autres
+    /// > empêchent de perdre à l'écriture ; celui-ci empêche de MENTIR à la
+    /// > lecture.
+    ///
+    /// `.mention` n'y entre pas : c'est un kind CONNU que la scène ne peint
+    /// délibérément pas (une mention est une métadonnée). Confondre les deux
+    /// ferait rougir la sentinelle sur toutes les stories mentionnant quelqu'un.
+    var wireUnpaintableKinds: [String]?
+
+    /// Les kinds que ce build ne sait pas peindre — vide quand la scène est
+    /// intégralement rendue. Lecture PUBLIQUE du mémo ci-dessus : le lecteur
+    /// vit app-side et doit pouvoir poser la question.
+    public var unpaintableKinds: [String] { wireUnpaintableKinds ?? [] }
+
+    /// **La scène porte-t-elle du contenu que ce build ne sait pas peindre ?**
+    ///
+    /// UN seul objet suffit. Peindre la scène amputée serait pire que de dire
+    /// la rupture : l'auteur n'a pas composé ça, et rien ne le signalerait.
+    public var carriesUnpaintableContent: Bool { !unpaintableKinds.isEmpty }
     var wireMissingZIndex: Set<String>?
 
     // Objets canvas composites

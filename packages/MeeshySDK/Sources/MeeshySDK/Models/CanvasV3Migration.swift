@@ -544,6 +544,7 @@ public extension StoryEffects {
         var locations: [StoryLocationObject] = []
         var audios: [StoryAudioPlayerObject] = []
         var bandEdges: [String: ObjectAnchor.Edge] = [:]
+        var unpaintable: [String] = []
         var timingEnds: [String: Double] = [:]
         var anchorPoints: [String: String] = [:]
 
@@ -585,7 +586,18 @@ public extension StoryEffects {
                 drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
                                                  from: object.payload.array("strokes"))
                 drawingData = object.payload.string("data").flatMap { Data(base64Encoded: $0) }
-            case .mention, .reserved:
+            case .mention:
+                // Kind CONNU que la scène ne peint pas : une mention est une
+                // métadonnée, pas un objet. Ne JAMAIS le compter comme une
+                // rupture — la sentinelle rougirait sur toute story qui cite
+                // quelqu'un.
+                continue
+            case .reserved(let raw):
+                // **Un kind d'un document plus récent que ce build** (#4088).
+                // Le décodeur l'a gardé ; la conversion ne sait pas le loger.
+                // Sans ce mémo, le lecteur peindrait la scène AMPUTÉE comme si
+                // c'était la composition de l'auteur.
+                unpaintable.append(raw)
                 continue
             }
         }
@@ -595,6 +607,7 @@ public extension StoryEffects {
         mediaObjects = medias.isEmpty ? nil : medias
         stickerObjects = stickerFamily.isEmpty ? nil : stickerFamily
         audioPlayerObjects = audios.isEmpty ? nil : audios
+        wireUnpaintableKinds = unpaintable.isEmpty ? nil : Array(Set(unpaintable)).sorted()
         wireBandEdge = bandEdges.isEmpty ? nil : bandEdges
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints

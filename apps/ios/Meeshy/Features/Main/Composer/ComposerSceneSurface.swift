@@ -205,7 +205,10 @@ struct ComposerSceneSurface: View {
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false)
+                // Les MÊMES deux marges que le rail *trailing* : elles le
+                // posent dans le couloir du plateau, jamais sur la scène.
                 .padding(.leading, ComposerRailGeometry.outerMargin)
+                .padding(.bottom, ComposerRailGeometry.gutter)
         )
     }
 
@@ -305,13 +308,31 @@ struct ComposerSceneSurface: View {
                 // `.bottomTrailing` tombent sur le plateau, jamais sur la scène.
                 // C'est la loi 6 — un rail posé sur la scène ferait mentir
                 // l'aperçu sur le rendu final.
-                // **L'ordre compte** : l'overlay est posé AVANT le padding
-                // horizontal, sinon son repère inclut le couloir et le rail se
-                // pose À CÔTÉ de la scène au lieu d'être DESSUS — mesuré à
-                // l'écran, c'est exactement ce qui s'est produit au premier
-                // essai.
-                .overlay(alignment: .leading) { floatingRail }
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+                // **L'ORDRE des modificateurs EST la disposition** (#4633,
+                // directive porteur 2026-08-31) :
+                //
+                //   > « La bande gauche d'outil applicable dans un canvas doit
+                //   > être placée sur le plateau hors du canvas. »
+                //
+                // Cet overlay était posé AVANT le padding — son repère excluait
+                // donc les couloirs, et `.leading` tombait SUR la scène. Son
+                // jumeau *trailing*, douze lignes plus bas, était posé APRÈS et
+                // tombait dans le couloir. **Une seule des deux moitiés de la
+                // directive #4561 avait été appliquée**, pendant que le
+                // doc-comment de la seconde affirmait « les deux rails vivent
+                // dans les COULOIRS du plateau ».
+                //
+                // Rien ne pouvait rougir : les deux formes compilent, les deux
+                // montent le rail, et la différence ne se voit qu'au pixel — ou
+                // au doigt, quand on essaie de traîner un objet sous la colonne
+                // et que la scène ne répond pas.
+                //
+                // `.bottomLeading` et non `.leading` : ancré en bas comme son
+                // jumeau, à portée du pouce, et avec les MÊMES marges — deux
+                // rails qui encadrent la même scène à deux hauteurs différentes
+                // se voient avant de se comprendre.
+                .overlay(alignment: .bottomLeading) { floatingRail }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
                 //

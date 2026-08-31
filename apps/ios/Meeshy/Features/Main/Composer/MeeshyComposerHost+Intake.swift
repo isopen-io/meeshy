@@ -629,16 +629,38 @@ extension MeeshyComposerHost {
 
     /// Les provenances SECONDAIRES, offertes sous le micro dans la feuille.
     /// `.record` n'y figure pas : c'est la surface principale, pas une porte.
+    /// **La provenance décide du MÉCANISME de présentation, pas seulement de la
+    /// destination** (#4632). `ComposerSoundHandoff` porte la règle : un portail
+    /// se remplace, un sélecteur système exige que la feuille se ferme d'abord.
+    ///
+    /// La branche `.files` posait `showsFileImporter = true` en laissant
+    /// `presentedPortal = .sound` monté — deux présentations sur le même corps de
+    /// vue, dont iOS n'honore que la première. Le bouton était INERTE.
     func presentSoundSource(_ source: ComposerSoundSource) {
-        switch source {
-        case .library:
+        switch ComposerSoundHandoff.handoff(for: source) {
+        case .portal:
             presentedPortal = .soundLibrary
-        case .files:
-            railPosesNextMedia = true
-            showsFileImporter = true
-        case .record:
+        case .systemImporterAfterDismiss:
+            // Le son se pose sur la SCÈNE, pas dans la liste média du document :
+            // `railPosesNextMedia` ne le concerne donc pas.
+            fileImportIntent = .sound
+            pendingFileImport = true
+            presentedPortal = nil
+        case .sheetSurface:
             break
         }
+    }
+
+    /// **La reprise, à la fermeture EFFECTIVE de la feuille** (#4632).
+    ///
+    /// Le drapeau retombe avant l'ouverture : un `pendingFileImport` resté vrai
+    /// rouvrirait l'importateur à la prochaine fermeture de n'importe quel
+    /// portail — la même classe de défaut que `railPosesNextMedia` documente
+    /// deux cents lignes plus haut.
+    func resumePendingFileImport() {
+        guard pendingFileImport else { return }
+        pendingFileImport = false
+        showsFileImporter = true
     }
 
     /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
@@ -882,6 +904,15 @@ extension MeeshyComposerHost {
     /// `Task`, comme les deux autres ingestions.
     func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
         guard case .success(let urls) = result else { return }
+        // **L'intention retombe dès la lecture** : elle vaut pour UNE ouverture.
+        // Laissée à `.sound`, elle ferait poser sur la scène le fichier suivant,
+        // même arrivé par la rangée du document.
+        let intention = fileImportIntent
+        fileImportIntent = .media
+        if intention == .sound {
+            await ingestSoundFiles(urls)
+            return
+        }
         var posees: [URL] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
@@ -901,6 +932,36 @@ extension MeeshyComposerHost {
         }
         consumeRailPosing(posees)
         HapticFeedback.light()
+    }
+
+    /// **Un fichier audio arrive sur la SCÈNE, avec son rôle** (#4632).
+    ///
+    /// C'est la seconde moitié du correctif, et celle qui ne se voyait pas tant
+    /// que la première tenait le sélecteur fermé : `ingestFileImporterResult`
+    /// versait TOUT dans `documentLocalMedia`, la liste média du document. Un
+    /// audio choisi depuis la porte du son n'y devenait donc jamais un son —
+    /// exactement le défaut que #4483 a fermé pour l'enregistrement, resté
+    /// ouvert sur la branche fichier.
+    ///
+    /// Le rôle est celui que l'auteur a posé DANS la feuille (`chosenSoundRole`),
+    /// et il survit à sa fermeture : c'est un état du meuble, pas de la feuille.
+    /// `nil` ⇒ `attachPastedAudio` applique sa règle automatique, la même que
+    /// pour un enregistrement.
+    ///
+    /// La copie suit le motif de l'ingestion voisine : `start…SecurityScoped…`
+    /// rend `false` pour un fichier qui n'est pas *scoped* — ce n'est pas un
+    /// échec, la copie est tentée quel que soit ce retour, et `stop…` n'est
+    /// appelé que si `start` a rendu `true`.
+    func ingestSoundFiles(_ urls: [URL]) async {
+        for sourceURL in urls {
+            let scoped = sourceURL.startAccessingSecurityScopedResource()
+            defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+            guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
+            viewModel.attachPastedAudio(url: destination, role: chosenSoundRole)
+            HapticFeedback.light()
+        }
     }
 
     /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
