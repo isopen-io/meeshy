@@ -125,7 +125,7 @@ extension MeeshyComposerHost {
         // dans la même transaction est exactement ce qui rendait le bouton
         // inerte — sans crash ni trace, l'état invalide n'étant pas représentable
         // côté `ComposerPortal` mais parfaitement représentable en travers de lui.
-        .sheet(item: $presentedPortal, onDismiss: { resumePendingFileImport() }) { portail in
+        .sheet(item: $presentedPortal, onDismiss: { resumePendingPresentation() }) { portail in
             switch portail {
             case .location:     documentLocationPickerSheet
             case .audio:        documentAudioComposerSheet
@@ -136,7 +136,33 @@ extension MeeshyComposerHost {
             case .reference:    referencePickerSheet
             case .language:     documentLanguagePickerSheet
             case .camera:       documentCameraSheet
+            case .hashtag:      composerHashtagSheet
+            case .audience:     composerAudienceSheet
             }
+        }
+        // **L'éditeur d'objet plein écran** (#4634). Il vit AU-DESSUS de
+        // l'aiguillage pour la même raison que les portails : ouvert depuis la
+        // scène, il doit survivre à un changement de surface.
+        //
+        // `fullScreenCover` et `.sheet` sont deux présentations du MÊME
+        // présentateur — SwiftUI n'en honore qu'une. L'exclusion est tenue à la
+        // SOURCE (`openObjectEditor` ferme le portail avant d'ouvrir) plutôt
+        // qu'ici : une garde posée sur le lecteur laisserait l'état invalide se
+        // former, quand la fermer chez l'écrivain le rend impossible.
+        .fullScreenCover(item: $editedObject) { objet in
+            ComposerObjectEditorView(
+                viewModel: viewModel,
+                objectId: objet.id,
+                aspectRatio: viewModel.currentCanvasRatio,
+                plateauTint: tint.color,
+                sceneImages: viewModel.loadedImages,
+                sceneImagesVersion: viewModel.loadedImagesVersion,
+                onClose: { closeObjectEditor() },
+                // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
+                // possède « quel objet est ouvert », et deux sources pour ce
+                // fait divergeraient au premier tap sur une barre voisine.
+                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) }
+            )
         }
         .photosPicker(
             isPresented: $showsPhotoPicker,

@@ -126,7 +126,11 @@ final class ComposerRailDoorTests: XCTestCase {
     /// de la maquette, en y intercalant les portes qu'elle ne dessine pas.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .text, .drawing, .sticker, .mention, .place])
+                       [.description, .media, .sound, .text, .drawing, .sticker,
+                        .mention, .hashtag, .place],
+                       "`.hashtag` se range JUSTE APRÈS `.mention` (#4636) : les deux "
+                       + "désignent une entité que le serveur dérive du texte, et la "
+                       + "position que les doigts apprennent suit cette parenté.")
     }
 
     func test_leRailCanonique_neManqueAucunePorte() {
@@ -160,8 +164,10 @@ final class ComposerRailDoorTests: XCTestCase {
             served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
         XCTAssertFalse(offertes.contains { $0.level == .object },
                        "Un mood n'a pas de scène : rien à y poser.")
-        XCTAssertEqual(offertes, [.description, .mention],
-                       "…et les deux portes qui ne visent pas la scène restent.")
+        XCTAssertEqual(offertes, [.description, .mention, .hashtag],
+                       "…et les TROIS portes qui ne visent pas la scène restent. "
+                       + "`.hashtag` y est entrée le 2026-09-01 (#4636) : comme la mention, "
+                       + "elle vise la publication, donc l'absence de toile ne la retire pas.")
     }
 
     /// **Le LIEU disparaît du Mood pour une raison qui n'est PAS l'absence de

@@ -30,7 +30,11 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// L'ordre d'affichage de la rangée. Distinct de `allCases` pour que
     /// réordonner l'interface ne demande pas de réordonner l'énuméré, dont
     /// l'ordre des `case` porte aussi la sérialisation.
-    static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
+    /// **Public depuis le 2026-08-31** (#4634) : l'éditeur d'objet plein écran
+    /// EMPILE les sept outils, et il vit côté app. Recopier la liste là-bas
+    /// aurait fait diverger l'ordre appris par les doigts au premier outil
+    /// ajouté ici — l'ordre EST la donnée, pas un détail d'affichage.
+    public static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
 
     public var sfSymbol: String {
         switch self {

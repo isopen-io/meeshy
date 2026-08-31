@@ -79,5 +79,19 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     /// La caméra.
     case camera
 
+    /// **Le sélecteur de HASHTAGS** (#4636). Il n'ajoute pas à une liste : il
+    /// écrit dans le texte de la publication, seule source des balises
+    /// (`ComposerHashtags`).
+    case hashtag
+
+    /// **L'AUDIENCE — la vue `2l`, en feuille.**
+    ///
+    /// Elle était un `Menu` posé sur la pastille du socle : six entrées sans
+    /// compteur, sans les mentions qu'elles gouvernent, sans les hashtags qui
+    /// partent avec, et sans dire que l'audience appartient à la PUBLICATION.
+    /// Un menu contextuel peut lister des choix ; il ne peut pas montrer leurs
+    /// conséquences, et c'est tout ce que cet écran a à faire.
+    case audience
+
     public var id: String { rawValue }
 }

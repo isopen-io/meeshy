@@ -142,6 +142,19 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// texte annulé ne laisse rien derrière lui.
     case text
 
+    /// **Le HASHTAG de la publication** (#4636, directive porteur 2026-08-31 :
+    /// « mettre l'outil hashtag dans la liste des outils d'un slide ou d'une
+    /// publication »).
+    ///
+    /// Elle est la JUMELLE de `.mention`, et pas seulement par le glyphe : les
+    /// deux désignent une entité que le serveur DÉRIVE du texte. C'est pourquoi
+    /// elle n'ouvre pas un objet de scène mais écrit dans le contenu — voir
+    /// `ComposerHashtags`, qui porte la raison en entier.
+    ///
+    /// Niveau `.publication`, donc ligne canonique du bas : un hashtag n'apparaît
+    /// pas sur la scène, il classe ce qui part.
+    case hashtag
+
     /// Le niveau du modèle sur lequel la porte agit.
     ///
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
@@ -150,7 +163,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     var level: ComposerRailLevel {
         switch self {
         case .description:                    return .slide
-        case .mention, .place:                return .publication
+        case .mention, .place, .hashtag:      return .publication
         case .media, .sound, .sticker, .text: return .object
         case .drawing:                        return .scene
         }
@@ -160,7 +173,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
+        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -173,6 +186,9 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .sound:       return "music.note"
         case .sticker:     return "face.smiling"
         case .mention:     return "at"
+        // `number` — le glyphe SYSTÈME du `#`. Posé à côté du `at` de la
+        // mention, il dit la parenté : deux références dérivées du texte.
+        case .hashtag:     return "number"
         case .place:       return "mappin.and.ellipse"
         // `scribble.variable` plutôt qu'un `pencil` générique : ce n'est pas
         // « éditer », c'est TRACER — et le glyphe DIT le verbe (loi 7).

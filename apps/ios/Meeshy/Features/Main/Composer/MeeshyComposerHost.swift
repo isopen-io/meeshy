@@ -217,6 +217,24 @@ struct MeeshyComposerHost: View {
     /// forme que les cinq autres écrans qui montent `AudienceUserPickerView`.
     @State var audiencePickerMode: PostVisibility?
 
+    /// **Le sélecteur de personnes demandé DEPUIS la feuille d'audience**
+    /// (#4636). Même mécanisme que `pendingFileImport`, et pour la même raison :
+    /// le picker est monté sous la feuille, donc il ne peut pas s'ouvrir tant
+    /// qu'elle occupe le présentateur. Sans cette intention, choisir
+    /// « Seulement… » dans la feuille n'ouvrirait RIEN — le défaut exact que
+    /// #4632 vient de fermer sur la porte du son.
+    @State var pendingAudiencePicker: PostVisibility?
+
+    /// Les tendances SUGGÉRÉES au sélecteur de hashtags. Vide est un état
+    /// nominal (hors-ligne, aucune tendance) : le champ de saisie suffit, donc
+    /// rien n'attend ce chargement.
+    @State var trendingHashtags: [APIHashtag] = []
+
+    /// **L'objet OUVERT dans l'éditeur plein écran** (#4634). Distinct de
+    /// `selectedSceneItemId`, qui répond à une autre question : celui-là est
+    /// SÉLECTIONNÉ sur la scène, celui-ci est en cours d'ÉDITION.
+    @State var editedObject: ComposerEditedObject?
+
     /// Les personnes que ce mood nomme sans que son texte le dise. Le meuble
     /// les porte ; la RÈGLE de ce qu'on en déclare au serveur est
     /// `ComposerMoodPolicy.declared` (`nil` et jamais `[]`, loi 3).

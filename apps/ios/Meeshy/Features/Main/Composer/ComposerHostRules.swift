@@ -452,8 +452,15 @@ nonisolated enum ComposerSceneCapabilities {
     /// Le son POSÉ sur la scène (objet visible, déplaçable, redimensionnable)
     /// revient par la palette de constructions (#4579), derrière l'entrée
     /// sticker ; le son de FOND reste au socle, où il porte son crédit (#4071).
+    ///
+    /// **`.hashtag` y entre le 2026-08-31** (#4636, directive porteur : « mettre
+    /// l'outil hashtag dans la liste des outils d'un slide ou d'une
+    /// publication »). Elle est servie parce que le meuble possède le chemin
+    /// complet — le texte de la publication est à lui (`documentText`), et
+    /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
+    /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .text, .drawing, .sticker, .mention, .place
+        .description, .media, .text, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à

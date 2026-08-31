@@ -1,0 +1,139 @@
+import SwiftUI
+import PhotosUI
+import MeeshySDK
+import MeeshyUI
+
+/// **Le SON du composer — sa feuille, son rôle de mixage, et ce qu'un fichier
+/// devient** (#4632).
+///
+/// Extrait de `MeeshyComposerHost+Intake.swift` le 2026-09-01, qui franchissait
+/// le plafond de 1 100 lignes. Le nom suit le motif `MeeshyComposerHost+*` :
+/// c'est ce qui garde le fichier DANS l'unité que `AppSourceGuard` lit, donc les
+/// gardes qui ancrent sur ces membres restent vivantes.
+extension MeeshyComposerHost {
+
+    /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
+    /// déjà ses deux entrées « Fichiers » et « Bibliothèque », que le composer
+    /// ne lui passait simplement jamais — et le rôle de mixage se pose SOUS le
+    /// bouton, à la place que le porteur a nommée.
+    ///
+    /// Le résultat va sur la SCÈNE (`attachPastedAudio`), jamais dans la liste
+    /// média du document : c'est tout le correctif.
+    var composerSoundSheet: some View {
+        UnifiedAudioRecorderSheet(
+            preferredLanguage: documentLanguage,
+            showsLanguageStrip: true,
+            onImportAudioFile: { presentSoundSource(.files) },
+            onOpenSoundLibrary: { presentSoundSource(.library) },
+            accessory: AnyView(soundRolePicker),
+            onRecordComplete: { url, _ in
+                viewModel.attachPastedAudio(url: url, role: chosenSoundRole)
+                presentedPortal = nil
+                HapticFeedback.light()
+            }
+        )
+    }
+
+    /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
+    ///
+    /// La sélection affichée est le rôle qui s'appliquerait SANS choix : tant
+    /// que l'auteur n'a rien dit, la pastille montre ce que la règle
+    /// automatique ferait, et non un défaut arbitraire qui la contredirait.
+    @ViewBuilder
+    var soundRolePicker: some View {
+        let effectif = chosenSoundRole ?? automaticSoundRole
+        VStack(alignment: .leading, spacing: 6) {
+            Text(ComposerSoundRoleCopy.title)
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(ComposerAudioRole.allCases, id: \.self) { role in
+                    Button {
+                        chosenSoundRole = role
+                        HapticFeedback.light()
+                    } label: {
+                        Text(ComposerSoundRoleCopy.label(role))
+                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(role == effectif
+                                               ? Color.accentColor.opacity(0.22)
+                                               : Color.primary.opacity(0.07))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ComposerSoundRoleCopy.label(role))
+                    .accessibilityAddTraits(role == effectif ? [.isSelected] : [])
+                }
+            }
+        }
+        .padding(.top, 10)
+    }
+
+    /// Ce que la règle ferait si l'auteur ne disait rien — la source unique,
+    /// APPELÉE et jamais recopiée.
+    var automaticSoundRole: ComposerAudioRole {
+        ComposerAudioPlacement.isBackground(
+            sceneAlreadyHasBackgroundAudio: viewModel.currentEffects.resolvedBackgroundAudio != nil
+        ) == true ? .background : .foreground
+    }
+
+    /// L'étagère des sons. Le picker vient du SDK — le meuble ne fait que le
+    /// présenter et remettre son résultat au viewModel, seul site qui sait ce
+    /// qu'un son EMPRUNTÉ vaut (`soundId` renseigné, `postMediaId` vide : c'est
+    /// ce couple qui dit au serveur « enregistre un usage, ne capture rien »).
+    var soundLibrarySheet: some View {
+        SoundLibraryPicker(
+            onPick: { sound in
+                viewModel.addBorrowedSound(sound)
+                presentedPortal = nil
+                HapticFeedback.light()
+            },
+            onCancel: { presentedPortal = nil }
+        )
+    }
+
+    /// **Un fichier audio arrive sur la SCÈNE, avec son rôle** (#4632).
+    ///
+    /// C'est la seconde moitié du correctif, et celle qui ne se voyait pas tant
+    /// que la première tenait le sélecteur fermé : `ingestFileImporterResult`
+    /// versait TOUT dans `documentLocalMedia`, la liste média du document. Un
+    /// audio choisi depuis la porte du son n'y devenait donc jamais un son —
+    /// exactement le défaut que #4483 a fermé pour l'enregistrement, resté
+    /// ouvert sur la branche fichier.
+    ///
+    /// Le rôle est celui que l'auteur a posé DANS la feuille (`chosenSoundRole`),
+    /// et il survit à sa fermeture : c'est un état du meuble, pas de la feuille.
+    /// `nil` ⇒ `attachPastedAudio` applique sa règle automatique, la même que
+    /// pour un enregistrement.
+    ///
+    /// La copie suit le motif de l'ingestion voisine : `start…SecurityScoped…`
+    /// rend `false` pour un fichier qui n'est pas *scoped* — ce n'est pas un
+    /// échec, la copie est tentée quel que soit ce retour, et `stop…` n'est
+    /// appelé que si `start` a rendu `true`.
+    func ingestSoundFiles(_ urls: [URL]) async {
+        for sourceURL in urls {
+            let scoped = sourceURL.startAccessingSecurityScopedResource()
+            defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+            guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
+            viewModel.attachPastedAudio(url: destination, role: chosenSoundRole)
+            HapticFeedback.light()
+        }
+    }
+
+    /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
+    /// du fil ouvre déjà, avec ses catégories, sa recherche et ses récents. En
+    /// fabriquer un second ici aurait donné deux listes d'emojis, deux mémoires
+    /// et deux jeux de catégories à faire diverger : le motif que la surface du
+    /// mood a refusé pour `StatusViewModel.moodOptions`.
+    ///
+    /// Il écrit dans `documentText`, et **jamais dans `moodEmoji`** : les deux
+    /// sont des emojis et vivent à quelques lignes l'un de l'autre, mais l'un
+    /// est un caractère glissé dans une phrase et l'autre est la matière
+    /// DÉFINISSANTE d'un mood — celle sans laquelle `ComposerDocumentPublishGate`
+    /// refuse de publier. Les confondre changerait ce qu'un mood EST à chaque
+    /// frappe de son texte.
+}
