@@ -135,36 +135,36 @@ extension StoryCanvasUIView {
         return slide.effects.resolvedBackgroundMedia?.id
     }
 
+    /// **Ce qu'un GESTE peut saisir — quatre familles sur cinq** (#4591).
+    ///
+    /// L'audio en est exclu, et la cascade qui vivait ici ne le disait pas :
+    /// elle interrogeait quatre tableaux et rendait `nil` pour le cinquième par
+    /// omission. Le `switch` exhaustif préserve exactement ce comportement et
+    /// le rend visible.
+    ///
+    /// > **Cette exclusion est DATÉE.** La directive porteur du 2026-08-31 pose
+    /// > que tout objet de scène se redimensionne et tourne, et #4579 veut des
+    /// > chips de son déplaçables. Le jour où l'audio devient saisissable, c'est
+    /// > ICI que la décision se prend — le `switch` l'exige, là où la cascade
+    /// > l'aurait laissée passer en silence.
+    private func manipulable(_ id: String) -> MeeshySceneObject? {
+        guard let objet = slide.sceneObject(id: id) else { return nil }
+        switch objet.kind {
+        case .text, .media, .sticker, .location: return objet
+        case .audio: return nil
+        }
+    }
+
     func currentItemNormalizedPosition(forId id: String) -> (Double, Double)? {
-        if let t = slide.effects.textObjects.first(where: { $0.id == id }) {
-            return (t.x, t.y)
-        }
-        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
-            return (m.x, m.y)
-        }
-        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
-            return (s.x, s.y)
-        }
-        if let l = slide.locationObjects.first(where: { $0.id == id }) {
-            return (l.x, l.y)
-        }
-        return nil
+        manipulable(id).map { ($0.x, $0.y) }
     }
 
     func currentScale(forId id: String) -> Double? {
-        if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.scale }
-        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.scale }
-        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.scale }
-        if let l = slide.locationObjects.first(where: { $0.id == id }) { return l.scale }
-        return nil
+        manipulable(id)?.scale
     }
 
     func currentRotation(forId id: String) -> Double? {
-        if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.rotation }
-        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.rotation }
-        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.rotation }
-        if let l = slide.locationObjects.first(where: { $0.id == id }) { return l.rotation }
-        return nil
+        manipulable(id)?.rotation
     }
 
     func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
