@@ -73,9 +73,19 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
             "les deux montages du `⋯` interrogent les entrées servies : un menu vide n'est pas monté"
         )
         // Annuler / rétablir — rien à défaire, rien à peindre.
+        //
+        // **La loi tient, l'EXPRESSION a changé** (#4586) : l'historique a quitté
+        // le socle pour le rail droit, et sa condition est passée d'un `if` dans
+        // la vue à un OPTIONNEL au contrat — `nil` ⇒ aucun bouton. C'est le même
+        // patron que `onAddSlide`, et il est meilleur : la question est posée UNE
+        // fois par le meuble au lieu d'être reposée par la vue.
         XCTAssertTrue(
-            surfaces.contains("if canUndoHistory || canRedoHistory"),
-            "la capsule d'historique ne paraît que s'il y a un geste à défaire ou à refaire"
+            surfaces.contains("onUndo: composerServesHistory && viewModel.canUndoGlobal"),
+            "l'historique ne paraît que s'il y a un geste à défaire"
+        )
+        XCTAssertTrue(
+            surfaces.contains("onRedo: composerServesHistory && viewModel.canRedoGlobal"),
+            "…et un geste à refaire, séparément"
         )
         // La bande de rognage — pas d'objet rognable, pas de bande.
         XCTAssertTrue(

@@ -401,6 +401,15 @@ extension MeeshyComposerHost {
             // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
             // d'où sa place tout en haut du rail et son séparateur.
             onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
+            // **L'historique a quitté le socle** (#4586). La question posée est
+            // la MÊME que celle que le socle posait — `ComposerHistoryService`
+            // reste le juge unique de « cet écran sert-il l'historique ? » — et
+            // seule la place change. `nil` quand il n'y a rien à défaire :
+            // absent, jamais grisé.
+            onUndo: composerServesHistory && viewModel.canUndoGlobal
+                ? { performHistoryUndo() } : nil,
+            onRedo: composerServesHistory && viewModel.canRedoGlobal
+                ? { performHistoryRedo() } : nil,
             // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`). La
             // résolution par kind vit dans la RÈGLE, pas ici : le meuble ne
             // tient qu'un id, c'est la slide qui sait de quel type il est.
@@ -898,6 +907,12 @@ extension MeeshyComposerHost {
     /// du jeu servi, donc la bande n'est pas ouvrable, ET il laisse
     /// `composerTrimBand` à `nil`, donc elle n'aurait rien à montrer si elle
     /// l'était. Une seule question posée une fois, deux conséquences.
+    /// L'unique lecture du juge de l'historique. Le socle posait la même
+    /// question à deux endroits ; le rail la pose une fois.
+    var composerServesHistory: Bool {
+        ComposerHistoryService.servesHistory(on: mountedComposerView)
+    }
+
     /// **Les jetons de l'objet sélectionné — un site unique.** Trois
     /// consommateurs les lisent (la rangée, le jeton encadré, le geste), et
     /// trois résolutions du même jeu peuvent diverger.

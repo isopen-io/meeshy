@@ -900,38 +900,78 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    func test_laSource_estLisible() throws {
-        let s = try topBarSource()
-        XCTAssertGreaterThan(s.count, 800)
-        XCTAssertTrue(s.contains("var historyPair"))
+    private func trailingRailSource() throws -> String {
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
+        let url = racine.appendingPathComponent(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(brut.contains("struct ComposerTrailingRail"),
+                      "ce n'est pas le rail droit — la garde lirait à côté")
+        return AppSourceGuard.stripComments(brut)
     }
 
-    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.** Un
-    /// « annuler » grisé occupe la place et l'attention d'un contrôle pour ne
-    /// rien promettre, sur une barre qui porte déjà quatre choses.
+    func test_lesSources_sontLisibles() throws {
+        XCTAssertGreaterThan(try topBarSource().count, 800)
+        XCTAssertGreaterThan(try trailingRailSource().count, 800)
+    }
+
+    /// **L'INVARIANT que cette classe protège n'a pas changé : l'historique
+    /// n'est PAS en barre haute.**
+    ///
+    /// C'est le défaut d'origine, nommé au simulateur : « le bouton “Annuler”
+    /// en haut à droite pendant un outil actif agit comme UNDO, pas comme
+    /// fermeture ». En français le mot dit les deux, et le voisinage du chrome
+    /// d'outil — dont le `(x)` ferme vraiment — tranchait pour le mauvais sens.
+    ///
+    /// La collision se lève par la GÉOGRAPHIE. Le socle l'avait levée ; le rail
+    /// droit la lève aussi, et mieux : rien n'y ferme quoi que ce soit, et ce
+    /// qui l'entoure agit précisément sur les objets que l'historique défait.
+    func test_lHistorique_nEstPasEnBarreHaute() throws {
+        let source = compact(try topBarSource())
+        XCTAssertFalse(source.contains("var historyPair"),
+                       "la paire a quitté le socle ET la barre haute (#4586)")
+    }
+
+    /// **Il vit au rail DROIT** (directive porteur 2026-08-31) : « à droite, ça
+    /// agit sur les dimensions des objets, + undo/redo devrait y être ».
+    ///
+    /// Ce qu'il défait, ce sont des gestes sur les OBJETS. Au socle il
+    /// voisinait avec l'audience et le bouton publier, qui décident de l'ENVOI.
+    func test_lHistorique_vitAuRailDroit() throws {
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("varonUndo:(()->Void)?"))
+        XCTAssertTrue(rail.contains("varonRedo:(()->Void)?"))
+        XCTAssertTrue(rail.contains("ComposerHistoryCopy.undo"))
+        XCTAssertTrue(rail.contains("ComposerHistoryCopy.redo"))
+    }
+
+    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.**
+    ///
+    /// Le contrat l'exprime par l'optionnel : `nil` ⇒ aucun bouton. C'est le
+    /// même patron que `onAddSlide`, et il remplace les `if canUndoHistory`
+    /// que le socle portait — la question est désormais posée UNE fois, par le
+    /// meuble, au lieu d'être reposée par la vue.
     func test_lesControles_nExistentQueSilsAgissent() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains("ifcanUndoHistory||canRedoHistory{"))
-        XCTAssertTrue(source.contains("ifcanUndoHistory{"))
-        XCTAssertTrue(source.contains("ifcanRedoHistory{"))
-        XCTAssertFalse(source.contains(".disabled(!canUndoHistory)"),
-                       "Griser au lieu d'absenter contredit la loi 4.")
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("ifletonUndo{"))
+        XCTAssertTrue(rail.contains("ifletonRedo{"))
+        XCTAssertFalse(rail.contains(".disabled("),
+                       "griser au lieu d'absenter contredit la loi 4")
+
+        let meuble = compact(try topBarSource())
+        XCTAssertTrue(meuble.contains("onUndo:composerServesHistory&&viewModel.canUndoGlobal"),
+                      "le juge de l'historique reste ComposerHistoryService")
     }
 
-    /// **Ils sont posés ENTRE l'œil et Publier**, pas ailleurs sur la rangée :
-    /// c'est la place que la directive nomme, et elle porte le sens — parmi ce
-    /// qui décide de l'envoi.
-    func test_laPaire_estEntreLOeilEtPublier() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains("{previewButton}historyPairpublishButton"))
+    /// **Le rail n'existe pas s'il n'a RIEN à porter.** Sans cette moitié,
+    /// retirer les actions et l'historique laisserait un socle de verre vide
+    /// flotter à droite de la scène.
+    func test_leRail_nExistePasVide() throws {
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("actions.isEmpty&&onAddSlide==nil&&onUndo==nil&&onRedo==nil"))
     }
 
-    /// **UNE capsule, pas deux boutons voisins** : annuler et rétablir sont un
-    /// seul contrôle à deux sens, comme les chevrons d'un navigateur.
-    func test_lesDeux_partagentUneSeuleCapsule() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains(".adaptiveGlass(in:Capsule())"))
-    }
 
     /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
     /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
