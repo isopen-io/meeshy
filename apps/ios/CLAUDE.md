@@ -507,6 +507,46 @@ c'était un bouton en double, jamais une capacité en double.
 > retirent l'un l'autre sans rien coûter ; deux boutons qui ouvrent deux
 > chemins obligent à choisir lequel survit — et à le dire.
 
+### 2 ter. Le composer crée un MeeshyDocument — pas une story à slides (directive porteur 2026-08-31)
+
+> « Et non `StorySlide` — on adopte la sémantique nouvelle de la structure des
+> **MeeshyDocument**, qui utilise **MeeshyComposer** pour se créer. »
+
+Le composer est né dans le pipeline STORY et en a hérité la nomenclature
+(`StorySlide`, `StoryEffects`, `StoryTextObject`…). **Ce n'est plus ce qu'il
+fait.** Il compose un DOCUMENT, dont une story n'est qu'un des profils de sortie
+— au même titre que le post, le réel et le mood.
+
+Le vocabulaire à employer, dans les doc-comments, les issues et les
+raisonnements : `MeeshyDocument`, `MeeshyScene`, `MeeshySlide`, `MeeshyObject`,
+`MeeshyComposer`. La planche `docs/product/planche-meeshy-composer.html` en est
+la source (78 occurrences de `MeeshyObject`, 64 de `MeeshyScene`, 38 de
+`MeeshySlide`).
+
+**Aucun de ces noms n'est un TYPE aujourd'hui** (mesuré le 2026-08-31 : seul
+`MeeshyScenePlayer` porte le préfixe, et c'est une `View`). Le composer raisonne
+donc juste dans une langue que le compilateur ne parle pas.
+
+> C'est l'inverse du motif de la « règle doublée » : là, une règle raisonnée
+> était doublée par un littéral et seul le littéral était appelé ; ici, **le NOM
+> existe sans la CHOSE**. Un vocabulaire sans type ne peut pas diverger de son
+> implémentation — il n'en a pas — mais il oblige chaque relecteur à traduire, et
+> la traduction n'est écrite nulle part. Elle s'est déjà payée : le doc-comment
+> de `ComposerRailDoor.place` promettait « une pastille de lieu posée sur la
+> scène » (vocabulaire cible) là où le code ouvrait le sélecteur de la
+> publication (comportement réel).
+
+**Ne PAS renommer les types Story en masse.** Ils sont sérialisés (`StoryEffects`
+voyage en JSON vers la passerelle, `CanvasV3Migration` lit d'anciennes formes) et
+partagés avec le reader et l'export : un renommage de surface casserait la
+lecture des publications existantes. La migration se fait par enveloppes ou par
+`typealias` documentés — jamais par un `sed`. Pilotage : #4591, où le choix
+`MeeshyDocument` / `MeeshyPublication` reste à trancher.
+
+**Corollaire déjà appliqué** : l'historique appartient au DOCUMENT, pas à
+l'envoi — la planche écrit « Historique du MeeshyDocument, conservé ». C'est ce
+qui justifie son déplacement du socle vers le rail des objets (#4586).
+
 ### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
 
 > « Dans l'icône (smile/sticker) il faudra juste proposer directement des
