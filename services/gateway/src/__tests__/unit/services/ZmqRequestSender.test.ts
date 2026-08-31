@@ -148,6 +148,19 @@ describe('ZmqRequestSender', () => {
       expect(sentPayload.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    // Leçon 282 — un témoin qui SÉPARE `.toLowerCase()` de la SSOT s'écrit sur un
+    // code TAGUÉ région : sur `'fr'`/`'en'` les deux rendent le même verdict. Le
+    // jeu ENVOYÉ au translator doit être canonicalisé comme le jeu d'ATTENTE
+    // (pendingLanguages), sinon `'en-US'` part en `'en-us'` (cible NLLB invalide)
+    // pendant qu'on attend `'en'` — la langue reste pendante jusqu'au timeout.
+    it('region-strips targetLanguages and dedups variants against their base language', async () => {
+      const request = makeTranslationRequest({ targetLanguages: ['fr-FR', 'fr', 'en-US'] });
+      await sender.sendTranslationRequest(request);
+
+      const sentPayload = connectionManager.send.mock.calls[0][0] as any;
+      expect(sentPayload.targetLanguages).toEqual(['fr', 'en']);
+    });
+
     it('throws when targetLanguages is empty after dedup', async () => {
       const request = makeTranslationRequest({ targetLanguages: [] });
       await expect(sender.sendTranslationRequest(request)).rejects.toThrow(

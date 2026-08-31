@@ -81,8 +81,12 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Dédupliquer les langues cibles via la SSOT locale `canonicalLanguage`
+    // (casse repliée ET région strippée) — la MÊME loi que le jeu d'attente
+    // (`pendingLanguages`) et le retrait à la réponse. Un `.toLowerCase()` brut
+    // laisserait partir `'en-US'` en `'en-us'` (cible NLLB invalide) pendant
+    // qu'on attend `'en'`, et compterait `'fr'`/`'fr-FR'` pour deux cibles.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +122,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
