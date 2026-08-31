@@ -90,7 +90,25 @@ export const ApplicationPreferenceSchema = z.object({
   // Expérience
   tutorialsCompleted: z.array(z.string()).default([]),
   betaFeaturesEnabled: z.boolean().default(false),
-  telemetryEnabled: z.boolean().default(true),
+  /**
+   * `false` par défaut depuis #4578, et ce n'est pas un durcissement gratuit.
+   *
+   * Cette préférence est GARDÉE par `dataProcessingConsentAt`
+   * (`ConsentValidationService.validateApplicationPreferences`) et n'a AUCUN
+   * lecteur d'usage dans le dépôt — mesuré : hors schémas, tests et interface,
+   * les seules occurrences sont la garde elle-même. Sa valeur stockée est donc
+   * la seule chose qui existe, et un défaut `true` faisait affirmer par le
+   * système, pour un compte qui n'a rien consenti, exactement ce que la garde
+   * refuse. L'état PAR DÉFAUT violait le modèle de consentement.
+   *
+   * Conséquence directe, mesurée sur staging : la catégorie `application`
+   * était INACCESSIBLE à un compte neuf — un `PATCH {"theme":"dark"}` était
+   * refusé en nommant ce champ-ci.
+   *
+   * Un consentement s'accorde, il ne se présume pas : c'est aussi ce que le
+   * RGPD attend d'un traitement analytique.
+   */
+  telemetryEnabled: z.boolean().default(false),
 
   // Consentements données/voix — RETIRÉS d'ici (#4180), voir
   // LEGACY_CONSENT_ERROR ci-dessus. Chaque clé reste DÉCLARÉE (plutôt que
@@ -123,5 +141,5 @@ export const APPLICATION_PREFERENCE_DEFAULTS: ApplicationPreference = {
   keyboardShortcutsEnabled: true,
   tutorialsCompleted: [],
   betaFeaturesEnabled: false,
-  telemetryEnabled: true
+  telemetryEnabled: false
 };

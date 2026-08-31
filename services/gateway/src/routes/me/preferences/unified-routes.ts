@@ -130,8 +130,13 @@ type CategoryWrite = {
   readonly category: PreferenceCategory;
   /** Ce qui sera ÉCRIT dans la colonne JSON. */
   readonly stored: PreferenceDocument;
-  /** L'état que le serveur OBÉIRA — c'est lui que la garde de consentement lit. */
+  /** L'état que le serveur OBÉIRA. */
   readonly effective: PreferenceDocument;
+  /**
+   * Ce que le CORPS NOMME — et c'est lui, depuis #4578, que la garde de
+   * consentement lit. Voir le commentaire du site de validation plus bas.
+   */
+  readonly submitted: PreferenceDocument;
 };
 
 export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
@@ -305,18 +310,28 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           return {
             category,
             stored,
-            // La garde de consentement lit l'état OBÉI, pas le document écrit :
-            // en `replace`, une clé absente n'est pas « éteinte », elle relève
-            // de son défaut — et c'est ce défaut qui sera servi et appliqué.
             effective: resolveComplete(PREFERENCE_REGISTRY[category].defaults, stored),
+            submitted,
           };
         });
 
+        // #4578 — la garde lit `submitted`, pas `effective`.
+        //
+        // Elle lisait l'état OBÉI, au motif qu'« en `replace`, une clé absente
+        // n'est pas éteinte, elle relève de son défaut — et c'est ce défaut qui
+        // sera servi et appliqué ». La seconde moitié était l'affirmation à
+        // vérifier, et la mesure sur staging l'a partagée en deux : pour la
+        // famille AUDIO une garde d'USAGE existe et fait le travail, donc
+        // stocker `true` n'applique rien ; pour `telemetryEnabled` et
+        // `allowAnalytics` aucun lecteur d'usage n'existe — d'où leur passage à
+        // `false` par défaut dans le même lot, plutôt qu'une garde d'écriture
+        // qui verrouillait trois catégories de réglages sur sept pour un compte
+        // neuf. Détail complet : `preference-router-factory.ts`, même lot.
         const violations = (
           await Promise.all(
             writes.map(async (write) =>
               (
-                await consentService.validatePreferences(userId, write.category, write.effective)
+                await consentService.validatePreferences(userId, write.category, write.submitted)
               ).map((violation) => ({ ...violation, category: write.category }))
             )
           )

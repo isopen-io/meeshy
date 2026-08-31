@@ -195,11 +195,16 @@ export function createPreferenceRouter(
           // Validation Zod
           const validated = schema.parse(request.body);
 
-          // Validation des consentements GDPR
+          // #4578 — la garde lit les clés que le corps NOMME, pas celles que
+          // `schema.parse` vient d'injecter depuis les `default()`. Sur ce
+          // verbe la distinction est encore plus nette : `parse` REMPLIT le
+          // document, si bien qu'un `PUT {"theme":"dark"}` arrivait à la garde
+          // en affirmant les vingt autres clés — dont `telemetryEnabled: true`.
+          // Voir le commentaire détaillé sur le PATCH ci-dessous.
           const consentViolations = await consentService.validatePreferences(
             userId,
             category,
-            validated as Record<string, any>
+            submittedFrom(schema, request.body) as Record<string, any>
           );
 
           if (consentViolations.length > 0) {
@@ -318,11 +323,44 @@ export function createPreferenceRouter(
           // et un réglage qu'on ne touchait pas se trouve levé en silence.
           const merged = { ...(await resolveCompleteFor(userId)), ...validated };
 
-          // Validation des consentements GDPR sur les données mergées
+          // #4578 — la garde de consentement lit ce que le corps NOMME, jamais
+          // le document fusionné ni les défauts du schéma.
+          //
+          // Mesuré sur staging le 2026-08-31, sur un compte créé pour
+          // l'occasion : un `PATCH {"theme":"dark"}` était REFUSÉ en nommant
+          // `telemetryEnabled`, une clé que le corps ne portait pas. Trois
+          // catégories sur sept étaient inaccessibles à un compte neuf —
+          // `application`, `privacy`, `audio` — parce que cinq préférences
+          // gardées par un consentement valent `true` PAR DÉFAUT. L'utilisateur
+          // ne pouvait ni changer son thème, ni sa visibilité, ni sa qualité
+          // audio, et le refus nommait un champ qu'il n'avait pas touché.
+          //
+          // Le commentaire qui justifiait la lecture fusionnée disait : « une
+          // clé absente n'est pas éteinte, elle relève de son défaut — et c'est
+          // ce défaut qui sera servi et appliqué ». La seconde moitié est ce
+          // qu'il fallait vérifier, et la mesure la partage en deux :
+          //
+          //  · AUDIO — `transcriptionEnabled`, `audioTranslationEnabled`,
+          //    `ttsEnabled` : une garde d'USAGE existe et fait le travail
+          //    (`routes/attachments/translation.ts:186`/`:365`,
+          //    `MessageTranslationService.ts:2439`). Stocker `true` sans le
+          //    consentement voix n'applique RIEN — la garde d'écriture était
+          //    redondante, et c'est elle qui verrouillait les réglages.
+          //  · TÉLÉMÉTRIE / ANALYTIQUE — `telemetryEnabled`, `allowAnalytics` :
+          //    AUCUN lecteur d'usage dans le dépôt. La garde d'écriture était
+          //    donc la seule, et la retirer laisserait un document affirmant
+          //    `true` pour un non-consentant. C'est pourquoi ces deux-là
+          //    passent à `false` PAR DÉFAUT dans le même lot : un système dont
+          //    l'état PAR DÉFAUT viole son propre modèle de consentement n'a
+          //    pas un problème de validation, il a un problème de défaut.
+          //
+          // L'invariant qui en résulte est gardé par
+          // `consent-gated-defaults-invariant.test.ts` : aucune préférence
+          // gardée ne peut valoir `true` par défaut sans garde d'usage.
           const consentViolations = await consentService.validatePreferences(
             userId,
             category,
-            merged as Record<string, any>
+            validated as Record<string, any>
           );
 
           if (consentViolations.length > 0) {
