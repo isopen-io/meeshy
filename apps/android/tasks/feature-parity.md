@@ -6874,9 +6874,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Still open (§M) — the deeper twin:** two orchestrators (`NotificationBannerViewModel` LIVE
       vs `NotificationToastViewModel` orphan) still wrap the SAME `MeeshyNotificationToast` atom off
       the SAME socket seam. Dedup + clock are now shared, but the two VMs+Hosts should collapse into
-      ONE (the banner's framing+navigation is the superset; the toast's `onConversationOpened/Closed`/
-      `onPostOpened/Closed` hooks are richer than the banner's `setActiveContext`). A product-level
-      merge (retire the toast host, fold its hooks into the banner, then wire it) is a separate slice.
+      ONE (the banner's framing+navigation is the superset). A product-level merge (retire the toast
+      host, fold its remaining hooks into the banner, then wire it) is a separate slice.
+- [x] In-app banner pulls down when the reader opens its thread — **shipped 2026-08-31** (slice
+      `banner-active-context-dismiss`): the LIVE `NotificationBannerViewModel.setActiveContext` set the
+      on-screen context (and published it process-wide for the FCM gate) but did NOT dismiss a banner
+      already on screen for the very conversation/post the reader just opened — iOS
+      `NotificationToastManager.onConversationOpened`/`onPostOpened` do exactly that (`if currentToast.
+      conversationId == conversationId { dismissToast() }`), and the orphan toast VM did too, so the
+      live surface was the poorer one (dimension 8 UX + dimension 13 complétude: a banner about thread X
+      kept counting down over the reader's face while they read thread X). This slice closes it AND makes
+      the "belongs to the open thread?" test a single SSOT: new pure `:core:model` `ActiveContextMatch.
+      matches(contentConversationId, contentPostId, activeConversationId, activePostId)` (a null active id
+      never matches — an empty screen silences nothing), which `NotificationToastPolicy` now calls for the
+      FRESH-notification active-screen suppression (behaviour identical — its inline null-guarded pair was
+      the same predicate) and `setActiveContext` calls for the ALREADY-SHOWN banner. +17 tests (11
+      `ActiveContextMatch` covering both arms true/false, both null guards, the OR, all-null; 6
+      `NotificationBannerViewModel`: opening the shown banner's conversation/post dismisses it, a different
+      conversation leaves it, leaving all screens leaves it, no-banner is inert). RED-proven (stripping the
+      predicate's null guards fails 6 predicate + 9 `NotificationToastPolicy` tests — proving the policy
+      genuinely consults it; removing the dismiss wiring fails exactly the two open-the-thread tests).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only

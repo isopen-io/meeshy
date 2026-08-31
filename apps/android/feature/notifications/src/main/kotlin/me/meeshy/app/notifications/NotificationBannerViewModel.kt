@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.model.ActiveContextMatch
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationBannerPresentation
@@ -106,6 +107,20 @@ class NotificationBannerViewModel @Inject constructor(
         // Publish the on-screen thread process-wide so the FCM push service — which has no
         // ViewModel — can suppress a foreground banner for the conversation being read.
         activeConversationStore.setActive(conversationId)
+        // A banner already on screen for the thread the reader just opened has said its piece —
+        // the reader now sees the content in the fil, so pull it down (iOS
+        // NotificationToastManager.onConversationOpened / onPostOpened). The SAME pure predicate
+        // that silences a FRESH notification for the open thread (NotificationToastPolicy).
+        val shown = _banner.value ?: return
+        if (ActiveContextMatch.matches(
+                contentConversationId = shown.conversationId,
+                contentPostId = shown.postId,
+                activeConversationId = conversationId,
+                activePostId = postId,
+            )
+        ) {
+            dismiss()
+        }
     }
 
     fun dismiss() {
