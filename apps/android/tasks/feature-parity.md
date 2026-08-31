@@ -7021,8 +7021,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       empty filler; case-insensitive keeps original casing; accent-folded `cafe`→`café` highlighted whole;
       the reassembly invariant on every non-trivial case). RED-proven (highlighted-run flag `true`→`false`
       fails exactly the 8 match-bearing tests, the 4 no-match cases stay green).
+      **Highlight now washes the query that PRODUCED the results, not the live input** (slice
+      `global-search-results-query`, 2026-08-31): iOS keeps a `resultsQuery` distinct from the live
+      `searchText` and highlights each row against it (`highlightedText(result.content, query:
+      viewModel.resultsQuery)`); Android highlighted against the live `state.query`, so while a new
+      query was being typed (during the 300 ms debounce + network window) the OLD results re-washed
+      against the NEW partial term — a stale, mismatched highlight (dimension 4 Fluidité / 13
+      Complétude). New `GlobalSearchUiState.resultsQuery` snapshot, set on BOTH the network path and
+      the cache-hit path to the term that produced the shown results, and reset to `""` when the query
+      shrinks below the floor (parity iOS `clearResults`); `MessageHitRow` now washes against
+      `resultsQuery`. +4 `GlobalSearchViewModelTest` (a successful search anchors `resultsQuery`; a
+      cache hit reports the cached term; shrinking below the floor resets it; the anchor stays on the
+      shown results while a newer query is being typed). RED-proven (blanking the anchor on both paths
+      fails exactly the 4 new tests).
       **Remaining:** highlighting the Conversations/Users result rows (their preview is the title/username,
-      a lighter follow-up), and the local FTS leg below.
+      a lighter follow-up — iOS does not do this, so it would be an Android surpass), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,

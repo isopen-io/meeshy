@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **global-search result rows now highlight the query that PRODUCED them, not the live
+> input — iOS `resultsQuery` parity — fixing a stale-highlight mismatch during debounce** (slice
+> `global-search-results-query`, feature-parity §N "Global search … query highlighting").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → all dependabot (base `dev`)
+> plus one non-android translation PR (#4541, `claude/intelligent-noether`, base `main`, jcnm) — no
+> `claude/apps/android/<slice-id>` slice pending, nothing of mine to merge. The prior slice
+> (`global-search-result-highlight`, #4549) is already on `main` (a2ead903). Branched
+> `claude/apps/android/global-search-results-query` off freshly-fetched `origin/main`
+> (HEAD == origin/main a2ead903). **Note:** the session's bootstrap branch was `dev`-based and its
+> tracking docs were behind `main` (several android slices #4506/#4512/#4533/#4539/#4549 had landed
+> on `main` after the dev fork); the authoritative tracking lives on `main`, so this run read PROGRESS/
+> feature-parity from `origin/main` and branched there.
+>
+> **The gap (a real correctness bug, not just a missing feature).** iOS keeps `resultsQuery` distinct
+> from the live `searchText` and highlights each message row against it — `highlightedText(result.content,
+> query: viewModel.resultsQuery)` — so a row always washes against the term that actually produced it.
+> Android's `MessageHitRow` washed against the LIVE `state.query`: the moment the user typed past the
+> results already on screen (during the 300 ms debounce + the network round-trip), the OLD results
+> re-washed against the NEW partial term — highlighting the wrong substring, or nothing (dimension 4
+> Fluidité, dimension 13 Complétude vs iOS). `MessageTextParser.highlightedSegments` (the SSOT shipped
+> by the prior slice) was correct; it was being fed the wrong query.
+>
+> **The change — one snapshot field + three write sites + one screen wire.** (1)
+> `GlobalSearchUiState.resultsQuery: String` — the query that produced the currently-shown `results`,
+> distinct from the live `query`. (2) It is set to the trimmed term on BOTH the network path (when
+> results land) and the cache-hit path (a cached row must report its own term, else it washes against
+> ""), and reset to `""` when the query shrinks below the 2-char floor (parity iOS `clearResults`). The
+> existing `searchJob?.cancel()` already makes a superseded search never overwrite the shown results, so
+> `resultsQuery` follows `results` exactly (parity iOS `guard !Task.isCancelled`). (3)
+> `GlobalSearchScreen.MessageHitRow` washes against `state.resultsQuery`. Blast radius: 1 VM state field
+> + 3 `copy` sites + 1 screen arg. Deliberately NOT touched: the Conversations/Users row highlighting
+> (iOS doesn't highlight those either — a separate Android-surpass follow-up, noted in §N) and the local
+> FTS leg.
+>
+> **Tests: +4, RED-proven.** `GlobalSearchViewModelTest` +4 (a successful search anchors `resultsQuery`
+> on its term; a cache hit reports the cached term; shrinking below the floor resets it; the anchor stays
+> on the shown results while a newer query is being typed — the core of the fix, proving `resultsQuery`
+> is a stored snapshot, not a mirror of the live `query`). **RED:** blanking the anchor on both write
+> paths (`resultsQuery = trimmed` → `""`) fails exactly the 4 new tests (`14 tests completed, 4 failed`),
+> the 10 pre-existing tests stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `36.0.0` + `platform-tools`;
+> `compileSdk = 37` resolved via a symlinked `android-37 → android-37.0`. `local.properties` kept out of
+> the diff (`git check-ignore` confirmed).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (973 actionable tasks, 0 failed). Reviewer **PASS** (diff `apps/android`
+> only — 1 VM + 1 screen + 1 test + tracking docs, no `local.properties`; SDK purity — the DECISION
+> (which term produced these results) is orchestration in the `:feature` ViewModel, the pure highlight
+> SSOT is untouched; SSOT — one `resultsQuery`, `highlightedSegments` reused; instant-app — no extra
+> fetch, the snapshot rides the existing state update; UDF — immutable `StateFlow`; no tautological
+> tests; no coverage floor lowered — a correctness fix with 4 behavioural tests, RED-proven).
+>
+> **Next**: the sibling result rows — highlight the Conversations tab (title) and Users tab
+> (display-name/`@username`) with the same `highlightedSegments` splitter against `resultsQuery` (an
+> Android surpass; iOS highlights only the message row). Then the deeper §M notification twin (collapse
+> `NotificationBanner*` LIVE and `NotificationToast*` orphan into one) remains the biggest open
+> cross-cutting item, and the local-FTS leg of §N. Read the chosen box's iOS audit part read-only before
+> branching.
+
 > On 2026-08-31 **the global-search MESSAGE result row now highlights the query in its content preview —
 > iOS `highlightedText` parity — off a new pure `:core:model` splitter that reuses the existing
 > `highlightRanges` SSOT rather than re-deriving it** (slice `global-search-result-highlight`,
