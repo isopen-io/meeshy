@@ -56,7 +56,29 @@ export const PrivacyPreferenceSchema = z.object({
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),
   autoEncryptNewConversations: z.boolean().default(false),
   showEncryptionStatus: z.boolean().default(true),
-  warnOnUnencrypted: z.boolean().default(false)
+  warnOnUnencrypted: z.boolean().default(false),
+
+  /**
+   * Le canal de COMPATIBILITÉ ASCENDANTE, déclaré (#4589).
+   *
+   * Les sept blocs de préférences du SDK iOS le portent
+   * (`PreferenceModels.swift`), et iOS encode le bloc ENTIER comme corps de
+   * requête (`UserPreferencesManager`, `try encoder.encode(privacy)`). Il
+   * arrivait donc sur chaque écriture, et le mode *strip* de Zod le retirait :
+   * mesuré sur staging le 2026-08-31, un `PATCH {"extras":{"sonde":"4589"}}`
+   * rendait `success: true` et la relecture ne rendait RIEN. Le canal de
+   * compatibilité ascendante d'iOS n'a jamais fonctionné.
+   *
+   * Le déclarer a deux effets, et le second est celui qui compte : il rend au
+   * client son aller-retour, et il permet à la frontière de REFUSER tout le
+   * reste (`.strict()` dans `submittedFrom`) sans casser les trois clients.
+   * Une porte de sortie nommée est ce qui autorise à fermer les autres.
+   *
+   * Facultatif et SANS défaut : il ne doit apparaître dans un document servi
+   * que si quelque chose y a été stocké — sinon les sept catégories gagneraient
+   * un `extras: {}` que ni le web ni Android n'attendent.
+   */
+  extras: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type PrivacyPreference = z.infer<typeof PrivacyPreferenceSchema>;

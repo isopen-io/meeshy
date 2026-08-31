@@ -1199,6 +1199,41 @@ describe('MessageReadStatusService', () => {
     // curseur AVANCÉ sur `msgForeign` — jamais un « rien n'a été écrit », ce
     // qu'un test qui ne regarderait que l'ABSENCE d'écriture ne pourrait pas
     // distinguer d'un défaut de câblage du témoin lui-même.
+    // Le champ est OPTIONNEL, et la lecture qui le vérifie doit l'être aussi.
+    //
+    // Mesuré sur staging le 2026-08-31 (build `60bc4c2`) :
+    // `POST /conversations/:id/receipts {"type":"read","messageIds":[…]}` sans
+    // `caughtUpToMessageId` rendait « Erreur lors de l'écriture de l'accusé »,
+    // et le journal du conteneur donnait la cause —
+    // `prisma.message.findUnique({ where: { id: undefined } })`, refusé par
+    // Prisma. La garde anti-usurpation ci-dessus partait sur CHAQUE appel
+    // portant `messageIds`, alors que son propre commentaire annonce qu'elle
+    // ne coûte une lecture « que quand ce champ optionnel est fourni » : le
+    // `if` que la phrase décrit n'existait pas.
+    //
+    // Pourquoi aucun témoin ne l'avait vu : `mockPrisma.message.findUnique`
+    // est un `jest.fn()` nu, qui REND quel que soit le `where`. **Un double
+    // qui ignore le `where` ne peut pas faire tomber une requête invalide** —
+    // il répond là où le vrai Prisma lève. Ce témoin mesure donc l'APPEL, pas
+    // la réponse : la seule forme qui distingue « la lecture n'a pas lieu »
+    // de « la lecture a lieu et le double la couvre ».
+    it("n'interroge PAS Prisma quand `caughtUpToMessageId` est absent", async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+      mockPrisma.message.findUnique.mockClear();
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgSeen, {
+        messageIds: [msgSeen],
+      });
+
+      const appelsSansId = mockPrisma.message.findUnique.mock.calls.filter(
+        (appel: any[]) => appel[0]?.where?.id === undefined
+      );
+      expect(appelsSansId).toEqual([]);
+    });
+
     it("rattrapage : refuse un caughtUpToMessageId d'une AUTRE conversation", async () => {
       const msgSeen = '507f1f77bcf86cd799439021';
       const msgForeign = '507f1f77bcf86cd799439098';

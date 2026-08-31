@@ -941,7 +941,7 @@ struct MessageViewsDetailView: View {
         defer { isLoadingReadStatus = false }
         do {
             let response: APIResponse<ReadStatusData> = try await APIClient.shared.request(
-                endpoint: "/messages/\(message.id)/read-status"
+                MessagesEndpoint.byMessageIdReadStatus(messageId: message.id)
             )
             if response.success {
                 readStatusData = response.data

@@ -134,7 +134,7 @@ final class NewConversationViewModel: ObservableObject {
                 URLQueryItem(name: "offset", value: "0")
             ]
             let response: APIResponse<[SearchedUser]> = try await api.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 method: "GET",
                 body: nil,
                 queryItems: queryItems
@@ -258,7 +258,7 @@ final class NewConversationViewModel: ObservableObject {
 
         do {
             let response: APIResponse<APIConversation> = try await api.post(
-                endpoint: "/conversations",
+                ConversationsEndpoint.root,
                 body: body
             )
             let userId = currentUserIdProvider() ?? ""

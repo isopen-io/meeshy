@@ -866,8 +866,13 @@ struct ProfileView: View {
                 let payload = try JSONEncoder().encode(request)
                 // The gateway route is `PATCH /users/me` (services/gateway/src/routes/users/profile.ts) —
                 // `/users/me/profile` does not exist and 404s forever on replay.
+                // `SettingsAction` PERSISTE ce chemin pour le rejouer plus tard :
+                // il lui faut une chaîne, pas une adresse typée. Elle est DÉRIVÉE
+                // du catalogue plutôt qu'écrite — sinon ce site redeviendrait le
+                // seul endroit du dépôt où un chemin s'écrit à la main, et le
+                // commentaire ci-dessus dit ce que ça coûte.
                 let action = SettingsAction(
-                    endpoint: "/users/me",
+                    endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me),
                     httpMethod: "PATCH",
                     payload: payload
                 )

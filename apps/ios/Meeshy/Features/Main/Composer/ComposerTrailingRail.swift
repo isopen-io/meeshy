@@ -173,7 +173,11 @@ struct ComposerTrailingRail: View {
                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
+                // `.title3`, comme les deux contrôleurs voisins de la même
+                // colonne : une taille figée ne scalerait pas avec le Dynamic
+                // Type, et l'historique n'a aucune raison d'être le seul bouton
+                // du rail à ne pas grossir avec les autres.
+                .font(.title3)
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)

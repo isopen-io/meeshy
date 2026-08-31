@@ -36,7 +36,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 
     public func reportUser(userId: String, reportType: String, reason: String? = nil) async throws {
@@ -46,7 +46,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 
     public func reportPost(postId: String, reportType: String, reason: String? = nil) async throws {
@@ -56,7 +56,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 
     public func reportStory(storyId: String, reportType: String, reason: String? = nil) async throws {
@@ -66,7 +66,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 
     public func reportConversation(conversationId: String, reportType: String, reason: String? = nil) async throws {
@@ -76,7 +76,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reportType: reportType,
             reason: reason
         )
-        let _: APIResponse<ReportResponseData> = try await api.post(endpoint: "/reports", body: body)
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
     }
 }
 

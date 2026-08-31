@@ -231,7 +231,7 @@ struct PostDetailView: View {
     private func postLikeViaREST(like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -253,7 +253,7 @@ struct PostDetailView: View {
             let ok: Bool = await {
                 do {
                     let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        endpoint: "/posts/\(postId)/bookmark",
+                        PostsEndpoint.byPostIdBookmark(postId: postId),
                         method: wasBookmarked ? "DELETE" : "POST"
                     )
                     return true

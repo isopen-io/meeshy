@@ -1731,3 +1731,67 @@ describe('DELETE /posts/:id/like — emoji désigné', () => {
     await app.close();
   });
 });
+
+// #4150 — `duration` est borné À LA FRONTIÈRE, plus seulement en aval.
+//
+// Il était lu en `(request.body as any) ?? {}` : aucun schéma, aucune borne, et
+// le seul `any` du module. La valeur était bien assainie par `recordView`
+// (ramenée dans [0, 300 000] ms) — mais une borne posée chez l'APPELÉ n'est pas
+// une borne : elle vaut pour cet appelé, et le jour où un second consommateur
+// lit le champ, il hérite d'un entier libre.
+describe('#4150 — POST /posts/:id/view borne `duration` avant le handler', () => {
+  it('refuse une durée hors bornes', async () => {
+    const app = await buildApp({ withNotifications: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/view`,
+      payload: { duration: 999_999_999 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  // MESURÉ, et contraire à ce que ce témoin attendait d'abord : une clé non
+  // déclarée est RETIRÉE, pas refusée — et le 200 ci-dessous n'est donc pas un
+  // trou de ce lot mais le comportement du CADRE.
+  //
+  // Fastify compile ses schémas avec `removeAdditional: true` par défaut :
+  // `additionalProperties: false` y signifie « retire », jamais « refuse ».
+  // C'est la même famille de silence que le mode *strip* de Zod fermé par
+  // #4589 sur les préférences, un étage plus bas — et elle ne se ferme pas
+  // route par route : il faudrait changer l'option du serveur, ce qui touche
+  // toute la surface et demande d'en mesurer les appelants d'abord.
+  //
+  // Le témoin garde donc ce qui est vrai ET ce qui compte : la clé parasite
+  // n'atteint jamais le service.
+  it('retire une clé non déclarée sans la faire atteindre le service (comportement du cadre)', async () => {
+    const app = await buildApp({ withNotifications: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/view`,
+      payload: { duration: 1000, sneaky: 'x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // `recordView` ne reçoit QUE la durée — la troisième position de l'appel.
+    const appels = mockRecordView.mock.calls;
+    expect(appels[appels.length - 1][2]).toBe(1000);
+    await app.close();
+  });
+
+  it('accepte une durée valide — la rigueur ne referme pas la porte', async () => {
+    const app = await buildApp({ withNotifications: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/view`,
+      payload: { duration: 1500 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

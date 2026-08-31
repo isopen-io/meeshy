@@ -63,3 +63,35 @@ public extension SignalEndpoint {
     /// l'appelant attend son repli en clair.
     var retryPolicy: MeeshyEndpointRetryPolicy { .never }
 }
+
+
+// MARK: - Une catégorie de préférences DÉSIGNE son adresse (#4282)
+
+public extension PreferenceCategory {
+    /// L'adresse servant CETTE catégorie.
+    ///
+    /// Le serveur sert sept routes LITTÉRALES (`/me/preferences/audio`,
+    /// `…/video`) et non une route à paramètre. Les sites d'appel, eux,
+    /// interpolaient `rawValue` : `"/me/preferences/\(category.rawValue)"`.
+    ///
+    /// Les deux formes se valent tant que `rawValue` et le dernier segment
+    /// coïncident — et rien ne le garantissait. Renommer un cas de
+    /// l'énumération (ou en ajouter un que le serveur ne sert pas) produisait
+    /// un 404 que ni le compilateur ni l'audit d'appariement ne pouvaient voir :
+    /// un segment interpolé est un JOKER, il apparie n'importe quelle route de
+    /// même forme.
+    ///
+    /// Ce `switch` est exhaustif SANS repli : un huitième cas ne compilera pas
+    /// tant que quelqu'un n'aura pas décidé quelle adresse il désigne.
+    var endpoint: MeEndpoint {
+        switch self {
+        case .privacy: return .preferencesPrivacy
+        case .audio: return .preferencesAudio
+        case .message: return .preferencesMessage
+        case .notification: return .preferencesNotification
+        case .video: return .preferencesVideo
+        case .document: return .preferencesDocument
+        case .application: return .preferencesApplication
+        }
+    }
+}

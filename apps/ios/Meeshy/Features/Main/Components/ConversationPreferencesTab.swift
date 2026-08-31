@@ -494,7 +494,7 @@ struct ConversationPreferencesTab: View {
 
         do {
             let response: PrefsUserSearchResponse = try await APIClient.shared.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 queryItems: [
                     URLQueryItem(name: "q", value: query),
                     URLQueryItem(name: "limit", value: "10"),

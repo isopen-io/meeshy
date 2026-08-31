@@ -1,6 +1,21 @@
 import XCTest
 @testable import MeeshySDK
 
+// #4282 — le filtre `role=admin,moderator` a quitté le CHEMIN pour les
+// `queryItems`, et ces témoins l'ont suivi.
+//
+// Ils épinglaient `"/communities/mine?role=admin,moderator"` : une adresse ET
+// son filtre dans la même chaîne. Le catalogue généré ne porte que des chemins,
+// et c'est la bonne frontière — le serveur déclare UNE route `/communities/mine`
+// dont `role` est un paramètre, pas une route par valeur de filtre. Tant que la
+// requête vivait dans le chemin, aucun appariement au manifeste ne pouvait
+// reconnaître cette adresse : c'est ce qui la faisait figurer parmi les
+// « chemins sans route » de l'audit.
+//
+// Les témoins vérifient désormais les DEUX moitiés séparément — l'adresse, et
+// le filtre — ce qui est plus fort que l'ancienne égalité de chaîne : une
+// inversion d'ordre des paramètres passait, un filtre perdu aussi.
+
 final class CommunityLinkServiceTests: XCTestCase {
 
     private var mock: MockAPIClient!
@@ -42,12 +57,13 @@ final class CommunityLinkServiceTests: XCTestCase {
     func test_listCommunityLinks_callsCorrectEndpoint() async throws {
         let communities = [makeMiniCommunity()]
         let response = APIResponse<[APICommunityMini]>(success: true, data: communities, error: nil)
-        mock.stub("/communities/mine?role=admin,moderator", result: response)
+        mock.stub("/communities/mine", result: response)
 
         let result = try await service.listCommunityLinks()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/communities/mine?role=admin,moderator")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/communities/mine")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "role", value: "admin,moderator")])
         XCTAssertEqual(mock.lastRequest?.method, "GET")
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].name, "My Community")
@@ -56,7 +72,7 @@ final class CommunityLinkServiceTests: XCTestCase {
     func test_listCommunityLinks_mapsFieldsCorrectly() async throws {
         let communities = [makeMiniCommunity(id: "c42", name: "Mapped", identifier: "mapped-id", memberCount: 10, isActive: false)]
         let response = APIResponse<[APICommunityMini]>(success: true, data: communities, error: nil)
-        mock.stub("/communities/mine?role=admin,moderator", result: response)
+        mock.stub("/communities/mine", result: response)
 
         let result = try await service.listCommunityLinks()
 
@@ -70,7 +86,7 @@ final class CommunityLinkServiceTests: XCTestCase {
     func test_listCommunityLinks_nilMemberCountDefaultsToZero() async throws {
         let communities = [makeMiniCommunity(memberCount: nil)]
         let response = APIResponse<[APICommunityMini]>(success: true, data: communities, error: nil)
-        mock.stub("/communities/mine?role=admin,moderator", result: response)
+        mock.stub("/communities/mine", result: response)
 
         let result = try await service.listCommunityLinks()
 
@@ -79,7 +95,7 @@ final class CommunityLinkServiceTests: XCTestCase {
 
     func test_listCommunityLinks_returnsEmptyArray() async throws {
         let response = APIResponse<[APICommunityMini]>(success: true, data: [], error: nil)
-        mock.stub("/communities/mine?role=admin,moderator", result: response)
+        mock.stub("/communities/mine", result: response)
 
         let result = try await service.listCommunityLinks()
 

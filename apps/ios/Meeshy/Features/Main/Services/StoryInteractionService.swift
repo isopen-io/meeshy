@@ -8,7 +8,7 @@ import os
 ///
 /// ```swift
 /// let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-///     endpoint: "/posts/\(story.id)/translate",
+///     PostsEndpoint.byPostIdTranslate(postId: story.id),
 ///     body: ["targetLanguage": lang.id]
 /// )
 /// ```
@@ -49,7 +49,7 @@ final class StoryInteractionService {
         let body = StoryTranslationRequestBody(targetLanguage: targetLanguage, force: force ? true : nil)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
-                endpoint: "/posts/\(storyId)/translate",
+                PostsEndpoint.byPostIdTranslate(postId: storyId),
                 body: body
             )
         } catch {
@@ -96,7 +96,7 @@ final class StoryInteractionService {
             // la réconciliation de la ligne optimiste de l'émetteur.
             if let clientMutationId, !clientMutationId.isEmpty {
                 let _: APIResponse<AnyCodable> = try await api.requestWithHeaders(
-                    endpoint: "/posts/\(storyId)/comments",
+                    PostsEndpoint.byPostIdComments(postId: storyId),
                     method: "POST",
                     body: try JSONEncoder().encode(body),
                     queryItems: nil,
@@ -104,7 +104,7 @@ final class StoryInteractionService {
                 )
             } else {
                 let _: APIResponse<AnyCodable> = try await api.post(
-                    endpoint: "/posts/\(storyId)/comments",
+                    PostsEndpoint.byPostIdComments(postId: storyId),
                     body: body
                 )
             }
@@ -125,7 +125,7 @@ final class StoryInteractionService {
     func loadViewers(storyId: String) async -> [StoryViewerSnapshot]? {
         do {
             let response: APIResponse<StoryViewersWireResponse> = try await api.request(
-                endpoint: "/posts/\(storyId)/interactions",
+                PostsEndpoint.byPostIdInteractions(postId: storyId),
                 method: "GET",
                 body: nil,
                 queryItems: nil
@@ -159,7 +159,7 @@ final class StoryInteractionService {
         let body = ReactionRequest(emoji: emoji)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
-                endpoint: "/posts/\(storyId)/like",
+                PostsEndpoint.byPostIdLike(postId: storyId),
                 body: body
             )
         } catch {

@@ -82,23 +82,25 @@ final class TrackingLinkServiceTests: XCTestCase {
 
     func test_listLinks_success_returnsLinks() async throws {
         let link = makeTrackingLink()
-        mock.stub("/tracking-links/user/me?offset=0&limit=50", result: makeLinksResponse([link]))
+        mock.stub("/tracking-links/user/me", result: makeLinksResponse([link]))
 
         let result = try await service.listLinks()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/user/me?offset=0&limit=50")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/user/me")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
         XCTAssertEqual(mock.lastRequest?.method, "GET")
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].token, "abc123")
     }
 
     func test_listLinks_customPagination_includesParams() async throws {
-        mock.stub("/tracking-links/user/me?offset=10&limit=25", result: makeLinksResponse([]))
+        mock.stub("/tracking-links/user/me", result: makeLinksResponse([]))
 
         let result = try await service.listLinks(offset: 10, limit: 25)
 
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/user/me?offset=10&limit=25")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/user/me")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "offset", value: "10"), URLQueryItem(name: "limit", value: "25")])
         XCTAssertTrue(result.isEmpty)
     }
 
@@ -139,12 +141,13 @@ final class TrackingLinkServiceTests: XCTestCase {
     func test_fetchClicks_success_callsCorrectEndpoint() async throws {
         let detail = makeDetail()
         let response = APIResponse<TrackingLinkDetail>(success: true, data: detail, error: nil)
-        mock.stub("/tracking-links/abc123/clicks?offset=0&limit=50", result: response)
+        mock.stub("/tracking-links/abc123/clicks", result: response)
 
         let result = try await service.fetchClicks(token: "abc123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/abc123/clicks?offset=0&limit=50")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/abc123/clicks")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
         XCTAssertEqual(result.link.id, "tl-1")
     }
 

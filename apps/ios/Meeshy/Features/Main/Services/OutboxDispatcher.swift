@@ -141,7 +141,7 @@ struct OutboxDispatcher: OutboxDispatching {
         // comme un échec 4xx non transitoire, et l'enregistrement mourait en
         // `.exhausted` alors que le serveur avait écrit ce qu'il fallait.
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
             method: "PUT",
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil,
@@ -169,7 +169,7 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
             method: "DELETE",
             body: nil,
             queryItems: nil,
@@ -192,7 +192,7 @@ struct OutboxDispatcher: OutboxDispatching {
             // rend la migration urgente : le rejeu hors ligne rejoue des
             // mutations enregistrées AVANT la mise à jour, et une bascule
             // partielle les enverrait sur une famille éteinte.
-            endpoint: "/directory/friend-requests",
+            DirectoryEndpoint.friendRequests,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -217,7 +217,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let status = payload.action == .accept ? "accept" : "reject"
         let body = RespondBody(action: status)
         let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/friend-requests/\(payload.friendRequestId)",
+            DirectoryEndpoint.friendRequestsById(id: payload.friendRequestId),
             method: "PATCH",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -239,7 +239,7 @@ struct OutboxDispatcher: OutboxDispatching {
 
         if let avatarUrl = payload.avatarUrl {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/users/me/avatar",
+                UsersEndpoint.meAvatar,
                 method: "PATCH",
                 body: try JSONEncoder().encode(UpdateProfileAvatarBody(avatar: avatarUrl)),
                 queryItems: nil,
@@ -262,7 +262,7 @@ struct OutboxDispatcher: OutboxDispatching {
         // result (caller refreshes via AuthManager.checkExistingSession()
         // after enqueue), so decode the envelope shape loosely as a dictionary.
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/me",
+            UsersEndpoint.me,
             method: "PATCH",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -289,7 +289,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
         do {
             let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/posts/\(payload.storyId)/view",
+                PostsEndpoint.byPostIdView(postId: payload.storyId),
                 method: "POST",
                 body: nil,
                 queryItems: nil
@@ -319,7 +319,7 @@ struct OutboxDispatcher: OutboxDispatching {
         )
         do {
             let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/attachments/\(payload.attachmentId)/status",
+                AttachmentsEndpoint.byAttachmentIdStatus(attachmentId: payload.attachmentId),
                 body: body
             )
             logger.info("reportAttachmentStatus dispatched att=\(payload.attachmentId, privacy: .public) action=\(payload.action, privacy: .public)")
@@ -361,7 +361,7 @@ struct OutboxDispatcher: OutboxDispatching {
             // an otherwise-successful 2xx — the read receipt looked like a
             // failure and was retried until exhausted for nothing.
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(payload.conversationId)/mark-read",
+                ConversationsEndpoint.byIdMarkRead(id: payload.conversationId),
                 method: "POST",
                 body: body,
                 queryItems: nil
@@ -394,7 +394,7 @@ struct OutboxDispatcher: OutboxDispatching {
             participantIds: payload.participantIds
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -430,7 +430,7 @@ struct OutboxDispatcher: OutboxDispatching {
         )
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/conversations/\(payload.conversationId)",
+                ConversationsEndpoint.byId(id: payload.conversationId),
                 method: "PUT",
                 body: try JSONEncoder().encode(body),
                 queryItems: nil,
@@ -449,8 +449,19 @@ struct OutboxDispatcher: OutboxDispatching {
     /// by the caller at enqueue time.
     private func dispatchUpdateSettings(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UpdateSettingsPayload.self)
+        // La catégorie arrive d'un enregistrement PERSISTÉ : elle peut porter
+        // n'importe quelle chaîne, y compris celle d'une version antérieure de
+        // l'app. L'interpoler telle quelle produisait un 404 SILENCIEUX au
+        // rejeu — l'action était consommée, la préférence jamais écrite.
+        // La convertir fait de ce cas une erreur qui se voit.
+        guard let category = PreferenceCategory(rawValue: payload.category) else {
+            throw MeeshyError.server(
+                statusCode: 0,
+                message: "Catégorie de préférences inconnue « \(payload.category) » — "
+                    + "aucune adresse ne la sert, l'action ne peut pas être rejouée.")
+        }
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/me/preferences/\(payload.category)",
+            category.endpoint,
             method: "PATCH",
             body: payload.body,
             queryItems: nil,
@@ -551,7 +562,7 @@ struct OutboxDispatcher: OutboxDispatching {
             mobileTranscription: payload.mobileTranscription
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts",
+            PostsEndpoint.root,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -574,7 +585,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let body = try ToggleLikePostBody.encoded(for: payload)
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(payload.postId)/like",
+                PostsEndpoint.byPostIdLike(postId: payload.postId),
                 method: method,
                 body: body,
                 queryItems: nil,
@@ -618,7 +629,7 @@ struct OutboxDispatcher: OutboxDispatching {
             visibility: payload.visibility
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts/\(payload.postId)/repost",
+            PostsEndpoint.byPostIdRepost(postId: payload.postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -658,7 +669,7 @@ struct OutboxDispatcher: OutboxDispatching {
             effectFlags: payload.effectFlags
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts/\(payload.postId)/comments",
+            PostsEndpoint.byPostIdComments(postId: payload.postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -687,7 +698,7 @@ struct OutboxDispatcher: OutboxDispatching {
         }
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(postId)/comments/\(payload.commentId)",
+                PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: payload.commentId),
                 method: "DELETE",
                 body: nil,
                 queryItems: nil,
@@ -715,7 +726,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let method = payload.liked ? "POST" : "DELETE"
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(postId)/comments/\(payload.commentId)/like",
+                PostsEndpoint.byPostIdCommentsByCommentIdLike(postId: postId, commentId: payload.commentId),
                 method: method,
                 body: nil,
                 queryItems: nil,

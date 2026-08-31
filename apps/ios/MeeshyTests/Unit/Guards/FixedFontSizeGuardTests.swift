@@ -157,10 +157,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
-        // **Le socle depuis le 2026-08-30** : la capsule annuler/rétablir a
-        // suivi les deux boutons descendus de la barre haute, et garde leur
-        // police figée — même cadre fixe, même raison (voir `totalCeiling`).
-        "Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -320,7 +316,16 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// pagination du carrousel (14 pt dans un cercle fixe de 34). Le second
     /// site figé du même fichier — le glyphe de lecture d'une vidéo — n'y
     /// participe pas : il a été DÉPLACÉ depuis `FeedPostCard+Media.swift`.
-    private static let totalCeiling = 248
+    /// **247 depuis #4586.** Un cran de MOINS : la capsule annuler/rétablir a
+    /// quitté le socle pour le rail des objets, et sa police figée n'a pas
+    /// suivi — le rail emploie `.title3`, comme ses deux contrôleurs voisins.
+    /// `MeeshyComposerHost+Socle.swift` sort donc de `bearingFiles` : il ne
+    /// porte plus aucun site.
+    ///
+    /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
+    /// > cliquet et devient un plafond : il ne rougirait plus que sur une
+    /// > régression plus grosse que l'écart accumulé.
+    private static let totalCeiling = 247
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
