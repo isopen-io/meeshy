@@ -44,17 +44,17 @@ public final class StatusService: StatusServiceProviding, @unchecked Sendable {
 
     public func create(moodEmoji: String, content: String?, originalLanguage: String? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async throws -> APIPost {
         let body = CreatePostRequest(content: content ?? "", type: "STATUS", visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, originalLanguage: originalLanguage, repostOfId: repostOfId, mentions: mentions)
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
+        let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.root, body: body)
         return response.data
     }
 
     public func delete(statusId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(statusId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: statusId))
     }
 
     public func react(statusId: String, emoji: String) async throws {
         let body = ["emoji": emoji]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(statusId)/like", method: "POST", body: bodyData)
+        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: statusId), method: "POST", body: bodyData)
     }
 }

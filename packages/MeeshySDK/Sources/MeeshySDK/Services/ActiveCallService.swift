@@ -22,7 +22,7 @@ public final class ActiveCallService: ActiveCallServiceProviding, @unchecked Sen
 
     public func activeCall(conversationId: String) async throws -> ActiveCallSession? {
         let response: APIResponse<ActiveCallSession?> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/active-call"
+            ConversationsEndpoint.byConversationIdActiveCall(conversationId: conversationId)
         )
         return response.data
     }

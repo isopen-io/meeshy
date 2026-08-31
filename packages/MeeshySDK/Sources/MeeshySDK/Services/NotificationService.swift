@@ -16,24 +16,24 @@ public final class NotificationService: @unchecked Sendable {
         if unreadOnly {
             queryItems.append(URLQueryItem(name: "unreadOnly", value: "true"))
         }
-        return try await api.request(endpoint: "/notifications", queryItems: queryItems)
+        return try await api.request(NotificationsEndpoint.root, queryItems: queryItems)
     }
 
     public func unreadCount() async throws -> Int {
-        let response: UnreadCountResponse = try await api.request(endpoint: "/notifications/unread-count")
+        let response: UnreadCountResponse = try await api.request(NotificationsEndpoint.unreadCount)
         return response.count
     }
 
     public func markAsRead(notificationId: String) async throws {
         let _: APIResponse<APINotification> = try await api.request(
-            endpoint: "/notifications/\(notificationId)/read",
+            NotificationsEndpoint.byIdRead(id: notificationId),
             method: "POST"
         )
     }
 
     public func markAllAsRead() async throws -> Int {
         let response: MarkReadResponse = try await api.request(
-            endpoint: "/notifications/read-all",
+            NotificationsEndpoint.readAll,
             method: "POST"
         )
         return response.count ?? 0
@@ -46,7 +46,7 @@ public final class NotificationService: @unchecked Sendable {
     @discardableResult
     public func markConversationRead(conversationId: String) async throws -> Int {
         let response: MarkReadResponse = try await api.request(
-            endpoint: "/notifications/conversation/\(conversationId)/read",
+            NotificationsEndpoint.conversationByConversationIdRead(conversationId: conversationId),
             method: "POST"
         )
         return response.count ?? 0
@@ -60,7 +60,7 @@ public final class NotificationService: @unchecked Sendable {
     @discardableResult
     public func markPostRead(postId: String) async throws -> Int {
         let response: MarkReadResponse = try await api.request(
-            endpoint: "/notifications/post/\(postId)/read",
+            NotificationsEndpoint.postByPostIdRead(postId: postId),
             method: "POST"
         )
         return response.count ?? 0
@@ -75,7 +75,7 @@ public final class NotificationService: @unchecked Sendable {
         struct Body: Encodable { let types: [String] }
         let bodyData = try JSONEncoder().encode(Body(types: types))
         let response: MarkReadResponse = try await api.request(
-            endpoint: "/notifications/read-by-types",
+            NotificationsEndpoint.readByTypes,
             method: "POST",
             body: bodyData
         )
@@ -83,6 +83,6 @@ public final class NotificationService: @unchecked Sendable {
     }
 
     public func delete(notificationId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/notifications/\(notificationId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(NotificationsEndpoint.byId(id: notificationId))
     }
 }

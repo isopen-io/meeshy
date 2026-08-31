@@ -40,7 +40,7 @@ public final class TrackedLinkService: TrackedLinkResolving, @unchecked Sendable
 
     public func resolve(token: String) async throws -> ResolvedTrackedLink {
         let response: APIResponse<ResolvedTrackedLink> = try await api.request(
-            endpoint: "/tracking-links/\(token)/resolve"
+            TrackingLinksEndpoint.byTokenResolve(token: token)
         )
         return response.data
     }
@@ -49,7 +49,7 @@ public final class TrackedLinkService: TrackedLinkResolving, @unchecked Sendable
         struct ClickBody: Encodable { let socialSource: String }
         struct ClickAck: Decodable {}
         let _: APIResponse<ClickAck>? = try? await api.post(
-            endpoint: "/tracking-links/\(token)/click",
+            TrackingLinksEndpoint.byTokenClick(token: token),
             body: ClickBody(socialSource: "ios-app")
         )
     }

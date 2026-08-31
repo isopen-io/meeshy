@@ -43,7 +43,7 @@ public final class ContactDirectoryService: ContactDirectoryServiceProviding, @u
         // `PUT` remplace, `PATCH` fusionne — et le corps ne porte plus de
         // `mode`. Deux requêtes dont l'une PURGE ne doivent pas se ressembler.
         let response: APIResponse<DirectorySyncResult> = try await api.request(
-            endpoint: "/directory/contacts",
+            DirectoryEndpoint.contacts,
             method: request.mode == .replace ? "PUT" : "PATCH",
             body: try JSONEncoder().encode(request),
             queryItems: nil
@@ -81,7 +81,7 @@ public final class ContactDirectoryService: ContactDirectoryServiceProviding, @u
             items.append(URLQueryItem(name: "updatedSince", value: ISO8601DateFormatter().string(from: updatedSince)))
         }
         return try await api.request(
-            endpoint: "/directory/contacts",
+            DirectoryEndpoint.contacts,
             method: "GET",
             body: nil,
             queryItems: items
@@ -90,7 +90,7 @@ public final class ContactDirectoryService: ContactDirectoryServiceProviding, @u
 
     public func clear() async throws -> DirectoryClearResult {
         let response: APIResponse<DirectoryClearResult> = try await api.request(
-            endpoint: "/directory/contacts",
+            DirectoryEndpoint.contacts,
             method: "DELETE",
             body: nil,
             queryItems: nil

@@ -32,13 +32,13 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     }
 
     public func search(query: String, limit: Int = 20, offset: Int = 0) async throws -> OffsetPaginatedAPIResponse<[UserSearchResult]> {
-        try await api.offsetPaginatedRequest(endpoint: "/users/search", offset: offset, limit: limit)
+        try await api.offsetPaginatedRequest(UsersEndpoint.search, offset: offset, limit: limit)
         // Note: the query param needs to be added manually
     }
 
     public func searchUsers(query: String, limit: Int = 20, offset: Int = 0) async throws -> [UserSearchResult] {
         let response: APIResponse<[UserSearchResult]> = try await api.request(
-            endpoint: "/users/search",
+            UsersEndpoint.search,
             queryItems: [
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "limit", value: "\(limit)"),
@@ -49,14 +49,14 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     }
 
     public func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser {
-        let response: APIResponse<UpdateProfileResponse> = try await api.patch(endpoint: "/users/me", body: request)
+        let response: APIResponse<UpdateProfileResponse> = try await api.patch(UsersEndpoint.me, body: request)
         return response.data.user
     }
 
     public func updateAvatar(url: String) async throws -> MeeshyUser {
         struct Body: Encodable { let avatar: String }
         let response: APIResponse<UpdateProfileResponse> = try await api.patch(
-            endpoint: "/users/me/avatar", body: Body(avatar: url)
+            UsersEndpoint.meAvatar, body: Body(avatar: url)
         )
         return response.data.user
     }
@@ -64,7 +64,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     public func updateBanner(url: String) async throws -> MeeshyUser {
         struct Body: Encodable { let banner: String }
         let response: APIResponse<UpdateProfileResponse> = try await api.patch(
-            endpoint: "/users/me/banner", body: Body(banner: url)
+            UsersEndpoint.meBanner, body: Body(banner: url)
         )
         return response.data.user
     }
@@ -142,7 +142,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
             ? nil
             : [URLQueryItem(name: "expand", value: expand.map(\.rawValue).sorted().joined(separator: ","))]
         let response: APIResponse<PublicProfile> = try await api.request(
-            endpoint: "/directory/people/\(encoded)",
+            DirectoryEndpoint.peopleByHandle(handle: encoded),
             method: "GET",
             body: nil,
             queryItems: items
@@ -157,7 +157,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     public func getProfileByEmail(_ email: String) async throws -> MeeshyUser {
         let encoded = email.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? email
         let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/users/email/\(encoded)"
+            UsersEndpoint.emailByEmail(email: encoded)
         )
         return response.data
     }
@@ -173,7 +173,7 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
         let digits = phone.replacingOccurrences(of: "+", with: "")
         let encoded = digits.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? digits
         let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/users/phone/\(encoded)"
+            UsersEndpoint.phoneByPhone(phone: encoded)
         )
         return response.data
     }
@@ -182,14 +182,14 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
 
     public func changeEmail(_ request: ChangeEmailRequest) async throws -> ChangeEmailResponse {
         let response: APIResponse<ChangeEmailResponse> = try await api.post(
-            endpoint: "/users/me/change-email", body: request
+            UsersEndpoint.meChangeEmail, body: request
         )
         return response.data
     }
 
     public func verifyEmailChange(_ request: VerifyEmailChangeRequest) async throws -> VerifyEmailChangeResponse {
         let response: APIResponse<VerifyEmailChangeResponse> = try await api.post(
-            endpoint: "/users/me/verify-email-change", body: request
+            UsersEndpoint.meVerifyEmailChange, body: request
         )
         return response.data
     }
@@ -197,21 +197,21 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
     public func resendEmailChangeVerification() async throws -> ChangeEmailResponse {
         struct Empty: Encodable {}
         let response: APIResponse<ChangeEmailResponse> = try await api.post(
-            endpoint: "/users/me/resend-email-change-verification", body: Empty()
+            UsersEndpoint.meResendEmailChangeVerification, body: Empty()
         )
         return response.data
     }
 
     public func changePhone(_ request: ChangePhoneRequest) async throws -> ChangePhoneResponse {
         let response: APIResponse<ChangePhoneResponse> = try await api.post(
-            endpoint: "/users/me/change-phone", body: request
+            UsersEndpoint.meChangePhone, body: request
         )
         return response.data
     }
 
     public func verifyPhoneChange(_ request: VerifyPhoneChangeRequest) async throws -> VerifyPhoneChangeResponse {
         let response: APIResponse<VerifyPhoneChangeResponse> = try await api.post(
-            endpoint: "/users/me/verify-phone-change", body: request
+            UsersEndpoint.meVerifyPhoneChange, body: request
         )
         return response.data
     }

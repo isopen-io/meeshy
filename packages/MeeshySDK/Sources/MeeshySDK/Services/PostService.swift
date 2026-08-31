@@ -415,11 +415,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.feed, cursor: cursor, limit: limit)
     }
 
     public func getPostsByHashtag(tag: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/hashtag/\(tag)", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.hashtagByTag(tag: tag), cursor: cursor, limit: limit)
     }
 
     public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
@@ -430,7 +430,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
         if let seedReelId { queryItems.append(URLQueryItem(name: "seed", value: seedReelId)) }
-        return try await api.request(endpoint: "/posts/feed/reels", queryItems: queryItems)
+        return try await api.request(PostsEndpoint.feedReels, queryItems: queryItems)
     }
 
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
@@ -490,24 +490,24 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     ///   remise, le serveur seul quantifie.
     public func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
         let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, allowSoundExtraction: allowSoundExtraction, mentions: mentions, mediaAlt: mediaAlt, mediaCaption: mediaCaption, discoverabilityPrecision: discoverabilityPrecision)
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
+        let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.root, body: body)
         return response.data
     }
 
     public func delete(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: postId))
     }
 
     public func like(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/like", method: "POST")
+        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: postId), method: "POST")
     }
 
     public func unlike(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/like")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdLike(postId: postId))
     }
 
     public func bookmark(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/bookmark", method: "POST")
+        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
     }
 
     public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
@@ -540,11 +540,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
                                         attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage, location: location)
         guard let clientMutationId, !clientMutationId.isEmpty else {
-            let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+            let response: APIResponse<APIPostComment> = try await api.post(PostsEndpoint.byPostIdComments(postId: postId), body: body)
             return response.data
         }
         let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
-            endpoint: "/posts/\(postId)/comments",
+            PostsEndpoint.byPostIdComments(postId: postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -573,7 +573,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         }
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
         let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
-            endpoint: "/posts/\(postId)/comments",
+            PostsEndpoint.byPostIdComments(postId: postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -585,7 +585,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
         let body = UpdateCommentRequest(content: content, effectFlags: effectFlags)
         let response: APIResponse<APIPostComment> = try await api.patch(
-            endpoint: "/posts/\(postId)/comments/\(commentId)", body: body
+            PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId), body: body
         )
         return response.data
     }
@@ -607,13 +607,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         }
         let body = TranslateCommentRequest(targetLanguage: targetLanguage, force: force ? true : nil)
         let _: APIResponse<TranslateCommentResponse> = try await api.post(
-            endpoint: "/posts/\(postId)/comments/\(commentId)/translate", body: body
+            PostsEndpoint.byPostIdCommentsByCommentIdTranslate(postId: postId, commentId: commentId), body: body
         )
     }
 
     public func likeComment(postId: String, commentId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/posts/\(postId)/comments/\(commentId)/like", method: "POST"
+            PostsEndpoint.byPostIdCommentsByCommentIdLike(postId: postId, commentId: commentId), method: "POST"
         )
     }
 
@@ -630,7 +630,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             targetType: targetType?.rawValue,
             visibility: visibility
         )
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+        let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.byPostIdRepost(postId: postId), body: body)
         return response.data
     }
 
@@ -659,11 +659,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             visibility: visibility
         )
         guard let clientMutationId, !clientMutationId.isEmpty else {
-            let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+            let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.byPostIdRepost(postId: postId), body: body)
             return response.data
         }
         let response: APIResponse<APIPost> = try await api.requestWithHeaders(
-            endpoint: "/posts/\(postId)/repost",
+            PostsEndpoint.byPostIdRepost(postId: postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -673,7 +673,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func share(postId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
+        let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdShare(postId: postId), method: "POST")
     }
 
     /// Records a share and (optionally) mints a TrackingLink. When
@@ -692,7 +692,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         if generateLink { body["generateLink"] = true }
         let bodyData = try JSONSerialization.data(withJSONObject: body)
         let response: APIResponse<PostShareResult> = try await api.request(
-            endpoint: "/posts/\(postId)/share",
+            PostsEndpoint.byPostIdShare(postId: postId),
             method: "POST",
             body: bodyData
         )
@@ -717,51 +717,51 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             // absente vaut mieux qu'une affirmation sans contenu.
             capturedInApp: capturedInApp ? true : nil
         )
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/from-attachment", body: body)
+        let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.fromAttachment, body: body)
         return response.data
     }
 
     public func getBookmarks(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/bookmarks", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.bookmarks, cursor: cursor, limit: limit)
     }
 
     public func removeBookmark(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/bookmark")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdBookmark(postId: postId))
     }
 
     public func getPost(postId: String) async throws -> APIPost {
-        let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(postId)")
+        let response: APIResponse<APIPost> = try await api.request(PostsEndpoint.byPostId(postId: postId))
         return response.data
     }
 
     public func getComments(postId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
-        try await api.paginatedRequest(endpoint: "/posts/\(postId)/comments", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.byPostIdComments(postId: postId), cursor: cursor, limit: limit)
     }
 
     public func requestTranslation(postId: String, targetLanguage: String) async throws {
         let body = ["targetLanguage": targetLanguage]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/posts/\(postId)/translate",
+            PostsEndpoint.byPostIdTranslate(postId: postId),
             method: "POST",
             body: bodyData
         )
     }
 
     public func pinPost(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/posts/\(postId)/pin", method: "POST")
+        let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
     }
 
     public func unpinPost(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/pin")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdPin(postId: postId))
     }
 
     public func unlikeComment(postId: String, commentId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)/like")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdCommentsByCommentIdLike(postId: postId, commentId: commentId))
     }
 
     public func deleteComment(postId: String, commentId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(postId)/comments/\(commentId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId))
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
@@ -802,7 +802,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
         let body = CreateStoryRequest(type: type.rawValue, content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, mediaCaption: mediaCaption)
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
+        let response: APIResponse<APIPost> = try await api.post(PostsEndpoint.root, body: body)
         return response.data
     }
 
@@ -873,7 +873,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// retombe ici.
     public func update(postId: String, known: Set<PostEditField>, draft: PostEditDraft) async throws -> APIPost {
         let body = PostEditPayload.build(known: known, draft: draft)
-        let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
+        let response: APIResponse<APIPost> = try await api.put(PostsEndpoint.byPostId(postId: postId), body: body)
         return response.data
     }
 
@@ -884,13 +884,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             let body = ["duration": duration]
             let bodyData = try JSONSerialization.data(withJSONObject: body)
             let _: APIResponse<[String: Bool]> = try await api.request(
-                endpoint: "/posts/\(postId)/view",
+                PostsEndpoint.byPostIdView(postId: postId),
                 method: "POST",
                 body: bodyData
             )
         } else {
             let _: APIResponse<[String: Bool]> = try await api.request(
-                endpoint: "/posts/\(postId)/view",
+                PostsEndpoint.byPostIdView(postId: postId),
                 method: "POST"
             )
         }
@@ -898,7 +898,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func getPostViews(postId: String, limit: Int = 50, offset: Int = 0) async throws -> PostViewersResponse {
         let response: APIResponse<PostViewersResponse> = try await api.request(
-            endpoint: "/posts/\(postId)/views",
+            PostsEndpoint.byPostIdViews(postId: postId),
             queryItems: [
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "offset", value: "\(offset)")
@@ -910,17 +910,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     // MARK: - Feed Variants
 
     public func getUserPosts(userId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/user/\(userId)", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.userByUserId(userId: userId), cursor: cursor, limit: limit)
     }
 
     public func getCommunityPosts(communityId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/community/\(communityId)", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.communityByCommunityId(communityId: communityId), cursor: cursor, limit: limit)
     }
 
     // MARK: - Comment Replies
 
     public func getCommentReplies(postId: String, commentId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
-        try await api.paginatedRequest(endpoint: "/posts/\(postId)/comments/\(commentId)/replies", cursor: cursor, limit: limit)
+        try await api.paginatedRequest(PostsEndpoint.byPostIdCommentsByCommentIdReplies(postId: postId, commentId: commentId), cursor: cursor, limit: limit)
     }
 
     // MARK: - Impression Tracking
@@ -929,7 +929,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         guard !postIds.isEmpty else { return }
         struct BatchBody: Encodable { let postIds: [String]; let source: String }
         let _: APIResponse<[String: Int]> = try await api.post(
-            endpoint: "/posts/impressions/batch",
+            PostsEndpoint.impressionsBatch,
             body: BatchBody(postIds: postIds, source: source)
         )
     }
@@ -940,7 +940,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     public func recordImpression(postId: String, source: String = "detail") async throws {
         struct Body: Encodable { let source: String }
         let _: APIResponse<[String: Bool]> = try await api.post(
-            endpoint: "/posts/\(postId)/impression",
+            PostsEndpoint.byPostIdImpression(postId: postId),
             body: Body(source: source)
         )
     }
@@ -949,7 +949,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         guard !sessions.isEmpty else { return }
         struct BatchBody: Encodable { let sessions: [EngagementSession] }
         let _: APIResponse<[String: Int]> = try await api.post(
-            endpoint: "/posts/engagement/batch",
+            PostsEndpoint.engagementBatch,
             body: BatchBody(sessions: sessions)
         )
     }

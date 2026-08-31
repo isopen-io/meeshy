@@ -27,7 +27,7 @@ public final class TranslationService: TranslationServiceProviding, @unchecked S
             text: text, sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage, messageId: messageId
         )
-        let response: APIResponse<TranslateResponse> = try await api.post(endpoint: "/translate-blocking", body: body)
+        let response: APIResponse<TranslateResponse> = try await api.post(TranslateBlockingEndpoint.root, body: body)
         return response.data
     }
 }

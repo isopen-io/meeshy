@@ -66,7 +66,7 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         ]
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             queryItems: items
         )
     }
@@ -80,7 +80,7 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         ]
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             queryItems: items
         )
     }
@@ -102,7 +102,7 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         ]
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             queryItems: items
         )
     }
@@ -116,48 +116,48 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         ]
         if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             queryItems: items
         )
     }
 
     public func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
         let response: APIResponse<SendMessageResponseData> = try await api.post(
-            endpoint: "/conversations/\(conversationId)/messages", body: request
+            ConversationsEndpoint.byIdMessages(id: conversationId), body: request
         )
         return response.data
     }
 
     public func edit(messageId: String, content: String) async throws -> APIMessage {
         struct EditBody: Encodable { let content: String }
-        let response: APIResponse<APIMessage> = try await api.put(endpoint: "/messages/\(messageId)", body: EditBody(content: content))
+        let response: APIResponse<APIMessage> = try await api.put(MessagesEndpoint.byMessageId(messageId: messageId), body: EditBody(content: content))
         return response.data
     }
 
     public func delete(conversationId: String, messageId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)/messages/\(messageId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId))
     }
 
     public func pin(conversationId: String, messageId: String) async throws {
         struct Empty: Encodable {}
-        let _: APIResponse<[String: String]> = try await api.put(endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin", body: Empty())
+        let _: APIResponse<[String: String]> = try await api.put(ConversationsEndpoint.byIdMessagesByMessageIdPin(id: conversationId, messageId: messageId), body: Empty())
     }
 
     public func unpin(conversationId: String, messageId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)/messages/\(messageId)/pin")
+        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byIdMessagesByMessageIdPin(id: conversationId, messageId: messageId))
     }
 
     public func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse {
         struct Empty: Encodable {}
         let response: APIResponse<ConsumeViewOnceResponse> = try await api.post(
-            endpoint: "/conversations/\(conversationId)/messages/\(messageId)/consume", body: Empty()
+            ConversationsEndpoint.byIdMessagesByMessageIdConsume(id: conversationId, messageId: messageId), body: Empty()
         )
         return response.data
     }
 
     public func search(conversationId: String, query: String, limit: Int = 20) async throws -> MessagesAPIResponse {
         try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages/search",
+            ConversationsEndpoint.byIdMessagesSearch(id: conversationId),
             queryItems: [
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "limit", value: "\(limit)"),
@@ -167,7 +167,7 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
 
     public func searchWithCursor(conversationId: String, query: String, cursor: String) async throws -> MessagesAPIResponse {
         try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages/search",
+            ConversationsEndpoint.byIdMessagesSearch(id: conversationId),
             queryItems: [
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "cursor", value: cursor),

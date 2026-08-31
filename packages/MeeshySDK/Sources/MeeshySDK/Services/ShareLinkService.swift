@@ -31,7 +31,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     /// Stats globales pour les liens de l'utilisateur
     public func fetchMyStats() async throws -> MyShareLinkStats {
         let response: APIResponse<MyShareLinkStats> = try await api.request(
-            endpoint: "/links/stats"
+            LinksEndpoint.stats
         )
         return response.data
     }
@@ -40,7 +40,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func getLinkInfo(identifier: String) async throws -> ShareLinkInfo {
         let response: APIResponse<ShareLinkInfo> = try await api.request(
-            endpoint: "/anonymous/link/\(identifier)"
+            AnonymousEndpoint.linkByIdentifier(identifier: identifier)
         )
         return response.data
     }
@@ -49,7 +49,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func joinAnonymously(linkId: String, request: AnonymousJoinRequest) async throws -> AnonymousJoinResponse {
         let response: APIResponse<AnonymousJoinResponse> = try await api.post(
-            endpoint: "/anonymous/join/\(linkId)",
+            AnonymousEndpoint.joinByLinkId(linkId: linkId),
             body: request
         )
         return response.data
@@ -64,7 +64,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     public func joinAuthenticated(linkId: String) async throws -> JoinAuthenticatedResponse {
         struct EmptyBody: Encodable {}
         let response: APIResponse<JoinAuthenticatedResponse> = try await api.post(
-            endpoint: "/conversations/join/\(linkId)",
+            ConversationsEndpoint.joinByLinkId(linkId: linkId),
             body: EmptyBody()
         )
         return response.data
@@ -75,7 +75,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
     public func leaveAnonymousSession(sessionToken: String) async throws {
         struct LeaveRequest: Encodable { let sessionToken: String }
         let _: APIResponse<[String: String]> = try await api.post(
-            endpoint: "/anonymous/leave",
+            AnonymousEndpoint.leave,
             body: LeaveRequest(sessionToken: sessionToken)
         )
     }
@@ -84,7 +84,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     public func createShareLink(request: CreateShareLinkRequest) async throws -> CreatedShareLink {
         let response: APIResponse<CreateShareLinkResponse> = try await api.post(
-            endpoint: "/links",
+            LinksEndpoint.root,
             body: request
         )
         let raw = response.data

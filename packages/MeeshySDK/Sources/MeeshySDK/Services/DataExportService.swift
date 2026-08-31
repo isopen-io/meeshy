@@ -75,7 +75,7 @@ public final class DataExportService: DataExportServiceProviding, @unchecked Sen
             URLQueryItem(name: "types", value: typesStr),
         ]
         let response: APIResponse<DataExportData> = try await api.request(
-            endpoint: "/me/export",
+            MeEndpoint.export,
             queryItems: queryItems
         )
         return response.data

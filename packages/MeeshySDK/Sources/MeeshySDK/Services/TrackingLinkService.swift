@@ -25,7 +25,7 @@ public final class TrackingLinkService: @unchecked Sendable {
     /// Stats globales des liens de l'utilisateur
     public func fetchStats() async throws -> TrackingLinkStats {
         let response: APIResponse<TrackingLinkStats> = try await api.request(
-            endpoint: "/tracking-links/stats"
+            TrackingLinksEndpoint.stats
         )
         return response.data
     }
@@ -33,7 +33,7 @@ public final class TrackingLinkService: @unchecked Sendable {
     /// Crée un nouveau lien de tracking
     public func createLink(_ request: CreateTrackingLinkRequest) async throws -> TrackingLink {
         let response: APIResponse<TrackingLink> = try await api.post(
-            endpoint: "/tracking-links",
+            TrackingLinksEndpoint.root,
             body: request
         )
         return response.data
@@ -51,7 +51,7 @@ public final class TrackingLinkService: @unchecked Sendable {
     public func setActive(token: String, isActive: Bool) async throws {
         struct SetActiveBody: Encodable { let isActive: Bool }
         let _: APIResponse<TrackingLink> = try await api.patch(
-            endpoint: "/tracking-links/\(token)",
+            TrackingLinksEndpoint.byToken(token: token),
             body: SetActiveBody(isActive: isActive)
         )
     }
@@ -59,7 +59,7 @@ public final class TrackingLinkService: @unchecked Sendable {
     /// Supprime un lien
     public func deleteLink(token: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/tracking-links/\(token)"
+            TrackingLinksEndpoint.byToken(token: token)
         )
     }
 }

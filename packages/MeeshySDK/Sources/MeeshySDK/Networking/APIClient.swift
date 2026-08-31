@@ -292,6 +292,8 @@ public protocol APIClientProviding: Sendable {
     func patch<T: Decodable, U: Encodable>(_ endpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T>
     func delete(_ endpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]>
     func delete<T: Decodable, U: Encodable>(_ endpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T>
+    func paginatedRequest<T: Decodable>(_ endpoint: any MeeshyEndpoint, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
+    func offsetPaginatedRequest<T: Decodable>(_ endpoint: any MeeshyEndpoint, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
 }
 
 public extension APIClientProviding {
@@ -354,6 +356,18 @@ public extension APIClientProviding {
 
     func delete<T: Decodable, U: Encodable>(_ endpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T> {
         try await delete(endpoint: legacyPath(for: endpoint), body: body)
+    }
+
+    func paginatedRequest<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint, cursor: String? = nil, limit: Int = 20
+    ) async throws -> PaginatedAPIResponse<[T]> {
+        try await paginatedRequest(endpoint: legacyPath(for: endpoint), cursor: cursor, limit: limit)
+    }
+
+    func offsetPaginatedRequest<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint, offset: Int = 0, limit: Int = 15
+    ) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        try await offsetPaginatedRequest(endpoint: legacyPath(for: endpoint), offset: offset, limit: limit)
     }
 }
 
