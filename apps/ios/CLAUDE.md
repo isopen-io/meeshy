@@ -507,21 +507,37 @@ c'était un bouton en double, jamais une capacité en double.
 > retirent l'un l'autre sans rien coûter ; deux boutons qui ouvrent deux
 > chemins obligent à choisir lequel survit — et à le dire.
 
-### 2 ter. Le composer crée un MeeshyDocument — pas une story à slides (directive porteur 2026-08-31)
+### 2 ter. Le composer crée une MeeshyPublication — pas une story à slides (directive porteur 2026-08-31)
 
 > « Et non `StorySlide` — on adopte la sémantique nouvelle de la structure des
-> **MeeshyDocument**, qui utilise **MeeshyComposer** pour se créer. »
+> MeeshyDocument, qui utilise **MeeshyComposer** pour se créer. »
+>
+> « **`MeeshyPublication` EST `MeeshyDocument`** — fusionner la terminologie en
+> `MeeshyPublication`. » (arbitrage du même jour)
 
 Le composer est né dans le pipeline STORY et en a hérité la nomenclature
 (`StorySlide`, `StoryEffects`, `StoryTextObject`…). **Ce n'est plus ce qu'il
-fait.** Il compose un DOCUMENT, dont une story n'est qu'un des profils de sortie
-— au même titre que le post, le réel et le mood.
+fait.** Il compose une PUBLICATION, dont une story n'est qu'un des profils de
+sortie — au même titre que le post, le réel et le mood.
 
-Le vocabulaire à employer, dans les doc-comments, les issues et les
-raisonnements : `MeeshyDocument`, `MeeshyScene`, `MeeshySlide`, `MeeshyObject`,
-`MeeshyComposer`. La planche `docs/product/planche-meeshy-composer.html` en est
-la source (78 occurrences de `MeeshyObject`, 64 de `MeeshyScene`, 38 de
-`MeeshySlide`).
+**`MeeshyDocument` n'existe pas.** Le terme est apparu une fois dans la planche
+et une fois dans une directive ; l'arbitrage le fond dans `MeeshyPublication`.
+Un concept à deux noms se paie deux fois : à l'écriture, où il faut choisir, et
+à la lecture, où il faut se demander si la différence en est une.
+
+Le vocabulaire à employer — doc-comments, issues, raisonnements :
+
+| terme | ce qu'il désigne |
+|---|---|
+| `MeeshyPublication` | ce que le composer produit, tous profils confondus |
+| `MeeshyScene` | la surface 9:16 d'une slide |
+| `MeeshySlide` | une page de la publication |
+| `MeeshyObject` | ce qu'on pose sur une scène — texte, média fg, sticker, tracé, chip |
+| `MeeshyComposer` | l'outil qui crée la publication |
+
+Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
+`MeeshyObject`, 64 de `MeeshyScene`, 38 de `MeeshySlide`, 35 de
+`MeeshyPublication`).
 
 **Aucun de ces noms n'est un TYPE aujourd'hui** (mesuré le 2026-08-31 : seul
 `MeeshyScenePlayer` porte le préfixe, et c'est une `View`). Le composer raisonne
@@ -540,12 +556,17 @@ donc juste dans une langue que le compilateur ne parle pas.
 voyage en JSON vers la passerelle, `CanvasV3Migration` lit d'anciennes formes) et
 partagés avec le reader et l'export : un renommage de surface casserait la
 lecture des publications existantes. La migration se fait par enveloppes ou par
-`typealias` documentés — jamais par un `sed`. Pilotage : #4591, où le choix
-`MeeshyDocument` / `MeeshyPublication` reste à trancher.
+`typealias` documentés — jamais par un `sed`. Pilotage : #4591.
 
-**Corollaire déjà appliqué** : l'historique appartient au DOCUMENT, pas à
-l'envoi — la planche écrit « Historique du MeeshyDocument, conservé ». C'est ce
-qui justifie son déplacement du socle vers le rail des objets (#4586).
+**Corollaire déjà appliqué** : l'historique appartient à la PUBLICATION, pas à
+l'envoi — la planche écrit « Historique de la `MeeshyPublication`, conservé »
+(elle disait `MeeshyDocument` avant la fusion de terminologie). C'est ce qui
+justifie son déplacement du socle vers le rail des objets (#4586).
+
+> Cette phrase a été FAUSSE pendant une minute : elle citait la planche telle
+> qu'elle était avant que le même commit ne la corrige. **Une citation est datée
+> par le fichier qu'elle cite** — la changer sans relire ce qui la cite fabrique
+> une référence qui n'a jamais existé.
 
 ### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
 
