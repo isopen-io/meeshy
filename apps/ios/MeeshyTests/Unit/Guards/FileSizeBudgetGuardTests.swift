@@ -147,7 +147,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// lieu de la diluer dans un `body` de 2 572 lignes. Le fichier reste en
     /// dette (2 513) ; seul le plafond baisse — laisser 57 lignes de mou
     /// accueillerait en silence le prochain ajout.
-    private static let legacyLineCeiling = 73_333
+    /// **73 205 depuis #4098.** `BubbleBodyFooterLayout` + son cache de hauteur
+    /// (214 lignes) quittent `BubbleStandardLayout.swift` — la vue `3h` devait y
+    /// monter la carte de citation, ce que la directive interdit sur un fichier
+    /// hors budget. Le découpage suit la responsabilité : ce qui part n'est pas
+    /// une vue mais un `Layout` et sa mesure, qui se relisent sans rien savoir
+    /// de ce que la bulle contient. L'hôte reste en dette (1 610) ; le plafond
+    /// descend au cumul RÉEL — le mou laissé en route est exactement ce qui
+    /// accueille en silence l'ajout suivant.
+    private static let legacyLineCeiling = 73_205
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

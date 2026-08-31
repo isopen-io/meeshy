@@ -316,6 +316,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
+        // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17

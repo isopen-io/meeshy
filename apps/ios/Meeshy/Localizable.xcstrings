@@ -49993,6 +49993,53 @@
         }
       }
     },
+    "conversation.storyUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد هذه القصة متاحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Story ist nicht mehr verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This story is no longer available"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta historia ya no está disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette story n'est plus disponible"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa storia non è più disponibile"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este story não está mais disponível"
+          }
+        }
+      }
+    },
     "conversation.messageNotFound": {
       "extractionState": "manual",
       "localizations": {
@@ -110570,6 +110617,100 @@
         }
       }
     },
+    "bubble.reply.story.answer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رد على القصة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antwort auf die Story"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "reply to their story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "respuesta a su historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "réponse à sa story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "risposta alla sua storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "resposta ao story"
+          }
+        }
+      }
+    },
+    "bubble.reply.story.open_hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح القصة المقتبسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet die zitierte Story"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the quoted story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre la historia citada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre la story citée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre la storia citata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre o story citado"
+          }
+        }
+      }
+    },
     "bubble.reply.story": {
       "extractionState": "manual",
       "localizations": {
@@ -154822,53 +154963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exige"
-          }
-        }
-      }
-    },
-    "participantProfile.linkCountries": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "البلدان المسموح بها"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zugelassene Länder"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Allowed countries"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Países admitidos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pays admis"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paesi ammessi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Países admitidos"
           }
         }
       }

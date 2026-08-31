@@ -20893,3 +20893,217 @@ nécessaire, mais le témoin qui l'aurait relié au symptôme — un carrousel
 réellement instancié — n'existait pas dans mon environnement, et je ne l'ai su
 qu'en le cherchant après coup. **Chercher le témoin d'abord, annoncer ensuite.**
 Le défaut (2) n'a été vu que sur une CAPTURE, gate entièrement vert.
+
+## Leçon 354 — Un champ EXISTE ne veut pas dire qu'il est ÉCRIT : une branche peut naître inatteignable
+
+**2026-08-31, vue `3h` (#4098).** En écrivant le bandeau de la citation de
+story, j'ai composé deux formes :
+
+```swift
+reply.isMe ? "réponse à votre story" : "réponse à sa story"
+```
+
+Le raisonnement était juste et le champ était le bon : `ReplyReference.isMe`
+signifie **exactement** « le contenu cité est le mien ». Le cas visé est réel,
+et c'est même le plus fréquent côté reçu — quelqu'un répond à MA story, je lis
+la conversation.
+
+**La branche « votre story » ne pouvait jamais s'afficher.** Les quatre
+producteurs d'une citation de story sont unanimes, et l'un d'eux l'écrit
+littéralement :
+
+| producteur | ce qu'il pose |
+|---|---|
+| `MessageModels.swift:845` | `authorName: "Story"`, `isMe` non passé ⇒ `false` |
+| `MessageModels.swift:860` | idem, repli « identifiant seul » |
+| `MessagePersistenceActor.swift:1716` | **`isMe: false`** en dur |
+| `ReplyContext.toReplyReference` | `isMe` jamais passé |
+
+J'avais lu la DÉCLARATION du champ — son type, son doc-comment, son sens
+produit — et pas une seule de ses ÉCRITURES.
+
+> **La déclaration d'un champ prouve qu'il peut être LU. Elle ne prouve jamais
+> qu'il est ÉCRIT.** Avant de brancher un rendu sur un champ, `grep` ses
+> PRODUCTEURS ; la liste obtenue dit si la branche existe pour de vrai.
+
+C'est la loi 4 du dépôt (« un contrôle existe s'il a un effet ») prise par
+l'autre bout : ici l'effet ne manquait pas au contrôle, c'est la CAUSE qui
+manquait à la branche. Une branche qu'aucune donnée ne peut atteindre ressemble
+à une fonctionnalité et n'en est pas — et son libellé serait resté dans le
+catalogue, traduit en sept langues, jamais affiché. (`test_everyAppCatalog
+IdentifierKeyIsReferencedInCode` l'aurait vue une fois la clé orpheline ; la
+branche VIVANTE avec sa clé RÉFÉRENCÉE, elle, ne fait rougir personne.)
+
+**Ce qui est parti dans le commit, et pourquoi la garde a deux faces.** La
+variante retirée, sa clé retirée du catalogue, et un témoin qui épingle
+**les deux moitiés** : le libellé unique côté carte, ET le fait producteur
+(`authorName: "Story"`) côté SDK. Sans la seconde moitié, la garde interdirait
+pour toujours une variante que la donnée pourrait un jour permettre — elle
+deviendrait un obstacle au lieu d'une garde. Le manque est SUIVI (#4517).
+
+### Le corollaire, trouvé dans le même lot
+
+La phrase de doctrine à livrer était « la citation **survit à son expiration** ».
+Le réflexe est de la lire comme la description d'un WIDGET : la carte se
+rend-elle encore quand la story a expiré ? Réponse : oui, la donnée est gravée,
+et `MessageModels` le dit noir sur blanc depuis longtemps. Rien à faire.
+
+Lue comme une QUESTION SUR LA CHAÎNE — « et quand elle a expiré, que se
+passe-t-il si je la touche ? » — elle a rendu le vrai défaut, **deux fichiers
+plus loin** :
+
+```swift
+if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) { … }
+// pas de `else`
+```
+
+Story expirée, purgée ou jamais chargée : le tap ne faisait **rien**. Pas
+d'erreur, pas d'explication. Le chemin voisin — un MESSAGE cité introuvable —
+faisait déjà la bonne chose douze lignes plus haut ; la story n'avait jamais
+reçu son pendant.
+
+> Une phrase de doctrine décrit une CHAÎNE, pas un composant. « X survit à Y »
+> se vérifie sur l'affichage **et** sur tout ce qu'on peut faire de X une fois
+> Y arrivé.
+
+Et le refus qui va avec : ne PAS préjuger de l'expiration côté client.
+`storyPublishedAt + StoryItem.defaultExpiryInterval` était une règle pure,
+testable, à portée de main — et fausse, parce que le droit d'ouvrir une story
+périmée est **déclaré par le serveur** (`referenceAccess`, « never recomputed
+from `expiresAt` here ») pour qui y est nommé. Une carte qui s'annoncerait
+« expirée » sur une story que le tap aurait ouverte serait un mensonge pire que
+le silence qu'on corrige. **La carte se rend toujours, le tap tente toujours,
+et c'est l'ÉCHEC qui parle** — chez le seul site qui peut le constater.
+
+### Deux corollaires d'outillage, payés dans le même lot
+
+**Une racine dérivée de `#filePath` en COMPTANT les crans casse au premier
+appelant d'une autre profondeur.** `MyStoriesSourceCorpus.appRoot(file:)`
+retirait quatre composants — juste pour les vingt gardes rangées à
+`MeeshyTests/Unit/Views/`, faux pour la première rangée à
+`MeeshyTests/Unit/Views/Bubble/`, qui a obtenu `apps/ios/MeeshyTests` et dix
+« no such file » sur des fichiers bien présents. `file` valant `#filePath` par
+DÉFAUT, c'est l'appelant qui décide, et rien dans la signature ne le dit.
+
+Le bruit était le cas HEUREUX : si la mauvaise racine avait contenu un fichier
+de même nom, la garde aurait lu le MAUVAIS fichier et serait passée au vert.
+**Une racine se REMONTE jusqu'à un repère nommé, elle ne se compte pas.**
+
+**Et une garde de source ne doit jamais accuser un site innocent.**
+`RiverTypingIndicatorTests` extrayait les listes d'arguments par
+`firstIndex(of: "(")` sur tout le reste du fichier. Sur
+`@State private var fingerprint: RiverConversationMapping.Fingerprint` — une
+ANNOTATION DE TYPE, pas un appel — il attrapait la parenthèse d'un appel
+quatre-vingt-dix lignes plus bas et avalait le `body` entier, où
+`typingParticipants:` est passé à `RiverStreamHost`, à qui il est destiné. Le
+message imprimé citait une « liste d'arguments » VIDE : le symptôme d'un
+extracteur qui a balayé autre chose que ce qu'il croyait. **Une garde qui
+accuse à tort se fait désactiver plutôt que corriger** — c'est le mode de
+panne le plus cher d'une garde, parce qu'il coûte la protection ET la
+confiance.
+
+Voir aussi la leçon 352 (une extraction franchit deux frontières muettes) —
+appliquée ici en amont : `BubbleBodyFooterLayout` a quitté un hôte hors budget
+AVANT que la carte n'y soit montée, et la suite entière a servi de parade.
+
+## Leçon 355 — Une vue CONSTRUITE puis JETÉE ne rougit nulle part, et les témoins de sa feature restent verts
+
+**Le fait.** `MeeshyComposerHost.sceneMentionStrip` rend `AnyView?`. Son corps montait
+`ComposerMentionStrip` dans un `if let` — **sans `return`**. Dans un accesseur à corps
+MULTIPLE, une expression nue n'est pas la valeur rendue : le `return nil` du bas gagnait
+toujours. La bande de suggestions `@` d'un texte de scène, livrée la veille par
+`bb3f3deafb` avec ses témoins, **n'a jamais pu paraître sur aucun chemin**.
+
+**Pourquoi ça survit à une livraison complète.** Le défaut est silencieux de trois façons,
+et chacune neutralise un garde-fou DIFFÉRENT — c'est leur conjonction qui le rend cher,
+pas l'une d'elles :
+
+| garde-fou | pourquoi il ne voit rien |
+|---|---|
+| le compilateur | il le DIT (`result of 'AnyView' initializer is unused`) — et un avertissement dans un build vert, parmi des centaines, ne se lit pas |
+| les témoins de la feature | ils éprouvent le contrôleur, la requête active, le filtrage des suggestions : tout ce qui **nourrit** la bande. Aucun ne demande si elle est **montée** |
+| l'œil, au simulateur | une bande absente ressemble à une bande qui n'a rien à dire — c'est exactement ce que la loi 8 prescrit par ailleurs |
+
+> **La question qu'un témoin de feature ne pose jamais est « la vue que je viens de nourrir
+> est-elle MONTÉE ? »** C'est la loi 8 de `BOUCLE.md` — « un effet déclaré doit être monté »,
+> écrite pour les overlays du canvas (`EffectOverlayMountingSourceGuardTests`) — portée aux
+> accesseurs de vue OPTIONNELLE. La forme est la même : le plan de lecture est juste, le
+> code compile, et rien n'atteint le pixel.
+
+**La parade.** `OptionalViewReturnGuardTests` : dans tout accesseur `var … : AnyView? {`,
+une ligne dont le contenu commence par `AnyView(` sans `return` est un rouge. Syntaxique,
+et c'est voulu — elle n'a pas besoin de savoir ce que la vue fait, seulement qu'on ne la
+laisse pas tomber.
+
+**Deux précautions de garde, apprises ailleurs et appliquées ici.**
+- La garde a été vérifiée **ROUGE sur le contenu pré-correctif** (`git show HEAD:<chemin>`,
+  rejoué en Python), jamais seulement verte après. Une garde positive peut naître déjà morte.
+- Elle porte un **fusible de population** : elle compte les accesseurs trouvés et les
+  `return AnyView(` reconnus. Un découpage de blocs qui cesserait de rendre les corps la
+  rendrait verte en ne regardant rien.
+
+**Le découpage compte les accolades depuis l'ouverture de l'accesseur**, jamais une
+expression régulière sur tout le fichier : la garde voisine `RiverTypingIndicatorTests` a
+été trouvée le même jour en train d'accuser un site INNOCENT, parce que son extracteur
+prenait `firstIndex(of: "(")` sur le reste du fichier et attrapait, depuis une ANNOTATION
+DE TYPE, la parenthèse d'un appel quatre-vingt-dix lignes plus bas. Une garde qui accuse
+un innocent se fait désactiver plutôt que corriger — c'est son mode de panne le plus cher.
+
+## Leçon 356 — Une chaîne qui sert à la fois de libellé VISUEL et de libellé d'ACCESSIBILITÉ est une décision prise pour l'un des deux lecteurs
+
+**Le fait.** La pastille bande-son du socle du composer posait
+`.accessibilityLabel(Text(ComposerSocleSound.label(for: fond)))` — la chaîne MONTRÉE,
+resservie telle quelle. Elle contient une durée d'horloge (« 0:28 ») ; VoiceOver la
+prononce en heures et minutes. Un extrait de vingt-huit secondes s'annonçait
+« zéro heure vingt-huit ».
+
+La doctrine existait déjà, écrite et outillée (247i) : `LocalizedNumber.duration` pour ce
+qu'on VOIT, `LocalizedNumber.spokenDuration` pour ce qu'on ENTEND. Le défaut n'est pas
+l'ignorance de la règle — c'est le **partage d'une chaîne entre deux consommateurs qui
+n'ont pas la même grammaire**. Réutiliser le libellé visuel a l'air d'une économie ; c'est
+un choix imposé au lecteur qui n'a pas été consulté.
+
+**La forme du correctif.** DEUX projections, UNE composition. `label` et `spokenLabel`
+délèguent à un `compose(_:locale:duree:)` privé qui porte le titre, le crédit et l'ordre ;
+seule la fonction de durée change. Deux fonctions écrites côte à côte auraient divergé au
+premier champ ajouté — et la divergence se serait vue chez UN seul des deux publics, donc
+jamais.
+
+**Le témoin ne peut pas être écrit dans la langue du banc.** `String(format: "%d:%02d")`
+et `LocalizedNumber.duration` rendent tous deux « 0:28 » en français : un témoin en fr_FR
+reste vert **des deux côtés du correctif**. Il faut la locale où les deux divergent — et
+`ar` NUE ne suffit pas (elle emprunte la région de l'appareil et rend des chiffres latins
+sur un banc américain) : `ar_SA`, comparaison `.literal`, sinon « ٦ » vaut « 6 » par
+collation. La règle prend donc sa `locale` en PARAMÈTRE plutôt que de lire `.current` :
+**une règle pure doit pouvoir être éprouvée sur une locale autre que celle de la machine
+qui la teste.**
+
+## Leçon 357 — Un doc-comment qui prédit sa propre chute est une dette datée, pas une documentation
+
+**Le fait.** `test_offered_unlockedItem_keepsEveryAction` affirme qu'un objet déverrouillé
+obtient TOUTES les actions de son menu. Son doc-comment, écrit au #4046, disait :
+
+> « `canLeaveScene` est le sixième cas, et son défaut FERME. **Sans ce paramètre, ce témoin
+> n'affirmerait plus "toutes" mais "toutes sauf une", en le disant avec le même mot.** »
+
+Le #4082 a ajouté `hasTrimmableSource` — septième cas, même famille, défaut FERMÉ. Le
+témoin est tombé au premier run complet qui a suivi. **La prédiction était exacte, publiée,
+lue par ses relecteurs — et elle n'a pas empêché la chute**, parce qu'un doc-comment ne
+s'exécute pas.
+
+> **Un témoin qui affirme « toutes » se remet en question à chaque ajout d'une capacité**,
+> sans quoi il finit par affirmer « toutes celles que je connaissais quand on m'a écrit ».
+> La forme qui tient : une attente DÉRIVÉE d'`allCases` (moins ce qui a une raison nommée
+> d'être absent), jamais une liste écrite à la main.
+
+**Et deux lectures d'un même rouge ne sont presque jamais symétriques.** Le second témoin
+tombé, `test_contextMenu_ordinaryText_offersEveryAction`, passait par la VUE. On pouvait
+croire qu'enrichir la fixture (un média au lieu d'un texte) le rendrait vert : non —
+`contextMenu(for:kind:)` n'appelle pas `offered(hasTrimmableSource:)` **du tout**, parce
+que rogner ouvre une bande SOUS la scène, une place que le menu d'appui long n'a pas. La
+fixture-média aurait seulement rendu l'échec plus difficile à lire. Avant de choisir entre
+« corriger la fixture » et « corriger l'attente », **lire ce que le site sous test APPELLE**.
+
+Corollaire : retirer une valeur d'une attente est un geste dangereux — il rend vert
+« le site ne l'offre pas » ET « l'entrée n'existe plus nulle part ». Le fusible qui
+distingue les deux se pose dans le même commit.
