@@ -85,6 +85,13 @@ docker-compose*.yml
 !infrastructure/docker/images/web/entrypoint.sh
 !apps/web/docker-entrypoint.sh
 !scripts/generate-notification-sounds.js
+# La v3 a BESOIN de ses scripts pour se construire (#4627) : `next build`
+# type-checke `e2e/visual/lib/a11y.ts`, qui importe `scripts/lib/routes-emises.mjs`,
+# et le script `build` enchaîne `node scripts/check-app-router-built.mjs` puis
+# `check-bundle-budget.mjs`. L'image FINALE n'en porte rien — l'étage `runner`
+# ne copie que `.next/standalone` et `.next/static`.
+!apps/web-v3/scripts
+!apps/web-v3/scripts/**
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/
