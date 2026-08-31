@@ -316,6 +316,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        // #4328 — la surface RÉPERTOIRE, en entier. Onze clés absentes du
+        // catalogue y servaient du français aux six autres langues, et du
+        // français SANS ACCENTS au francophone : le `defaultValue` n'avait
+        // jamais été relu comme du texte affiché, puisque personne ne le
+        // croyait affiché.
+        "apps/ios/Meeshy/Features/Contacts/ContactsShared.swift",  // 11
+        "apps/ios/Meeshy/Features/Contacts/PhonebookListView.swift",  // 14
+        "apps/ios/Meeshy/Features/Contacts/PhonebookViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift",  // 4
         // #4430 — les onze chaînes dont le `defaultValue` était écrit en ANGLAIS
         // dans un catalogue de langue source française. Entrées au catalogue,
         // traduites en sept locales, littéraux réalignés sur le `fr`.
