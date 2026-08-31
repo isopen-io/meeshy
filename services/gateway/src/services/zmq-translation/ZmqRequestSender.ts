@@ -29,10 +29,19 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
 /**
- * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les cibles
- * partent telles que l'appelant les donne (`'EN'`, `'pt-BR'`) et le translator
- * rend la sienne : sans forme commune, une langue rendue ne se reconnaîtrait pas
- * dans le jeu des langues attendues.
+ * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les appelants
+ * donnent leurs cibles VERBATIM (`'EN'`, `'pt-BR'`, `'fr-FR'` — la diffusion
+ * admin, la traduction à la demande d'un post/commentaire) et le champ n'est
+ * normalisé nulle part en amont. On les canonicalise ICI, à l'unique porte avant
+ * ZMQ, pour DEUX raisons — la seconde est un défaut de complétude, pas une
+ * optimisation :
+ *  - une cible région-taggée (`'pt-BR'`) est absente de la table NLLB côté
+ *    translator et y retombe silencieusement : la traduction n'est jamais
+ *    produite, et le travail ML (le poste le plus cher du pipeline) est gaspillé
+ *    en double dès que `'fr'` et `'fr-FR'` cohabitent ;
+ *  - le jeu ENVOYÉ (`targetLanguages`) et le jeu ATTENDU (`pendingLanguages`)
+ *    doivent coïncider : une complétion rendue sous `'pt'` ne solderait jamais
+ *    une attente inscrite sous `'pt-br'`, et la requête expirerait au deadman.
  */
 const canonicalLanguage = (language: string): string =>
   normalizeLanguageCode(language) ?? language.toLowerCase();
@@ -81,8 +90,11 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Canonicaliser PUIS dédupliquer les langues cibles (SSOT `canonicalLanguage`).
+    // Le jeu ENVOYÉ est ainsi identique au jeu ATTENDU (`pendingLanguages` plus
+    // bas) : `'fr'` et `'fr-FR'` comptent pour UNE cible, et aucune forme
+    // région-taggée invalide n'atteint NLLB.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +130,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;

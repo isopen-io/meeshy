@@ -328,6 +328,31 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalizes region-tagged targetLanguages before sending (no invalid NLLB target)', async () => {
+      // Callers (broadcast, on-demand post/comment translation) may pass verbatim
+      // BCP-47 codes. A region-tagged target like 'pt-BR' has no NLLB entry and is
+      // silently dropped by the translator; sending it is wasted/failed ML work.
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR', 'PT-br', 'en_US'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr', 'pt', 'en']);
+    });
+
+    it('sends the SAME canonical language set it tracks as pending (region-tagged settles)', async () => {
+      // The sent set (line 97) and the pending set (line 121) must coincide: a
+      // completion arrives under the canonical form the translator was asked for,
+      // and must settle the request. A divergence (send 'pt-br', wait for 'pt')
+      // would leave the request stuck until the deadman timeout.
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['pt-BR'] }),
+        'canon-settle'
+      );
+      expect(firstSendArg(connectionManager).targetLanguages).toEqual(['pt']);
+      expect(sender.settleTranslationLanguage('canon-settle', 'pt')).toEqual({ remaining: [] });
+      expect(sender.getPendingRequestsCount()).toBe(0);
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))
