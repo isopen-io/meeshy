@@ -108,6 +108,13 @@ extension StoryCanvasUIView {
             // `.gradient` cases can stamp the preview ON TOP of the flat tint
             // (user spec 2026-05-28: thumbnail visible above color, not below).
             slidePreviewThumbHash: slide.effects.thumbHash,
+            // **Les bandes d'un média AJUSTÉ sont peintes, pas laissées nues**
+            // (directive porteur 2026-08-31). La scène étant figée en 9:16, un
+            // fond paysage n'en occupe que la tranche centrale — et l'auteur
+            // écrit dans ce qui reste. La cascade des sources est une RÈGLE
+            // pure : le fond d'abord, les collages de premier plan ensuite, le
+            // composite de slide en dernier.
+            letterboxFillHashes: StoryLetterboxFill.candidateHashes(effects: slide.effects),
             // Filter is BAKED into the background bitmap at stamp time (no overlay) —
             // renders identically in composer / preview / reader / published, and an
             // in-place image edit re-filters via `contentVersion` (2026-06-03 pivot).
