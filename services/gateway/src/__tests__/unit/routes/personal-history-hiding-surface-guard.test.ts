@@ -146,7 +146,22 @@ const SURFACES: Record<string, Classification> = {
   // responsabilité — GET /configs/:conversationId/messages) : même deux
   // lectures, même raison, seul le chemin a changé.
   'admin/agent-configs.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
-  'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
+  // 3 → 4 (`07d57a92ad`) : la quatrième lecture est VOULUE, et elle est une
+  // CORRECTION DE SÉCURITÉ, pas une surface nouvelle. #4384 avait fermé la
+  // lecture du texte d'un message protégé sur `GET /admin/messages` ; le filtre
+  // `?search=` de la MÊME route interrogeait toujours la colonne brute, si bien
+  // qu'un modérateur ne pouvait plus LIRE un message à vue unique mais pouvait
+  // le DEVINER terme à terme, en observant si la ligne apparaît. Le correctif
+  // pré-balaye les candidats (`take: SEARCH_SCAN_CAP`), écarte les lignes
+  // protégées par le prédicat PARTAGÉ `messageContentIsProtected`, puis pagine
+  // sur les seuls identifiants servables. D'où un `findMany` de plus — sur le
+  // chemin AVEC recherche uniquement, le chemin sans recherche gardant sa
+  // pagination en base.
+  //
+  // Ce compte monte donc parce qu'un trou s'est fermé. L'incrémenter en le
+  // disant est ce que ce cliquet demande ; le laisser rouge aurait appris à
+  // ses lecteurs à le regeler sans lire.
+  'admin/content.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
   // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
   // que le balayage élargi rend visible.
