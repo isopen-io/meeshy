@@ -21148,44 +21148,7 @@ fenêtre du double-tap. Deux invocations consécutives ne le synthétisent pas d
 que par un geste qu'aucun outil ne produit, **le test de LAYER est la preuve, pas un repli** :
 il est déterministe là où la capture est un coup de dés.
 
-## Leçon 359 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le PASSÉ
-
-**Le fait, trouvé deux fois la même nuit, par deux chemins différents.** Un
-`xcodebuild build-for-testing` qui ÉCHOUE laisse en place le bundle de tests précédent.
-Le `test-without-building` qui suit s'exécute alors normalement : suites nommées, comptes
-plausibles, **vert**. Il mesure un ARBRE qui n'existe plus.
-
-| entrée | comment le build a échoué |
-|---|---|
-| session A | une erreur de compilation ordinaire (ordre d'arguments), 129 tests « verts » ensuite |
-| session B | une référence retirée du `.pbxproj` par une régénération, deux rouges attribués à tort à son propre correctif |
-
-Dans les deux cas le seul témoin est **une ligne de log qu'on ne lit pas quand le résumé
-dit « passed »** — `** TEST BUILD FAILED **`, plusieurs centaines de lignes plus haut.
-
-> C'est la forme la plus dangereuse du faux vert, parce qu'elle ne ment pas sur le
-> RÉSULTAT mais sur son OBJET. Un test rouge fait chercher ; un test vert sur le mauvais
-> binaire fait CONCLURE. La session B a failli conclure que son correctif ne marchait pas ;
-> la session A, que le sien marchait.
-
-**La parade est mécanique, pas une discipline de lecture** — enchaîner les deux commandes
-en gardant la porte fermée :
-
-```sh
-xcodebuild build-for-testing … 2>&1 | grep -E "error:|TEST BUILD" > build.log
-if grep -q "TEST BUILD SUCCEEDED" build.log; then
-    xcodebuild test-without-building …
-else
-    echo "BUILD ROUGE — aucun test lancé"
-fi
-```
-
-Corollaire de méthode : **lire la ligne de build AVANT le compte de tests**, toujours, et
-se méfier d'un compte qui n'a pas bougé alors qu'on vient d'ajouter des témoins. Le COMPTE
-par classe est le second témoin — c'est déjà lui qui attrape le `-only-testing:` d'une
-classe absente du `.pbxproj`, silencieusement ignorée.
-
-## Leçon 355 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le passé
+## Leçon 359 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le passé
 
 **2026-08-31.** Deux sessions, deux entrées différentes, la même nuit, le même
 piège — c'est pour ça qu'elle est écrite à deux voix.
@@ -21229,40 +21192,10 @@ Deux corollaires qui ne se devinent pas :
 Même famille que [[reference_status_channel_lies_about_the_fact]] : le canal
 de statut ment sur le fait — ici en disant vrai sur autre chose.
 
-## Leçon 356 — « La vue est-elle montée ? » a une jumelle : « quelle SURFACE est montée ? »
-
-**2026-08-31, vue `3h` (#4098).** Carte de citation de story livrée, prouvée à
-l'écran sur `Meeshy-iOS18` : carte de scène, bandeau, tap qui ouvre la story.
-Conforme à sa planche.
-
-Sur `Meeshy-iOS26`, la MÊME conversation, la MÊME donnée : **citation aplatie**,
-vignette de 30 pt sur une ligne. Le simulateur y résout le mode de lecture en
-**Focal**, dont la citation est rendue par `FocalQuotedReplyView` — un composant
-natif, délibéré, qui n'a jamais entendu parler de mon lot.
-
-Rien ne pouvait le signaler : les deux peaux compilent, chacune reste cohérente
-avec elle-même, et aucune garde ne compare deux rendus d'une même donnée. La
-seule chose qui l'a dit est **d'avoir changé de simulateur** — iOS 18
-résolvait en Bulles, iOS 26 en Focal, parce que le programme bêta y est actif.
-
-> Vérifier qu'une vue est MONTÉE ne suffit pas quand plusieurs SURFACES peuvent
-> rendre la même donnée. La question complète est : **combien de peaux rendent
-> cette chose, et laquelle ai-je regardée ?**
-
-Le motif est le même à trois échelles, trouvées le même jour :
-- la session voisine — un composer de story à fond COLORÉ monte une AUTRE
-  surface que celle où le milestone pose ses vues ;
-- moi — la citation a trois hôtes (bulle, conteneur média, lecteur audio) et
-  #4518 en couvrait deux ;
-- moi encore — et deux PEAUX (bulles, plate), d'où #4527.
-
-**Ce n'est pas toujours un défaut** : `FocalQuotedReplyView` est dense par
-conception, et poser une carte de 235 pt dans une rangée plate irait contre son
-arbitrage écrit. D'où une issue `décision-produit` plutôt qu'un correctif —
-mais la QUESTION devait être posée, et elle ne l'aurait pas été sans la seconde
-capture.
-
 ## Leçon 360 — Trois surfaces, une nuit, le même angle mort : on éprouve ce qui ALIMENTE et ce qui DÉCIDE, jamais ce qui est POSÉ
+
+*(Sa jumelle d'échelle est la [leçon 361](#leçon-361) : la question « est-ce POSÉ ? » a une
+couche au-dessus d'elle — « quelle SURFACE est posée ? ».)*
 
 **Le fait.** Le 2026-08-31, trois features du composer sans aucun rapport entre elles ont
 été livrées avec leurs témoins au vert et n'atteignaient l'écran d'aucune façon. Les trois
@@ -21301,3 +21234,36 @@ SIGNATURE dit ce qu'elle interroge : c'est en écrivant `toolIsOpen: Bool` plut�
 **Corollaire de méthode.** Aucune de ces trois n'a été trouvée par un gate ; les trois l'ont
 été **en regardant l'écran**. La loi 5 (« la fin se prouve, capture à l'appui ») n'est pas
 une formalité de clôture : c'est le seul instrument qui pose la troisième question.
+
+## Leçon 361 — « La vue est-elle montée ? » a une jumelle : « quelle SURFACE est montée ? »
+
+**2026-08-31, vue `3h` (#4098).** Carte de citation de story livrée, prouvée à
+l'écran sur `Meeshy-iOS18` : carte de scène, bandeau, tap qui ouvre la story.
+Conforme à sa planche.
+
+Sur `Meeshy-iOS26`, la MÊME conversation, la MÊME donnée : **citation aplatie**,
+vignette de 30 pt sur une ligne. Le simulateur y résout le mode de lecture en
+**Focal**, dont la citation est rendue par `FocalQuotedReplyView` — un composant
+natif, délibéré, qui n'a jamais entendu parler de mon lot.
+
+Rien ne pouvait le signaler : les deux peaux compilent, chacune reste cohérente
+avec elle-même, et aucune garde ne compare deux rendus d'une même donnée. La
+seule chose qui l'a dit est **d'avoir changé de simulateur** — iOS 18
+résolvait en Bulles, iOS 26 en Focal, parce que le programme bêta y est actif.
+
+> Vérifier qu'une vue est MONTÉE ne suffit pas quand plusieurs SURFACES peuvent
+> rendre la même donnée. La question complète est : **combien de peaux rendent
+> cette chose, et laquelle ai-je regardée ?**
+
+Le motif est le même à trois échelles, trouvées le même jour :
+- la session voisine — un composer de story à fond COLORÉ monte une AUTRE
+  surface que celle où le milestone pose ses vues ;
+- moi — la citation a trois hôtes (bulle, conteneur média, lecteur audio) et
+  #4518 en couvrait deux ;
+- moi encore — et deux PEAUX (bulles, plate), d'où #4527.
+
+**Ce n'est pas toujours un défaut** : `FocalQuotedReplyView` est dense par
+conception, et poser une carte de 235 pt dans une rangée plate irait contre son
+arbitrage écrit. D'où une issue `décision-produit` plutôt qu'un correctif —
+mais la QUESTION devait être posée, et elle ne l'aurait pas été sans la seconde
+capture.
