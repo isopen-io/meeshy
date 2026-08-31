@@ -359,7 +359,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     /// call sites in either file). Including them here would be scope creep
     /// beyond the audited root cause (wrong password / 2FA code).
     nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
-        guard endpoint.hasPrefix("/auth/login") else { return .sessionExpired }
+        guard MeeshyEndpointPolicy.authKind(forLegacyPath: endpoint) == .credentials else {
+            return .sessionExpired
+        }
         return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
     }
 
@@ -605,7 +607,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
 
         // We declare isRefreshOrAuth and shouldAttemptRefresh here because they are needed for both proactive and reactive refresh
-        let isRefreshOrAuth = endpoint == "/auth/refresh" || endpoint.hasPrefix("/auth/login") || endpoint.hasPrefix("/auth/register") || endpoint.hasPrefix("/auth/magic-link")
+        // #4282 — la politique a un NOM et un témoin. Elle vivait ici en
+        // comparaisons de préfixe : une comparaison ne rougit jamais quand une
+        // route bouge, elle cesse de matcher et la règle disparaît en silence.
+        let isRefreshOrAuth = MeeshyEndpointPolicy.authKind(forLegacyPath: endpoint) != .bearer
         let shouldAttemptRefresh = !isRefreshOrAuth
 
         guard let url = components.url else {
@@ -670,7 +675,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             // retrying just burns the 2 s + 4 s back-off and can never
             // succeed. Opt them out of the retry loop so the caller fails
             // fast and falls back (e.g. a plaintext message send).
-            let endpointAllowsRetry = !endpoint.hasPrefix("/signal/")
+            let endpointAllowsRetry = MeeshyEndpointPolicy.retryPolicy(forLegacyPath: endpoint) == .standard
 
             for attempt in 0..<(Self.maxRetryAttempts + 1) {
                 if attempt > 0 {

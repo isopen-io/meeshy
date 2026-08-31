@@ -38,7 +38,17 @@ const OUTPUT_DIR = resolve(
   REPO_ROOT,
   'packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints'
 );
-const HAND_WRITTEN = new Set(['MeeshyEndpoint.swift']);
+/**
+ * L'en-tête que ce script pose sur chaque fichier qu'il écrit. Il sert aussi de
+ * MARQUE de propriété : la suppression des orphelins ne touche que les fichiers
+ * qui la portent.
+ *
+ * Une LISTE de fichiers écrits à la main aurait fait l'affaire le jour de son
+ * écriture, et se serait périmée au premier fichier ajouté — silencieusement,
+ * en supprimant du code que personne n'a demandé à générer. La marque, elle,
+ * voyage avec le fichier.
+ */
+const GENERATED_MARK = '// GÉNÉRÉ — ne pas éditer à la main.';
 const REGENERATE_MANIFEST_COMMAND = 'cd services/gateway && npm run route-manifest:generate';
 
 interface RawManifestFile {
@@ -74,8 +84,10 @@ function main(): void {
   const written = new Set(files.map((file) => file.fileName));
   for (const existing of readdirSync(OUTPUT_DIR)) {
     if (!existing.endsWith('.swift')) continue;
-    if (HAND_WRITTEN.has(existing) || written.has(existing)) continue;
-    rmSync(join(OUTPUT_DIR, existing));
+    if (written.has(existing)) continue;
+    const path = join(OUTPUT_DIR, existing);
+    if (!readFileSync(path, 'utf8').startsWith(GENERATED_MARK)) continue;
+    rmSync(path);
     console.log(`- ${existing} (namespace disparu du manifeste)`);
   }
 

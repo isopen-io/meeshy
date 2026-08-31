@@ -32,7 +32,7 @@ const OUTPUT_DIR = resolve(
   REPO_ROOT,
   'packages/MeeshySDK/Sources/MeeshySDK/Networking/Endpoints'
 );
-const HAND_WRITTEN = new Set(['MeeshyEndpoint.swift']);
+const GENERATED_MARK = '// GÉNÉRÉ — ne pas éditer à la main.';
 const REGENERATE = 'cd packages/shared && npm run ios-endpoints:generate';
 
 function manifestRoutes(): readonly ManifestRouteInput[] {
@@ -61,8 +61,14 @@ describe("cliquet — les énumérations Swift suivent le manifeste", () => {
         (file) => file.fileName
       )
     );
+    // Un fichier écrit à la main ne porte pas la marque du générateur — c'est
+    // elle, et non une liste de noms, qui distingue les deux. Une liste se
+    // périme au premier fichier ajouté, sans rien dire.
     const orphans = readdirSync(OUTPUT_DIR).filter(
-      (name) => name.endsWith('.swift') && !HAND_WRITTEN.has(name) && !expected.has(name)
+      (name) =>
+        name.endsWith('.swift') &&
+        !expected.has(name) &&
+        readFileSync(join(OUTPUT_DIR, name), 'utf8').startsWith(GENERATED_MARK)
     );
     expect(orphans, `Fichiers sans route au manifeste. Régénérer : ${REGENERATE}`).toEqual([]);
   });
@@ -76,6 +82,7 @@ describe("cliquet — les énumérations Swift suivent le manifeste", () => {
     const swift = readdirSync(OUTPUT_DIR).filter((name) => name.endsWith('.swift'));
     expect(swift.length).toBeGreaterThan(10);
     expect(swift).toContain('MeeshyEndpoint.swift');
+    expect(swift).toContain('MeeshyEndpointPolicy.swift');
     expect(swift).toContain('AuthEndpoint.swift');
   });
 });
