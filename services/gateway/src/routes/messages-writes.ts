@@ -54,6 +54,72 @@ interface UpdateMessageBody {
   isEdited?: boolean;
 }
 
+/**
+ * L'audience de `attachment-status:updated`, et ce que vaut son verdict.
+ *
+ * `repli` DÉCLARE que la préférence n'a pas pu être lue : la room qu'il porte
+ * n'est pas un choix de l'utilisateur, c'est une posture d'incident. Un booléen
+ * `showReadReceipts` seul ne pouvait pas dire ça — il aurait rangé « il a
+ * refusé » et « on n'a pas pu demander » sous la même valeur, alors que les
+ * deux n'envoient pas chercher au même endroit quand on relit le journal.
+ */
+type AudienceStatutPiece =
+  | { readonly kind: 'lue'; readonly room: string }
+  | { readonly kind: 'repli'; readonly room: string; readonly cause: unknown };
+
+/**
+ * Choisit la room de `attachment-status:updated` — et ne LÈVE JAMAIS (#4530).
+ *
+ * ## Ce que ce site était le seul à ne pas avoir
+ *
+ * `privacy-cache.ts` pose sa règle en toutes lettres : il ne rattrape rien, et
+ * « chaque appelant garde son propre repli ». Mesuré, les cinq autres appelants
+ * de `loadPrivacyPreferencesCached` le font — `PrivacyPreferencesService`
+ * (`getPreferences`, `getPreferencesForUsers`),
+ * `MessageReadStatusService._loadReadReceiptOptOuts`, et les deux résolveurs de
+ * `preferences/forward-source-visibility`. Celui-ci n'en avait aucun : il
+ * héritait du `catch` de la DIFFUSION, qui ne se replie sur rien — il journalise
+ * et passe. Une base indisponible faisait donc disparaître l'événement ENTIER,
+ * y compris pour les propres appareils de celui qui venait d'écouter, pendant
+ * que la route rendait 200 ; rien dans la réponse ne distinguait ce cas du cas
+ * nominal. Le `try` de la diffusion n'entourait au départ que l'émission :
+ * `85494dee00` y a fait entrer cette lecture, et le `catch` a hérité d'un appel
+ * qui tombe pour des raisons ordinaires (base, coupe-circuit, timeout).
+ *
+ * ## Pourquoi le repli est RESTRICTIF ici, et OUVERT chez les cinq autres
+ *
+ * L'écart est délibéré, pas une divergence. Les cinq autres décident si un
+ * CHAMP part dans une charge qui part de toute façon — se fermer y priverait
+ * tout le monde d'un contenu sur la foi d'un incident. Ici la préférence
+ * choisit une ADRESSE : la room personnelle porte l'événement à celui qui a agi
+ * (ses autres appareils restent synchronisés, ce qui est le service rendu), et
+ * n'élargit l'audience à personne — un incident ne publie pas à toute une
+ * conversation la position d'écoute de quelqu'un qui l'a peut-être refusée.
+ * Doctrine du dépôt : une garde échoue en montrant MOINS, jamais plus. Rien
+ * n'est mémoïsé (`privacy-cache` ne cache pas les échecs) : la requête suivante
+ * relit et retrouve la room nominale.
+ *
+ * L'absence de préférence stockée reste PERMISSIVE (`!== false`) : ne rien
+ * avoir réglé n'est pas un refus, et seul l'ÉCHEC de la lecture déclenche le
+ * repli.
+ */
+const resolveAudienceStatutPiece = async (
+  prisma: MessagesRouteDeps['prisma'],
+  userId: string,
+  conversationId: string
+): Promise<AudienceStatutPiece> => {
+  try {
+    const prefs = await loadPrivacyPreferencesCached(prisma, [userId]);
+    const diffuseAuxAutres = prefs.get(userId)?.showReadReceipts !== false;
+    return {
+      kind: 'lue',
+      room: diffuseAuxAutres ? ROOMS.conversation(conversationId) : ROOMS.user(userId),
+    };
+  } catch (cause) {
+    return { kind: 'repli', room: ROOMS.user(userId), cause };
+  }
+};
+
 export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: MessagesRouteDeps): void {
   const { prisma, requiredAuth, attachmentService, translationService, socketIOHandler, trackingLinkService } = deps;
 
@@ -620,15 +686,26 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           // Il n'est pas SILENCIÉ pour autant : la diffusion se replie sur SA
           // room à lui, pour que ses propres appareils restent synchronisés.
           // « Ne pas dire aux autres » n'est pas « ne rien savoir soi-même ».
-          const prefs = await loadPrivacyPreferencesCached(prisma, [userId]);
-          const diffuseAuxAutres = prefs.get(userId)?.showReadReceipts !== false;
-          const room = diffuseAuxAutres
-            ? ROOMS.conversation(attachment.message.conversationId)
-            : ROOMS.user(userId);
+          //
+          // La lecture qui tranche vit dans `resolveAudienceStatutPiece`, qui ne
+          // lève jamais : c'est ELLE qui a l'incident, pas la diffusion, et le
+          // `catch` ci-dessous ne doit plus l'avaler (#4530).
+          const audience = await resolveAudienceStatutPiece(
+            prisma,
+            userId,
+            attachment.message.conversationId
+          );
+          if (audience.kind === 'repli') {
+            logger.error(
+              'Préférences de confidentialité illisibles — repli sur la room restrictive, l\'événement part quand même',
+              audience.cause,
+              { userId, attachmentId, room: audience.room }
+            );
+          }
           const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0
             ? Math.min(100, Math.round((playPositionMs / durationMs) * 100))
             : undefined;
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+          socketIOManager.getIO().to(audience.room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
             messageId: attachment.messageId,
             conversationId: attachment.message.conversationId,
@@ -641,7 +718,15 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           });
         }
       } catch (socketError) {
-        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
+        // Ce `catch` ne couvre plus qu'un incident de TRANSPORT — la lecture de
+        // préférences a son propre repli, un cran au-dessus. Le message le dit,
+        // parce qu'un refus à plusieurs causes possibles doit les SÉPARER : les
+        // deux n'envoient pas chercher au même endroit (#4530).
+        logger.error(
+          'Diffusion Socket.IO en échec — le transport, pas la lecture des préférences',
+          socketError as Error,
+          { userId, attachmentId }
+        );
       }
 
       return sendSuccess(reply, { message: `Attachment marqué comme ${action}` });
