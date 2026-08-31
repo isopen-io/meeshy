@@ -31,9 +31,17 @@
  * l'ecran clos, qui n'est la cible d'aucune des deux.
  *
  * La loi de selection vit dans `apps/web-v3/scripts/lib/vues-comparables.mjs`,
- * avec ses temoins : une route parametree se sert par un jeton DECLARE par la
- * vue (champ `jetons` de `vues.json`), et deux vues qui partagent une route
- * ont besoin d'un ETAT — un jeton vivant, un jeton expire — pas d'une route.
+ * avec ses temoins : une route parametree se sert par un jeton DECLARE, et deux
+ * vues qui partagent une route ont besoin d'un ETAT — un jeton vivant, un jeton
+ * expire — pas d'une route.
+ *
+ * OU CE JETON EST DECLARE, ET POURQUOI PAS DANS vues.json. `vues.json` est
+ * REGENERE par `capture-cibles.js` depuis une planche qui ne connait aucun
+ * jeton : un `jetons` pose la disparaitrait a la prochaine passe, en rendant
+ * exactement le refus qu'un jeton reellement absent produit — mode degrade
+ * indiscernable du mode nominal. Il vit donc dans `jetons-de-vues.json`, que la
+ * capture n'ouvre jamais, et que `litLesVues` joint a l'index par identifiant de
+ * vue (`apps/web-v3/scripts/lib/index-des-vues.mjs`).
  */
 'use strict';
 
@@ -120,10 +128,19 @@ function ecartStructurel(a, b) {
 (async () => {
   // La selection se tranche AVANT le navigateur : un refus ne coute alors aucun
   // lancement de Chromium, et il sort par la meme porte que le verdict.
-  const { selectionComparable, refusDeSelection } = await import(
+  const { RC_NON_COMPARABLE, selectionComparable, refusDeSelection } = await import(
     pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/vues-comparables.mjs')).href);
+  const { litLesVues } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
 
-  const index = JSON.parse(fs.readFileSync(path.join(HERE, 'vues.json'), 'utf8'));
+  // Un index qu'on ne sait pas LIRE se dit avant tout le reste, et par le meme
+  // code de sortie : une annexe absente ou un jeton declare au mauvais endroit
+  // ne sont pas « hors cible », ce sont des raisons de n'avoir rien mesure.
+  const index = litLesVues(HERE);
+  if (index.refus.length) {
+    index.refus.forEach(r => process.stderr.write(`[compare] NON COMPARABLE — ${r.id} — ${r.raison}\n`));
+    process.exit(RC_NON_COMPARABLE);
+  }
   const selection = selectionComparable({ vues: index.vues, demandees: ONLY });
   const refus = refusDeSelection(selection);
   if (refus) {
