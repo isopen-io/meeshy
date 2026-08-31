@@ -29,6 +29,32 @@ const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
 const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
 
+/** La vie du jeton d'étape 2, alignée sur `AuthService.authenticate` (5 min). */
+const PENDING_TWO_FACTOR_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * L'état du second facteur d'un compte, en TROIS valeurs — pas deux (#4534).
+ *
+ * `absent` et `required` se lisent ; `indeterminate` est le troisième cas que
+ * les booléens escamotent : le champ n'a pas été projeté, ou porte autre chose
+ * qu'une date. On ne SAIT alors pas si le compte est protégé, et le sens sûr
+ * est le refus. Une garde qui replierait ce cas sur « pas de second facteur »
+ * rouvrirait le contournement le jour où quelqu'un retire `twoFactorEnabledAt`
+ * du `select` — sans qu'aucun témoin ne rougisse.
+ */
+export type SecondFactorState = 'absent' | 'required' | 'indeterminate';
+
+export function resolveSecondFactor(twoFactorEnabledAt: unknown): SecondFactorState {
+  if (twoFactorEnabledAt === null) return 'absent';
+  if (twoFactorEnabledAt instanceof Date) {
+    return Number.isNaN(twoFactorEnabledAt.getTime()) ? 'indeterminate' : 'required';
+  }
+  if (typeof twoFactorEnabledAt === 'string') {
+    return Number.isNaN(Date.parse(twoFactorEnabledAt)) ? 'indeterminate' : 'required';
+  }
+  return 'indeterminate';
+}
+
 export interface MagicLinkRequest {
   email: string;
   deviceFingerprint?: string;
@@ -226,6 +252,14 @@ export class MagicLinkService {
     sessionToken?: string;
     session?: any;
     rememberDevice?: boolean; // Retrieved from server-side storage
+    /**
+     * Branche EXCLUSIVE de la session complète (#4534) : quand elle vaut
+     * `true`, ni `token`, ni `sessionToken`, ni `session` ne sont rendus —
+     * aucun accès n'est accordé avant que le second facteur soit vérifié.
+     */
+    requires2FA?: boolean;
+    /** Jeton d'étape 2, à présenter à `POST /auth/login/2fa` avec le code. */
+    twoFactorToken?: string;
   }> {
     const { token, requestContext } = validation;
 
@@ -315,7 +349,66 @@ export class MagicLinkService {
         data: { usedAt: new Date() }
       });
 
-      // 8. Créer la session AVANT de signer — l'ordre est le correctif (#4264)
+      // 8. Le second facteur, quand le compte en porte un (#4534)
+      //
+      // Ce site rendait `token` ET `sessionToken` INCONDITIONNELLEMENT : un
+      // compte protégé par un second facteur était entièrement joignable par
+      // un lien reçu PAR E-MAIL, c'est-à-dire exactement le scénario contre
+      // lequel ce facteur existe. `twoFactorEnabledAt` était déjà chargé
+      // (quelqu'un a su qu'il faudrait le regarder) et rien ne le lisait.
+      //
+      // La garde vit dans le SERVICE, pas dans la route : `validateMagicLink`
+      // est le passage unique des DEUX producteurs de lien — la demande
+      // interactive et le lien de 24 h glissé dans l'e-mail de digest
+      // (`issueLoginTokenForUser`). Même raison que la revérification de
+      // `isActive` douze lignes plus haut.
+      //
+      // Le lien est déjà consommé à ce stade, et c'est voulu : il a prouvé la
+      // possession de la boîte, il ne se rejoue pas pour émettre un second
+      // jeton d'étape 2. Celui-ci vit cinq minutes et se represente autant de
+      // fois qu'il faut pour saisir le code.
+      const secondFactor = resolveSecondFactor(user.twoFactorEnabledAt);
+
+      if (secondFactor === 'indeterminate') {
+        logger.error('État du second facteur indéterminé — session refusée');
+        await this.logSecurityEvent(user.id, 'MAGIC_LINK_2FA_INDETERMINATE', 'HIGH', {
+          ipAddress: requestContext.ip
+        });
+        return { success: false, error: 'An error occurred. Please try again.' };
+      }
+
+      if (secondFactor === 'required') {
+        const twoFactorToken = await this.mintPendingTwoFactorToken(user.id);
+
+        await this.logSecurityEvent(user.id, 'MAGIC_LINK_2FA_REQUIRED', 'LOW', {
+          ipAddress: requestContext.ip,
+          geoLocation: requestContext.geoData?.location
+        });
+
+        logger.info('Second facteur requis — aucune session ouverte');
+
+        // Ce que la réponse PARTIELLE transporte est aussi ce qu'elle NE
+        // transporte pas : ni jeton, ni session, ni le profil complet. Le
+        // porteur du lien n'a encore prouvé que la possession de la boîte —
+        // il n'a pas à en recevoir le rôle, le téléphone ni la biographie.
+        return {
+          success: true,
+          requires2FA: true,
+          twoFactorToken,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName || `${user.firstName} ${user.lastName}`,
+            avatar: user.avatar
+          },
+          rememberDevice: magicLinkToken.rememberDevice
+        };
+      }
+
+      // 9. Créer la session AVANT de signer — l'ordre est le correctif (#4264)
       //
       // Ce site signait son JWT douze lignes plus haut, avec son PROPRE
       // `require('jsonwebtoken')` et une charge à deux champs : pas de `role`,
@@ -335,7 +428,7 @@ export class MagicLinkService {
         requestContext
       });
 
-      // 9. Signer le JWT, rattaché à la session qui vient de naître
+      // 10. Signer le JWT, rattaché à la session qui vient de naître
       const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
       const jwtToken = signSessionToken({
         user: { id: user.id, username: user.username, role: user.role },
@@ -343,7 +436,7 @@ export class MagicLinkService {
         sessionId: session.id
       });
 
-      // 10. Update user's last login info
+      // 11. Update user's last login info
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -354,7 +447,7 @@ export class MagicLinkService {
         }
       });
 
-      // 11. Log security event
+      // 12. Log security event
       await this.logSecurityEvent(user.id, 'MAGIC_LINK_LOGIN_SUCCESS', 'LOW', {
         ipAddress: requestContext.ip,
         geoLocation: requestContext.geoData?.location,
@@ -363,7 +456,7 @@ export class MagicLinkService {
 
       logger.info('Login successful');
 
-      // 12. Return user data (convert to SocketIOUser format)
+      // 13. Return user data (convert to SocketIOUser format)
       const socketIOUser = {
         id: user.id,
         username: user.username,
@@ -402,6 +495,33 @@ export class MagicLinkService {
       logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }
+  }
+
+  /**
+   * Émettre le jeton d'étape 2 que `POST /auth/login/2fa` sait DÉJÀ consommer.
+   *
+   * Même forme et même mémoire que `AuthService.authenticate` : le SHA-256 du
+   * jeton dans `User.phoneVerificationCode`, sa péremption dans
+   * `phoneVerificationExpiry`. C'est ce qui rend le lien magique un producteur
+   * d'étape 1 de plus, sans qu'aucune ligne de l'étape 2 ne change.
+   *
+   * L'écriture n'est pas gardée : si elle échoue, l'exception remonte au
+   * `catch` de `validateMagicLink`, qui refuse — jamais une session ouverte
+   * sur un second facteur qu'on n'aurait pas su armer.
+   */
+  private async mintPendingTwoFactorToken(userId: string): Promise<string> {
+    const twoFactorToken = crypto.randomBytes(32).toString('hex');
+    const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        phoneVerificationCode: twoFactorTokenHash,
+        phoneVerificationExpiry: new Date(Date.now() + PENDING_TWO_FACTOR_TTL_MS)
+      }
+    });
+
+    return twoFactorToken;
   }
 
   /**
