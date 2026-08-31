@@ -144,6 +144,7 @@ import { EventEmitter } from 'events';
 import { registerAllRoutes, type RouteRegistrationDeps } from '../route-registration';
 import { createUnifiedAuthMiddleware, AUTH_REGIME, type AuthRegime } from '../middleware/auth';
 import { socketIOAdminRoutes } from '../socketio/socketio-admin-routes';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // ---------------------------------------------------------------------------
 // Stub Prisma "profond" — IDENTIQUE à celui que portait
@@ -704,16 +705,16 @@ function hasEnricherOnly(route: CollectedRoute, authenticateRef: unknown): boole
  * rougit, puisqu'il interroge le serveur et ne lit pas cette table.
  */
 const GARDES_HORS_HOOK: ReadonlySet<string> = new Set([
-  'POST /api/v1/uploads',
-  'POST /api/v1/uploads/*',
-  'PATCH /api/v1/uploads/*',
-  'DELETE /api/v1/uploads/*',
+  `POST ${apiPath('/uploads')}`,
+  `POST ${apiPath('/uploads/*')}`,
+  `PATCH ${apiPath('/uploads/*')}`,
+  `DELETE ${apiPath('/uploads/*')}`,
   // `routes/auth/refresh` vérifie la SIGNATURE du jeton reçu dans le corps
   // avant toute autre chose et répond 401 sans elle (`573581e27`). Aucun
   // en-tête n'est exigé — d'où l'absence de hook — mais l'appelant doit
   // prouver quelque chose, donc la route n'est pas « publique par
   // construction ».
-  'POST /api/v1/auth/refresh',
+  `POST ${apiPath('/auth/refresh')}`,
 ]);
 
 const UNIFIED_AUTH_CALL_MARKER = 'authMiddleware.createAuthContext(';
