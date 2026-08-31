@@ -175,7 +175,7 @@ struct ComposerSceneSurface: View {
     /// change de sens selon l'état n'apprend rien.
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = servies.filter(ComposerSceneFloatingRail.doors.contains)
+        let portes = ComposerSceneFloatingRail.sideRow(from: servies)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
             ComposerLeadingRail(mode: .doors(portes),
@@ -290,18 +290,26 @@ struct ComposerSceneSurface: View {
                 // essai.
                 .overlay(alignment: .leading) { floatingRail }
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
-                // **Le rail FLOTTE sur le bord DROIT, DANS la scène** (#4072,
-                // arbitrage du 2026-08-28 sur #4061).
+                // **Les deux rails vivent dans les COULOIRS du plateau**
+                // (directive porteur 2026-08-31, #4561) :
                 //
-                // Il vivait dans le couloir GAUCHE, à huit entrées, et le
-                // doc-comment ci-dessus le justifiait par la loi 6 : « un rail
-                // posé sur la scène ferait mentir l'aperçu sur le rendu final ».
-                // L'argument est réel — et l'arbitrage l'a tranché après
-                // relecture des captures : la planche `1b` montre quatre
-                // pastilles flottant SUR la scène, à droite. Ce que la loi 6
-                // protège reste protégé par l'œil du socle, qui rend la scène
-                // sans son chrome ; ce que le couloir coûtait était la rangée
-                // basse entière.
+                //   > « On exploite la place du plateau sans encombrer le
+                //   > canvas », ce qui « permet de manipuler tout le canvas sans
+                //   > problème ».
+                //
+                // Cela REMPLACE l'arbitrage du 2026-08-28, qui faisait flotter
+                // le rail sur le bord droit DANS la scène en s'appuyant sur les
+                // quatre pastilles de la planche `1b`. Deux raisons, et la
+                // seconde est celle que la directive ajoute : la loi 6 (un
+                // contrôle posé sur la scène fait mentir l'aperçu sur le rendu
+                // final), et la MANIPULATION — un objet se déplace, se pince et
+                // se tourne n'importe où dans le cadre, donc un rail flottant
+                // vole les touches de la bande qu'il couvre. L'auteur découvre
+                // la zone morte en essayant d'y traîner quelque chose.
+                //
+                // Le plateau est de la place DISPONIBLE : la scène est figée en
+                // 9:16 et l'écran ne l'est pas. L'occuper ne coûte rien ;
+                // occuper le canvas coûte une zone morte.
                 .overlay(alignment: .bottomTrailing) {
                     ComposerTrailingRail(actions: trailingActions,
                                          plateauTint: plateauTint,

@@ -2,73 +2,122 @@ import XCTest
 @testable import Meeshy
 @testable import MeeshyUI
 
-/// **Deux places, deux rôles — et c'est l'arbitrage du 2026-08-28 (#4061, `1b`).**
+/// **Deux places, deux NIVEAUX** (directive porteur 2026-08-31, #4561).
 ///
-/// Le rail FLOTTE sur le bord droit, DANS la scène, et il agit **sur** elle :
-/// quatre gestes qui posent ou modifient ce qui est déjà là. La rangée basse,
-/// elle, fait **entrer** de la matière — photo, caméra, fichier, lieu. Les
-/// fondre en un seul rail de huit icônes mélange les deux rôles et coûte la
-/// rangée que le pouce atteint.
+/// > « Cette approche est meilleure, ce qui permet de manipuler tout le canvas
+/// > sans problème : on exploite la place du plateau sans encombrer le canvas.
+/// > […] On préserve des actions sur la ligne canonique comme la description du
+/// > contenu, l'ajout de son de fond, image et vidéo de fond, mention et
+/// > localisation de la publication ; et sur la rangée à gauche, ce sont les
+/// > features qui apparaissent sur le canvas visuellement. »
 ///
-/// Mesuré au simulateur `Meeshy-iOS26` avant ce lot : dès qu'un fond était
-/// choisi, l'app montait `ComposerSceneSurface` — **deux rails hors de la
-/// scène, huit entrées à gauche, aucune rangée basse**. C'est exactement la
-/// disposition que l'arbitrage a écartée, au motif qu'aucune capture ne la
-/// montre.
+/// ## Ce que ce lot répare
+///
+/// `ComposerRailDoor.level` classait déjà chaque porte — `.publication`,
+/// `.slide`, `.object`, `.scene` — avec un `switch` exhaustif et un doc-comment
+/// par cas. Deux fichiers plus loin, la répartition était un **littéral écrit à
+/// la main** : `[.text, .sticker, .sound, .mention]`. Il rangeait `.mention`,
+/// que l'énuméré déclare `.publication`, parmi ce qui vit sur la scène.
+///
+/// > Une liste écrite à la main À CÔTÉ d'une règle qui décide déjà la même chose
+/// > ne se fait contredire par rien : les deux compilent, et seule celle qui est
+/// > appelée compte. Le doc-comment de la règle continue d'énoncer une
+/// > classification juste que le produit n'applique pas.
+///
+/// C'est ce que le porteur a lu comme « la sémantique n'est pas si claire » — et
+/// il avait raison : la moitié raisonnée était invisible à l'écran.
+///
+/// ## L'axe a changé, et c'est le fond du lot
+///
+/// L'axe précédent était « agit SUR la scène » contre « fait ENTRER de la
+/// matière ». Il classait le dessin en bas (un tracé entre dans la scène) et la
+/// mention à gauche (elle agit sur ce qui est là) : deux rangements défendables
+/// qui décrivent le VERBE de la porte, pas l'endroit où son résultat apparaît.
+/// La main, elle, suit le résultat.
 final class ComposerSceneFloatingRailTests: XCTestCase {
 
-    func test_leRailPorteLesQuatreGestesDeLaMaquette() {
-        XCTAssertEqual(ComposerSceneFloatingRail.doors,
-                       [.text, .sticker, .sound, .mention],
-                       "✎ ☺ ♫ # — les quatre de la planche `1b`, dans son ordre")
+    private let toutes: [ComposerRailDoor] = [.description, .media, .sound, .sticker,
+                                              .mention, .place, .drawing, .text]
+
+    // MARK: - Ce qui SE VOIT sur la scène
+
+    func test_laRangeeDeGauche_porteCeQuiApparaitSurLaScene() {
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: toutes),
+                       [.media, .sound, .sticker, .drawing, .text],
+                       "texte, sticker, son posé, média de premier plan, tracé")
     }
 
-    /// **Le dessin n'y est PAS, et ce n'est pas un oubli.** L'arbitrage dit
-    /// quatre actions ; la loi 1 dit qu'on ne retire rien. Les deux tiennent
-    /// ensemble parce que le dessin FAIT ENTRER un tracé dans la scène — c'est
-    /// de la matière, comme une photo — et sa place est donc la rangée basse.
-    func test_leDessinNEstPasDansLeRail_ilEstDansLaRangeeBasse() {
-        XCTAssertFalse(ComposerSceneFloatingRail.doors.contains(.drawing))
-        XCTAssertFalse(ComposerSceneFloatingRail.doors.contains(.media))
-        XCTAssertFalse(ComposerSceneFloatingRail.doors.contains(.place))
+    /// **La mention et le lieu ont CHANGÉ DE CÔTÉ**, et ce n'est pas un
+    /// rangement : les deux ouvrent un sélecteur de la PUBLICATION
+    /// (`presentedPortal = .mention` / `.location`) et ne posent rien sur la
+    /// scène. Les laisser à gauche promettait un objet qui n'arrive jamais.
+    func test_laMentionEtLeLieu_viventSurLaLigneCanonique() {
+        let bas = ComposerSceneFloatingRail.lowRow(from: toutes)
+        XCTAssertEqual(bas, [.description, .mention, .place])
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.mention))
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.place))
     }
 
-    /// Le rail est un rail de SCÈNE : sans scène, il n'a rien sur quoi agir —
-    /// loi 8, le prisme n'affiche que ce dont on a besoin quand on en a besoin.
-    func test_sansScene_leRailNExistePas() {
-        XCTAssertTrue(ComposerSceneFloatingRail.served(hasScene: false).isEmpty)
-        XCTAssertFalse(ComposerSceneFloatingRail.served(hasScene: true).isEmpty)
+    /// **Le dessin a changé de côté dans l'AUTRE sens.** L'axe précédent le
+    /// rangeait en bas parce qu'un tracé « entre » dans la scène. Il s'y VOIT,
+    /// donc il est à gauche : c'est le résultat qui décide, pas le verbe.
+    func test_leDessin_estAGauche_carUnTraceSeVoit() {
+        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.drawing))
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes).contains(.drawing))
     }
 
-    /// **Le fusible.** Une règle qui rendrait toujours la liste vide passerait
-    /// le témoin négatif ci-dessus sans rien servir.
-    func test_avecUneScene_lesQuatreSontServies() {
-        XCTAssertEqual(ComposerSceneFloatingRail.served(hasScene: true).count, 4)
+    // MARK: - La partition
+
+    /// **Aucune porte ne se perd, et aucune n'est à deux places.** Les deux
+    /// rangées sont la NÉGATION du même prédicat — c'est structurel, pas une
+    /// coïncidence à vérifier : deux filtres écrits séparément auraient permis
+    /// les deux fautes.
+    func test_lesDeuxRangees_partagentLesPortesSansPerteNiDoublon() {
+        let gauche = ComposerSceneFloatingRail.sideRow(from: toutes)
+        let bas = ComposerSceneFloatingRail.lowRow(from: toutes)
+
+        XCTAssertEqual(Set(gauche).union(bas), Set(toutes), "aucune porte ne se perd")
+        XCTAssertTrue(Set(gauche).isDisjoint(with: Set(bas)), "aucune porte à deux places")
+        XCTAssertEqual(gauche.count + bas.count, toutes.count, "ni doublon ni perte")
     }
 
-    // MARK: - Le partage des huit portes
-
-    /// **Aucune porte ne se perd, et aucune n'est à deux places.** Le rail et
-    /// la rangée forment une PARTITION du jeu servi : c'est ce qui rend le
-    /// partage vérifiable plutôt que déclaratif.
-    func test_leRailEtLaRangee_partagentLesPortesSansPerteNiDoublon() {
-        let servies: [ComposerRailDoor] = [.description, .media, .sound, .sticker,
-                                           .mention, .place, .drawing, .text]
-        let rail = ComposerSceneFloatingRail.served(hasScene: true)
-            .filter(servies.contains)
-        let rangee = ComposerSceneFloatingRail.lowRow(from: servies)
-
-        XCTAssertEqual(Set(rail).union(rangee), Set(servies), "aucune porte ne se perd")
-        XCTAssertTrue(Set(rail).isDisjoint(with: Set(rangee)), "aucune porte à deux places")
-        XCTAssertEqual(rangee, [.description, .media, .place, .drawing])
+    /// Les deux rangées se DÉRIVENT du jeu servi : une porte que l'hôte ne sert
+    /// pas n'apparaît nulle part.
+    func test_unePorteNonServie_nApparaitNullePart() {
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: [.media, .description]), [.media])
+        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: [.media, .description]), [.description])
     }
 
-    /// La rangée se DÉRIVE du jeu servi : une porte que l'hôte ne sert pas
-    /// n'apparaît nulle part. Deux listes écrites à part auraient divergé au
-    /// premier ajout.
-    func test_unePorteNonServie_nApparaitNulle_part() {
-        let rangee = ComposerSceneFloatingRail.lowRow(from: [.media, .text])
-        XCTAssertEqual(rangee, [.media])
-        XCTAssertFalse(rangee.contains(.drawing))
+    // MARK: - Le prédicat lui-même
+
+    /// **Le niveau répond à la question, et le `switch` est exhaustif.** Un
+    /// cinquième niveau ne compilera pas tant qu'il n'aura pas dit s'il se voit
+    /// — exactement la question qu'on oublie de se poser en ajoutant un bouton.
+    func test_leNiveau_ditSiLeResultatSeVoit() {
+        XCTAssertTrue(ComposerRailLevel.object.appearsOnCanvas)
+        XCTAssertTrue(ComposerRailLevel.scene.appearsOnCanvas)
+        XCTAssertFalse(ComposerRailLevel.publication.appearsOnCanvas)
+        XCTAssertFalse(ComposerRailLevel.slide.appearsOnCanvas)
+    }
+
+    /// **Le fusible de la dérivation.** Si `appearsOnCanvas` rendait toujours la
+    /// même valeur, l'une des deux rangées serait vide et tous les témoins de
+    /// partition ci-dessus resteraient verts — une partition dont un côté est
+    /// vide est toujours une partition.
+    func test_lesDeuxRangees_sontNonVides() {
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).isEmpty)
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes).isEmpty)
+    }
+
+    /// **Sans scène, la rangée de gauche disparaît d'elle-même.** La loi 8 n'a
+    /// plus besoin d'être écrite ici : `ComposerRailDoor.offered` retire déjà
+    /// les portes de niveau `.object` et `.scene` d'un format sans toile, et ce
+    /// sont exactement celles que `appearsOnCanvas` retient.
+    func test_sansScene_laRangeeDeGaucheEstVide() {
+        let offertes = ComposerRailDoor.offered(served: Set(toutes),
+                                                format: .status, allowsCapture: true)
+        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: offertes).isEmpty)
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: offertes).isEmpty,
+                       "la ligne canonique survit — elle ne vise pas la toile")
     }
 }

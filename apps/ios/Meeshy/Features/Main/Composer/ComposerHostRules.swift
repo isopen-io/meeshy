@@ -108,42 +108,60 @@ nonisolated enum ComposerReelGate {
 /// montre est UN rail, flottant sur le bord DROIT, à quatre actions
 /// (✎ ☺ ♫ #) — **et la rangée d'outils basse conservée**.
 ///
-/// **Deux places, deux rôles**, et c'est tout le sens de la séparation :
-/// - le RAIL agit **sur** la scène — poser un texte, un sticker, un son, une
-///   mention sur ce qui est déjà là ;
-/// - la RANGÉE BASSE fait **entrer** de la matière — photo, caméra, fichier,
-///   lieu, dessin.
+/// **Deux places, deux NIVEAUX** (directive porteur 2026-08-31, #4561).
 ///
-/// Les fondre en un seul rail de huit icônes, ce que l'app faisait, mélange les
-/// deux rôles ET coûte la rangée que le pouce atteint : mesuré au simulateur, la
-/// rangée disparaissait entièrement dès qu'un fond était choisi.
+/// > « On exploite la place du plateau sans encombrer le canvas. […] Sur la
+/// > rangée à gauche, ce sont les features qui apparaissent sur le canvas
+/// > visuellement ; on préserve sur la ligne canonique la description du
+/// > contenu, l'ajout de son de fond, image et vidéo de fond, mention et
+/// > localisation de la publication. »
 ///
-/// **Le dessin n'est pas dans le rail, et ce n'est pas un oubli.** L'arbitrage
-/// dit quatre ; la loi 1 dit qu'on ne retire rien. Les deux tiennent ensemble
-/// parce qu'un tracé ENTRE dans la scène — c'est de la matière, comme une
-/// photo — et sa place est donc la rangée basse.
+/// - la rangée de GAUCHE porte ce qui **se voit** sur la scène — texte,
+///   sticker, son posé, média de premier plan, tracé ;
+/// - la LIGNE CANONIQUE porte ce qui appartient à l'**envoi ou à la slide** —
+///   description, mention, lieu de la publication.
+///
+/// **L'axe précédent était « agit sur la scène » contre « fait entrer de la
+/// matière ».** Il classait le dessin en bas (un tracé ENTRE dans la scène) et
+/// la mention à gauche (elle agit sur ce qui est là) — deux rangements
+/// défendables qui ne disaient rien à l'auteur, parce qu'ils décrivent le VERBE
+/// de la porte et non l'endroit où son résultat apparaît. La main, elle, suit
+/// le résultat : le geste part de la colonne et atterrit sur la scène.
+///
+/// **Aucun rail ne se pose SUR la scène** (même directive). Un contrôle
+/// flottant vole les touches de la bande qu'il couvre, et l'auteur découvre la
+/// zone morte en essayant d'y traîner quelque chose. Le plateau est de la place
+/// disponible — la scène est figée en 9:16, l'écran ne l'est pas.
 nonisolated enum ComposerSceneFloatingRail {
 
-    /// Les quatre de la planche, dans son ordre : ✎ ☺ ♫ #.
-    static let doors: [ComposerRailDoor] = [.text, .sticker, .sound, .mention]
-
-    /// **Loi 8** — un rail de scène sans scène n'a rien sur quoi agir. Il ne
-    /// s'estompe pas, il n'existe pas.
-    static func served(hasScene: Bool) -> [ComposerRailDoor] {
-        hasScene ? doors : []
+    /// **La rangée de GAUCHE — ce qui apparaît visuellement sur la scène.**
+    ///
+    /// Elle se DÉDUIT du niveau de chaque porte, jamais d'une liste. Le
+    /// littéral qui vivait ici — `[.text, .sticker, .sound, .mention]` — rangeait
+    /// `.mention` parmi ce qui vit sur la scène, alors que `ComposerRailDoor`
+    /// la déclare `.publication` deux fichiers plus loin. Deux répartitions
+    /// coexistaient : l'une raisonnée, l'autre recopiée, et seule la recopiée
+    /// était appelée.
+    ///
+    /// > Une liste écrite à la main À CÔTÉ d'une règle qui décide déjà la même
+    /// > chose ne se fait contredire par rien : les deux compilent, et le
+    /// > doc-comment de la règle continue d'énoncer une classification juste que
+    /// > le produit n'applique pas.
+    static func sideRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
+        served.filter { $0.level.appearsOnCanvas }
     }
 
-    /// **La RANGÉE BASSE — tout le reste, dans l'ordre où l'hôte les sert.**
+    /// **La LIGNE CANONIQUE — ce qui appartient à l'envoi ou à la slide.**
     ///
-    /// Le partage n'est pas un rangement : il suit les deux rôles. Ce qui reste
-    /// ici FAIT ENTRER de la matière — une photo, un lieu, un tracé — ou donne
-    /// le focus à la description. Le rail, lui, agit sur ce qui est déjà là.
+    /// La description du contenu, la mention et le lieu de la publication : rien
+    /// de tout cela n'a de place sur la scène, et le bas est déjà la zone de ce
+    /// qui décide de l'envoi (loi 5).
     ///
-    /// Elle se dérive du jeu SERVI plutôt que d'être écrite en dur : une porte
-    /// que l'hôte ne sert pas ne doit apparaître ni au rail ni à la rangée, et
-    /// deux listes écrites séparément auraient divergé au premier ajout.
+    /// Les deux rangées forment une PARTITION du jeu servi — c'est la
+    /// négation du même prédicat, donc aucune porte ne peut se perdre ni
+    /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
     static func lowRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
-        served.filter { !doors.contains($0) }
+        served.filter { !$0.level.appearsOnCanvas }
     }
 }
 

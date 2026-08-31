@@ -48,6 +48,28 @@ nonisolated enum ComposerRailLevel: Equatable {
     /// (#4092 veut qu'il le DEVIENNE ; ce niveau disparaîtra alors, et sa
     /// disparition sera le témoin que la promesse est tenue.)
     case scene
+
+    /// **Ce que la porte fait naître se VOIT-il sur la scène ?**
+    ///
+    /// C'est cette question — et elle seule — qui décide de quel côté la porte
+    /// se pose (directive porteur 2026-08-31) :
+    ///
+    /// > « Sur la rangée à gauche, ce sont les features qui apparaissent sur le
+    /// > canvas visuellement ; on préserve sur la ligne canonique la description
+    /// > du contenu, l'ajout de son de fond, image et vidéo de fond, mention et
+    /// > localisation de la publication. »
+    ///
+    /// Le `switch` est exhaustif à dessein : un cinquième niveau ne compilera
+    /// pas tant qu'il n'aura pas dit s'il se voit. C'est exactement la question
+    /// qu'on oublie de se poser en ajoutant un bouton — et l'oublier avait
+    /// produit deux répartitions, l'une raisonnée par niveau, l'autre recopiée
+    /// dans un littéral (#4561).
+    var appearsOnCanvas: Bool {
+        switch self {
+        case .object, .scene:      return true
+        case .publication, .slide: return false
+        }
+    }
 }
 
 nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
@@ -84,8 +106,22 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// qui n'a pas de scène.
     case mention
 
-    /// Une pastille de lieu POSÉE sur la scène — distincte du LIEU de la
-    /// publication (d'où l'on publie), qui vit au socle.
+    /// **Le LIEU de la publication — d'où l'on publie.**
+    ///
+    /// Son doc-comment a longtemps annoncé « une pastille de lieu POSÉE sur la
+    /// scène, distincte du LIEU de la publication ». La mesure dit l'inverse :
+    /// `handleRailDoor(.place)` appelle `handleDocumentTool(.place)`, dont
+    /// l'effet est `.attachesLocation` et qui ouvre `presentedPortal = .location`
+    /// — le sélecteur de la PUBLICATION. Aucun objet n'est posé sur la scène.
+    ///
+    /// > Un doc-comment qui décrit ce que la porte DEVRAIT faire ne se fait
+    /// > contredire par rien : il est juste dans son intention, il occupe le bon
+    /// > endroit, et le lecteur suivant s'y fie. C'est la troisième occurrence
+    /// > du motif dans cette famille de fichiers (« selection markers » de
+    /// > `editOverlayLayer`, « Internal recording » de la barre universelle).
+    ///
+    /// La pastille de lieu SUR la scène reste à faire ; le jour où elle arrive,
+    /// elle sera une porte de plus, pas une seconde lecture de celle-ci.
     case place
 
     /// **Le DESSIN** — le premier outil de la vue `3b`, et le seul qui n'ajoute
@@ -114,8 +150,8 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     var level: ComposerRailLevel {
         switch self {
         case .description:                    return .slide
-        case .mention:                        return .publication
-        case .media, .sound, .sticker, .place, .text: return .object
+        case .mention, .place:                return .publication
+        case .media, .sound, .sticker, .text: return .object
         case .drawing:                        return .scene
         }
     }
@@ -177,10 +213,31 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         let sceneExists = format != .status
         return canonicalRail.filter { porte in
             guard served.contains(porte) else { return false }
-            // Les deux niveaux qui EXIGENT une toile. Un `status` n'a pas de
-            // scène : ni objet à poser, ni surface où tracer.
-            guard porte.level == .object || porte.level == .scene else { return true }
-            return sceneExists
+            guard !sceneExists else { return true }
+            // Sans toile, ce qui APPARAÎT sur elle n'a rien à poser : la même
+            // question qui range la porte à gauche décide aussi qu'elle ne
+            // survit pas à un format sans scène. Une seule règle, deux effets.
+            guard !porte.level.appearsOnCanvas else { return false }
+            return !removedFromStatus.contains(porte)
         }
     }
+
+    /// **Ce que le profil MOOD retire EN PLUS, et pour une autre raison.**
+    ///
+    /// Planche `2k` : « photo · caméra · lieu · micro — **indisponibles en
+    /// Mood** ». Le lieu ne disparaît pas faute de toile — il n'en a jamais eu
+    /// besoin, puisqu'il vise la publication : il disparaît parce qu'« une
+    /// humeur d'une heure ne dit pas d'où elle est écrite ». C'est un choix
+    /// produit, et il se déclare.
+    ///
+    /// > **Ce retrait a longtemps tenu par ACCIDENT.** Le lieu était classé
+    /// > `.object`, donc écarté par la règle de la toile — un effet de bord
+    /// > d'une classification fausse. Corriger la classification (#4561) a
+    /// > rendu la porte au Mood, et seul le témoin l'a vu.
+    ///
+    /// La leçon vaut au-delà de ce cas : **une règle générale qui remplace un
+    /// effet de bord doit vérifier ce que cet effet de bord PROTÉGEAIT.** Une
+    /// protection non déclarée ne se signale pas quand on la retire — elle
+    /// n'était écrite nulle part.
+    private static let removedFromStatus: Set<ComposerRailDoor> = [.place]
 }

@@ -39,9 +39,44 @@ final class ComposerRailDoorTests: XCTestCase {
     // MARK: - Les niveaux du modèle
 
     func test_quatrePortes_creentUnObjetDeScene() {
-        for porte in [ComposerRailDoor.media, .sound, .sticker, .place] {
+        for porte in [ComposerRailDoor.media, .sound, .sticker, .text] {
             XCTAssertEqual(porte.level, .object, "\(porte.rawValue)")
         }
+    }
+
+    /// **Le LIEU vise la publication, et c'est MESURÉ.**
+    ///
+    /// Son doc-comment annonçait « une pastille de lieu POSÉE sur la scène,
+    /// distincte du LIEU de la publication ». La chaîne dit l'inverse :
+    /// `handleRailDoor(.place)` → `handleDocumentTool(.place)` → effet
+    /// `.attachesLocation` → `presentedPortal = .location`, le sélecteur de la
+    /// PUBLICATION. Aucun objet n'est posé sur la scène.
+    ///
+    /// > Un doc-comment qui décrit ce que la porte DEVRAIT faire ne se fait
+    /// > contredire par rien : il est juste dans son intention, il occupe le bon
+    /// > endroit, et le lecteur suivant s'y fie. Troisième occurrence du motif
+    /// > dans cette famille de fichiers.
+    ///
+    /// **Le niveau se lit à ce que la porte OUVRE, pas à ce qu'on aimerait
+    /// qu'elle fasse** — et il ne décide pas seul de sa présence.
+    ///
+    /// > La première version de ce témoin affirmait « un statut n'a pas de
+    /// > toile, il a un lieu » et exigeait `.place` sur un `status`. Faux : la
+    /// > planche `2k` retire le lieu du Mood, pour une raison de PROFIL. J'avais
+    /// > déduit la conséquence du niveau au lieu de la lire dans la spécification
+    /// > — l'erreur exacte que le lot corrigeait, commise en le corrigeant.
+    /// > Voir `test_leLieu_estRetireDuMood_parChoixProduit_nonParAbsenceDeToile`.
+    func test_leLieu_viseLaPublication_carCEstLeSelecteurQuIlOuvre() {
+        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas,
+                       "elle ne pose rien sur la scène — elle ouvre un sélecteur")
+
+        // Elle survit dans les trois formats à scène : son niveau ne l'expose
+        // pas à la règle de la toile.
+        let surUneStory = ComposerRailDoor.offered(served: [.place, .text],
+                                                   format: .story, allowsCapture: true)
+        XCTAssertTrue(surUneStory.contains(.place))
+        XCTAssertTrue(surUneStory.contains(.text))
     }
 
     func test_laDescription_viseLaSlide_etNeCreeAucunObjet() {
@@ -127,6 +162,43 @@ final class ComposerRailDoorTests: XCTestCase {
                        "Un mood n'a pas de scène : rien à y poser.")
         XCTAssertEqual(offertes, [.description, .mention],
                        "…et les deux portes qui ne visent pas la scène restent.")
+    }
+
+    /// **Le LIEU disparaît du Mood pour une raison qui n'est PAS l'absence de
+    /// toile — et ce retrait tenait par accident.**
+    ///
+    /// Planche `2k` : « photo · caméra · lieu · micro — indisponibles en Mood ».
+    /// Le lieu vise la publication, donc il n'a jamais eu besoin d'une scène :
+    /// il est retiré parce qu'une humeur d'une heure ne dit pas d'où elle est
+    /// écrite.
+    ///
+    /// Tant que `.place` était classée `.object` (à tort — elle ouvre le
+    /// sélecteur de la publication), la règle de la toile l'écartait par EFFET
+    /// DE BORD. Corriger la classification au #4561 a rendu la porte au Mood, et
+    /// seul ce témoin l'a vu.
+    ///
+    /// > **Une règle générale qui remplace un effet de bord doit vérifier ce que
+    /// > cet effet de bord PROTÉGEAIT.** Une protection non déclarée ne se
+    /// > signale pas quand on la retire : elle n'était écrite nulle part.
+    func test_leLieu_estRetireDuMood_parChoixProduit_nonParAbsenceDeToile() {
+        let mood = ComposerRailDoor.offered(
+            served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
+        XCTAssertFalse(mood.contains(.place), "planche 2k — lieu indisponible en Mood")
+
+        // Le fusible qui distingue les deux raisons : le lieu N'EST PAS de
+        // niveau objet, donc son retrait ne peut pas venir de la règle de la
+        // toile. Sans cette moitié, remettre `.place` en `.object` rendrait le
+        // témoin vert en réintroduisant exactement le défaut corrigé.
+        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas)
+
+        // Et il SURVIT partout ailleurs : le retrait est celui d'un profil,
+        // jamais celui de la porte.
+        for format in [ComposerFormat.story, .post, .reel] {
+            XCTAssertTrue(ComposerRailDoor.offered(served: [.place], format: format,
+                                                   allowsCapture: true).contains(.place),
+                          "\(format)")
+        }
     }
 
     func test_dansLesTroisFormatsAScene_lesPortesDObjet_sontOffertes() {
