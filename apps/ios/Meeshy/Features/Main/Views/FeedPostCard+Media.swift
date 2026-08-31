@@ -4,6 +4,110 @@ import MeeshyUI
 
 // MARK: - Extracted from FeedView.swift
 
+/// **La source unique des libellés VoiceOver de la grille média du fil.**
+///
+/// ## Une clé porte UNE phrase
+///
+/// `feed.media.item` était appelée à CINQ endroits de `mediaPreview` avec cinq
+/// replis différents — « Media 1 of \(count) », « Media 2 of \(count) »… jusqu'à
+/// « Media 5 of \(count) ». La POSITION était gravée dans le littéral au lieu de
+/// voyager comme argument. Tant que la clé restait absente du catalogue, chaque
+/// site rendait son propre repli et la collision ne se voyait pas ; l'entrer au
+/// catalogue — ce que le cliquet i18n demande — aurait fait tomber les cinq
+/// tuiles sur la MÊME phrase, et VoiceOver aurait annoncé « Média 1 sur 7 » sur
+/// chacune des cinq images.
+///
+/// Un `defaultValue` ne masque donc pas seulement l'absence d'une clé : quand
+/// deux sites l'écrivent différemment, il masque aussi le fait que la clé a
+/// plusieurs SENS. Garde : `LocalizedKeySinglePhraseGuardTests`.
+///
+/// ## Réemploi plutôt qu'une clé de plus
+///
+/// La tuile « +N » du fil disait « \(count - 5) more media items » via une clé
+/// `feed.media.moreItems` absente du catalogue — donc en anglais dans les sept
+/// locales, français compris. `PostDetailView` rend la MÊME affordance (même
+/// grille, même geste : ouvrir la galerie plein écran) et sert déjà
+/// `a11y.post.media.more`, traduite dans les sept locales. Le fil la rejoint,
+/// et la clé anglaise disparaît du dépôt.
+///
+/// `bundle` et `locale` sont des paramètres, jamais des valeurs en dur : sans
+/// eux un test juge la langue du SIMULATEUR — vert en local (fr), rouge en CI
+/// (en). Même doctrine que `PostStatAccessibility`.
+enum FeedMediaAccessibility {
+    /// « Média 3 sur 7 » — la position voyage comme ARGUMENT.
+    static func tileLabel(position: Int, of total: Int,
+                          bundle: Bundle = .main,
+                          locale: Locale = .current) -> String {
+        String(
+            localized: "feed.media.item",
+            defaultValue: "Média \(position) sur \(total)",
+            bundle: bundle,
+            locale: locale
+        )
+    }
+
+    /// La tuile de débordement : elle n'ouvre pas « N autres médias », elle
+    /// ouvre la galerie ENTIÈRE — c'est ce que dit `a11y.post.media.more`.
+    static func overflowLabel(total: Int,
+                              bundle: Bundle = .main,
+                              locale: Locale = .current) -> String {
+        String(
+            format: String(
+                localized: "a11y.post.media.more",
+                defaultValue: "Voir les %d médias",
+                bundle: bundle,
+                locale: locale
+            ),
+            total
+        )
+    }
+
+    /// Le média unique n'a pas de position à annoncer : « Image partagée ».
+    static func singleImageLabel(bundle: Bundle = .main,
+                                 locale: Locale = .current) -> String {
+        String(
+            localized: "a11y.post.media.image",
+            defaultValue: "Image partagée",
+            bundle: bundle,
+            locale: locale
+        )
+    }
+
+    static func openHint(bundle: Bundle = .main,
+                         locale: Locale = .current) -> String {
+        String(
+            localized: "feed.media.viewFullscreen",
+            defaultValue: "Toucher pour agrandir",
+            bundle: bundle,
+            locale: locale
+        )
+    }
+}
+
+/// Une tuile de galerie = UN élément VoiceOver actionnable. Les quatorze piles
+/// de cinq modificateurs identiques que portait `mediaPreview` sont ici, en un
+/// seul endroit — et `.accessibilityElement(children: .ignore)` y entre, comme
+/// dans la grille jumelle de `PostDetailView` : sans elle le libellé posé sur le
+/// conteneur ne remplace pas ce que l'image publie déjà.
+private extension View {
+    func feedGalleryTile(position: Int, of total: Int,
+                         open: @escaping () -> Void) -> some View {
+        feedGalleryTile(
+            label: FeedMediaAccessibility.tileLabel(position: position, of: total),
+            open: open
+        )
+    }
+
+    func feedGalleryTile(label: String, open: @escaping () -> Void) -> some View {
+        contentShape(Rectangle())
+            .onTapGesture(perform: open)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(label)
+            .accessibilityHint(FeedMediaAccessibility.openHint())
+    }
+}
+
 // MARK: - FeedPostCard Media Preview
 extension FeedPostCard {
     @ViewBuilder
@@ -23,17 +127,9 @@ extension FeedPostCard {
             // Two images side by side - equal width
             HStack(spacing: spacing) {
                 galleryImageView(mediaList[0])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
+                    .feedGalleryTile(position: 1, of: count) { openFullscreen(mediaList[0]) }
                 galleryImageView(mediaList[1])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[1]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
+                    .feedGalleryTile(position: 2, of: count) { openFullscreen(mediaList[1]) }
             }
             .frame(height: 180)
             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -42,25 +138,13 @@ extension FeedPostCard {
             HStack(spacing: spacing) {
                 galleryImageView(mediaList[0])
                     .aspectRatio(0.75, contentMode: .fill)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
+                    .feedGalleryTile(position: 1, of: count) { openFullscreen(mediaList[0]) }
 
                 VStack(spacing: spacing) {
                     galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 2, of: count) { openFullscreen(mediaList[1]) }
                     galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 3, of: count) { openFullscreen(mediaList[2]) }
                 }
             }
             .frame(height: 220)
@@ -70,31 +154,15 @@ extension FeedPostCard {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 1, of: count) { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 2, of: count) { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 3, of: count) { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 4, of: count) { openFullscreen(mediaList[3]) }
                 }
             }
             .frame(height: 220)
@@ -104,31 +172,15 @@ extension FeedPostCard {
             VStack(spacing: spacing) {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 1, of: count) { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 2, of: count) { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 3, of: count) { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
+                        .feedGalleryTile(position: 4, of: count) { openFullscreen(mediaList[3]) }
                     ZStack {
                         galleryImageView(mediaList[4])
                         if count > 5 {
@@ -139,13 +191,11 @@ extension FeedPostCard {
                                 .accessibilityHidden(true)
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[4]) }
-                    .accessibilityLabel(count > 5
-                        ? String(localized: "feed.media.moreItems", defaultValue: "\(count - 5) more media items", bundle: .main)
-                        : String(localized: "feed.media.item", defaultValue: "Media 5 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
+                    .feedGalleryTile(
+                        label: count > 5
+                            ? FeedMediaAccessibility.overflowLabel(total: count)
+                            : FeedMediaAccessibility.tileLabel(position: 5, of: count)
+                    ) { openFullscreen(mediaList[4]) }
                 }
             }
             .frame(height: 240)
@@ -294,7 +344,14 @@ extension FeedPostCard {
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .onTapGesture { openFullscreen(media) }
+        // Le média UNIQUE d'un post était la seule tuile du fil à ouvrir le
+        // plein écran sans porter ni nom ni trait de bouton : VoiceOver
+        // annonçait « image » sans dire ce que c'était, ni qu'on pouvait
+        // l'ouvrir. `a11y.post.media.image` est la clé que la grille jumelle de
+        // `PostDetailView` sert déjà pour cette même tuile.
+        .feedGalleryTile(label: FeedMediaAccessibility.singleImageLabel()) {
+            openFullscreen(media)
+        }
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {

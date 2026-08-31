@@ -19,7 +19,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 270i, 2026-08-30)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 271i, 2026-08-31)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 >
 > | itération | PR | squash sur `main` | issue |
 > |---|---|---|---|
@@ -42,8 +42,64 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
 > | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
 > | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
+> | 270i | [#4368](https://github.com/isopen-io/meeshy/pull/4368) | `ba7af15c` | #4364 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+> - **Branche de travail** : `claude/intelligent-noether-u8iuu6`, **réinitialisée** (jamais supprimée) sur `origin/main` `09d94823` — base de 271i.
+>   ⚠️ Elle pointait sur `dev` (91 commits, aucun travail iOS de cette piste) au démarrage du cycle : le protocole du haut de ce fichier a été appliqué tel quel (`git checkout -B <branche> origin/main`). `dev` reste intacte à `2e099690`.
+>
+> ### 271i — une clé portait CINQ phrases, et la traduire les aurait réduites à une (#4540)
+>
+> | mesure | avant | après |
+> |---|---|---|
+> | cliquet i18n (`backlogCeiling`) | 81 | **79** |
+> | écrans épinglés | 246 | **247** |
+> | clés à replis divergents (cible app) | **1** | **0** |
+> | clés du catalogue app | 3 433 | **3 434** |
+> | `LocalizationConsistencyTests.swift` | 1203 l. | **1069 l.** (sous budget) |
+>
+> - **`feed.media.item` était appelée cinq fois avec cinq replis** — « Media 1 of
+>   \(count) » … « Media 5 of \(count) ». La POSITION était gravée dans le
+>   littéral au lieu de voyager en argument. Absente du catalogue, chaque site
+>   rendait le sien et la collision ne se voyait pas ; **l'y entrer, ce que le
+>   cliquet demande, aurait fait annoncer « Média 1 sur 7 » sur les cinq images**.
+>   → *Un `defaultValue` ne masque pas seulement l'ABSENCE d'une clé (#4328) :
+>   quand deux sites l'écrivent différemment, il masque aussi le fait que la clé a
+>   plusieurs SENS.* Le cliquet comptait **une** clé de dette pour **cinq**
+>   phrases non traduites. **Le défaut est ARMÉ par le travail correct qu'on
+>   demande au traducteur** — sur une surface qu'il n'ouvre pas.
+> - **Un témoin de cette classe doit comparer des PHRASES, pas des littéraux.**
+>   Sur les 5 clés à replis divergents du dépôt, **une seule** est un défaut :
+>   deux sont la même phrase avec deux noms de variable
+>   (`Supprimer \(label)` / `Supprimer \(labelForAttachment(…))`), une est
+>   servie par deux BUNDLES donc deux catalogues (`share.empty`), une est un
+>   repli mort face au catalogue (`common.done`). Un témoin écrit sur l'égalité
+>   de chaîne aurait crié quatre fois et se serait fait désarmer.
+>   Garde : `LocalizedKeySinglePhraseGuardTests`, **RED sur l'état d'avant**
+>   (1 violation, exactement la bonne) et GREEN après.
+> - **Réemploi plutôt qu'une clé de plus** : la tuile « +N » servait
+>   `feed.media.moreItems` (anglaise, absente du catalogue) alors que
+>   `PostDetailView` rend la MÊME grille avec la MÊME affordance et sert déjà
+>   `a11y.post.media.more`, traduite dans les sept locales. La clé anglaise quitte
+>   le dépôt sans qu'une chaîne soit inventée ; `feed.media.item` entre au
+>   catalogue avec la FORME de son jumeau structurel `story.viewer.a11y.position`
+>   et le VOCABULAIRE de `a11y.post.media.more`.
+> - **Le média UNIQUE n'avait aucun nom accessible** — `.onTapGesture` et rien
+>   d'autre : pas de libellé, pas de `.isButton`.
+>   → *Un balayage qui cherche « les libellés fautifs » ne trouve jamais les
+>   surfaces qui n'en ont pas.* La grille avait cinq libellés faux ; le média
+>   unique en avait zéro, et c'est lui qui a survécu le plus longtemps.
+> - **Quatorze piles de cinq modificateurs deviennent un modificateur**
+>   (`feedGalleryTile`), qui pose au passage l'`.accessibilityElement(children: .ignore)`
+>   que la grille jumelle de `PostDetailView` avait et que celle du fil n'avait
+>   pas. `mediaPreview` : 145 → 91 lignes.
+> - **Le scanner de `String(localized:)` devient partagé** (`LocalizedCallScanner`)
+>   parce qu'un second témoin en avait besoin et qu'une copie aurait produit deux
+>   lectures divergentes de la même syntaxe. Effet voulu : le fichier hôte repasse
+>   sous le budget de taille, l'extraction PRÉCÉDANT l'ajout comme l'exige le
+>   `CLAUDE.md`.
+> - **Suite** : le témoin ne couvre que la cible app. L'étendre demande de
+>   grouper par catalogue RÉSOLU — deux bundles peuvent légitimement servir deux
+>   phrases sous une même clé.
 >
 > ### 270i — le widget parlait sept langues, et la garde ne le savait pas (#4364)
 >
