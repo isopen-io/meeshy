@@ -15,9 +15,21 @@ dataProcessingConsentAt (BASE OBLIGATOIRE)
 │   └─> voiceProfileConsentAt
 │       └─> voiceCloningConsentAt
 │           └─> voiceCloningEnabledAt
-├─> textTranslationEnabledAt
-└─> thirdPartyServicesConsentAt
+└─> textTranslationEnabledAt
 ```
+
+> **`thirdPartyServicesConsentAt` a été RETIRÉ de cette hiérarchie (#4343).**
+> Il n'y a jamais eu ni route pour l'écrire, ni clé de schéma pour le porter,
+> ni colonne `User` pour le stocker : les trois gardes qui l'exigeaient
+> refusaient donc tout le monde, en nommant une preuve que le produit n'avait
+> aucun moyen de délivrer. L'arbitrage retenu est le RETRAIT de l'exigence
+> (option b), et non l'invention de l'écrivain manquant : aucun tiers ne
+> reçoit quoi que ce soit dans ce dépôt — il n'existe ni scanner de logiciels
+> malveillants, ni traitement d'arrière-plan virtuel, et un drapeau bêta
+> n'envoie rien nulle part. Un consentement doit être SPÉCIFIQUE et ÉCLAIRÉ ;
+> « services tiers » ne nommait ici aucun traitement réel à autoriser.
+> Si un vrai service tiers arrive, c'est SON arrivée qui apportera son
+> consentement, nommé (#4551).
 
 ## Règles de Validation par Catégorie
 
@@ -49,20 +61,31 @@ dataProcessingConsentAt (BASE OBLIGATOIRE)
 
 | Préférence | Consentements Requis |
 |------------|---------------------|
-| `virtualBackgroundEnabled` | `dataProcessingConsentAt` + `thirdPartyServicesConsentAt` |
+| `virtualBackgroundEnabled` | `dataProcessingConsentAt` |
 
 ### Document Preferences
 
 | Préférence | Consentements Requis |
 |------------|---------------------|
-| `scanFilesForMalware` | `thirdPartyServicesConsentAt` |
+| *(aucune)* | — |
+
+`scanFilesForMalware` n'exige plus rien depuis #4343. C'était la garde la plus
+coûteuse des trois : cette préférence vaut `true` **par défaut** au schéma, si
+bien que tout utilisateur qui rouvrait ses préférences de document et les
+enregistrait resoumettait la valeur par défaut et récoltait une violation —
+sur la préférence qui rend le produit plus SÛR.
 
 ### Application Preferences
 
 | Préférence | Consentements Requis |
 |------------|---------------------|
 | `telemetryEnabled` | `dataProcessingConsentAt` |
-| `betaFeaturesEnabled` | `thirdPartyServicesConsentAt` |
+
+`betaFeaturesEnabled` n'exige plus rien depuis #4343 : activer un drapeau de
+fonctionnalité n'est pas un traitement de donnée personnelle. L'interrupteur
+existe pourtant dans deux interfaces (`ApplicationSettings` sur le web,
+`SettingsView` sur iOS) — jusqu'à #4343, l'utilisateur y voyait un
+interrupteur qui échouait **toujours**.
 
 ### Notification Preferences
 
