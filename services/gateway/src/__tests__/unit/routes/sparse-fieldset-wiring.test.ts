@@ -475,7 +475,11 @@ const COMPTE = {
   systemLanguage: 'fr',
   regionalLanguage: 'en',
   customDestinationLanguage: null,
-  autoTranslateEnabled: true,
+  // PAS de `autoTranslateEnabled` : `User` n'a aucune colonne de ce nom, et le
+  // `select` du cache d'auth ne peut donc pas la poser sur `registeredUser`.
+  // La poser ici FABRIQUAIT une colonne inexistante, et rendait vert un
+  // service qui ne lisait rien (#3736). Son unique magasin est le document
+  // `UserPreferences.application`, servi par le double ci-dessous.
   isOnline: true,
   lastActiveAt: new Date('2026-08-01T10:00:00Z'),
   emailVerifiedAt: new Date('2025-01-01T00:00:00Z'),
@@ -532,6 +536,9 @@ const CLES_ME_NU = [
 async function monterMoi(): Promise<{ app: FastifyInstance; prisma: any }> {
   const prisma = {
     user: { findUnique: jest.fn<any>(async () => COMPTE), findFirst: jest.fn<any>(async () => COMPTE) },
+    // Le magasin RÉEL de `autoTranslateEnabled` (#3736) : `GET /me` le relit,
+    // et seulement quand `?fields=` laisse passer la clé.
+    userPreferences: { findUnique: jest.fn<any>(async () => ({ application: { autoTranslateEnabled: true } })) },
     signalPreKeyBundle: {
       findUnique: jest.fn<any>(async () => ({
         registrationId: 42,

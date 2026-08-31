@@ -111,6 +111,11 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     signalPreKeyBundle: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
     },
+    // Le magasin de `autoTranslateEnabled` (#3736) — `User` n'a aucune colonne
+    // de ce nom, la lecture de soi relit donc le document `application`.
+    userPreferences: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     ...overrides,
   } as any;
 }
