@@ -30,16 +30,22 @@ public final class StatusService: StatusServiceProviding, @unchecked Sendable {
         case friends
         case discover
 
-        public var endpoint: String {
+        /// L'adresse servant ce mode.
+        ///
+        /// Elle rendait deux chemins ÉCRITS À LA MAIN — et l'audit
+        /// d'appariement ne les voyait pas, parce qu'il cherche
+        /// `endpoint: "…"` au site d'APPEL et qu'ici le chemin vit dans une
+        /// propriété calculée. Un chemin peut s'écrire ailleurs qu'à l'appel.
+        public var endpoint: any MeeshyEndpoint {
             switch self {
-            case .friends: return "/posts/feed/statuses"
-            case .discover: return "/posts/feed/statuses/discover"
+            case .friends: return PostsEndpoint.feedStatuses
+            case .discover: return PostsEndpoint.feedStatusesDiscover
             }
         }
     }
 
     public func list(mode: Mode = .friends, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: mode.endpoint, cursor: cursor, limit: limit)
+        try await api.paginatedRequest(mode.endpoint, cursor: cursor, limit: limit)
     }
 
     public func create(moodEmoji: String, content: String?, originalLanguage: String? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async throws -> APIPost {

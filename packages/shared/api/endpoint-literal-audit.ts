@@ -66,15 +66,42 @@ export interface EndpointLiteralSite {
   readonly literal: string;
 }
 
-const LITERAL = /endpoint: "([^"]*)"/g;
+/**
+ * Deux formes, apprises d'un défaut que la première ratait.
+ *
+ * `CALL_SITE` attrape `endpoint: "…"` — la forme nominale. Mais un chemin peut
+ * s'écrire AILLEURS qu'au site d'appel : `StatusService.Mode.endpoint` le
+ * rendait depuis une propriété calculée, `PendingStatusQueue` le composait dans
+ * une variable locale. Les deux ont survécu à la migration ET à l'audit, pour
+ * la même raison : je cherchais une SYNTAXE D'APPEL au lieu de chercher un
+ * CHEMIN.
+ *
+ * `ANY_PATH` cherche donc tout littéral qui a la forme d'un chemin. Il ne
+ * s'applique qu'aux fichiers écrits à la main : le catalogue GÉNÉRÉ écrit des
+ * chemins, c'est son métier.
+ */
+const CALL_SITE = /endpoint: "([^"]*)"/g;
+const ANY_PATH = /"(\/[a-zA-Z0-9][A-Za-z0-9._~\-/]*(?:\\\([^)]*\)[A-Za-z0-9._~\-/]*)*)"/g;
+
+/** Le dossier des énumérations générées — il écrit des chemins par construction. */
+export const GENERATED_ENDPOINTS_DIR = 'Networking/Endpoints';
 
 /** Tous les chemins écrits à la main dans une source Swift. */
 export function endpointLiteralsIn(file: string, source: string): readonly EndpointLiteralSite[] {
+  if (file.includes(GENERATED_ENDPOINTS_DIR)) return [];
   const sites: EndpointLiteralSite[] = [];
   source.split('\n').forEach((line, index) => {
-    for (const match of line.matchAll(LITERAL)) {
-      const literal = match[1] ?? '';
-      if (literal.startsWith('/')) sites.push({ file, line: index + 1, literal });
+    const trimmed = line.trim();
+    if (trimmed.startsWith('//')) return;
+    const seen = new Set<string>();
+    for (const pattern of [CALL_SITE, ANY_PATH]) {
+      for (const match of line.matchAll(pattern)) {
+        const literal = match[1] ?? '';
+        if (!literal.startsWith('/') || literal.includes(' ') || !literal.includes('/', 1)) continue;
+        if (seen.has(literal)) continue;
+        seen.add(literal);
+        sites.push({ file, line: index + 1, literal });
+      }
     }
   });
   return sites;
@@ -106,6 +133,11 @@ export function unmatchedEndpointLiterals(
     );
   };
   return sites.filter((site) => {
+    // Le PRÉFIXE lui-même n'est pas une route : `MeeshyConfig` le déclare
+    // (`/api/v1`) pour composer les URL. Le chercher parmi les routes servies
+    // n'a pas de sens — c'est le seul littéral en forme de chemin dont
+    // l'ABSENCE du manifeste est correcte.
+    if (site.literal === apiPrefix) return false;
     const suffix = canonicalSwiftLiteral(site.literal);
     const prefixed = suffix.startsWith('/api') ? suffix : `${apiPrefix}${suffix}`;
     return !matches(prefixed) && !matches(suffix);
