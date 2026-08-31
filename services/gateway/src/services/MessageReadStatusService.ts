@@ -1001,10 +1001,20 @@ export class MessageReadStatusService {
         // déjà connaître l'id) mais une corruption du PROPRE curseur du
         // lecteur ; la garde ne coûte qu'une lecture, et seulement quand ce
         // champ optionnel est fourni.
-        const caughtUpMessage = await this.prisma.message.findUnique({
-          where: { id: options.caughtUpToMessageId },
-          select: { conversationId: true },
-        });
+        //
+        // Le `if` ci-dessous manquait, et la phrase précédente le décrivait
+        // pourtant : la lecture partait sur CHAQUE appel portant `messageIds`,
+        // avec `id: undefined`, que Prisma refuse. `POST …/receipts
+        // {"type":"read"}` — la porte unique de #4349 — rendait donc 500 dans
+        // son cas nominal, et `POST …/mark-as-read` avec lui. Mesuré sur
+        // staging le 2026-08-31 ; aucun témoin ne pouvait le voir, le double
+        // de `message.findUnique` répondant quel que soit son `where`.
+        const caughtUpMessage = options.caughtUpToMessageId
+          ? await this.prisma.message.findUnique({
+              where: { id: options.caughtUpToMessageId },
+              select: { conversationId: true },
+            })
+          : null;
         if (caughtUpMessage?.conversationId === conversationId) {
           await this._advanceCursor({
             participantId,
