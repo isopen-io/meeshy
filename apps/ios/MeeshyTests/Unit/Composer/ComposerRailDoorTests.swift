@@ -291,7 +291,19 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}switchmode{"),
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
         XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
-        XCTAssertTrue(source.contains("case.tool(letcontrols):ForEach(controls)"))
+        // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
+        //
+        // L'assertion littérale `case.tool(letcontrols):ForEach(controls)` est
+        // tombée au #4582, quand un `ScrollView` horizontal s'est intercalé — un
+        // changement légitime, et le témoin le refusait pour une raison qu'il
+        // n'avait jamais eue : il vérifiait une DISPOSITION en croyant vérifier
+        // un ANCRAGE.
+        //
+        // Ce que ce témoin doit dire est plus haut : le ressort précède tout ce
+        // qui se peint. Que les contrôleurs soient peints se vérifie sans
+        // épingler par quoi ils sont enveloppés.
+        XCTAssertTrue(source.contains("case.tool(letcontrols):"))
+        XCTAssertTrue(source.contains("ForEach(controls)"))
     }
 
     /// **La vue ne décide de rien.** Elle reçoit `doors` déjà filtrées ; si elle

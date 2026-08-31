@@ -70,4 +70,44 @@ nonisolated enum ComposerRailGeometry {
     static func sceneWidth(usableWidth: CGFloat, railsShown: Bool) -> CGFloat {
         max(0, usableWidth - 2 * sceneInset(railsShown: railsShown))
     }
+
+    // MARK: - Ce qu'une rangée REQUIERT, et ce qui déborde
+
+    /// L'écart entre deux entrées d'un rail. Lu par la vue ET par la règle : un
+    /// littéral recopié dans l'une des deux rendrait la mesure fausse sans que
+    /// rien ne rougisse.
+    static let entrySpacing: CGFloat = 10
+
+    /// **La largeur qu'une rangée d'entrées REQUIERT**, cible tactile comprise.
+    ///
+    /// `n × 44 + (n−1) × 10`. Pour les huit entrées de l'outil texte (sept
+    /// contrôleurs plus le `(x)`) : **422 pt**, quand un iPhone de 393 pt en
+    /// offre 373 une fois les marges retirées. Le débordement est ARITHMÉTIQUE,
+    /// pas conditionnel — il ne dépend ni du contenu, ni de la locale, ni de la
+    /// taille de texte.
+    static func rowWidth(entries: Int, spacing: CGFloat = entrySpacing) -> CGFloat {
+        guard entries > 0 else { return 0 }
+        return CGFloat(entries) * railWidth + CGFloat(entries - 1) * spacing
+    }
+
+    /// Ce qui dépasse d'une largeur disponible ; `0` ⇒ la rangée tient.
+    ///
+    /// **Le débordement est SYMÉTRIQUE, et c'est ce qui le rend reconnaissable
+    /// à l'œil** : une `HStack` trop large n'est pas clippée par SwiftUI — elle
+    /// dessine par-dessus les deux bords, moitié-moitié. Un contrôle coupé d'un
+    /// seul côté est mal aligné ; coupé également des deux, il est trop large.
+    static func rowOverflow(entries: Int, available: CGFloat) -> CGFloat {
+        max(0, rowWidth(entries: entries) - available)
+    }
+
+    /// La largeur réellement offerte à une rangée sur un écran donné, marges
+    /// extérieures retirées.
+    static func availableRowWidth(screenWidth: CGFloat) -> CGFloat {
+        max(0, screenWidth - 2 * outerMargin)
+    }
+
+    /// Le plus étroit iPhone que l'app supporte — iPhone SE, plancher iOS 16.
+    /// Une rangée se mesure LÀ, jamais sur l'appareil de développement : le
+    /// débordement du 2026-08-31 a été vu sur 393 pt, il commençait à 375.
+    static let narrowestSupportedScreenWidth: CGFloat = 375
 }
