@@ -6,6 +6,7 @@ import {
   bloquer, debloquer, listerBloques, repondreBlocage, LIMITE_MAX_BLOCAGES,
 } from '../directory/blocks';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 /**
  * Les trois ALIAS des routes de blocage (#4164).
@@ -37,7 +38,7 @@ const blocDeLaCible = (request: FastifyRequest): string =>
   `/api/v1/directory/blocks/${encodeURIComponent((request.params as { userId: string }).userId)}`;
 
 const ANNONCE = {
-  ensemble: { depuis: DEPUIS, successeur: '/api/v1/directory/blocks', retraitLe: dateDeRetrait(DEPUIS) },
+  ensemble: { depuis: DEPUIS, successeur: apiPath('/directory/blocks'), retraitLe: dateDeRetrait(DEPUIS) },
   membre: { depuis: DEPUIS, successeur: blocDeLaCible, retraitLe: dateDeRetrait(DEPUIS) },
 } as const;
 

@@ -12,6 +12,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission, withAudit } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const DEPUIS_REPORTS = '2026-08-29';
 
@@ -26,7 +27,7 @@ const DEPUIS_REPORTS = '2026-08-29';
  */
 const ADAPTATEUR_SIGNALEMENT = {
   depuis: DEPUIS_REPORTS,
-  successeur: '/api/v1/reports',
+  successeur: apiPath('/reports'),
   retraitLe: dateDeRetrait(DEPUIS_REPORTS),
 } as const;
 

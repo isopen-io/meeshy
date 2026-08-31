@@ -36,6 +36,7 @@ import {
   type PreferenceDocument,
   type PreferenceSchema,
 } from './preference-registry';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 export type { CategoryStorage };
 
@@ -59,7 +60,7 @@ export type { CategoryStorage };
  */
 const ALIAS_DEPRECIE: AdresseDepreciee = {
   depuis: '2026-08-29',
-  successeur: '/api/v1/me/preferences',
+  successeur: apiPath('/me/preferences'),
 };
 
 /**

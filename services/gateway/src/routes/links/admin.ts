@@ -25,6 +25,7 @@ import { depreciee } from '../../utils/deprecation';
 // coûtait — c'est là qu'a vécu le premier écart de comportement (#4170,
 // `PATCH` ne révoquait pas les invités là où `/toggle` le faisait déjà).
 import { loadShareLinkForManagement, applyShareLinkUpdate } from './management';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -43,7 +44,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   // ancien encore en circulation. Le retrait suit le compteur d'accès de
   // #4275, jamais une lecture de code client.
   fastify.get<{ Querystring: { limit?: string; offset?: string } }>('/links/my-links', {
-    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links' })],
+    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
     schema: {
       description: 'Get all share links created by the authenticated user with pagination. Returns links with conversation details, participant statistics, and language information. Maximum 50 links per request.',
       tags: ['links'],
@@ -227,7 +228,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       authRequired,
       depreciee({
         depuis: '2026-08-29',
-        successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}`,
+        successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}`),
       }),
     ],
     schema: {
@@ -333,7 +334,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       authRequired,
       depreciee({
         depuis: '2026-08-29',
-        successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}`,
+        successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}`),
       }),
     ],
     schema: {

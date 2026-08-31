@@ -5,6 +5,7 @@ import { servedUserPermissions, servedPermissionsSchema } from '../../services/a
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 /**
  * Lire ses propres permissions — DEUX adresses, UNE implémentation (#4350).
@@ -44,7 +45,7 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
  */
 export const ANNONCE_ME_PERMISSIONS: AdresseDepreciee = {
   depuis: '2026-08-30',
-  successeur: '/api/v1/me/permissions',
+  successeur: apiPath('/me/permissions'),
 };
 
 /** Schéma PARTAGÉ par les deux adresses — voir doc-comment de module. */

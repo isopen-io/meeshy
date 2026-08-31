@@ -23,6 +23,7 @@ import {
   selectForFields,
   type ColumnPlan,
 } from '../../utils/sparse-fieldset';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
@@ -645,7 +646,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
    * aucun des deux ne migre ici. Le retrait suit le compteur de #4275.
    */
   fastify.get('/links/stats', {
-    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links?include=summary' })],
+    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: apiPath('/links?include=summary') })],
     schema: {
       description: 'Get aggregated statistics for all share links created by the authenticated user. Returns total link counts, active link counts, and total usage.',
       tags: ['links'],

@@ -37,6 +37,7 @@ import { serializeConversationParticipant } from '@meeshy/shared/utils/participa
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
 import { depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -184,7 +185,7 @@ export function registerSharingRoutes(
     // canonique : `POST /links` l'est. `onRequest` court avant TOUTE garde
     // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
     // qui échoue est celui qui a le plus besoin de savoir migrer.
-    onRequest: [depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links' })],
+    onRequest: [depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -327,7 +328,7 @@ export function registerSharingRoutes(
     },
     onRequest: [depreciee({
       depuis: '2026-08-30',
-      successeur: (request) => `/api/v1/links?conversationId=${(request.params as { conversationId: string }).conversationId}`,
+      successeur: (request) => apiPath(`/links?conversationId=${(request.params as { conversationId: string }).conversationId}`),
     })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -478,7 +479,7 @@ export function registerSharingRoutes(
     // FONCTION de la requête, comme pour `/anonymous/join/:linkId`.
     onRequest: [depreciee({
       depuis: '2026-08-30',
-      successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}/members`,
+      successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}/members`),
     })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {

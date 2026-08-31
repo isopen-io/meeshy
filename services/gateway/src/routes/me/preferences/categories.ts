@@ -68,6 +68,7 @@ import { detachConversationsFromCategory } from '../../../services/conversationP
 import { withMutationOutcome } from '../../../utils/withMutationLog';
 import { MutationInFlight } from '../../../services/MutationLogService';
 import { depreciee, type AdresseDepreciee } from '../../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 interface CategoryRow {
   id: string;
@@ -122,17 +123,17 @@ const DEPUIS_ME_CATEGORIES = '2026-08-30';
 
 export const ANNONCE_ME_CATEGORIES_COLLECTION: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: '/api/v1/me/categories',
+  successeur: apiPath('/me/categories'),
 };
 
 export const ANNONCE_ME_CATEGORIES_REORDER: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: '/api/v1/me/categories/reorder',
+  successeur: apiPath('/me/categories/reorder'),
 };
 
 export const ANNONCE_ME_CATEGORY_ITEM: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: (request) => `/api/v1/me/categories/${(request.params as CategoryIdParams).categoryId}`,
+  successeur: (request) => apiPath(`/me/categories/${(request.params as CategoryIdParams).categoryId}`),
 };
 
 // ========== SCHEMAS FOR OPENAPI DOCUMENTATION ==========
