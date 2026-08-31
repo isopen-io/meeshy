@@ -138,7 +138,7 @@ final class LocalizedKeySinglePhraseGuardTests: XCTestCase {
     /// **Un témoin qui n'a jamais rougi est une hypothèse.** Sans chaîne Apple
     /// pour l'exécuter ailleurs, la forme qu'il interdit et la forme qu'il
     /// tolère sont vérifiées ici, sur des sources synthétiques.
-    func test_leTémoinSépareDeuxPhrasesEtTolèreDeuxNomsDeVariable() {
+    func test_leTémoinSépareDeuxPhrasesEtTolèreDeuxNomsDeVariable() throws {
         let source = #"""
         let a = String(localized: "gallery.item", defaultValue: "Media 1 of \(count)")
         let b = String(localized: "gallery.item", defaultValue: "Media 2 of \(count)")
@@ -152,9 +152,12 @@ final class LocalizedKeySinglePhraseGuardTests: XCTestCase {
             phrases[call.key, default: []].insert(Self.phrase(of: fallback))
         }
 
-        XCTAssertEqual(phrases["gallery.item"]?.count, 2,
-                       "Deux positions gravées dans le littéral sont DEUX phrases")
-        XCTAssertEqual(phrases["row.delete"], ["Supprimer <arg>"],
-                       "Deux noms de variable pour la même phrase n'en font pas deux")
+        let gallery = try XCTUnwrap(phrases["gallery.item"], "la clé synthétique n'a pas été vue")
+        XCTAssertEqual(gallery.count, 2,
+                       "Deux positions gravées dans le littéral sont DEUX phrases : \(gallery)")
+
+        let delete = try XCTUnwrap(phrases["row.delete"], "la clé synthétique n'a pas été vue")
+        XCTAssertEqual(delete, ["Supprimer <arg>"],
+                       "Deux noms de variable pour la même phrase n'en font pas deux : \(delete)")
     }
 }
