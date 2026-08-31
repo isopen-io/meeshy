@@ -18,6 +18,14 @@ data class TextStyles(
 }
 
 /**
+ * A run of a content string flagged as a search-term match ([highlighted]) or
+ * not. In order, the runs' [text] concatenate back to the original input with no
+ * gaps and no overlaps — so a plain-text row can wash the matches by mapping each
+ * run onto a styled span, with no decision of its own.
+ */
+data class HighlightSegment(val text: String, val highlighted: Boolean)
+
+/**
  * A single rendered run of a message body. Text runs carry emphasis; the three
  * link kinds carry both what to display and where to navigate.
  */
@@ -83,6 +91,41 @@ object MessageTextParser {
             start = endFolded
         }
         return ranges
+    }
+
+    /**
+     * Split [text] into alternating highlighted / plain [HighlightSegment] runs
+     * for the accent- and case-insensitive occurrences of [term] (see
+     * [highlightRanges]). The runs cover [text] with no gaps and no overlaps and
+     * concatenate back to it exactly, so a plain-text surface — a global-search
+     * result row (iOS `highlightedText`) — washes the matches by mapping each run
+     * onto a styled span (glue, no decisions), without re-running the search.
+     *
+     * Boundaries: an empty [text] yields no runs; an empty [term], or one that
+     * matches nothing, yields a single plain run carrying the whole [text]; two
+     * adjacent matches yield back-to-back highlighted runs with no empty filler
+     * between them. Because matching is accent-folded, a highlighted run may keep
+     * more characters than [term] has (an accented grapheme highlighted whole).
+     */
+    fun highlightedSegments(text: String, term: String): List<HighlightSegment> {
+        if (text.isEmpty()) return emptyList()
+        val ranges = highlightRanges(text, term)
+        if (ranges.isEmpty()) return listOf(HighlightSegment(text, highlighted = false))
+        val segments = mutableListOf<HighlightSegment>()
+        var cursor = 0
+        for (range in ranges) {
+            val start = range.first
+            val endExclusive = range.last + 1
+            if (start > cursor) {
+                segments.add(HighlightSegment(text.substring(cursor, start), highlighted = false))
+            }
+            segments.add(HighlightSegment(text.substring(start, endExclusive), highlighted = true))
+            cursor = endExclusive
+        }
+        if (cursor < text.length) {
+            segments.add(HighlightSegment(text.substring(cursor), highlighted = false))
+        }
+        return segments
     }
 
     /**

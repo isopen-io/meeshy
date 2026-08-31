@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — "Rendered in the result rows" is a two-part slice: the DECISION is pure, the WASH is glue (slice `global-search-result-highlight`)
+feature-parity §N listed "query highlighting rendered in the RESULT rows" as one open item. It is really two
+things at two altitudes, and only one of them is a test target:
+- The DECISION — *which* substrings of the plain content match the (accent/case-folded) query — is pure and
+  already had an SSOT (`MessageTextParser.highlightRanges`). What was missing for a plain-text row was the
+  SPLIT of the content into alternating highlighted/plain runs. I added `highlightedSegments(text, term)`
+  that REUSES `highlightRanges` (loops its ranges, fills the gaps) rather than re-scanning — so there is no
+  second search implementation to drift (dimension 11). This is the whole test surface: 12 behavioural tests,
+  including the load-bearing invariant that the runs reassemble to the original text (catches any off-by-one
+  in the gap/tail filling that a per-segment assertion alone might miss).
+- The WASH — mapping each run onto an `AnnotatedString` span — is Compose glue (exempt). Keep it a trivial
+  `if (highlighted) withStyle(background) else append`, no decisions, so the exemption is honest.
+- **Coherence catch worth repeating:** the highlight colour must be the SAME token the chat bubble already
+  uses (`MeeshyPalette.Warning.copy(alpha=0.45f)` in `MessageBubble.kt`), not a fresh one — a term should
+  read identically in the result row and in the conversation it opens. Grepped `highlightColor =` to find the
+  existing wash before picking one.
+- **Parity nuance:** the row renders PLAIN content, not `RichMessageText`. iOS `highlightedText` does the same
+  — markdown/mention/link parsing in a result row would put a tappable link inside a row whose own tap opens
+  the conversation, a dead-end gesture. "Reuse the richest renderer" would have been the wrong instinct here.
+- **RED-proof shape for a segmenter:** mutate the run's `highlighted = true`→`false`. Exactly the match-bearing
+  tests fail; the no-match/boundary tests stay green (they emit no highlighted run) — which simultaneously
+  proves those boundary tests aren't secretly asserting the highlight path.
+
 ## 2026-08-31 — Before writing a new pure `:core:model` type, grep for the SSOT it would duplicate (slice `notification-banner-dedup-ssot`)
 The "Next" pointed at the §M notification-toast dedup window as if it were unbuilt. I wrote a fresh pure
 `NotificationDedupWindow` + full test (RED+GREEN both real) before reading §M closely — and found the SSOT

@@ -7008,8 +7008,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
       +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
       re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
-      **Remaining:** query highlighting rendered in the RESULT rows (iOS `highlightedText`, currently only the
-      chat bubble renders `highlightRanges`), and the local FTS leg below.
+      **Message-row highlighting done** (slice `global-search-result-highlight`, 2026-08-31): the message
+      result row now washes the query match in the content preview, iOS `highlightedText` parity. New pure
+      `:core:model` `MessageTextParser.highlightedSegments(text, term)` splits the plain content into
+      alternating highlighted/plain `HighlightSegment` runs (reusing the existing `highlightRanges` SSOT —
+      not a twin), and `GlobalSearchScreen.MessageHitRow` maps those runs onto a washed `AnnotatedString`
+      (same `MeeshyPalette.Warning.copy(alpha=0.45f)` wash as the chat bubble, so a term reads identically
+      in the row and in the opened conversation). Plain content, no markdown/link parsing in the row (iOS
+      does the same — a tappable link inside a result row would dead-end the tap). +12 `MessageTextParserHighlightSegmentsTest`
+      (empty text→no runs; empty/folds-away/unmatched term→single plain run; match at start/middle/end;
+      whole-string match; several matches with plain fillers; adjacent matches→back-to-back highlighted, no
+      empty filler; case-insensitive keeps original casing; accent-folded `cafe`→`café` highlighted whole;
+      the reassembly invariant on every non-trivial case). RED-proven (highlighted-run flag `true`→`false`
+      fails exactly the 8 match-bearing tests, the 4 no-match cases stay green).
+      **Remaining:** highlighting the Conversations/Users result rows (their preview is the title/username,
+      a lighter follow-up), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,

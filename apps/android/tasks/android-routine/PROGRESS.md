@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **the global-search MESSAGE result row now highlights the query in its content preview —
+> iOS `highlightedText` parity — off a new pure `:core:model` splitter that reuses the existing
+> `highlightRanges` SSOT rather than re-deriving it** (slice `global-search-result-highlight`,
+> feature-parity §N "Global search → Message-row highlighting").
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4539
+> (`notification-banner-dedup-ssot`, the previous run's slice) was open with the **Android** required gate
+> GREEN and the diff strictly `apps/android` (1 main VM + 1 new test + tracking docs). Its only red check was
+> **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet regression (1184 vs baseline 1183, entirely
+> in web `.tsx`/`.ts` files this Kotlin diff never touches), i.e. base-branch noise, not this PR's (routine
+> §CI reality: `ci.yml` "compiles no Kotlin … is not an Android gate and never was"). Reviewer PASS →
+> squash-merged #4539. Synced local `main` (fa5c6ce3), branched `claude/apps/android/global-search-result-highlight`.
+>
+> **The gap.** feature-parity §N left "query highlighting rendered in the RESULT rows" open: the pure
+> `MessageTextParser.highlightRanges` existed and the chat bubble rendered it, but the global-search message
+> result row still showed `hit.message.content` as flat `Text`. iOS `GlobalSearchView` highlights the query
+> in each result row (`highlightedText`, case/diacritic-insensitive) over the PLAIN content — no markdown, no
+> tappable links (a link inside a result row would dead-end the row's open-conversation tap).
+>
+> **The change — one pure splitter + trivial wash glue.** (1) New pure `:core:model`
+> `MessageTextParser.highlightedSegments(text, term): List<HighlightSegment>` — splits the plain content into
+> alternating highlighted/plain runs by REUSING `highlightRanges` (the accent-fold SSOT), not re-deriving the
+> search; the runs cover the text with no gaps/overlaps and reassemble to it exactly, so the UI maps each run
+> onto a span with zero decisions. New `HighlightSegment(text, highlighted)` value alongside. (2)
+> `GlobalSearchScreen.MessageHitRow` now takes `query`, builds an `AnnotatedString` from those runs, and
+> washes the highlighted ones with `MeeshyPalette.Warning.copy(alpha=0.45f)` — the SAME wash as the chat
+> bubble's search highlight (`MessageBubble.kt`), so a term reads identically in the row and in the opened
+> conversation (colour/UX coherence). Blast radius: 1 pure file + 1 screen file + 1 new test file.
+>
+> **Tests: +12, RED-proven.** New `MessageTextParserHighlightSegmentsTest`: empty text→no runs; empty /
+> folds-away (`́`) / unmatched term→single plain run; match at start / middle / end; whole-string match;
+> several matches with plain fillers; adjacent matches→back-to-back highlighted with no empty filler;
+> case-insensitive keeps original casing; unaccented `cafe`→`café` highlighted whole; and the reassembly
+> invariant asserted on every non-trivial case. **RED:** flipping the highlighted run's flag `true`→`false`
+> fails exactly the 8 match-bearing tests (`12 tests completed, 8 failed`); the 4 no-match cases stay green
+> because they emit no highlighted run — proving the tests bind the actual highlight decision, not a constant.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via a symlinked `android-37 → android-37.0`. `local.properties` kept out of the diff (gitignored,
+> `git check-ignore` confirmed).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the exact `meeshy.sh check`
+> commands) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 pure `:core:model` file + 1
+> screen + 1 new test + tracking docs, no `local.properties`; SDK purity — the DECISION is a pure `:core:model`
+> function, the wash is `:feature` glue; SSOT — `highlightedSegments` reuses `highlightRanges`, no twin, and
+> the wash colour is the chat bubble's; instant-app/UDF — pure derivation `remember`ed on content+query; no
+> tautological tests; no coverage floor lowered — a net-new pure function shipped with 12 behavioural tests).
+>
+> **Next**: the sibling result rows — highlight the Conversations tab (title preview) and Users tab
+> (display-name/username) with the same `highlightedSegments` splitter (a lighter follow-up; their preview is a
+> short label, not free content). Then the deeper §M notification twin (collapse `NotificationBanner*` LIVE and
+> `NotificationToast*` orphan into one) remains the biggest open cross-cutting item, and the local-FTS leg of
+> §N. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **the LIVE in-app banner's dedup stopped being a re-coded twin — it now uses the ONE
 > shared pure `ToastDedupWindow`, the injected clock seam, and a cancellable dismiss job — and the
 > previously-untested banner ViewModel got its behavioural test suite** (slice
