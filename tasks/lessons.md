@@ -22306,3 +22306,75 @@ n'a rien protégé.
 
 Voir [[reference_a_built_view_that_is_dropped_never_turns_red]],
 [[reference_a_comment_asserting_more_than_the_fix_is_a_trap]].
+
+## Leçon 289 — Une exemption porte sur la NATURE d'un objet, pas sur la règle qui le lit
+
+**Cycle #4328 (2026-09-01).** `LocalizationConsistencyTests.untranslatableKeys`
+déclare depuis 225i que les CGU (`onboarding.step.recap.terms.body`) ne se
+traduisent pas à l'initiative d'une itération — du texte qu'un utilisateur
+ACCEPTE ne se traduit pas à la légère. **Deux règles honoraient cette
+déclaration** (`fullyLocalizedScreensStayTranslated…`,
+`fullyLocalizedScreenDefaultValuesMatch…`). **Le cliquet du backlog, non** : il
+comptait la clé comme une dette ordinaire.
+
+Le symptôme n'est pas un faux rouge, il est plus discret : **le plancher du
+plafond valait 1, pour une raison qu'aucun lecteur du nombre ne pouvait voir**.
+Un `0` était inatteignable, et rien ne l'aurait jamais expliqué — un cliquet qui
+gardera toujours du mou, sans que personne sache combien ni pourquoi.
+
+> La question à poser en ÉCRIVANT une exemption — jamais en lisant le compte :
+> **« toutes les lectures de la donnée qu'elle exempte l'honorent-elles ? »**
+> C'est la forme jumelle de « quand un correctif enseigne une notion à UN
+> lecteur de catalogue, chercher les autres lecteurs » (226i / #4329).
+
+**Et une exemption doit se PAYER.** Une porte qu'on élargit sans rien casser
+cesse d'être une porte. `test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet`
+mesure le cliquet **deux fois** — `untranslatedKeys(env, honouringExemptions:)` —
+et exige que la différence soit **exactement** `untranslatableKeys`. Une entrée
+ajoutée « au cas où », ou restée là après que son défaut a disparu, rougit
+désormais. C'est la loi « un contrôle existe s'il a un effet », appliquée à une
+liste au lieu d'un bouton.
+
+**Corollaire de mesure, payé le même jour** : un plafond se LIT au témoin forcé
+à zéro, jamais soustrait du précédent. Le plafond disait 31 ; la mesure rendait
+**8**. Les 23 points d'écart étaient du mou qu'une soustraction avait laissé
+s'installer — exactement la cause qui avait donné 42 points au cycle 231i.
+
+**Corollaire de découpe** : le fichier hôte passait 1251 lignes, donc était
+fermé à tout ajout (budget 800–1100). La ligne de découpe est une
+RESPONSABILITÉ — d'un côté les RÈGLES que le dépôt s'engage à tenir, de l'autre
+la MESURE qui les alimente (catalogues, arborescence, scanner) : elles bougent
+pour des raisons différentes. 965 + 370. `private` étant de portée FICHIER en
+Swift, trois statiques s'élargissent en `internal` : le prix de la découpe, à
+dire à l'endroit où on le paie.
+
+## Leçon 290 — Vérifier qu'une valeur est ACCEPTÉE ne dit pas qu'elle REVIENT
+
+**Cycle #4624 (2026-09-01).** Android n'envoyait aucun message : le corps portait
+`cmid_…` là où les trois portes du gateway exigent `^cid_`. Le correctif est
+d'une ligne (`OutboxIds.cid()`, la fonction écrite pour ce rôle et jamais
+branchée), et sa vérification aurait pu s'arrêter au 200.
+
+Elle serait passée à côté du couplage sur lequel l'arbitrage REPOSE :
+`MessageCacheSource.persist` purge la bulle optimiste en lisant le
+`clientMessageId` **que le serveur RENVOIE**, et s'en sert comme identifiant
+LOCAL. Si le gateway ne l'échoïsait pas, le correctif aurait déplacé le défaut —
+un doublon à chaque envoi au lieu d'un 400.
+
+Mesuré sur staging, sur les DEUX chemins que le client emprunte : la réponse
+immédiate du POST (qui alimente `reconcileSent`) **et** la relecture de
+resynchronisation (qui alimente `ackedLocalIds` → `deleteByIds`) portent la
+valeur verbatim.
+
+> **Un correctif de format se mesure aux deux bouts du fil : ce qui part, et ce
+> qui rentre sous le même nom.**
+
+Deux corollaires de méthode :
+* **Mesurer le corps RÉEL, pas le corps plausible.** `MeeshyApi.json` est
+  `explicitNulls = false` et laisse `encodeDefaults` à `false` : le corps qu'Android
+  émet pour un envoi texte n'a que TROIS champs — `messageType` vaut son défaut
+  et n'est même pas sérialisé. Envoyer la forme complète du `data class` aurait
+  testé une charge que le client ne produit jamais.
+* **La contre-épreuve compte autant que le vert.** Rejouer l'ancien préfixe
+  prouve que la porte est toujours là et que c'est bien lui, seul, qui la
+  franchissait ou non.
