@@ -1,6 +1,25 @@
 import XCTest
 @testable import MeeshySDK
 
+// #4588 — cinq de ces adresses ont été CORRIGÉES le 2026-08-31, dans les
+// témoins comme dans le service.
+//
+// Elles étaient fausses des deux côtés : `AuthService` appelait
+// `/auth/password-reset/reset`, `/auth/phone/send-code`, `/auth/phone/verify`,
+// `/auth/email/verify` et `/auth/email/resend-verification` — mesuré **404**
+// sur `gate.staging.meeshy.me` — et ces témoins ASSERTAIENT exactement ces
+// chemins.
+//
+// C'est ce qui rendait le défaut permanent. Un témoin qui épingle un chemin ne
+// peut vérifier qu'une chose : que le client est cohérent avec LUI-MÊME. Il
+// était vert, il l'est resté, et quatre parcours utilisateur — dont la
+// réinitialisation de mot de passe — ne pouvaient pas aboutir. Ce n'est pas la
+// relecture qui l'a trouvé, c'est l'appariement mécanique des chemins au
+// manifeste du serveur (#4282).
+//
+// Depuis, le service passe par le catalogue GÉNÉRÉ : un chemin qui n'existe pas
+// côté serveur ne compile plus, et ces témoins ne peuvent plus en épingler un.
+
 final class AuthServiceTests: XCTestCase {
     private var mock: MockAPIClient!
     private var service: AuthService!
@@ -344,18 +363,18 @@ final class AuthServiceTests: XCTestCase {
 
     func testResetPasswordSuccess() async throws {
         let response = SimpleAPIResponse(success: true, message: "Password reset", error: nil)
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         try await service.resetPassword(token: "reset-tok", newPassword: "newPass123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/password-reset/reset")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/reset-password")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testResetPasswordThrowsOnFailure() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: "Token expired")
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         do {
             try await service.resetPassword(token: "expired", newPassword: "new")
@@ -373,7 +392,7 @@ final class AuthServiceTests: XCTestCase {
 
     func testResetPasswordThrowsWithDefaultMessage() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: nil)
-        mock.stub("/auth/password-reset/reset", result: response)
+        mock.stub("/auth/reset-password", result: response)
 
         do {
             try await service.resetPassword(token: "bad", newPassword: "new")
@@ -393,18 +412,18 @@ final class AuthServiceTests: XCTestCase {
 
     func testSendPhoneCodeSuccess() async throws {
         let response = SimpleAPIResponse(success: true, message: "Code sent", error: nil)
-        mock.stub("/auth/phone/send-code", result: response)
+        mock.stub("/auth/send-phone-code", result: response)
 
         try await service.sendPhoneCode(phoneNumber: "+33612345678")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/phone/send-code")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/send-phone-code")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testSendPhoneCodeThrowsOnFailure() async {
         let response = SimpleAPIResponse(success: false, message: nil, error: "Invalid phone")
-        mock.stub("/auth/phone/send-code", result: response)
+        mock.stub("/auth/send-phone-code", result: response)
 
         do {
             try await service.sendPhoneCode(phoneNumber: "bad")
@@ -425,14 +444,14 @@ final class AuthServiceTests: XCTestCase {
     func testVerifyPhoneSuccess() async throws {
         let verifyData = VerifyPhoneResponse(verified: true, phoneTransferToken: "transfer-abc")
         let response = APIResponse(success: true, data: verifyData, error: nil)
-        mock.stub("/auth/phone/verify", result: response)
+        mock.stub("/auth/verify-phone", result: response)
 
         let result = try await service.verifyPhone(phoneNumber: "+33612345678", code: "123456")
 
         XCTAssertEqual(result.verified, true)
         XCTAssertEqual(result.phoneTransferToken, "transfer-abc")
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/phone/verify")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/verify-phone")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
