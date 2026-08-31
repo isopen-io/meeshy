@@ -2,6 +2,76 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **the conversation stats dashboard gained a CLIENT-SIDE fallback — a failed or lagging
+> `/stats` fetch no longer blanks to an error screen; the sheet computes the same figures from the
+> messages already on screen (iOS's `clientComputed*` fallback), shown instantly and kept on failure**
+> (slice `conversation-stats-client-fallback`, feature-parity §C "Conversation stats rings …" — the
+> offline/cache-first maturity arm of an already-`[x]` box). The Android dashboard was SERVER-ONLY:
+> `ConversationStatsViewModel` fetched `/stats` and, on `NetworkResult.Failure`, set `StatsPhase.Error`
+> — an error screen even though the loaded page held every message needed to compute messages / words /
+> content-types / participants / activity locally, exactly as iOS falls back to `messages.count` etc.
+> when `serverStats == nil`. Dimension-8 (offline) + dimension-2 (cache-first) + dimension-13 gap.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4599/#4590 (gateway,
+> `claude/brave-archimedes-*`) + dependabot; none a `claude/apps/android/<slice-id>` slice, nothing of
+> mine to merge. Prior slice (`story-viewer-dwell`) is on `main` (#4607, commit 79fdf443). Branched
+> `claude/apps/android/conversation-stats-client-fallback` off freshly-fetched `origin/main`.
+>
+> **The change — one pure computation + a cache-first ViewModel + a thin mapper.** (1) New pure
+> `:core:model` `ConversationStatsProjection.clientComputed(conversationId, messages)` returning a
+> `ConversationMessageStatsResponse` — the SAME type the server returns, so the existing `project()`
+> path renders EITHER source (no divergent second render path). Faithful port of iOS: a word is a run
+> of non-whitespace (empty/blank ⇒ 0); an attachment-less non-empty message is one TEXT item (a caption
+> beside an attachment is not — the attachments win); daily buckets emitted oldest-first as `yyyy-MM-dd`.
+> **SOTA over iOS**: participants group by `senderId`, not display name (iOS merges two users who share a
+> name). `hourly`/`language` stay empty (not derivable from the reduced shape without a clock/detector —
+> iOS's fallback has neither either). New value types `ClientStatMessage` + `ClientAttachmentKind`. (2)
+> `ConversationStatsViewModel.load` now takes `List<ClientStatMessage>` (was `List<String>` for sentiment
+> only — a single richer input, no divergent twin): it SEEDS the sheet from `clientComputed` synchronously
+> (cache-first, no spinner), scores sentiment from the same list, then fetches `/stats`; a Success refines
+> (server is authoritative over the loaded page), a Failure KEEPS the local snapshot instead of erroring.
+> Only a fetch with no local messages surfaces the error. (3) `BubbleContent → ClientStatMessage` mapping
+> extracted to `ClientStatMessageMapping.kt` (ChatScreen is already 3400+ lines, over budget — extract,
+> don't grow): the bubble layer carries no author id (viewer's own → `__me__`, others → display name or
+> `__unknown__`) and renders a video as a thumbnail in `images`, so a video folds into the IMAGE tally —
+> a documented fallback coarsening; the server split stays accurate.
+>
+> **Tests: +20, RED-reasoned.** `ConversationStatsProjectionTest` +10 (message/word totals; whitespace
+> runs collapse; attachment-only counts under its kind not text; whitespace-only still TEXT like iOS;
+> group-by-id keeps two "Sam"s apart; later name fills a first-null; per-day oldest-first buckets; chars
+> summed + hourly/lang empty; empty page zeroed; feeds the same participantShares projection).
+> `ClientStatMessageMappingTest` +6 (outgoing→`__me__`; incoming→name; nameless→`__unknown__`; attachment
+> kinds incl. video-folds-into-image; instant→local-day in a +02:00 zone crosses midnight; absent
+> timestamp→today). `ConversationStatsViewModelTest` reworked +4 net (local messages seed before the
+> network resolves; a failure keeps the local snapshot [was: error]; a failure with NO local messages
+> still errors; a success refines the seed) — the two now-unreachable "sentiment survives into Error"
+> tests were replaced, not weakened (the new ones assert MORE: stats present, not just an error).
+> **RED:** keying participants by name instead of id fails exactly the two-Sams test; making a fetch
+> failure always Error (old behaviour) fails exactly the keep-snapshot test; dropping the synchronous
+> seed fails exactly the seed-before-resolve test.
+>
+> **Android gate DELEGATED TO CI (local toolchain unavailable, per ROUTINE §CI reality).** SDK
+> bootstrapped (cmdline-tools 13114758, `build-tools;35.0.0`, `platforms;android-37.0`), but **AGP 8.13.0
+> resolves `compileSdk = 37` to hash `android-37` while the SDK repo only publishes the minor-versioned
+> `android-37.0`** — `Failed to find target with hash string 'android-37'`. A symlink, a path-patched
+> copy, and a fresh reinstall via newer cmdline-tools all failed the same way; CI's `android-actions/
+> setup-android@v4` resolves it (main is green on this exact AGP), the container's manual toolchain does
+> not. So no local `assembleDebug`/`testDebugUnitTest` this run — pushed, opened the PR, and the **Android**
+> check is the compiler. Diff reviewed adversarially for compile-correctness (imports pruned — the mapper
+> moved out of ChatScreen left 4 unused imports, removed; no stale `messageContents` caller; single input
+> type; `ClientStatMessage(day:)` last non-default param is legal Kotlin, all call sites name it).
+>
+> **Reviewer self-run: PASS pending CI.** Diff `apps/android` only (2 `:core:model` + 4 `:feature:chat` +
+> 2 tracking docs; `local.properties` gitignored, not staged). SDK purity — pure `:core:model` building
+> block, orchestration in the `:feature` ViewModel, mapping glue in the feature module. SSOT — one
+> `clientComputed`, feeding the one existing `project()`; no re-implemented render path. Instant-app —
+> synchronous cache-first seed, no spinner, no refetch on period switch. No coverage floor lowered; no
+> tautological tests; behaviour over implementation.
+>
+> **Next**: the §C "Conversation info sheet: hero/direct headers …" box is still `[ ]` — the header
+> composition is the remaining Compose-glue arm now that members/media/stats are all real. For a pure-core
+> next slice, consider another Chat value type, or an earlier build-order area (Auth→Conversations).
+
 > On 2026-08-31 **dwell-time tracking reached its FOURTH and LAST single-focus surface — the story
 > viewer now records a dwell-aware view beside its impression, bringing dwell to full iOS parity
 > (reels + detail + status + story), off the same `EngagementSessions` heart** (slice

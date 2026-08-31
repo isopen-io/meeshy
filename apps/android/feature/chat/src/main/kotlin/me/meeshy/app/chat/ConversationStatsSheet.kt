@@ -37,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ActivityPeriod
+import me.meeshy.sdk.model.ClientStatMessage
 import me.meeshy.sdk.model.ContentTypeKind
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.LanguageShare
@@ -63,13 +64,13 @@ import kotlin.math.roundToInt
 fun ConversationStatsSheet(
     conversationId: String,
     accentColor: Color,
-    messageContents: List<String>,
+    clientMessages: List<ClientStatMessage>,
     onDismiss: () -> Unit,
     viewModel: ConversationStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(conversationId) { viewModel.load(conversationId, messageContents) }
+    LaunchedEffect(conversationId) { viewModel.load(conversationId, clientMessages) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

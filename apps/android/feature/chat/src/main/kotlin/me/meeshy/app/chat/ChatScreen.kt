@@ -855,10 +855,14 @@ fun ChatScreen(
     }
 
     if (showStats) {
+        val statsZone = remember { ZoneId.systemDefault() }
+        val clientMessages = remember(state.messages) {
+            state.messages.filterNot { it.isDeleted }.map { it.toClientStatMessage(statsZone) }
+        }
         ConversationStatsSheet(
             conversationId = state.conversationId,
             accentColor = accentColor,
-            messageContents = state.messages.filterNot { it.isDeleted }.map { it.text },
+            clientMessages = clientMessages,
             onDismiss = { showStats = false },
         )
     }
