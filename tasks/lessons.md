@@ -21170,12 +21170,29 @@ parfaitement normal : suites nommées, comptes plausibles, `EXIT=0`.
 
 ```bash
 xcodebuild build-for-testing … > build.log 2>&1
-if grep -q "TEST BUILD SUCCEEDED" build.log; then
+BUILD_RC=$?
+if [ "$BUILD_RC" -eq 0 ]; then
     xcodebuild test-without-building …
 else
     echo "BUILD ROUGE — aucun test lancé"; exit 1
 fi
 ```
+
+**Le gate porte sur le CODE DE SORTIE, pas sur un motif du journal** — et cette
+précision a coûté un faux ROUGE avant d'être écrite. La première version cherchait
+`grep -q "TEST BUILD SUCCEEDED"` ; **avec `-quiet`, xcodebuild n'imprime pas cette
+ligne**, et un build parfaitement vert était déclaré rouge. La parade contre un
+faux vert avait fabriqué un faux rouge, ce qui est le même défaut retourné : on
+juge un fait sur son ÉCHO plutôt que sur lui-même.
+
+Deux pièges de coquille vont avec :
+
+- **ne pas mettre de tube derrière la commande jugée.** `xcodebuild … | grep …`
+  fait de `$?` le statut de `grep`, jamais celui du build (`${PIPESTATUS[0]}` le
+  rattrape, mais le plus sûr est de rediriger vers un fichier et de filtrer
+  ensuite) ;
+- **capturer `$?` sur la ligne SUIVANTE**, avant tout autre appel — un `echo`
+  intercalé l'écrase.
 
 Deux corollaires qui ne se devinent pas :
 
