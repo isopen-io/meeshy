@@ -19,6 +19,7 @@ import { mintConversationShareLink } from '../links/utils/share-link-mint';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { NEW_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
@@ -789,22 +790,19 @@ export function registerSharingRoutes(
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
+      // #4174 — la table de droits vient du site UNIQUE
+      // (`services/participantRights.ts`). Elle était écrite ICI, et elle
+      // DIFFÉRAIT de celle que `POST …/participants` posait pour le même
+      // geste : `canSendVideos` et `canSendAudios` y valaient `false`. Le
+      // même utilisateur, ajouté au même groupe, recevait donc des droits
+      // différents selon le bouton employé — alors que les deux portes
+      // partagent le résolveur d'admission, produisent la même ligne de rôle
+      // `member`, et sont déclenchées par le même écran.
       const invitedMemberFields = {
         type: 'user',
         displayName: userToInvite.displayName || userToInvite.username,
         role: 'member',
-        permissions: {
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendVideos: false,
-          canSendAudios: false,
-          canSendLocations: false,
-          canSendLinks: false,
-          // Un membre invité après coup lit depuis son arrivée ; un
-          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
-          canViewHistory: false
-        }
+        permissions: { ...NEW_MEMBER_PERMISSIONS }
       };
 
       // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne
