@@ -992,6 +992,27 @@
    "hors_planche": true,
    "ordre": 0,
    "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "banner:inApp",
+   "titre_issue": "La v3 web naît avec la bannière in-app qui dit son type — jamais avec celle qu'on vient de corriger deux fois",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Une suite couvre les SEPT cadrages (commentaire de contenu, nouvelle publication, message privé, message de groupe, relation acceptée, demande de relation, réaction) ; la phrase d'action rendue est celle SERVIE par le serveur (`notification.title` / `subtitle` du payload `notification:new`), aucune phrase française réécrite dans la v3 ; la seule composition client est « X dans {groupe} », le nom local du groupe n'existant que sur l'appareil.",
+   "dimensions_visees": [
+    "Cohérence de positionnement",
+    "Expérience utilisateur",
+    "Maintenabilité",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Issue #4454. Surface TRANSVERSE — ni l'écran `notifs` (la liste) ni `notifPrefs` : le toast s'affiche par-dessus n'importe quel écran connecté. Elle n'avait aucune entrée ici, donc `ordre-des-ecrans.js` ne la voyait pas : ouverte mais hors plan.\n\n**Elle précède son infrastructure au 2026-08-31.** `apps/web-v3` ne porte alors que la route publique `/l/:token`, le moteur de thème et `lib/realtime/lifecycle.ts` — aucune coquille connectée, aucun socket applicatif, aucune surface de notification. D'où `depend_de: [\"home\"]`, comme `notifs`.\n\n**Tension de séquencement à trancher par le porteur** : rangée en L6 avec sa famille (`notifs`, `notifPrefs`), la bannière n'existe qu'après tout L5 — c'est-à-dire que `home`, `chats`, `feed` et `composer` sortiraient MUETS, sans aucun retour temps réel de ce qui arrive pendant qu'on les parcourt. La monter en L5 coûte une coquille de toast plus tôt ; l'y laisser coûte quatre écrans sans voix. Le choix n'est pas dans l'issue.\n\n**La loi est DÉJÀ écrite deux fois** — `NotificationBannerPresentation` (iOS, `packages/MeeshySDK/.../Notifications/`) et `buildNotificationBanner` (`apps/web/utils/notification-banner.ts`, 233 lignes + 290 de témoins). La v3 ne doit PAS en écrire une troisième : la dimension 11 de l'issue dit « une seule loi, trois clients ». Le lot commence donc par remonter la loi web dans `packages/shared`, pas par la recopier.\n\n**Source** — issue #4454, miroirs #4452 (iOS) et #4453 (web existant), dépendance #4451 fermée."
   }
  ]
 }

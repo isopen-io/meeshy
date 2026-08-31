@@ -210,18 +210,30 @@ function registerSubRoutes(ctx: Context) {
 
 ## La table des routes est PUBLIÉE, et un cliquet la tient
 
-`docs/api/route-manifest.{json,md}` liste les routes réellement SERVIES — méthode,
-chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa preuve —
-produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par `grep`.
-C'est la source qui fait foi pour les catalogues clients (#4276).
+`services/gateway/route-manifest.json` liste les routes réellement SERVIES —
+méthode, chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa
+preuve — produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par
+`grep`. C'est la source qui fait foi pour les catalogues clients (#4276), et le
+collecteur vit dans `src/route-manifest/collect.ts`.
 
-**Ajouter, retirer ou déplacer une route rend `src/__tests__/route-manifest-ratchet.test.ts`
-ROUGE tant que le manifeste n'est pas régénéré** — c'est voulu :
+**Ajouter, retirer ou déplacer une route rend
+`src/__tests__/security/route-manifest-ratchet.test.ts` ROUGE tant que le
+manifeste n'est pas régénéré** — c'est voulu :
 
 ```bash
-npx tsx scripts/route-manifest.ts        # régénère (à commiter avec la route)
-npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
+npm run route-manifest:generate   # régénère (à commiter avec la route)
 ```
+
+⚠️ **Node ≥ 22.19 requis** : sous une version antérieure, le script échoue sur
+`webidl.util.markAsUncloneable is not a function` — une pile qui pointe
+l'intérieur d'`undici` et ne nomme ni la cause ni le remède. Il le dit lui-même
+quand il détecte la mauvaise version ; ne pas lire l'échec comme un dépôt cassé.
+
+Il n'existe **pas** de variante `--check` : le cliquet ci-dessus EST la
+vérification, et il tourne au gate. Ces trois indications étaient fausses jusqu'au
+2026-08-31 (#4455) — un document qui dit vrai sur le principe et faux sur le
+chemin est plus coûteux qu'un document absent : on lui fait confiance, on suit,
+on échoue, et on ne sait pas si l'erreur est la sienne.
 
 Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
 préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
@@ -1360,7 +1372,7 @@ du désaccord* ci-dessous.
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
 main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
-cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `routes/attachments/translation.ts`
 au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
 les trois enveloppes fantômes au cycle 88 bis.
 
@@ -1578,7 +1590,7 @@ déclaration qui dit **faux** — et une déclaration fausse tronque exactement
 comme un objet nu vide, sans qu'aucun outil ne la signale, puisqu'elle porte
 des `properties`.
 
-Cas mesuré (cycle 91) : `routes/voice/translation.ts` portait trois
+Cas mesuré (cycle 91) : `routes/attachments/translation.ts` portait trois
 `attachment: { type: 'object' }` nus **et**, trois cents lignes plus bas, la
 forme « juste » qu'on aurait voulu leur copier. Elle déclarait les six champs du
 producteur COURT (`translateAttachment`) sur une route qui sert le producteur
