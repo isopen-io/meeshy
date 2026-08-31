@@ -228,10 +228,10 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=${DOMAIN:-meeshy.me}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS absente sur l hote. Poser la liste d origines separees par des virgules. Vide, la passerelle refuse TOUTE origine de navigateur}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS absente sur l hote. C est le repli de CORS_ORIGINS. Vide, il ne rattrape rien}
+      - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL absente sur l hote. Sans elle les liens de reinitialisation et de confirmation partent brises}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons. Surtout PAS sous UPLOAD_PATH :
@@ -251,9 +251,9 @@ services:
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation des utilisateurs
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - MEESHY_PASSWORD=${MEESHY_PASSWORD}
-      - ATABETH_PASSWORD=${ATABETH_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
+      - MEESHY_PASSWORD=${MEESHY_PASSWORD:?MEESHY_PASSWORD absente sur l hote. Vide, le compte BIGBOSS naitrait avec le mot de passe public bigboss123}
+      - ATABETH_PASSWORD=${ATABETH_PASSWORD:?ATABETH_PASSWORD absente sur l hote. Vide, le compte naitrait avec le mot de passe public admin123}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - MEESHY_EMAIL=${MEESHY_EMAIL}
       - ATABETH_EMAIL=${ATABETH_EMAIL}

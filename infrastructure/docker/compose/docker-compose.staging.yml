@@ -218,7 +218,7 @@ services:
       - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
       - ALLOWED_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
       - FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons — même règle qu'en prod :
@@ -234,9 +234,9 @@ services:
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - MEESHY_PASSWORD=${MEESHY_PASSWORD}
-      - ATABETH_PASSWORD=${ATABETH_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
+      - MEESHY_PASSWORD=${MEESHY_PASSWORD:?MEESHY_PASSWORD absente sur l hote. Vide, le compte BIGBOSS naitrait avec le mot de passe public bigboss123}
+      - ATABETH_PASSWORD=${ATABETH_PASSWORD:?ATABETH_PASSWORD absente sur l hote. Vide, le compte naitrait avec le mot de passe public admin123}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - MEESHY_EMAIL=${MEESHY_EMAIL}
       - ATABETH_EMAIL=${ATABETH_EMAIL}

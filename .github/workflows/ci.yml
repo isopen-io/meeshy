@@ -194,6 +194,18 @@ jobs:
       - name: web-v3 pipeline guard
         run: node scripts/check-v3-pipeline.mjs --self-test && node scripts/check-v3-pipeline.mjs
 
+      # Même raison de placement que les trois gardes ci-dessus : l'invariant
+      # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
+      # et sur les deux modèles d'environnement — la surface est le DÉPÔT.
+      # Il ferme #4537 : une variable d'hôte absente n'arrête pas Docker Compose,
+      # elle est substituée par la chaîne VIDE avec un simple avertissement.
+      # La passerelle reçoit alors une liste d'origines DÉCLARÉE mais vide et
+      # refuse tout (#4480) — sans qu'aucune erreur ne soit levée au démarrage.
+      # La garde exige la forme à refus sur toute variable dont l'absence fait
+      # MENTIR le service, et rougit sur toute substitution nue non classée.
+      - name: Compose host variables guard
+        run: node scripts/check-compose-required-vars.mjs --self-test && node scripts/check-compose-required-vars.mjs
+
       # Le rapport unique de la machine de vérification (§ 9 de la conception)
       # agrège cinq mesures dont quatre ont un prérequis (un build, un serveur,
       # un navigateur pour le gate axe — dont l'INVOCATION vit dans le job
