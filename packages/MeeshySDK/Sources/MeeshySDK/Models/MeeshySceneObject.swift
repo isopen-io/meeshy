@@ -167,27 +167,32 @@ public enum MeeshySceneObject: Sendable {
         }
     }
 
-    /// **La DURÉE propre de l'objet — `nil` quand il n'en a pas.**
+    /// **La DURÉE propre de l'objet — `nil` ⇒ il vit toute la slide.**
     ///
-    /// Contrairement à `scale` et `rotation`, cette absence est RÉELLE et le
-    /// contrat la porte : `canvas-v3.ts` déclare `timing` **optionnel**, là où
-    /// il déclare `transform` requis. Un lieu n'a pas de temps propre — sa
-    /// pastille vit aussi longtemps que la slide.
+    /// Les CINQ familles en portent une (directive porteur 2026-08-31) :
     ///
-    /// > La différence avec l'asymétrie corrigée au même lot n'est pas de
-    /// > degré : `transform` était REQUIS par le contrat et absent du modèle
-    /// > Swift — un trou. `timing` est optionnel des DEUX côtés — une propriété.
-    /// > Ce qui les distingue s'est lu dans `canvas-v3.ts`, pas dans le modèle.
+    /// > « Tout `MeeshySceneObject` peut apparaître et disparaître quand il
+    /// > souhaite, y compris la pastille de lieu. »
+    ///
+    /// > **La première version rendait `nil` pour un LIEU et le justifiait** —
+    /// > « un lieu n'a pas de temps propre » — en lisant `timing: optional()`
+    /// > dans `canvas-v3.ts` comme « cette famille n'a pas de temps ».
+    /// > **`optional` décrit la PRÉSENCE d'un champ, jamais la CAPACITÉ d'une
+    /// > famille.** Un objet peut ne pas avoir de fenêtre ; aucun ne peut être
+    /// > privé du droit d'en avoir une.
+    ///
+    /// `nil` signifie donc « pas de fenêtre posée », pour les cinq — l'objet vit
+    /// aussi longtemps que la slide.
     ///
     /// Le type est uniformisé en `Double?` : l'audio la porte en `Float?`, les
-    /// trois autres en `Double?`. La conversion vit ici, une fois.
+    /// quatre autres en `Double?`. La conversion vit ici, une fois.
     public var duration: Double? {
         switch self {
         case .text(let o):     return o.duration
         case .media(let o):    return o.duration
         case .sticker(let o):  return o.duration
         case .audio(let o):    return o.duration.map(Double.init)
-        case .location:        return nil
+        case .location(let o): return o.duration
         }
     }
 
@@ -238,27 +243,28 @@ public extension StoryEffects {
     }
 }
 
-/// **Le projet de timeline voit QUATRE familles, pas cinq.**
+/// **Le projet de timeline voit les CINQ familles.**
 ///
-/// `TimelineProject` porte `mediaObjects`, `audioPlayerObjects`, `textObjects`
-/// et `stickerObjects` — **non-optionnels**, et sans `locationObjects`.
+/// Il n'en portait que quatre — sans `locationObjects` — et j'avais lu cette
+/// absence comme une propriété : « une pastille de lieu n'a pas de piste ».
 ///
-/// Ce n'est pas un oubli : **une pastille de lieu n'a pas de piste**, ce qui est
-/// la même propriété que son `duration == nil` — elle n'a pas de temps propre,
-/// elle vit aussi longtemps que la slide. Le domaine est cohérent avec lui-même,
-/// et la projection le dit plutôt que de fabriquer une cinquième famille vide.
+/// > Les deux absences se justifiaient l'une l'autre : le modèle n'avait pas de
+/// > fenêtre parce que la timeline ne le portait pas, et la timeline ne le
+/// > portait pas parce que le modèle n'avait pas de fenêtre. **Deux absences qui
+/// > se soutiennent forment un cercle, et un cercle a l'air d'une cohérence.**
+/// > Ce qui l'a brisé n'est pas une relecture — c'est une source EXTÉRIEURE au
+/// > code.
 ///
-/// > J'ai d'abord recopié la forme de `StoryEffects` — cinq familles,
-/// > optionnelles — en attribuant à cette struct la déclaration de sa VOISINE,
-/// > lue à quelques lignes d'écart dans le même fichier. Le compilateur l'a pris
-/// > en cinq erreurs. **Une déclaration se lit dans SON bloc, jamais dans son
-/// > voisinage.**
+/// Les tableaux sont NON-OPTIONNELS ici, là où `StoryEffects` en déclare trois
+/// optionnels : une déclaration se lit dans SON bloc, jamais dans celui de sa
+/// voisine.
 public extension TimelineProject {
 
     var sceneObjects: [MeeshySceneObject] {
         var tous: [MeeshySceneObject] = textObjects.map(MeeshySceneObject.text)
         tous += mediaObjects.map(MeeshySceneObject.media)
         tous += stickerObjects.map(MeeshySceneObject.sticker)
+        tous += locationObjects.map(MeeshySceneObject.location)
         tous += audioPlayerObjects.map(MeeshySceneObject.audio)
         return tous.enumerated()
             .sorted { ($0.element.zIndex, $0.offset) < ($1.element.zIndex, $1.offset) }
@@ -269,6 +275,7 @@ public extension TimelineProject {
         if let o = textObjects.first(where: { $0.id == id }) { return .text(o) }
         if let o = mediaObjects.first(where: { $0.id == id }) { return .media(o) }
         if let o = stickerObjects.first(where: { $0.id == id }) { return .sticker(o) }
+        if let o = locationObjects.first(where: { $0.id == id }) { return .location(o) }
         if let o = audioPlayerObjects.first(where: { $0.id == id }) { return .audio(o) }
         return nil
     }

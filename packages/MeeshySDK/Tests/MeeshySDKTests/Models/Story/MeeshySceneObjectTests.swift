@@ -182,20 +182,37 @@ final class MeeshySceneObjectTests: XCTestCase {
 
     /// **Un LIEU n'a pas de temps propre**, et cette absence est RÉELLE.
     ///
-    /// Contrairement à `scale` et `rotation` — que le contrat déclarait requis
-    /// et que le modèle Swift ne portait pas, un trou — `timing` est optionnel
-    /// des DEUX côtés dans `canvas-v3.ts`. Une pastille de lieu vit aussi
-    /// longtemps que la slide ; elle n'a pas de fenêtre à elle.
+    /// **Un lieu porte SA fenêtre comme les quatre autres** — directive porteur
+    /// 2026-08-31 : « tout `MeeshySceneObject` peut apparaître et disparaître
+    /// quand il souhaite, y compris la pastille de lieu ».
     ///
-    /// > Ce qui sépare un trou d'une propriété ne se lit pas dans le modèle
-    /// > Swift : il se lit dans le CONTRAT. Les deux ont la même forme en Swift
-    /// > — un optionnel — et des significations opposées.
-    func test_unLieu_nAPasDeTempsPropre() {
-        let lieu = StoryLocationObject(place: .init(latitude: 64.14, longitude: -21.94,
+    /// > La version précédente de ce témoin affirmait l'inverse — `XCTAssertNil`
+    /// > sur la durée d'un lieu — en lisant `timing: optional()` dans
+    /// > `canvas-v3.ts` comme « cette famille n'a pas de temps ». **`optional`
+    /// > décrit la PRÉSENCE d'un champ, jamais la CAPACITÉ d'une famille.** Un
+    /// > objet peut ne pas avoir de fenêtre ; aucun ne peut être privé du droit
+    /// > d'en avoir une.
+    func test_unLieu_porteSaFenetre_commeLesQuatreAutres() {
+        var lieu = StoryLocationObject(place: .init(latitude: 64.14, longitude: -21.94,
                                                     name: "Reykjavík"), x: 0.5, y: 0.8)
+        lieu.startTime = 2
+        lieu.duration = 3
         var e = StoryEffects()
         e.locationObjects = [lieu]
+        XCTAssertEqual(e.sceneObject(id: lieu.id)?.duration, 3)
+    }
+
+    /// `nil` reste lisible, et signifie la MÊME chose pour les cinq : aucune
+    /// fenêtre posée, l'objet vit aussi longtemps que la slide. Ce n'est plus
+    /// une propriété du lieu, c'est un état que les cinq peuvent prendre.
+    func test_uneFenetreAbsente_seLitPareilPourLesCinq() {
+        let lieu = StoryLocationObject(place: .init(latitude: 48.85, longitude: 2.35,
+                                                    name: "Paris"), x: 0.5, y: 0.8)
+        var e = StoryEffects()
+        e.locationObjects = [lieu]
+        e.textObjects = [texte("t1")]
         XCTAssertNil(e.sceneObject(id: lieu.id)?.duration)
+        XCTAssertNil(e.sceneObject(id: "t1")?.duration)
     }
 
     /// Les quatre autres la portent, et le type est UNIFORMISÉ : l'audio la
@@ -215,18 +232,18 @@ final class MeeshySceneObjectTests: XCTestCase {
         XCTAssertEqual(e.sceneObject(id: son.id)?.duration, 12)
     }
 
-    // MARK: - La timeline voit QUATRE familles
+    // MARK: - La timeline voit les CINQ familles
 
-    /// **`TimelineProject` n'a pas de `locationObjects`**, et c'est la même
-    /// propriété que le témoin ci-dessus : une pastille de lieu n'a pas de
-    /// piste parce qu'elle n'a pas de temps.
+    /// **`TimelineProject` porte `locationObjects`**, parce qu'un objet qui a
+    /// une fenêtre a une piste.
     ///
-    /// > La première version de cette projection recopiait la forme de
-    /// > `StoryEffects` — cinq familles, optionnelles — en attribuant à
-    /// > `TimelineProject` la déclaration de sa VOISINE, lue à quelques lignes
-    /// > d'écart dans un fichier de trois mille. Une déclaration se lit dans SON
-    /// > bloc, jamais dans son voisinage.
-    func test_leProjetDeTimeline_voitQuatreFamilles() {
+    /// > La version précédente affirmait quatre familles et le justifiait par le
+    /// > témoin ci-dessus — « pas de piste parce que pas de temps » — pendant
+    /// > que ce témoin-là se justifiait par cette absence-ci. **Deux absences
+    /// > qui se soutiennent forment un cercle, et un cercle a l'air d'une
+    /// > cohérence.** Aucune relecture ne pouvait le rompre : il fallait une
+    /// > source extérieure au code.
+    func test_leProjetDeTimeline_voitCinqFamilles() {
         let p = TimelineProject(
             slideId: "s1", slideDuration: 6,
             mediaObjects: [media("m1")],
@@ -234,12 +251,38 @@ final class MeeshySceneObjectTests: XCTestCase {
                                                         x: 0.5, y: 0.5, volume: 1,
                                                         waveformSamples: [])],
             textObjects: [texte("t1")],
-            stickerObjects: [StorySticker(emoji: "🎬", x: 0.5, y: 0.5)])
+            stickerObjects: [StorySticker(emoji: "🎬", x: 0.5, y: 0.5)],
+            locationObjects: [StoryLocationObject(id: "l1",
+                                                  place: .init(latitude: 48.85, longitude: 2.35,
+                                                               name: "Paris"))])
 
-        XCTAssertEqual(p.sceneObjects.count, 4)
-        XCTAssertEqual(Set(p.sceneObjects.map(\.kind)), [.text, .media, .sticker, .audio])
+        XCTAssertEqual(p.sceneObjects.count, 5)
+        XCTAssertEqual(Set(p.sceneObjects.map(\.kind)), [.text, .media, .sticker, .audio, .location])
         XCTAssertEqual(p.sceneObject(id: "m1")?.kind, .media)
+        XCTAssertEqual(p.sceneObject(id: "l1")?.kind, .location)
         XCTAssertNil(p.sceneObject(id: "fantome"))
+    }
+
+    /// **Le projet est ALIMENTÉ par la slide, et la rend.** Le champ ajouté au
+    /// projet ne servait personne tant que `init(from:)` ne le remplissait pas
+    /// et qu'`apply(to:)` ne le réécrivait pas : un déplacement de pastille dans
+    /// la timeline se serait perdu au retour.
+    func test_leLieu_faitLAllerRetour_entreLaSlideEtLeProjet() {
+        var slide = StorySlide(id: "s1")
+        slide.effects.locationObjects = [
+            StoryLocationObject(id: "l1", place: .init(latitude: 48.85, longitude: 2.35,
+                                                       name: "Paris"))
+        ]
+
+        var projet = TimelineProject(from: slide)
+        XCTAssertEqual(projet.locationObjects.count, 1)
+
+        projet.locationObjects[0].startTime = 1
+        projet.locationObjects[0].duration = 4
+        projet.apply(to: &slide)
+
+        XCTAssertEqual(slide.effects.locationObjects.first?.startTime, 1)
+        XCTAssertEqual(slide.effects.locationObjects.first?.duration, 4)
     }
 
     /// Même ordre que la scène : du fond vers l'avant.

@@ -527,21 +527,39 @@ Un concept à deux noms se paie deux fois : à l'écriture, où il faut choisir,
 
 Le vocabulaire à employer — doc-comments, issues, raisonnements :
 
-| terme | ce qu'il désigne |
-|---|---|
-| `MeeshyPublication` | ce que le composer produit, tous profils confondus |
-| `MeeshyScene` | la surface 9:16 d'une slide |
-| `MeeshySlide` | une page de la publication |
-| `MeeshyObject` | ce qu'on pose sur une scène — texte, média fg, sticker, tracé, chip |
-| `MeeshyComposer` | l'outil qui crée la publication |
+| terme | ce qu'il désigne | type Swift |
+|---|---|---|
+| `MeeshyPublication` | ce que le composer produit, tous profils confondus | — (enveloppe à écrire) |
+| `MeeshyScene` | la surface 9:16 d'une slide | — (`StoryEffects` la porte) |
+| `MeeshySlide` | une page de la publication | — (`StorySlide`) |
+| `MeeshySceneObject` | ce qu'on pose sur une scène — texte, média fg, sticker, chip de lieu, chip de son | **`MeeshySceneObject`** (somme à cinq cas) |
+| `MeeshyComposer` | l'outil qui crée la publication | `MeeshyComposerHost` |
+
+**`MeeshyObject` → `MeeshySceneObject`** (arbitrage porteur du même jour) : le
+nom dit OÙ l'objet vit. Un « objet Meeshy » sans qualificatif aurait aussi bien
+désigné une publication ou une slide.
 
 Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
 `MeeshyObject`, 64 de `MeeshyScene`, 38 de `MeeshySlide`, 35 de
 `MeeshyPublication`).
 
-**Aucun de ces noms n'est un TYPE aujourd'hui** (mesuré le 2026-08-31 : seul
-`MeeshyScenePlayer` porte le préfixe, et c'est une `View`). Le composer raisonne
-donc juste dans une langue que le compilateur ne parle pas.
+**Le premier de ces noms EST un type depuis le 2026-08-31** :
+`MeeshySceneObject` (`packages/MeeshySDK/.../Models/MeeshySceneObject.swift`),
+une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
+rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
+`isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
+Les quatre autres noms restent à écrire.
+
+**Ce que la somme a rendu visible.** Trente-quatre fonctions interrogeaient
+quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
+de l'ordre des familles, et les divergences n'étaient visibles nulle part. Douze
+sont repointées sur la somme, trois sont exclues par une raison écrite (l'ordre
+d'égalité y est significatif), dix-neuf restent.
+
+> **Un type qui n'existe pas ne peut pas diverger — il oblige seulement chaque
+> site à réinventer la règle.** C'est ainsi que la pastille de lieu s'est
+> retrouvée sans fenêtre de temps sur cinq sites qui se citaient l'un l'autre
+> (leçon 373).
 
 > C'est l'inverse du motif de la « règle doublée » : là, une règle raisonnée
 > était doublée par un littéral et seul le littéral était appelé ; ici, **le NOM

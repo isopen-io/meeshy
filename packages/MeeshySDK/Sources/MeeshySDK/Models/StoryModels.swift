@@ -1340,10 +1340,14 @@ public struct StorySticker: Codable, Identifiable, Sendable {
 
 // MARK: - Story Location Object (pastille de lieu posée sur une slide)
 
-/// Pastille de lieu posée sur une slide. Mêmes transforms qu'un
-/// `StoryTextObject` — la pastille est hors timeline : toujours visible sur sa
-/// slide, sans `startTime` ni `duration`. `TimelineClipKind` n'est donc pas
-/// étendu.
+/// Pastille de lieu posée sur une slide. **Mêmes transforms ET même fenêtre de
+/// temps qu'un `StoryTextObject`** — elle apparaît et disparaît quand elle veut
+/// (directive porteur 2026-08-31, #4591).
+///
+/// > Ce doc-comment affirmait le contraire — « hors timeline : toujours visible
+/// > sur sa slide » — et il était CITÉ par les sites qui en dérivaient leur
+/// > propre absence. Une phrase fausse au bon endroit se propage mieux qu'un
+/// > correctif.
 public struct StoryLocationObject: Codable, Identifiable, Sendable {
     public var id: String
     public var place: SharedPlace
@@ -1356,6 +1360,38 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
     public var zIndex: Int
     /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
     public var anchor: CGPoint
+    /// **Une pastille de lieu APPARAÎT et DISPARAÎT quand elle veut**
+    /// (directive porteur 2026-08-31, #4591).
+    ///
+    /// > « Tout `MeeshySceneObject` peut apparaître et disparaître quand il
+    /// > souhaite, y compris la pastille de lieu — différente de la
+    /// > localisation du POST ! »
+    ///
+    /// Elle était la SEULE des cinq familles sans fenêtre de temps, et j'avais
+    /// documenté cette absence comme une propriété du domaine (« un lieu n'a
+    /// pas de temps propre »). C'était un TROU, et le raisonnement qui l'a
+    /// justifié était faux : j'avais lu `timing: optional()` dans
+    /// `canvas-v3.ts` comme « cette famille n'a pas de temps ».
+    ///
+    /// > **`optional` décrit la PRÉSENCE d'un champ, jamais la CAPACITÉ d'une
+    /// > famille.** Un objet PEUT ne pas avoir de fenêtre ; aucun ne peut être
+    /// > privé du droit d'en avoir une. C'est la deuxième fois du jour qu'une
+    /// > absence du modèle Swift est prise pour une intention — et la seconde
+    /// > l'a été dans le commit qui prétendait savoir les distinguer.
+    ///
+    /// Optionnels comme chez les quatre autres familles : le décodeur manuel
+    /// les lit par `decodeIfPresent`, donc aucune publication existante ne
+    /// change.
+    public var startTime: Double?
+    public var duration: Double?
+    /// Les fondus vont AVEC la fenêtre : `RenderableItem` les lit tous les
+    /// quatre, et `MeeshyUI` en fabriquait quatre `nil` EN DUR sur ce type. Un
+    /// shim qui rend `nil` sans condition n'est pas une omission — **il OMBRE la
+    /// vraie valeur** : les propriétés stockées ci-dessus n'auraient atteint
+    /// aucun pixel du canvas tant qu'il vivait.
+    public var fadeIn: Double?
+    public var fadeOut: Double?
+
     /// **E3 (#3888) — langue d'origine de l'élément.** Défaut : la langue
     /// DÉCLARÉE au composer (`declaredContentLanguage`), surchargeable par
     /// élément. `nil` sur les brouillons/payloads antérieurs.
@@ -1363,17 +1399,22 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, place, x, y, scale, rotation, zIndex, anchor, sourceLanguage
+        case startTime, duration, fadeIn, fadeOut
     }
 
     public init(id: String = UUID().uuidString, place: SharedPlace,
                 x: Double = 0.5, y: Double = 0.8, scale: Double = 1.0,
                 rotation: Double = 0, zIndex: Int = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                startTime: Double? = nil, duration: Double? = nil,
+                fadeIn: Double? = nil, fadeOut: Double? = nil) {
         self.id = id; self.place = place
         self.x = x; self.y = y; self.scale = scale
         self.rotation = rotation; self.zIndex = zIndex; self.anchor = anchor
         self.sourceLanguage = sourceLanguage
+        self.startTime = startTime; self.duration = duration
+        self.fadeIn = fadeIn; self.fadeOut = fadeOut
     }
 
     // Custom Codable: anchor uses the nested {x,y} container patron shared
@@ -1390,6 +1431,10 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
         rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
         zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn)
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         if let nested = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
             let ax = try nested.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
             let ay = try nested.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
@@ -1407,6 +1452,10 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(zIndex, forKey: .zIndex)
+        try c.encodeIfPresent(startTime, forKey: .startTime)
+        try c.encodeIfPresent(duration, forKey: .duration)
+        try c.encodeIfPresent(fadeIn, forKey: .fadeIn)
+        try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         var anchorC = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
         try anchorC.encode(Double(anchor.x), forKey: .x)
         try anchorC.encode(Double(anchor.y), forKey: .y)
@@ -3051,6 +3100,20 @@ public struct TimelineProject: Codable, Sendable {
     /// Stickers (emoji overlays) du slide — listés dans la timeline pour indiquer
     /// leur fenêtre d'apparition (startTime/duration), déplaçables comme les textes.
     public var stickerObjects: [StorySticker]
+
+    /// **Les pastilles de lieu ONT une piste** (directive porteur 2026-08-31).
+    ///
+    /// Elles manquaient à ce projet, et j'avais lu leur absence comme une
+    /// propriété — « un lieu n'a pas de piste parce qu'il n'a pas de temps ».
+    /// Les deux moitiés du raisonnement étaient fausses, et elles se
+    /// soutenaient : le modèle n'avait pas de fenêtre parce que la timeline ne
+    /// le portait pas, et la timeline ne le portait pas parce que le modèle
+    /// n'avait pas de fenêtre.
+    ///
+    /// > Deux absences qui se justifient l'une l'autre forment un cercle, et un
+    /// > cercle a l'air d'une cohérence. Ce qui l'a brisé n'est pas une
+    /// > relecture — c'est une source EXTÉRIEURE au code.
+    public var locationObjects: [StoryLocationObject]
     public var clipTransitions: [StoryClipTransition]
 
     /// Read-only snapshot of the slide's inter-slide entry/exit animation,
@@ -3067,6 +3130,7 @@ public struct TimelineProject: Codable, Sendable {
                 audioPlayerObjects: [StoryAudioPlayerObject] = [],
                 textObjects: [StoryTextObject] = [],
                 stickerObjects: [StorySticker] = [],
+                locationObjects: [StoryLocationObject] = [],
                 clipTransitions: [StoryClipTransition] = [],
                 openingEffect: StoryTransitionEffect? = nil,
                 closingEffect: StoryTransitionEffect? = nil) {
@@ -3076,6 +3140,7 @@ public struct TimelineProject: Codable, Sendable {
         self.audioPlayerObjects = audioPlayerObjects
         self.textObjects = textObjects
         self.stickerObjects = stickerObjects
+        self.locationObjects = locationObjects
         self.clipTransitions = clipTransitions
         self.openingEffect = openingEffect
         self.closingEffect = closingEffect
@@ -3093,6 +3158,7 @@ public struct TimelineProject: Codable, Sendable {
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
         self.stickerObjects = slide.effects.stickerObjects ?? []
+        self.locationObjects = slide.effects.locationObjects
         self.clipTransitions = slide.effects.clipTransitions ?? []
         self.openingEffect = slide.effects.opening
         self.closingEffect = slide.effects.closing
@@ -3119,6 +3185,9 @@ public struct TimelineProject: Codable, Sendable {
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects
         slide.effects.stickerObjects = stickerObjects.isEmpty ? nil : stickerObjects
+        // `locationObjects` est NON-optionnel sur `StoryEffects` : pas de
+        // bascule nil/vide à préserver ici, contrairement à ses quatre voisines.
+        slide.effects.locationObjects = locationObjects
         slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
 
         // Calculé APRÈS l'écriture des arrays pour que `contentDerivedDuration()`

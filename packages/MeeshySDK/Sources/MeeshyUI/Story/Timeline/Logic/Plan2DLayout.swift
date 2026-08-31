@@ -123,7 +123,7 @@ public nonisolated enum Plan2DLayout {
     public static func tracks(from effects: StoryEffects, slideDuration: Double) -> [Plan2DTrack] {
         let unordered = textTracks(effects, slideDuration: slideDuration)
             + stickerTracks(effects, slideDuration: slideDuration)
-            + placeTracks(effects)
+            + placeTracks(effects, slideDuration: slideDuration)
             + drawingTracks(effects)
             + mediaTracks(effects, slideDuration: slideDuration)
             + audioTracks(effects, slideDuration: slideDuration)
@@ -171,15 +171,28 @@ public nonisolated enum Plan2DLayout {
         }
     }
 
-    /// Une pastille de lieu n'a AUCUN champ de timing au modèle : elle est
-    /// visible tant que sa slide l'est. Fantôme par nature, pas par défaut.
-    private static func placeTracks(_ effects: StoryEffects) -> [Plan2DTrack] {
+    /// **Une pastille de lieu apparaît et disparaît quand elle veut** —
+    /// directive porteur 2026-08-31 (#4591). Elle portait `bar: .ghost` EN DUR,
+    /// justifié par « aucun champ de timing au modèle » : c'était vrai, et
+    /// c'était le trou, pas la règle.
+    ///
+    /// > Trois sites disaient la même chose et se citaient l'un l'autre : le
+    /// > modèle sans fenêtre, le projet sans famille, cette piste sans barre.
+    /// > **Un cercle d'absences a l'air d'une cohérence** — ce qui l'a brisé
+    /// > était extérieur au code.
+    ///
+    /// Le fantôme reste le rendu d'une pastille SANS fenêtre posée : `bar(...)`
+    /// le rend déjà pour `start == nil && duration == nil`, exactement comme
+    /// pour un texte ou un sticker. Aucun cas particulier n'est nécessaire —
+    /// c'est le cas particulier qui était le défaut.
+    private static func placeTracks(_ effects: StoryEffects, slideDuration: Double) -> [Plan2DTrack] {
         effects.locationObjects.map { location in
             Plan2DTrack(id: location.id,
                         label: label(Glyph.place, location.place.name),
                         plane: .fg,
                         z: location.zIndex,
-                        bar: .ghost)
+                        bar: bar(start: location.startTime, duration: location.duration,
+                                 slideDuration: slideDuration))
         }
     }
 
