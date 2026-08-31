@@ -72,6 +72,12 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  CONSENT_PURPOSES,
+  CONSENT_POLICY_VERSION_DEFAULT,
+  isConsentPurpose,
+  type ConsentPurpose,
+} from '@meeshy/shared/types/consents';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { logError } from '../../utils/logger';
@@ -90,14 +96,7 @@ import {
  * chaîne : les ancêtres d'un `purpose` sont tout ce qui le précède dans ce
  * tableau.
  */
-export const CONSENT_PURPOSES = [
-  'data-processing',
-  'voice-data',
-  'voice-profile',
-  'voice-cloning',
-] as const;
-
-export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
+export { CONSENT_PURPOSES, type ConsentPurpose } from '@meeshy/shared/types/consents';
 
 type ConsentColumn =
   | 'dataProcessingConsentAt'
@@ -126,11 +125,8 @@ const CONSENT_SELECT: Readonly<Record<ConsentColumn, true>> = {
  * variable d'environnement permet de la faire évoluer sans redéploiement de
  * code ; la valeur par défaut date ce lot.
  */
-export const CONSENT_POLICY_VERSION = process.env.CONSENT_POLICY_VERSION || '2026-08-30';
-
-function isConsentPurpose(value: string): value is ConsentPurpose {
-  return (CONSENT_PURPOSES as readonly string[]).includes(value);
-}
+export const CONSENT_POLICY_VERSION =
+  process.env.CONSENT_POLICY_VERSION || CONSENT_POLICY_VERSION_DEFAULT;
 
 /** Les ancêtres d'un `purpose`, racine d'abord — jamais lui-même. */
 function ancestorsOf(purpose: ConsentPurpose): readonly ConsentPurpose[] {
@@ -432,8 +428,27 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         body = PutConsentBodySchema.parse(request.body);
       } catch (error) {
         if (error instanceof z.ZodError) {
+          // #4487 — `violations`, PAS `details: { issues }`.
+          //
+          // `details` est étalé à la RACINE de l'enveloppe, et
+          // `errorResponseSchema` ne déclare pas `issues` : `fast-json-stringify`
+          // le retirait au dernier mètre. Le serveur savait exactement quel
+          // champ manquait, le sérialisait, et le jetait — l'appelant recevait
+          // `{"error":"VALIDATION_ERROR","message":"VALIDATION_ERROR"}`, sans
+          // rien.
+          //
+          // Ce n'est pas théorique : c'est ce qui m'a fait conclure à tort à une
+          // route cassée en vérifiant #4348 sur staging, alors qu'il manquait
+          // seulement `policyVersion` au corps. Un client qui n'a pas le code
+          // sous les yeux n'a, lui, aucun recours.
+          //
+          // `violations` EXISTE dans l'enveloppe et EST déclaré au schéma. La
+          // clé n'était pas à inventer : elle était à employer.
           return sendBadRequest(reply, 'VALIDATION_ERROR', {
-            details: { issues: error.issues },
+            violations: error.issues.map((issue) => ({
+              path: issue.path.join('.'),
+              message: issue.message,
+            })),
           });
         }
         throw error;
