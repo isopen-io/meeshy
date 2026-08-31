@@ -28,12 +28,17 @@ export interface LoginRequestBody {
 }
 
 /**
- * Standard request body for 2FA completion
+ * Le corps de `POST /login/2fa`.
+ *
+ * Il ne porte PAS `rememberDevice` (#4471) : la préférence d'appareil de
+ * confiance est celle exprimée à `POST /login`, et le serveur la retient entre
+ * les deux étapes (`pending-device-trust.ts`). L'accepter ici laissait le corps
+ * de la seconde requête s'accorder 365 jours de session de confiance sans
+ * aucun lien avec ce que la personne avait coché à la première.
  */
 export interface TwoFactorRequestBody {
   twoFactorToken: string;
   code: string;
-  rememberDevice?: boolean;
 }
 
 /**
