@@ -24,7 +24,7 @@ import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetSe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
 import { searchTokensFor } from '../utils/search-tokens';
-import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
   isAccountLocked,
   recordFailedLoginAttempt,
@@ -48,6 +48,7 @@ import {
   pendingTwoFactorWhere,
   clearPendingTwoFactor,
 } from './auth/pending-two-factor';
+import { AUTH_USER_SELECT } from './auth/auth-user-projection';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -182,42 +183,12 @@ export class AuthService {
           ],
           isActive: true
         },
+        // La ligne d'une réponse d'authentification a UN site — `AUTH_USER_SELECT`,
+        // qui porte aussi l'état du verrou (#4138). Le mot de passe est le seul
+        // ajout de ce chemin : c'est le seul à le confronter (#4554).
         select: {
-          id: true,
-          username: true,
-          password: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true,
-          // L'état du verrou voyage avec l'utilisateur : le chemin de connexion
-          // l'a déjà lu, le relire serait une requête pour rien (#4138).
-          failedLoginAttempts: true,
-          lockedUntil: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
+          ...AUTH_USER_SELECT,
+          password: true
         }
       });
 
@@ -382,37 +353,15 @@ export class AuthService {
           ...challenge,
           isActive: true
         },
+        // Le MÊME site que `authenticate` : sans lui, cette liste avait perdu
+        // `isOnline` et `lastActiveAt`, que `userToSocketIOUser` lit — la
+        // présence partait `undefined` de la seconde porte (#4554). Le secret
+        // TOTP et les codes de secours sont l'ajout de ce chemin : c'est le
+        // seul à les confronter.
         select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          twoFactorEnabledAt: true,
+          ...AUTH_USER_SELECT,
           twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true,
-          failedLoginAttempts: true,
-          lockedUntil: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
+          twoFactorBackupCodes: true
         }
       });
 
@@ -766,28 +715,11 @@ export class AuthService {
           id: userId,
           isActive: true
         },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          createdAt: true,
-          updatedAt: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
-        }
+        // Troisième consommateur de `userToSocketIOUser`, et le plus amputé des
+        // trois avant #4554 : la réponse du lien magique (`routes/auth/magic-link.ts`,
+        // seul appelant) ne portait ni vérification d'email ou de téléphone, ni
+        // suivi de connexion, ni changement de contact en attente.
+        select: { ...AUTH_USER_SELECT }
       });
 
       if (!user) {
