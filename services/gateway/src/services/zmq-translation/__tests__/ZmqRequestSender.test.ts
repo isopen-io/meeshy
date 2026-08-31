@@ -328,6 +328,28 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalizes region-tagged targetLanguages to their NLLB pivot form before send', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['pt-BR', 'fr-FR', 'zh-Hant-HK'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['pt', 'fr', 'zh']);
+    });
+
+    it('dedups region variants of the same language into a single target', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR', 'FR', 'fr_FR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr']);
+    });
+
+    it('drops empty target codes and throws when none survive canonicalization', async () => {
+      await expect(
+        sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [''] }))
+      ).rejects.toThrow('targetLanguages must not be empty after deduplication');
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))

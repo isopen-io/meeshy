@@ -24,18 +24,9 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
-
-/**
- * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les cibles
- * partent telles que l'appelant les donne (`'EN'`, `'pt-BR'`) et le translator
- * rend la sienne : sans forme commune, une langue rendue ne se reconnaîtrait pas
- * dans le jeu des langues attendues.
- */
-const canonicalLanguage = (language: string): string =>
-  normalizeLanguageCode(language) ?? language.toLowerCase();
 
 
 export interface RequestSenderStats {
@@ -81,8 +72,15 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Canonicaliser chaque cible via la SSOT `normalizeLanguageForDedup` AVANT
+    // de dédupliquer : casse repliée, tag de région/script strippé, réduction
+    // ISO-639-3→1. Le translator ne reçoit ainsi que des codes NLLB canoniques,
+    // et `'fr'`/`'fr-FR'`/`'FR'` comptent pour UNE cible, pas trois. Le jeu des
+    // langues attendues (`pendingLanguages`) partage cette même forme canonique,
+    // si bien qu'une langue rendue s'y reconnaît toujours.
+    const uniqueTargetLanguages = [...new Set(
+      request.targetLanguages.map(normalizeLanguageForDedup).filter((l) => l !== '')
+    )];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +116,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
@@ -464,7 +462,7 @@ export class ZmqRequestSender {
       return { remaining: [] };
     }
 
-    entry.pendingLanguages.delete(canonicalLanguage(targetLanguage));
+    entry.pendingLanguages.delete(normalizeLanguageForDedup(targetLanguage));
 
     if (entry.pendingLanguages.size === 0) {
       this.removePendingRequest(taskId);
