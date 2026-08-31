@@ -23,7 +23,7 @@ final class AuthManagerLogoutSettingsQueuePurgeTests: XCTestCase {
     func test_logout_purgesSettingsActionQueue() async throws {
         await SettingsActionQueue.shared.enqueue(
             SettingsAction(
-                endpoint: "/users/me",
+                UsersEndpoint.me,
                 httpMethod: "PATCH",
                 payload: Data(#"{"displayName":"Compte A"}"#.utf8)
             )

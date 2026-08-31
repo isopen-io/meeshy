@@ -59,7 +59,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MessageOverlayMenu.swift",
         "MyStoriesView.swift",
         "OnboardingStepViews.swift",
-        "OutboxDispatcher.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "PostDetailViewModel.swift",
@@ -160,7 +159,18 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// dans son propre fichier (`ConversationCatchUpLaw`) plutôt que d'épaissir
     /// le modèle. Net : −2. Le plafond suit le cumul RÉEL — laisser le mou
     /// accueillerait en silence l'ajout suivant.
-    private static let legacyLineCeiling = 73_203
+    // 271i — 73 203 → 71 698 (−1 505). `OutboxDispatcher.swift` portait 1 519
+    // lignes, 40 % au-dessus du budget, et la migration des chemins d'API
+    // (#4282) voulait y ajouter onze lignes. Le cliquet a refusé, en faisant
+    // exactement son travail : rendre le coût d'un fichier trop gros payable
+    // par le PROCHAIN qui y touche, quel que soit son sujet.
+    //
+    // La famille « messages » (envoi, édition, suppression, réaction — la plus
+    // longue et la plus autonome) est partie dans
+    // `OutboxDispatcher+Messages.swift` ; le fichier retombe à 1 029 lignes,
+    // SORT de la liste, et le plafond suit le cumul réel. Nombre LU du témoin avec le plafond posé à 0, jamais
+    // soustrait — un plafond calculé dérive dans le sens confortable.
+    private static let legacyLineCeiling = 71_698
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
