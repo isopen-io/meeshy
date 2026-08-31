@@ -90,6 +90,8 @@ class StatusesViewModelTest {
 
     private fun user(id: String) = MeeshyUser(id = id, username = "me")
 
+    private val dwellClock = FakeClock()
+
     private fun viewModel(
         currentUser: MeeshyUser? = null,
         cache: StatusBarCache = StatusBarCache(FakeClock()),
@@ -100,7 +102,7 @@ class StatusesViewModelTest {
         every { socialSocket.statusDeleted } returns statusDeletedFlow
         every { socialSocket.statusReacted } returns statusReactedFlow
         every { socialSocket.statusUnreacted } returns statusUnreactedFlow
-        return StatusesViewModel(repository, postRepository, session, cache, diskCache, socialSocket)
+        return StatusesViewModel(repository, postRepository, session, cache, diskCache, socialSocket, dwellClock)
     }
 
     @Test
@@ -801,6 +803,106 @@ class StatusesViewModelTest {
 
         vm.markStatusViewed("a")
 
+        assertThat(vm.state.value.statuses.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    // --- Dwell enrichment (mirror of iOS `StatusBubbleController` present/dismiss:
+    // the impression counts the open, the dwell measures how long the popover stayed up) ---
+
+    @Test
+    fun `leaving the popover after dwelling past the floor records the measured watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("a")
+        dwellClock.now = 1000
+
+        vm.endStatusDwell()
+
+        coVerify(exactly = 1) { postRepository.viewPost("a", 1000) }
+    }
+
+    @Test
+    fun `the dwell record enriches the same view rather than replacing the impression`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("a")
+        dwellClock.now = 1500
+
+        vm.endStatusDwell()
+
+        // The impression (no duration) fires exactly once on open, and the dwell adds a second,
+        // duration-carrying call — the gateway dedups them onto one view.
+        coVerify(exactly = 1) { postRepository.viewPost("a") }
+        coVerify(exactly = 1) { postRepository.viewPost("a", 1500) }
+    }
+
+    @Test
+    fun `a glance below the dwell floor records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("a")
+        dwellClock.now = 999
+
+        vm.endStatusDwell()
+
+        // The impression still fired on open; the sub-floor glance must NOT add the dwell record
+        // it would carry (999ms — the only duration this scenario could produce).
+        coVerify(exactly = 0) { postRepository.viewPost("a", 999) }
+    }
+
+    @Test
+    fun `a blank statusId opens no dwell session`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("  ")
+        dwellClock.now = 10_000
+
+        vm.endStatusDwell()
+
+        coVerify(exactly = 0) { postRepository.viewPost(any(), any()) }
+    }
+
+    @Test
+    fun `ending the dwell twice records the watch-time only once`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("a")
+        dwellClock.now = 2000
+
+        vm.endStatusDwell()
+        dwellClock.now = 5000
+        vm.endStatusDwell()
+
+        coVerify(exactly = 1) { postRepository.viewPost("a", 2000) }
+        coVerify(exactly = 0) { postRepository.viewPost("a", 5000) }
+    }
+
+    @Test
+    fun `ending a dwell that never opened records nothing`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel()
+        dwellClock.now = 3000
+
+        // The viewer's own status opens the popover but records no view, so no session is open.
+        vm.endStatusDwell()
+
+        coVerify(exactly = 0) { postRepository.viewPost(any(), any()) }
+    }
+
+    @Test
+    fun `a failed dwell record does not disturb the loaded bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { postRepository.viewPost("a", any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
+        dwellClock.now = 0
+        val vm = viewModel()
+        vm.markStatusViewed("a")
+        dwellClock.now = 1200
+
+        vm.endStatusDwell()
+
+        coVerify(exactly = 1) { postRepository.viewPost("a", 1200) }
         assertThat(vm.state.value.statuses.map { it.id }).containsExactly("a")
         assertThat(vm.state.value.errorMessage).isNull()
     }

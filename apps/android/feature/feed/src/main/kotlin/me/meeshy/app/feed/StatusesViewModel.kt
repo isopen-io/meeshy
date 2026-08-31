@@ -10,8 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.ImpressionBatcher
@@ -62,6 +66,7 @@ class StatusesViewModel @Inject constructor(
     private val statusBarCache: StatusBarCache,
     private val statusBarCacheRepository: StatusBarCacheRepository,
     private val socialSocket: SocialSocketManager,
+    private val clock: CacheClock,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -74,6 +79,23 @@ class StatusesViewModel @Inject constructor(
      * (`source: "status"`).
      */
     private val impressionBatcher = ImpressionBatcher(source = "status", postRepository = postRepository)
+
+    /**
+     * Dwell bookkeeping for the status-bubble surface. Held outside [_state] because it is an
+     * analytics cursor, not something the bar renders (the same placement as
+     * [me.meeshy.app.feed.PostDetailViewModel.sessions]). The pure [EngagementSessions] machine
+     * owns the *how* (monotonic dwell, qualification); this ViewModel owns the *when* — begin the
+     * moment the popover opens ([markStatusViewed], right beside the impression), end when it
+     * dismisses ([endStatusDwell], driven by the popover's `onDispose`).
+     *
+     * Port of iOS `StatusBubbleController`, whose `present(_:)` fires the `viewPost` impression and
+     * `EngagementTracker.begin(surface: .statusBubble)` together, and whose every dismiss path calls
+     * `end(surface: .statusBubble)`. Both records land on the same `posts/{id}/view` endpoint, which
+     * the gateway keeps from double-counting — `creditPostView` is a `(postId, userId)` singleton
+     * that increments `viewCount` once (the impression) and only ever raises the stored dwell
+     * `duration` to its max (the enrichment).
+     */
+    private var sessions = EngagementSessions()
 
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
@@ -156,10 +178,14 @@ class StatusesViewModel @Inject constructor(
     /**
      * A mood status IS a post — opening its popover is a single, per-viewer-deduplicated
      * VIEW, the status-bar counterpart of the post-detail `viewPost` record. Fire-and-forget,
-     * failure silently ignored (best-effort analytics). Port of iOS `markStatusViewed`.
+     * failure silently ignored (best-effort analytics). Records the impression AND opens the
+     * dwell session, together — the faithful port of iOS `StatusBubbleController.present(_:)`,
+     * which fires the `viewPost` impression and `EngagementTracker.begin(.statusBubble)` in the
+     * same method. A blank [statusId] records nothing and opens nothing (iOS's early `guard`).
      */
     fun markStatusViewed(statusId: String) {
         if (statusId.isBlank()) return
+        sessions = sessions.begin(EngagementSurface.STATUS_BUBBLE, statusId, clock.nowMillis())
         viewModelScope.launch {
             try {
                 postRepository.viewPost(statusId)
@@ -167,6 +193,41 @@ class StatusesViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 // best-effort — matches iOS `try?`
+            }
+        }
+    }
+
+    /**
+     * Closes the status-bubble dwell session and, when it qualified (on-surface time ≥
+     * [EngagementSessions.MIN_DWELL_MS]), records the measured dwell against the viewed status.
+     * Driven by the popover's `onDispose` so it fires on every dismiss path (tap-outside, react,
+     * republish) — the port of iOS `StatusBubbleController.dismiss()`/`isPresented` both calling
+     * `end(surface: .statusBubble)`. Idempotent: a second call (or a dismiss of a status that was
+     * never opened for a view — the viewer's OWN status, which fires no impression and so opens no
+     * session) finds nothing open and records nothing. A sub-threshold glance is dropped.
+     */
+    fun endStatusDwell() {
+        val (next, view) = sessions.end(EngagementSurface.STATUS_BUBBLE, clock.nowMillis())
+        sessions = next
+        view?.let { recordDwellView(it) }
+    }
+
+    /**
+     * Best-effort dwell enrichment for a status's existing view: `posts/{id}/view` with the
+     * measured [QualifiedView.dwellMs]. The gateway's `creditPostView` is a `(postId, userId)`
+     * singleton, so this never re-increments the view count already booked by [markStatusViewed]'s
+     * impression — it only raises the stored dwell `duration` (the reco/monetisation watch-time
+     * signal) to its max. Fire-and-forget, matching the impression: a failure is analytics the
+     * viewer should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches the impression view record
             }
         }
     }
