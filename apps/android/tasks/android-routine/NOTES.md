@@ -30,6 +30,34 @@ NO view metric, so the wiring was purely additive (no double-count, no product-s
   values almost hid a real bug in the TEST, not the code: dwell 8 ms never qualifies (floor 1000), so a `QualifiedView`
   assertion on it was impossible — scale the times so the accrued dwell genuinely crosses the floor.
 
+## 2026-08-31 — "double-count" is a claim about the SERVER, not the client; read the endpoint before deciding a second call is unsafe (slice `post-detail-dwell`)
+The `reels-engagement-dwell` NOTES said `PostDetail`/`Statuses` were harder wiring targets because their
+`viewPost` sink is "already called dwell-less → wiring there would double-count." That framing is what made
+reels look like the ONLY unambiguous surface. It was half-right: reels was clean, but the reason the others
+"double-count" was never verified against the gateway — it was inferred from the client alone. Reading
+`PostService.creditPostView` settled it: it is a `(postId, userId)` singleton — the first call
+(dwell-less impression) increments `viewCount` once, and a SECOND call carrying a duration returns `false`
+(no re-increment) and only raises the stored `duration` to `max(existing, new)`. So a second, dwell-aware
+`viewPost(id, dwellMs)` is purely ADDITIVE — impression + enrichment, exactly iOS's two-record model
+(`.task` impression beside `.trackEngagement` dwell), collapsed onto one endpoint the server already dedups.
+Lessons:
+- **"This second call would double-count" is a statement about the WRITE SIDE.** When the write endpoint is in
+  a repo you can read (here the gateway), read it before letting the fear scope your slice away from a whole
+  surface. The detail/status surfaces were called "harder" for a reason that dissolved on one method read.
+- **A dwell surface that ALREADY fires a dwell-less view is not a conflict — it's the impression half of iOS's
+  own two-record model.** Keep the immediate impression (it counts the open even if the process dies before
+  dispose) and ADD the dwell enrichment on leave; don't replace the impression (that loses the open count) and
+  don't fear the pair (the server keeps the max duration and one view).
+- **End a ViewModel dwell session from the SCREEN's `onDispose`, never `onCleared`.** `onCleared` runs as the
+  scope is being cancelled, so a `viewModelScope.launch` there is likely dropped. The screen's
+  `DisposableEffect(Unit){onDispose{ vm.endDwellSession() }}` runs while the scope is still alive — the exact
+  seam `ReelsScreen` uses via `setCurrentReel(null)`. Make `endDwellSession` idempotent (a second `end` on a
+  closed surface is a no-op) so a later `onCleared` is harmless.
+- **`any()` matches NULL in mockk.** Asserting `coVerify(exactly=0){ viewPost("p1", any()) }` to prove "no dwell
+  record" FALSELY fails, because the null-duration impression matches `any()`. Assert the exact duration the
+  scenario would produce (`viewPost("p1", 999)`) instead — `neq`/`match<Int?>` don't resolve cleanly on a
+  nullable reified arg in this mockk version.
+
 ## 2026-08-31 — a correct pure SSOT can still be fed the WRONG input; highlight against the query that PRODUCED the results (slice `global-search-results-query`)
 The prior slice shipped `MessageTextParser.highlightedSegments` and the message row washed its content —
 looked done. But the row was called with the LIVE `state.query`, while iOS highlights against

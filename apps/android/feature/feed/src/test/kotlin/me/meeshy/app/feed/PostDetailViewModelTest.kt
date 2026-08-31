@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
@@ -60,6 +61,10 @@ class PostDetailViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
+    private var clockNow: Long = 0L
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = clockNow
+    }
 
     private fun post(
         id: String = "p1",
@@ -109,7 +114,7 @@ class PostDetailViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostDetailViewModel(repository, session, socialSocket, config, handle)
+        return PostDetailViewModel(repository, session, socialSocket, config, clock, handle)
     }
 
     @Test
@@ -568,6 +573,83 @@ class PostDetailViewModelTest {
         vm.state.test {
             assertThat(awaitItem().post?.content).isEqualTo("Hi")
         }
+    }
+
+    // --- Dwell enrichment (mirror of iOS `.trackEngagement(surface: .detail)` beside the impression) ---
+
+    @Test
+    fun `leaving after dwelling past the floor records the measured watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1000) }
+    }
+
+    @Test
+    fun `the dwell record enriches the same view rather than replacing the impression`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1500
+
+        vm.endDwellSession()
+
+        // The impression (no duration) still fires exactly once on open, and the dwell adds a
+        // second, duration-carrying call — the gateway dedups them onto one view.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+        coVerify(exactly = 1) { repository.viewPost("p1", 1500) }
+    }
+
+    @Test
+    fun `a glance below the dwell floor records no watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 999
+
+        vm.endDwellSession()
+
+        // The impression (null duration) still fired on open; the sub-floor glance must NOT add
+        // the dwell record it would carry (999ms — the only duration this scenario could produce).
+        coVerify(exactly = 0) { repository.viewPost("p1", 999) }
+    }
+
+    @Test
+    fun `a blank postId opens no dwell session`() = runTest {
+        clockNow = 0
+        val vm = viewModel(postId = null)
+        clockNow = 10_000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 0) { repository.viewPost(any(), any()) }
+    }
+
+    @Test
+    fun `ending the dwell twice records the watch-time only once`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 2000
+
+        vm.endDwellSession()
+        clockNow = 5000
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 2000) }
+        coVerify(exactly = 0) { repository.viewPost("p1", 5000) }
+    }
+
+    @Test
+    fun `a failed dwell record does not throw`() = runTest {
+        coEvery { repository.viewPost("p1", any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1200
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1200) }
     }
 
     // --- Author-only reach stats projection (isAuthor) ---

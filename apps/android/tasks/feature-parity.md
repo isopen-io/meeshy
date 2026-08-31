@@ -5165,11 +5165,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       restarts dwell / thresholds; +4 `ReelsViewModelTest`: dwell past floor records duration on
       page-move, bounce records nothing, leaving records the final reel, re-settle keeps one session).
       Mutation-proven: neutralising `pauseTop` fails exactly the two nesting tests; flipping the dwell
-      floor `>=`→`>` fails exactly the boundary tests. **Still open (deferred, deliberately narrower
-      than iOS):** the other three surfaces (detail/story/status — the pure core already supports
-      them), watch-time samples + completion from the reels player (the `end` params exist, fed
-      dwell-only for now), micro-action recording, and the durable outbox / crash-recovery net (iOS's
-      SQLite outbox — Android has no equivalent wiring point yet).
+      floor `>=`→`>` fails exactly the boundary tests. **Detail surface shipped 2026-08-31** (slice
+      `post-detail-dwell`): `PostDetailViewModel` now opens a `DETAIL` session on init (right after its
+      immediate `viewPost` impression) and closes it from `PostDetailScreen`'s `onDispose` via a public
+      `endDwellSession()` — a qualified dwell records `viewPost(id, dwellMs)`. This is the port of iOS
+      `PostDetailView`'s `.trackEngagement(surface: .detail)` sitting BESIDE its `.task` impression,
+      **not** replacing it: verified against the gateway that `creditPostView` is a `(postId, userId)`
+      singleton, so the second (duration-carrying) call never re-increments `viewCount` — it only raises
+      the stored dwell `duration` to its max. So the impression counts the open and the dwell enriches
+      it, no double-count, one endpoint. +6 tests (`PostDetailViewModelTest`): dwell past floor records
+      the measured watch-time; the record enriches the same view (impression still fires exactly once +
+      one duration-carrying call); a sub-floor glance records no watch-time; a blank postId opens no
+      session; ending twice records once (idempotent); a failed dwell record does not throw. RED-proven:
+      neutralising `beginDwell` fails exactly the 4 tests that expect a recorded dwell while the two
+      assert-no-record tests stay green. **Still open (deferred, deliberately narrower than iOS):** the
+      remaining two surfaces (story/status — the pure core already supports them; both already fire a
+      dwell-less `viewPost`/`markViewed`, so each is the same additive enrichment as detail once its
+      begin/end lifecycle hooks are wired), watch-time samples + completion from the reels player (the
+      `end` params exist, fed dwell-only for now — Android reels loop `REPEAT_MODE_ONE`, so completion
+      is not meaningful there), micro-action recording, and the durable outbox / crash-recovery net
+      (iOS's SQLite outbox — Android has no equivalent wiring point yet).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a
