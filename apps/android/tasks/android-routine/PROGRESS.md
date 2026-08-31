@@ -2,6 +2,79 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **dwell-time tracking reached its second surface — the post detail now records a
+> dwell-aware view beside its impression, off the same `EngagementSessions` heart** (slice
+> `post-detail-dwell`, feature-parity §F "Post view + dwell-time tracking" — the deferred "other three
+> surfaces" sub-item, detail leg).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4590/#4584/#4583/#4581/#4580/
+> #4577/#4576/#4575/#4574/#4573/#4572/#4571/#4570/#4569/#4568/#4567/#4566/#4565/#4564/#4563/#4562/#4541
+> (all jcnm gateway/web + dependabot, none a `claude/apps/android/<slice-id>` slice, no `apps/android`
+> collision, nothing of mine to merge). Prior slice (`reels-engagement-dwell`) is on `main` (#4593, commit
+> 285b1afc). Branched `claude/apps/android/post-detail-dwell` off freshly-fetched `origin/main`. Read
+> tracking from `origin/main` (the session's own checkout is a `dev`-based branch far behind `main`, with
+> a divergent `notification-center-category-filter` history that never landed — the NOTES rule "read
+> tracking from origin/main" held again).
+>
+> **The gap.** iOS tracks dwell on four single-focus surfaces via `EngagementTracker`; the
+> `reels-engagement-dwell` slice landed the pure core + the reels surface and DEFERRED the other three.
+> `PostDetailView` (iOS) carries `.trackEngagement(surface: .detail)` **beside** its `.task` `viewPost`
+> impression — two records: the impression counts the open, the dwell (to the batch endpoint) measures
+> quality. Android's `PostDetailViewModel` fired only the dwell-less impression; the detail surface
+> recorded no watch-time at all (a dimension-2 Performance/reco-signal gap, dimension-13 Complétude gap).
+>
+> **The change — begin/end wiring on the existing surface, no new sink, no double-count.** (1)
+> `PostDetailViewModel` gains a `CacheClock` dep + a private `sessions = EngagementSessions()` cursor;
+> `init` opens a `DETAIL` session (`beginDwell`, right after `recordView`), and a new public
+> `endDwellSession()` closes it → a qualified dwell records `viewPost(id, dwellMs.toInt())`. (2)
+> `PostDetailScreen` calls `endDwellSession()` from a `DisposableEffect(Unit) { onDispose { … } }` — the
+> exact seam `ReelsScreen` uses via `setCurrentReel(null)`, so the coroutine runs while `viewModelScope`
+> is still alive (a later `onCleared` is not relied on and would be a no-op — the session is already
+> ended). **The crux, verified in the gateway before coding:** `PostService.creditPostView` is a
+> `(postId, userId)` singleton — the second, duration-carrying call does NOT re-increment `viewCount`
+> (returns `false`), it only raises the stored `duration` to `max(existing, new)`. So keeping the
+> immediate impression AND adding a dwell call is purely additive (impression + enrichment), faithful to
+> iOS's two-record model, on Android's single `viewPost(id, duration?)` endpoint. **SOTA/right-choice
+> over the naïve port:** rather than replacing the impression (which would lose the "counted on open"
+> guarantee for a killed-before-dispose session) OR blindly double-firing (which a lesser endpoint would
+> double-count), the design leans on the gateway's proven dedup+max-duration semantics — the impression
+> stays immediate, the dwell enriches. Deliberately EXCLUDED (faithful, narrower boundary): the
+> story/status surfaces (same additive shape, next slices), watch-samples/completion (reels loop, so N/A
+> there), and micro-actions/outbox (no Android sink).
+>
+> **Tests: +6, RED-proven by mutation.** `PostDetailViewModelTest` +6 (dwell past floor records the
+> measured watch-time; the dwell record enriches the same view — impression fires exactly once + one
+> duration call; a sub-floor glance records no watch-time; a blank postId opens no session; ending twice
+> records once — idempotent; a failed dwell record does not throw). **Mutation:** neutralising `beginDwell`
+> (never open a session) fails EXACTLY the 4 tests that expect a recorded dwell (`4 failed`), while the two
+> assert-no-record tests (`below floor`, `blank postId`) stay green — the RED signature that proves the
+> tests exercise the wiring, not a constant. All 54 `PostDetailViewModelTest` cases and every other feed
+> test stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (973 actionable tasks, 0 failed, 5m 57s). Reviewer **PASS** (diff
+> `apps/android` only — 2 edited `:feature:feed` files + 1 edited test + tracking docs, no
+> `local.properties`; SDK purity — the pure `EngagementSessions` building block stays in `:core:model`,
+> the *when* (begin/end/report) is orchestration in the `:feature:feed` ViewModel, the lifecycle hook in
+> the screen; SSOT — one `EngagementSessions`, the existing `viewPost` sink reused, no re-implemented dwell
+> logic; instant-app — analytics is fire-and-forget, no spinner; UDF — immutable `StateFlow` UiState
+> untouched, the dwell cursor lives beside the room cursor; no dead-ends — every qualified view reaches a
+> real endpoint; no tautological tests; no coverage floor lowered — new orchestration wiring with
+> mutation-proven coverage).
+>
+> **Next**: the last two dwell surfaces — story-viewer (`StoryViewerViewModel` already has a
+> `currentRoomStoryId` cursor + `markCurrentViewed`; needs a `STORY_VIEWER` begin/end on slide change and
+> a story-appropriate dwell sink — stories use `storyRepository.markViewed(slideId)`, which has no
+> duration arg, so this one needs an SDK look first) and status-bubble (`StatusesViewModel.markStatusViewed`
+> fires a dwell-less `viewPost` on popover open — same additive enrichment as detail, but the begin/end is
+> a popover open/close event, not a screen lifecycle). Other open threads: the §M notification twin
+> (`NotificationBanner*` LIVE vs `NotificationToast*` orphan), and the local-FTS leg of §N. Read the
+> chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **dwell-time tracking got its pure heart plus its first surface: reels now record a
 > view WITH how long they were watched, off a faithful port of iOS's `EngagementTracker`** (slice
 > `reels-engagement-dwell`, feature-parity §F "Post view + dwell-time tracking" — the `- [~]` box's
