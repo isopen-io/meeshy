@@ -349,7 +349,7 @@ struct FeedView: View {
     private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -433,7 +433,7 @@ struct FeedView: View {
     private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
         do {
             let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/bookmark",
+                PostsEndpoint.byPostIdBookmark(postId: postId),
                 method: bookmark ? "POST" : "DELETE"
             )
             return true

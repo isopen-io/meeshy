@@ -210,7 +210,7 @@ struct ThemedFeedOverlay: View {
     private func postLikeViaREST(postId: String, like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -290,7 +290,7 @@ struct ThemedFeedOverlay: View {
             let ok: Bool = await {
                 do {
                     let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        endpoint: "/posts/\(postId)/bookmark",
+                        PostsEndpoint.byPostIdBookmark(postId: postId),
                         method: wasBookmarked ? "DELETE" : "POST"
                     )
                     return true

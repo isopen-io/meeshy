@@ -110,12 +110,23 @@ describe('AUDIT — aucun chemin écrit à la main ne rend 404', () => {
    * demande seulement qu'un chemin écrit à la main DÉSIGNE quelque chose.
    */
   it('chaque littéral correspond à une route servie', () => {
-    const sites = CLIENT_ROOTS.flatMap((root) =>
-      swiftFiles(root).flatMap((file) =>
-        endpointLiteralsIn(file.slice(REPO_ROOT.length + 1), readFileSync(file, 'utf8'))
-      )
+    const files = CLIENT_ROOTS.flatMap((root) => swiftFiles(root));
+    const sites = files.flatMap((file) =>
+      endpointLiteralsIn(file.slice(REPO_ROOT.length + 1), readFileSync(file, 'utf8'))
     );
-    expect(sites.length).toBeGreaterThan(50);
+
+    // Le fusible porte sur les FICHIERS LUS, jamais sur le nombre de littéraux.
+    //
+    // Première écriture : `expect(sites.length).toBeGreaterThan(50)`. Elle a
+    // tenu une heure — le temps que la migration #4282 fasse tomber le compte
+    // de 135 à 21, et le fusible a rougi sur le PROGRÈS. Un fusible calé sur une
+    // grandeur que le travail existe pour réduire finit par interdire le
+    // travail, et il le fait au moment le plus déroutant : quand tout va bien.
+    //
+    // Ce que le fusible doit prouver est qu'on a LU quelque chose. Le compte de
+    // littéraux, lui, a le droit d'atteindre zéro : c'est la fin de la
+    // migration, pas une panne de l'audit.
+    expect(files.length).toBeGreaterThan(200);
 
     const unmatched = unmatchedEndpointLiterals(sites, servedPaths(), API_PREFIX);
     const report = unmatched
