@@ -1303,6 +1303,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// resterait intact à côté — le doublon exact que `adoptDraft` existe pour
     /// éviter. Et l'ADOPTION doit venir APRÈS la graine : un brouillon que
     /// l'auteur vient de désigner l'emporte sur ce qu'une porte sème.
+    ///
+    /// > **La garde épinglait `adoptDraft(id: draftId)` — le nom d'une VARIABLE
+    /// > LOCALE**, qui ne fait pas partie de la règle qu'elle protège. Elle est
+    /// > tombée au #4611, quand le meuble s'est mis à lire la graine de la porte
+    /// > en repli du paramètre (`draftId ?? intent.origin.resumedDraftId`) et
+    /// > que le local a changé de nom. Une garde de source sur-spécifiée punit
+    /// > un renommage sans rien protéger de plus : elle n'épingle plus que
+    /// > l'APPEL et son ORDRE, ce que la règle dit vraiment.
     func test_leMeuble_construitUnSeulAtelier_etAdopteApresAvoirSeme() throws {
         let compacte = try hostCompact()
 
@@ -1312,7 +1320,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "la porte sèmerait dans le vide."
         )
         let graine = compacte.range(of: compact("StoryComposerViewModel(seeding: mediaSeed)"))
-        let adoption = compacte.range(of: compact("composer.adoptDraft(id: draftId)"))
+        let adoption = compacte.range(of: compact("composer.adoptDraft(id:"))
         XCTAssertNotNil(adoption, "L'adoption d'un brouillon a disparu du meuble.")
         if let graine, let adoption {
             XCTAssertTrue(

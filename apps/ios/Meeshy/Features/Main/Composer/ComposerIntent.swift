@@ -59,6 +59,34 @@ nonisolated extension ComposerOrigin {
             return nil
         }
     }
+
+    /// **Le brouillon que cette porte REPREND**, quand elle en reprend un —
+    /// sinon `nil`. Jumeau exact de `repostedPostId` ci-dessus, et pour la
+    /// raison que son doc-comment donne déjà.
+    ///
+    /// ## Le piège que ce lecteur désarme
+    ///
+    /// `.draft(id:)` transportait un identifiant que **personne ne lisait** :
+    /// zéro `case .draft(let …)` au dépôt (mesuré le 2026-08-31). Le seul
+    /// chemin d'adoption du meuble passe par un PARAMÈTRE séparé,
+    /// `MeeshyComposerHost(draftId:)` — la « seconde source » que le
+    /// doc-comment de `repostedPostId` existe pour interdire.
+    ///
+    /// > Une porte non construite est une route morte ; une porte dont la
+    /// > GRAINE n'a aucun lecteur est pire — elle compile, elle route, et elle
+    /// > perd ce qu'on lui confie. Le jour où quelqu'un l'aurait montée, le
+    /// > brouillon repris serait resté intact à côté d'un composer vierge.
+    ///
+    /// Le `switch` est exhaustif : une dixième porte casse la compilation ici
+    /// avant de pouvoir répondre `nil` par omission.
+    var resumedDraftId: String? {
+        switch self {
+        case .draft(let id):
+            return id
+        case .storyTray, .feedComposer, .reelTab, .moodChip, .edit, .repost, .share, .conversationMedia:
+            return nil
+        }
+    }
 }
 
 /// Les quatre contenus que Meeshy publie. Le format reste CHANGEABLE après
@@ -555,6 +583,26 @@ nonisolated extension ComposerProfile {
             )
 
         case .draft, .share:
+            // **Deux portes DÉCLARÉES SANS APPELANT** (#4611, mesuré le
+            // 2026-08-31) — dites ici pour qu'aucune session ne les monte en
+            // croyant qu'elles sont servies :
+            //
+            // - `.draft` : la reprise VIVANTE marche, et elle traverse bien le
+            //   meuble — `openComposer(resumingDraftId:)` pose `pendingDraftId`,
+            //   `StoryTrayActions` le remet en PARAMÈTRE (`draftId:`), le meuble
+            //   adopte. Cette porte est donc une SECONDE expression de la même
+            //   intention, et c'est elle qui n'a pas d'appelant.
+            //   Elle en était même une expression MENTEUSE : son `id` n'avait
+            //   aucun lecteur (zéro `case .draft(let …)` au dépôt). Le meuble le
+            //   lit désormais en repli du paramètre
+            //   (`ComposerOrigin.resumedDraftId`), donc la monter marcherait —
+            //   elle ne perd plus ce qu'on lui confie.
+            // - `.share` : l'extension de partage ne fait aujourd'hui que
+            //   router vers des conversations. Publier une pièce reçue est la
+            //   vue `2a` de la planche, portée par #4079.
+            //
+            // Inventaire gardé : `ComposerDoorInventoryGuardTests`.
+            //
             // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE
             // — la table reste une fonction de l'origine, elle n'ouvre pas le
             // document pour le deviner.

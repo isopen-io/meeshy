@@ -1264,4 +1264,29 @@ final class ComposerIntentTests: XCTestCase {
         }
         throw SourceDeProductionIntrouvable(nom: nomDeFichier)
     }
+
+    // MARK: - La graine du brouillon a enfin un lecteur (#4611)
+
+    /// **`.draft(id:)` transportait un identifiant que PERSONNE ne lisait** —
+    /// zéro `case .draft(let …)` au dépôt, mesuré le 2026-08-31. Le seul chemin
+    /// d'adoption du meuble passait par un paramètre séparé,
+    /// `MeeshyComposerHost(draftId:)`.
+    ///
+    /// > Une porte non construite est une route morte ; une porte dont la GRAINE
+    /// > n'a aucun lecteur est pire — elle compile, elle route, et elle perd ce
+    /// > qu'on lui confie. Montée telle quelle, elle aurait ouvert un composer
+    /// > vierge pendant que le brouillon repris attendait à côté.
+    func test_resumedDraftId_renditLaGraineDeLaPorteLisible() {
+        XCTAssertEqual(ComposerOrigin.draft(id: "d-42").resumedDraftId, "d-42")
+    }
+
+    /// Aucune autre porte n'en porte : le lecteur est le JUMEAU de
+    /// `repostedPostId`, pas un fourre-tout. Le `switch` exhaustif force une
+    /// dixième porte à se prononcer ici plutôt qu'à répondre `nil` par omission.
+    func test_lesAutresPortes_neReprennentAucunBrouillon() {
+        for origine in Self.toutesLesOrigines where nom(de: origine) != "draft" {
+            XCTAssertNil(origine.resumedDraftId,
+                         "\(nom(de: origine)) ne reprend aucun brouillon.")
+        }
+    }
 }

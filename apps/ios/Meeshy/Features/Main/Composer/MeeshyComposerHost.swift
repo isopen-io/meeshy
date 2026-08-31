@@ -474,7 +474,14 @@ struct MeeshyComposerHost: View {
     ) {
         self.intent = intent
         self.initialVisibility = initialVisibility
-        self.draftId = draftId
+        // **La PORTE peut porter le brouillon** (#4611). `draftId` était le
+        // seul chemin d'adoption, et `ComposerOrigin.draft(id:)` transportait à
+        // côté un identifiant que personne ne lisait — deux moitiés d'une même
+        // intention, jamais reliées. Le paramètre garde la priorité : un
+        // appelant qui le passe EXPLICITEMENT sait ce qu'il fait, là où la
+        // graine de la porte est un défaut.
+        let repris = draftId ?? intent.origin.resumedDraftId
+        self.draftId = repris
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPublishDocument = onPublishDocument
         self.moodSeed = moodSeed
@@ -497,7 +504,7 @@ struct MeeshyComposerHost: View {
         } else {
             composer = StoryComposerViewModel()
         }
-        if let draftId { composer.adoptDraft(id: draftId) }
+        if let repris { composer.adoptDraft(id: repris) }
         _viewModel = StateObject(wrappedValue: composer)
 
         let ouverture = ComposerProfile.profile(
