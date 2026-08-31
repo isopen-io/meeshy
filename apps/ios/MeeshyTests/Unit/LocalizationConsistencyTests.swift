@@ -316,6 +316,17 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        // #4430 — les onze chaînes dont le `defaultValue` était écrit en ANGLAIS
+        // dans un catalogue de langue source française. Entrées au catalogue,
+        // traduites en sept locales, littéraux réalignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Components/SecurityVerificationView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/ReplyCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
+        "apps/ios/Meeshy/Features/Intents/MeeshyAppIntents.swift",  // 1
         // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
         // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
