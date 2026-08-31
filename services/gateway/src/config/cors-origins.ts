@@ -50,6 +50,16 @@
  * Une requête SANS en-tête `Origin` (curl, application mobile, appel
  * serveur-à-serveur) reste servie : ce n'est pas une requête de navigateur, et
  * CORS ne la protège de rien. Inchangé des deux côtés.
+ *
+ * ## Et ce qui ne l'applique PAS (#4538)
+ *
+ * L'inventaire de #4480 était complet pour les LECTEURS de `CORS_ORIGINS` — et
+ * il a laissé deux portes dehors, parce qu'elles ne lisent aucune de ces
+ * variables et n'apparaissent dans aucun balayage qui les cherche. Elles sont
+ * désormais DÉCLARÉES, en donnée, en bas de ce fichier (`PORTES_HORS_REGLE`),
+ * et confrontées au code par `__tests__/cors-origin-emitter-sweep.test.ts` :
+ * ce cliquet balaie ce qui SORT (les en-têtes posés) et non ce qui est lu,
+ * seul angle qui voit une porte n'employant aucun des noms qu'on cherche.
  */
 
 /** La source d'environnement, injectable — c'est ce qui rend la règle testable. */
@@ -163,3 +173,91 @@ export function socketIoCorsOrigin(
     return callback(rejectionFor(origin ?? '', options.onRejected));
   };
 }
+
+// MARK: - Ce qui n'obéit PAS à la règle ci-dessus, déclaré (#4538)
+
+/**
+ * Le chemin de CE module, relatif à `src/`. Donnée plutôt que littéral chez le
+ * cliquet : le balayage doit s'exempter de lui-même — la règle NOMME forcément
+ * l'en-tête qu'elle gouverne — et il ne peut le faire qu'en sachant où elle vit.
+ */
+export const MODULE_DE_LA_REGLE = 'config/cors-origins.ts';
+
+/**
+ * Les noms par lesquels une porte INVOQUE la règle. Une porte qui importe ce
+ * module et cite l'un d'eux est gouvernée — c'est MESURÉ à la source, jamais
+ * inscrit dans une table qu'on oublierait de tenir. Ajouter une porte qui
+ * respecte la règle ne demande donc de toucher à rien ici ; seule une porte qui
+ * s'en échappe doit se déclarer.
+ */
+export const RESOLVEURS_DE_LA_REGLE: readonly string[] = Object.freeze([
+  'fastifyCorsOrigin',
+  'socketIoCorsOrigin',
+  'originIsAllowed',
+]);
+
+type PorteCommune = {
+  /** Chemin relatif à `src/`, jamais un numéro de ligne — une clé de ligne périme au premier commit. */
+  readonly fichier: string;
+  /** L'en-tête réellement posé, comparé à ce que le balayage trouve au site. */
+  readonly entete: 'Access-Control-Allow-Origin';
+  /** La valeur servie, comparée elle aussi. C'est ce qui fait rougir un passage discret sous la règle. */
+  readonly valeur: string;
+  /** La raison MESURÉE — jamais « historique », jamais « voir plus haut ». */
+  readonly pourquoi: string;
+};
+
+/** La source NOMME l'en-tête et le pose elle-même. */
+type PorteLitterale = PorteCommune & { readonly forme: 'litterale' };
+
+/** La source ne nomme rien : elle CONSTRUIT un composant qui pose l'en-tête à sa place. */
+type PorteDeleguee = PorteCommune & { readonly forme: 'deleguee'; readonly composant: string };
+
+export type PorteHorsRegle = PorteLitterale | PorteDeleguee;
+
+/**
+ * Les portes qui décident d'une origine SANS passer par la règle ci-dessus.
+ *
+ * Une divergence DÉCLARÉE, sur le modèle de `SEUILS_REPORT` : en donnée, avec sa
+ * raison, confrontée au code par `__tests__/cors-origin-emitter-sweep.test.ts`.
+ * Un commentaire ne suffisait pas — rien ne l'aurait confronté au jour où
+ * quelqu'un resserre les origines sans savoir que ces deux portes ne suivent pas.
+ *
+ * Les deux entrées partagent la même inertie, et c'est ce qui rend l'arbitrage
+ * tenable : `'*'` et `Access-Control-Allow-Credentials: true` s'excluent PAR
+ * SPÉCIFICATION. Aucune de ces portes ne pose le second, donc aucun cookie ni
+ * en-tête d'autorisation ne voyage sur elles — l'autorisation y est portée par
+ * le handler, jamais par l'origine. Ce ne sont pas des fuites ; ce sont des
+ * surfaces de décision qui n'obéissent pas à la règle unique, et c'est
+ * exactement ce qu'il fallait rendre visible.
+ */
+export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
+  {
+    fichier: 'routes/attachments/download.ts',
+    forme: 'litterale',
+    entete: 'Access-Control-Allow-Origin',
+    valeur: '*',
+    pourquoi:
+      "Les médias sont EMBARQUÉS par le web depuis meeshy.me sur gate.meeshy.me : l'en-tête accompagne " +
+      "le `Cross-Origin-Resource-Policy: cross-origin` posé au même endroit, sans quoi Helmet laisse " +
+      "`same-origin` et Chrome bloque la ressource (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin, avatars cassés " +
+      "au rechargement). Inerte pour une requête créditée — pas d'`…-Credentials` — et l'accès aux octets " +
+      "est jugé par `resolveAttachmentReadVerdict` (participation à la conversation + cycle de vie du " +
+      "message porteur), jamais par l'origine.",
+  },
+  {
+    fichier: 'routes/uploads/tus-handler.ts',
+    forme: 'deleguee',
+    composant: '@tus/server',
+    entete: 'Access-Control-Allow-Origin',
+    valeur: '*',
+    pourquoi:
+      "TROUVÉE en instruisant #4538, qui n'en connaissait que trois. `new Server({…})` ne reçoit AUCUN " +
+      "`allowedOrigins` ; le `getCorsOrigin` de @tus/server 2.4.4 rend alors `'*'` sur chaque réponse. " +
+      "La porte HTTP ne la couvre pas : `tusServer.handle(req.raw, reply.raw)` écrit sur la réponse BRUTE, " +
+      "donc les en-têtes que @fastify/cors met en attente sur `reply` ne sont jamais écrits — c'est la " +
+      "SEULE décision d'origine des routes d'upload. Inerte de la même façon : `allowedCredentials` n'est " +
+      "pas posé. Fermer l'option demande de vérifier le téléversement depuis meeshy.me ET hors navigateur " +
+      "(l'issue de suivi porte cette mesure) ; elle est déclarée ici en attendant, pas oubliée.",
+  },
+]);
