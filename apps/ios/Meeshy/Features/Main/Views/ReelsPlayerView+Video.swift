@@ -171,6 +171,39 @@ struct ReelVideoView: View {
         .ignoresSafeArea()
     }
 
+    /// **La langue que le rapport `watched` déclare (#3912).**
+    ///
+    /// `SharedAVPlayerManager.consumedLanguageProvider` était DÉCLARÉ (`:110`) et
+    /// LU (`:412`), assigné nulle part — un contrat mort. Tout rapport de
+    /// visionnage partait donc avec `language: nil`.
+    ///
+    /// **Ce n'est PAS le miroir du chemin audio**, et la différence décide de ce
+    /// qu'il faut déclarer. `AudioPlayerView` publie une SÉLECTION : l'auditeur
+    /// choisit une piste TTS traduite, et `"orig"` se résout en langue de
+    /// transcription. La vidéo n'offre aucun choix — `drive()` charge
+    /// `attachment.fileUrl`, l'ORIGINAL, sans condition ; la sélection de piste
+    /// (`ReelPageView.resolvedAudioUrl`) ne sert que les réels AUDIO.
+    ///
+    /// Ce qu'un lecteur ENTEND sur une vidéo est donc la piste d'origine, et la
+    /// seule source qui en connaisse la langue est sa TRANSCRIPTION. Ce n'est
+    /// pas un pis-aller : `reel.originalLanguage` décrit la langue du POST — son
+    /// texte — qui peut différer de ce qui est parlé dans la vidéo.
+    ///
+    /// Sans transcription, le fournisseur rend `nil` — et c'est exact : personne
+    /// ne sait quelle langue a été entendue. Un `nil` qui dit « je ne sais pas »
+    /// vaut mieux qu'une langue inventée depuis le texte du post.
+    private func publishConsumedLanguage() {
+        let spoken = Self.consumedLanguage(for: media)
+        manager.consumedLanguageProvider = { spoken }
+    }
+
+    /// La résolution PURE, testable sans moteur ni vue — même patron que
+    /// `ReelMediaAutostart.shouldStart` : ce qui se décide se décide dans une
+    /// fonction qu'un témoin peut appeler.
+    nonisolated static func consumedLanguage(for media: FeedMedia) -> String? {
+        media.transcription?.language
+    }
+
     private func drive(ready: Bool) {
         // Défense en profondeur call-aware (miroir de `ReelFeedVideoSurface.drive`) :
         // ne jamais (re)lancer un réel pendant un appel — la session audio appartient
@@ -180,6 +213,7 @@ struct ReelVideoView: View {
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
         }
+        publishConsumedLanguage()
         // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du
         // feed (`ReelFeedVideoSurface`) exprime maintenant son silence via
         // `isForceMuted` (intention PAR SURFACE, transitoire) plutôt que la
