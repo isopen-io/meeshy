@@ -1025,10 +1025,44 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
 
     /// **Et il cesse de recevoir les touches** : sans cela, le doigt qui trace
     /// déplacerait aussi l'objet sous lui — deux gestes pour un seul mouvement.
+    ///
+    /// **Le verrou a DÉMÉNAGÉ dans le canvas au `42b02bc9a9`**, et cette garde
+    /// est restée rouge sur `dev` jusqu'à ce qu'un run COMPLET la trouve : les
+    /// runs ciblés nommaient `ComposerRailDoorTests`, la première classe du
+    /// fichier, et ces témoins vivent dans la douzième. **`-only-testing:` cible
+    /// une CLASSE, jamais un fichier** — un fichier de quinze classes n'en
+    /// exécute qu'une.
+    ///
+    /// Pourquoi il a déménagé : la surface de dessin était posée sur le CADRE de
+    /// mise en page, quand le canvas ajuste sa carte au ratio puis la CENTRE. Un
+    /// trait tiré hors de la carte était perdu à la publication. La surface est
+    /// donc entrée DANS le canvas — et le verrou avec elle, sans quoi elle
+    /// tombait sous le `allowsHitTesting(false)` de la scène et plus aucun trait
+    /// ne passait.
+    ///
+    /// La garde interroge donc les DEUX moitiés, chacune chez elle : la surface
+    /// PASSE le calque, le canvas le VERROUILLE.
     func test_leCanvas_neRecoitPlusLesTouchesPendantLeDessin() throws {
-        let source = compact(try surfaceSource())
-        XCTAssertTrue(source.contains(".allowsHitTesting(drawingSurface==nil)"))
-        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+        XCTAssertTrue(compact(try surfaceSource()).contains("canvasOverlay:drawingSurface"),
+                      "la surface doit PASSER le calque au canvas")
+        XCTAssertTrue(compact(try canvasSource()).contains(".allowsHitTesting(canvasOverlay==nil)"),
+                      "et le canvas doit cesser de recevoir les touches tant qu'il le porte")
+    }
+
+    /// La source du canvas encastré, dans le SDK — lue par son chemin, comme
+    /// `StoryCanvasActionTitleLocalizationTests` le fait déjà pour les titres
+    /// d'actions. Un `#filePath` remonte à `apps/ios`, d'où le détour par la
+    /// racine du dépôt.
+    private func canvasSource() throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let url = racine.appendingPathComponent(
+            "packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1000, "source vide — la garde serait verte par omission")
+        return AppSourceGuard.stripComments(brut)
     }
 
     /// **La surface n'est montée QUE pendant le mode** (loi 4) — une couche de
@@ -1245,9 +1279,14 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     /// directive du 2026-08-30 : les contrôleurs sont au rail, leurs options
     /// sous la scène. Trois couches empilées sur une scène déjà encadrée par
     /// deux rails, c'était une de trop.
+    ///
+    /// **Elle n'est plus un `.overlay` de la scène depuis le `42b02bc9a9`** :
+    /// elle entre dans le canvas par `canvasOverlay`, qui la borne à la CARTE
+    /// ajustée plutôt qu'au cadre de mise en page. Ce que ce témoin garde n'a
+    /// pas changé — une seule couche sur la scène, et pas les barres d'outils.
     func test_laCapture_estLeSeulOverlayDeLaScene() throws {
         let source = compact(try surfaceSource())
-        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+        XCTAssertTrue(source.contains("canvasOverlay:drawingSurface"))
         XCTAssertFalse(source.contains(".overlay{drawingToolbar}"),
                        "Les réglages du pinceau vivent au rail, plus par-dessus la scène.")
         XCTAssertFalse(source.contains(".overlay{textToolbar}"),

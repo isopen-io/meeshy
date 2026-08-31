@@ -1091,11 +1091,11 @@ struct ConversationListHeaderOverlay: View {
                         // Le compteur d'alertes non lues (pastille rouge) portait
                         // l'information par la seule couleur/badge — muet pour
                         // VoiceOver. Exposé en `accessibilityValue` (pluriel géré).
+                        // #4328 — UNE clé : le catalogue porte le pluriel des sept langues (l'arabe en a six catégories), le ternaire d'avant le tenait en Swift sur deux clés absentes.
                         let unreadA11yValue: String = iPadNotificationCount <= 0
                             ? ""
-                            : (iPadNotificationCount == 1
-                                ? String(localized: "conversation.list.notifications.unread.one.a11y", defaultValue: "1 non lue", bundle: .main)
-                                : String(format: String(localized: "conversation.list.notifications.unread.other.a11y", defaultValue: "%d non lues", bundle: .main), iPadNotificationCount))
+                            : String(localized: "conversation.list.notifications.unread.a11y",
+                                     defaultValue: "\(iPadNotificationCount) non lues", bundle: .main)
                         Button {
                             HapticFeedback.light()
                             onNotificationsTap()
