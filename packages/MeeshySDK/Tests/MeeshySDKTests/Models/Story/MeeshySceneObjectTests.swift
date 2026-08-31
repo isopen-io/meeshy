@@ -177,4 +177,76 @@ final class MeeshySceneObjectTests: XCTestCase {
         XCTAssertEqual(slide.sceneObjects.map(\.id), ["t1"])
         XCTAssertEqual(slide.sceneObject(id: "t1")?.kind, .text)
     }
+
+    // MARK: - La DURÉE, et l'absence qui est une propriété
+
+    /// **Un LIEU n'a pas de temps propre**, et cette absence est RÉELLE.
+    ///
+    /// Contrairement à `scale` et `rotation` — que le contrat déclarait requis
+    /// et que le modèle Swift ne portait pas, un trou — `timing` est optionnel
+    /// des DEUX côtés dans `canvas-v3.ts`. Une pastille de lieu vit aussi
+    /// longtemps que la slide ; elle n'a pas de fenêtre à elle.
+    ///
+    /// > Ce qui sépare un trou d'une propriété ne se lit pas dans le modèle
+    /// > Swift : il se lit dans le CONTRAT. Les deux ont la même forme en Swift
+    /// > — un optionnel — et des significations opposées.
+    func test_unLieu_nAPasDeTempsPropre() {
+        let lieu = StoryLocationObject(place: .init(latitude: 64.14, longitude: -21.94,
+                                                    name: "Reykjavík"), x: 0.5, y: 0.8)
+        var e = StoryEffects()
+        e.locationObjects = [lieu]
+        XCTAssertNil(e.sceneObject(id: lieu.id)?.duration)
+    }
+
+    /// Les quatre autres la portent, et le type est UNIFORMISÉ : l'audio la
+    /// déclare en `Float?`, les trois autres en `Double?`. La conversion vit
+    /// dans la somme, une fois, plutôt qu'à chaque site de lecture.
+    func test_lesQuatreAutres_portentLeurDuree_dansUnSeulType() {
+        var t = texte("t1"); t.duration = 6
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.duration = 12
+
+        var e = StoryEffects()
+        e.textObjects = [t]
+        e.audioPlayerObjects = [son]
+
+        XCTAssertEqual(e.sceneObject(id: "t1")?.duration, 6)
+        XCTAssertEqual(e.sceneObject(id: son.id)?.duration, 12)
+    }
+
+    // MARK: - La timeline voit QUATRE familles
+
+    /// **`TimelineProject` n'a pas de `locationObjects`**, et c'est la même
+    /// propriété que le témoin ci-dessus : une pastille de lieu n'a pas de
+    /// piste parce qu'elle n'a pas de temps.
+    ///
+    /// > La première version de cette projection recopiait la forme de
+    /// > `StoryEffects` — cinq familles, optionnelles — en attribuant à
+    /// > `TimelineProject` la déclaration de sa VOISINE, lue à quelques lignes
+    /// > d'écart dans un fichier de trois mille. Une déclaration se lit dans SON
+    /// > bloc, jamais dans son voisinage.
+    func test_leProjetDeTimeline_voitQuatreFamilles() {
+        let p = TimelineProject(
+            slideId: "s1", slideDuration: 6,
+            mediaObjects: [media("m1")],
+            audioPlayerObjects: [StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                                        x: 0.5, y: 0.5, volume: 1,
+                                                        waveformSamples: [])],
+            textObjects: [texte("t1")],
+            stickerObjects: [StorySticker(emoji: "🎬", x: 0.5, y: 0.5)])
+
+        XCTAssertEqual(p.sceneObjects.count, 4)
+        XCTAssertEqual(Set(p.sceneObjects.map(\.kind)), [.text, .media, .sticker, .audio])
+        XCTAssertEqual(p.sceneObject(id: "m1")?.kind, .media)
+        XCTAssertNil(p.sceneObject(id: "fantome"))
+    }
+
+    /// Même ordre que la scène : du fond vers l'avant.
+    func test_leProjet_rangeDuFondVersLAvant() {
+        let p = TimelineProject(slideId: "s1", slideDuration: 6,
+                                mediaObjects: [media("bas", z: 1)],
+                                textObjects: [texte("haut", z: 5)])
+        XCTAssertEqual(p.sceneObjects.map(\.id), ["bas", "haut"])
+    }
 }

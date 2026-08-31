@@ -167,6 +167,30 @@ public enum MeeshySceneObject: Sendable {
         }
     }
 
+    /// **La DURÉE propre de l'objet — `nil` quand il n'en a pas.**
+    ///
+    /// Contrairement à `scale` et `rotation`, cette absence est RÉELLE et le
+    /// contrat la porte : `canvas-v3.ts` déclare `timing` **optionnel**, là où
+    /// il déclare `transform` requis. Un lieu n'a pas de temps propre — sa
+    /// pastille vit aussi longtemps que la slide.
+    ///
+    /// > La différence avec l'asymétrie corrigée au même lot n'est pas de
+    /// > degré : `transform` était REQUIS par le contrat et absent du modèle
+    /// > Swift — un trou. `timing` est optionnel des DEUX côtés — une propriété.
+    /// > Ce qui les distingue s'est lu dans `canvas-v3.ts`, pas dans le modèle.
+    ///
+    /// Le type est uniformisé en `Double?` : l'audio la porte en `Float?`, les
+    /// trois autres en `Double?`. La conversion vit ici, une fois.
+    public var duration: Double? {
+        switch self {
+        case .text(let o):     return o.duration
+        case .media(let o):    return o.duration
+        case .sticker(let o):  return o.duration
+        case .audio(let o):    return o.duration.map(Double.init)
+        case .location:        return nil
+        }
+    }
+
     /// **Le plan de FOND**, que seuls un média et un audio peuvent occuper. Un
     /// texte, un sticker et un lieu sont toujours de premier plan — ce n'est pas
     /// une valeur par défaut, c'est le modèle qui ne leur donne pas le champ.
@@ -210,6 +234,42 @@ public extension StoryEffects {
         if let o = stickerObjects?.first(where: { $0.id == id }) { return .sticker(o) }
         if let o = locationObjects.first(where: { $0.id == id }) { return .location(o) }
         if let o = audioPlayerObjects?.first(where: { $0.id == id }) { return .audio(o) }
+        return nil
+    }
+}
+
+/// **Le projet de timeline voit QUATRE familles, pas cinq.**
+///
+/// `TimelineProject` porte `mediaObjects`, `audioPlayerObjects`, `textObjects`
+/// et `stickerObjects` — **non-optionnels**, et sans `locationObjects`.
+///
+/// Ce n'est pas un oubli : **une pastille de lieu n'a pas de piste**, ce qui est
+/// la même propriété que son `duration == nil` — elle n'a pas de temps propre,
+/// elle vit aussi longtemps que la slide. Le domaine est cohérent avec lui-même,
+/// et la projection le dit plutôt que de fabriquer une cinquième famille vide.
+///
+/// > J'ai d'abord recopié la forme de `StoryEffects` — cinq familles,
+/// > optionnelles — en attribuant à cette struct la déclaration de sa VOISINE,
+/// > lue à quelques lignes d'écart dans le même fichier. Le compilateur l'a pris
+/// > en cinq erreurs. **Une déclaration se lit dans SON bloc, jamais dans son
+/// > voisinage.**
+public extension TimelineProject {
+
+    var sceneObjects: [MeeshySceneObject] {
+        var tous: [MeeshySceneObject] = textObjects.map(MeeshySceneObject.text)
+        tous += mediaObjects.map(MeeshySceneObject.media)
+        tous += stickerObjects.map(MeeshySceneObject.sticker)
+        tous += audioPlayerObjects.map(MeeshySceneObject.audio)
+        return tous.enumerated()
+            .sorted { ($0.element.zIndex, $0.offset) < ($1.element.zIndex, $1.offset) }
+            .map(\.element)
+    }
+
+    func sceneObject(id: String) -> MeeshySceneObject? {
+        if let o = textObjects.first(where: { $0.id == id }) { return .text(o) }
+        if let o = mediaObjects.first(where: { $0.id == id }) { return .media(o) }
+        if let o = stickerObjects.first(where: { $0.id == id }) { return .sticker(o) }
+        if let o = audioPlayerObjects.first(where: { $0.id == id }) { return .audio(o) }
         return nil
     }
 }
