@@ -21184,3 +21184,80 @@ Corollaire de méthode : **lire la ligne de build AVANT le compte de tests**, to
 se méfier d'un compte qui n'a pas bougé alors qu'on vient d'ajouter des témoins. Le COMPTE
 par classe est le second témoin — c'est déjà lui qui attrape le `-only-testing:` d'une
 classe absente du `.pbxproj`, silencieusement ignorée.
+
+## Leçon 355 — `test-without-building` ne rougit pas sur un bundle périmé : il rejoue le passé
+
+**2026-08-31.** Deux sessions, deux entrées différentes, la même nuit, le même
+piège — c'est pour ça qu'elle est écrite à deux voix.
+
+`xcodebuild build-for-testing` échoue. `xcodebuild test-without-building`
+s'exécute quand même, sur le bundle **précédent**, et rend un résumé
+parfaitement normal : suites nommées, comptes plausibles, `EXIT=0`.
+
+| entrée | ce qui a cassé le build | ce que le run a rendu |
+|---|---|---|
+| moi | un `xcodegen` voisin avait retiré du pbxproj la référence à un fichier neuf encore non committé ⇒ `cannot find 'ConversationCatchUpLaw' in scope` | les chiffres de l'état que je venais de NEUTRALISER exprès pour éprouver le rouge — j'ai failli conclure que mon correctif ne marchait pas |
+| session voisine | une erreur d'ordre d'arguments | `** TEST BUILD FAILED **` **puis 129 tests verts**, lus dans cet ordre |
+
+> **Un canal de statut qui rend des chiffres plausibles est plus dangereux
+> qu'un canal muet.** Ici il ne ment pas sur les tests — il dit la vérité sur
+> un PASSÉ qu'on ne lui a pas demandé.
+
+**La parade, et elle doit être un GATE, pas une relecture** :
+
+```bash
+xcodebuild build-for-testing … > build.log 2>&1
+if grep -q "TEST BUILD SUCCEEDED" build.log; then
+    xcodebuild test-without-building …
+else
+    echo "BUILD ROUGE — aucun test lancé"; exit 1
+fi
+```
+
+Deux corollaires qui ne se devinent pas :
+
+- **Le rouge qu'on fait tourner exprès est le moment le plus exposé.** On
+  ATTEND des échecs, donc on lit les échecs comme la confirmation attendue.
+  C'est exactement là que le bundle périmé passe inaperçu — il rend le rouge
+  qu'on espérait, pour la mauvaise raison. Faire tourner le rouge exige donc
+  de vérifier le build DEUX fois : à la neutralisation et à la restauration.
+- **Un fichier neuf non committé est une bombe à retardement dans un arbre
+  partagé** : n'importe quel `xcodegen generate` d'un voisin le fait entrer au
+  pbxproj, et n'importe quelle restauration de ce pbxproj l'en fait sortir. Le
+  committer tôt coûte moins cher que de diagnostiquer sa disparition.
+
+Même famille que [[reference_status_channel_lies_about_the_fact]] : le canal
+de statut ment sur le fait — ici en disant vrai sur autre chose.
+
+## Leçon 356 — « La vue est-elle montée ? » a une jumelle : « quelle SURFACE est montée ? »
+
+**2026-08-31, vue `3h` (#4098).** Carte de citation de story livrée, prouvée à
+l'écran sur `Meeshy-iOS18` : carte de scène, bandeau, tap qui ouvre la story.
+Conforme à sa planche.
+
+Sur `Meeshy-iOS26`, la MÊME conversation, la MÊME donnée : **citation aplatie**,
+vignette de 30 pt sur une ligne. Le simulateur y résout le mode de lecture en
+**Focal**, dont la citation est rendue par `FocalQuotedReplyView` — un composant
+natif, délibéré, qui n'a jamais entendu parler de mon lot.
+
+Rien ne pouvait le signaler : les deux peaux compilent, chacune reste cohérente
+avec elle-même, et aucune garde ne compare deux rendus d'une même donnée. La
+seule chose qui l'a dit est **d'avoir changé de simulateur** — iOS 18
+résolvait en Bulles, iOS 26 en Focal, parce que le programme bêta y est actif.
+
+> Vérifier qu'une vue est MONTÉE ne suffit pas quand plusieurs SURFACES peuvent
+> rendre la même donnée. La question complète est : **combien de peaux rendent
+> cette chose, et laquelle ai-je regardée ?**
+
+Le motif est le même à trois échelles, trouvées le même jour :
+- la session voisine — un composer de story à fond COLORÉ monte une AUTRE
+  surface que celle où le milestone pose ses vues ;
+- moi — la citation a trois hôtes (bulle, conteneur média, lecteur audio) et
+  #4518 en couvrait deux ;
+- moi encore — et deux PEAUX (bulles, plate), d'où #4527.
+
+**Ce n'est pas toujours un défaut** : `FocalQuotedReplyView` est dense par
+conception, et poser une carte de 235 pt dans une rangée plate irait contre son
+arbitrage écrit. D'où une issue `décision-produit` plutôt qu'un correctif —
+mais la QUESTION devait être posée, et elle ne l'aurait pas été sans la seconde
+capture.
