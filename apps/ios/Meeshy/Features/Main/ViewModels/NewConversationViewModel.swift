@@ -274,8 +274,7 @@ final class NewConversationViewModel: ObservableObject {
                 )
             } else {
                 errorMessage = String(
-                    localized: "Impossible de creer la conversation",
-                    defaultValue: "Impossible de cr\u{00E9}er la conversation"
+                    localized: "conversation.new.create.error", defaultValue: "Impossible de créer la conversation"
                 )
             }
         }

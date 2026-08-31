@@ -82,6 +82,34 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
         )
     }
 
+    /// **Une PHRASE ne peut pas servir de clé (#4621).**
+    ///
+    /// Quarante-sept appels portaient leur texte français EN GUISE de clé —
+    /// `String(localized: "Acces refuse a cette conversation", defaultValue:
+    /// "Acces refuse a cette conversation")`. Deux conséquences, dont la
+    /// seconde échappe à toute garde de traduction : les sept locales rendaient
+    /// du français, et **le francophone lui-même lisait du français
+    /// DÉSACCENTUÉ** — le `defaultValue` n'avait jamais été relu comme du texte
+    /// AFFICHÉ, puisque personne ne le croyait affiché.
+    ///
+    /// Le remède n'était pas d'ajouter ces phrases au catalogue : une clé qui
+    /// EST son propre texte change d'identité à la première faute d'orthographe
+    /// corrigée. Il fallait leur donner un IDENTIFIANT.
+    func test_aucunePhraseNeSertDeCle() {
+        let phrases = Self.fichiersSwift()
+            .flatMap { url -> [String] in
+                guard let texte = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+                return Self.clesNonIdentifiantes(texte)
+            }
+
+        XCTAssertTrue(
+            Set(phrases).isEmpty,
+            "Ces appels emploient une PHRASE comme clé de localisation. Elle doit devenir un "
+            + "identifiant, et son `defaultValue` être écrit en français correct :\n"
+            + Set(phrases).sorted().joined(separator: "\n")
+        )
+    }
+
     // MARK: - Contre-épreuves : la garde doit pouvoir TOMBER
 
     /// Une garde négative meurt en silence quand son balayage cesse de trouver
@@ -111,6 +139,19 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
         Text(String(localized: "feed.demo.autre", bundle: .main))
         """
         XCTAssertTrue(Self.clesDe(echantillon).isEmpty)
+    }
+
+    /// Contre-épreuve du miroir : il reconnaît une PHRASE et ignore un
+    /// identifiant. Sans elle, un motif trop strict rendrait `[]` en silence.
+    func test_leMiroirDistinguePhraseEtIdentifiant() {
+        let phrase = """
+        Text(String(localized: "Acces refuse", defaultValue: "Acces refuse"))
+        """
+        let identifiant = """
+        Text(String(localized: "link.error.forbidden", defaultValue: "Accès refusé"))
+        """
+        XCTAssertEqual(Self.clesNonIdentifiantes(phrase), ["Acces refuse"])
+        XCTAssertTrue(Self.clesNonIdentifiantes(identifiant).isEmpty)
     }
 
     // MARK: - Extraction
@@ -143,6 +184,20 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
             let apres = texte.index(r.upperBound, offsetBy: 160, limitedBy: texte.endIndex) ?? texte.endIndex
             let fenetre = texte[r.upperBound..<apres]
             return (cle, fenetre.contains("bundle: .module"))
+        }
+    }
+
+    /// Les clés d'un extrait qui NE SONT PAS des identifiants — le miroir de
+    /// `clesDe`, pour la famille de #4621.
+    static func clesNonIdentifiantes(_ texte: String) -> [String] {
+        let motif = try! NSRegularExpression(
+            pattern: #"String\(\s*localized:\s*"([^"\\]+)"\s*,\s*defaultValue:"#
+        )
+        let plage = NSRange(texte.startIndex..., in: texte)
+        return motif.matches(in: texte, range: plage).compactMap { m in
+            guard let r = Range(m.range(at: 1), in: texte) else { return nil }
+            let cle = String(texte[r])
+            return estIdentifiant(cle) ? nil : cle
         }
     }
 

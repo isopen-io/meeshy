@@ -110,7 +110,7 @@ struct AudioPostComposerView: View {
                         )
                 }
             }
-            .navigationTitle(String(localized: "Post audio", defaultValue: "Post audio"))
+            .navigationTitle(String(localized: "composer.audio.title", defaultValue: "Post audio"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -244,7 +244,7 @@ struct AudioPostComposerView: View {
             VStack(spacing: 4) {
                 Text(borrowedSound.hasAuthoredTitle
                      ? borrowedSound.title
-                     : String(localized: "Son original", defaultValue: "Son original"))
+                     : String(localized: "media.sound.original", defaultValue: "Son original"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -262,12 +262,11 @@ struct AudioPostComposerView: View {
                 // A bare monospaced "0:34" reads to VoiceOver as a context-less
                 // number. Name what the timer measures via the label and expose
                 // the running time as the value.
-                .accessibilityLabel(String(localized: "Durée enregistrée",
-                                           defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
+                .accessibilityLabel(String(localized: "composer.audio.recorded-duration", defaultValue: "Durée enregistrée"))
                 .accessibilityValue(spokenDuration)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
-                Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
+                Text(String(localized: "composer.audio.transcription.running", defaultValue: "Transcription en cours…"))
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textSecondary)
                 Text(formattedDuration)
@@ -285,8 +284,7 @@ struct AudioPostComposerView: View {
                 Image(systemName: "globe")
                     .font(.caption.weight(.semibold))
                     .accessibilityHidden(true)
-                Text(String(localized: "Langue de transcription",
-                            defaultValue: "Langue de transcription"))
+                Text(String(localized: "composer.audio.transcription.language", defaultValue: "Langue de transcription"))
                     .font(.caption.weight(.semibold))
                 Spacer()
             }
@@ -348,7 +346,7 @@ struct AudioPostComposerView: View {
                 Image(systemName: "line.3.horizontal.decrease.circle.fill")
                     .font(.footnote)
                     .accessibilityHidden(true)
-                Text(String(localized: "Plus", defaultValue: "Plus"))
+                Text(String(localized: "common.more", defaultValue: "Plus"))
                     .font(.footnote.weight(.semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
@@ -359,7 +357,7 @@ struct AudioPostComposerView: View {
             )
         }
         // « Plus » seul est ambigu en VoiceOver → intention explicite.
-        .accessibilityLabel(String(localized: "Plus de langues", defaultValue: "Plus de langues"))
+        .accessibilityLabel(String(localized: "composer.audio.languages.more", defaultValue: "Plus de langues"))
     }
 
     private var suggestedLocales: [Locale] {
@@ -417,7 +415,7 @@ struct AudioPostComposerView: View {
                     .font(.footnote)
                     .foregroundColor(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
-                Text(String(localized: "Transcription", defaultValue: "Transcription"))
+                Text(String(localized: "composer.audio.transcription.title", defaultValue: "Transcription"))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                 Spacer()
@@ -430,8 +428,7 @@ struct AudioPostComposerView: View {
             }
 
             Text(t.text.isEmpty
-                 ? String(localized: "Aucune transcription disponible.",
-                          defaultValue: "Aucune transcription disponible.")
+                 ? String(localized: "composer.audio.transcription.none", defaultValue: "Aucune transcription disponible.")
                  : t.text)
                 .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
@@ -461,8 +458,7 @@ struct AudioPostComposerView: View {
                     .foregroundColor(MeeshyColors.error)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "Transcription indisponible",
-                                defaultValue: "Transcription indisponible"))
+                    Text(String(localized: "composer.audio.transcription.unavailable", defaultValue: "Transcription indisponible"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                     Text(error)
@@ -477,8 +473,7 @@ struct AudioPostComposerView: View {
                 Button(action: retryTranscription) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.clockwise")
-                        Text(String(localized: "Reessayer",
-                                    defaultValue: "R\u{00E9}essayer"))
+                        Text(String(localized: "common.retry", defaultValue: "Réessayer"))
                     }
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(.white)
@@ -509,7 +504,7 @@ struct AudioPostComposerView: View {
             HStack(spacing: 12) {
                 Button(action: resetToIdle) {
                     Label(
-                        String(localized: "Refaire", defaultValue: "Refaire"),
+                        String(localized: "common.redo", defaultValue: "Refaire"),
                         systemImage: "arrow.counterclockwise"
                     )
                     .font(.subheadline.weight(.semibold))
@@ -527,7 +522,7 @@ struct AudioPostComposerView: View {
                 }
 
                 Button(action: publish) {
-                    Text(String(localized: "Publier", defaultValue: "Publier"))
+                    Text(String(localized: "common.publish", defaultValue: "Publier"))
                         .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -542,8 +537,7 @@ struct AudioPostComposerView: View {
         case .transcribing:
             Button(action: cancelTranscription) {
                 Label(
-                    String(localized: "Annuler la transcription",
-                           defaultValue: "Annuler la transcription"),
+                    String(localized: "composer.audio.transcription.cancel", defaultValue: "Annuler la transcription"),
                     systemImage: "xmark.circle.fill"
                 )
                 .font(.subheadline.weight(.semibold))
@@ -626,8 +620,7 @@ struct AudioPostComposerView: View {
             try? FileManager.default.removeItem(at: localURL)
             try FileManager.default.copyItem(at: pickedURL, to: localURL)
         } catch {
-            transcriptionError = String(localized: "Import du fichier audio impossible",
-                                        defaultValue: "Import du fichier audio impossible")
+            transcriptionError = String(localized: "composer.audio.import.error", defaultValue: "Import du fichier audio impossible")
             phase = .preview
             return
         }
@@ -674,8 +667,7 @@ struct AudioPostComposerView: View {
     private func cancelTranscription() {
         EdgeTranscriptionService.shared.cancel()
         transcriptionError = String(
-            localized: "Transcription annulee",
-            defaultValue: "Transcription annul\u{00E9}e"
+            localized: "composer.audio.transcription.cancelled", defaultValue: "Transcription annulée"
         )
         phase = .preview
     }
@@ -774,16 +766,14 @@ struct AudioLanguagePickerView: View {
             List {
                 Section {
                     Toggle(isOn: $showAllLanguages) {
-                        Text(String(localized: "Afficher toutes les langues",
-                                    defaultValue: "Afficher toutes les langues"))
+                        Text(String(localized: "composer.audio.languages.show-all", defaultValue: "Afficher toutes les langues"))
                             .font(.subheadline)
                             .foregroundColor(theme.textPrimary)
                     }
                     .tint(MeeshyColors.indigo500)
                 } footer: {
                     Text(String(
-                        localized: "Par defaut, seules les langues disponibles sur cet appareil sont listees.",
-                        defaultValue: "Par d\u{00E9}faut, seules les langues disponibles sur cet appareil sont list\u{00E9}es."
+                        localized: "composer.audio.languages.hint", defaultValue: "Par défaut, seules les langues disponibles sur cet appareil sont listées."
                     ))
                     .font(.caption)
                     .foregroundColor(theme.textMuted)
@@ -820,8 +810,7 @@ struct AudioLanguagePickerView: View {
                 }
             }
             .searchable(text: $searchText,
-                        prompt: String(localized: "Rechercher une langue",
-                                       defaultValue: "Rechercher une langue"))
+                        prompt: String(localized: "composer.audio.languages.search", defaultValue: "Rechercher une langue"))
             .navigationTitle(Text(title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

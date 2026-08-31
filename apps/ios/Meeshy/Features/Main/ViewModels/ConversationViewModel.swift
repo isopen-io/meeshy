@@ -1766,7 +1766,7 @@ class ConversationViewModel: ObservableObject {
                 // it as transient and the user would see ghost messages.
                 await handleAccessRevoked(
                     reason: message.isEmpty
-                        ? String(localized: "Cette conversation n'existe plus", defaultValue: "Cette conversation n'existe plus")
+                        ? String(localized: "conversation.error.gone", defaultValue: "Cette conversation n'existe plus")
                         : message
                 )
                 return

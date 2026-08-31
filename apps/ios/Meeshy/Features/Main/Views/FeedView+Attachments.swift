@@ -1162,37 +1162,37 @@ struct FeedComposerSheet: View {
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
-                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
-                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.take-photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
-                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
+                    .accessibilityLabel(String(localized: "feed.attach.emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
-                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
+                    .accessibilityLabel(String(localized: "feed.attach.file", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
-                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
+                    .accessibilityLabel(String(localized: "feed.attach.location", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
-                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
+                    .accessibilityLabel(String(localized: "feed.attach.record-audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
 
@@ -1214,7 +1214,7 @@ struct FeedComposerSheet: View {
                                     )
                             )
                     }
-                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityLabel(String(localized: "feed.post.language", defaultValue: "Langue du post"))
                     .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)

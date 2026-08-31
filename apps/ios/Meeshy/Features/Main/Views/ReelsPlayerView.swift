@@ -837,13 +837,13 @@ struct ReelPageView: View {
         .padding(.vertical, 7)
         .background(Capsule().fill(.ultraThinMaterial))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(String(localized: "Son utilisé", defaultValue: "Son utilis\u{00E9}"))
+        .accessibilityLabel(String(localized: "media.sound.used", defaultValue: "Son utilisé"))
         .accessibilityValue(borrowedSoundLabel(track))
     }
 
     private func borrowedSoundLabel(_ track: StoryAudioPlayerObject) -> String {
         let authored = track.name.flatMap { $0.isEmpty ? nil : $0 }
-        let title = authored ?? String(localized: "Son original", defaultValue: "Son original")
+        let title = authored ?? String(localized: "media.sound.original", defaultValue: "Son original")
         if let author = track.soundAuthorUsername, !author.isEmpty {
             return "\(title) · @\(author)"
         }

@@ -320,7 +320,7 @@ struct PostDetailView: View {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
                 try await RepostPublisher.shared.publish(intention)
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
                 FeedbackToastManager.shared.showError(String(localized: "post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))

@@ -357,11 +357,11 @@ struct ThemedFeedOverlay: View {
                 try await RepostPublisher.shared.publish(
                     .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
                 postRepostDelta[postId, default: 0] -= 1
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost"))
             }
         }
     }

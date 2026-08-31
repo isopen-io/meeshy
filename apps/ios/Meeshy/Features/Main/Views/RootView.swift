@@ -1355,20 +1355,20 @@ struct RootView: View {
                 let message: String
                 switch error {
                 case .server(404, _):
-                    message = String(localized: "Lien introuvable", defaultValue: "Lien introuvable")
+                    message = String(localized: "link.error.not-found", defaultValue: "Lien introuvable")
                 case .server(410, let msg):
                     message = msg.isEmpty
-                        ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
+                        ? String(localized: "link.error.inactive", defaultValue: "Ce lien n'est plus actif")
                         : msg
                 case .forbidden(let reason, _):
-                    message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
+                    message = reason ?? String(localized: "link.error.forbidden", defaultValue: "Accès refusé à cette conversation")
                 default:
-                    message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                    message = error.errorDescription ?? String(localized: "link.error.open", defaultValue: "Impossible d'ouvrir le lien")
                 }
                 FeedbackToastManager.shared.showError(message)
             } catch {
                 FeedbackToastManager.shared.showError(
-                    String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                    String(localized: "link.error.open", defaultValue: "Impossible d'ouvrir le lien")
                 )
             }
         }
@@ -1933,7 +1933,7 @@ struct RootView: View {
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
             FeedbackToastManager.shared.showError(
-                String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
+                String(localized: "link.error.open-conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
             )
         }
     }

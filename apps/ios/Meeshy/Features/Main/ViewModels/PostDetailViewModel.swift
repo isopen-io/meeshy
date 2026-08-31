@@ -676,10 +676,10 @@ class PostDetailViewModel: ObservableObject {
                 location: location
             ))
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
-            FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "post.detail.edit.success", defaultValue: "Post modifié"))
         } catch {
             self.post = snapshot
-            FeedbackToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+            FeedbackToastManager.shared.showError(String(localized: "post.detail.edit.error", defaultValue: "Erreur lors de la modification"))
         }
     }
 
@@ -690,7 +690,7 @@ class PostDetailViewModel: ObservableObject {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
+            FeedbackToastManager.shared.showError(String(localized: "post.detail.report.error", defaultValue: "Erreur lors du signalement"))
         }
     }
 

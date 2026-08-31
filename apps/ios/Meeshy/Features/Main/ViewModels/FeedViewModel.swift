@@ -255,7 +255,7 @@ class FeedViewModel: ObservableObject {
                 }
             } else {
                 if posts.isEmpty {
-                    error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
+                    error = response.error ?? String(localized: "feed.load.error", defaultValue: "Impossible de charger le fil")
                 }
             }
         } catch let apiError as APIError {
