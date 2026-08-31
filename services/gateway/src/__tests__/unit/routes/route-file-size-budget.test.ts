@@ -32,49 +32,32 @@
  * ### Portée
  *
  * Ce cliquet balaie `services/gateway/src/routes/**` — la langue du critère 3.
- * Six fichiers du gateway HORS de `routes/` dépassent encore largement le budget
- * (`services/notifications/NotificationService.ts`, 6119 lignes en tête) : c'est
- * un chantier distinct, avec son inventaire gelé, et non un oubli de ce test.
+ * Dix-sept fichiers du gateway HORS de `routes/` dépassent encore largement le
+ * budget (`services/notifications/NotificationService.ts`, 6119 lignes en tête).
+ * C'est un chantier distinct, et il a désormais SON cliquet, comme cette note
+ * l'annonçait : `__tests__/gateway-file-size-budget.test.ts` (#4426), avec son
+ * inventaire gelé décroissant.
+ *
+ * Les deux règles restent distinctes — ZÉRO exemption ici, où la dette a été
+ * soldée en entier ; un inventaire qui décroît là-bas, où elle ne pouvait pas
+ * l'être dans le même lot. Mais la MESURE est commune, dans
+ * `__tests__/helpers/file-size-sweep.ts` : deux implémentations de `lineCount`
+ * divergeraient d'une ligne au premier fichier sans saut de ligne final, et les
+ * deux cliquets se contrediraient sur le même fichier.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readdirSync, readFileSync, statSync } from 'fs';
-import { join, relative, sep } from 'path';
+import { statSync } from 'fs';
+import { join } from 'path';
+
+import { overBudget, walk } from '../../helpers/file-size-sweep';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
 /** Le plafond demandé par le porteur, plus strict que la directive (1100). */
 const MAX_LINES = 1000;
-
-/**
- * Seules les sources ÉCRITES À LA MAIN sont visées : la directive exclut
- * explicitement le code généré et les dépendances. Les suites de tests ont leur
- * propre économie (un témoin par ligne d'un tableau produit de longs fichiers
- * sans dette de lisibilité) et sortent du périmètre.
- */
-const isHandWrittenSource = (path: string): boolean =>
-  path.endsWith('.ts') && !path.endsWith('.d.ts') && !path.split(sep).includes('__tests__');
-
-const walk = (dir: string): readonly string[] =>
-  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) return walk(full);
-    return isHandWrittenSource(full) ? [full] : [];
-  });
-
-/**
- * Compte comme `wc -l` — le nombre de FINS de ligne — pour que les chiffres de
- * ce cliquet soient les mêmes que ceux des issues et des commentaires, qui
- * citent tous `wc -l`. `split('\n').length` en rendrait un de plus sur tout
- * fichier terminé par un saut de ligne, et le seuil mordrait à 999.
- */
-const lineCount = (path: string): number => {
-  const text = readFileSync(path, 'utf8');
-  const newlines = (text.match(/\n/g) ?? []).length;
-  return text.endsWith('\n') || text.length === 0 ? newlines : newlines + 1;
-};
 
 describe('budget de taille des fichiers de routes (#4284)', () => {
   it('voit bien le répertoire des routes — sinon un balayage vide passerait au vert', () => {
@@ -83,12 +66,10 @@ describe('budget de taille des fichiers de routes (#4284)', () => {
   });
 
   it("n'a aucun fichier écrit à la main de 1000 lignes ou plus", () => {
-    const overBudget = walk(ROUTES_DIR)
-      .map((path) => ({ path: relative(ROUTES_DIR, path), lines: lineCount(path) }))
-      .filter((file) => file.lines >= MAX_LINES)
-      .sort((a, b) => b.lines - a.lines)
-      .map((file) => `${file.path} (${file.lines} lignes)`);
+    const listes = overBudget(ROUTES_DIR, MAX_LINES).map(
+      (file) => `${file.path} (${file.lines} lignes)`
+    );
 
-    expect(overBudget).toEqual([]);
+    expect(listes).toEqual([]);
   });
 });
