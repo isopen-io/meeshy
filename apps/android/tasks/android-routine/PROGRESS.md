@@ -2,6 +2,70 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **the LIVE in-app banner's dedup stopped being a re-coded twin — it now uses the ONE
+> shared pure `ToastDedupWindow`, the injected clock seam, and a cancellable dismiss job — and the
+> previously-untested banner ViewModel got its behavioural test suite** (slice
+> `notification-banner-dedup-ssot`, feature-parity §M "In-app banner dedup — one SSOT window").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → none; no
+> `claude/apps/android/<slice-id>` slice pending, nothing of mine to merge. Branched off
+> freshly-fetched `origin/main` (HEAD == origin/main, 09d94823) → `claude/apps/android/notification-dedup-window`,
+> renamed to `claude/apps/android/notification-banner-dedup-ssot` once the slice was refined (see below).
+>
+> **Course-correction worth recording.** The chosen "Next" was the §M notification-toast dedup window.
+> I began by writing a NEW pure `:core:model` `NotificationDedupWindow` + its test (RED/GREEN both
+> proven). Then, reading feature-parity §M before wiring, I found the SSOT **already existed**:
+> `ToastDedupWindow` (shipped 2026-08-30 with the `notification-toast-orchestrator` slice), used by a
+> WHOLE parallel orchestrator — `NotificationToastViewModel`/`NotificationToastHost` — that is fully
+> tested but **never wired at the scaffold**. Meanwhile the orchestrator that IS wired
+> (`NotificationBannerViewModel`/`NotificationBannerHost`, #4457, richer framing + tap-to-navigate)
+> carried a PRIVATE, untested `LinkedHashMap` re-implementation of the very same 2 s dedup window.
+> My new type would have been a THIRD copy. **I deleted it** (`NotificationDedupWindow` + test, never
+> committed) and repointed the slice at the real defect: converge the live banner VM onto the existing
+> SSOT.
+>
+> **The change — SSOT convergence + first tests for a live-but-untested VM.** (1) `NotificationBannerViewModel`
+> now holds `ToastDedupWindow.empty()` and calls `admit(id, clock.nowMillis())` (admit-first, exactly the
+> ordering `NotificationToastViewModel` uses — behaviour-equivalent for the visible outcome, and now
+> consistent between the twins), dropping the private `shownAt` map, `isDuplicate`, `pruneDedupWindow`,
+> and the local `DEDUP_WINDOW_MS`/`MAX_REMEMBERED`. (2) It takes the existing `NotificationToastClock`
+> Hilt seam (no new module — the binding already exists), replacing direct `System.currentTimeMillis()`/
+> `LocalDateTime.now()`, so every branch is now test-pinnable. (3) The auto-dismiss moved from an inline
+> `delay(4s)` in the tail of `handle` (which serialized notifications — a banner arriving during another's
+> window waited out the full 4 s inside the collector) to a cancellable `dismissJob`, mirroring the toast
+> VM: `handle` returns immediately, a newer banner cancels the older timer, and `dismiss()` cancels it too.
+> Blast radius: 1 main file changed (`NotificationBannerViewModel`, +1 ctor dep via `hiltViewModel()` so no
+> call-site churn), 1 new test file. No `:core:model` change — the SSOT was already there.
+>
+> **Tests: +12, RED-proven.** New `NotificationBannerViewModelTest` (mirrors `NotificationToastViewModelTest`'s
+> socket+clock harness): fresh→banner; duplicate within 2 s doesn't re-surface; same id after the window
+> re-surfaces; active-conversation suppressed; different conversation still shows; active-post suppressed;
+> push-disabled blocked; banner carries conversationId (and null postId) / postId (and null conversationId)
+> for navigation; 4 s auto-dismiss; an older banner's timer doesn't clobber a newer banner; dismiss clears.
+> **RED:** mutating `isDuplicateDelivery = admit.isDuplicate`→`false` fails exactly
+> `aDuplicateDeliveryWithinTheWindowDoesNotSurfaceAgain` (verified on the SDK toolchain), all others green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the exact `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (assembleDebug + all-module testDebugUnitTest, 1m01s incremental). Reviewer
+> **PASS** (diff `apps/android` only — 1 main file + 1 new test + tracking docs, no `local.properties`; SDK
+> purity — the pure building block `ToastDedupWindow` was reused, not duplicated, orchestration stays in the
+> `:feature` VM; SSOT — the whole point of the slice: one dedup window, one clock seam, the deleted duplicate
+> is the proof; instant-app/UDF — immutable `StateFlow<InAppBanner?>`, dedup is a pure value type advanced
+> per event; no tautological tests; no coverage floor lowered — a previously-untested live VM gained 12
+> behavioural tests, RED-proven).
+>
+> **Next**: the deeper §M twin — `NotificationBannerViewModel`/Host (live) and `NotificationToastViewModel`/Host
+> (orphan) still both wrap the same `MeeshyNotificationToast` atom off the same socket seam. Collapse them into
+> ONE (fold the toast's `onConversationOpened/Closed`/`onPostOpened/Closed` hooks into the banner, retire the
+> toast host), then wire the surviving host's active-context hooks from the chat/feed screens — the cross-cutting
+> app wiring §M has flagged since 2026-08-30. That merge is a product-shaped slice; scope it before branching.
+> For a pure-core alternative, the §N global-search `highlightRanges` render (Compose-glue) and a Chat/Feed value
+> type remain open. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **the video watch-report gained its double-fire guard — one pure function decides
 > whether a fullscreen dismiss should emit its watch-progress report, so a PAUSED close can no longer
 > erase the resume position the shared player just wrote** (slice `video-dismiss-watch-report`,
