@@ -95,6 +95,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
 import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
@@ -380,16 +381,11 @@ export class MeeshySocketIOManager {
       path: "/socket.io/",
       transports: ["websocket", "polling"],
       cors: {
-        origin: process.env.NODE_ENV === 'development' ? true : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-          const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || 
-                                 process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || 
-                                 ['https://meeshy.me', 'https://www.meeshy.me', 'https://gate.meeshy.me', 'https://ml.meeshy.me'];
-          if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        // La MÊME règle que la porte HTTP de `server.ts` (#4480) — les deux
+        // littéraux jumeaux d'avant divergeaient sur trois points.
+        origin: socketIoCorsOrigin({
+          onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
+        }),
         methods: ["GET", "POST"],
         allowedHeaders: ['authorization', 'content-type', 'x-session-token', 'websocket', 'polling'],
         credentials: true

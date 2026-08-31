@@ -39,6 +39,7 @@ import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS } from './config/cors-methods';
+import { fastifyCorsOrigin } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
 import { MutationLogService } from './services/MutationLogService';
@@ -398,42 +399,12 @@ class MeeshyServer {
       }
     });
 
-    // CORS configuration
+    // CORS — la règle vit dans `config/cors-origins` (#4480), pas ici : la porte
+    // WebSocket applique la MÊME, et deux littéraux jumeaux avaient divergé.
     await this.server.register(cors, {
-      origin: config.isDev ? true : (origin, cb) => {
-        // Add your production domains here
-        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') ||
-                               process.env.ALLOWED_ORIGINS?.split(',') ||
-                               [
-                                 // Local development
-                                 'http://localhost:3100',
-                                 'http://localhost',
-                                 'http://localhost:80',
-                                 'http://127.0.0.1',
-                                 'http://127.0.0.1:80',
-                                 // Production
-                                 'https://meeshy.me',
-                                 'https://www.meeshy.me',
-                                 'https://gate.meeshy.me',
-                                 'https://ml.meeshy.me',
-                                 // Staging
-                                 'https://staging.meeshy.me:8443',
-                                 'https://gate.staging.meeshy.me:8443',
-                                 'https://ml.staging.meeshy.me:8443'
-                               ];
-
-        logger.info(`CORS check: origin="${origin}", allowed="${allowedOrigins.join(',')}"`);
-
-        // Allow requests without origin (e.g., mobile apps, Postman, curl)
-        // Allow requests from allowed origins
-        if (!origin || allowedOrigins.includes(origin)) {
-          return cb(null, true);
-        }
-
-        // Log the rejection for debugging
-        logger.warn(`CORS rejected origin: "${origin}"`);
-        return cb(new Error('Not allowed by CORS'), false);
-      },
+      origin: fastifyCorsOrigin({
+        onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
+      }),
       credentials: true,
       methods: CORS_METHODS
     });
