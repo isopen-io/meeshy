@@ -491,8 +491,22 @@ nonisolated enum ComposerSceneCapabilities {
     /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
     /// l'état, et c'est lui que les gardes interrogent pour vérifier
     /// qu'aucune bande sans hôte n'y est entrée par distraction.
-    static func bands(canTrimSelection: Bool) -> Set<ComposerSceneBand> {
-        canTrimSelection ? bands.union([.timeline]) : bands
+    /// **Deux capacités, deux questions distinctes** — et c'est pour cela
+    /// qu'elles sont deux paramètres et non un `Set` reçu tout fait : le jour
+    /// où l'appelant les confond, le compilateur ne dit rien, alors qu'un
+    /// paramètre nommé se relit.
+    ///
+    /// `canStyleSelection` est vrai quand l'objet sélectionné est un TEXTE
+    /// (#4083). Sans lui, la bande `textStyles` n'était jamais servie et le
+    /// jeton « STYLE » de l'inspecteur pointait sur du vide — mesuré au
+    /// simulateur le 2026-08-31 : il s'annonçait en `StaticText`, faute de
+    /// destination ouvrable.
+    static func bands(canTrimSelection: Bool,
+                      canStyleSelection: Bool = false) -> Set<ComposerSceneBand> {
+        var servies = bands
+        if canTrimSelection { servies.insert(.timeline) }
+        if canStyleSelection { servies.insert(.textStyles) }
+        return servies
     }
 }
 

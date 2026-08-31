@@ -156,6 +156,16 @@ struct ComposerSceneBandView: View {
     /// demandée, la première ce qui l'empêche de paraître vide si elle l'était.
     var timelineContent: AnyView?
 
+    /// **Le contenu de la bande `textStyles`, composé par l'HÔTE** (#4083).
+    ///
+    /// Même motif que `timelineContent` : le spécimen a besoin du VRAI texte de
+    /// l'objet sélectionné et du rappel qui écrit le style — deux choses que
+    /// seul le meuble connaît. La bande reste une règle de PLACE.
+    ///
+    /// `nil` ⇒ rien à montrer, et `ComposerSceneCapabilities.bands(…)` ne
+    /// l'aura alors jamais servie.
+    var textStylesContent: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
@@ -168,12 +178,20 @@ struct ComposerSceneBandView: View {
             // tolérée : c'est la trace de la loi 4, tenue des deux côtés.
             if let timelineContent { timelineContent } else { EmptyView() }
         case .textStyles:
-            // Aucun contenu : ce contexte appartient au critère mais n'a pas
-            // d'hôte ici — les 18 styles exigent un objet `text` sélectionné,
-            // qu'aucune porte de cette surface ne pose encore (#4083).
-            // `ComposerSceneBand.opened` ne le sert donc jamais, et sa garde le
-            // prouve : c'est là que l'absence est tenue, pas ici.
-            EmptyView()
+            // **Le spécimen des 18 styles** (#4083). Il a un hôte depuis le
+            // 2026-08-31 : le meuble compose `TextStyleSpecimenBand` avec le
+            // texte réel de l'objet sélectionné.
+            //
+            // > Ce cas rendait `EmptyView()` et le commentaire l'assumait —
+            // > « les 18 styles exigent un objet `text` sélectionné, qu'aucune
+            // > porte de cette surface ne pose encore ». La porte existait
+            // > depuis #4401 ; c'est la BANDE qui n'était pas servie, et le
+            // > jeton « STYLE » de l'inspecteur pointait donc sur du vide.
+            //
+            // Le repli reste, pour la même raison que celui de `timeline` : la
+            // loi 4 tenue des DEUX côtés — la capacité empêche la bande d'être
+            // demandée, ce repli l'empêche de paraître vide si elle l'était.
+            if let textStylesContent { textStylesContent } else { EmptyView() }
         }
     }
 

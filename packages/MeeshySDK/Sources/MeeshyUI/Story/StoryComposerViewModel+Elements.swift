@@ -794,6 +794,26 @@ extension StoryComposerViewModel {
         currentEffects = effects
     }
 
+    /// **La famille typographique d'un texte de la scène** (#4083, vue `2e`).
+    ///
+    /// `TextEditToolOptions` l'écrit par un `@Binding var textObject` — ce qui
+    /// convient à un panneau qui POSSÈDE l'objet le temps d'une édition, et pas
+    /// du tout à une bande qui n'a qu'un identifiant. Sans ce site, le spécimen
+    /// aurait dû se fabriquer un binding, c'est-à-dire une SECONDE écriture du
+    /// même champ, à faire diverger au premier ajout d'effet de bord.
+    ///
+    /// Même forme que `updateTextContent` juste au-dessus, délibérément : deux
+    /// écritures du même tableau qui ne se ressemblent pas se relisent deux
+    /// fois.
+    public func updateTextStyle(id: String, style: StoryTextStyle) {
+        var effects = currentEffects
+        var texts = effects.textObjects
+        guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
+        texts[index].textStyle = style.rawValue
+        effects.textObjects = texts
+        currentEffects = effects
+    }
+
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 

@@ -462,6 +462,7 @@ extension MeeshyComposerHost {
             band: ComposerSceneBand.opened(requestedSceneBand,
                                            served: openableSceneBands),
             bandTimelineContent: composerTrimBand,
+            bandTextStylesContent: composerTextStylesBand,
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
@@ -951,7 +952,43 @@ extension MeeshyComposerHost {
     /// que `opened` refuse — un contrôle inerte qui a l'air vivant, c'est-à-dire
     /// exactement le défaut que ce câblage vient de fermer.
     var openableSceneBands: Set<ComposerSceneBand> {
-        ComposerSceneCapabilities.bands(canTrimSelection: trimmableSelection != nil)
+        ComposerSceneCapabilities.bands(canTrimSelection: trimmableSelection != nil,
+                                        canStyleSelection: styleableSelection != nil)
+    }
+
+    /// **Le TEXTE sélectionné, et son style courant** (#4083) — `nil` dès que
+    /// la sélection n'est pas un texte.
+    ///
+    /// Même forme que `trimmableSelection`, et pour la même raison : ce `nil`
+    /// tient la loi 4 des deux côtés d'un coup — il retire `.textStyles` du jeu
+    /// servi (la bande n'est pas ouvrable) ET laisse `composerTextStylesBand` à
+    /// `nil` (elle n'aurait rien à montrer). Une question posée une fois, deux
+    /// conséquences.
+    var styleableSelection: StoryTextObject? {
+        guard let id = selectedSceneItemId else { return nil }
+        return viewModel.currentEffects.textObjects.first { $0.id == id }
+    }
+
+    /// **Le spécimen des 18 styles, composé pour l'objet sélectionné.**
+    ///
+    /// Le texte RÉEL voyage jusqu'à la vue : c'est ce que la planche demande —
+    /// « l'aperçu en haut applique le style sélectionné au vrai texte de la
+    /// scène ». Un spécimen sur un texte fabriqué répondrait à une autre
+    /// question que celle que l'auteur se pose.
+    var composerTextStylesBand: AnyView? {
+        guard let texte = styleableSelection else { return nil }
+        return AnyView(
+            TextStyleSpecimenBand(
+                text: texte.text,
+                selection: texte.parsedTextStyle,
+                // Le plateau est sombre en permanence — sans ce drapeau les
+                // vignettes non choisies peignent du sombre sur du sombre.
+                onDarkSurface: true,
+                onSelect: { style in
+                    viewModel.updateTextStyle(id: texte.id, style: style)
+                }
+            )
+        )
     }
 
     var trimmableSelection: (url: URL, bounds: MediaTrimBounds,

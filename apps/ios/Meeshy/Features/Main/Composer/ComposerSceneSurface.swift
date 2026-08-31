@@ -139,6 +139,8 @@ struct ComposerSceneSurface: View {
     var band: ComposerSceneBand?
     /// Ce que la bande `timeline` montre — composé par le meuble (#4082).
     var bandTimelineContent: AnyView?
+    /// Ce que la bande `textStyles` montre — composé par le meuble (#4083).
+    var bandTextStylesContent: AnyView?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
@@ -377,7 +379,8 @@ struct ComposerSceneSurface: View {
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
                                           onPickOpening: onPickBandOpening,
-                                          timelineContent: bandTimelineContent)
+                                          timelineContent: bandTimelineContent,
+                                          textStylesContent: bandTextStylesContent)
                 case .nothing:
                     EmptyView()
                 }
