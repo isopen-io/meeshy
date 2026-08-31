@@ -240,6 +240,70 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun openingTheShownBannersConversationDismissesIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+
+        vm.setActiveContext(conversationId = "c1", postId = null)
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun openingADifferentConversationLeavesTheShownBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        vm.setActiveContext(conversationId = "c2", postId = null)
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun openingTheShownBannersPostDismissesIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = null, postId = "p1"))
+        runCurrent()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+
+        vm.setActiveContext(conversationId = null, postId = "p1")
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun leavingAllScreensDoesNotDismissAShownBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        vm.setActiveContext(conversationId = null, postId = null)
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun settingActiveContextWithNoBannerShownIsInert() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        vm.setActiveContext(conversationId = "c1", postId = null)
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
     fun dismissClearsTheCurrentBanner() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()

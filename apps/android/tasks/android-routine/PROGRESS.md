@@ -2,6 +2,73 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **the LIVE in-app banner now pulls down when the reader opens the very thread it is
+> about — and the "belongs to the open thread?" test became one SSOT predicate shared by the fresh-
+> notification gate and the shown-banner dismissal** (slice `banner-active-context-dismiss`,
+> feature-parity §M). `NotificationBannerViewModel.setActiveContext` recorded the on-screen context
+> (and published it process-wide for the FCM gate) but did NOT dismiss a banner ALREADY on screen for
+> the conversation/post the reader just opened. iOS `NotificationToastManager.onConversationOpened`/
+> `onPostOpened` do exactly that, and the orphan `NotificationToastViewModel` did too — so the live
+> surface was the poorer one: a banner about thread X kept counting down over the reader's face while
+> they read thread X (dimension 8 UX + dimension 13 complétude gap vs iOS).
+>
+> **Step 0 — the prior open android-routine PR was merged first.** `list_pull_requests` (open) → #4629
+> (`claude/apps/android/push-foreground-presentation-gate`, mine) + gateway/dependabot. #4629's **Android**
+> check was green; its only red was **Quality (bun)** — the pre-existing `apps/web` type-debt ratchet
+> regression (baseline 1183 → 1184) that `ci.yml` has failed on for every main commit since Aug 31,
+> logically impossible for an `apps/android`-only diff to cause (it runs `tsc` on `apps/web`, zero web
+> files touched) and forbidden to fix (web = production logic). Squash-merged #4629 (commit `1a7b3085`)
+> exactly as the prior android slices merged on the same web-red. Then branched
+> `claude/apps/android/banner-active-context-dismiss` off freshly-synced `origin/main` (HEAD == origin/main,
+> `rev-list --left-right --count` = 0/0).
+>
+> **The change — one pure SSOT predicate + a policy refactor + banner wiring.** (1) New pure `:core:model`
+> `ActiveContextMatch.matches(contentConversationId, contentPostId, activeConversationId, activePostId)`:
+> a match needs the ACTIVE id present AND equal (a null active id — nothing on screen — never matches, so a
+> null-vs-null pair is deliberately NOT a match); conversation and post are OR-ed. A faithful port of iOS
+> `NotificationToastManager`'s `onConversationOpened`/`onPostOpened` + `handleNewNotification` guard. (2)
+> `NotificationToastPolicy.decide` now calls `ActiveContextMatch.matches` for its active-screen suppression
+> instead of the inline `context?.conversationId != null && context.conversationId == activeConversationId`
+> pair — behaviour identical (proven: the two formulations are both "both non-null and equal"), so the SSOT
+> now has a SECOND live consumer, not an orphan. (3) `NotificationBannerViewModel.setActiveContext` reads
+> the currently-shown banner and, if it belongs to the just-opened context, `dismiss()`es it (cancels the
+> auto-dismiss job + nulls the banner). **SOTA over iOS:** the predicate is a pure, exhaustively-branch-
+> tested value type both the fresh-gate and the dismissal share, where iOS re-writes the `==` comparison at
+> each of the three sites. Blast radius: `ActiveContextMatch` all-new; `NotificationToastPolicy` −4/+11 (one
+> call replaces the inline pair); `NotificationBannerViewModel` +11 (the dismiss block) +1 import.
+> Deliberately EXCLUDED: touching the orphan `NotificationToastViewModel`'s `onConversationOpened` hooks
+> (wiring into dead code adds no value — the toast/banner VM merge stays a separate §M slice, note updated).
+>
+> **Tests: +17, RED-proven.** `ActiveContextMatchTest` +11 (same conversation/post match; different
+> conversation/post no-match; post-match-wins-when-conversation-differs and vice-versa; null active
+> conversation vs present content, null content vs present active, null active post vs present content, all
+> null, neither matches). `NotificationBannerViewModelTest` +6 (opening the shown banner's conversation
+> dismisses it; opening its post dismisses it; a different conversation leaves it; leaving all screens
+> (`null,null`) leaves it; setActiveContext with no banner shown is inert). **RED:** stripping the
+> predicate's `!= null` guards fails 6 `ActiveContextMatch` + 9 `NotificationToastPolicy` tests (the policy
+> genuinely consults it — the extraction is load-bearing, not cosmetic); removing the dismiss wiring fails
+> exactly the two open-the-thread tests (`17 tests completed, 2 failed`), both verified by rebuild.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37` for AGP 8.13. Kept `local.properties` out of the diff
+> (gitignored, verified via `git check-ignore`).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (4m 07s, 973 tasks). Reviewer **PASS** (diff `apps/android` only — 2
+> core files (1 new + 1 edited) + 1 core test + 2 feature files (1 edited main + 1 edited test) + 2 tracking
+> docs, no `local.properties`; SDK purity — pure `:core:model` predicate, orchestration stays in the
+> `:feature` VM; SSOT — one `ActiveContextMatch` shared by the policy and the banner dismissal, the inline
+> pair deleted, no re-implementation; instant-app — pulling a stale banner is pure UDF state, no
+> spinner/refetch; UDF — immutable `StateFlow`, synchronous pure transition; no coverage floor lowered; no
+> tautological tests; RED-proven behaviour).
+>
+> **Next**: the deeper §M twin remains — `NotificationBannerViewModel` (LIVE) vs `NotificationToastViewModel`
+> (orphan, never mounted) still wrap the same `MeeshyNotificationToast` atom off the same socket seam; a
+> product-level merge (retire the toast host+VM, keep the banner's superset framing/navigation) is a
+> separate slice. Or the per-category notification SWR cache key (§M), or an earlier build-order pure-core
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **a FOREGROUND FCM push now consults a presentation gate before raising a system
 > banner — the very preferences the app already honours for the in-app toast (push master, quiet
 > hours, per-type toggles) plus on-screen-thread and socket-alive suppression** (slice
