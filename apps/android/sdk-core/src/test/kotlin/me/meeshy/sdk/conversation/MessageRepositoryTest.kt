@@ -334,6 +334,35 @@ class MessageRepositoryTest {
         assertThat(request.expiresAt).isNull()
     }
 
+    /**
+     * **Le corps envoye porte un `clientMessageId` au format que le gateway
+     * EXIGE** (#4624).
+     *
+     * Le temoin voisin epingle `request.clientMessageId == cmid` : la coherence
+     * du client AVEC LUI-MEME, vraie quel que soit le prefixe. Il est reste
+     * vert pendant que TOUT envoi Android etait rejete en 400. Ce qui manquait
+     * est le FORMAT, et il appartient au serveur — les trois portes le
+     * declarent a l'identique :
+     * `routes/conversations/messages-send.ts:56` (REST),
+     * `validation/socket-event-schemas.ts:24` (socket),
+     * `routes/links/types.ts:99` (lien anonyme).
+     *
+     * Le litteral est RECOPIE plutot que derive d'`OutboxIds` : une constante
+     * partagee avec la source ferait passer ce temoin par construction, et
+     * c'est justement la construction qui etait fausse.
+     */
+    @Test
+    fun `sendOptimistic puts a gateway-shaped clientMessageId on the wire`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val serverContract =
+            "^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        assertThat(sentRequest("message:c1").clientMessageId).matches(serverContract)
+        assertThat(cmid).matches(serverContract)
+    }
+
     @Test
     fun `sendOptimistic encodes the chosen effects onto the outbox request`() = runTest {
         val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")), clock = MutableClock(0L))
