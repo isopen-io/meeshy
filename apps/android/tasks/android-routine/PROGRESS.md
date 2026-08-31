@@ -2,6 +2,75 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-31 **dwell-time tracking got its pure heart plus its first surface: reels now record a
+> view WITH how long they were watched, off a faithful port of iOS's `EngagementTracker`** (slice
+> `reels-engagement-dwell`, feature-parity §F "Post view + dwell-time tracking" — the `- [~]` box's
+> long-open "Still fully open: dwell-time tracking" sub-item).
+>
+> **Step 0 — merged the prior open android-routine PR first (rule 0).** `list_pull_requests` (open) →
+> #4587 (`global-search-results-query`, the previous run's slice) was open with the **Android** required
+> gate GREEN and the diff strictly `apps/android` (2 feature + 1 test + 3 tracking docs). Its only red
+> check was **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet regression (1184 vs baseline
+> 1183, `AgentConfigDialog`/`use-audio-translation`/`MarkdownMessage`…), confirmed red on `main` itself
+> (ci.yml failing on the exact base SHA a2ead903 and every push since 2026-08-30 19:54), unfixable inside
+> an `apps/android`-only diff and never an Android gate (ROUTINE §CI reality). `mergeable_state: unstable`
+> (mergeable; the failing check is not required). Squash-merged → `main` ea97e96c. Branched
+> `claude/apps/android/reels-engagement-dwell` off freshly-fetched `origin/main` (ea97e96c). Read tracking
+> from `origin/main` (the session's own checkout is a `dev`-based branch 777 commits behind `main`, with a
+> divergent `notification-center-category-filter` history that never landed — the NOTES rule "read tracking
+> from origin/main" held again).
+>
+> **The gap.** iOS tracks dwell on four single-focus surfaces (`detail`/`reels`/`storyViewer`/`statusBubble`)
+> via `EngagementTracker` — monotonic per-surface dwell, a topmost-owns-the-clock rule (an overlay pauses
+> the one underneath), and `minDwellMs`/`minWatchMs` qualification. Android tracked NONE of it: the reels
+> surface recorded no view at all, and `PostRepository.viewPost(id, duration)` — an endpoint that already
+> documents an optional dwell duration — was only ever called dwell-less (post-detail / status open).
+>
+> **The change — one pure state machine + one existing-hook wiring.** (1) New pure `:core:model`
+> `EngagementSessions` (immutable, `@ConsistentCopyVisibility`, clock injected as `nowMs`): `begin(surface,
+> postId, nowMs)` pauses the current top and pushes; `end(surface, nowMs, watchMs?, completed?)` pops,
+> resumes the new top, and returns `(next, QualifiedView?)` — a `QualifiedView(postId, dwellMs)` when
+> `dwell ≥ 1000 || watch ≥ 2000 || completed`, else `null` (sub-threshold bounce). `currentDwell` clamps a
+> backwards clock to 0. Faithful port of `EngagementTracker` (`apps/ios/.../Services/EngagementTracker.swift`).
+> (2) `ReelsViewModel` gains a `CacheClock` dep + a private `sessions` cursor; `setCurrentReel` now ends the
+> departing reel (a qualified view → `viewPost(id, dwellMs.toInt())`, best-effort) and begins the arriving
+> one; `ReelsScreen`'s `onDispose` calls `setCurrentReel(null)` to end the last. **SOTA/right-choice over
+> iOS:** the pure machine is a fully-immutable value type (iOS mutates a dict in a `@MainActor` class), so
+> every branch is JVM-testable; and Android reports through its own `viewPost(duration)` sink (the platform's
+> documented dwell endpoint) rather than iOS's separate `POST /posts/engagement/batch`. Reels had no prior
+> view metric, so this is purely additive — no double-count. Deliberately deferred (faithful, narrower
+> boundary): the other three surfaces (the core already supports them), watch-samples/completion from the
+> player, micro-actions, and the durable crash-recovery outbox.
+>
+> **Tests: +17, RED-proven by mutation.** `EngagementSessionsTest` +13 (floor qualify / sub-threshold drop /
+> inclusive boundary / unknown-surface inert / other-surface inert / watch qualify / watch-below-floor /
+> completed-qualifies / backwards-clock-never-negative / overlay pauses the surface underneath / paused
+> surface excludes the covered span / re-begin restarts dwell / thresholds). `ReelsViewModelTest` +4 (dwell
+> past floor records `viewPost(id, duration)` on page-move; a sub-floor bounce records nothing; leaving the
+> thread records the final reel; a re-settle keeps one session → one view). **Mutations:** neutralising
+> `pauseTop` fails EXACTLY the two nesting tests (`2 failed`); flipping the dwell floor `>=`→`>` fails EXACTLY
+> the three boundary-touching tests (`3 failed`). All prior reels/room-membership tests stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check` commands)
+> BUILD SUCCESSFUL (973 actionable tasks, 0 failed, 7m 31s). Reviewer **PASS** (diff `apps/android` only — 2
+> new `:core:model` files + 3 edited `:feature:reels` files + 2 tracking docs, no `local.properties`; SDK
+> purity — the pure state machine is an opaque, clock-injected building block in `:core:model`, the *when*
+> (begin/end/report) is orchestration in the `:feature:reels` ViewModel; SSOT — one `EngagementSessions`, the
+> existing `viewPost` sink reused, no re-implemented dwell logic; instant-app — analytics is fire-and-forget,
+> no spinner; UDF — immutable `StateFlow` UiState untouched, the dwell cursor lives beside `currentReelId`;
+> no dead-ends — every qualified view reaches a real endpoint; no tautological tests; no coverage floor
+> lowered — a new pure state machine with near-total branch coverage, mutation-proven).
+>
+> **Next**: extend the dwell tracker to the remaining single-focus surfaces (post-detail — but reconcile with
+> its existing dwell-less `recordView`; story-viewer; status-bubble), then feed watch-samples + completion
+> from the reels player (the `end` params already exist). Other open threads: the §M notification twin
+> (`NotificationBanner*` LIVE vs `NotificationToast*` orphan), and the local-FTS leg of §N. Read the chosen
+> box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **global-search result rows now highlight the query that PRODUCED them, not the live
 > input — iOS `resultsQuery` parity — fixing a stale-highlight mismatch during debounce** (slice
 > `global-search-results-query`, feature-parity §N "Global search … query highlighting").

@@ -5142,11 +5142,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       an explicit `flushNow`/`flushNowAsync` are ported; iOS's OTHER two nets —
       app-backgrounding flush (`willResignActive`/`didEnterBackground`) and kill-survival
       persistence (UserDefaults, replayed on relaunch) — are NOT, Android has no equivalent
-      wiring point yet for either. **Still fully open: dwell-time tracking** — iOS's own
-      `EngagementTracker`/`TrackEngagementModifier` is a materially bigger, separate system
-      (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
-      overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
-      `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      wiring point yet for either. **Dwell-time tracking — pure core + reels surface shipped 2026-08-31** (slice
+      `reels-engagement-dwell`). New pure `:core:model` `EngagementSessions` — a faithful port of
+      iOS `EngagementTracker`'s bookkeeping: an immutable per-surface state machine (surfaces
+      `DETAIL`/`REELS`/`STORY_VIEWER`/`STATUS_BUBBLE`, the four single-focus regions iOS tracks — the
+      scrolling feed is deliberately NOT one), monotonic dwell with the **topmost-owns-the-clock**
+      rule (`begin` pauses the covered surface, `end` resumes it — the overlay's window is excluded
+      from the surface underneath), and the `MIN_DWELL_MS = 1000` / `MIN_WATCH_MS = 2000`
+      qualification (`end` yields a `QualifiedView(postId, dwellMs)` when dwell OR watch OR completed
+      crosses the floor, else `null` — a sub-threshold bounce, matching iOS `guard qualifies`). The
+      clock is injected as `nowMs`, so the type carries no time/I-O/framework. Wired on the **reels**
+      surface via the existing `ReelsViewModel.setCurrentReel` hook: the reel scrolled away from is
+      ended (a qualified view records its measured duration through `PostRepository.viewPost(id,
+      duration)` — the `posts/{id}/view` endpoint already documents an optional dwell duration, and
+      reels had NO view metric before, so this is purely additive, no double-count), the reel landed
+      on begins a fresh session, and `ReelsScreen`'s `onDispose` ends the last one. Chose Android's
+      `viewPost(duration)` sink over iOS's separate `POST /posts/engagement/batch` — the duration
+      endpoint is the platform-appropriate dwell sink. +17 tests (13 `EngagementSessionsTest`: floor
+      qualify / sub-threshold drop / inclusive boundary / unknown-surface inert / other-surface inert
+      / watch-time qualify / watch-below-floor / completed-qualifies / backwards-clock-never-negative /
+      overlay pauses the surface underneath / paused surface excludes the covered span / re-begin
+      restarts dwell / thresholds; +4 `ReelsViewModelTest`: dwell past floor records duration on
+      page-move, bounce records nothing, leaving records the final reel, re-settle keeps one session).
+      Mutation-proven: neutralising `pauseTop` fails exactly the two nesting tests; flipping the dwell
+      floor `>=`→`>` fails exactly the boundary tests. **Still open (deferred, deliberately narrower
+      than iOS):** the other three surfaces (detail/story/status — the pure core already supports
+      them), watch-time samples + completion from the reels player (the `end` params exist, fed
+      dwell-only for now), micro-action recording, and the durable outbox / crash-recovery net (iOS's
+      SQLite outbox — Android has no equivalent wiring point yet).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a
