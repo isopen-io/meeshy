@@ -43,7 +43,14 @@ import { relative, join, sep } from 'path';
  */
 export type SelecteurDeFichier = (path: string) => boolean;
 
-const estSourceTypeScript = (path: string): boolean =>
+/**
+ * Ce qui EST une source TypeScript écrite à la main, avant toute question de
+ * population. Exporté par #4532 : le cliquet de `packages/shared` a besoin du
+ * même prédicat pour prouver sa partition (production ⊎ témoins ⊎ généré), et
+ * le redéclarer chez lui en ferait une JUMELLE de la mesure — précisément ce
+ * que ce module existe pour empêcher (§ en-tête).
+ */
+export const estSourceTypeScript = (path: string): boolean =>
   path.endsWith('.ts') && !path.endsWith('.d.ts');
 
 const sousUnRepertoireDeTests = (path: string): boolean => path.split(sep).includes('__tests__');
@@ -103,13 +110,37 @@ export const isHandWrittenSource = (path: string): boolean =>
 export const isHandWrittenTest = (path: string): boolean =>
   estSourceTypeScript(path) && sousUnRepertoireDeTests(path);
 
+/**
+ * Ce qu'un balayage DESCEND. Second paramètre libre, ajouté par #4532 — et sa
+ * raison est mesurée, pas cosmétique.
+ *
+ * `walk` descend dans TOUT répertoire, ce qui est sans conséquence sur
+ * `services/gateway/src` (aucune dépendance, aucun artefact de build n'y vit).
+ * Ce n'est plus vrai dès qu'une racine porte son propre `node_modules/` ou son
+ * `dist/` — le cas de `packages/shared`, et de tout paquet du monorepo.
+ *
+ * Le piège y est SILENCIEUX sous bun : l'installation ISOLÉE de bun 1.3 pose
+ * des LIENS SYMBOLIQUES, dont `entry.isDirectory()` rend `false`, si bien que le
+ * balayage n'y descend pas et rend le bon compte **par accident de layout**. Le
+ * `node_modules` racine du dépôt porte 4155 fichiers `.ts` non-`.d.ts` : sous
+ * une installation à répertoires réels, le même appel gèlerait des sources de
+ * DÉPENDANCES que la directive 2026-08-28 exempte au même titre que le généré.
+ *
+ * Le DÉFAUT est `TOUT_DESCENDRE`, donc les trois cliquets qui appelaient `walk`
+ * et `overBudget` avant #4532 sont inchangés, à la lettre.
+ */
+export type SelecteurDeRepertoire = (path: string) => boolean;
+
+const TOUT_DESCENDRE: SelecteurDeRepertoire = () => true;
+
 export const walk = (
   dir: string,
   retenir: SelecteurDeFichier = isHandWrittenSource,
+  descendre: SelecteurDeRepertoire = TOUT_DESCENDRE,
 ): readonly string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) return walk(full, retenir);
+    if (entry.isDirectory()) return descendre(full) ? walk(full, retenir, descendre) : [];
     return retenir(full) ? [full] : [];
   });
 
@@ -138,8 +169,9 @@ export const overBudget = (
   root: string,
   seuil: number,
   retenir: SelecteurDeFichier = isHandWrittenSource,
+  descendre: SelecteurDeRepertoire = TOUT_DESCENDRE,
 ): readonly FichierMesure[] =>
-  walk(root, retenir)
+  walk(root, retenir, descendre)
     .map((path) => ({ path: relative(root, path), lines: lineCount(path) }))
     .filter((file) => file.lines >= seuil)
     .sort((a, b) => b.lines - a.lines);
