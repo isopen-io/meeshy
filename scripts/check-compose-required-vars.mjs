@@ -90,6 +90,23 @@
 //     COPIE de cette table et vérifie que le shell l'exige, sans qu'une ligne
 //     du shell ait été écrite.
 //
+// CE QU'ELLE NE VOYAIT PAS — LE FAIBLE, PAS SEULEMENT L'ABSENT [#4548]
+//
+// Toutes les règles ci-dessus mesurent une ABSENCE : une substitution nue, une
+// bloquante sans refus, un refus sans message. Aucune ne mesurait ce qui est
+// FAIBLE. Mesuré : `docker-compose.prod.yml:84` portait
+// `${MONGODB_PASSWORD:-MeeshyPassword123}` — le mot de passe de la base, avec
+// sa valeur par défaut PUBLIÉE dans ce dépôt (huit sites la portent) — et la
+// garde restait VERTE, parce que cette variable ne manque jamais. Le repli est
+// la forme où la classe se cache derrière la syntaxe.
+//
+// Le durcissement n'a pas été « tout repli est suspect » : mesuré, les quatre
+// compositions en portent 193, dont l'immense majorité est honnête (des ports,
+// des noms d'image, des tailles, des préférences de langue, `DOMAIN` 42 fois).
+// Une règle large aurait fait rougir la CI entière et aurait été retirée. Le
+// critère retenu est une DÉRIVATION à trois facteurs, tous déjà lisibles dans
+// le monde lu — voir `unSecretNAJamaisDeRepliPublie`.
+//
 // CE QUE LE BALAYAGE VOIT — ET CE QU'IL NE VOIT PAS
 //
 // Il voit : tous les `docker-compose*.yml` de `infrastructure/docker/compose/`
@@ -185,6 +202,16 @@ const SUBSTITUTIONS = Object.freeze({
     secret: true,
     replis: ['admin123'],
     raison: "InitService.ts:423 replie sur 'admin123'.",
+  },
+  MONGODB_PASSWORD: {
+    classe: BLOQUANTE,
+    secret: true,
+    replis: ['MeeshyPassword123'],
+    raison:
+      "docker-compose.prod.yml:84 replie sur 'MeeshyPassword123' — l'interface d'administration nosqlclient, " +
+      'publiée sur mongo.<domaine> derrière un basicauth, se connectait alors à la base avec un mot de passe ' +
+      'publié dans ce dépôt (huit sites le portent, dont init-postgresql.sql et les scripts qui initialisent ' +
+      'la réplique de développement avec lui). Un identifiant, donc bloquante par le test (a).',
   },
 
   DATABASE_URL: {
@@ -449,6 +476,70 @@ const uneBloquanteQuiDeploiePorteLeRefus = (world) =>
         ),
     );
 
+/**
+ * LE FAIBLE, ET NON PLUS SEULEMENT L'ABSENT [#4548]
+ *
+ * Un repli PUBLIÉ est un secret par défaut. Trois facteurs le disent, tous
+ * mesurés dans le monde déjà lu — jamais une intuition, jamais une liste :
+ *
+ *   - le fichier DÉPLOIE. `NON_DEPLOYING` dit déjà où un repli est honnête :
+ *     dans docker-compose.dev.yml, `${JWT_SECRET:-dev-jwt-secret…}` est VRAI,
+ *     c'est le secret de développement et il n'y a rien à cacher ;
+ *   - le repli porte une VALEUR. `${VAR:-}` ne publie rien : il déclare une
+ *     option absente, ce que SEPT substitutions de prod et de staging font à
+ *     dessein, sur six noms (BREVO_API_KEY, SENDGRID_API_KEY, MAILGUN_API_KEY,
+ *     ENCRYPTION_MASTER_KEY deux fois, ATTACHMENT_MASTER_KEY, HF_TOKEN). Les
+ *     faire rougir serait la règle trop large ;
+ *   - la variable EST un secret.
+ *
+ * « EST un secret » se lit d'abord dans la TABLE, où `secret` est déjà déclaré
+ * et déjà servi au validateur de déploiement — puis, à défaut de déclaration,
+ * dans la FORME du nom. C'est le retournement de la règle 1 porté aux secrets :
+ * un nom en _PASSWORD / _SECRET / _KEY / _TOKEN que personne n'a dédouané est
+ * traité comme un secret, non parce qu'il est dangereux, mais parce que
+ * personne n'a encore dit qu'il ne l'était pas. Une valeur PUBLIQUE par
+ * conception — une clé Firebase, qui voyage déjà dans le bundle du navigateur —
+ * se déclare `secret: false` avec sa raison, dans la table. Aucune seconde
+ * liste n'est née ici : c'est le champ qui existait, lu par une règle de plus.
+ *
+ * Elle laisse volontairement la classe BLOQUANTE à `uneBloquanteQuiDeploiePorteLeRefus`,
+ * qui la couvre PLUS largement (tout repli, même vide). Doubler la voix ne
+ * dirait pas seulement deux fois la même chose : le message ci-dessous propose
+ * « secret: false » comme issue, et cette issue est INTERDITE sur une bloquante
+ * de forme secret — `uneBloquanteEstServableAuValidateur` la refuse. Une règle
+ * qui offre une sortie que sa voisine ferme envoie le lecteur dans un mur. Les
+ * deux règles se partagent donc le terrain par ce que la table a DÉCLARÉ :
+ * celle-ci attrape le secret que la classification n'a pas encore nommé.
+ */
+const estUnSecret = (world, name) => world.classification[name]?.secret ?? FORME_SECRET.test(name);
+
+const porteUnRepli = (substitution) => substitution.form.endsWith('-');
+
+const unSecretNAJamaisDeRepliPublie = (world) =>
+  world.files
+    .filter((file) => file.deploys)
+    .flatMap((file) =>
+      file.substitutions
+        .filter(
+          (substitution) =>
+            porteUnRepli(substitution) &&
+            substitution.message.trim().length > 0 &&
+            classOf(world, substitution.name) !== BLOQUANTE &&
+            estUnSecret(world, substitution.name),
+        )
+        .map(
+          (substitution) =>
+            `${file.path}:${substitution.line} : ${substitution.name} porte un repli PUBLIÉ dans un fichier qui déploie —\n` +
+            `  \${${substitution.name}${substitution.form}…} est un SECRET PAR DÉFAUT.\n` +
+            `  ${world.classification[substitution.name]?.raison ?? "Aucune raison n'est encore écrite pour cette variable."}\n` +
+            `  Le repli n'est pas vide, donc sa valeur est PUBLIÉE ici, et l'hôte qui oublie la variable déploie\n` +
+            `  avec elle sans que rien ne le dise. Une garde qui n'attrape que l'ABSENT laisse passer le FAIBLE.\n` +
+            `  Trois issues : \${${substitution.name}:?message} si l'hôte doit la poser ;\n` +
+            `  \${${substitution.name}:-} si elle est réellement optionnelle (un repli VIDE ne publie rien) ;\n` +
+            `  ou « secret: false » avec sa raison mesurée dans SUBSTITUTIONS si cette valeur est publique par conception.`,
+        ),
+    );
+
 const leRefusNommeCeQuIlFaudraitPoser = (world) =>
   world.files.flatMap((file) =>
     file.substitutions
@@ -537,6 +628,7 @@ const CHECKS = Object.freeze([
   uneSubstitutionNueEstClassee,
   uneBloquanteNEstJamaisNue,
   uneBloquanteQuiDeploiePorteLeRefus,
+  unSecretNAJamaisDeRepliPublie,
   leRefusNommeCeQuIlFaudraitPoser,
   leMessageNeCassePasLeYaml,
   uneBloquanteEstDocumentee,
@@ -547,6 +639,21 @@ const inspect = (world) => CHECKS.flatMap((check) => check(world));
 const mutate = (world, apply) => apply(structuredClone(world));
 
 const fileNamed = (world, name) => world.files.find((file) => basename(file.path) === name);
+
+/**
+ * Les noms que le témoin injecte naissent à l'EXÉCUTION [#4548] — repris du
+ * témoin de dérivation de `scripts/deployment/deploy-validate-config.sh`, pour
+ * la même raison : un nom écrit en dur pourrait être reconnu par une liste
+ * écrite en dur, et le témoin prouverait alors la coïncidence de deux copies
+ * plutôt que la DÉRIVATION. Un nom qui n'existe qu'à l'instant du test ne peut
+ * être connu d'aucune table — s'il rougit, c'est que la règle l'a DÉRIVÉ.
+ *
+ * L'un porte la forme d'un secret, l'autre celle d'un réglage d'exploitation :
+ * c'est exactement la frontière que la règle doit tenir.
+ */
+const TEMOIN_RACINE = `MEESHY_TEMOIN_${process.pid}_${Math.floor(Math.random() * 1e9)}`;
+const TEMOIN_SECRET = `${TEMOIN_RACINE}_PASSWORD`;
+const TEMOIN_LIBRE = `${TEMOIN_RACINE}_MEM_LIMIT`;
 
 const MUTATIONS = Object.freeze([
   [
@@ -660,6 +767,29 @@ const MUTATIONS = Object.freeze([
     'MEESHY_PASSWORD porte un nom de secret et ne déclare pas « secret: true »',
   ],
   [
+    'un mot de passe INCONNU arrive avec un repli publié dans un fichier qui déploie',
+    (world) => {
+      const target = fileNamed(world, 'docker-compose.prod.yml');
+      target.substitutions = [
+        ...target.substitutions,
+        { line: 1, name: TEMOIN_SECRET, form: ':-', message: 'MotDePassePublieDansLeDepot' },
+      ];
+      return world;
+    },
+    `${TEMOIN_SECRET} porte un repli PUBLIÉ`,
+  ],
+  [
+    "une defaut-acceptable de forme secret n'est pas protégée par sa classe",
+    (world) => {
+      const target = fileNamed(world, 'docker-compose.prod.yml');
+      target.substitutions = target.substitutions.map((s) =>
+        s.name === 'ATTACHMENT_MASTER_KEY' ? { ...s, form: ':-', message: 'ZGV2LWF0dGFjaG1lbnQta2V5' } : s,
+      );
+      return world;
+    },
+    'ATTACHMENT_MASTER_KEY porte un repli PUBLIÉ',
+  ],
+  [
     'un compose INCONNU arrive avec une substitution nue et hérite de la règle stricte',
     (world) => {
       world.files = [
@@ -676,6 +806,82 @@ const MUTATIONS = Object.freeze([
   ],
 ]);
 
+/**
+ * LES MUTATIONS QUI DOIVENT RESTER MUETTES [#4548]
+ *
+ * Une garde ne se prouve pas seulement par ce qu'elle attrape. La règle des
+ * replis publiés a un versant exactement aussi coûteux : les 193 replis des
+ * quatre compositions sont, à UN près, légitimes. Une règle « tout repli est
+ * suspect » aurait fait rougir des ports, des noms d'image, des tailles, des
+ * préférences de langue et `DOMAIN` quarante-deux fois — elle aurait été
+ * retirée dans la semaine, et le défaut serait revenu avec elle.
+ *
+ * Ces mutations injectent donc des replis LÉGITIMES et exigent le SILENCE, une
+ * par famille mesurée dans l'arbre : un réglage d'exploitation, un secret
+ * déclaré ABSENT par un repli vide, un secret de développement dans un fichier
+ * qui ne déploie pas, une valeur publique par conception dédouanée dans la
+ * table.
+ *
+ * Chacune vérifie d'abord que son injection a bien ATTERRI : un témoin muet
+ * dont la mutation ne s'applique pas serait vert pour la pire des raisons, et
+ * ce dépôt a déjà payé le prix d'un cliquet qui ment.
+ */
+const MUTATIONS_MUETTES = Object.freeze([
+  [
+    "un réglage d'exploitation garde son repli en déploiement",
+    (world) => {
+      const target = fileNamed(world, 'docker-compose.prod.yml');
+      target.substitutions = [...target.substitutions, { line: 1, name: TEMOIN_LIBRE, form: ':-', message: '8g' }];
+      return world;
+    },
+    TEMOIN_LIBRE,
+  ],
+  [
+    'un repli VIDE sur un nom de secret ne publie rien',
+    (world) => {
+      const target = fileNamed(world, 'docker-compose.prod.yml');
+      target.substitutions = [...target.substitutions, { line: 1, name: TEMOIN_SECRET, form: ':-', message: '' }];
+      return world;
+    },
+    TEMOIN_SECRET,
+  ],
+  [
+    "un secret de développement garde son repli dans un fichier qui NE déploie PAS",
+    (world) => {
+      const target = fileNamed(world, 'docker-compose.dev.yml');
+      target.substitutions = [
+        ...target.substitutions,
+        { line: 1, name: TEMOIN_SECRET, form: ':-', message: 'dev-secret-vrai-et-assume' },
+      ];
+      return world;
+    },
+    TEMOIN_SECRET,
+  ],
+  [
+    'une valeur publique par conception se dédouane par « secret: false »',
+    (world) => {
+      world.classification = {
+        ...world.classification,
+        [TEMOIN_SECRET]: {
+          classe: DEFAUT_ACCEPTABLE,
+          secret: false,
+          raison: 'Valeur publique par conception, injectée par le self-test.',
+        },
+      };
+      const target = fileNamed(world, 'docker-compose.prod.yml');
+      target.substitutions = [
+        ...target.substitutions,
+        { line: 1, name: TEMOIN_SECRET, form: ':-', message: 'AIzaSyValeurPubliqueParConception' },
+      ];
+      return world;
+    },
+    TEMOIN_SECRET,
+  ],
+]);
+
+const mondeNomme = (world, name) =>
+  world.files.some((file) => file.substitutions.some((substitution) => substitution.name === name));
+
 const selfTest = (world) => {
   const blind = MUTATIONS.filter(
     ([, apply, expected]) => !inspect(mutate(world, apply)).some((failure) => failure.includes(expected)),
@@ -683,11 +889,28 @@ const selfTest = (world) => {
   blind.forEach(([title, , expected]) =>
     console.error(`AVEUGLE : « ${title} » n'a produit aucun échec contenant « ${expected} »`),
   );
-  if (blind.length > 0) {
-    console.error(`\n${blind.length}/${MUTATIONS.length} mutations passent sous le garde.`);
+  const bavardes = MUTATIONS_MUETTES.map(([titre, apply, nom]) => {
+    const mute = mutate(world, apply);
+    if (!mondeNomme(mute, nom)) {
+      return [titre, nom, [`la mutation n'a rien injecté — ce témoin serait vert sans rien prouver.`]];
+    }
+    return [titre, nom, inspect(mute).filter((failure) => failure.includes(nom))];
+  }).filter(([, , echecs]) => echecs.length > 0);
+
+  bavardes.forEach(([titre, nom, echecs]) =>
+    console.error(`TROP LARGE : « ${titre} » a rougi sur ${nom}\n${echecs.join('\n')}`),
+  );
+
+  if (blind.length + bavardes.length > 0) {
+    if (blind.length > 0) console.error(`\n${blind.length}/${MUTATIONS.length} mutations passent sous le garde.`);
+    if (bavardes.length > 0)
+      console.error(`\n${bavardes.length}/${MUTATIONS_MUETTES.length} replis légitimes ont rougi — la règle est TROP LARGE.`);
     return 1;
   }
-  console.log(`self-test : ${MUTATIONS.length}/${MUTATIONS.length} mutations détectées.`);
+  console.log(
+    `self-test : ${MUTATIONS.length}/${MUTATIONS.length} mutations détectées, ` +
+      `${MUTATIONS_MUETTES.length}/${MUTATIONS_MUETTES.length} replis légitimes restés muets.`,
+  );
   return 0;
 };
 

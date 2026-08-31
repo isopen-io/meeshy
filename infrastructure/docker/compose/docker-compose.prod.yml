@@ -81,7 +81,7 @@ services:
     container_name: meeshy-nosqlclient
     restart: unless-stopped
     environment:
-      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD:-MeeshyPassword123}@database:27017/${MONGODB_DATABASE:-meeshy}?authSource=admin"
+      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD:?MONGODB_PASSWORD absente sur l hote. Vide, nosqlclient se connectait a la base avec le mot de passe public MeeshyPassword123}@database:27017/${MONGODB_DATABASE:-meeshy}?authSource=admin"
       ROOT_URL: "https://mongo.${DOMAIN:-localhost}"
       PORT: 3000
     depends_on:
