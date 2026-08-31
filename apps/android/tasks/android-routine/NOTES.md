@@ -2851,3 +2851,34 @@ Lessons:
 - A cheap guard against re-doing a merged slice: for any candidate, `grep -rl <TypeName>` under `apps/android`
   BEFORE designing it. Here `NotificationTypeToggle`, `NotificationFilterCategory` and the toast dedup window all
   already existed — the whole §M notification area is done through #4493.
+
+## 2026-08-31 — AGP 8.13 wants `android-37`, the SDK only publishes `android-37.0` → local gate is CI-only (slice `conversation-stats-client-fallback`)
+The container's manual SDK bootstrap (cmdline-tools 11076708 AND the newer 13114758, `build-tools;35.0.0`,
+`platforms;android-37.0`) could NOT run any Gradle task: **`Failed to find target with hash string 'android-37'`**.
+AGP 8.13.0 maps `compileSdk = 37` to the bare hash `android-37`, but since the minor-SDK releases (36.1, 37.0,
+37.1…) the API-37 platform is published ONLY as the minor-versioned `platforms;android-37.0` (`sdkmanager
+"platforms;android-37"` → "Failed to find package"). None of these bridged it: a symlink `android-37 → android-37.0`
+("Observed package id … in inconsistent location"); a path-patched copy (`<localPackage path>` + `<api-level>` →
+37, offline so nothing reinstalls — AGP simply doesn't list it); a fresh reinstall via newer cmdline-tools.
+- **CI still resolves it** — `.github/workflows/android.yml` uses `android-actions/setup-android@v4`, and `main`
+  is green on this exact AGP, so the merge gate is real; only the CONTAINER's manual toolchain is the problem.
+  This is precisely ROUTINE §"CI reality": local gate unavailable ⇒ push, open the PR, the **Android** check is
+  the compiler. Don't burn a run trying to out-hack the platform table — verify by adversarial diff-read + CI.
+- A prior run (`notification-center-category-filter`) DID build locally via an `android-37 → android-37.0`
+  symlink; that was before `main` moved ~780 commits. If AGP or the SDK snapshot bumped since, the symlink trick
+  is dead — reach for CI, not another sed of `package.xml`.
+
+## 2026-08-31 — server-first with a client fallback is the stats-dashboard shape of cache-first (slice `conversation-stats-client-fallback`)
+The pattern that unlocked a whole maturity arm: **a screen fed by a server aggregation should compute the same
+figures from the data it ALREADY holds, project BOTH through one path, and keep the local snapshot when the
+network fails.** iOS does this implicitly (`serverStats?.x ?? clientComputed.x`); Android had server-only and
+blanked to an error on `NetworkResult.Failure`. The elegant port: `clientComputed(...)` returns the SAME
+`ConversationMessageStatsResponse` the server does, so the existing `project()` renders either — no divergent
+render path, and the failure branch is a one-liner (`if (fallback != null) keep else error`).
+- **A single richer input beats twin inputs.** The ViewModel took `List<String>` (sentiment only); the fallback
+  needs sender/attachments/day too. Rather than pass both a string list AND a message list (divergent twins),
+  the load signature became one `List<ClientStatMessage>` and sentiment derives from `it.content`.
+- **Grouping keys expose data-shape gaps.** iOS groups participants by display name (two "Sam"s merge); keying
+  by id is a free SOTA win in the pure port. But the Android bubble layer carries NO author id and NO video
+  flag — so the `BubbleContent → ClientStatMessage` mapper coarsens (own→`__me__`, video→image). Keep such
+  coarsening in the WIRING mapper, never in the pure core, and document it: the server split stays authoritative.

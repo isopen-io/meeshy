@@ -3154,6 +3154,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       it survives a fetch failure); `ConversationStatsSheet` renders the three emoji/percent columns
       + a segmented success/warning/error bar. Strings en/fr/es/pt. Box now `[x]`. (The `AI
       participant persona` box below, same `/analysis` endpoint, shipped separately 2026-08-22.)
+      **Client-side fallback landed 2026-08-31** (slice `conversation-stats-client-fallback`) — the
+      dashboard was SERVER-ONLY: a failed/lagging `/stats` fetch showed an error screen even though the
+      loaded page already holds the messages to compute the same figures (iOS's `clientComputed*`
+      fallback). New pure `ConversationStatsProjection.clientComputed(...)` (+ `ClientStatMessage` /
+      `ClientAttachmentKind`) reduces the on-screen messages into the SAME `ConversationMessageStatsResponse`
+      the server returns — messages, words, characters, content-type counts, per-participant shares
+      (grouped by **id**, SOTA over iOS's group-by-display-name), and per-day activity — so a single
+      projection path renders either source. The ViewModel now seeds the sheet from that snapshot
+      INSTANTLY (cache-first, no spinner) and, on a fetch failure, KEEPS it instead of erroring
+      (offline graceful degradation). `BubbleContent → ClientStatMessage` mapping extracted to its own
+      file (a video thumbnail folds into the IMAGE tally — the bubble layer carries no video/author-id;
+      the server split stays authoritative). Matures dimensions 2/8/13 (performance, UX offline, complétude).
 - [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
       `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
       orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
