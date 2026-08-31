@@ -42,6 +42,13 @@ type HookOptions = {
   audioUrl?: string;
   attachmentId?: string;
   isOwnMessage?: boolean;
+  consumedLanguage?: string | null;
+  consumption?: {
+    lastPlayPositionMs: number | null;
+    listenedComplete: boolean;
+    lastWatchPositionMs: number | null;
+    watchedComplete: boolean;
+  } | null;
 };
 
 function makeOptions(overrides: HookOptions = {}) {
@@ -116,5 +123,47 @@ describe('useAudioPlayback — trackConsumption', () => {
       hookRef.current!.handleEnded();
     });
     expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── #3909 / #3911 / #3913 — le vocal aussi ──────────────────────────────────
+//
+// Les temoins riches vivent sur `use-video-playback.test.tsx` : les deux hooks
+// partagent `useMediaConsumptionReporter`, et y dupliquer douze cas mesurerait
+// deux fois le meme code. Ce qui doit etre epingle ICI est ce que le partage ne
+// prouve pas : que le lecteur AUDIO est bien cable dessus, avec sa propre
+// action et sa propre langue.
+
+describe('useAudioPlayback — cablage du rapport de consommation', () => {
+  beforeEach(() => {
+    mockApiPost.mockClear();
+  });
+
+  it('un demontage EN LECTURE envoie la portion ecoutee (#3911)', async () => {
+    const { hookRef, unmount } = renderHook(makeOptions({ consumedLanguage: 'de' }));
+
+    act(() => { hookRef.current!.handleSeekToTime(0); });
+    await act(async () => { unmount(); });
+
+    // Aucune lecture ouverte, aucune position : rien a dire, donc rien envoye.
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('la langue de la piste JOUEE part avec le rapport (#3913)', () => {
+    const { hookRef } = renderHook(makeOptions({ consumedLanguage: 'de' }));
+    act(() => { hookRef.current!.handleEnded(); });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/v1/attachments/att-audio-001/status',
+      expect.objectContaining({ action: 'listened', complete: true, language: 'de' }),
+    );
+  });
+
+  it('sans piste traduite, aucune langue n est inventee', () => {
+    const { hookRef } = renderHook(makeOptions());
+    act(() => { hookRef.current!.handleEnded(); });
+
+    const corps = mockApiPost.mock.calls[0][1];
+    expect(corps).not.toHaveProperty('language');
   });
 });

@@ -45,6 +45,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     mimeType: attachment.mimeType,
     attachmentId: attachment.id,
     isOwnMessage,
+    // #3909 — ce que le serveur sait déjà de ce visionnage. Servi depuis
+    // toujours par `GET /conversations/:id/messages`, et jamais lu.
+    consumption: attachment.currentUserConsumption,
   });
 
   const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef as React.RefObject<HTMLDivElement>);

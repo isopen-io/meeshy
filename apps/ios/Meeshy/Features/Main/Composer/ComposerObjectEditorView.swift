@@ -356,7 +356,7 @@ struct ComposerObjectEditorView: View {
     private func apply(_ nouveau: ComposerObjectTiming) {
         guard let binding = viewModel.textObjectBinding(for: objectId) else { return }
         var objet = binding.wrappedValue
-        objet.startTime = nouveau.start
+        objet.startTime = nouveau.storedStartTime
         objet.duration = nouveau.storedDuration
         binding.wrappedValue = objet
     }

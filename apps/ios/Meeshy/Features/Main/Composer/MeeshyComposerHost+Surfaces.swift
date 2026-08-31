@@ -507,7 +507,25 @@ extension MeeshyComposerHost {
             },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
-            onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
+            //
+            // **Sauf quand l'éditeur PLEIN ÉCRAN est monté** (#4634, défaut
+            // mesuré au simulateur le 2026-09-01). Présenter un
+            // `fullScreenCover` fait perdre le premier répondant au canvas de
+            // CETTE surface, qui annonce donc une fin de saisie qu'aucun doigt
+            // n'a demandée — et `exitTextEditingMode` supprime alors la coquille
+            // encore vide que la porte TEXTE vient de poser. L'éditeur
+            // s'ouvrait sur un objet DÉJÀ détruit : aucune section, aucun
+            // clavier, et « Terminé » ne rendait rien.
+            //
+            // > Un événement de PRÉSENTATION ressemble, au bout du câble, à un
+            // > geste de l'utilisateur. La garde ne porte donc pas sur ce que
+            // > l'événement DIT, mais sur qui possède l'édition à cet instant :
+            // > tant que l'écran plein est monté, c'est lui, et la surface du
+            // > dessous n'a pas à conclure quoi que ce soit.
+            onInlineTextEditEnded: { _ in
+                guard editedObject == nil else { return }
+                viewModel.exitTextEditingMode()
+            },
             // **La bande n'existe que pendant l'édition ET avec des personnes à
             // proposer.** Gater sur la seule requête peindrait une bande de
             // verre vide quand aucun ami accepté ne correspond — un état

@@ -155,6 +155,13 @@ type HookOptions = {
   mimeType?: string;
   attachmentId?: string;
   isOwnMessage?: boolean;
+  consumedLanguage?: string | null;
+  consumption?: {
+    lastPlayPositionMs: number | null;
+    listenedComplete: boolean;
+    lastWatchPositionMs: number | null;
+    watchedComplete: boolean;
+  } | null;
 };
 
 function makeOptions(overrides: HookOptions = {}) {
@@ -387,8 +394,16 @@ describe('useVideoPlayback', () => {
       expect(mockMediaManagerStop).toHaveBeenCalledWith(getVideo());
     });
 
-    it('calls trackConsumption(false) when watchedMs >= 3000 and not yet tracked', async () => {
-      jest.useFakeTimers();
+    // #3913 — le seuil « >= 3 s d'horloge MURALE » a disparu.
+    //
+    // Il mesurait le temps passe, pas le media consomme : une video d'une
+    // seconde n'etait JAMAIS remontee, et une pause survenue 2,9 s apres la
+    // lecture perdait tout. Ce que le rapport doit suivre est la POSITION du
+    // media, seule grandeur que le serveur puisse recouper avec la duree — et
+    // c'est exactement le modele de `PlaybackStretchTracker` (« aucune horloge
+    // interne, aucun timer : l'appelant fournit la position media »), donc
+    // celui d'iOS.
+    it('rapporte des que le MEDIA a avance, quelle que soit l horloge murale', async () => {
       const { hookRef } = renderHook(makeOptions({ isOwnMessage: false }));
 
       await act(async () => {
@@ -396,69 +411,50 @@ describe('useVideoPlayback', () => {
       });
       expect(hookRef.current!.isPlaying).toBe(true);
 
-      // Advance time 3+ seconds
-      act(() => {
-        jest.advanceTimersByTime(3500);
-      });
+      // Une demi-seconde de VIDEO — sous l'ancien seuil de 3 s, donc perdue.
+      videoState.currentTime = 0.5;
 
-      // Now pause
       await act(async () => {
         await hookRef.current!.togglePlay();
       });
 
       expect(mockApiPost).toHaveBeenCalledWith(
         '/api/v1/attachments/att-001/status',
-        expect.objectContaining({ action: 'watched', complete: false }),
+        expect.objectContaining({ action: 'watched', complete: false, playPositionMs: 500 }),
       );
-      jest.useRealTimers();
     });
 
-    it('does NOT call trackConsumption when watchedMs < 3000', async () => {
-      jest.useFakeTimers();
+    it('ne rapporte RIEN quand le media n a pas avance', async () => {
       const { hookRef } = renderHook(makeOptions({ isOwnMessage: false }));
 
       await act(async () => {
         await hookRef.current!.togglePlay();
       });
-
-      // Only 1 second watched
-      act(() => { jest.advanceTimersByTime(1000); });
-
+      // `currentTime` reste a 0 : rien n'a ete consomme, meme si du temps a passe.
       await act(async () => {
         await hookRef.current!.togglePlay();
       });
 
       expect(mockApiPost).not.toHaveBeenCalled();
-      jest.useRealTimers();
     });
 
-    it('does NOT call trackConsumption when already tracked', async () => {
-      jest.useFakeTimers();
+    it('rapporte a CHAQUE pause — la garde ne vaut que pour la completion', async () => {
       const { hookRef } = renderHook(makeOptions({ isOwnMessage: false }));
 
-      await act(async () => {
-        await hookRef.current!.togglePlay();
-      });
-      act(() => { jest.advanceTimersByTime(4000); });
-
-      // First pause (should track)
+      await act(async () => { await hookRef.current!.togglePlay(); });
+      videoState.currentTime = 4;
       await act(async () => { await hookRef.current!.togglePlay(); });
       expect(mockApiPost).toHaveBeenCalledTimes(1);
       mockApiPost.mockClear();
 
-      // Play again
       await act(async () => { await hookRef.current!.togglePlay(); });
-      act(() => { jest.advanceTimersByTime(4000); });
+      videoState.currentTime = 8;
+      await act(async () => { await hookRef.current!.togglePlay(); });
 
-      // Second pause: hasTrackedCompletionRef is reset per attachmentId, NOT between plays
-      // so this WILL track again (ref only reset on attachmentId change)
-      await act(async () => { await hookRef.current!.togglePlay(); });
-      // trackConsumption only skipped if hasTrackedCompletionRef.current=true
-      // It was set to true only by handleEnded, not by trackConsumption(false)
-      // So a second pause CAN call trackConsumption(false) again
+      // `hasTrackedCompletionRef` n'est pose que par `handleEnded` : une
+      // seconde pause rapporte a nouveau, et c'est voulu — chaque pause est
+      // une frontiere, donc un segment.
       expect(mockApiPost).toHaveBeenCalledTimes(1);
-
-      jest.useRealTimers();
     });
   });
 
@@ -1113,5 +1109,161 @@ describe('useVideoPlayback', () => {
       act(() => { hookRef.current!.handleEnded(); });
       expect(mockApiPost).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ── #3909 / #3911 / #3913 — ce que le web SAIT d'une lecture ────────────────
+//
+// `PlaybackStretchTracker` existait, teste, avec son jumeau Swift et un
+// doc-comment les declarant miroirs. AUCUN lecteur web ne l'appelait : le
+// defaut n'etait pas du code manquant mais un CABLAGE manquant, et c'est ce qui
+// rendait les trois defauts solidaires.
+
+describe('reprise de lecture (#3909)', () => {
+  it('ouvre a la position SERVIE, pas a zero', async () => {
+    const { hookRef } = renderHook(makeOptions({
+      consumption: {
+        lastPlayPositionMs: null,
+        listenedComplete: false,
+        lastWatchPositionMs: 42_000,
+        watchedComplete: false,
+      },
+    }));
+
+    await waitFor(() => expect(hookRef.current!.currentTime).toBe(42));
+    expect(getVideo().currentTime).toBe(42);
+  });
+
+  it('ne reprend PAS une video deja vue en entier', async () => {
+    // Reprendre a trois secondes de la fin fait rejouer un generique.
+    const { hookRef } = renderHook(makeOptions({
+      consumption: {
+        lastPlayPositionMs: null,
+        listenedComplete: false,
+        lastWatchPositionMs: 118_000,
+        watchedComplete: true,
+      },
+    }));
+
+    await waitFor(() => expect(hookRef.current).not.toBeNull());
+    expect(hookRef.current!.currentTime).toBe(0);
+  });
+
+  it('ne reprend pas sous la seconde — indiscernable de zero, et surprenant', async () => {
+    const { hookRef } = renderHook(makeOptions({
+      consumption: {
+        lastPlayPositionMs: null,
+        listenedComplete: false,
+        lastWatchPositionMs: 400,
+        watchedComplete: false,
+      },
+    }));
+
+    await waitFor(() => expect(hookRef.current).not.toBeNull());
+    expect(hookRef.current!.currentTime).toBe(0);
+  });
+});
+
+describe('cloture au demontage (#3911)', () => {
+  it('un demontage EN LECTURE envoie la portion vue, il ne la perd pas', async () => {
+    // Le cas reel : la liste de messages est virtualisee, et faire defiler une
+    // bulle en cours de lecture hors de la fenetre de rendu la DEMONTE.
+    const { hookRef, unmount } = renderHook(makeOptions());
+
+    await act(async () => { await hookRef.current!.togglePlay(); });
+    videoState.currentTime = 12;
+    mockApiPost.mockClear();
+
+    await act(async () => { unmount(); });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/v1/attachments/att-001/status',
+      expect.objectContaining({ action: 'watched', complete: false, playPositionMs: 12_000 }),
+    );
+  });
+
+  it('lit la position AVANT que le lecteur ne remette la source a zero', async () => {
+    // Le nettoyage du lecteur finit par `removeAttribute('src')` + `load()`.
+    // Un rapport pose apres lui rapporterait 0 a chaque demontage : un envoi
+    // parfaitement ponctuel, et parfaitement faux.
+    const { hookRef, unmount } = renderHook(makeOptions());
+
+    await act(async () => { await hookRef.current!.togglePlay(); });
+    videoState.currentTime = 7.5;
+    mockApiPost.mockClear();
+
+    await act(async () => { unmount(); });
+
+    const corps = mockApiPost.mock.calls[0][1];
+    expect(corps.playPositionMs).toBe(7500);
+    expect(corps.playPositionMs).not.toBe(0);
+  });
+
+  it('un demontage sans lecture n envoie rien', async () => {
+    const { unmount } = renderHook(makeOptions());
+    mockApiPost.mockClear();
+    await act(async () => { unmount(); });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('trace de segments et langue (#3913)', () => {
+  it('envoie les SEGMENTS, pas seulement une position', async () => {
+    const { hookRef } = renderHook(makeOptions({ consumedLanguage: 'es' }));
+
+    await act(async () => { await hookRef.current!.togglePlay(); });
+    videoState.currentTime = 9;
+    await act(async () => { await hookRef.current!.togglePlay(); });
+
+    const corps = mockApiPost.mock.calls[0][1];
+    expect(corps.stretches).toEqual([{ startMs: 0, endMs: 9000, endedBy: 'pause' }]);
+    expect(corps.language).toBe('es');
+  });
+
+  it('un deplacement du curseur coupe le segment et en ouvre un autre', async () => {
+    const { hookRef } = renderHook(makeOptions());
+
+    await act(async () => { await hookRef.current!.togglePlay(); });
+    videoState.currentTime = 4;
+    act(() => { hookRef.current!.handleSeek(30); });
+    videoState.currentTime = 33;
+    await act(async () => { await hookRef.current!.togglePlay(); });
+
+    const corps = mockApiPost.mock.calls[0][1];
+    // Chronologique, et MOTIVE : la frontiere dit pourquoi elle est la.
+    expect(corps.stretches).toEqual([
+      { startMs: 0, endMs: 4000, endedBy: 'seek' },
+      { startMs: 30_000, endMs: 33_000, endedBy: 'pause' },
+    ]);
+  });
+
+  it('changer de piste CLOT le rapport de la piste quittee', async () => {
+    // Le meme mecanisme que le demontage : ce qu'on regardait cesse d'etre ce
+    // qu'on regarde. Une seule cle d'effet couvre les deux.
+    const hookRef = React.createRef() as React.MutableRefObject<HookResult | null>;
+    const { rerender } = render(
+      <TestComponent options={makeOptions()} hookRef={hookRef} />,
+    );
+
+    await act(async () => { await hookRef.current!.togglePlay(); });
+    videoState.currentTime = 15;
+    mockApiPost.mockClear();
+
+    await act(async () => {
+      rerender(
+        <TestComponent
+          options={makeOptions({ fileUrl: 'https://example.com/video-es.mp4' })}
+          hookRef={hookRef}
+        />,
+      );
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/v1/attachments/att-001/status',
+      expect.objectContaining({
+        playPositionMs: 15_000,
+        stretches: [{ startMs: 0, endMs: 15_000, endedBy: 'dismissed' }],
+      }),
+    );
   });
 });
