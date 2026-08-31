@@ -352,7 +352,13 @@ extension MeeshyComposerHost {
                     documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
                 }
             ),
-            title: "Langue du post"
+            // L'IDENTIFIANT, pas la phrase (#4621) : `"Langue du post"` était une
+            // clé-PHRASE, retirée du catalogue quand les soixante et une phrases
+            // françaises ont cessé de servir de clé. La feuille affichait donc sa
+            // clé brute, en français, dans les sept locales. Le défaut était déjà
+            // nommé douze lignes plus bas dans `ComposerDocumentRules.language` :
+            // « sa clé contient des espaces et échappe au cliquet français ».
+            title: "feed.post.language"
         )
     }
 

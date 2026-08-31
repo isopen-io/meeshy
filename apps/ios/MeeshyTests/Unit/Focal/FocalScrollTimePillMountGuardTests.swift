@@ -10,14 +10,33 @@ import XCTest
 /// Linux (R5).
 final class FocalScrollTimePillMountGuardTests: XCTestCase {
 
+    /// **L'UNITÉ du type, jamais son fichier.**
+    ///
+    /// Les invariants ci-dessous portent sur `MessageListViewController` —
+    /// « son timer de suivi de lecture porte le tick de la pilule », « il n'en
+    /// construit pas un troisième ». Une EXTRACTION les fait franchir une
+    /// frontière que la loi ne connaît pas : sortir le cluster de suivi vers
+    /// `MessageListViewController+SeenTracking.swift` (#3947) a fait tomber
+    /// `startSeenTracking` d'un côté et laissé la garde de l'autre, qui
+    /// rougissait en annonçant la disparition d'une méthode toujours là.
+    ///
+    /// La source lue est donc la CONCATÉNATION des fichiers du type. Ajouter
+    /// une extension à cette liste est le geste attendu ; l'oublier fait
+    /// rougir la garde, ce qui est exactement le bon sens de panne.
+    private static let unitFiles = [
+        "Meeshy/Features/Main/Views/MessageListViewController.swift",
+        "Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
+    ]
+
     private func source() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Focal
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try Self.unitFiles
+            .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func strippedSource() throws -> String {
@@ -154,16 +173,17 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
     }
 
     /// Égalité de compte, pas seulement présence (leçon 257) : exactement
-    /// DEUX constructions `Timer(` dans tout le fichier — les DEUX
-    /// préexistantes (`reconfigureDebounceTimer`, `seenTimer`). Un TROISIÈME
-    /// `Timer(` ferait échouer ce test, signalant qu'un observateur neuf a
-    /// été introduit pour la pilule, contrairement à l'arbitrage.
+    /// DEUX constructions `Timer(` dans tout le TYPE — les DEUX préexistantes
+    /// (`reconfigureDebounceTimer` dans l'hôte, `seenTimer` dans l'extension
+    /// de suivi depuis #3947). Un TROISIÈME `Timer(` ferait échouer ce test,
+    /// signalant qu'un observateur neuf a été introduit pour la pilule,
+    /// contrairement à l'arbitrage.
     func test_noNewTimerIntroduced_forThePill() throws {
         let code = try strippedSource()
         let occurrences = code.components(separatedBy: "Timer(").count - 1
         XCTAssertEqual(
             occurrences, 2,
-            "MessageListViewController.swift construit \(occurrences) `Timer(...)` — exactement DEUX sont attendus (le debounce de reconfigure, et le suivi de lecture RÉUTILISÉ par la pilule). Un troisième signalerait un observateur neuf pour la pilule, contraire à l'arbitrage F-086bis."
+            "MessageListViewController (hôte + extensions) construit \(occurrences) `Timer(...)` — exactement DEUX sont attendus (le debounce de reconfigure, et le suivi de lecture RÉUTILISÉ par la pilule). Un troisième signalerait un observateur neuf pour la pilule, contraire à l'arbitrage F-086bis."
         )
     }
 

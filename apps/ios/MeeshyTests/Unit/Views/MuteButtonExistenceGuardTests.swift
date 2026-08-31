@@ -85,6 +85,16 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         XCTAssertEqual(BackgroundSoundBadge.muteIconName(isMuted: false), "speaker.wave.2.fill")
     }
 
+    /// Les trois gardes ci-dessous portent sur `ReelVideoView`, sorti vers
+    /// `ReelsPlayerView+Video.swift` par la découpe #4628. Lire l'UNITÉ du
+    /// type, jamais un seul de ses fichiers.
+    private func reelsPlayerUnit() throws -> String {
+        try [
+            "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
+        ].map { try source($0) }.joined(separator: "\n")
+    }
+
     // MARK: - Câblage : les surfaces neuves réutilisent le prédicat PARTAGÉ, jamais un `!= .none` recopié
     //
     // Correctif revue (constat mineur #10) : la forme QUALIFIÉE seulement —
@@ -96,6 +106,10 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/PostDetailView.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            // Le cluster vidéo vit ici depuis la découpe #4628 : une garde
+            // NÉGATIVE qui ne le lit pas cesse silencieusement de protéger la
+            // moitié de la surface qu'elle nomme.
+            "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
         ]
         for path in surfaces {
             let text = try source(path)
@@ -501,7 +515,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// présence prouvait le défaut du commit rejeté (supprimer les
     /// `.toggle()` laissait l'ancienne garde de 17 tests verte).
     func test_reelsPlayerView_decorativeMuteState_isRemoved() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try reelsPlayerUnit()
         XCTAssertFalse(
             text.contains("isBackgroundSoundMuted"),
             "L'état muet local sans consommateur doit être retiré — remplacé par la lecture " +
@@ -510,7 +524,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     }
 
     func test_reelsPlayerView_muteState_isLocalNotGlobal() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try reelsPlayerUnit()
         XCTAssertFalse(
             text.contains("isGlobalMuted"),
             "Le réel ne doit JAMAIS référencer le muet global du viewer story."
@@ -523,7 +537,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// toucher à cette réaffirmation, sous peine de la faire fuiter en dehors
     /// de son passage et de re-museler le réel après un tap utilisateur.
     func test_reelsPlayerView_nativeAudioAlwaysOnInvariant_notDisturbed() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let text = try reelsPlayerUnit()
         XCTAssertTrue(
             text.contains("manager.isMuted = false"),
             "L'invariant « le viewer plein écran joue TOUJOURS avec le son natif » " +

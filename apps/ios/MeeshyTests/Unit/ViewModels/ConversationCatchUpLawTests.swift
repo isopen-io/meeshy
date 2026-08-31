@@ -137,8 +137,13 @@ final class ConversationCatchUpLawTests: XCTestCase {
     /// qu'elle attend. Trois maillons, trois assertions — c'est la leçon du
     /// dépôt sur les correctifs dont la valeur n'atteint aucun lecteur.
     func test_theVisibleFactTravelsFromTheListToTheLaw() throws {
-        let controller = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Views/MessageListViewController.swift")
+        // L'UNITÉ du type : `visibleServerMessageIds()` et son site d'appel
+        // vivent dans l'extension de suivi de lecture depuis #3947, sortie de
+        // l'hôte pour le ramener sous le budget de taille.
+        let controller = try [
+            "Meeshy/Features/Main/Views/MessageListViewController.swift",
+            "Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
+        ].map { try MyStoriesSourceCorpus.text(of: $0) }.joined(separator: "\n")
         let view = try MyStoriesSourceCorpus.text(
             of: "Meeshy/Features/Main/Views/ConversationView.swift")
         let model = try MyStoriesSourceCorpus.text(
