@@ -8,11 +8,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import java.util.concurrent.CancellationException
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -27,6 +32,7 @@ class ReelsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val clock: CacheClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelsUiState())
@@ -38,6 +44,16 @@ class ReelsViewModel @Inject constructor(
      * something the UI renders.
      */
     private var currentReelId: String? = null
+
+    /**
+     * Dwell bookkeeping for the reels surface. Held outside [_state] (like
+     * [currentReelId]) because it is an analytics cursor, not something the UI
+     * renders. The pure [EngagementSessions] machine owns the *how* (monotonic
+     * dwell, qualification); this ViewModel owns the *when* — begin on settle,
+     * end on the next settle or on leaving — and where the qualified view is
+     * reported (`posts/{id}/view`).
+     */
+    private var sessions = EngagementSessions()
 
     init {
         observeRealtime()
@@ -72,13 +88,47 @@ class ReelsViewModel @Inject constructor(
      * Idempotent, and safe to call on every settle: re-passing the same id is a no-op, and a blank
      * or absent id (an empty thread, a page index past the end) simply leaves the current room
      * without joining another.
+     *
+     * It also drives the dwell session: the reel we scroll away from is ended (a
+     * qualified view — dwelt ≥ [EngagementSessions.MIN_DWELL_MS] — records its
+     * duration), and the reel we land on begins a fresh one. Passing `null` (the
+     * pager left, or ran past the end) therefore also closes the last session, so
+     * a screen-dispose that calls `setCurrentReel(null)` needs no separate path.
      */
     fun setCurrentReel(reelId: String?) {
         val next = reelId?.takeIf { it.isNotBlank() }
         if (next == currentReelId) return
         currentReelId?.let { socialSocket.leavePostRoom(it) }
+        endReelSession()
         currentReelId = next
-        next?.let { socialSocket.joinPostRoom(it) }
+        next?.let {
+            socialSocket.joinPostRoom(it)
+            sessions = sessions.begin(EngagementSurface.REELS, it, clock.nowMillis())
+        }
+    }
+
+    private fun endReelSession() {
+        val (next, view) = sessions.end(EngagementSurface.REELS, clock.nowMillis())
+        sessions = next
+        view?.let { recordDwellView(it) }
+    }
+
+    /**
+     * Best-effort dwell-aware view record (`posts/{id}/view` with its measured
+     * duration) — the reels surface has no other view metric today, so this is
+     * purely additive. Fire-and-forget, matching the feed/detail view records:
+     * a failure is analytics the reader should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches the feed/detail `try?` view records
+            }
+        }
     }
 
     /** Leaves the post room the pager was sitting in, so a closed viewer stops receiving its events. */

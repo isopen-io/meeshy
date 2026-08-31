@@ -5,6 +5,31 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-31 — a big iOS subsystem can yield a clean one-phase slice if you port the pure HEART and wire ONE surface to a sink that already exists (slice `reels-engagement-dwell`)
+iOS's engagement stack (`EngagementTracker` + `EngagementDispatcher` + `EngagementOutbox` + `EngagementModels`,
+plus a `POST /posts/engagement/batch` endpoint and a durable SQLite outbox) looks far too big for one phase.
+The landable slice was: (1) port only the pure BOOKKEEPING (`EngagementTracker`'s dwell math, topmost-owns-the-
+clock, qualification) as an immutable `:core:model` value type — the outbox/dispatcher/models are I/O and can
+wait; (2) wire exactly ONE of the four surfaces (reels), reusing an EXISTING sink. The sink was the key
+de-risker: `PostRepository.viewPost(id, duration)` already documented an optional dwell duration and reels had
+NO view metric, so the wiring was purely additive (no double-count, no product-semantics decision). Lessons:
+- **`EngagementSurface` is 4 SINGLE-FOCUS regions (`detail`/`reels`/`storyViewer`/`statusBubble`), NOT the feed.**
+  I nearly wired the scrolling feed (a LazyColumn of many concurrent posts) before reading the enum — iOS never
+  tracks dwell there. Read the surface/scope enum before designing the wiring; the granularity decides everything.
+- **Before picking the "cleanest pure core" candidate, verify its SINK is real and non-conflicting.** The dwell
+  tracker's core was beautiful, but on `PostDetail`/`Statuses` the `viewPost` sink is already called dwell-less →
+  wiring there would double-count or force a product decision (record-on-open vs record-on-close-if-qualified).
+  Reels had no existing view record → the one surface where the sink was unambiguous. The wiring target, not the
+  pure core, is where a "clean" slice is won or lost.
+- **Port the WHOLE pure contract even if one surface leaves some branches prod-dormant.** The topmost-owns-the-clock
+  stack only fires with ≥2 concurrent surfaces; reels-only wiring never nests. But omitting it would force the next
+  surface's slice to retrofit the SSOT (the "twin diverges" hazard). Unit-test the full machine now, wire surfaces
+  incrementally — same shape as `ScrollAffordance` shipping all its content variants though one screen state hits few.
+- **RED-proof a state machine by MUTATION, not just by a failing pre-impl run:** disabling `pauseTop` failed exactly
+  the 2 nesting tests; flipping the dwell floor `>=`→`>` failed exactly the 3 boundary-touching tests. Small-ms test
+  values almost hid a real bug in the TEST, not the code: dwell 8 ms never qualifies (floor 1000), so a `QualifiedView`
+  assertion on it was impossible — scale the times so the accrued dwell genuinely crosses the floor.
+
 ## 2026-08-31 — a correct pure SSOT can still be fed the WRONG input; highlight against the query that PRODUCED the results (slice `global-search-results-query`)
 The prior slice shipped `MessageTextParser.highlightedSegments` and the message row washed its content —
 looked done. But the row was called with the LIVE `state.query`, while iOS highlights against
