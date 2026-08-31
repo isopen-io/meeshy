@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -440,6 +441,28 @@ fun MeeshyApp(
         // Pas de floatingActionButton ici : ce slot positionne LUI-MEME son contenu,
         // ce qui est incompatible avec des boutons deplacables. Ils sont poses dans
         // le Box ci-dessous, par-dessus le NavHost.
+        //
+        // `contentWindowInsets` a ZERO — le Scaffold racine ne RESERVE plus les
+        // barres systeme.
+        //
+        // Par defaut il rend un padding = `systemBarsForVisualComponents`, et ce
+        // padding etait applique au NavHost ci-dessous. Il ANNULAIT
+        // `enableEdgeToEdge()` pour l'application ENTIERE : mesure sur emulateur,
+        // l'arbre etait confine a y[132..2337] px au lieu de y[0..2400], et le
+        // degrade de `MeeshyBackground` — monte SOUS le NavHost — ne pouvait plus
+        // atteindre les barres. Les bandes plates en haut et en bas de l'ecran
+        // etaient ce `containerColor`, pas le fond de la marque.
+        //
+        // Pire, en cascade : `Modifier.padding(PaddingValues)` ne CONSOMME pas les
+        // insets (seuls `windowInsetsPadding` et `consumeWindowInsets` le font), et
+        // le Scaffold de material3 1.3.1 n'appelle jamais `consumeWindowInsets`.
+        // Chaque `TopAppBar` en aval se croyait donc encore en edge-to-edge et
+        // REAPPLIQUAIT la barre de statut par-dessus la bande deja reservee : 50,3 dp
+        // de vide mort au-dessus du titre de la liste de conversations.
+        //
+        // Chaque destination porte desormais ses propres insets — c'est le contrat
+        // normal d'un Scaffold Material 3, et le seul qui laisse le fond plein ecran.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
       Box(modifier = Modifier.fillMaxSize()) {
         NavHost(

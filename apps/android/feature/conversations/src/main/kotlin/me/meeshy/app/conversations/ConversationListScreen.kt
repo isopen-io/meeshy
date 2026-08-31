@@ -163,50 +163,18 @@ fun ConversationListScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            LargeTopAppBar(
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    titleContentColor = MeeshyPalette.Indigo500,
-                    actionIconContentColor = MeeshyTheme.tokens.textSecondary,
-                ),
-                title = {
-                    Text(
-                        text = stringResource(R.string.conversations_title),
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MeeshyPalette.Indigo500,
-                    )
-                },
-                actions = {
-                    // A global "unlock all" affordance surfaces only while at least one
-                    // conversation is locked (parity iOS Settings, which offers unlock-all
-                    // contextually) — tapping it opens the master-PIN sheet that drops every
-                    // lock at once. Hidden otherwise, so the bar stays quiet in the common case.
-                    if (state.canUnlockAll) {
-                        IconButton(onClick = viewModel::onUnlockAll) {
-                            Icon(
-                                Icons.Filled.LockOpen,
-                                contentDescription = stringResource(R.string.conversations_unlock_all),
-                            )
-                        }
-                    }
-                    // Master-PIN management (parity iOS Settings → change / remove master
-                    // PIN). Surfaces only once a master PIN exists; "Remove" additionally
-                    // hides while any conversation is locked (see canRemoveMasterPin).
-                    if (state.hasMasterPin) {
-                        LockSecurityMenu(
-                            canChange = state.canChangeMasterPin,
-                            canRemove = state.canRemoveMasterPin,
-                            onChange = viewModel::onChangeMasterPin,
-                            onRemove = viewModel::onRemoveMasterPin,
-                        )
-                    }
-                    // iOS parity: search moves to the bottom bar; sign-out lives in
-                    // Settings (Danger section), so the top keeps only Contacts.
-                    IconButton(onClick = onContacts) {
-                        Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
-                    }
-                },
+            // En-tete extrait (#4600) : titre et actions sur UNE rangee, sous la
+            // barre systeme. Le `LargeTopAppBar` qu'il remplace reservait 64 dp
+            // d'une rangee vide au-dessus du titre — le vide que le porteur a vu.
+            ConversationListHeader(
+                canUnlockAll = state.canUnlockAll,
+                hasMasterPin = state.hasMasterPin,
+                canChangeMasterPin = state.canChangeMasterPin,
+                canRemoveMasterPin = state.canRemoveMasterPin,
+                onUnlockAll = viewModel::onUnlockAll,
+                onChangeMasterPin = viewModel::onChangeMasterPin,
+                onRemoveMasterPin = viewModel::onRemoveMasterPin,
+                onContacts = onContacts,
             )
         },
         bottomBar = {
@@ -340,7 +308,10 @@ fun ConversationListScreen(
  * the menu and forwards the intent. Menu-open is local UI state, closed after each pick.
  */
 @Composable
-private fun LockSecurityMenu(
+// `internal` depuis #4600 : l'en-tete vit desormais dans son propre fichier, et
+// `private` ne franchit pas cette frontiere — la meme que toute extraction fait
+// traverser, et qui ne se voit qu'a la compilation.
+internal fun LockSecurityMenu(
     canChange: Boolean,
     canRemove: Boolean,
     onChange: () -> Unit,
