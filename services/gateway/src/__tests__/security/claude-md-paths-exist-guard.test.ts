@@ -97,7 +97,27 @@ const FICHIERS = [
  * l'histoire pour faire taire un test, ce qui est exactement l'inverse du but.
  * Chaque entrée porte donc sa raison, et non un simple laissez-passer.
  */
-const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{ chemin: string; raison: string }> = [
+/**
+ * `sortieDeBuild` distingue DEUX absences que le prédicat `existsSync` confond.
+ *
+ * Une exemption ordinaire vise un fichier RETIRÉ du dépôt : si elle réapparaît,
+ * la ligne doit partir — sinon elle masque un vrai chemin. C'est la règle du
+ * troisième témoin, et elle est juste.
+ *
+ * Une sortie de BUILD, elle, existe sur toute machine qui a bâti le projet et
+ * nulle part ailleurs. Lui appliquer la même règle rend la garde ROUGE chez
+ * chaque développeur ayant lancé `tsc` une fois, et VERTE en CI — où `dist/`
+ * n'est jamais construit. Un témoin rouge en local et vert en intégration
+ * n'enseigne qu'une chose : à ne plus le lire.
+ *
+ * Le discriminant est donc porté par la DÉCLARATION, jamais déduit du chemin.
+ */
+const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{
+  chemin: string;
+  raison: string;
+  /** Le chemin désigne un artefact de compilation — sa présence ne prouve rien. */
+  sortieDeBuild?: true;
+}> = [
   {
     chemin: '__tests__/unit/socketio/MeeshySocketIOManager.presenceSnapshot.test.ts',
     raison: "cité comme « cas réel, SUPPRIMÉ au cycle 62 » — le document raconte sa suppression",
@@ -108,6 +128,7 @@ const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{ chemin: string; raison:
   },
   {
     chemin: 'dist/src/server.js',
+    sortieDeBuild: true,
     raison:
       "SORTIE DE BUILD, jamais un fichier du dépôt : la ligne citée est « `tsx watch` " +
       'for dev, `tsc` + `node dist/src/server.js` for prod », une COMMANDE de production, ' +
@@ -156,10 +177,15 @@ describe('Les chemins cités par un CLAUDE.md existent (#4455)', () => {
   });
 
   it('chaque exemption porte une RAISON — un laissez-passer nu se périme sans qu\'on le voie', () => {
-    for (const { chemin, raison } of CITATIONS_VOLONTAIREMENT_ABSENTES) {
+    for (const { chemin, raison, sortieDeBuild } of CITATIONS_VOLONTAIREMENT_ABSENTES) {
       expect(raison.length).toBeGreaterThan(20);
       // Et l'exemption ne survit pas à son objet : si le fichier réapparaît,
       // la ligne doit partir, sinon elle cache un vrai chemin.
+      //
+      // Sauf pour une SORTIE DE BUILD, dont la présence ne dit rien du dépôt :
+      // elle mesure seulement si CETTE machine a compilé. Voir le doc-comment
+      // de `CITATIONS_VOLONTAIREMENT_ABSENTES`.
+      if (sortieDeBuild) continue;
       expect(existsSync(join(RACINE, 'services/gateway', chemin))).toBe(false);
     }
   });
