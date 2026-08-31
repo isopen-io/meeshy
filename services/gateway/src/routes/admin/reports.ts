@@ -37,6 +37,37 @@ const updateReportSchema = z.object({
   actionTaken: z.enum(['none', 'warning_sent', 'content_removed', 'user_suspended', 'user_banned']).optional()
 });
 
+/**
+ * Les clés de tri que `GET /admin/reports` SERT — la liste blanche que
+ * `ReportFilters['sortBy']` (`packages/shared/types/report.ts`) déclare déjà et
+ * que la lecture `request.query as any` faisait sauter : le compilateur ne
+ * voyait plus le contrat, et `orderBy[sortBy] = sortOrder`
+ * (`services/admin/report.service.ts`, unique consommateur de ces deux champs)
+ * prenait la clé du client TELLE QUELLE.
+ *
+ * Directive du 2026-08-25 : « une SÉLECTION ou un ORDRE qui dépend de la
+ * présence révèle autant que le champ ». `routes/admin/users.ts` refuse déjà
+ * `isOnline`/`lastActiveAt` comme clé de tri (`PRESENCE_SORT_KEYS`) sur la
+ * route qui ordonne des lignes `User`. Ici la liste est CLOSE plutôt que noire,
+ * et c'est ce qui la rend tenable : `Report` ne porte aucune colonne de
+ * présence AUJOURD'HUI, mais il porte deux relations vers `User`
+ * (`reporter`, `moderator`) dont Prisma sait ordonner — une liste d'interdits
+ * devrait suivre le modèle, une liste close ne le suit pas.
+ *
+ * Une clé hors liste RETOMBE sur `createdAt` : c'est le régime déjà tenu par
+ * `resolveUserSortKey` et `presenceGatedFilters` du même répertoire — un 400
+ * confirmerait au client l'existence de la colonne qu'il vient de nommer.
+ */
+const REPORT_SORT_KEYS = ['createdAt', 'updatedAt', 'resolvedAt'] as const;
+
+type ReportSortKey = (typeof REPORT_SORT_KEYS)[number];
+
+const resolveReportSortKey = (value: unknown): ReportSortKey =>
+  (REPORT_SORT_KEYS as readonly unknown[]).includes(value) ? (value as ReportSortKey) : 'createdAt';
+
+/** `asc` demandé explicitement, `desc` pour tout le reste — y compris `DESC`. */
+const resolveReportSortOrder = (value: unknown): 'asc' | 'desc' => (value === 'asc' ? 'asc' : 'desc');
+
 // Middleware pour verifier les permissions de moderation
 // `requireModeratorPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
@@ -89,8 +120,8 @@ export async function reportRoutes(fastify: FastifyInstance) {
         status: query.status,
         reporterId: query.reporterId,
         moderatorId: query.moderatorId,
-        sortBy: query.sortBy || 'createdAt',
-        sortOrder: query.sortOrder || 'desc'
+        sortBy: resolveReportSortKey(query.sortBy),
+        sortOrder: resolveReportSortOrder(query.sortOrder)
       };
 
       if (query.createdAfter) {

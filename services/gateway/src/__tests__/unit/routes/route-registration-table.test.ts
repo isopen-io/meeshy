@@ -130,7 +130,20 @@ describe('ROUTE_TABLE (#4278)', () => {
     // explicitement hors périmètre de #4348 (voir doc-comment de
     // `routes/me/consents.ts`). L'écart de +1 sur la table (et +2 sur le
     // manifeste) est donc attendu, sans aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(61);
+    //
+    // 61 → 62 le 2026-08-31 (#3734) : entrée `admin-share-links`, l'adresse
+    // NEUVE `DELETE /api/v1/admin/share-links/:id` — la console
+    // d'administration ne pouvait FERMER aucun lien (`DELETE /links/:linkId`
+    // exige le `mshy_*` public, que `GET /admin/share-links` retire
+    // délibérément de son `select` depuis #4157 : la console n'a que
+    // l'ObjectId). Aucun alias, aucune route retirée ni renommée. Le chiffre
+    // n'est pas ajusté en aveugle — la vérification que le commentaire
+    // ci-dessus prescrit a été faite : le manifeste régénéré passe de 547 à
+    // 548 routes, et le cliquet `route-manifest-ratchet` ne rapportait
+    // AVANT régénération qu'une seule différence, `+ DELETE
+    // /api/v1/admin/share-links/:id (module=registerAdminShareLinkRoutes)`,
+    // soit exactement celle-là et aucune autre.
+    expect(ROUTE_TABLE.length).toBe(62);
   });
 });
 
