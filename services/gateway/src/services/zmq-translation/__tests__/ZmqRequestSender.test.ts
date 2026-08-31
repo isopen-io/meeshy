@@ -328,6 +328,28 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalises region-tagged targets to NLLB codes and dedups variants', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR', 'en-US', 'pt_BR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr', 'en', 'pt']);
+    });
+
+    it('sends targets the translator can settle 1:1 against pendingLanguages', async () => {
+      // A region variant sent verbatim ('fr-FR') would be a target the pending
+      // set never tracks: settling the FIRST sent language must decrement the
+      // pending set (non-null remaining), proving sent ⊆ pending.
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr-FR', 'en-US'] }),
+        'canon-settle-task'
+      );
+      const arg = firstSendArg(connectionManager);
+      const first = sender.settleTranslationLanguage('canon-settle-task', arg.targetLanguages[0]);
+      expect(first).not.toBeNull();
+      expect(first?.remaining).toEqual([arg.targetLanguages[1]]);
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))
