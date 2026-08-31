@@ -10,6 +10,7 @@ import {
   disclosableEntryRights,
   resolveEntryRights,
   PARTICIPANT_RIGHT_NAMES,
+  NEW_MEMBER_PERMISSIONS,
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -502,24 +503,19 @@ export function registerParticipantWriteRoutes(
         return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
       }
 
+      // #4174 — la table de droits vient du site UNIQUE
+      // (`services/participantRights.ts`), partagé avec `POST …/invite`.
+      // C'est la table de CE handler qui a été retenue : la variante de
+      // l'autre porte fermait `canSendVideos`/`canSendAudios` en laissant
+      // `canSendFiles` ouvert, donc ne fermait rien — un fichier peut être
+      // une vidéo.
       const addedMemberFields = {
         type: 'user',
         displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
         avatar: userToAdd.avatar,
         role: 'member',
         language: userToAdd.systemLanguage ?? 'en',
-        permissions: {
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendAudios: true,
-          canSendVideos: true,
-          canSendLocations: false,
-          canSendLinks: false,
-          // Un membre ajouté après coup lit depuis son arrivée ; un
-          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
-          canViewHistory: false
-        }
+        permissions: { ...NEW_MEMBER_PERMISSIONS }
       };
 
       // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
