@@ -133,6 +133,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // divergent est du texte mort qui ment au lecteur (#4308).
         "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
         "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
@@ -145,6 +146,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
         "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
+        "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",  // 28
+        "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
@@ -173,10 +176,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
         // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
         // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
@@ -196,6 +202,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 6
@@ -273,6 +280,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioCarouselView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
@@ -741,7 +749,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
         // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 81
+        //
+        // 231i — 81 → 31. Eight interpolated keys entered the catalog this iteration
+        // (#4328), which accounts for eight of the fifty. The other forty-two were
+        // SLACK: earlier iterations lowered the backlog without re-measuring the
+        // ceiling, so the ratchet had stopped ratcheting — it would have accepted
+        // forty-two new untranslated keys without a word. The number below was READ
+        // from this witness with the ceiling set to 0, never computed from the
+        // previous one; a ceiling that is subtracted rather than measured drifts in
+        // the comfortable direction, and nothing ever says so.
+        let backlogCeiling = 31
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
