@@ -259,6 +259,25 @@ public final class StoryCanvasUIView: UIView {
     let itemsContainer = CALayer()
     let editOverlayLayer = CALayer()
 
+    /// **L'objet SÉLECTIONNÉ, et ce qu'on en dit** (#4073, vue `1c`).
+    ///
+    /// Le doc-comment de `editOverlayLayer` promettait « snap guides, selection
+    /// markers » depuis toujours ; seuls les guides existaient. Le canvas
+    /// n'avait AUCUNE notion d'objet sélectionné — la scène du composer
+    /// affichait donc son inspecteur, ses contrôleurs et son menu contextuel
+    /// sans jamais montrer SUR QUOI ils portaient.
+    ///
+    /// > Un commentaire qui décrit un mécanisme absent ne se fait contredire
+    /// > par rien (leçon 335). Celui-ci a survécu à toutes les passes parce
+    /// > qu'il énonçait la bonne intention au bon endroit.
+    ///
+    /// Le libellé du badge vient de l'HÔTE : ce que dit « TEXT · PLAN FG · z 2 »
+    /// est du vocabulaire produit, pas une donnée du canvas. Le canvas tient la
+    /// GÉOMÉTRIE, l'app tient les MOTS.
+    var selectionMarkerId: String?
+    var selectionMarkerBadge: String?
+    var selectionMarkerLayers: [CALayer] = []
+
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
     internal let backgroundLayer = StoryBackgroundLayer()

@@ -116,7 +116,14 @@ extension ConversationView {
                 )
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "conversation.view.composer.reply_to", defaultValue: "Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)", bundle: .main))
+        .accessibilityLabel(String(
+            localized: "conversation.view.composer.reply_to",
+            // « vous » etait un litteral Swift NU dans l'interpolation : la cle
+            // partait bien au catalogue, et son argument restait francais dans
+            // les six autres langues. `bubble.reply.you` porte deja ce mot,
+            // traduit, pour la bulle de reponse — meme mot, meme cle.
+            defaultValue: "Réponse à \(reply.isMe ? String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) : reply.authorName) : \(reply.previewText)",
+            bundle: .main))
     }
 
     // MARK: - Edit Banner

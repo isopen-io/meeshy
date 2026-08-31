@@ -404,8 +404,24 @@ extension MeeshyComposerHost {
             // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`). La
             // résolution par kind vit dans la RÈGLE, pas ici : le meuble ne
             // tient qu'un id, c'est la slide qui sait de quel type il est.
-            objectChips: ComposerObjectChips.chips(forSelected: selectedSceneItemId,
-                                                   in: viewModel.currentSlide),
+            objectChips: sceneObjectChips,
+            // **Le jeton ENCADRÉ, et le geste qui l'encadre** (#4073). Le
+            // contrat les portait depuis la livraison et AUCUN hôte ne les
+            // remplissait : six capsules qui s'annonçaient `.isButton` à
+            // VoiceOver, vibraient sous le doigt, et n'ouvraient rien. Suivre
+            // une donnée jusqu'à son consommateur s'arrête un cran trop tôt —
+            // il faut la suivre jusqu'au PIXEL, et demander ce que le doigt
+            // OBTIENT.
+            activeObjectChipId: ComposerObjectChips.activeChipId(
+                chips: sceneObjectChips, openedBand: requestedSceneBand),
+            onObjectChip: { id in handleObjectChip(id) },
+            // **Ce que le canvas ENCADRE** (#4073). Le meuble tient déjà l'id
+            // de l'objet sélectionné pour les jetons et pour le rail — le lui
+            // faire descendre jusqu'au canvas est ce qui manquait pour que
+            // « un seul objet à la fois » se VOIE.
+            selectedItemId: selectedSceneItemId,
+            selectionBadge: ComposerObjectChips.badge(forSelected: selectedSceneItemId,
+                                                      in: viewModel.currentSlide),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -414,10 +430,8 @@ extension MeeshyComposerHost {
             // remplir** (#4082) : l'objet selectionne doit avoir une source a
             // rogner. Sinon la bande serait ouvrable sur du vide, ce que la
             // regle `opened(_:served:)` existe pour interdire.
-            band: ComposerSceneBand.opened(
-                requestedSceneBand,
-                served: ComposerSceneCapabilities.bands(
-                    canTrimSelection: trimmableSelection != nil)),
+            band: ComposerSceneBand.opened(requestedSceneBand,
+                                           served: openableSceneBands),
             bandTimelineContent: composerTrimBand,
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
@@ -884,6 +898,27 @@ extension MeeshyComposerHost {
     /// du jeu servi, donc la bande n'est pas ouvrable, ET il laisse
     /// `composerTrimBand` à `nil`, donc elle n'aurait rien à montrer si elle
     /// l'était. Une seule question posée une fois, deux conséquences.
+    /// **Les jetons de l'objet sélectionné — un site unique.** Trois
+    /// consommateurs les lisent (la rangée, le jeton encadré, le geste), et
+    /// trois résolutions du même jeu peuvent diverger.
+    var sceneObjectChips: [ComposerObjectChips.Chip] {
+        ComposerObjectChips.chips(forSelected: selectedSceneItemId,
+                                  in: viewModel.currentSlide,
+                                  openableBands: openableSceneBands)
+    }
+
+    /// **Les bandes qu'on peut OUVRIR à cet instant** — un site unique.
+    ///
+    /// Elle servait deux consommateurs par deux appels séparés : la bande
+    /// elle-même, et les jetons de l'inspecteur qui doivent savoir si leur
+    /// destination mène quelque part. Deux calculs du même jeu peuvent
+    /// diverger, et le jour où ils divergent le jeton s'illumine sur une bande
+    /// que `opened` refuse — un contrôle inerte qui a l'air vivant, c'est-à-dire
+    /// exactement le défaut que ce câblage vient de fermer.
+    var openableSceneBands: Set<ComposerSceneBand> {
+        ComposerSceneCapabilities.bands(canTrimSelection: trimmableSelection != nil)
+    }
+
     var trimmableSelection: (url: URL, bounds: MediaTrimBounds,
                              sourceDuration: Double, isVideo: Bool)? {
         guard let id = selectedSceneItemId else { return nil }

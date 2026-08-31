@@ -184,3 +184,54 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
     expect(() => buildApiEndpointsCatalog(routes)).toThrow(/méthode/i);
   });
 });
+
+describe('buildApiEndpointsCatalog — les entrées DÉRIVÉES sont exposées (#4282)', () => {
+  /**
+   * La projection Swift du catalogue (#4282) doit porter les MÊMES noms que la
+   * projection TypeScript, sans quoi « un chemin s'écrit à un seul endroit »
+   * devient « un chemin s'écrit une fois par surface, avec un nom par
+   * surface ». Elle a donc besoin de la STRUCTURE dérivée — namespace, clé,
+   * paramètres — et pas seulement du fichier `.ts` rendu, qu'il faudrait
+   * re-parser pour la retrouver.
+   *
+   * Re-dériver le nommage côté Swift serait la faute que ce lot corrige :
+   * une seconde règle, juste le jour où on l'écrit, divergente au premier
+   * changement de segment.
+   */
+  it('expose namespace, clé, chemin brut, paramètres et verbes pour chaque adresse', () => {
+    const routes: ManifestRouteInput[] = [
+      { method: 'POST', path: '/api/v1/auth/login' },
+      { method: 'GET', path: '/api/v1/conversations/:conversationId/messages' },
+      { method: 'POST', path: '/api/v1/conversations/:conversationId/messages' },
+    ];
+
+    const { entries } = buildApiEndpointsCatalog(routes);
+
+    expect(entries).toHaveLength(2);
+
+    const login = entries.find((entry) => entry.rawPath === '/api/v1/auth/login');
+    expect(login).toMatchObject({
+      namespace: 'auth',
+      key: 'login',
+      paramNames: [],
+      methods: ['POST'],
+    });
+
+    const messages = entries.find((entry) => entry.rawPath.endsWith('/messages'));
+    expect(messages).toMatchObject({
+      namespace: 'conversations',
+      paramNames: ['conversationId'],
+    });
+    expect(messages?.methods).toEqual(['GET', 'POST']);
+  });
+
+  it("l'ordre des entrées ne dépend pas de l'ordre des routes en entrée", () => {
+    const routes: ManifestRouteInput[] = [
+      { method: 'GET', path: '/api/v1/users/me' },
+      { method: 'POST', path: '/api/v1/auth/login' },
+    ];
+    const forward = buildApiEndpointsCatalog(routes).entries.map((entry) => entry.rawPath);
+    const reversed = buildApiEndpointsCatalog([...routes].reverse()).entries.map((entry) => entry.rawPath);
+    expect(forward).toEqual(reversed);
+  });
+});

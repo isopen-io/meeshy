@@ -24,7 +24,7 @@ import { depreciee } from '../../utils/deprecation';
 // entre les deux fichiers. Voir son doc-comment pour ce que la duplication
 // coûtait — c'est là qu'a vécu le premier écart de comportement (#4170,
 // `PATCH` ne révoquait pas les invités là où `/toggle` le faisait déjà).
-import { loadShareLinkForManagement } from './management';
+import { loadShareLinkForManagement, applyShareLinkUpdate } from './management';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -304,48 +304,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
-      const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: loaded.id },
-        data: { isActive },
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-      });
-
-      // La seconde moitié de la promesse de cette route : « the link becomes
-      // inaccessible to new AND EXISTING anonymous users ». Fermer la porte ne
-      // vide pas la salle — les invités déjà entrés gardaient leur socket dans
-      // la room du fil, donc chaque message, indéfiniment. Réactiver, en
-      // revanche, ne rend rien à personne : une ligne `Participant` close ne se
-      // rouvre que par la porte d'entrée.
-      if (!isActive) {
-        await revokeShareLinkGuests({
-          prisma: fastify.prisma,
-          io: fastify.socketIOHandler?.getManager()?.getIO(),
-          manager: fastify.socketIOHandler?.getManager(),
-          shareLinkId: loaded.id,
-        });
-      }
+      // #4351 — cet alias ne réécrit plus l'écriture : il délègue à
+      // `applyShareLinkUpdate`, qui porte la projection ET la révocation des
+      // invités déjà entrés. C'est là que vivait la seconde moitié de la
+      // promesse de cette route — « the link becomes inaccessible to new AND
+      // EXISTING anonymous users » : fermer la porte ne vide pas la salle, les
+      // invités déjà entrés gardaient leur socket dans la room du fil, donc
+      // chaque message, indéfiniment. Réactiver, en revanche, ne rend rien à
+      // personne : une ligne `Participant` close ne se rouvre que par la porte
+      // d'entrée.
+      const updatedLink = await applyShareLinkUpdate(fastify, loaded.id, { isActive });
 
       return sendSuccess(reply, updatedLink, { message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès' });
 
@@ -443,32 +411,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
-      const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: loaded.id },
-        data: { expiresAt: new Date(expiresAt) },
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
+      // #4351 — même délégation que `/toggle` : une seule écriture, une seule
+      // projection. Prolonger ne révoque personne (`isActive` n'est pas dans
+      // le `data`), et c'est `applyShareLinkUpdate` qui en décide, pas cet
+      // appelant.
+      const updatedLink = await applyShareLinkUpdate(fastify, loaded.id, {
+        expiresAt: new Date(expiresAt),
       });
 
       return sendSuccess(reply, updatedLink, { message: 'Lien prolongé avec succès' });
@@ -559,13 +507,14 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permissions insuffisantes pour supprimer ce lien');
       }
 
-      // AVANT la fermeture, et pas après : `Participant.shareLinkId` est une
-      // colonne NUE — aucune relation Prisma, donc aucune cascade — et une
+      // AVANT la fermeture, et pas après — l'argument est désormais porté par
+      // `applyShareLinkUpdate` (#4351), qui l'applique aux TROIS écritures :
+      // `Participant.shareLinkId` est une colonne NUE, aucune cascade, et une
       // ligne de lien devenue inactive ne relie plus rien à un invité qui
-      // resterait connecté par erreur. Révoquer d'abord fait échouer FERMÉ :
-      // si la révocation lève, le lien reste actif et la reprise est
-      // idempotente (aucun état intermédiaire où le lien serait fermé mais ses
-      // invités encore connectés).
+      // resterait connecté par erreur. Cette route garde son propre couple
+      // révocation + `update` NU parce que sa réponse ne porte que son
+      // message : lui faire traverser `applyShareLinkUpdate` la ferait payer
+      // la projection `include` que personne ne lit ici.
       await revokeShareLinkGuests({
         prisma: fastify.prisma,
         io: fastify.socketIOHandler?.getManager()?.getIO(),

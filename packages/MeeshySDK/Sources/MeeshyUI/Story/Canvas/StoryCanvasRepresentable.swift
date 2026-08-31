@@ -39,6 +39,19 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+
+    /// **L'objet SÉLECTIONNÉ, et ce que le badge en dit** (#4073, vue `1c`).
+    ///
+    /// Le canvas n'en avait aucune notion : taper un objet remontait bien un
+    /// `onItemTapped` à l'hôte, mais RIEN ne revenait le désigner à l'écran.
+    /// L'inspecteur, les contrôleurs du rail et le menu d'appui long portaient
+    /// donc tous sur un objet invisible.
+    ///
+    /// Le libellé vient de l'HÔTE et n'est pas déduit ici : « TEXTE · PLAN FG ·
+    /// z 2 » est du vocabulaire produit, localisé, que le SDK n'a pas à
+    /// connaître. Le canvas tient la GÉOMÉTRIE, l'app tient les MOTS.
+    public var selectedItemId: String?
+    public var selectionBadge: String?
     /// Y (écran) du haut des contrôleurs de l'outil texte — le texte en cours
     /// d'édition reste au-dessus (cf. `StoryCanvasUIView.inlineEditFloorGlobalY`).
     /// `.greatestFiniteMagnitude` = pas de plafond (texte centré, comportement
@@ -109,6 +122,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
+                selectedItemId: String? = nil,
+                selectionBadge: String? = nil,
                 inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
                 inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
@@ -131,6 +146,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.selectedItemId = selectedItemId
+        self.selectionBadge = selectionBadge
         self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
@@ -230,6 +247,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
+        // **Le cadre de sélection** (#4073). `setSelectionMarker` se garde
+        // lui-même contre la réassignation identique : `updateUIView` est
+        // appelée à chaque évaluation du corps SwiftUI, et reposer le cadre à
+        // chaque passe le ferait clignoter sous le doigt.
+        uiView.setSelectionMarker(id: selectedItemId, badge: selectionBadge)
 
         // Bridge des bitmaps édités/foreground du composer vers
         // `StoryCanvasUIView.readerContext.imageCache`. On reconstruit le

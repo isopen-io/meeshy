@@ -11,7 +11,18 @@ APP_NAME="Meeshy"
 BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
-DERIVED_DATA="Build"
+# Chemin de DerivedData, surchargeable par l'environnement.
+#
+# Deux sessions qui bâtissent dans le MÊME `-derivedDataPath` se disputent
+# `Intermediates.noindex/XCBuildData/build.db`, et xcodebuild rend alors
+# « database is locked » avec un code 65. Le danger n'est pas la minute perdue :
+# `test-without-building` rejoue ensuite le bundle PRÉCÉDENT, avec des chiffres
+# plausibles et EXIT=0 — donc une certification de l'arbre d'AVANT le diff.
+# Sérialiser à coups de `pgrep` ne suffit pas : entre la lecture et le
+# lancement, l'autre peut démarrer. La séparation, elle, n'a pas de fenêtre.
+#
+#   MEESHY_DERIVED_DATA=/chemin/hors/depot ./apps/ios/meeshy.sh build
+DERIVED_DATA="${MEESHY_DERIVED_DATA:-Build}"
 
 # Apple Developer Team — required for device code-signing under automatic
 # provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
