@@ -22378,3 +22378,76 @@ Deux corollaires de méthode :
 * **La contre-épreuve compte autant que le vert.** Rejouer l'ancien préfixe
   prouve que la porte est toujours là et que c'est bien lui, seul, qui la
   franchissait ou non.
+
+## Leçon 291 — Une garde qui refuse TOUTE écriture refuse aussi la BONNE
+
+**Cycle #3914 (2026-09-01).** `ConversationViewModel.seedResumePositionSeconds`
+posait `guard !hasLocalPosition` : la position servie par le serveur n'écrivait
+JAMAIS dans le magasin de reprise dès qu'une position locale existait, si
+ancienne fût-elle. Un appareil ayant ouvert la pièce jointe une fois n'apprenait
+plus jamais ce qui s'était passé ailleurs.
+
+Sa raison écrite n'était juste qu'à moitié — « une position locale plus avancée,
+ou volontairement abandonnée, ne doit pas être écrasée par une valeur serveur
+peut-être périmée ». **Un MAXIMUM garde la moitié « plus avancée »
+intégralement** ; la seconde moitié se payait par le gel définitif de
+l'appareil.
+
+> Comparer coûte une ligne de plus que refuser, et ne perd rien. La
+> non-régression demandée devient une CONSÉQUENCE de la règle plutôt qu'une
+> exception à écrire à part — donc une chose de moins à maintenir.
+
+**Le témoin s'écrit sur le cas que la garde RATE**, jamais sur celui qu'elle
+protège : au cas protégé, la garde trop large et la règle juste rendent le même
+verdict. Même forme que la leçon 261.
+
+**Le signe avant-coureur** : deux valeurs du même domaine fusionnées par deux
+règles OPPOSÉES à quelques lignes d'écart. `MediaConsumptionStore` (teinte
+cosmétique) fusionnait en MAX depuis toujours, dans la MÊME boucle que le
+magasin de reprise qui refusait tout, et rien ne disait pourquoi.
+
+## Leçon 292 — Une projection non déclarée au schéma ne rougit nulle part
+
+**Cycle #3909 (2026-09-01).** L'issue affirmait « le serveur expose déjà
+`currentUserConsumption` ». **Il ne l'exposait plus** : #4177 l'avait retiré, à
+raison — le champ n'était déclaré nulle part dans `messageAttachmentSchema`,
+donc `fast-json-stringify` le retirait de CHAQUE réponse. Deux requêtes Prisma
+par page payées depuis juin 2026 pour un champ qu'aucun client n'a jamais reçu.
+
+Câbler le client sans lire le commentaire laissé sur place aurait produit un
+lecteur parfaitement correct branché sur `undefined` — un contrôle NON ALIMENTÉ,
+que rien ne distingue d'une reprise « pas encore utilisée ».
+
+> **Une projection non déclarée coûte, s'exécute, et passe les tests de route** —
+> qui lisent le handler, jamais la charge sérialisée. L'ordre est donc :
+> DÉCLARATION → projection → lecteur, et le témoin garde les DEUX moitiés :
+> retirer l'une ou l'autre doit faire rougir le même fichier.
+
+Corollaire de méthode, déjà payé au cycle #4625 : **la prémisse d'une issue est
+DATÉE, le code ne l'est pas.** Deux issues sur trois ce jour-là reposaient sur un
+état du dépôt qui avait changé depuis leur rédaction.
+
+## Leçon 293 — Au démontage, React a déjà détaché le `ref` quand un nettoyage PASSIF s'exécute
+
+**Cycle #3911 (2026-09-01).** Le rapport de clôture d'une lecture audio/vidéo
+part du nettoyage d'un `useEffect`. Il lisait la position par
+`mediaRef.current.currentTime` — et rendait **0 à chaque démontage** : React
+détache le `ref` de l'élément hôte AVANT d'exécuter les nettoyages passifs. La
+garde « rien à dire » absorbait alors le rapport entier, si bien que le défaut
+survivait sous une correction qui *a l'air* juste, **sans qu'aucune requête ne
+parte**.
+
+Le remède : **capturer l'ÉLÉMENT au montage**, dans le corps de l'effet, et le
+passer au nettoyage. Le nœud reste lisible tant que le nettoyage du lecteur
+(`removeAttribute('src')` + `load()`) n'a pas eu lieu — d'où la seconde règle du
+même cycle : **le hook de rapport est déclaré EN PREMIER**, React exécutant les
+nettoyages dans l'ordre de déclaration.
+
+Le témoin qui l'attrape porte les DEUX assertions :
+
+```
+expect(corps.playPositionMs).toBe(7500);
+expect(corps.playPositionMs).not.toBe(0);   // ← 0 est ce que rendait la « correction »
+```
+
+La seconde n'est pas redondante : elle nomme la valeur du défaut.

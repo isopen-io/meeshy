@@ -170,7 +170,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `OutboxDispatcher+Messages.swift` ; le fichier retombe à 1 029 lignes,
     // SORT de la liste, et le plafond suit le cumul réel. Nombre LU du témoin avec le plafond posé à 0, jamais
     // soustrait — un plafond calculé dérive dans le sens confortable.
-    private static let legacyLineCeiling = 71_698
+    //
+    // 232i — 71 698 → 71 266 (−432). #3914 devait changer la règle d'amorçage
+    // de la position de reprise dans `ConversationViewModel.swift` (5 055
+    // lignes) : le cliquet a refusé, en faisant exactement son travail. L'amorçage
+    // média est parti chez lui — `ConversationViewModel+MediaConsumptionSeed.swift`,
+    // 113 lignes — et l'hôte retombe à 4 992. Il RESTE en dette ; seul le
+    // plafond baisse.
+    //
+    // Le nombre est REMESURÉ sur les 34 noms, pas soustrait : mes 63 lignes
+    // n'expliquent que 63 des 432, le reste venant de découpes voisines livrées
+    // entre-temps. Soustraire aurait laissé 369 lignes de mou — de quoi
+    // accueillir en silence l'ajout que ce cliquet existe pour refuser.
+    private static let legacyLineCeiling = 71_266
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
