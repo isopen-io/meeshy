@@ -428,27 +428,39 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         body = PutConsentBodySchema.parse(request.body);
       } catch (error) {
         if (error instanceof z.ZodError) {
-          // #4487 — `violations`, PAS `details: { issues }`.
+          // #4487 — `issues`, étalé à la racine par `details`, et déclaré
+          // par `badRequestResponseSchema` (ligne 400 de la route).
           //
           // `details` est étalé à la RACINE de l'enveloppe, et
-          // `errorResponseSchema` ne déclare pas `issues` : `fast-json-stringify`
-          // le retirait au dernier mètre. Le serveur savait exactement quel
-          // champ manquait, le sérialisait, et le jetait — l'appelant recevait
+          // `fast-json-stringify` retire toute propriété que le schéma de
+          // réponse ne déclare PAS. Le serveur savait exactement quel champ
+          // manquait, le sérialisait, et le jetait — l'appelant recevait
           // `{"error":"VALIDATION_ERROR","message":"VALIDATION_ERROR"}`, sans
-          // rien.
+          // rien. Ce n'est pas théorique : c'est ce qui m'a fait conclure à
+          // tort à une route cassée en vérifiant #4348 sur staging, alors
+          // qu'il manquait seulement `policyVersion` au corps.
           //
-          // Ce n'est pas théorique : c'est ce qui m'a fait conclure à tort à une
-          // route cassée en vérifiant #4348 sur staging, alors qu'il manquait
-          // seulement `policyVersion` au corps. Un client qui n'a pas le code
-          // sous les yeux n'a, lui, aucun recours.
+          // La correction a donc DEUX moitiés, et une seule ne sert à rien :
+          // le schéma déclare `issues` (avec `zodIssueSchema`), et le
+          // handler sert `issues`. Ce site a servi `violations` pendant un
+          // temps — la clé générique de l'enveloppe — pendant que le schéma
+          // déclarait déjà la forme riche : le corps servi ne portait alors
+          // ni l'un ni l'autre au complet, et les trois témoins du fichier
+          // `consents-refus-motive.test.ts` étaient rouges.
           //
-          // `violations` EXISTE dans l'enveloppe et EST déclaré au schéma. La
-          // clé n'était pas à inventer : elle était à employer.
+          // La forme est celle de Zod, RÉELLE et non supposée : `path` est
+          // un TABLEAU (le témoin le compare à `['policyVersion']`), et une
+          // clé refusée par `strict` laisse `path` vide en nommant la clé
+          // dans `keys` — deux faits mesurés, pas déduits.
           return sendBadRequest(reply, 'VALIDATION_ERROR', {
-            violations: error.issues.map((issue) => ({
-              path: issue.path.join('.'),
-              message: issue.message,
-            })),
+            details: {
+              issues: error.issues.map((issue) => ({
+                code: issue.code,
+                path: issue.path.map(String),
+                ...('keys' in issue ? { keys: (issue as { keys: string[] }).keys } : {}),
+                message: issue.message,
+              })),
+            },
           });
         }
         throw error;

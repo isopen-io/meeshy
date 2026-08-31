@@ -12,6 +12,17 @@
  *   │           └─> voiceCloningConsentAt
  *   │                 └─> voiceCloningEnabledAt
  *   └─> textTranslationEnabledAt
+ *
+ * `thirdPartyServicesConsentAt` N'EST PAS un consentement de cette hiérarchie
+ * et n'en a jamais été un : aucune route ne l'écrivait, aucun schéma ne le
+ * déclarait, aucune colonne `User` ne le portait. #4343 a tranché l'option
+ * (b) — RETRAIT de l'exigence — après avoir constaté qu'aucun tiers ne reçoit
+ * quoi que ce soit : il n'existe dans le dépôt ni scanner de logiciels
+ * malveillants, ni traitement d'arrière-plan virtuel, et une fonctionnalité
+ * bêta n'envoie rien nulle part. Les trois gardes qui le nommaient étaient
+ * écrites au CONDITIONNEL (« pourrait nécessiter », « may require ») : une
+ * hypothèse de conformité, pas une obligation mesurée. Détail de l'arbitrage
+ * et de ses conséquences : commentaire de clôture de #4343.
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -21,7 +32,6 @@ export interface ConsentStatus {
   hasVoiceDataConsent: boolean;
   hasVoiceProfileConsent: boolean;
   hasVoiceCloningConsent: boolean;
-  hasThirdPartyServicesConsent: boolean;
   canTranscribeAudio: boolean;
   canTranslateText: boolean;
   canTranslateAudio: boolean;
@@ -60,8 +70,7 @@ export class ConsentValidationService {
     const userPreferences = await this.prisma.userPreferences.findUnique({
       where: { userId },
       select: {
-        audio: true,
-        application: true
+        audio: true
       }
     });
 
@@ -75,11 +84,12 @@ export class ConsentValidationService {
     // (`packages/shared/seed.ts`) — ils passent la garde parce qu'ils ont
     // consenti, pas parce que le processus tourne quelque part.
 
-    // Parser les préférences audio (JSON). `applicationPrefs` reste lu plus
-    // bas pour `thirdPartyServicesConsentAt` (hors périmètre #4180) — plus
-    // JAMAIS pour les quatre colonnes de consentement ci-dessous.
+    // Parser les préférences audio (JSON). Le blob `application` n'est PLUS
+    // lu par ce service depuis #4343 : sa seule lecture restante servait
+    // `thirdPartyServicesConsentAt`, un champ que rien n'écrivait. Il a
+    // disparu du `select` ci-dessus avec elle — une colonne qu'on charge
+    // sans la lire finit toujours par se faire relire.
     const audioPrefs = userPreferences?.audio as any || {};
-    const applicationPrefs = userPreferences?.application as any || {};
 
     // Consentements de base — SEULE la colonne `User` fait foi (#4180).
     //
@@ -135,23 +145,17 @@ export class ConsentValidationService {
     // remise à `null`, blob encore daté ⇒ `hasVoiceCloningConsent` restait
     // vrai).
     //
-    // `thirdPartyServicesConsentAt` NE PEUT PAS entrer dans ce blob — ce
-    // commentaire affirmait le contraire (« reste dans le blob ») avant
-    // #4343, ce qui était faux : `ApplicationPreferenceSchema` ne déclare
-    // pas cette clé, donc Zod la STRIPPE en silence (mode par défaut) sur
-    // les deux chemins d'écriture de `PATCH`/`PUT /me/preferences/application`
-    // — un client qui l'envoie reçoit `200` et la clé disparaît sans jamais
-    // atteindre Mongo. Il n'a pas non plus de colonne `User` miroir, ce qui
-    // reste vrai. La lecture ci-dessous ne trouve donc RIEN, TOUJOURS :
-    // `hasThirdPartyServicesConsent` (ligne suivante) vaut `false` pour tout
-    // le monde, sans exception, ce qui bloque `betaFeaturesEnabled` et
-    // `scanFilesForMalware` pour quiconque. L'arbitrage — (a) un vrai
-    // consentement avec sa colonne, (b) le retrait de l'exigence, (c) son
-    // rattachement à `hasDataProcessingConsent` — est ouvert sous #4343.
-    const thirdPartyServicesConsentAt = applicationPrefs.thirdPartyServicesConsentAt;
-
+    // `thirdPartyServicesConsentAt` était lu ICI, depuis le blob
+    // `application`, et n'y arrivait JAMAIS : le schéma ne le déclarait pas
+    // (Zod strippe en mode par défaut), aucune route ne l'écrivait, aucune
+    // colonne `User` ne le portait. `hasThirdPartyServicesConsent` valait
+    // donc `false` pour tout le monde, toujours — et les trois gardes qui
+    // le lisaient refusaient tout le monde en nommant une preuve que le
+    // produit n'avait aucun moyen de délivrer. #4343 a retiré la lecture ET
+    // les gardes plutôt que d'inventer l'écrivain manquant : un
+    // consentement doit être SPÉCIFIQUE et ÉCLAIRÉ, et « services tiers »
+    // ne nomme, dans ce dépôt, aucun traitement réel à autoriser.
     const hasVoiceCloningConsent = !!voiceCloningEnabledAt && hasVoiceProfileConsent;
-    const hasThirdPartyServicesConsent = !!thirdPartyServicesConsentAt && hasDataProcessingConsent;
 
     // Calculer les capacités selon la hiérarchie de consentements
     const canTranscribeAudio = audioTranscriptionEnabled && hasVoiceDataConsent;
@@ -165,7 +169,6 @@ export class ConsentValidationService {
       hasVoiceDataConsent,
       hasVoiceProfileConsent,
       hasVoiceCloningConsent,
-      hasThirdPartyServicesConsent,
       canTranscribeAudio,
       canTranslateText,
       canTranslateAudio,
@@ -330,16 +333,22 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
-    // Background virtuel pourrait nécessiter du traitement tiers
+    // L'arrière-plan virtuel traite l'image de la caméra : c'est un
+    // traitement de donnée personnelle, et `dataProcessingConsentAt` le
+    // couvre. Cette garde EXIGEAIT en plus `thirdPartyServicesConsentAt`
+    // — mais en `&&` avec la négation de l'autre, si bien qu'un
+    // consentement toujours faux ne la refermait jamais seul : son EFFET
+    // observable était déjà exactement celui écrit ci-dessous. #4343 ne
+    // change donc rien à ce qui est refusé ; il retire de `requiredConsents`
+    // un nom que l'utilisateur lisait sans pouvoir y répondre.
     if (
       preferences.virtualBackgroundEnabled === true &&
-      !status.hasThirdPartyServicesConsent &&
       !status.hasDataProcessingConsent
     ) {
       violations.push({
         field: 'virtualBackgroundEnabled',
-        message: 'Virtual background may require third-party services consent',
-        requiredConsents: ['dataProcessingConsentAt', 'thirdPartyServicesConsentAt']
+        message: 'Virtual background requires data processing consent',
+        requiredConsents: ['dataProcessingConsentAt']
       });
     }
 
@@ -353,17 +362,23 @@ export class ConsentValidationService {
     userId: string,
     preferences: Record<string, any>
   ): Promise<ConsentViolation[]> {
-    const status = await this.getConsentStatus(userId);
+    // #4343 — `scanFilesForMalware` n'exige plus aucun consentement.
+    //
+    // La garde retirée ici était la PIRE des trois, pour une raison qui ne
+    // tient pas au consentement fantôme : cette préférence vaut `true` PAR
+    // DÉFAUT (`packages/shared/types/preferences/document.ts`). Tout
+    // utilisateur qui rouvrait ses préférences de document et les
+    // enregistrait resoumettait donc la valeur par défaut et récoltait une
+    // violation — sur la préférence qui rend le produit plus SÛR, et sans
+    // qu'aucun geste ne puisse la lever. Aucun scanner n'existe par
+    // ailleurs dans le dépôt : le seul « tiers » à consentir était
+    // hypothétique. Si un scanner tiers arrive un jour, c'est SON arrivée
+    // qui devra apporter son consentement, spécifique et nommé (#4551).
+    //
+    // La méthode reste — `validatePreferences` l'aiguille par catégorie et
+    // les préférences de document en gagneront d'autres. Elle n'interroge
+    // plus la base : son unique lecture servait la garde ci-dessus.
     const violations: ConsentViolation[] = [];
-
-    // Scan malware pourrait nécessiter services tiers
-    if (preferences.scanFilesForMalware === true && !status.hasThirdPartyServicesConsent) {
-      violations.push({
-        field: 'scanFilesForMalware',
-        message: 'Malware scanning requires third-party services consent',
-        requiredConsents: ['thirdPartyServicesConsentAt']
-      });
-    }
 
     return violations;
   }
@@ -400,14 +415,20 @@ export class ConsentValidationService {
       });
     }
 
-    // Features beta pourraient nécessiter consentement services tiers
-    if (preferences.betaFeaturesEnabled === true && !status.hasThirdPartyServicesConsent) {
-      violations.push({
-        field: 'betaFeaturesEnabled',
-        message: 'Beta features may require third-party services consent',
-        requiredConsents: ['thirdPartyServicesConsentAt']
-      });
-    }
+    // #4343 — `betaFeaturesEnabled` n'exige plus aucun consentement.
+    //
+    // Activer un drapeau de fonctionnalité n'est PAS un traitement de
+    // donnée personnelle : rien ne part, nulle part. La garde retirée ici
+    // le disait elle-même au conditionnel (« pourraient nécessiter »,
+    // « may require ») — une hypothèse, pas une obligation. L'interrupteur
+    // existe pourtant dans DEUX interfaces (`ApplicationSettings` sur le
+    // web, `SettingsView` sur iOS) : jusqu'à #4343, l'utilisateur voyait un
+    // interrupteur qui échouait TOUJOURS, en nommant un consentement
+    // introuvable.
+    //
+    // Si une fonctionnalité bêta particulière traite un jour des données,
+    // c'est ELLE qui portera sa garde, avec le consentement que son
+    // traitement exige — pas ce drapeau générique.
 
     return violations;
   }

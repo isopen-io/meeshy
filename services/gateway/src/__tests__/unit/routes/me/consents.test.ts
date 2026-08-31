@@ -390,7 +390,28 @@ describe('Révocation de bout en bout — le défaut fermé par #4180, prouvé s
  * ne peut plus diverger entre les deux côtés de la frontière.
  */
 describe('Un refus de consentement est LISIBLE (#4487)', () => {
-  it('sert les `violations` par CHAMP — plus un `VALIDATION_ERROR` nu', async () => {
+  // La clé est `issues`, PAS `violations` — et le choix n'est pas de style.
+  //
+  // Ces deux témoins ont porté sur `violations` pendant un cycle, pendant que
+  // leurs trois frères de `consents-refus-motive.test.ts` portaient sur
+  // `issues` : deux fichiers de témoins du MÊME numéro d'issue, en désaccord
+  // sur le nom du champ servi, dont un jeu restait rouge sans que personne le
+  // lise (les deux fichiers ne tombent pas dans le même filtre `jest`).
+  //
+  // Ce qui tranche est une MESURE de l'API existante, pas une préférence :
+  // les deux clés y ont déjà DEUX SENS distincts.
+  //   · `violations` = des violations de CONSENTEMENT, portant
+  //     `requiredConsents` (`preference-router-factory.ts`, `unified-routes.ts`)
+  //   · `issues`     = des issues ZOD, portant `code` / `path` / `keys`
+  //     (`posts/core.ts`, et le `badRequestResponseSchema` de CETTE route)
+  //
+  // Servir `violations` pour un refus de schéma sur une route de CONSENTEMENT
+  // ferait donc collision avec la clé qui signifie « il vous manque un
+  // consentement » — le contresens le plus coûteux possible, à cet endroit
+  // précis. La forme riche (`path` en TABLEAU, `code`, `keys`) ne survivrait
+  // pas non plus à `violations`, dont l'`items` de l'enveloppe partagée
+  // déclare `path` en STRING et rien d'autre.
+  it('sert les `issues` par CHAMP — plus un `VALIDATION_ERROR` nu', async () => {
     const { app } = await buildApp();
     const res = await putConsent(app, 'voice-cloning', { granted: true }, USER_ID);
 
@@ -398,13 +419,14 @@ describe('Un refus de consentement est LISIBLE (#4487)', () => {
     const corps = JSON.parse(res.body);
     expect(corps.error).toBe('VALIDATION_ERROR');
     // Le champ manquant est NOMMÉ. Avant, `details: { issues }` était étalé à
-    // la racine, non déclaré au schéma, et retiré par `fast-json-stringify` :
-    // le serveur savait, sérialisait, puis jetait au dernier mètre.
-    expect(Array.isArray(corps.violations)).toBe(true);
-    expect(JSON.stringify(corps.violations)).toContain('policyVersion');
+    // la racine SANS être déclaré au schéma, et retiré par
+    // `fast-json-stringify` : le serveur savait, sérialisait, puis jetait au
+    // dernier mètre. `badRequestResponseSchema` le déclare désormais.
+    expect(Array.isArray(corps.issues)).toBe(true);
+    expect(JSON.stringify(corps.issues)).toContain('policyVersion');
   });
 
-  it('le témoin porte sur la valeur SERVIE — un `violations` non déclaré au schéma serait effacé sans bruit', async () => {
+  it('le témoin porte sur la valeur SERVIE — un champ non déclaré au schéma serait effacé sans bruit', async () => {
     const { app } = await buildApp();
     const res = await putConsent(app, 'voice-cloning', { granted: 'oui' }, USER_ID);
 
@@ -412,7 +434,10 @@ describe('Un refus de consentement est LISIBLE (#4487)', () => {
     // sérialisation qui effaçait, et une assertion sur l'objet décodé après
     // `JSON.parse` mesure la même chose — mais dire pourquoi évite qu'un lot
     // suivant remplace ce témoin par une assertion sur l'objet d'entrée.
-    expect(res.body).toContain('violations');
+    expect(res.body).toContain('issues');
+    // Et la forme RICHE survit : `code` est déclaré par `zodIssueSchema`, il
+    // serait effacé par un repli sur `violations`.
+    expect(res.body).toContain('invalid_type');
   });
 
   it('la version servie est celle du site UNIQUE — la recopie ne peut plus diverger', async () => {
