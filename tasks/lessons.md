@@ -23515,7 +23515,7 @@ le fil. Elle levait au passage #4746 : un volet câblé par une session voisine,
 avec témoins verts, n'était jamais apparu parce que le flux story montait
 l'atelier.
 
-## Leçon 419 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
+## Leçon 421 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
 
 Deux témoins de `apps/web-v3/e2e/visual/v3-network-vitals.spec.ts` tenaient le
 critère de #4495 : un lien partagé s'ouvre en un aller-retour. Ils rougissaient
