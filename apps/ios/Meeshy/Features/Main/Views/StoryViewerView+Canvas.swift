@@ -1742,6 +1742,16 @@ struct StoryCardView: View {
                                         horizontalInset: 20,
                                         onToggle: onCaptionExpansionToggled)
                 }
+                // **La légende tient la colonne du CANVAS, pas celle de l'hôte**
+                // (#4762). Ce conteneur déborde volontairement le viewport pour
+                // la pagination (mesuré : 491,3 pt à x = −44,7 sur un écran de
+                // 402) ; sans cette largeur, le `frame(maxWidth: .infinity)` de
+                // la légende résout celle du CONTENEUR et le texte sort des deux
+                // côtés — « The latest apps » s'affichait « e latest apps ».
+                .frame(width: StoryCanvasFraming.captionColumnWidth(
+                    viewport: geometry.size,
+                    ratio: readerCanvasRatio,
+                    scale: readerCanvasFraming.scale))
                 .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
                 .transition(.opacity)
             }
