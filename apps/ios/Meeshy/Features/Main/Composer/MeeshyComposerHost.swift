@@ -541,7 +541,14 @@ struct MeeshyComposerHost: View {
     /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
     /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
     /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
-    @State var documentTranscription: MobileTranscriptionPayload?
+    /// **Une transcription PAR FICHIER** (#4672).
+    ///
+    /// C'était UNE valeur, écrasée à chaque retour de la feuille. Avec deux
+    /// vocaux, la seconde effaçait la première : une seule carte s'affichait,
+    /// et le premier son partait quand même à la publication, muet et
+    /// invisible. La clé est l'URL du fichier — le seul handle que
+    /// `documentLocalMedia` et la feuille partagent.
+    @State var documentTranscriptions: [URL: MobileTranscriptionPayload] = [:]
 
     init(
         intent: ComposerIntent,

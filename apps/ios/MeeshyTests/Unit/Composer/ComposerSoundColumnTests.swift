@@ -148,4 +148,58 @@ final class ComposerSoundColumnTests: XCTestCase {
             "bg-1")
     }
 
+    // MARK: - N sons de contenu, N cartes (#4672)
+
+    private func media(_ nom: String, mime: String = "audio/mp4",
+                       ms: Int? = 4000) -> ComposerDocumentMedia {
+        ComposerDocumentMediaFactory.media(
+            url: URL(fileURLWithPath: "/tmp/\(nom)"), declaredMimeType: mime, durationMs: ms)
+    }
+
+    private func payload(_ texte: String) -> MobileTranscriptionPayload {
+        MobileTranscriptionPayload(text: texte, language: "fr", confidence: 0.9, segments: [])
+    }
+
+    /// **Le témoin s'écrit à DEUX sons.** À un seul, « chaque son porte sa
+    /// transcription » et « une transcription pour tous » rendent le même
+    /// écran — c'est le rang où l'ancien défaut était invisible.
+    func test_deuxSonsDeContenu_rendentDeuxCartes() {
+        let sons = ComposerForegroundSound.resolveAll(
+            localMedia: [media("a.m4a"), media("b.m4a")],
+            transcriptions: [:])
+        XCTAssertEqual(sons.count, 2)
+        XCTAssertEqual(sons.map(\.url.lastPathComponent), ["a.m4a", "b.m4a"],
+                       "l'ordre est celui de la POSE — le seul que l'auteur puisse prévoir")
+    }
+
+    /// **Le second son ne vole plus la transcription du premier.**
+    func test_chaqueSon_porteSaPropreTranscription() {
+        let a = media("a.m4a"), b = media("b.m4a")
+        let sons = ComposerForegroundSound.resolveAll(
+            localMedia: [a, b],
+            transcriptions: [a.url: payload("le premier"), b.url: payload("le second")])
+        XCTAssertEqual(sons.first?.text, "le premier")
+        XCTAssertEqual(sons.last?.text, "le second")
+    }
+
+    /// **Un son sans transcription n'emprunte pas celle d'un voisin.** Une
+    /// carte muette est une absence ; une carte qui affiche le texte du son
+    /// d'à côté a l'air d'une reconnaissance ratée.
+    func test_unSonSansTranscription_nEmprunteRienAuVoisin() {
+        let a = media("a.m4a"), b = media("b.m4a")
+        let sons = ComposerForegroundSound.resolveAll(
+            localMedia: [a, b], transcriptions: [a.url: payload("le premier")])
+        XCTAssertEqual(sons.first?.text, "le premier")
+        XCTAssertEqual(sons.last?.text, "", "le second n'a pas de texte, et n'en invente pas")
+    }
+
+    /// Les médias non audio ne fabriquent pas de carte : c'est
+    /// `ComposerIngestRouter` qui décide, jamais un `hasPrefix` réécrit.
+    func test_lesMediasNonAudio_neFabriquentAucuneCarte() {
+        let sons = ComposerForegroundSound.resolveAll(
+            localMedia: [media("photo.jpg", mime: "image/jpeg", ms: nil), media("a.m4a")],
+            transcriptions: [:])
+        XCTAssertEqual(sons.map(\.url.lastPathComponent), ["a.m4a"])
+    }
+
 }

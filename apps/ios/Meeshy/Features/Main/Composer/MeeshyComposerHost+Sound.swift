@@ -44,11 +44,26 @@ extension MeeshyComposerHost {
         return { editBackgroundSound(son) }
     }
 
-    /// Le son placé en CONTENU, résolu depuis l'état du meuble — la surface le
-    /// reçoit, elle ne le cherche pas.
-    var foregroundSound: ComposerForegroundSound? {
-        ComposerForegroundSound.resolve(localMedia: documentLocalMedia,
-                                        transcription: documentTranscription)
+    /// Les sons placés en CONTENU, résolus depuis l'état du meuble — la surface
+    /// les reçoit, elle ne les cherche pas (#4672).
+    var foregroundSounds: [ComposerForegroundSound] {
+        ComposerForegroundSound.resolveAll(localMedia: documentLocalMedia,
+                                           transcriptions: documentTranscriptions)
+    }
+
+    /// **La transcription qui PART avec la publication.**
+    ///
+    /// `PublishIntent.document` n'en porte qu'une : le fil ne modélise pas
+    /// encore une transcription par pièce jointe. Celle du DERNIER son posé est
+    /// servie — le même choix qu'avant #4672, désormais nommé au lieu d'être
+    /// une conséquence de l'écrasement.
+    ///
+    /// **La limite est du CÔTÉ FIL, pas du composer** : l'écran montre bien N
+    /// cartes, chacune avec son texte ; c'est la charge d'envoi qui n'en
+    /// transporte qu'un. Elle a son issue.
+    var documentTranscription: MobileTranscriptionPayload? {
+        guard let dernier = foregroundSounds.last else { return nil }
+        return documentTranscriptions[dernier.url]
     }
 
     /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
@@ -289,7 +304,7 @@ extension MeeshyComposerHost {
         // côté du type, pas ici : c'est elle qu'un témoin peut convoquer.
         let transcriptionServie = ComposerForegroundSound.survivingTranscription(
             returned: transcription,
-            previous: documentTranscription,
+            previous: edite.flatMap { documentTranscriptions[$0.url] },
             editedURL: edite?.url,
             returnedURL: url
         )
@@ -300,7 +315,12 @@ extension MeeshyComposerHost {
                 declaredMimeType: mimeType,
                 durationMs: durationMs
             ))
-            documentTranscription = transcriptionServie
+            // **Sous la clé du fichier SERVI**, jamais sous celle du fichier
+            // édité : `AudioSegmentExporter` rend une URL NEUVE dès qu'un
+            // rognage a lieu, et la poser sous l'ancienne clé donnerait une
+            // carte muette à côté d'une transcription orpheline.
+            documentTranscriptions[url] = transcriptionServie
+            if let edite, edite.url != url { documentTranscriptions[edite.url] = nil }
             if let transcriptionServie {
                 documentLanguage = transcriptionServie.language
             }

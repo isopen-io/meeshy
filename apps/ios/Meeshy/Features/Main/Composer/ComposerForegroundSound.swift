@@ -29,7 +29,14 @@ import MeeshyUI
 /// `textOnlyContent`, la branche que la surface ne rend que lorsque
 /// `showsScene` est faux. L'écrire aussi ici ferait deux gardes pour une
 /// condition, et la seconde se tairait le jour où la première changerait.
-nonisolated struct ComposerForegroundSound: Equatable {
+nonisolated struct ComposerForegroundSound: Equatable, Identifiable {
+
+    /// **Le FICHIER est l'identité.** Deux sons peuvent partager durée, type et
+    /// même transcription sans être le même son ; leur URL, non — c'est elle
+    /// que `documentLocalMedia` porte, et elle qui désigne l'entrée à remplacer
+    /// quand l'auteur en édite un.
+    var id: URL { url }
+
 
     let url: URL
     let duration: TimeInterval
@@ -40,33 +47,48 @@ nonisolated struct ComposerForegroundSound: Equatable {
     /// du tout : la carte ne peint alors aucune zone de texte (loi 4).
     let text: String
 
-    /// **Le DERNIER son de la liste média gagne.**
+    /// **N sons, N cartes — et chacun porte SA transcription** (#4672).
     ///
-    /// Le meuble ne garde qu'UNE transcription (`documentTranscription`,
-    /// écrasée à chaque retour de la feuille) : elle décrit donc le son posé en
-    /// dernier. Élire un autre son afficherait la transcription d'un voisin —
-    /// un défaut pire que l'absence, parce qu'il a l'air d'une transcription
-    /// ratée plutôt que d'une transcription absente.
+    /// > Question du porteur, 2026-09-01 : « si on ajoute un second son comment
+    /// > cela est géré ? »
+    ///
+    /// Mal, jusqu'ici. Le meuble ne gardait qu'UNE transcription, écrasée à
+    /// chaque retour de la feuille, et cette résolution élisait le DERNIER son
+    /// de la liste. Avec deux vocaux : une seule carte s'affichait, le premier
+    /// son restait dans `documentLocalMedia` — donc **il partait à la
+    /// publication** — et rien à l'écran ne disait qu'il existait encore.
+    ///
+    /// Un défaut de cette forme est pire qu'une absence : la publication porte
+    /// un contenu que le composer n'affiche plus, et l'auteur ne peut ni
+    /// l'entendre, ni le rogner, ni le retirer.
+    ///
+    /// La transcription se cherche désormais PAR FICHIER. Une carte qui n'en
+    /// trouve pas rend un son sans texte — jamais celui d'un voisin, qui aurait
+    /// l'air d'une reconnaissance ratée plutôt que d'une absence.
     ///
     /// La famille du média se lit de `ComposerIngestRouter`, le site unique du
     /// routage MIME du composer — jamais d'un `hasPrefix("audio")` réécrit ici.
-    static func resolve(localMedia: [ComposerDocumentMedia],
-                        transcription: MobileTranscriptionPayload?) -> ComposerForegroundSound? {
-        guard let media = localMedia.last(where: {
-            ComposerIngestRouter.route(mime: $0.mimeType) == .audio
-        }) else { return nil }
-
-        return ComposerForegroundSound(
-            url: media.url,
-            // Une durée absente ne disqualifie pas le son : le lecteur relit la
-            // vraie durée du fichier au chargement et corrige. La refuser ici
-            // ferait disparaître la carte pour un champ que rien n'oblige à
-            // remplir.
-            duration: media.durationMs.map { TimeInterval($0) / 1000 } ?? 0,
-            mimeType: media.mimeType,
-            cues: cues(from: transcription),
-            text: transcription?.text ?? ""
-        )
+    ///
+    /// **L'ORDRE est celui de la pose**, pas un tri : c'est l'ordre dans lequel
+    /// l'auteur les a enregistrés, et le seul qu'il puisse prévoir.
+    static func resolveAll(localMedia: [ComposerDocumentMedia],
+                           transcriptions: [URL: MobileTranscriptionPayload]) -> [ComposerForegroundSound] {
+        localMedia
+            .filter { ComposerIngestRouter.route(mime: $0.mimeType) == .audio }
+            .map { media in
+                let transcription = transcriptions[media.url]
+                return ComposerForegroundSound(
+                    url: media.url,
+                    // Une durée absente ne disqualifie pas le son : le lecteur
+                    // relit la vraie durée du fichier au chargement et corrige.
+                    // La refuser ici ferait disparaître la carte pour un champ
+                    // que rien n'oblige à remplir.
+                    duration: media.durationMs.map { TimeInterval($0) / 1000 } ?? 0,
+                    mimeType: media.mimeType,
+                    cues: cues(from: transcription),
+                    text: transcription?.text ?? ""
+                )
+            }
     }
 
     /// Les segments datés deviennent des lignes ; leur ORDRE est celui du

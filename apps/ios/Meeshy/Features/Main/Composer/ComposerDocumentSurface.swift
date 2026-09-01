@@ -112,18 +112,23 @@ struct ComposerDocumentSurface: View {
     /// elle reste une lecture : la surface ne fabrique pas d'action que l'hôte
     /// ne lui a pas donnée.
     var onEditBackgroundSound: (() -> Void)? = nil
+    /// **Ce que le doigt fait d'une carte de son de contenu.**
+    ///
+    /// Toucher la carte rouvre « Création audio » SUR ce son. `nil` ⇒ la carte
+    /// s'écoute sans s'éditer, plutôt qu'un tap qui ne ferait rien (loi 4) — un
+    /// composer qui sert la carte sans servir l'édition existe : c'est celui
+    /// d'une surface en lecture seule.
+    ///
+    /// **Le son touché voyage en ARGUMENT depuis #4672** : avec N cartes, un
+    /// rappel sans argument ouvrirait toujours le même — un contrôle qui a l'air
+    /// de répondre et désigne son voisin.
+    var onEditForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
 
     /// **Le son placé en CONTENU de publication** (directive porteur
     /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
     /// jamais fouillé ici : la surface reste une présentation. `nil` ⇒ aucune
     /// carte — et c'est le cas de l'écrasante majorité des publications.
-    var foregroundSound: ComposerForegroundSound? = nil
-
-    /// Toucher la carte rouvre la vue « Création audio » SUR ce son. `nil` ⇒ la
-    /// carte s'écoute sans s'éditer, plutôt qu'un tap qui ne ferait rien
-    /// (loi 4) — un composer qui sert la carte sans servir l'édition existe :
-    /// c'est celui d'une surface en lecture seule.
-    var onEditForegroundSound: (() -> Void)? = nil
+    var foregroundSounds: [ComposerForegroundSound] = []
 
     /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
     ///
@@ -426,17 +431,24 @@ struct ComposerDocumentSurface: View {
     /// et s'y édite ; il n'a pas besoin d'une carte sous le texte.
     @ViewBuilder
     private var foregroundSoundCard: some View {
-        if let foregroundSound {
+        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
+        // fichier : les précédents restaient dans la publication — donc ils
+        // partaient — sans que rien à l'écran ne dise qu'ils existaient. Un
+        // contenu publié qu'on ne peut ni entendre, ni rogner, ni retirer.
+        //
+        // `ForEach` sur l'identité du FICHIER : deux sons peuvent partager
+        // durée, type et texte sans être le même son.
+        ForEach(foregroundSounds) { son in
             MeeshyAudioTranscriptPlayer(
-                url: foregroundSound.url,
-                duration: foregroundSound.duration,
-                cues: foregroundSound.cues,
-                fallbackText: foregroundSound.text,
+                url: son.url,
+                duration: son.duration,
+                cues: son.cues,
+                fallbackText: son.text,
                 // Le plateau est sombre PAR CONSTRUCTION — comme les deux
                 // champs de texte de cette surface, qui posent déjà
                 // `isDark: true` sans consulter le thème de l'appareil.
                 isDark: true,
-                onEdit: onEditForegroundSound
+                onEdit: onEditForegroundSound.map { rappel in { rappel(son) } }
             )
             .padding(.horizontal, 16)
             .padding(.top, 4)

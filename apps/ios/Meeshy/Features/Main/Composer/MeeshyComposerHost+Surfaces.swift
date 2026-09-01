@@ -607,10 +607,8 @@ extension MeeshyComposerHost {
             onEditBackgroundSound: editBackgroundSoundAction,
             // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
-            foregroundSound: foregroundSound,
-            onEditForegroundSound: foregroundSound.map { son in
-                { editForegroundSound(son) }
-            },
+            onEditForegroundSound: { son in editForegroundSound(son) },
+            foregroundSounds: foregroundSounds,
             // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à

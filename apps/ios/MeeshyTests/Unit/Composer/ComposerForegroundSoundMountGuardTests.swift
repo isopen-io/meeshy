@@ -62,6 +62,19 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
             carte.contains("MeeshyAudioTranscriptPlayer("),
             "La carte doit monter le lecteur du SDK, jamais une bande réécrite ici."
         )
+        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
+        // fichier ; les précédents partaient à la publication sans que rien à
+        // l'écran ne dise qu'ils existaient.
+        XCTAssertTrue(
+            carte.contains("ForEach(foregroundSounds)"),
+            "La carte doit se répéter sur TOUS les sons de contenu : un `if let` n'en montre "
+                + "qu'un, et les autres partent quand même à la publication."
+        )
+        XCTAssertTrue(
+            carte.contains("rappel(son)"),
+            "…et le tap doit désigner LE son touché : un rappel sans argument ouvrirait "
+                + "toujours le même, un contrôle qui a l'air de répondre et vise son voisin."
+        )
     }
 
     /// **La branche à SCÈNE ne la monte pas.** Contre-épreuve : sans elle, la
@@ -90,8 +103,8 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
             return XCTFail("`documentSurface` introuvable.")
         }
-        XCTAssertTrue(document.contains("foregroundSound: foregroundSound"),
-                      "La surface ne reçoit plus le son de contenu.")
+        XCTAssertTrue(document.contains("foregroundSounds: foregroundSounds"),
+                      "La surface ne reçoit plus les sons de contenu.")
         XCTAssertTrue(document.contains("editForegroundSound(son)"),
                       "Le tap de la carte n'est plus câblé : il ne ferait rien.")
 
