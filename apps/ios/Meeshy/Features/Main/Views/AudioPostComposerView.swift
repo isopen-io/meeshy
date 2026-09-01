@@ -138,12 +138,13 @@ struct AudioPostComposerView: View {
                                     acceptRecording(url: url, mimeType: "audio/mp4")
                                 }
                             )
-                            .frame(minHeight: 300)
+                            // Rétréci (directive porteur 2026-09-01) : ce carré
+                            // porte UN bouton et un compteur ; la place qu'il
+                            // prenait est celle dont le placement et le rognage
+                            // ont besoin, plus bas.
+                            .frame(minHeight: 220)
                         } else {
                             statusCard
-                        }
-                        if offersTranscription {
-                            languageSelector
                         }
                         // **Le placement suit immédiatement le carré du son**
                         // (directive porteur 2026-09-01) : c'est la décision qui
@@ -151,9 +152,16 @@ struct AudioPostComposerView: View {
                         // regardant ce qu'on vient d'enregistrer — pas en bas
                         // d'un écran qu'il faut faire défiler.
                         placementSection
+                        if offersTranscription {
+                            languageSelector
+                        }
                         contentPanel
                         trimSection
-                        Color.clear.frame(height: 100)
+                        // Plus de réserve manuelle : `safeAreaInset` ci-dessous
+                        // retranche la hauteur RÉELLE de la barre, mesurée par
+                        // SwiftUI. Un nombre écrit à la main aurait menti au
+                        // premier changement de police ou de Dynamic Type.
+                        Color.clear.frame(height: MeeshySpacing.md)
                     }
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.lg)
@@ -164,11 +172,20 @@ struct AudioPostComposerView: View {
                         importAudioFile(from: url)
                     }
                 }
-
-                VStack {
-                    Spacer()
+                // **La barre d'action RÉSERVE sa place, sur le DÉFILEMENT**
+                // (#4657). En overlay dans le `ZStack`, elle recouvrait le
+                // dernier bloc dès que le contenu ne défilait pas — un ressort
+                // au bas du défilement ne réserve rien quand il n'y a rien à
+                // faire défiler.
+                //
+                // Et l'inset se pose ICI, pas sur le `ZStack` : posé sur le
+                // conteneur, il en emportait la LARGEUR avec lui et tout le
+                // contenu se décalait, bords gauche et droit rognés — mesuré à
+                // l'écran, pas déduit.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
                     actionBar
                         .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.top, MeeshySpacing.md)
                         .padding(.bottom, MeeshySpacing.lg)
                         .background(
                             LinearGradient(
@@ -178,6 +195,7 @@ struct AudioPostComposerView: View {
                             .ignoresSafeArea(edges: .bottom)
                         )
                 }
+
             }
             .task { adopterAudioInitial() }
             .navigationTitle(title)
@@ -263,7 +281,7 @@ struct AudioPostComposerView: View {
                     // VoiceOver.
                     .accessibilityHidden(true)
             }
-            .frame(height: 168)
+            .frame(height: 132)
 
             durationLabel
         }
@@ -385,45 +403,45 @@ struct AudioPostComposerView: View {
     @ViewBuilder
     private var placementSection: some View {
         if let placement, recordedURL != nil || borrowedSound != nil {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(ComposerSoundRoleCopy.title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textSecondary)
-
-                // **Un grand interrupteur, pas deux pastilles.** Le choix
-                // n'est pas un réglage parmi d'autres : c'est lui qui décide si
-                // la publication PORTE ce son ou si elle EST ce son. Deux
-                // moitiés pleine largeur le disent ; deux petites capsules le
-                // rangeaient au même niveau qu'un filtre.
+            VStack(alignment: .leading, spacing: 6) {
+                // **Sans titre** (directive porteur 2026-09-01). « Place du
+                // son » nommait ce que les deux libellés disent déjà — « fond
+                // de publication », « contenu de publication » se lisent seuls.
+                // Un en-tête qui répète son contenu vole une ligne au rognage.
                 HStack(spacing: 0) {
                     ForEach(ComposerAudioRole.allCases, id: \.self) { role in
                         placementHalf(role, binding: placement)
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(theme.surface(tint: "C7D2FE"))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 14)
                         .stroke(MeeshyColors.indigo400.opacity(0.25), lineWidth: 1)
                 )
 
-                if borrowedSound != nil {
-                    Text(ComposerSoundRoleCopy.borrowedForegroundRefusal)
-                        .font(.caption2)
-                        .foregroundColor(theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                // La définition passe SOUS l'interrupteur, sur une ligne, pour
+                // celle qui est choisie — c'est ce qui divise sa hauteur par
+                // deux. Le prix est réel et assumé : il faut choisir une moitié
+                // pour lire ce qu'elle fait. Les deux libellés étant explicites,
+                // la ligne CONFIRME plutôt qu'elle n'enseigne.
+                Text(borrowedSound != nil
+                     ? ComposerSoundRoleCopy.borrowedForegroundRefusal
+                     : ComposerSoundRoleCopy.description(placement.wrappedValue))
+                    .font(.caption2)
+                    .foregroundColor(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    /// Une moitié de l'interrupteur — son titre, et ce que ce titre VEUT DIRE.
+    /// Une moitié de l'interrupteur — son libellé, et rien d'autre.
     ///
-    /// La description vit SOUS chaque titre plutôt que sous l'interrupteur :
-    /// une seule ligne changeante obligerait à sélectionner une option pour
-    /// savoir ce qu'elle fait, c'est-à-dire à essayer pour comprendre.
+    /// La description a quitté chaque moitié pour la ligne unique sous
+    /// l'interrupteur : deux titres et deux sous-titres empilés faisaient un
+    /// bloc de 88 pt là où la décision en mérite 44.
     @ViewBuilder
     private func placementHalf(_ role: ComposerAudioRole,
                                binding: Binding<ComposerAudioRole>) -> some View {
@@ -440,26 +458,19 @@ struct AudioPostComposerView: View {
             binding.wrappedValue = role
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 4) {
-                Text(ComposerSoundRoleCopy.label(role))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(choisi ? .white : theme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(ComposerSoundRoleCopy.description(role))
-                    .font(.caption2)
-                    .foregroundColor(choisi ? .white.opacity(0.85) : theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(choisi ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Color.clear))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            Text(ComposerSoundRoleCopy.label(role))
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(choisi ? .white : theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(choisi ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Color.clear))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
         .disabled(refuse)

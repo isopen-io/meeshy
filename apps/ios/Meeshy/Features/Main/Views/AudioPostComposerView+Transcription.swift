@@ -24,15 +24,25 @@ extension AudioPostComposerView {
 
     var languageSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "composer.audio.transcription.language", defaultValue: "Langue de transcription"))
-                    .font(.caption.weight(.semibold))
-                Spacer()
+            // **« Langue du son », et seulement AVANT l'enregistrement**
+            // (directive porteur 2026-09-01). Ce n'est pas la langue de la
+            // transcription : c'est celle qui est PARLÉE — la transcription
+            // n'en est qu'une conséquence, et le Prisme s'en sert ensuite pour
+            // traduire. Une fois le son capté, l'en-tête ne dit plus rien que
+            // les pastilles ne montrent, et la place qu'il prend manque au
+            // rognage.
+            if phase == .idle || phase == .recording {
+                HStack(spacing: 6) {
+                    Image(systemName: "globe")
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                    Text(String(localized: "composer.audio.transcription.language",
+                                defaultValue: "Langue du son", bundle: .main))
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                }
+                .foregroundColor(theme.textSecondary)
             }
-            .foregroundColor(theme.textSecondary)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -237,52 +247,32 @@ extension AudioPostComposerView {
     /// utiliser ; il reste dans l'annonce d'accessibilité, où il ne coûte pas
     /// trois lignes d'écran.
     func errorPanel(_ error: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.footnote)
-                .foregroundColor(MeeshyColors.error)
-                .accessibilityHidden(true)
-
-            Text(String(localized: "composer.audio.transcription.unavailable",
-                        defaultValue: "Transcription indisponible"))
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
-                .lineLimit(1)
-
-            if recordedURL != nil {
-                actionErreur(String(localized: "common.retry", defaultValue: "Réessayer"),
-                             pleine: true, action: retryTranscription)
-            }
-
-            // **Deux façons de s'en passer** (directive porteur 2026-09-01).
-            // La reconnaissance vocale échoue pour des raisons qui ne regardent
-            // pas l'auteur — pas de modèle pour sa langue, audio bruité,
-            // service indisponible. Lui laisser une transcription VIDE le prive
-            // de la traduction et de la recherche pour une panne dont il n'est
-            // pas responsable ; deux gestes suffisent à la lui rendre.
-            actionErreur(String(localized: "composer.audio.transcription.write",
-                                defaultValue: "Rédiger", bundle: .main),
-                         pleine: false) { showManualTranscription = true }
-
-            // « Coller » n'apparaît QUE si le presse-papiers porte du texte.
-            // `hasStrings` répond sans le LIRE, donc sans déclencher la demande
-            // d'autorisation d'iOS. Un bouton qui collerait du vide serait un
-            // contrôle sans effet ; celui-ci n'existe que quand il en a un.
-            if UIPasteboard.general.hasStrings {
-                actionErreur(String(localized: "composer.audio.transcription.paste",
-                                    defaultValue: "Coller", bundle: .main),
-                             pleine: false, action: collerTranscription)
-            }
-
-            Spacer(minLength: 0)
+        // **Une ligne quand elle RENTRE, deux quand elle ne rentre pas.**
+        //
+        // Quatre éléments sur 402 pt, c'est juste — et « juste » dépend de la
+        // langue, du Dynamic Type et de la largeur de l'appareil. Trois
+        // tentatives ont montré les deux échecs possibles : forcer la largeur
+        // intrinsèque des quatre POUSSE le conteneur (toute la feuille se
+        // décalait, bords rognés) ; la réduire TRONQUE le message, et
+        // « Transcription indis… » n'apprend rien.
+        //
+        // `ViewThatFits` tranche à la mesure plutôt qu'au pari : la ligne
+        // unique est servie partout où elle tient, et là où elle ne tient pas
+        // le message garde sa place entière au-dessus de ses actions.
+        ViewThatFits(in: .horizontal) {
+            ligneErreur(surUneLigne: true)
+            ligneErreur(surUneLigne: false)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Un rectangle arrondi plutôt qu'une capsule : la forme doit tenir les
+        // DEUX dispositions, et une capsule sur deux lignes dessine un stade.
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: 18)
                 .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
-                .overlay(Capsule().stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 18)
+                    .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1))
         )
         // Le détail technique n'est pas montré, mais il n'est pas PERDU : il
         // part dans l'annonce, seul endroit où un diagnostic peut vivre sans
@@ -306,6 +296,62 @@ extension AudioPostComposerView {
         }
     }
 
+    /// Les deux formes de la ligne d'erreur — le message, puis ses trois
+    /// sorties. En une ligne quand la largeur le permet, en deux sinon.
+    @ViewBuilder
+    private func ligneErreur(surUneLigne: Bool) -> some View {
+        let message = HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
+            Text(String(localized: "composer.audio.transcription.unavailable",
+                        defaultValue: "Transcription indisponible"))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        let actions = HStack(spacing: 6) {
+            if recordedURL != nil {
+                actionErreur(String(localized: "common.retry", defaultValue: "Réessayer"),
+                             pleine: true, action: retryTranscription)
+            }
+            // **Deux façons de s'en passer** (directive porteur 2026-09-01).
+            // La reconnaissance vocale échoue pour des raisons qui ne regardent
+            // pas l'auteur — pas de modèle pour sa langue, audio bruité,
+            // service indisponible. Lui laisser une transcription VIDE le prive
+            // de la traduction et de la recherche pour une panne dont il n'est
+            // pas responsable ; deux gestes suffisent à la lui rendre.
+            actionErreur(String(localized: "composer.audio.transcription.write",
+                                defaultValue: "Rédiger", bundle: .main),
+                         pleine: false) { showManualTranscription = true }
+            // « Coller » n'apparaît QUE si le presse-papiers porte du texte.
+            // `hasStrings` répond sans le LIRE, donc sans déclencher la demande
+            // d'autorisation d'iOS. Un bouton qui collerait du vide serait un
+            // contrôle sans effet ; celui-ci n'existe que quand il en a un.
+            if UIPasteboard.general.hasStrings {
+                actionErreur(String(localized: "composer.audio.transcription.paste",
+                                    defaultValue: "Coller", bundle: .main),
+                             pleine: false, action: collerTranscription)
+            }
+        }
+
+        if surUneLigne {
+            HStack(spacing: 6) {
+                message
+                actions
+                Spacer(minLength: 0)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                message
+                actions
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     /// Une action de la ligne d'erreur. `pleine` distingue le geste NOMINAL —
     /// réessayer, la machine peut encore réussir — des deux replis manuels.
     @ViewBuilder
@@ -314,9 +360,11 @@ extension AudioPostComposerView {
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(titre)
-                .font(.footnote.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(pleine ? .white : MeeshyColors.indigo400)
-                .padding(.horizontal, 12)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
@@ -328,6 +376,7 @@ extension AudioPostComposerView {
                 )
         }
         .buttonStyle(.plain)
+        .layoutPriority(0)
     }
 
     /// **Coller n'est pas rédiger** : le presse-papiers est lu ICI, au tap, et

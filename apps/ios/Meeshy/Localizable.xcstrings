@@ -48541,43 +48541,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لغة النسخ"
+            "value": "لغة الصوت"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkriptionssprache"
+            "value": "Sprache des Tons"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription language"
+            "value": "Sound language"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Idioma de transcripción"
+            "value": "Idioma del sonido"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Langue de transcription"
+            "value": "Langue du son"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lingua di trascrizione"
+            "value": "Lingua del suono"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Idioma da transcrição"
+            "value": "Idioma do som"
           }
         }
       }
