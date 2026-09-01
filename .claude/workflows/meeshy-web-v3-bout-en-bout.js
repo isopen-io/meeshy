@@ -96,11 +96,21 @@ ROUTES — decision de ce tour (a inscrire dans la conception par la phase Conce
 - \`/\`            : vitrine (visiteur) OU tableau de bord (lecteur connecte) — deja aiguille par app/route.ts.
 - \`/chats\`       : liste des conversations (connecte) — existe, a styliser et rendre temps reel.
 - \`/chats/:cle\`  : le fil d'une conversation (connecte) — existe, a styliser et rendre temps reel.
-- \`/chat/:lien\`  : REJOINDRE par un lien partage (anonyme ou connecte). C'est la route LEGACY
-  (apps/web/app/chat/[id], declaree dans l'AASA iOS pour les liens universels) : les liens deja
-  partages pointent \`/chat/<id>\`, ils doivent continuer de s'ouvrir. La conception ecrivait
-  \`/chats/:lien\` pour join/rights : cette ecriture entrait en collision avec le fil connecte
-  \`/chats/:cle\` ; \`/chat/:lien\` la remplace, et la matrice suit.
+- \`/chat/:lien\`  : REJOINDRE par un lien partage (anonyme ou connecte), et TOUT ce qui suit se
+  passe SOUS CETTE MEME ADRESSE (directive du porteur, 2026-09-01) : l'apercu du lien et le
+  formulaire de jonction (vue \`join\`), les sept refus, la confirmation des droits (vue \`rights\`),
+  PUIS LE FIL de la conversation pour l'invite (vue \`thread\`, audience anonyme) — l'etat de
+  l'ecran est decide par le serveur d'apres ce que le lecteur detient (aucune session invitee ⇒
+  apercu + formulaire ; session invitee valide ⇒ le fil ; un lecteur connecte membre ⇒ le fil ;
+  un lecteur connecte non membre ⇒ apercu + « Rejoindre »). Il n'existe AUCUNE route \`/join\`,
+  aucune redirection vers une autre adresse pour rejoindre, aucun \`/chat/:lien/quelque-chose\`
+  pour lire : un lien recu dans WhatsApp s'ouvre, se rejoint et se lit a UNE adresse. C'est la
+  route LEGACY (apps/web/app/chat/[id], declaree dans l'AASA iOS pour les liens universels) : les
+  liens deja partages pointent \`/chat/<id>\`, ils doivent continuer de s'ouvrir. La conception
+  ecrivait \`/chats/:lien\` pour join/rights : cette ecriture entrait en collision avec le fil
+  connecte \`/chats/:cle\` ; \`/chat/:lien\` la remplace, et la matrice suit. Le fil de l'invite
+  (\`/chat/:lien\`) et le fil du membre (\`/chats/:cle\`) sont rendus par le MEME module de vue
+  (app/connecte/fil-vue.ts, a faire evoluer) — deux portes, une seule vue, jamais une jumelle.
 
 REGLES DE LA V3, non negociables :
 - La v3 vit dans apps/web-v3. apps/web reste VIF et sert le trafic : on n'y touche que si la
@@ -489,15 +499,18 @@ mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
    .cache/dc-vendor). Verifie que \`cible/<id>.png\` existe pour chaque vue neuve et que vues.json /
    vues.md la portent. Si une route parametree entre, declare son jeton dans jetons-de-vues.json.
 3. LA MATRICE ${D}/matrice.json : une ligne par vue neuve (vue_id, titre_issue, lot, priorite,
-   route, audience, depend_de, critere_de_fin, dimensions_visees, corps_issue) ; \`join\` et
-   \`rights\` passent a la route \`/chat/:lien\` (voir « ROUTES — decision de ce tour ») ; puis
+   route, audience, depend_de, critere_de_fin, dimensions_visees, corps_issue) ; \`join\`,
+   \`rights\` passent a la route \`/chat/:lien\`, et \`thread\` porte ses DEUX adresses
+   (\`/chat/:lien\` pour l'invite, \`/chats/:cle\` pour le membre — voir « ROUTES ») ; puis
    \`node ${D}/ordre-des-ecrans.js\` doit rendre rc=0 et regenerer ordre.md. Ne touche jamais
    ordre.md a la main.
 4. LA CONCEPTION ${D}/conception-web-v3.md : ajoute (ou complete) un « § 12 — Directive du
    porteur (2026-09-01) » qui tranche par ecrit, avec la meme exigence de preuve que le reste du
    document : (a) la vitrine est un ecran de la v3 (ferme la question de #4476 point 2) ; (b) \`/\`
-   sert le TABLEAU DE BORD au lecteur connecte (pas le fil) ; (c) \`/chat/:lien\` est la route de
-   jonction, et pourquoi (legacy, AASA, collision avec /chats/:cle) — avec l'etape de bascule
+   sert le TABLEAU DE BORD au lecteur connecte (pas le fil) ; (c) \`/chat/:lien\` est LA route de
+   jonction ET de lecture pour l'invite — aucune route /join, aucune redirection, l'etat decide
+   par le serveur d'apres ce que le lecteur detient — et pourquoi (legacy, AASA, collision avec
+   /chats/:cle ; le § 6.3 etat par etat s'y applique tel quel) — avec l'etape de bascule
    Traefik correspondante dans le tableau du § 4.9 ; (d) le TEMPS REEL de participation : un module
    ES ecrit a la main, charge apres le premier pixel, socket.io-client par import dynamique, servi
    dans la zone (ou et comment — decide-le en lisant § 4.4, § 4.4 bis, next.config.ts,
