@@ -64,15 +64,78 @@ la publication comme un objet** — mesuré le 2026-09-01, avec ses sites :
 | fil app → passerelle | `PublishIntent.swift:52` — douze champs, **pas une slide, pas un objet, pas un effet** |
 | base | `model Post` (`packages/shared/prisma/schema.prisma`) — **ni `storyId`, ni `sceneId`, ni index de slide** ; la scène voyage en `storyEffects Json?`, opaque, **un par post** |
 
-Une publication de quatre slides est donc **quatre lignes `Post` que rien ne
-relie**. Le mot « publication » a un référent dans le composer et n'en a plus
-aucun passé le fil.
+Une STORY de quatre scènes est donc **quatre lignes `Post` que rien ne relie** —
+et c'est conforme à la règle arbitrée ci-dessous, une story étant une suite
+d'unités autonomes. Ce qui n'a pas de référent passé le fil, c'est la
+publication **en tant qu'objet** : rien ne dit que ces quatre lignes viennent
+d'une même composition.
 
 > **Une `MeeshyPublication` ne se sérialise pas : elle se PROJETTE.** Ce qui est
 > composé est une publication ; ce qui est publié est un ensemble de posts. Tant
 > que la projection reste implicite — une boucle `for` sur les slides — personne
 > ne peut la contredire, et c'est ainsi qu'une slide vierge est partie en post
 > à côté du vrai (#4730).
+
+### La règle de projection — ARBITRÉE (porteur, 2026-09-02)
+
+**La projection dépend du PROFIL, et d'aucune autre condition :**
+
+| profil | M scènes composées | ce qui est publié |
+|---|---|---|
+| **P** (post) · **R** (réel) | M | **UN seul** post / réel, portant ses **M scènes / médias** |
+| **S** (story) | N | **N stories** — une par scène |
+
+Autrement dit : une story est une SUITE d'unités autonomes, un post est UNE
+unité à plusieurs pages. Le profil ne décide pas seulement d'un type sur le
+fil ; **il décide de la CARDINALITÉ de la projection.**
+
+**N unités ne font pas N destins** (objection soulevée en revue, tranchée sur
+mesure). « N stories » décrit ce qui est PUBLIÉ, pas ce qui est ENTREPRIS :
+`StoryPublishQueue.shared.enqueue(item)`
+(`StoryViewModel+Publication.swift:647`) enfile **UN seul item** pour toute la
+composition, quel que soit N. La boucle par slide qui l'entoure (`:682`) ne sert
+qu'à l'affichage OPTIMISTE — une bulle par unité, tout de suite.
+
+Le geste de l'auteur est donc **atomique à la file** et **pluriel à l'écran**, et
+c'est la bonne combinaison : on ne demande pas trois fois à quelqu'un qui a
+appuyé une fois. Ce qui reste à dire, et qui n'est pas tranché ici : ce que
+devient l'item si son EXÉCUTION échoue à mi-parcours, deux stories étant déjà
+créées côté serveur. Une reprise non idempotente republierait les deux
+premières.
+
+> **Une règle de cardinalité doit dire de quoi elle compte les unités.** « N
+> stories » compte des PUBLICATIONS ; l'auteur, lui, compte des GESTES, et la
+> file compte des TRAVAUX. Trois cardinalités pour une phrase — les confondre
+> fait promettre trois échecs là où il n'y a qu'un bouton.
+
+**Écart mesuré au 2026-09-02** : `publishAllSlides()`
+(`StoryComposerView+Publication.swift:305`) boucle sur les slides **sans jamais
+regarder le profil** — `publishedType(requested:atelier:)` (`:347`) choisit le
+TYPE, jamais le NOMBRE. Un post ou un réel composé à l'atelier avec M scènes
+part donc en **M posts**. C'est la règle ci-dessus qui a raison ; le code est en
+dette.
+
+**Et cette dette en a une autre sous elle** : pour qu'UN post porte M scènes, il
+faut que la scène voyage avec lui. `PublishIntent` et `CreatePostBody` ne
+portent **aucun** `storyEffects` (#4756) — le chemin document perd la scène
+entière. #4756 n'est donc pas un confort : c'est le préalable de cette règle
+pour les profils P et R.
+
+### L'identité de ce qu'on reprend, et son faux jumeau
+
+Une publication qu'on **rouvre** (édition, brouillon repris) doit dire laquelle
+elle est. Cette identité vit **dans le brouillon**, pas à côté : c'est
+`onPublishDocument(draft)` qui décide « créer ou éditer », et une décision qui
+arrive par deux canaux diverge au premier site qui n'en câble qu'un. Un
+optionnel suffit et porte tout — `nil` ⇒ création, posé ⇒ reprise ; **pas de
+booléen d'accompagnement** (règle du dépôt sur les paires redondantes).
+
+> ⚠️ **`repostOfId` est déjà là, de forme IDENTIQUE et de sens OPPOSÉ.** Deux
+> `String?` voisins dont l'un dit « je DESCENDS de » (l'ancrage vers la source
+> qu'on republie) et l'autre « je SUIS » (la publication qu'on rouvre). Leur
+> doc-comment doit les opposer explicitement : confondus, le symptôme est une
+> ÉDITION qui publie un repost de son propre post — un défaut qui se relit comme
+> du code juste.
 
 ### Les trois obligations de la projection
 
@@ -153,7 +216,7 @@ du document », planche ligne 1193 ; « une scène projetée en familles v1 EST 
 ligne 562) — donc elle ne coûte aucune migration de fil. Elle supprime une question que
 l'utilisateur n'a aucune raison de se poser. Et elle rend vraie, sans cas particulier, la
 demande de départ : *une scène doit pouvoir être un seul média présentable dans un réel
-ou dans un post.* La complexité se paie dans le code, jamais chez l'utilisateur (loi 11).
+ou dans un post.* La complexité se paie dans le code, jamais chez l'utilisateur (**dimension 12** de la roadmap produit — la planche dit explicitement que ce n'est PAS une loi du composer, dont la loi 11 est « Personne ne lit du vide »).
 
 ## 3. Ce qu'une slide SIGNIFIE dépend du profil
 

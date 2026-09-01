@@ -923,7 +923,7 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// > voulait. Un test qui part de l'ÉTAT traverse la traduction ; un test
     /// > qui part de la VALEUR la présuppose.
     func test_unDocumentAvecUneScene_sertLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: true, editsScene: true)
+        let vue = ComposerMountedView.mounted(surface: .document, hasScene: true)
         XCTAssertEqual(vue, .scene, "La scène incrustée est un document QUI A une scène.")
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: vue),
                       "C'est l'écran où poser un sticker, avancer un objet et changer le fond "
@@ -933,7 +933,7 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// Et le document NU ne le sert toujours pas — le contrepoids du témoin
     /// précédent, sans lequel « tout servir » le rendrait vert.
     func test_unDocumentSansScene_neSertPasLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: false, editsScene: false)
+        let vue = ComposerMountedView.mounted(surface: .document, hasScene: false)
         XCTAssertEqual(vue, .document)
         XCTAssertFalse(ComposerHistoryService.servesHistory(on: vue))
     }

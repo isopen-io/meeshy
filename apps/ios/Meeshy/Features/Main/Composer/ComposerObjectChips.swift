@@ -182,11 +182,11 @@ nonisolated enum ComposerObjectChips {
         case .text(let o):    return chips(for: o, locale: locale, openableBands: openableBands)
         case .media(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
         case .sticker(let o): return chips(for: o, locale: locale, openableBands: openableBands)
-        case .location, .audio:
-            // Ni l'un ni l'autre n'a d'inspecteur : le lieu ne porte que son
-            // nom, et le son n'a pas encore de forme sur la scène (#4579). Ce
-            // `return []` est le MÊME comportement qu'avant — la différence est
-            // qu'il est désormais ÉCRIT au lieu d'être un défaut de cascade.
+        case .audio(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
+        case .location:
+            // Le lieu ne porte que son nom, et il est déjà dit par l'en-tête de
+            // la scène (#4034) : un jeton le répéterait sans rien offrir à
+            // régler. Ce `return []` est ÉCRIT, jamais un défaut de cascade.
             return []
         }
     }
@@ -314,6 +314,57 @@ nonisolated enum ComposerObjectChips {
         }
         if let fenetre = window(start: media.startTime,
                                 duration: media.duration, locale: locale) {
+            jetons.append(Chip(id: "window", label: fenetre,
+                               destination: porte(.timeline, parmi: openableBands)))
+        }
+        return jetons
+    }
+
+    /// **Les jetons d'une CHIP DE SON** (#4579, retour porteur 2026-09-02 :
+    /// « l'affichage des détails des outils qui manquent »).
+    ///
+    /// Le son rendait `[]`, sous un commentaire devenu faux : « le son n'a pas
+    /// encore de forme sur la scène ». Il en a une depuis `fab725c1d5` —
+    /// `AudioForegroundChip`, déplaçable et redimensionnable — et depuis
+    /// `7311d42c60` elle a même un RANG manipulable. Un objet qu'on peut poser,
+    /// déplacer, redimensionner et ranger en profondeur, mais dont la sélection
+    /// n'affiche AUCUN réglage, est le seul de la scène dans ce cas.
+    ///
+    /// > Un commentaire qui justifie une absence par un état du monde se périme
+    /// > quand cet état change — et il continue d'expliquer, avec assurance, une
+    /// > décision que plus rien ne fonde. C'est le contraire d'une garde : il
+    /// > protège l'absence au lieu de la signaler.
+    ///
+    /// Quatre jetons, et pas un de plus que ce que l'objet PORTE :
+    /// - la TAILLE, comme tout objet de scène — elle ne manque jamais ;
+    /// - la ROTATION quand elle a été touchée ;
+    /// - le VOLUME, seulement s'il s'écarte du nominal (même règle que la
+    ///   vidéo : « SON 100 % » sur une piste jamais réglée enseigne moins que
+    ///   rien) ;
+    /// - la FENÊTRE de lecture, qui mène à la timeline.
+    ///
+    /// Un son de FOND n'est pas concerné : il n'a pas de chip sur la scène,
+    /// donc pas de sélection, donc jamais de rangée. C'est `isBackground` qui
+    /// l'en écarte à la source — et le vérifier ici serait une seconde écriture
+    /// de la même règle.
+    static func chips(for audio: StoryAudioPlayerObject,
+                      locale: Locale = .current,
+                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+        var jetons: [Chip] = [sizeChip(scale: audio.scale ?? 1, locale: locale)]
+        if let rotation = rotationChip(audio.rotation ?? 0, locale: locale) {
+            jetons.append(rotation)
+        }
+        if abs(Double(audio.volume) - 1) > 0.001 {
+            jetons.append(Chip(id: "volume",
+                               label: ComposerObjectChipsCopy.sound(
+                                LocalizedNumber.percent(Int((Double(audio.volume) * 100).rounded()),
+                                                        locale: locale))))
+        }
+        // `startTime`/`duration` sont des `Float?` sur cette famille seule —
+        // la conversion est ÉCRITE plutôt que laissée à l'inférence, qui
+        // n'existe pas ici : `window` prend des `Double?`.
+        if let fenetre = window(start: audio.startTime.map(Double.init),
+                                duration: audio.duration.map(Double.init), locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre,
                                destination: porte(.timeline, parmi: openableBands)))
         }

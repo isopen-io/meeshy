@@ -255,6 +255,11 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// Ce qui distingue la story n'est pas d'avoir un canvas — c'est que
     /// chacun de ses canvas est une unité d'histoire à publier, pas un média de
     /// la publication.
+    ///
+    /// **Remis en cause le 2026-09-02, RÉTABLI le même jour** (retour porteur) :
+    /// j'y avais servi les outils qui posent un objet de scène, pour réparer un
+    /// défaut que je venais de créer en retirant les rails. Les rails sont
+    /// restaurés — la story se compose par eux et par la rangée contextuelle.
     static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
         format == .story ? [] : servedRow
     }

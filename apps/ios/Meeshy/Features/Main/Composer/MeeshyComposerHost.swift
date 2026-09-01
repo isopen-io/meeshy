@@ -493,23 +493,7 @@ struct MeeshyComposerHost: View {
     /// lecture morte le jour où un lot suivant croirait s'en servir.
     @State var selectedSceneItemKind: StoryCanvasUIView.CanvasItemKind?
 
-    /// **L'auteur est-il ENTRÉ dans l'éditeur de scène ?** (#4513)
-    ///
-    /// `false` ⇒ la scène est INCRUSTÉE dans le document (`1b`) ; `true` ⇒ elle
-    /// occupe l'écran avec ses rails et son inspecteur (`1c`).
-    ///
-    /// **Un GESTE, jamais une dérivation de `selectedSceneItemKind`** — que le
-    /// code pose programmatiquement en au moins trois endroits (poser un texte
-    /// le sélectionne, `+Intake`; un fond tapé le sélectionne; une intake le
-    /// remet à `nil`). Dériver l'écran de la sélection ferait donc basculer
-    /// l'auteur dans l'éditeur au moment où il POSE un objet, pas au moment où
-    /// il demande à l'éditer.
-    ///
-    /// Il ne se remet pas à `false` quand la scène disparaît : la règle s'en
-    /// charge (`hasScene && editsScene`), et un second site qui l'éteindrait
-    /// serait une deuxième écriture de la même loi.
-    @State var editsScene = false
-    /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
+   /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
     /// JETAIT (`{ _, kind in … }`). Le kind suffisait à l'inspecteur, qui ne
     /// sert qu'un contrôle par famille ; le rail *trailing* offre des actions
     /// qui dépendent de CET objet — verrouillé ? au fond ? seul de son plan ? —
@@ -1138,11 +1122,7 @@ struct MeeshyComposerHost: View {
             // La substitution se fait ICI et pas dans `documentHasScene`, dont
             // le MOOD est l'autre lecteur : y injecter le format ferait décider
             // l'offre de formats par le format déjà choisi.
-            hasScene: sceneIsPresent,
-            // **`1b` par défaut, `1c` sur un geste** (#4513). L'éditeur ne se
-            // sert plus d'emblée : la scène naît INCRUSTÉE dans le document, et
-            // l'auteur y entre en tapant ce qu'il veut modifier.
-            editsScene: editsScene
+            hasScene: sceneIsPresent
         )
     }
 
