@@ -67,15 +67,33 @@ function log(...args) {
 // du § 4.3 : retirer un `PathPrefix` ne demande aucune contrepartie ici (ne
 // pas intercepter n'est jamais faux, seulement moins mis en cache), alors que
 // l'en retirer rouvrirait le défaut le temps d'une propagation de worker.
-// Gardé par `__tests__/public/sw.v3-zone.test.ts`, qui lit la règle réelle du
-// compose de production et exige `règle Traefik ⊆ cette liste`.
-// `/l` entre ici pour l'ÉTAPE 2 du § 4.9 (« le rôle premier, une seule
-// route »), et il y entre SEUL : la v3 ne sert aujourd'hui que
-// `/l/:token` et `/l/:token/expired`. Ce commit est l'antérieur exigé
-// ci-dessus — le `PathPrefix` correspondant n'est ajouté au routeur qu'une
-// fois cette image DÉPLOYÉE, sans quoi la bascule ne couvrirait que les
-// navigateurs neufs et son retour arrière serait inerte chez les revenants.
-const V3_ZONE_PREFIXES = ['/__v3', '/l'];
+// Gardé par `scripts/check-v3-pipeline.mjs` — invariant « le worker legacy
+// s'efface devant ce que la règle réclame », posé une fois PAR DÉPLOIEMENT
+// (production ET staging) et qui EXÉCUTE `belongsToV3Zone` plutôt que de la
+// recopier. `__tests__/public/sw.v3-zone.test.ts` garde l'autre moitié : que
+// chaque chemin réclamé échappe VRAIMENT au listener.
+//
+// `/l` est entré ici pour l'ÉTAPE 2 du § 4.9 (« le rôle premier, une seule
+// route »), dans le commit antérieur exigé ci-dessus.
+//
+// LES SIX SUIVANTS SONT UN RATTRAPAGE, ET IL FAUT LE DIRE. `/` a été réclamé
+// par le routeur de staging quand la vitrine v3 a basculé (2026-09-01) SANS
+// entrer dans cette liste : la vitrine était donc servie aux navigateurs neufs
+// et le shell du legacy, sorti du cache, aux revenants. Aucun témoin n'a
+// rougi — celui qui existait ne lisait que le compose de PRODUCTION et ne
+// reconnaissait que `PathPrefix(…)`, jamais `Path(…)`, qui est justement la
+// forme employée pour `/`. Les cinq pages institutionnelles entrent, elles,
+// dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686).
+const V3_ZONE_PREFIXES = [
+  '/__v3',
+  '/l',
+  '/',
+  '/about',
+  '/contact',
+  '/partners',
+  '/terms',
+  '/privacy',
+];
 
 function belongsToV3Zone(pathname) {
   return V3_ZONE_PREFIXES.some(

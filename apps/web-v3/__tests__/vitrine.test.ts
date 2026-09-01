@@ -1,4 +1,5 @@
-import { ATOUTS, HEROS, MISSION, PIED } from '@/app/vitrine/contenu';
+import { PIED } from '@/app/enveloppe/contenu';
+import { ATOUTS, HEROS, MISSION } from '@/app/vitrine/contenu';
 import { documentDeLaVitrine } from '@/app/vitrine/vue';
 
 /**

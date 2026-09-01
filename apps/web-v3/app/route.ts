@@ -1,22 +1,15 @@
+import { rendLePage } from './enveloppe/vue';
 import { documentDeLaVitrine } from './vitrine/vue';
 
 /**
  * `/` — la vitrine publique.
  *
- * ELLE NE PARTAGE PAS `rendDocument` AVEC LES ÉCRANS DE LIEN, et c'est une
- * différence de CONTRAT, pas un oubli. Celui-là pose `cache-control: no-store`,
- * juste pour une réponse composée autour d'un jeton : la mettre en cache la
- * servirait au lecteur suivant. Cette page-ci ne dépend d'aucun lecteur, ne
- * porte aucune donnée, et une politique `no-store` lui ferait payer un
- * aller-retour complet à chaque visite — sur la surface même qui vante la
- * légèreté. Partager la fonction aurait donc partagé la MAUVAISE moitié.
+ * La politique de cache vit dans `rendLePage` (`app/enveloppe/vue.ts`), avec
+ * celle des cinq pages institutionnelles : ces six documents ne dépendent
+ * d'aucun lecteur et ne portent aucune donnée. C'est la raison pour laquelle
+ * aucun d'eux ne passe par `rendDocument`, le rendu des écrans de lien : celui-
+ * là pose `cache-control: no-store`, juste pour une réponse composée autour
+ * d'un jeton dont l'état change sans prévenir, et ruineux ici — un aller-retour
+ * complet à chaque visite, sur les surfaces mêmes qui vantent la légèreté.
  */
-export function GET(): Response {
-  return new Response(documentDeLaVitrine(), {
-    status: 200,
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400',
-    },
-  });
-}
+export const GET = (): Response => rendLePage(documentDeLaVitrine());

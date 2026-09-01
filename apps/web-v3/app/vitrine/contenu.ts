@@ -26,6 +26,8 @@
  * `footer.social.followUs` non plus : il n'existe aucune URL sociale à mettre
  * derrière, et un intitulé sans destination est un contrôle qui ment.
  *
+ * Le reste du pied (`footer`), lui, a DÉMÉNAGÉ — voir plus bas.
+ *
  * LA LANGUE. Le fichier n'existe qu'en français parce que `DOCUMENT_LANGUAGE`
  * vaut `'fr'` — une constante, aujourd'hui. Le jour où #4415 la rend variable,
  * les trois autres locales du legacy (`en`, `es`, `pt`) rejoignent ce fichier
@@ -93,14 +95,12 @@ export const APPEL = {
   action: 'Créer un compte gratuit',
 } as const;
 
-export const PIED = {
-  devise: 'Briser les barrières linguistiques, une conversation à la fois',
-  droits: '© 2025 Meeshy. Tous droits réservés.',
-  liens: [
-    { libelle: 'À propos', href: '/about' },
-    { libelle: 'Contact', href: '/contact' },
-    { libelle: 'Partenaires', href: '/partners' },
-    { libelle: 'Conditions d’utilisation', href: '/terms' },
-    { libelle: 'Politique de confidentialité', href: '/privacy' },
-  ],
-} as const;
+/**
+ * Le PIED du legacy n'est plus ici : il vit dans `app/enveloppe/contenu.ts`.
+ *
+ * Il porte les cinq liens institutionnels, que les cinq pages institutionnelles
+ * servent désormais elles aussi — et qui portent le MÊME pied. Le laisser chez
+ * la vitrine aurait obligé `/about` à importer depuis la page d'accueil, ou à
+ * recopier ces lignes : la définition d'une jumelle. C'est le chrome du SITE,
+ * pas celui d'un écran.
+ */

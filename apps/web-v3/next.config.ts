@@ -25,16 +25,27 @@ const nextConfig: NextConfig = {
      */
     '/**': ['./node_modules/@meeshy/icons/critical.svg'],
     /**
-     * La vitrine inline la table de jetons — même lecture par CHEMIN que
-     * l'écran d'un lien, donc même invisibilité pour le traceur. Elle ne
-     * déclare PAS `sprite.svg` : elle n'affiche aucun glyphe, et l'ajouter
-     * ferait voyager 40 Ko dans l'image pour une surface qui n'en lit rien.
+     * La vitrine et les cinq pages institutionnelles inlinent la table de
+     * jetons — même lecture par CHEMIN que l'écran d'un lien, donc même
+     * invisibilité pour le traceur. Aucune ne déclare `sprite.svg` : elles
+     * n'affichent aucun glyphe, et l'ajouter ferait voyager 40 Ko dans l'image
+     * pour six surfaces qui n'en lisent rien.
+     *
+     * LA DÉCLARATION EST PAR ROUTE, et c'est ce qui rend l'oubli si coûteux :
+     * une page dont l'entrée manque n'échoue NI au build, NI aux témoins, NI au
+     * lint — elle sert un document SANS STYLE, et seulement dans l'image. Les
+     * six entrées sont donc composées à partir d'UNE liste, jamais recopiées.
      */
-    '/': [
-      './node_modules/@meeshy/design-tokens/tokens.css',
-      './node_modules/@meeshy/design-tokens/dark.css',
-      './node_modules/@meeshy/design-tokens/light.css',
-    ],
+    ...Object.fromEntries(
+      ['/', '/about', '/contact', '/partners', '/terms', '/privacy'].map((route) => [
+        route,
+        [
+          './node_modules/@meeshy/design-tokens/tokens.css',
+          './node_modules/@meeshy/design-tokens/dark.css',
+          './node_modules/@meeshy/design-tokens/light.css',
+        ],
+      ]),
+    ),
     '/l/[token]': [
       './node_modules/@meeshy/design-tokens/tokens.css',
       './node_modules/@meeshy/design-tokens/dark.css',
