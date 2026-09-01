@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — a deferred follow-up is only closed when EVERY named site is wired (slice `engagement-consent-gate-surfaces`)
+The prior slice `engagement-consent-gate-detail` shipped the pure consent gate on `EngagementSessions.begin` but
+wired only the DETAIL surface, deferring reels/status/story as "three thin per-surface slices". This slice did all
+three at once — the wire is one injected `PrivacyPreferencesStore` + one `consentGranted = preferences.value.allowAnalytics`
+argument per `begin` call site. Lessons:
+- **A privacy gate is not "shipped" while any of its surfaces still bypass it.** The detail slice closed the gate on
+  ONE of four surfaces; the toggle stayed 3/4 dead. Dimension-1 completeness is per-surface: enumerate every call site
+  of the gated primitive (`grep EngagementSurface`) and confirm each passes the flag, not just the one you touched.
+- **Grouping identical one-line wires into one slice is coherent when they share the exact concept.** Three surfaces,
+  one pattern, one privacy invariant — a single slice with one behavioural test per surface reads better than three
+  near-duplicate PRs, and the reviewer scope gate (apps/android-only) is unchanged.
+- **Two direct test-constructor call sites hid behind the `viewModel()` helper.** `StoryViewerViewModelTest` built the
+  VM inline in two tests (failed-load, isOwnStory) that don't use the helper — adding a ctor param breaks them silently
+  until compile. `grep 'StoryViewerViewModel('` in the test file caught both; pass `InMemoryPrivacyPreferencesStore()`
+  (default = consent granted) there so their behaviour is unchanged.
+- **Reels/story have NO bare-impression `viewPost` — only status does.** So the withheld-consent assertion differs by
+  surface: reels/story assert the specific dwell duration is absent (no impression to coexist with); status asserts the
+  dwell duration absent AND the bare `viewPost(id)` impression still fires (the un-gated accounting tier).
+
 ## 2026-09-01 — a REDUCED port can silently drop a SECURITY tier; and "any()" matches a defaulted-null arg (slice `engagement-consent-gate-detail`)
 Android's `EngagementSessions` was a deliberately-thin port of iOS `EngagementTracker` — it kept the dwell state
 machine and the qualification threshold, and dropped everything else (micro-actions, watch samples, the outbox…). Fine,

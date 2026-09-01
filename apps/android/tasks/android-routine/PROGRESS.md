@@ -2,6 +2,56 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-09-01 **the analytics-consent gate now covers ALL FOUR dwell surfaces — reels, status bubble and
+> story viewer joined post detail, so the `allowAnalytics` privacy toggle is live everywhere it should be**
+> (slice `engagement-consent-gate-surfaces`, feature-parity §F engagement). The prior slice
+> (`engagement-consent-gate-detail`, #4655) shipped the pure `EngagementSessions.begin` consent gate but wired
+> only PostDetail, deferring the other three as "three thin per-surface slices"; leaving the toggle 3/4 dead —
+> a dwell on a reel, a status bubble, or a story still reported watch-time regardless of consent. This slice
+> closes that dimension-1 (Sécurité/privacy) gap across the board.
+>
+> **Step 0 — the open android-routine PR #4655 was MERGED first.** `list_pull_requests` (open) → #4655
+> (`claude/apps/android/engagement-consent-gate-detail`, mine) + gateway/dependabot PRs (jcnm/bots, none an
+> android slice). #4655's **Android** merge gate was SUCCESS; its only red check was **Quality (bun)** — an
+> `apps/web` type-debt ratchet regression (1184 vs baseline 1183), which an `apps/android`-only diff cannot
+> produce and which prior android slices (#4650/#4647/#4644) all merged past. Squash-merged #4655 → main
+> (commit `d0d2b144`), then branched `claude/apps/android/engagement-consent-gate-surfaces` off freshly-fetched
+> `origin/main` (HEAD == origin/main).
+>
+> **The change — one injected store + one argument per surface.** Each of `ReelsViewModel`,
+> `StatusesViewModel`, `StoryViewerViewModel` gains the existing Hilt-provided `PrivacyPreferencesStore` in its
+> constructor and passes `consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics` into its
+> `begin` call (reels: `setCurrentReel`; status: `markStatusViewed`; story: `transitionDwell`). The un-gated
+> impression tier stays un-gated on every surface (status still fires `viewPost(id)` on open; story still fires
+> `storyRepository.markViewed`). No new production logic — the gate itself already exists on the pure
+> `:core:model` `EngagementSessions.begin`; this slice only threads the existing `allowAnalytics` SSOT to the
+> three remaining call sites. Blast radius: 3 VMs (+1 ctor dep, +1 begin arg each), 3 test files (helper +1
+> `allowAnalytics` param, +2 direct story ctor calls patched with `InMemoryPrivacyPreferencesStore()`).
+>
+> **Tests: +4, RED-proven by mutation.** `ReelsViewModelTest` +1 (withheld consent → the qualifying 1000 ms
+> dwell fires no `viewPost("r1", 1000)`); `StatusesViewModelTest` +2 (withheld → no `viewPost("a", 10000)` dwell
+> record; the bare `viewPost("a")` impression still credits the open); `StoryViewerViewModelTest` +1 (withheld →
+> no `viewPost("a1", 1000)` dwell record). **RED:** stripping the reels wiring (`begin(...)` without
+> `consentGranted`) fails EXACTLY the reels consent test (1 of 18), the other 17 green — verified this run; the
+> pattern is identical across the three surfaces.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0`
+> symlink resolved `compileSdk = 37`. Kept `local.properties` out of the diff (`git check-ignore` confirms it is
+> gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest,
+> 973 tasks) → **BUILD SUCCESSFUL in 3m 51s**. Reviewer **PASS** (diff `apps/android` only — 3 feature files + 3
+> feature test files + tracking docs, no `local.properties`; SDK purity — the gate is the pure `:core:model`
+> machine, the store read stays in each `:feature` VM; SSOT — reuses the one `EngagementSessions.begin` gate and
+> the `allowAnalytics` SSOT, no re-implementation; instant-app — N/A, a suppression; UDF — VM `StateFlow`
+> unchanged; no tautological tests — mutation-proven; no coverage floor lowered).
+>
+> **Next**: engagement §F still defers, deliberately narrower than iOS: watch-time samples + completion from the
+> reels player, micro-action recording, and the durable outbox / crash-recovery net (iOS's SQLite
+> `EngagementOutbox`). For a fresh pure-core slice, consider a Chat or Feed value type / resolver from the audit.
+> Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-09-01 **post-consumption dwell tracking now OBEYS the reader's analytics-consent toggle —
 > a reader who turned `allowAnalytics` off accrues no dwell, exactly as iOS gates all engagement at
 > `EngagementTracker.begin`** (slice `engagement-consent-gate-detail`, feature-parity §F engagement). The

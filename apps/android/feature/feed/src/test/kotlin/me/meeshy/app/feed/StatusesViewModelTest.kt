@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketStatusCreatedData
 import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
@@ -29,6 +30,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -95,6 +97,7 @@ class StatusesViewModelTest {
     private fun viewModel(
         currentUser: MeeshyUser? = null,
         cache: StatusBarCache = StatusBarCache(FakeClock()),
+        allowAnalytics: Boolean = true,
     ): StatusesViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
         every { socialSocket.statusCreated } returns statusCreatedFlow
@@ -102,7 +105,12 @@ class StatusesViewModelTest {
         every { socialSocket.statusDeleted } returns statusDeletedFlow
         every { socialSocket.statusReacted } returns statusReactedFlow
         every { socialSocket.statusUnreacted } returns statusUnreactedFlow
-        return StatusesViewModel(repository, postRepository, session, cache, diskCache, socialSocket, dwellClock)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return StatusesViewModel(
+            repository, postRepository, session, cache, diskCache, socialSocket, dwellClock, privacyStore,
+        )
     }
 
     @Test
@@ -905,5 +913,33 @@ class StatusesViewModelTest {
         coVerify(exactly = 1) { postRepository.viewPost("a", 1200) }
         assertThat(vm.state.value.statuses.map { it.id }).containsExactly("a")
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld the popover dwell records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(allowAnalytics = false)
+        vm.markStatusViewed("a")
+        dwellClock.now = 10_000
+
+        vm.endStatusDwell()
+
+        // No session opened, so the qualifying 10s dwell (the only duration this scenario could
+        // record) never fires — while the un-gated impression still credited the open.
+        coVerify(exactly = 0) { postRepository.viewPost("a", 10_000) }
+    }
+
+    @Test
+    fun `the impression still fires when analytics consent is withheld`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(allowAnalytics = false)
+
+        vm.markStatusViewed("a")
+
+        // The deduplicated view-count credit is not analytics telemetry (iOS fires `viewPost`
+        // regardless of consent); only the dwell enrichment is gated.
+        coVerify(exactly = 1) { postRepository.viewPost("a") }
     }
 }

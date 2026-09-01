@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import java.util.concurrent.CancellationException
@@ -33,6 +34,7 @@ class ReelsViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelsUiState())
@@ -103,7 +105,12 @@ class ReelsViewModel @Inject constructor(
         currentReelId = next
         next?.let {
             socialSocket.joinPostRoom(it)
-            sessions = sessions.begin(EngagementSurface.REELS, it, clock.nowMillis())
+            sessions = sessions.begin(
+                EngagementSurface.REELS,
+                it,
+                clock.nowMillis(),
+                consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+            )
         }
     }
 
