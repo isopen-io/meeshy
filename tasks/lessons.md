@@ -23143,3 +23143,54 @@ désormais et cherche le BLOC (`var libraryTab`) où qu'il soit.
 **Le rappel de méthode qui l'aurait évitée** : *avant d'extraire, `grep` le nom
 du fichier ET des symboles déplacés dans les tests — la liste EST le lot de
 repointage.* Il était en mémoire ; il n'a pas été appliqué.
+## Leçon 409 — Une clé qui sert d'INDEX et de GARDE D'IDEMPOTENCE à la fois se casse en deux dès que l'index cesse d'être total
+
+**Le lot.** #4724 : la rangée haute du composer montrait une tuile par média du
+document — un son, un PDF, une image posée sur la scène compris. La loi à poser
+était simple : une tuile dit le FOND d'une slide, et rien d'autre.
+
+**Ce que la loi a cassé en passant.** `slideIdByMediaURL` disait « ce média a
+fondé cette slide ». La boucle d'ingestion s'en servait AUSSI comme garde
+d'idempotence : `where slideIdByMediaURL[media.sourceURL] == nil` voulait dire
+« pas encore posé ». Les deux sens coïncidaient tant que TOUT média fondait une
+slide. Dès qu'un média peut être posé sans rien fonder, ils divergent — et la
+divergence ne se voit pas : la boucle se contente de re-poser le même média à
+chaque changement de la liste, indéfiniment, sans erreur ni trace. C'est
+`applyContentMedia`, idempotent de son côté, qui aurait absorbé le défaut en
+silence.
+
+> **Un index TOTAL peut servir de garde ; un index PARTIEL ne le peut plus, et
+> rien ne rougit le jour où il le devient.** Avant de restreindre ce qu'un index
+> contient, chercher qui l'interroge pour une question qu'il ne pose pas —
+> « existe-t-il ? » au lieu de « où est-il ? ».
+
+**Le correctif.** Une seconde mémoire (`mediaRoleByURL`) qui dit ce que CHAQUE
+média est devenu, et qui porte la garde. Elle s'oublie avec son média, sinon
+re-choisir le même fichier après un retrait serait sauté — exactement le défaut
+que `viewModel.reset()` ferme pour `carriedContentSources`, à un cran de plus.
+
+## Leçon 410 — Un rôle déclaré à l'ENTRÉE doit être celui que le modèle écrira à la SORTIE, sinon ce n'est pas un rôle, c'est un vœu
+
+**Le lot.** Même issue. La règle se résume naturellement à « la porte du rail
+pose en premier plan, la rangée du document ouvre une page ». Écrite comme ça,
+elle est fausse d'une moitié.
+
+`addMediaObject` décide `isBackground` depuis TRENTE lignes plus bas, et depuis
+toujours : `resolvedBackgroundMedia == nil && !hasSlideLevelBgImage`. Sur une
+slide VIERGE, le premier média posé par le rail devient donc le fond — quoi que
+la porte ait déclaré. Une règle qui aurait dit « premier plan » là aurait produit
+un objet que le modèle marque `isBackground: true` : la rangée haute n'aurait pas
+montré de tuile pour un média que la scène affiche PLEIN CADRE. Les deux se
+seraient contredits sur le même objet, ce qui est pire que le défaut d'origine —
+il est cohérent, lui.
+
+> **Une règle de placement écrite en amont doit lire le MÊME prédicat que le
+> site qui écrit réellement le champ, ses deux moitiés comprises.** Ici la
+> seconde moitié — l'image de fond posée au niveau de la SLIDE (`slideImages`),
+> pas un `mediaObject` — est celle qu'on oublie, parce qu'elle vit dans un autre
+> tableau et ne s'appelle pas « fond ».
+
+**Le témoin qui l'attrape** ne vérifie pas le rôle rendu : il vérifie que le
+prédicat de l'appelant contient les DEUX moitiés de celui du modèle. C'est une
+garde de source, et c'est le bon outil ici — la divergence est entre deux
+écritures d'une même question, pas dans un résultat observable.
