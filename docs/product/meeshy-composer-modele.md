@@ -51,6 +51,63 @@ l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais êtr
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 
+## 1 bis. Ce qu'une publication DEVIENT — la projection
+
+`MeeshyPublication` est une notion de **COMPOSITION**. Le tableau du § 1 le dit
+en creux (« pas un post serveur ») sans dire ce qui arrive au moment de publier ;
+c'est le trou que ce paragraphe ferme. **Aucune couche sous le composer ne porte
+la publication comme un objet** — mesuré le 2026-09-01, avec ses sites :
+
+| couche | ce qu'on y trouve |
+|---|---|
+| publication d'une story | `StoryComposerView+Publication.swift:305` `publishAllSlides()` — **un post par slide** |
+| fil app → passerelle | `PublishIntent.swift:52` — douze champs, **pas une slide, pas un objet, pas un effet** |
+| base | `model Post` (`packages/shared/prisma/schema.prisma`) — **ni `storyId`, ni `sceneId`, ni index de slide** ; la scène voyage en `storyEffects Json?`, opaque, **un par post** |
+
+Une publication de quatre slides est donc **quatre lignes `Post` que rien ne
+relie**. Le mot « publication » a un référent dans le composer et n'en a plus
+aucun passé le fil.
+
+> **Une `MeeshyPublication` ne se sérialise pas : elle se PROJETTE.** Ce qui est
+> composé est une publication ; ce qui est publié est un ensemble de posts. Tant
+> que la projection reste implicite — une boucle `for` sur les slides — personne
+> ne peut la contredire, et c'est ainsi qu'une slide vierge est partie en post
+> à côté du vrai (#4730).
+
+### Les trois obligations de la projection
+
+Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
+
+1. **Le prédicat** — quelles unités méritent un post. Site unique existant :
+   `StorySlidePublishMatter.deservesAPost(_:hasBackgroundImage:)`
+   (`packages/MeeshySDK/Sources/MeeshySDK/Models/Story/`), pure, publique, douze
+   témoins. À **absorber**, jamais réécrire.
+2. **L'élection** — laquelle des N unités REPRÉSENTE la publication. Les posts
+   sortent à ~451 ms d'intervalle et le fil montre le plus récent : sans
+   élection, **la dernière unité composée devient la vitrine**, par effet de bord
+   de l'horloge.
+3. **Le troisième état** — entre « pas de scène » et « une scène », il y a **une
+   scène NÉE ET VIDE** : la slide semée. Les deux couches en tirent des
+   conclusions opposées et **ont raison toutes les deux** — le canvas la MONTRE
+   (`ComposerStoryCanvas.showsCanvas`), la présence ne la COMPTE pas
+   (`ComposerScenePresence` compte ce que la scène contient, jamais ce qui l'a
+   fait naître). Une forme qui ne connaît que deux états ne peut pas décrire ça,
+   et c'est par cet état que le socle a été atteint sans publieur (#4751).
+
+### Ce qu'il ne faut pas écrire
+
+Ne nommer dans la forme **aucune clé de regroupement serveur** : il n'en existe
+pas. Une enveloppe qui attendrait un `storyId` mentirait à la première
+relecture, et la forme iOS attendrait un champ que le fil ne rend pas. **Le
+regroupement serveur est une décision distincte, avec sa migration.**
+
+### Ce qui reste à trancher
+
+Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733**
+(« le meuble publie la story par un second chemin »), non arbitré à ce jour. Ce
+paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
+pas #4733, et ne doit pas être lu comme le faisant.
+
 ## 2. La simplification : une slide est TOUJOURS une scène
 
 Il n'existe **pas** deux formes de slide (« un média » d'un côté, « une scène » de
