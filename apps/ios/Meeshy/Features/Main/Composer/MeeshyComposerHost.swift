@@ -964,8 +964,14 @@ struct MeeshyComposerHost: View {
         // Basculer vers Post après avoir composé ailleurs doit rattraper la
         // dérivation : sans ça, un média ingéré en Story puis ramené en Post
         // n'aurait jamais sa slide (loi 9 — le contenu est PRÉSERVÉ).
-        .adaptiveOnChange(of: selectedFormat) { _, _ in
+        .adaptiveOnChange(of: selectedFormat, initial: true) { _, _ in
             syncPostMediaIntoSlides()
+            // La première unité d'histoire naît AVEC le format, jamais au
+            // premier geste : le canvas d'une story se montre vide, et un rail
+            // sans aucune unité n'aurait pas de voisine à côté de qui poser la
+            // suivante. `initial: true` couvre les portes qui ouvrent DÉJÀ en
+            // story (reprise d'un brouillon de story, tiroir des stories).
+            seedStoryCanvasIfNeeded()
         }
     }
 
@@ -1025,7 +1031,23 @@ struct MeeshyComposerHost: View {
     /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
     /// endroit ne peut pas être lue de travers ailleurs.
     var mountedComposerView: ComposerMountedView {
-        ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene)
+        ComposerMountedView.mounted(
+            surface: mountedSurface,
+            // **Une story a toujours son canvas** (directive porteur
+            // 2026-09-01). `documentHasScene` demande « y a-t-il de la matière
+            // à cadrer ? », la bonne question pour un post dont la scène est
+            // une incrustation optionnelle. Une story EST ses canvas : lui
+            // poser le prédicat du post la laisserait sur l'écran document tant
+            // qu'elle est vide — au moment précis où elle en a besoin.
+            //
+            // La substitution se fait ICI et pas dans `documentHasScene`, dont
+            // le MOOD est l'autre lecteur : y injecter le format ferait décider
+            // l'offre de formats par le format déjà choisi.
+            hasScene: ComposerStoryCanvas.showsCanvas(
+                format: selectedFormat,
+                documentHasScene: documentHasScene
+            )
+        )
     }
 
     @ViewBuilder

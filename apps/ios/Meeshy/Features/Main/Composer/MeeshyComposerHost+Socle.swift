@@ -362,8 +362,53 @@ extension MeeshyComposerHost {
                 visibilityUserIds: composerVisibilityUserIds
             )
         case .document, .mood:
-            publishDocument()
+            // **Une story part par le canal de la SCÈNE, pas par le brouillon**
+            // (directive porteur 2026-09-01). Elle est routée sur `.document`
+            // depuis que le nouveau composer ne charge plus l'atelier — mais
+            // `ComposerDocumentDraft` porte du texte, des pièces jointes et un
+            // lieu, jamais des slides. L'y faire passer publierait une story
+            // VIDE de tout ce que l'auteur a composé.
+            //
+            // > Router une surface et router sa PUBLICATION sont deux gestes.
+            // > Le premier se voit à l'écran ; le second ne se voit qu'à
+            // > l'arrivée, sur un contenu qu'on ne peut plus rattraper.
+            if selectedFormat == .story {
+                publishStoryScene()
+            } else {
+                publishDocument()
+            }
         }
+    }
+
+    /// **Publier les unités d'histoire** — le canal que l'atelier utilisait,
+    /// pressé par le meuble puisque l'atelier n'est plus monté.
+    ///
+    /// Les douze arguments sont ceux que `StoryComposerView+Publication`
+    /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
+    /// il relaie. `ComposerMediaAccessibility.empty` est le seul écart, et il
+    /// est honnête — la surface de scène du meuble n'offre pas encore d'éditeur
+    /// d'alternative textuelle, donc il n'y a rien à transmettre. Fabriquer un
+    /// dictionnaire vide plutôt que de lire un magasin absent dit la vérité ;
+    /// lire un magasin par défaut aurait fait croire à un relais.
+    func publishStoryScene() {
+        guard canPublishDocument else { return }
+        isPublishingDocument = true
+        let accepted = onPublishAllInBackground(
+            viewModel.slides,
+            viewModel.slideImages,
+            viewModel.loadedImages,
+            viewModel.loadedVideoURLs,
+            viewModel.loadedAudioURLs,
+            documentLanguage,
+            composerVisibility.rawValue,
+            composerVisibilityUserIds,
+            viewModel.draftId,
+            composerReferences,
+            ComposerMediaAccessibility.empty,
+            selectedFormat.postType
+        )
+        isPublishingDocument = false
+        if accepted { onDismiss() }
     }
 
     var publishButton: some View {
@@ -477,7 +522,19 @@ extension MeeshyComposerHost {
             atelierHasMatter: publishTrigger.canPublish,
             // La matière que le MEUBLE voit, lui — celle que l'écran montre
             // déjà en vignettes et en chip de lieu (#4514).
-            hasMedia: !documentLocalMedia.isEmpty,
+            //
+            // **Et, pour une STORY, ce que ses canvas portent** (directive
+            // porteur 2026-09-01). Le gate mesure les trois choses qu'un POST
+            // compose — texte, médias joints, lieu — dont une story ne remplit
+            // aucune : elle se compose EN POSANT des objets sur ses unités
+            // d'histoire. Sans ce terme, la flèche refuserait en silence sur un
+            // écran plein de travail.
+            //
+            // La règle est appelée, jamais réécrite ici : c'est elle qui sait
+            // que la slide SEMÉE au montage ne compte pas comme de la matière.
+            hasMedia: !documentLocalMedia.isEmpty
+                || (selectedFormat == .story
+                    && ComposerStoryCanvas.hasMatter(slides: viewModel.slides)),
             hasLocation: documentLocation != nil
         )
     }
@@ -547,14 +604,22 @@ extension MeeshyComposerHost {
             // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
             // porte qui la poste telle quelle.
             //
-            // `forcePlainPost` vaut TOUJOURS `true` ici (B3, #3926) : la surface
-            // document ne publie plus qu'un POST simple — ses médias qualifiants
-            // forment un carrousel, jamais un réel promu en silence. RÉEL et
-            // STORY quittent le document par l'éventail (routage → scène) et
-            // partent par l'atelier avec leur propre `postType`. Ce publieur
-            // n'est d'ailleurs atteint que lorsque `mountedSurface == .document`,
-            // c'est-à-dire `selectedFormat == .post` : le forçage y est vrai par
-            // construction, on le pose en clair pour que la loi se lise.
+            // `forcePlainPost` valait TOUJOURS `true` ici (B3, #3926), et le
+            // commentaire disait pourquoi : « ce publieur n'est atteint que
+            // lorsque `mountedSurface == .document`, c'est-à-dire
+            // `selectedFormat == .post` ». **Le routage du 2026-09-01 a rendu
+            // cette phrase fausse** — la STORY descend désormais sur le
+            // document, et le littéral aurait forcé en POST simple une
+            // composition que l'auteur venait de déclarer story.
+            //
+            // > Un littéral justifié par un invariant de ROUTAGE est une bombe à
+            // > retardement : le jour où la route change, rien ne rougit — le
+            // > commentaire cesse simplement d'être vrai.
+            //
+            // Il porte donc désormais sa condition, qui dit exactement ce que le
+            // commentaire affirmait. Ce qu'il garde de son sens d'origine : les
+            // médias qualifiants d'un POST forment un carrousel, jamais un réel
+            // promu en silence.
             //
             // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
             // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
@@ -575,7 +640,7 @@ extension MeeshyComposerHost {
             // re-transcrirait ce travail en silence.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
-                forcePlainPost: true,
+                forcePlainPost: selectedFormat == .post,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,

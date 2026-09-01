@@ -118,12 +118,44 @@ struct DocumentComposerDoor: View {
             // diverger. Le paramètre reste obligatoire pour la SCÈNE, que cette
             // porte ne monte jamais.
             initialVisibility: PostVisibility.public.rawValue,
-            // Le canal de la SCÈNE, sans objet ici : `.keyboardOnContent` plus
-            // `.post` routent vers la surface du document, jamais vers
-            // l'atelier. Écrit en toutes lettres plutôt que rendu optionnel — un
-            // défaut le ferait disparaître des sites qui, eux, montent vraiment
-            // une scène.
-            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            // **Le canal de la SCÈNE, désormais BRANCHÉ** (directive porteur
+            // 2026-09-01). Il rendait `false` en toutes lettres, et le
+            // commentaire disait pourquoi : « `.keyboardOnContent` plus `.post`
+            // routent vers la surface du document, jamais vers l'atelier ».
+            //
+            // La STORY se compose maintenant sur cette porte
+            // (`ComposerSurfaceRouting` l'envoie sur `.document`), et ses canvas
+            // sont des unités d'histoire — jamais des médias de la publication.
+            // Le brouillon du document ne les porte pas et ne peut pas les
+            // porter : il n'a ni slides, ni effets, ni images chargées. Laisser
+            // le `false` aurait donné un composer qui compose une story et une
+            // flèche qui refuse — la loi 4, sur le geste qui termine le travail.
+            //
+            // Le corps est le MÊME que celui de `ConversationMediaComposerDoor`,
+            // et volontairement : c'est le publieur de CRÉATION de story du
+            // dépôt (`publishStoryInBackground`), et deux assemblages de ses
+            // quatorze arguments auraient divergé au premier champ ajouté.
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+                storyViewModel.publishStoryInBackground(
+                    targetType: targetType,
+                    slides: slides,
+                    slideImages: slideImages,
+                    loadedImages: loadedImages,
+                    loadedVideoURLs: loadedVideoURLs,
+                    loadedAudioURLs: loadedAudioURLs,
+                    originalLanguage: originalLanguage,
+                    visibility: visibility,
+                    visibilityUserIds: visibilityUserIds,
+                    draftId: draftId,
+                    references: references,
+                    composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
+                                                           caption: accessibility.mediaCaption ?? [:]),
+                    allowSoundExtraction: accessibility.allowSoundExtraction
+                )
+                // La publication accepte TOUJOURS : hors-ligne, elle part en
+                // file d'attente plutôt que de rester dans le composer.
+                return true
+            },
             onPublishDocument: { draft in await publish(draft) },
             // `moodSeed:` vient APRÈS `onPublishDocument:`, et l'ordre des
             // arguments est load-bearing : Swift n'autorise aucun
@@ -291,8 +323,14 @@ struct DocumentComposerDoor: View {
         // touchent au disque : le fichier composé par le meuble n'est ni
         // déplacé ni effacé ici — il survit à un refus comme à une acceptation,
         // et c'est la file durable seule qui en dispose.
+        // `declaredType` vient du FORMAT du brouillon — le seul champ qui savait
+        // déjà ce que l'auteur avait choisi, et que personne ne lisait. La
+        // story se composant désormais sur cette surface (routage 2026-09-01),
+        // une déduction sur les mimes l'aurait publiée en POST : le composer
+        // aurait montré des unités d'histoire et envoyé un billet.
         await viewModel.publish(PublishIntent.document(
             localMedia: draft.localMedia,
+            declaredType: draft.format.postType,
             forcePlainPost: draft.forcePlainPost,
             content: draft.text,
             visibility: draft.visibility.rawValue,

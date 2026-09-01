@@ -89,11 +89,30 @@ nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
+        // **Les quatre ouvertures qui PORTENT DÉJÀ de la matière gardent la
+        // scène, story comprise** — et c'est une exemption RAISONNÉE, pas un
+        // reste de l'ancienne loi.
+        //
+        // Elles n'ouvrent pas sur un choix : elles arrivent avec une capture,
+        // un média reçu d'une conversation, ou un brouillon repeuplé, et
+        // l'atelier est le seul écran qui les tienne déjà. `.mediaSeeded` en
+        // fait la démonstration : `ConversationMediaComposerDoor` documente que
+        // router son média ailleurs le ferait disparaître de l'écran ET de la
+        // publication, `ComposerDocumentDraft` n'ayant ni `mediaIds`, ni
+        // fichier. Leur retirer la scène ferait perdre à l'auteur ce qu'il vient
+        // de confier — un prix que la directive ne demande pas.
         case .cameraReady, .videoCameraReady, .resume, .mediaSeeded:
             return .scene
+        // **Ici, l'auteur CHOISIT.** C'est le « nouveau composer » de la
+        // directive porteur du 2026-09-01, et c'est là que la story cessait
+        // d'être composée dans le meuble : `.scene` monte `StoryComposerView` —
+        // l'atelier du SDK, la vue de composition de story qui préexistait au
+        // meuble. Une story s'écrivait donc dans un composer et un post dans un
+        // autre, sur un écran que l'auteur croit unique.
         case .keyboardOnContent, .moodGrid:
             switch format {
-            case .story, .reel: return .scene
+            case .story: return .document
+            case .reel: return .scene
             case .post: return .document
             case .status: return .mood
             }

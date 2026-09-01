@@ -32,16 +32,23 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — RÉEL et STORY montent la SCÈNE par le routage (le média prend le
-    // canvas) : c'est la loi qui rend l'éventail suffisant pour les trois modes.
-    func test_reelEtStory_montentLaScene_postResteDocument() {
+    // 1 — le RÉEL monte la SCÈNE par le routage (le média prend le canvas) ;
+    // le POST reste au document. **La STORY a quitté cette loi le 2026-09-01.**
+    //
+    // Ce témoin affirmait « RÉEL et STORY montent la scène ». `.scene` monte
+    // l'atelier du SDK — l'autre composer de story — et la directive porteur du
+    // 2026-09-01 l'a retiré du chemin de la story, qui se compose désormais
+    // dans le meuble comme tout le reste (#4700). L'assertion est RETOURNÉE, pas
+    // supprimée : c'est elle qui dira, le jour où quelqu'un rebranchera
+    // l'atelier par mégarde, que la story vient de repartir dans l'autre écran.
+    func test_leReelMonteLaScene_leePostEtLaStoryRestentAuDocument() {
         XCTAssertEqual(
-            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .story), .scene,
-            "STORY monte la scène 9:16."
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .story), .document,
+            "STORY ne charge plus l'atelier — elle se compose dans le meuble (#4700)."
         )
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel), .scene,
-            "RÉEL rejoint STORY sur la scène — le média prend le canvas (directive produit, B3)."
+            "RÉEL garde la scène — ses canvas sont ses médias (directive produit, B3)."
         )
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .post), .document,
@@ -99,13 +106,27 @@ final class ComposerDestinationSelectorTests: XCTestCase {
         )
     }
 
-    // 5 — la publication du document est TOUJOURS un POST simple : RÉEL/STORY
-    // partent par la scène, jamais un réel promu en silence depuis le document.
+    // 5 — un POST publié depuis le document reste un POST simple : jamais un
+    // réel promu en silence par ses médias qualifiants.
+    //
+    // **La garde suivait un LITTÉRAL (`forcePlainPost:true`), justifié par un
+    // invariant de ROUTAGE** — « ce publieur n'est atteint que si
+    // `selectedFormat == .post` ». Le routage du 2026-09-01 (#4700) a rendu la
+    // phrase fausse : la STORY descend désormais sur le document, et le littéral
+    // aurait forcé en post simple une composition déclarée story.
+    //
+    // Elle suit désormais la CONDITION qui dit ce que le commentaire affirmait.
+    // C'est plus fort, pas plus faible : un littéral `true` rougit maintenant
+    // ici, alors qu'il passait avant.
     func test_laPublicationDuDocument_estToujoursUnPostSimple() throws {
         let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
+            src.contains("forcePlainPost:selectedFormat==.post"),
+            "Le forçage doit porter sa CONDITION : un littéral `true` publierait une story en post simple (#4700)."
+        )
+        XCTAssertFalse(
             src.contains("forcePlainPost:true"),
-            "Le document publie un POST simple (carrousel possible), jamais un réel — RÉEL passe par la scène (B3)."
+            "Le littéral est précisément ce que le routage de la story a rendu faux."
         )
         XCTAssertFalse(
             src.contains("forcePlainPost:documentDestination.forcePlainPost"),

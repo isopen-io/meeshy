@@ -135,6 +135,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// français, et le Prisme le traduirait FR→WO sur un texte déjà wolof.
     static func document(
         localMedia: [ComposerDocumentMedia],
+        declaredType: PostType?,
         forcePlainPost: Bool,
         content: String?,
         visibility: String,
@@ -150,11 +151,21 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // La règle de composition vit dans `ReelComposition`, jamais ici —
             // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
             // d'atterrissage d'un document de celle d'un vocal ou d'un média.
-            type: ReelComposition.defaultType(
+            // **Un type DÉCLARÉ gagne sur un type déduit** (directive porteur
+            // 2026-09-01). `ReelComposition` répond à « qu'est-ce que cette
+            // composition RESSEMBLE à être ? » — une question de médias, qui ne
+            // sait rendre que POST ou RÉEL. Depuis que la story se compose sur
+            // cette surface, l'auteur peut avoir CHOISI son format dans
+            // l'éventail : une déduction faite sur les mimes publierait alors
+            // un post là où il vient de dire « story ».
+            //
+            // `nil` laisse la déduction faire son travail — c'est le cas des
+            // portes qui n'offrent aucun choix de format.
+            type: (declaredType ?? ReelComposition.defaultType(
                 mimeTypes: localMedia.map(\.mimeType),
                 durationsMs: localMedia.map(\.durationMs),
                 forcePlainPost: forcePlainPost
-            ).rawValue,
+            )).rawValue,
             localMediaURLs: localMedia.map(\.url),
             localMediaMimeTypes: localMedia.map(\.mimeType),
             content: content,

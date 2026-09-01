@@ -67,15 +67,41 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     }
 
     /// La promesse que V3 attend, et la seconde condition de levée de l'éventail :
-    /// choisir « Story » depuis le fil doit changer la surface, pas seulement
-    /// un libellé.
-    func test_surface_duFeedComposer_devientLaScene_quandLAuteurChoisitLaStory() {
+    /// choisir « Story » depuis le fil doit changer l'ÉCRAN, pas seulement un
+    /// libellé.
+    ///
+    /// **Ce que le témoin mesure a changé de niveau le 2026-09-01** (#4700). Il
+    /// exigeait `surface == .scene`, c'est-à-dire l'atelier du SDK — l'autre
+    /// composer de story, que la directive porteur retire du chemin. La
+    /// promesse, elle, n'a pas bougé : le choix doit changer ce que l'auteur
+    /// voit. Elle se vérifie désormais sur la VUE MONTÉE, où elle a toujours
+    /// été vraie — `ComposerMountedView` distingue un document plat d'un
+    /// document QUI A une scène, ce que `ComposerSurfaceKind` ne sait pas dire.
+    ///
+    /// > Un témoin dont la loi change n'est pas forcément un témoin à retirer :
+    /// > c'est souvent un témoin posé au mauvais NIVEAU, que la nouvelle loi
+    /// > oblige enfin à descendre là où sa promesse vit.
+    func test_surface_duFeedComposer_montreUnCanvas_quandLAuteurChoisitLaStory() {
         let profil = ComposerProfile.profile(for: .feedComposer)
+        let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .story)
 
+        XCTAssertEqual(surface, .document,
+                       "la story ne charge plus l'atelier depuis le fil (#4700)")
         XCTAssertEqual(
-            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .story),
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false)
+            ),
             .scene,
-            "Basculer le document en story doit ouvrir l'atelier — sinon le choix ne change rien."
+            "Basculer le document en story doit montrer un canvas — sinon le choix ne change rien."
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false)
+            ),
+            .document,
+            "…et le même routage sous un POST vide reste un document : c'est le CHOIX qui change l'écran."
         )
     }
 
@@ -105,17 +131,37 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// Invariant traversant : une story et un réel ne sont JAMAIS un document.
-    /// Des pages et une prise continue ont besoin d'un canvas ; les servir sans
-    /// scène perdrait tout ce qui les distingue d'un post.
-    func test_surface_storyEtReel_neSontJamaisUnDocument() {
+    /// **Le RÉEL n'est JAMAIS un document** — une prise continue a besoin d'un
+    /// canvas, et la servir sans scène perdrait ce qui la distingue d'un post.
+    ///
+    /// **La STORY a quitté cet invariant le 2026-09-01** (#4700). Il portait
+    /// les deux formats ensemble, et ce couplage n'était pas anodin : il disait
+    /// « ce qui a besoin d'un canvas monte l'atelier ». Le meuble a désormais sa
+    /// PROPRE scène incrustée, et la story s'y compose — la directive porteur
+    /// retire l'autre composer de son chemin, pas son canvas.
+    ///
+    /// La story garde la scène sur les quatre ouvertures qui ARRIVENT avec du
+    /// contenu ; elle ne la prend plus là où l'auteur choisit son format. Le
+    /// détail des deux moitiés vit dans `ComposerStoryCanvasTests`, qui les
+    /// nomme toutes les deux.
+    func test_surface_leReelNEstJamaisUnDocument_etLaStorySuitSonOuverture() {
         for opening in Self.toutesLesOuvertures {
-            for format in [ComposerFormat.story, .reel] {
-                XCTAssertEqual(
-                    ComposerSurfaceRouting.surface(opening: opening, format: format), .scene,
-                    "\(nom(format)) sous \(nom(opening)) doit garder sa scène."
-                )
-            }
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .reel), .scene,
+                "réel sous \(nom(opening)) doit garder sa scène."
+            )
+        }
+        for opening in [ComposerOpening.cameraReady, .videoCameraReady, .resume, .mediaSeeded] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .story), .scene,
+                "story sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
+            )
+        }
+        for opening in [ComposerOpening.keyboardOnContent, .moodGrid] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .story), .document,
+                "story sous \(nom(opening)) se compose dans le meuble (#4700)."
+            )
         }
     }
 
@@ -1373,6 +1419,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         let intentArme = PublishIntent.document(
             localMedia: arme.localMedia,
+            declaredType: nil,
             forcePlainPost: arme.forcePlainPost,
             content: arme.text,
             visibility: arme.visibility.rawValue,
@@ -1394,6 +1441,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         let intentNonArme = PublishIntent.document(
             localMedia: nonArme.localMedia,
+            declaredType: nil,
             forcePlainPost: nonArme.forcePlainPost,
             content: nonArme.text,
             visibility: nonArme.visibility.rawValue,

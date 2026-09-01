@@ -246,9 +246,10 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             return XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         XCTAssertTrue(
-            compact(code).contains(compact("servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }")),
+            compact(code).contains(compact("ComposerDocumentTool.servedRow(for: selectedFormat)")),
             "`servedDocumentTools` doit rester une PROJECTION de `ComposerDocumentTool.servedRow` — jamais "
-                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique."
+                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique. "
+                + "Depuis #4700 la projection prend le FORMAT : une story n'a pas de champ de contenu à outiller."
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
@@ -304,6 +305,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
         let intent = PublishIntent.document(
             localMedia: brouillon.localMedia,
+            declaredType: nil,
             forcePlainPost: brouillon.forcePlainPost,
             content: brouillon.text,
             visibility: brouillon.visibility.rawValue,
@@ -428,6 +430,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
         let intent = PublishIntent.document(
             localMedia: brouillon.localMedia,
+            declaredType: nil,
             forcePlainPost: brouillon.forcePlainPost,
             content: brouillon.text,
             visibility: brouillon.visibility.rawValue,
@@ -467,6 +470,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
         let intent = PublishIntent.document(
             localMedia: [vocal],
+            declaredType: nil,
             forcePlainPost: false,
             content: nil,
             visibility: "PUBLIC",
@@ -492,6 +496,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     func test_unDocumentSansVocal_gardeLaLangueDeLaCapsule() {
         let intent = PublishIntent.document(
             localMedia: [],
+            declaredType: nil,
             forcePlainPost: false,
             content: "Hello everyone",
             visibility: "PUBLIC",
