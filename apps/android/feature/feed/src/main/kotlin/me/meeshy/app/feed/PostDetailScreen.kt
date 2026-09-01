@@ -46,6 +46,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +102,13 @@ fun PostDetailScreen(
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
+    }
+
+    // Leaving the detail closes the dwell session, recording the measured watch-time against
+    // the view this screen already opened (only when it passed the dwell floor). Mirrors
+    // ReelsScreen's `onDispose { setCurrentReel(null) }`.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.endDwellSession() }
     }
 
     MeeshyBackground {

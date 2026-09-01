@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
@@ -76,6 +77,12 @@ fun ReelsScreen(
     val shareContext = LocalContext.current
 
     LaunchedEffect(seed) { viewModel.load(seed) }
+
+    // Leaving the reels thread closes the last dwell session (records its view if
+    // it qualified) — the pager's per-settle end never fires for the final reel.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.setCurrentReel(null) }
+    }
 
     Box(
         Modifier

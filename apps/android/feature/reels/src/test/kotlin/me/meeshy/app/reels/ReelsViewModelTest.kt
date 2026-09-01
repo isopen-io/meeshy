@@ -14,13 +14,17 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import io.mockk.coVerify
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -53,6 +57,10 @@ class ReelsViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
+    private var clockNow: Long = 0L
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = clockNow
+    }
 
     private fun reel(
         id: String,
@@ -70,12 +78,16 @@ class ReelsViewModelTest {
     private fun viewModel(
         thread: List<ApiPost> = emptyList(),
         currentUserId: String? = "me",
+        allowAnalytics: Boolean = true,
     ): ReelsViewModel {
         every { session.currentUserId } returns currentUserId
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         coEvery { repository.getReels(any(), any(), any()) } returns NetworkResult.Success(thread)
-        return ReelsViewModel(repository, session, socialSocket, config)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore)
     }
 
     // MARK: - Post room membership
@@ -136,6 +148,74 @@ class ReelsViewModelTest {
 
         verify(exactly = 1) { socialSocket.joinPostRoom("r1") }
         verify(exactly = 1) { socialSocket.leavePostRoom("r1") }
+    }
+
+    // MARK: - Dwell-aware view recording
+
+    @Test
+    fun `a reel dwelt past the floor records its view with the measured duration when the pager moves on`() = runTest {
+        val vm = viewModel()
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 1000
+        vm.setCurrentReel("r2")
+
+        coVerify(exactly = 1) { repository.viewPost("r1", 1000) }
+    }
+
+    @Test
+    fun `a reel bounced under the dwell floor records no view`() = runTest {
+        val vm = viewModel()
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 999
+        vm.setCurrentReel("r2")
+
+        coVerify(exactly = 0) { repository.viewPost("r1", any()) }
+    }
+
+    @Test
+    fun `leaving the reels thread records the final reel's dwell`() = runTest {
+        val vm = viewModel()
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 1500
+        vm.setCurrentReel(null)
+
+        coVerify(exactly = 1) { repository.viewPost("r1", 1500) }
+    }
+
+    @Test
+    fun `re-settling the same reel keeps one session and records one view on leave`() = runTest {
+        val vm = viewModel()
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 500
+        vm.setCurrentReel("r1") // inert re-settle: no second session, no restart
+        clockNow = 1000
+        vm.setCurrentReel(null)
+
+        coVerify(exactly = 1) { repository.viewPost("r1", 1000) }
+    }
+
+    // MARK: - Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`)
+
+    @Test
+    fun `with analytics consent withheld a qualifying reel dwell records no view`() = runTest {
+        val vm = viewModel(allowAnalytics = false)
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 1000
+        vm.setCurrentReel("r2") // a 1000ms dwell WOULD qualify — but consent was withheld
+
+        // No session opened, so the dwell record (the only view the reels surface produces)
+        // never fires. 1000 is the exact duration this scenario could have recorded.
+        coVerify(exactly = 0) { repository.viewPost("r1", 1000) }
     }
 
     // MARK: - Live like state

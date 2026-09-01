@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationStatsRepository
 import me.meeshy.sdk.model.ActivityPeriod
 import me.meeshy.sdk.model.ActivityPoint
+import me.meeshy.sdk.model.ClientStatMessage
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.ConversationStatsProjection
@@ -76,21 +77,34 @@ class ConversationStatsViewModel @Inject constructor(
     val state: StateFlow<ConversationStatsUiState> = _state.asStateFlow()
 
     /**
-     * Bind to a conversation and load its stats. [messageContents] are the loaded
-     * message texts, scored on-device into the sentiment split (a pure, fast pass —
-     * no network). Idempotent for an id already loaded (or in flight); a prior
-     * [StatsPhase.Error] for the same id re-tries and re-scores.
+     * Bind to a conversation and load its stats. [clientMessages] are the messages
+     * already on screen: they seed the sheet with a locally-computed snapshot
+     * INSTANTLY (cache-first — no spinner) and are scored on-device into the
+     * sentiment split, both pure fast passes with no network. The server aggregation
+     * then refines them; if it fails, the locally-computed snapshot STAYS instead of
+     * collapsing to an error (offline graceful degradation, parity iOS's
+     * server-first/client-fallback dashboard). With no local messages the sheet
+     * shows a spinner then, on a failed fetch, the error state.
+     *
+     * Idempotent for an id already loaded (or in flight); a prior [StatsPhase.Error]
+     * for the same id re-tries and re-seeds.
      */
-    fun load(conversationId: String, messageContents: List<String> = emptyList()) {
+    fun load(conversationId: String, clientMessages: List<ClientStatMessage> = emptyList()) {
         val current = _state.value
         if (current.conversationId == conversationId && current.phase != StatsPhase.Error) return
-        fetch(conversationId, SentimentBreakdownProjection.breakdown(messageContents).takeIf { it.hasContent })
+        val sentiment = SentimentBreakdownProjection
+            .breakdown(clientMessages.map { it.content })
+            .takeIf { it.hasContent }
+        val fallback = clientMessages
+            .takeIf { it.isNotEmpty() }
+            ?.let { ConversationStatsProjection.clientComputed(conversationId, it) }
+        fetch(conversationId, sentiment, fallback)
     }
 
     /** Re-fetch the current conversation after a failure, keeping the already-scored sentiment. */
     fun retry() {
         val current = _state.value
-        current.conversationId?.let { fetch(it, current.sentiment) }
+        current.conversationId?.let { fetch(it, current.sentiment, fallback = null) }
     }
 
     /** Switch the activity window. Pure — no refetch, the [ConversationStatsUiState.activity] getter reflects it. */
@@ -99,17 +113,27 @@ class ConversationStatsViewModel @Inject constructor(
         _state.update { it.copy(period = period) }
     }
 
-    private fun fetch(conversationId: String, sentiment: SentimentBreakdown?) {
-        _state.value = ConversationStatsUiState(
+    private fun fetch(
+        conversationId: String,
+        sentiment: SentimentBreakdown?,
+        fallback: ConversationMessageStatsResponse?,
+    ) {
+        val base = ConversationStatsUiState(
             conversationId = conversationId,
             phase = StatsPhase.Loading,
             period = _state.value.period,
             sentiment = sentiment,
         )
+        // Cache-first: render the locally-computed page immediately when we have one.
+        _state.value = fallback?.let { project(base, it) } ?: base
         viewModelScope.launch {
             when (val result = repository.fetchStats(conversationId)) {
                 is NetworkResult.Success -> _state.update { project(it, result.data) }
-                is NetworkResult.Failure -> _state.update { it.copy(phase = StatsPhase.Error) }
+                is NetworkResult.Failure -> _state.update { state ->
+                    // A failed refine leaves the locally-computed snapshot standing;
+                    // only a fetch with nothing local to fall back on surfaces the error.
+                    if (fallback != null) state else state.copy(phase = StatsPhase.Error)
+                }
             }
         }
     }

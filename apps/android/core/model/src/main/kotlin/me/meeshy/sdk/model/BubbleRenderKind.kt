@@ -14,6 +14,15 @@ object BubbleRenderKind {
 
     /** What a bubble renders once deletion, view-once consumption and the countdown combine. */
     enum class Kind {
+        /**
+         * A conversation notice about itself (someone joined / left, a legacy call
+         * summary) rather than a turn at talk: it renders as a CENTERED notice with no
+         * avatar and no sender name, never a signed bubble (iOS `ThemedMessageBubble`
+         * `case .system`, checked BEFORE every other kind). Without this arm a join
+         * notice would render as the arriver's own first message.
+         */
+        System,
+
         /** Normal content bubble. */
         Standard,
 
@@ -39,12 +48,18 @@ object BubbleRenderKind {
 
         /** True only for [Burned] — the arm that shows the "Seen and deleted" tombstone. */
         val isBurned: Boolean get() = this == Burned
+
+        /** True only for [System] — the arm that shows the centered notice. */
+        val isSystem: Boolean get() = this == System
     }
 
     /**
      * Combines the server deletion flag, the view-once consume count and the ephemeral
      * countdown [ephemeral] into a single render decision. Precedence — highest first:
      *
+     * - a system message ([isSystem]) is [Kind.System] regardless of anything else —
+     *   iOS checks `messageSource == .system` FIRST, so a notice never masquerades as a
+     *   deletion tombstone, a burned view-once, or a self-destructing bubble.
      * - a deleted message is [Kind.Deleted] regardless of anything else — server
      *   authority wins, mirroring iOS checking `.deleted` BEFORE the burned/ephemeral
      *   arms, so a deleted-and-expired message still shows the deletion tombstone.
@@ -63,7 +78,9 @@ object BubbleRenderKind {
         ephemeral: EphemeralLifecycle.State,
         isViewOnce: Boolean = false,
         viewOnceCount: Int = 0,
+        isSystem: Boolean = false,
     ): Kind = when {
+        isSystem -> Kind.System
         isDeleted -> Kind.Deleted
         isViewOnce && viewOnceCount > 0 -> Kind.Burned
         ephemeral is EphemeralLifecycle.State.Expired -> Kind.EphemeralExpired

@@ -12,9 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryGroup
@@ -26,6 +30,8 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
@@ -255,10 +261,13 @@ data class StoryViewerUiState(
 @HiltViewModel
 class StoryViewerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
+    private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val reportRepository: ReportRepository,
+    private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -295,6 +304,25 @@ class StoryViewerViewModel @Inject constructor(
      * iOS `StoryViewerView.transitionPostRoom` / Android `ReelsViewModel.setCurrentReel`.
      */
     private var currentRoomStoryId: String? = null
+
+    /**
+     * Dwell bookkeeping for the story-viewer surface — the 4th single-focus surface, joining
+     * reels/detail/status. Held outside [_state] since it is an analytics cursor, not something
+     * the UI renders (the same placement as [currentRoomStoryId], and as the feed ViewModels'
+     * dwell sessions). The pure [EngagementSessions] machine owns the *how* (monotonic dwell,
+     * qualification); this ViewModel owns the *when* — the session moves WITH the slide on screen
+     * (begun on the one landed on, ended on the one left) via [transitionDwell] in [emit], mirroring
+     * iOS `StoryViewerView` re-arming `EngagementTracker` on each slide. [currentDwellStoryId]
+     * guards the transition so a same-slide re-emit (a reaction, a translation merge) neither ends
+     * nor restarts the running session.
+     *
+     * A qualified dwell records `viewPost(id, dwellMs)` — a story slide id IS a post id, so the
+     * measured watch-time rides the very `posts/{id}/view` endpoint the impression already uses,
+     * carrying its optional `duration`. The gateway dedups: the impression increments `viewCount`
+     * once, the dwell only raises the stored `duration` to its max — purely additive, no double-count.
+     */
+    private var sessions = EngagementSessions()
+    private var currentDwellStoryId: String? = null
 
     init {
         load()
@@ -434,6 +462,7 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Leaves the post room the viewer was sitting in, so a closed viewer stops receiving its events. */
     override fun onCleared() {
+        endCurrentDwell()
         currentRoomStoryId?.let { socialSocket.leavePostRoom(it) }
         currentRoomStoryId = null
         super.onCleared()
@@ -494,6 +523,60 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
+     * Closes the story-viewer dwell session and, when it qualified, records the measured watch-time.
+     * Public so the composition can end the last slide's dwell when the viewer leaves (the analogue
+     * of iOS `StoryViewerView.onDisappear` → `EngagementTracker.end(.storyViewer)`); also called on
+     * teardown ([onCleared]) as the reliable net. Idempotent — a second call, with no session open,
+     * records nothing.
+     */
+    fun endCurrentDwell() {
+        transitionDwell(null)
+    }
+
+    /**
+     * Moves the dwell session with the slide on screen: ends the one left (recording it when it
+     * passed the dwell floor) and begins the one landed on. Idempotent — re-passing the current id
+     * (including `null`) is a no-op, so a same-slide re-emit neither closes nor restarts the running
+     * session. A `null` [nextId] ends without re-arming (viewer dismissed/torn down). The port of
+     * iOS `StoryViewerView` re-arming `EngagementTracker` per slide, and the dwell twin of
+     * [transitionPostRoom].
+     */
+    private fun transitionDwell(nextId: String?) {
+        if (nextId == currentDwellStoryId) return
+        val (afterEnd, view) = sessions.end(EngagementSurface.STORY_VIEWER, clock.nowMillis())
+        sessions = afterEnd
+        view?.let { recordDwellView(it) }
+        currentDwellStoryId = nextId
+        nextId?.let {
+            sessions = sessions.begin(
+                EngagementSurface.STORY_VIEWER,
+                it,
+                clock.nowMillis(),
+                consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+            )
+        }
+    }
+
+    /**
+     * Best-effort dwell enrichment for a slide's existing view: `posts/{id}/view` with the measured
+     * [QualifiedView.dwellMs]. The gateway's view credit is a `(postId, userId)` singleton, so this
+     * never re-increments the view count already booked by the impression ([markCurrentViewed]) — it
+     * only raises the stored dwell `duration` (the reco/monetisation watch-time signal) to its max.
+     * Fire-and-forget, matching the impression: a failure is analytics the viewer should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // best-effort — matches the impression view record
+            }
+        }
+    }
+
+    /**
      * Quick-strip reaction on the current slide. The count moves optimistically;
      * a repeat of the same emoji is inert (no network); a network failure rolls
      * back to the snapshot so the UI never shows a phantom reaction.
@@ -543,6 +626,9 @@ class StoryViewerViewModel @Inject constructor(
     private fun emit() {
         val currentId = playback.currentSlide?.id
         transitionPostRoom(currentId)
+        // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
+        // running session ends the moment the viewer is swiped away rather than lingering to teardown.
+        transitionDwell(if (playback.isDismissed) null else currentId)
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()

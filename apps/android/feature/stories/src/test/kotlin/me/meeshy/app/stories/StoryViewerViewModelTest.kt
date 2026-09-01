@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
@@ -34,8 +35,11 @@ import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTransitionKind
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryRepository
@@ -56,8 +60,15 @@ class StoryViewerViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private val storyRepository: StoryRepository = mockk(relaxed = true)
+    private val postRepository: PostRepository = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+
+    private class FakeClock(var now: Long = 0L) : CacheClock {
+        override fun nowMillis(): Long = now
+    }
+
+    private val dwellClock = FakeClock()
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
     private val translationUpdatedFlow =
@@ -99,6 +110,7 @@ class StoryViewerViewModelTest {
         startUserId: String,
         posts: List<ApiPost>,
         user: MeeshyUser? = null,
+        allowAnalytics: Boolean = true,
     ): StoryViewerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { session.currentUserId } returns null
@@ -106,7 +118,13 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
-        return StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return StoryViewerViewModel(
+            storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock,
+            privacyStore, handle,
+        )
     }
 
     // Group "a"'s latest story is the newest overall so it sorts first; "b" follows.
@@ -277,6 +295,131 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "b", posts = twoAuthors())
         vm.markCurrentViewed()
         coVerify { storyRepository.markViewed("b1") }
+    }
+
+    // --- Dwell enrichment (the 4th single-focus surface, mirror of iOS
+    // `StoryViewerView` begin(surface: .storyViewer) on slide present / end on slide-change &
+    // dismiss). A story slide id IS a post id, so the measured dwell rides the same
+    // `posts/{id}/view` endpoint the impression already uses, carrying `duration`. ---
+
+    @Test
+    fun `advancing past the dwell floor records the left slide's measured watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1's dwell at 0
+        dwellClock.now = 1000
+
+        vm.advance() // a1 (a's only slide) → b1: leaves a1 after 1000ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+    }
+
+    @Test
+    fun `a sub-floor glance before advancing records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 999
+
+        vm.advance() // leaves a1 after only 999ms — below the 1000ms floor
+
+        coVerify(exactly = 0) { postRepository.viewPost("a1", any()) }
+    }
+
+    @Test
+    fun `each advance records the slide it leaves, re-arming the clock on the one landed on`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // begins b1 at 0
+        dwellClock.now = 1000
+        vm.advance() // b1 → b2: leaves b1 after 1000ms, begins b2 at 1000
+        dwellClock.now = 3000
+
+        vm.advance() // b2 → past last (dismissed): leaves b2 after 3000-1000=2000ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("b1", 1000) }
+        coVerify(exactly = 1) { postRepository.viewPost("b2", 2000) }
+    }
+
+    @Test
+    fun `stepping back records the slide left and re-arms on the previous`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // begins b1 at 0
+        dwellClock.now = 1000
+        vm.advance() // b1 → b2: records b1(1000), begins b2 at 1000
+        dwellClock.now = 2500
+
+        vm.back() // b2 → b1: leaves b2 after 2500-1000=1500ms
+
+        coVerify(exactly = 1) { postRepository.viewPost("b1", 1000) }
+        coVerify(exactly = 1) { postRepository.viewPost("b2", 1500) }
+    }
+
+    @Test
+    fun `endCurrentDwell records the current slide then a second end is inert`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1 at 0
+        dwellClock.now = 1200
+
+        vm.endCurrentDwell()
+        dwellClock.now = 5000
+        vm.endCurrentDwell() // nothing open — idempotent
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1200) }
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 5000) }
+    }
+
+    @Test
+    fun `a same-slide re-emit does not restart the dwell clock`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        ) // begins a1 at 0
+        dwellClock.now = 500
+        vm.react("🔥") // re-emits WITHOUT changing the current slide
+        dwellClock.now = 1000
+
+        vm.endCurrentDwell() // dwell must measure from 0 (begin), not 500 (the re-emit)
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1000) }
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 500) }
+    }
+
+    @Test
+    fun `dismissing the viewer ends the current dwell`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // begins a1 at 0
+        dwellClock.now = 1500
+
+        vm.onSwipe(StorySwipeAction.Dismiss) // dismisses without changing the slide
+
+        coVerify(exactly = 1) { postRepository.viewPost("a1", 1500) }
+    }
+
+    @Test
+    fun `a failed dwell record does not crash or disturb the viewer`() = runTest {
+        coEvery { postRepository.viewPost(any(), any()) } throws RuntimeException("offline")
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        dwellClock.now = 1000
+
+        vm.advance() // records a1(1000) — the sink throws, swallowed as best-effort
+
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld a qualifying slide dwell records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors(), allowAnalytics = false)
+        dwellClock.now = 1000
+
+        vm.advance() // a1 → b1: a 1000ms dwell WOULD qualify, but consent was withheld
+
+        // No dwell session opened, so the enrichment (the only postRepository.viewPost the story
+        // surface makes) never fires; 1000 is the exact duration this scenario could have recorded.
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 1000) }
     }
 
     @Test
@@ -464,7 +607,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isDismissed).isFalse()
@@ -488,7 +631,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors())
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, session, socialSocket, config, reportRepository, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isOwnStory).isTrue() // group a, author == current user
 

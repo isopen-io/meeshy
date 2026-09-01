@@ -97,6 +97,10 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 // la lecture v3 existe : l'inverse echangerait une sentinelle
                 // lisible contre un ecran vide.
                 .addInterceptor(ClientCapabilitiesInterceptor())
+                // Signal Prisme 4e priorite : dit a la passerelle la locale de
+                // l'appareil (X-Device-Locale), qu'elle reduit et persiste dans
+                // User.deviceLocale. Sans lui, le 4e rang du resolveur reste mort.
+                .addInterceptor(DeviceLocaleInterceptor())
                 // Apres l'authenticator: si le rafraichissement a pu sauver la
                 // session, la reponse finale n'est plus un 401 et rien ne se
                 // declenche. On ne signale donc que les expirations REELLES.

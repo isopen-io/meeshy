@@ -13,7 +13,7 @@ public sealed interface NotificationToastDecision {
     /** A duplicate delivery (APN + socket racing for the same event) within the dedup window. */
     public data object Deduplicated : NotificationToastDecision
 
-    /** Push disabled, or inside the configured quiet-hours window. */
+    /** Push disabled, inside the quiet-hours window, or this type's per-type toggle is off. */
     public data object BlockedByPreferences : NotificationToastDecision
 }
 
@@ -23,14 +23,13 @@ public sealed interface NotificationToastDecision {
  * `NotificationToastManager.handleNewNotification`'s impure guard-chain (iOS has no isolated
  * pure version of this logic; this is a genuine extraction, not a straight port).
  *
- * Deliberately narrower than iOS's own gate for now: [UserNotificationPreferences.pushEnabled]
- * and the DND window ([DndWindow.isActive]) are ported — both already pure, existing
- * predicates. The PER-TYPE toggle gate (iOS `isTypeEnabled`, an 80-case switch over
- * `MeeshyNotificationType`) is intentionally NOT ported here: Android has no existing raw
- * wire-type→toggle resolver to reuse (the closest, [NotificationTypeCatalog], maps a coarser
- * 17-case UI category, not the wire enum) — building one is real, separate work, left open
- * rather than invented under this slice's scope. Until then, every type is treated as
- * always-enabled once push+DND pass.
+ * The gate has three preference layers, applied in order once active-screen suppression and
+ * dedup are cleared: [UserNotificationPreferences.pushEnabled] (the push master), the DND
+ * window ([DndWindow.isActive]), then the PER-TYPE toggle ([NotificationTypeToggle.isEnabled],
+ * a faithful port of iOS `isTypeEnabled` keyed on the wire `type` string). Any of the three
+ * failing yields [NotificationToastDecision.BlockedByPreferences]; a type with no governing
+ * toggle (translation, gamification, and the not-yet-modelled incoming-call / friend-content
+ * categories) passes the third layer, exactly as iOS treats its toggle-less types.
  *
  * [isDuplicateDelivery] is a precomputed boolean rather than a self-managed time window: the
  * "was this id already shown in the last 2s" check is inherently stateful (compares across
@@ -48,15 +47,21 @@ public object NotificationToastPolicy {
         now: LocalDateTime,
     ): NotificationToastDecision {
         val context = notification.context
-        val matchesActiveConversation = context?.conversationId != null &&
-            context.conversationId == activeConversationId
-        val matchesActivePost = context?.postId != null && context.postId == activePostId
-        if (matchesActiveConversation || matchesActivePost) {
+        val matchesActiveScreen = ActiveContextMatch.matches(
+            contentConversationId = context?.conversationId,
+            contentPostId = context?.postId,
+            activeConversationId = activeConversationId,
+            activePostId = activePostId,
+        )
+        if (matchesActiveScreen) {
             return NotificationToastDecision.SuppressedActiveScreen
         }
         if (isDuplicateDelivery) return NotificationToastDecision.Deduplicated
         if (!preferences.pushEnabled) return NotificationToastDecision.BlockedByPreferences
         if (DndWindow.isActive(preferences, now)) return NotificationToastDecision.BlockedByPreferences
+        if (!NotificationTypeToggle.isEnabled(notification.type, preferences)) {
+            return NotificationToastDecision.BlockedByPreferences
+        }
         return NotificationToastDecision.Show(notification)
     }
 }

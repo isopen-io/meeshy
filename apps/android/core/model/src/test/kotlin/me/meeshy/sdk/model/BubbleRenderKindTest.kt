@@ -23,7 +23,9 @@ class BubbleRenderKindTest {
         ephemeral: EphemeralLifecycle.State = EphemeralLifecycle.State.None,
         isViewOnce: Boolean = false,
         viewOnceCount: Int = 0,
+        isSystem: Boolean = false,
     ) = BubbleRenderKind.resolve(
+        isSystem = isSystem,
         isDeleted = isDeleted,
         ephemeral = ephemeral,
         isViewOnce = isViewOnce,
@@ -147,6 +149,47 @@ class BubbleRenderKindTest {
         ).isEqualTo(BubbleRenderKind.Kind.Burned)
     }
 
+    // MARK: - System (a conversation notice — join/leave/legacy summary — renders centered)
+
+    @Test
+    fun resolve_systemMessage_isSystem() {
+        // A system message (messageSource == "system") renders a centered notice, not a
+        // signed chat bubble — iOS `BubbleContentBuilder` sets `.kind = .system`.
+        assertThat(resolve(isDeleted = false, isSystem = true))
+            .isEqualTo(BubbleRenderKind.Kind.System)
+    }
+
+    @Test
+    fun resolve_systemWinsOverDeleted() {
+        // iOS checks `messageSource == .system` BEFORE `.deleted`: a deleted system
+        // message still renders as a system notice, never a deletion tombstone.
+        assertThat(resolve(isDeleted = true, isSystem = true))
+            .isEqualTo(BubbleRenderKind.Kind.System)
+    }
+
+    @Test
+    fun resolve_systemWinsOverBurned() {
+        // System precedence sits above the burned tombstone too — a stray view-once
+        // count on a system row must not turn it into "Seen and deleted".
+        assertThat(resolve(isDeleted = false, isSystem = true, isViewOnce = true, viewOnceCount = 1))
+            .isEqualTo(BubbleRenderKind.Kind.System)
+    }
+
+    @Test
+    fun resolve_systemWinsOverEphemeralExpired() {
+        // A notice never self-destructs into an empty collapse: system beats the
+        // ephemeral-expired arm regardless of any (nonsensical) expiry on a notice.
+        assertThat(resolve(isDeleted = false, isSystem = true, ephemeral = EphemeralLifecycle.State.Expired))
+            .isEqualTo(BubbleRenderKind.Kind.System)
+    }
+
+    @Test
+    fun resolve_notSystem_neverSystem() {
+        // Guard: the System arm fires ONLY on the flag, never as a fallback.
+        assertThat(resolve(isDeleted = false, isSystem = false))
+            .isEqualTo(BubbleRenderKind.Kind.Standard)
+    }
+
     // MARK: - Convenience predicates
 
     @Test
@@ -155,6 +198,7 @@ class BubbleRenderKindTest {
         assertThat(BubbleRenderKind.Kind.Standard.isEphemeralExpired).isFalse()
         assertThat(BubbleRenderKind.Kind.Deleted.isEphemeralExpired).isFalse()
         assertThat(BubbleRenderKind.Kind.Burned.isEphemeralExpired).isFalse()
+        assertThat(BubbleRenderKind.Kind.System.isEphemeralExpired).isFalse()
     }
 
     @Test
@@ -163,5 +207,15 @@ class BubbleRenderKindTest {
         assertThat(BubbleRenderKind.Kind.Standard.isBurned).isFalse()
         assertThat(BubbleRenderKind.Kind.Deleted.isBurned).isFalse()
         assertThat(BubbleRenderKind.Kind.EphemeralExpired.isBurned).isFalse()
+        assertThat(BubbleRenderKind.Kind.System.isBurned).isFalse()
+    }
+
+    @Test
+    fun isSystem_trueOnlyForSystemKind() {
+        assertThat(BubbleRenderKind.Kind.System.isSystem).isTrue()
+        assertThat(BubbleRenderKind.Kind.Standard.isSystem).isFalse()
+        assertThat(BubbleRenderKind.Kind.Deleted.isSystem).isFalse()
+        assertThat(BubbleRenderKind.Kind.Burned.isSystem).isFalse()
+        assertThat(BubbleRenderKind.Kind.EphemeralExpired.isSystem).isFalse()
     }
 }

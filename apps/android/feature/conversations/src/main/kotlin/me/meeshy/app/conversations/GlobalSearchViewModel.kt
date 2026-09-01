@@ -23,6 +23,14 @@ enum class GlobalSearchTab { MESSAGES, CONVERSATIONS, USERS }
 
 data class GlobalSearchUiState(
     val query: String = "",
+    /**
+     * La requete qui a PRODUIT les [results] actuellement affiches — distincte de
+     * [query], la saisie vive. Une ligne de resultat surligne son texte contre
+     * CETTE requete (parite iOS `resultsQuery`) : pendant qu'une nouvelle requete
+     * se tape, les anciens resultats restent affiches et leur surlignage doit
+     * rester ancre sur le terme qui les a produits, jamais sur la saisie en cours.
+     */
+    val resultsQuery: String = "",
     val recentSearches: List<String> = emptyList(),
     val selectedTab: GlobalSearchTab = GlobalSearchTab.MESSAGES,
     val isSearching: Boolean = false,
@@ -87,7 +95,12 @@ class GlobalSearchViewModel @Inject constructor(
         val trimmed = value.trim()
         if (trimmed.length < MIN_QUERY_LENGTH) {
             _state.update {
-                it.copy(results = GlobalSearchResults(), hasSearched = false, isSearching = false)
+                it.copy(
+                    results = GlobalSearchResults(),
+                    resultsQuery = "",
+                    hasSearched = false,
+                    isSearching = false,
+                )
             }
             return
         }
@@ -99,7 +112,9 @@ class GlobalSearchViewModel @Inject constructor(
             val cached = queryCache.get(trimmed, clock.nowMillis())
             if (cached != null) {
                 recentSearchesStore.record(trimmed)
-                _state.update { it.copy(isSearching = false, hasSearched = true, results = cached) }
+                _state.update {
+                    it.copy(isSearching = false, hasSearched = true, results = cached, resultsQuery = trimmed)
+                }
                 return@launch
             }
             _state.update { it.copy(isSearching = true) }
@@ -108,7 +123,9 @@ class GlobalSearchViewModel @Inject constructor(
             // Une recherche qui a REELLEMENT tourne entre dans l'historique — pas
             // chaque frappe : le debounce fait deja office de "recherche commise".
             recentSearchesStore.record(trimmed)
-            _state.update { it.copy(isSearching = false, hasSearched = true, results = results) }
+            _state.update {
+                it.copy(isSearching = false, hasSearched = true, results = results, resultsQuery = trimmed)
+            }
         }
     }
 
