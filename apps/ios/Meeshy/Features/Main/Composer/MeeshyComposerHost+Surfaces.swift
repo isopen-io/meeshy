@@ -542,6 +542,13 @@ extension MeeshyComposerHost {
         )
     }
 
+    /// Le son placé en CONTENU, résolu depuis l'état du meuble — la surface le
+    /// reçoit, elle ne le cherche pas.
+    var foregroundSound: ComposerForegroundSound? {
+        ComposerForegroundSound.resolve(localMedia: documentLocalMedia,
+                                        transcription: documentTranscription)
+    }
+
     var documentSurface: some View {
         ComposerDocumentSurface(
             text: $documentText,
@@ -600,6 +607,12 @@ extension MeeshyComposerHost {
             // #4657 — la rangée de l'avatar montre le son de fond : la note,
             // l'onde et la durée à côté du visage, et le texte descend.
             backgroundSound: viewModel.currentEffects.resolvedBackgroundAudio,
+            // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
+            // zone de texte, transcription défilante, et se rouvre au toucher.
+            foregroundSound: foregroundSound,
+            onEditForegroundSound: foregroundSound.map { son in
+                { editForegroundSound(son) }
+            },
             // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à

@@ -1,0 +1,157 @@
+import XCTest
+@testable import Meeshy
+
+/// **Le lecteur du son de contenu est bien MONTÉ, et dans la branche SANS
+/// canvas** (directive porteur 2026-09-01, #4657).
+///
+/// `ComposerForegroundSound` a sa suite de règle ; celle-ci prouve le dernier
+/// maillon — que la surface l'ASSEMBLE, et à l'endroit dit. Trois affirmations
+/// distinctes, et la deuxième est celle qui se perdrait en silence : déplacer
+/// la carte hors de `textOnlyContent` la ferait paraître AUSSI sur la scène,
+/// où un son de premier plan est déjà un objet posé sur le canvas.
+///
+/// Même patron que `ComposerDocumentSurfaceMentionMountGuardTests` — ancrage
+/// par le CORPS de la déclaration (équilibrage d'accolades), jamais par un
+/// comptage global, qui ne dirait pas si l'appel est au bon endroit.
+final class ComposerForegroundSoundMountGuardTests: XCTestCase {
+
+    private func source(_ chemin: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Composer/\(chemin)")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func corps(_ ancre: String, dans code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var resultat = ""
+        for caractere in code[debut.lowerBound...] {
+            resultat.append(caractere)
+            if caractere == "{" { profondeur += 1 }
+            if caractere == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return resultat }
+            }
+        }
+        return nil
+    }
+
+    /// La carte se monte DANS la disposition texte-seul — la seule branche que
+    /// `content` rend quand `showsScene` est faux. C'est cette structure, et
+    /// elle seule, qui tient le « sans canvas » de la directive : une seconde
+    /// garde écrite dans la règle de résolution se tairait le jour où celle-ci
+    /// changerait.
+    func test_laCarte_estMontéeDansLaBrancheSANSCanvas() throws {
+        let surface = try source("ComposerDocumentSurface.swift")
+        guard let texteSeul = corps("private var textOnlyContent: some View {", dans: surface) else {
+            return XCTFail("`textOnlyContent` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            texteSeul.contains("foregroundSoundCard"),
+            "`textOnlyContent` ne monte plus la carte du son de contenu : le son placé en contenu de "
+                + "publication redeviendrait une vignette muette dans le rail."
+        )
+        guard let carte = corps("private var foregroundSoundCard: some View {", dans: surface) else {
+            return XCTFail("`foregroundSoundCard` introuvable.")
+        }
+        XCTAssertTrue(
+            carte.contains("MeeshyAudioTranscriptPlayer("),
+            "La carte doit monter le lecteur du SDK, jamais une bande réécrite ici."
+        )
+    }
+
+    /// **La branche à SCÈNE ne la monte pas.** Contre-épreuve : sans elle, la
+    /// première assertion resterait verte si la carte était montée dans les
+    /// DEUX branches — c'est-à-dire précisément le défaut que la directive
+    /// exclut (« sans canvas »).
+    func test_laBrancheÀSCÈNE_neLaMontePas() throws {
+        let surface = try source("ComposerDocumentSurface.swift")
+        guard let contenu = corps("private var content: some View {", dans: surface),
+              let scene = contenu.range(of: "EmbeddedSceneCanvas(") else {
+            return XCTFail("`content` ou sa scène introuvables.")
+        }
+        let brancheScene = contenu[scene.lowerBound...]
+        XCTAssertFalse(
+            brancheScene.contains("foregroundSoundCard"),
+            "La carte ne doit pas paraître sous la scène : un son de premier plan y est déjà un objet "
+                + "posé sur le canvas, et le montrer deux fois ferait deux contrôles pour un son."
+        )
+    }
+
+    /// **Toucher la carte doit MENER quelque part** (loi 4). Le meuble sert la
+    /// fermeture d'édition, et elle rouvre bien le portail du son — sans quoi
+    /// la carte serait un contrôle inerte à l'air parfaitement vivant.
+    func test_leMeuble_câbleLÉdition_versLaFeuilleDeCréationAudio() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
+            return XCTFail("`documentSurface` introuvable.")
+        }
+        XCTAssertTrue(document.contains("foregroundSound: foregroundSound"),
+                      "La surface ne reçoit plus le son de contenu.")
+        XCTAssertTrue(document.contains("editForegroundSound(son)"),
+                      "Le tap de la carte n'est plus câblé : il ne ferait rien.")
+
+        let son = try source("MeeshyComposerHost+Sound.swift")
+        guard let edition = corps("func editForegroundSound(", dans: son) else {
+            return XCTFail("`editForegroundSound` introuvable.")
+        }
+        XCTAssertTrue(edition.contains("presentedPortal = .sound"),
+                      "L'édition doit rouvrir la vue « Création audio », pas une seconde surface.")
+        XCTAssertTrue(edition.contains("chosenSoundPlacement = .foreground"),
+                      "La feuille doit s'ouvrir sur la moitié du commutateur que le geste vient de désigner.")
+
+        guard let feuille = corps("var composerSoundSheet: some View {", dans: son) else {
+            return XCTFail("`composerSoundSheet` introuvable.")
+        }
+        XCTAssertTrue(
+            feuille.contains("initialAudio:"),
+            "La feuille doit s'ouvrir SUR le son édité — sans `initialAudio`, « modifier » rouvrirait un "
+                + "enregistreur vierge et l'auteur perdrait sa prise."
+        )
+    }
+}
+
+/// **Un son placé en CONTENU n'est pas AUSSI la bande-son de la scène**
+/// (directive porteur 2026-09-01, #4657).
+///
+/// Le commutateur de placement dit deux choses différentes — « Se joue pendant
+/// la lecture, sans lecteur visible » d'un côté, « Pièce jointe du post, avec
+/// son lecteur » de l'autre. `syncPostMediaIntoSlides` posait
+/// `applyContentAudio` sur TOUT audio du document, si bien que le second choix
+/// produisait aussi le premier : la pastille de l'avatar annonçait « Son de
+/// fond, 5 secondes » au-dessus d'une carte de contenu portant le même son.
+/// Mesuré au simulateur `Meeshy-iOS26`, reproductible.
+///
+/// Garde NÉGATIVE : elle rougit à la RÉINTRODUCTION de l'appel, pas à la
+/// disparition du fichier — `test_leSiteDeSynchronisationExisteToujours` en
+/// répond.
+final class ComposerContentSoundIsNotSceneAudioGuardTests: XCTestCase {
+
+    private func intake() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(
+                "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    func test_leSiteDeSynchronisationExisteToujours() throws {
+        XCTAssertTrue(try intake().contains("func syncPostMediaIntoSlides()"),
+                      "La garde ci-dessous ne mesurerait rien sans son site.")
+    }
+
+    func test_laSynchronisationNeVerseAucunAudioDansLaBandeSonDeLaScène() throws {
+        XCTAssertFalse(
+            try intake().contains("applyContentAudio"),
+            "Un son de la liste média du document est un son de CONTENU — le placement « fond » ne "
+                + "passe jamais par là (`applyCreatedAudio` et `ingestSoundFiles` vont droit à la "
+                + "scène). Le reverser en bande-son fait dire à la pastille de l'avatar « Son de "
+                + "fond » au-dessus de la carte de contenu qui porte le même son."
+        )
+    }
+}

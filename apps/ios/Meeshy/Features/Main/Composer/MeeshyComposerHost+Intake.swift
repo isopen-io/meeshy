@@ -46,12 +46,27 @@ extension MeeshyComposerHost {
     func syncPostMediaIntoSlides() {
         guard selectedFormat == .post else { return }
 
-        // **Le SON ne fait pas de slide (#4052).** Il se pose sur la scène
-        // COURANTE comme bande-son — pas une page du carrousel. Traité AVANT la
-        // boucle des visuels : il n'entre jamais dans `slideIdByMediaURL`, dont
-        // l'invariant est « une entrée = une slide », et l'y mettre ferait
-        // supprimer une slide au retrait du vocal.
-        viewModel.applyContentAudio(documentContentMedia.filter { $0.kind == .audio })
+        // **Le SON ne fait pas de slide (#4052), et depuis #4657 il ne fait pas
+        // non plus de BANDE-SON tout seul.**
+        //
+        // Cette ligne posait `applyContentAudio(…audio…)` : tout son de la liste
+        // média du document devenait la bande-son de la scène. C'était juste
+        // tant que la porte « Vocal » n'offrait aucun choix. Le commutateur de
+        // placement a changé la donne, et la ligne s'est mise à contredire le
+        // texte que l'app affiche elle-même : « Pièce jointe du post, avec son
+        // lecteur » d'un côté, « Son de fond, 5 secondes » sur la pastille de
+        // l'avatar de l'autre — pour le MÊME son. Mesuré au simulateur
+        // `Meeshy-iOS26` le 2026-09-01, reproductible.
+        //
+        // Un son placé en FOND ne passe jamais par ici : `applyCreatedAudio`
+        // l'envoie directement à la scène (`attachPastedAudio`), et
+        // `ingestSoundFiles` fait de même. Ce qui reste dans
+        // `documentContentMedia` est donc TOUJOURS du contenu — une pièce
+        // jointe, qui se joue dans son lecteur et non sous la scène.
+        //
+        // > Une règle écrite avant le contrôle qui la contredit ne rougit
+        // > nulle part : elle continue de s'appliquer, correctement, à une
+        // > question que plus personne ne pose.
 
         for media in documentContentMedia where media.kind != .audio
             && slideIdByMediaURL[media.sourceURL] == nil {
@@ -172,6 +187,10 @@ extension MeeshyComposerHost {
             documentLocation = nil
             documentDiscoverability.reset()
             documentTranscription = nil
+            // Le contexte d'édition désigne une URL de `documentLocalMedia`
+            // qu'on vient de vider : le laisser posé ferait remplacer une
+            // entrée qui n'existe plus.
+            editedForegroundSound = nil
             // La carte média→slide est un INDEX du meuble : la laisser pleine
             // ferait retirer, au prochain sync, des slides qui n'existent plus.
             slideIdByMediaURL = [:]

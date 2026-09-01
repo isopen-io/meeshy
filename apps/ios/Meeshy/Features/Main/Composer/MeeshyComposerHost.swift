@@ -284,6 +284,14 @@ struct MeeshyComposerHost: View {
     /// contredirait le bouton qu'il vient de presser.
     @State var chosenSoundPlacement: ComposerAudioRole = .background
 
+    /// **Le son que la feuille rouvre pour l'ÉDITER** (directive porteur
+    /// 2026-09-01). `nil` ⇒ la feuille s'ouvre vierge, sur l'enregistreur ;
+    /// posé ⇒ elle s'ouvre sur ce son, prêt à être rogné, re-transcrit ou
+    /// replacé. C'est ce champ qui distingue « ajouter » de « modifier », et
+    /// c'est aussi lui qui dit à `applyCreatedAudio` quelle entrée REMPLACER —
+    /// sans quoi éditer un son en aurait posé un second à côté du premier.
+    @State var editedForegroundSound: ComposerForegroundSound?
+
 
     @State var showsMediaSourceChooser = false
 

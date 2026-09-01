@@ -125,7 +125,12 @@ extension MeeshyComposerHost {
         // dans la même transaction est exactement ce qui rendait le bouton
         // inerte — sans crash ni trace, l'état invalide n'étant pas représentable
         // côté `ComposerPortal` mais parfaitement représentable en travers de lui.
-        .sheet(item: $presentedPortal, onDismiss: { resumePendingPresentation() }) { portail in
+        // `editedForegroundSound` s'éteint À LA FERMETURE, jamais seulement au
+        // retour de « Valider » : la feuille se referme aussi d'un glissement,
+        // et un contexte d'édition survivant ferait rouvrir « Ajouter un son »
+        // sur le son précédent, prêt à le remplacer sans l'avoir demandé.
+        .sheet(item: $presentedPortal,
+               onDismiss: { editedForegroundSound = nil; resumePendingPresentation() }) { portail in
             switch portail {
             case .location:     documentLocationPickerSheet
             case .emoji:        emojiPickerSheet

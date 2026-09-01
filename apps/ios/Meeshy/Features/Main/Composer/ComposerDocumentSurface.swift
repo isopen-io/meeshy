@@ -109,6 +109,18 @@ struct ComposerDocumentSurface: View {
     /// qui n'existe pas.
     var backgroundSound: StoryAudioPlayerObject? = nil
 
+    /// **Le son placé en CONTENU de publication** (directive porteur
+    /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
+    /// jamais fouillé ici : la surface reste une présentation. `nil` ⇒ aucune
+    /// carte — et c'est le cas de l'écrasante majorité des publications.
+    var foregroundSound: ComposerForegroundSound? = nil
+
+    /// Toucher la carte rouvre la vue « Création audio » SUR ce son. `nil` ⇒ la
+    /// carte s'écoute sans s'éditer, plutôt qu'un tap qui ne ferait rien
+    /// (loi 4) — un composer qui sert la carte sans servir l'édition existe :
+    /// c'est celui d'une surface en lecture seule.
+    var onEditForegroundSound: (() -> Void)? = nil
+
     /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
     ///
     /// Un slot opaque : la surface ne sait pas ce qu'est un format, ni quels
@@ -382,14 +394,47 @@ struct ComposerDocumentSurface: View {
                         Spacer(minLength: 0)
                     }
                     textOnlyField
+                    foregroundSoundCard
                 }
             } else {
-                HStack(alignment: .top, spacing: 12) {
-                    avatarView
-                        .padding(.top, 10)
-                    textOnlyField
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) {
+                        avatarView
+                            .padding(.top, 10)
+                        textOnlyField
+                    }
+                    foregroundSoundCard
                 }
             }
+        }
+    }
+
+    /// **Le son du CONTENU se joue là où le contenu se lit** (#4657).
+    ///
+    /// Il est monté ICI, et nulle part ailleurs, parce que `textOnlyContent`
+    /// EST la branche « sans canvas » : le `if showsScene` de `content` a déjà
+    /// tranché au-dessus. C'est la seule garde de cette condition — en écrire
+    /// une seconde dans la règle de résolution ferait deux vérités pour un fait,
+    /// et la seconde se tairait le jour où la première changerait.
+    ///
+    /// Avec une scène, un son de premier plan est un OBJET posé sur le canvas
+    /// et s'y édite ; il n'a pas besoin d'une carte sous le texte.
+    @ViewBuilder
+    private var foregroundSoundCard: some View {
+        if let foregroundSound {
+            MeeshyAudioTranscriptPlayer(
+                url: foregroundSound.url,
+                duration: foregroundSound.duration,
+                cues: foregroundSound.cues,
+                fallbackText: foregroundSound.text,
+                // Le plateau est sombre PAR CONSTRUCTION — comme les deux
+                // champs de texte de cette surface, qui posent déjà
+                // `isDark: true` sans consulter le thème de l'appareil.
+                isDark: true,
+                onEdit: onEditForegroundSound
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
         }
     }
 

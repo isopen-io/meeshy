@@ -33,8 +33,32 @@ extension MeeshyComposerHost {
                 presentedPortal = nil
                 HapticFeedback.light()
             },
-            placement: $chosenSoundPlacement
+            placement: $chosenSoundPlacement,
+            // **Éditer, c'est rouvrir la MÊME vue sur le son déjà posé**
+            // (directive porteur 2026-09-01). Aucune seconde surface d'édition
+            // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
+            // pour exactement ça, et une vue jumelle aurait divergé au premier
+            // réglage.
+            initialAudio: editedForegroundSound.map {
+                AudioPostComposerView.ExistingAudio(
+                    url: $0.url,
+                    duration: $0.duration,
+                    mimeType: $0.mimeType
+                )
+            }
         )
+    }
+
+    /// **Toucher la carte du son de contenu rouvre « Création audio » DESSUS.**
+    ///
+    /// Le placement est forcé à `.foreground` : la carte n'existe QUE pour un
+    /// son de contenu, et ouvrir la feuille sur l'autre moitié du commutateur
+    /// ferait mentir le geste qui vient d'être fait.
+    func editForegroundSound(_ son: ComposerForegroundSound) {
+        editedForegroundSound = son
+        chosenSoundPlacement = .foreground
+        presentedPortal = .sound
+        HapticFeedback.light()
     }
 
     /// **Ce que le PLACEMENT décide** (#4657) — la seule chose qui distinguait
@@ -69,6 +93,30 @@ extension MeeshyComposerHost {
                            mimeType: String,
                            durationMs: Int,
                            transcription: MobileTranscriptionPayload?) {
+        // **Une ÉDITION remplace, elle n'ajoute pas** (directive porteur
+        // 2026-09-01). Le retrait précède le `switch` — et non l'une de ses
+        // branches — parce que l'auteur peut aussi avoir fait passer le son en
+        // FOND depuis la feuille : l'entrée éditée doit alors quitter la liste
+        // média du document quand même. Le mettre dans la branche « premier
+        // plan » aurait laissé le son en double, une fois sur la scène et une
+        // fois sous le texte.
+        let edite = editedForegroundSound
+        if let edite {
+            documentLocalMedia.removeAll { $0.url == edite.url }
+            editedForegroundSound = nil
+        }
+        // **Rouvrir la feuille pour rogner ne doit pas EFFACER la
+        // transcription.** La feuille ne re-transcrit pas un son déjà acquis —
+        // c'est délibéré, une reconnaissance non demandée est du travail chaud
+        // pour rien — donc elle rend `nil`, et l'écrire tel quel aurait perdu
+        // le texte au premier réglage de poignée. La règle qui décide vit à
+        // côté du type, pas ici : c'est elle qu'un témoin peut convoquer.
+        let transcriptionServie = ComposerForegroundSound.survivingTranscription(
+            returned: transcription,
+            previous: documentTranscription,
+            editedURL: edite?.url,
+            returnedURL: url
+        )
         switch chosenSoundPlacement {
         case .foreground:
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(
@@ -76,9 +124,9 @@ extension MeeshyComposerHost {
                 declaredMimeType: mimeType,
                 durationMs: durationMs
             ))
-            documentTranscription = transcription
-            if let transcription {
-                documentLanguage = transcription.language
+            documentTranscription = transcriptionServie
+            if let transcriptionServie {
+                documentLanguage = transcriptionServie.language
             }
         case .background:
             viewModel.attachPastedAudio(url: url, role: .background)

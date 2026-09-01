@@ -138,10 +138,16 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// inerte, avec un état de plus pour le prouver.
     func test_leOnDismissDeLaFeuille_consommeLIntentionEnAttente() throws {
         let code = compact(try hostUnit())
-        XCTAssertTrue(code.contains("onDismiss:{resumePendingPresentation()}"),
+        // **Ancrée sur la FIN du `onDismiss`, pas sur son contenu entier.** La
+        // fermeture porte aussi l'extinction du contexte d'édition du son de
+        // contenu (#4657) ; exiger un corps d'UNE seule instruction aurait fait
+        // rougir la garde sur un ajout parfaitement légitime, sans rien dire de
+        // la reprise qu'elle protège. Ce qui compte est que la reprise soit là,
+        // et qu'elle CONCLUE la fermeture — le présentateur n'est libre qu'après.
+        XCTAssertTrue(code.contains("resumePendingPresentation()}){portailin"),
                       "La feuille des portails doit reprendre l'import en attente à sa "
-                      + "fermeture EFFECTIVE — c'est le seul instant où le présentateur "
-                      + "est libre.")
+                      + "fermeture EFFECTIVE, en DERNIER — c'est le seul instant où le "
+                      + "présentateur est libre.")
     }
 
     /// **La moitié « destination », celle que le premier défaut cachait.** Un
@@ -149,7 +155,7 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     func test_unFichierAudio_estPoseSurLaScene_avecSonRole() throws {
         let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcingestSoundFiles("))
-        XCTAssertTrue(code.contains("viewModel.attachPastedAudio(url:destination,role:chosenSoundRole)"),
+        XCTAssertTrue(code.contains("viewModel.attachPastedAudio(url:destination,role:chosenSoundPlacement)"),
                       "Le rôle choisi dans la feuille doit suivre le fichier — il survit "
                       + "à la fermeture parce qu'il est un état du MEUBLE.")
     }
