@@ -170,6 +170,15 @@ struct ComposerSceneSurface: View {
     /// requête.
     var mentionStrip: AnyView?
 
+    /// **Le volet de description, replié ou non** (#4742). Construit par le
+    /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
+    /// chemin vers la saisie ; elle sait seulement OÙ il va.
+    ///
+    /// `nil` quand le meuble n'en sert pas (loi 4 : une surface qui peint un
+    /// volet sans rien derrière promettrait une description qu'on ne peut pas
+    /// écrire).
+    var descriptionPanel: AnyView?
+
     /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
     /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
@@ -534,6 +543,16 @@ struct ComposerSceneSurface: View {
                 // inconditionnellement (il se vide lui-même), donc `toolOptions
                 // == nil` était toujours faux et la rangée n'a jamais pu
                 // paraître. Mesuré à l'écran, pas déduit.
+                // **La description de la SLIDE, juste sous la scène** (#4742).
+                //
+                // Elle prend la place que la doctrine de ce fichier lui donnait
+                // depuis le début — « l'objet, la SCÈNE, la SLIDE, la
+                // PUBLICATION » — et qu'elle n'occupait pas : montée en overlay
+                // de bas d'écran et SEULEMENT en mode saisie, elle était
+                // invisible le reste du temps. Un texte qui part avec la
+                // publication et que l'auteur ne voit jamais est un texte qu'il
+                // oublie.
+                if let descriptionPanel { descriptionPanel }
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
                                            activeChipId: activeObjectChipId,

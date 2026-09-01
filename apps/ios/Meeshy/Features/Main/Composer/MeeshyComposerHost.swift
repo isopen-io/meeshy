@@ -284,6 +284,16 @@ struct MeeshyComposerHost: View {
     /// contredirait le bouton qu'il vient de presser.
     @State var chosenSoundPlacement: ComposerAudioRole = .background
 
+    /// **Le viseur promis par la porte a-t-il déjà été ouvert ?** (#4751)
+    ///
+    /// `.task` peut rejouer — au retour d'un cover, à une recomposition de
+    /// l'arbre — et un second viseur posé par-dessus le premier serait un
+    /// écran que rien ne referme. La garde vit ICI et non dans la règle :
+    /// `armsCameraOnAppear` est pure et doit rendre la même réponse à chaque
+    /// appel, ce qui est correct pour une règle et faux pour une garde
+    /// d'unicité.
+    @State var hasArmedOpeningCamera = false
+
     /// **Le son que la feuille rouvre pour l'ÉDITER** (directive porteur
     /// 2026-09-01). `nil` ⇒ la feuille s'ouvre vierge, sur l'enregistreur ;
     /// posé ⇒ elle s'ouvre sur ce son, prêt à être rogné, re-transcrit ou
@@ -511,6 +521,13 @@ struct MeeshyComposerHost: View {
     /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
+
+    /// **Le repli du volet de description** (#4742).
+    ///
+    /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
+    /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
+    /// Déplié par défaut — la description existe pour être relue.
+    @State var sceneDescriptionCollapsed = false
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
@@ -984,6 +1001,30 @@ struct MeeshyComposerHost: View {
             // story (reprise d'un brouillon de story, tiroir des stories).
             seedStoryCanvasIfNeeded()
         }
+        // **La porte qui a promis un VISEUR l'ouvre** (#4751). `.cameraReady`
+        // a quitté l'exemption qui l'envoyait à l'atelier ; sans cette ligne,
+        // « Créer une story » ouvrirait le meuble sur une scène vide et la
+        // porte la plus visible du Feed cesserait de tenir ce que son nom
+        // annonce.
+        //
+        // `armOpeningCameraIfPromised` est le site UNIQUE : la règle décide,
+        // le meuble exécute, et un `guard` d'idempotence tient la promesse à
+        // UNE ouverture — un `.task` peut rejouer, et un second viseur
+        // par-dessus le premier serait un écran que rien ne referme.
+        .task { armOpeningCameraIfPromised() }
+    }
+
+    /// Ouvre le viseur que la porte a promis, une fois.
+    ///
+    /// **Idempotent par un état du meuble, pas par la règle** : la règle est
+    /// pure et rend la même réponse à chaque appel, ce qui est correct pour
+    /// elle et faux comme garde. C'est l'HÔTE qui sait s'il a déjà ouvert.
+    func armOpeningCameraIfPromised() {
+        guard !hasArmedOpeningCamera,
+              ComposerSurfaceRouting.armsCameraOnAppear(opening: profile.opensWith)
+        else { return }
+        hasArmedOpeningCamera = true
+        presentMediaIntake(.camera)
     }
 
     /// La graine entre par la RÈGLE, jamais par quatre affectations écrites

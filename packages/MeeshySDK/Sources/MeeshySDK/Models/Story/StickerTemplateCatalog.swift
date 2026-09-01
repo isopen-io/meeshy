@@ -17,6 +17,9 @@ public enum StickerTemplateCatalog {
         public static let locationPill = "location.pill"
         public static let locationPostcard = "location.postcard"
         public static let locationTicket = "location.ticket"
+        public static let locationStamp = "location.stamp"
+        public static let locationCompass = "location.compass"
+        public static let locationMarquee = "location.marquee"
 
         public static let timeDigital = "time.digital"
         public static let timeAnalog = "time.analog"
@@ -50,6 +53,21 @@ public enum StickerTemplateCatalog {
                         fallbackEmoji: "\u{1F4CD}",
                         posedScale: 1.0),
         StickerTemplate(id: ID.locationTicket,
+                        family: .location,
+                        slots: placeSlots,
+                        fallbackEmoji: "\u{1F4CD}",
+                        posedScale: 1.0),
+        StickerTemplate(id: ID.locationStamp,
+                        family: .location,
+                        slots: placeSlots,
+                        fallbackEmoji: "\u{1F4CD}",
+                        posedScale: 1.0),
+        StickerTemplate(id: ID.locationCompass,
+                        family: .location,
+                        slots: placeSlots,
+                        fallbackEmoji: "\u{1F9ED}",
+                        posedScale: 1.0),
+        StickerTemplate(id: ID.locationMarquee,
                         family: .location,
                         slots: placeSlots,
                         fallbackEmoji: "\u{1F4CD}",
