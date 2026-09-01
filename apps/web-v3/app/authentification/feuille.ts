@@ -26,7 +26,6 @@ export const FEUILLE_AUTHENTIFICATION = compacte(`
 .acces h1{margin:0 0 10px;font-size:var(--text-3xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
 .acces>p{margin:0 0 28px;color:var(--color-text-muted);line-height:var(--leading-relaxed)}
 
-.alerte{margin:0 0 22px;padding:12px 16px;border-radius:var(--radius-sm);border-left:3px solid var(--color-danger);background:color-mix(in srgb,var(--color-danger) 12%,transparent);color:var(--color-danger-soft);font-weight:var(--font-weight-medium);font-size:var(--text-sm);line-height:var(--leading-relaxed)}
 
 .acces form{display:grid;gap:18px}
 .champ{display:grid;gap:6px}

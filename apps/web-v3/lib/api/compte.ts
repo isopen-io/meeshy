@@ -14,6 +14,13 @@ import { baseDeLaPasserelle } from './links';
  * répondre en renvoyant se connecter, pas en affichant une erreur. Les
  * confondre ferait lire « une erreur est survenue » à qui doit simplement se
  * reconnecter.
+ *
+ * UN 403 N'EST PAS UN 401, et ces deux routes ne le confondent plus. Le second
+ * dit « ce jeton ne vaut plus » ; le premier dit « il vaut, mais pas pour
+ * ceci ». Renvoyer se connecter sur un 403 fabrique une BOUCLE — le lecteur se
+ * reconnecte, revient, est refusé de la même façon. Le défaut a été mesuré sur
+ * `/chats/:cle` (voir `lib/api/fil.ts`) ; ces deux routes portaient la même
+ * confusion, sans témoin pour la dire.
  */
 
 export type Recuperateur = (url: string, options: RequestInit) => Promise<Response>;
@@ -87,9 +94,19 @@ const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | n
 };
 
 export type Lecteur = {
+  readonly id: string | null;
   readonly prenom: string | null;
   readonly nomAffiche: string | null;
   readonly pseudonyme: string | null;
+  /**
+   * LES TROIS RANGS DU PRISME, servis tels que la passerelle les donne. Ils ne
+   * sont ni normalisés ni repliés ici : `resolveUserLanguagesOrdered`
+   * (`@meeshy/shared`) est le site unique qui en fait un ordre, et lui refaire
+   * ce travail en amont produirait deux vérités sur la même question.
+   */
+  readonly systemLanguage: string | null;
+  readonly regionalLanguage: string | null;
+  readonly customDestinationLanguage: string | null;
 };
 
 export type Identite =
@@ -125,7 +142,7 @@ export const moi = async ({
   const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_MOI}`, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
 
   const enveloppe = objet(await reponse.json().catch(() => null));
   if (enveloppe?.success !== true) return { genre: 'panne' };
@@ -139,9 +156,13 @@ export const moi = async ({
   return {
     genre: 'lecteur',
     lecteur: {
+      id: chaine(brut.id),
       prenom: chaine(brut.firstName),
       nomAffiche: chaine(brut.displayName),
       pseudonyme: chaine(brut.username),
+      systemLanguage: chaine(brut.systemLanguage),
+      regionalLanguage: chaine(brut.regionalLanguage),
+      customDestinationLanguage: chaine(brut.customDestinationLanguage),
     },
   };
 };
@@ -162,7 +183,7 @@ export const conversations = async ({
   const reponse = await demande(url, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
 
   const corps = await reponse.json().catch(() => null);
   const enveloppe = objet(corps);
