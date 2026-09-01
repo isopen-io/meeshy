@@ -22990,7 +22990,7 @@ que le cycle 122 du Prisme (« qui AFFICHE ce que le résolveur élit ? »).
 la bonne chose ? » mais **« qui l'appelle ? »** — un `grep` de son nom, et si la
 seule occurrence est sa déclaration, la garde n'existe pas.
 
-## Leçon 397 — 401 et 403 traités ensemble font une BOUCLE, et la boucle redemande le mot de passe à chaque tour
+## Leçon 404 — 401 et 403 traités ensemble font une BOUCLE, et la boucle redemande le mot de passe à chaque tour
 
 **Lot `/chats/:cle` de la v3.** L'écran renvoyait vers `/login` sur les deux
 codes. Mesuré contre la passerelle de staging, une conversation dont on n'est
@@ -23025,7 +23025,7 @@ mais en **demandant une ressource qu'on n'a pas le droit de voir**. Un écran
 protégé se teste avec trois jetons — aucun, le sien, et celui de quelqu'un
 d'autre — et c'est le troisième qui parle.
 
-## Leçon 398 — Dans l'IMAGE, les paquets du monorepo vivent SOUS la racine de l'app : son `tsconfig` les balaie, et rien en local ne peut le dire
+## Leçon 405 — Dans l'IMAGE, les paquets du monorepo vivent SOUS la racine de l'app : son `tsconfig` les balaie, et rien en local ne peut le dire
 
 **Lot `/chats/:cle` de la v3.** Déclarer `@meeshy/shared` a fait échouer la
 construction de l'image sur :
