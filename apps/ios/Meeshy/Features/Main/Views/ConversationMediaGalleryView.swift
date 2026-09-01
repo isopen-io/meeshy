@@ -407,7 +407,33 @@ struct ConversationMediaGalleryView: View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             VStack(alignment: .leading, spacing: 0) {
-                bottomMetadataOverlay(att)
+                // **Déplier la légende EFFACE l'auteur** (directive porteur
+                // 2026-09-02) : « quand on affiche / déplie pour tout voir, les
+                // détails d'auteur se cachent pour afficher le contenu ».
+                //
+                // Le bas de l'écran est une ressource FINIE. Une légende
+                // dépliée et une carte d'auteur s'y disputent la place ; la
+                // seule des deux que l'utilisateur vient de demander est la
+                // légende. L'auteur revient au repli — rien n'est perdu, tout
+                // est rendu à son tour.
+                //
+                // C'est la règle du POST. La story fait l'inverse et c'est
+                // voulu : là, rien ne se cache, la scène se FLOUTE
+                // (`StoryViewerView+Canvas`). Deux surfaces, deux réponses à la
+                // même question — « où trouver la place ? » — parce qu'elles
+                // n'ont pas le même voisinage.
+                if CaptionExpansionSpace.showsAuthorDetails(captionExpanded: captionExpanded) {
+                    bottomMetadataOverlay(att)
+                        // **Un FONDU, jamais un glissement** (directive porteur
+                        // 2026-09-02) : « il ne faut pas faire remonter l'auteur
+                        // de l'image mais le faire disparaître fade out puis
+                        // fade-in ». Un `.move` ferait monter la carte d'auteur
+                        // à travers la légende qui grandit — deux mouvements en
+                        // sens contraire sur la même bande, que l'œil lit comme
+                        // une bousculade. Le fondu ne déplace rien : l'auteur
+                        // s'efface sur place et revient sur place.
+                        .transition(.opacity)
+                }
                 if let caption = captionMap[att.id], !caption.isEmpty {
                     captionOverlay(caption)
                 }

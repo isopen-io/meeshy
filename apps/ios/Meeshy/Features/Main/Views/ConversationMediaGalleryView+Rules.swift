@@ -152,3 +152,38 @@ enum FullscreenImageSource {
         return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
     }
 }
+
+// MARK: - Où trouver la place quand la légende se déplie
+
+/// **Déplier une légende demande de la place, et chaque surface la prend
+/// ailleurs** (directive porteur 2026-09-02).
+///
+/// > « Le contenu doit pouvoir s'afficher en dessous de l'auteur et quand on
+/// > affiche / déplie pour tout voir, les détails d'auteur se cachent pour
+/// > afficher le contenu. […] Pour les story pas besoin de cacher quoi que ce
+/// > soit, quand on déplie, on floute juste la story. »
+///
+/// Deux réponses à UNE question, et la différence n'est pas un goût : elle
+/// vient du VOISINAGE. Le plein écran média porte, sous la légende, une carte
+/// d'auteur et une pellicule — la place se prend donc en les retirant. La story
+/// n'a rien sous sa légende : sa scène occupe tout, elle recule au lieu de
+/// céder.
+///
+/// La règle vit ici pour être interrogeable : un troisième hôte qui monterait
+/// la couche partagée devra DIRE lequel des deux comportements il adopte, au
+/// lieu de recopier l'un des deux au jugé.
+enum CaptionExpansionSpace {
+
+    /// Les détails d'auteur restent-ils visibles ? Non dès que la légende est
+    /// dépliée — c'est la place qu'elle occupe.
+    nonisolated static func showsAuthorDetails(captionExpanded: Bool) -> Bool {
+        !captionExpanded
+    }
+
+    /// Rayon du flou appliqué à une scène de story pendant que sa légende est
+    /// dépliée. Zéro au repos — un flou permanent ferait payer à toute lecture
+    /// le coût d'un geste que personne n'a fait.
+    nonisolated static func storySceneBlurRadius(captionExpanded: Bool) -> CGFloat {
+        captionExpanded ? 14 : 0
+    }
+}
