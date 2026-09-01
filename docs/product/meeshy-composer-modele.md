@@ -108,6 +108,39 @@ Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733
 paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
 pas #4733, et ne doit pas être lu comme le faisant.
 
+## 1 ter. Ce que chaque nom devient SOUS le composer
+
+Les quatre noms du § 1 sont le vocabulaire du composer. Deux d'entre eux n'ont
+**aucun correspondant** sous lui — ni sur le fil, ni en base, ni comme type
+Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
+
+| nom du modèle | contrat partagé (`packages/shared/types/canvas-v3.ts`) | type Swift livré |
+|---|---|---|
+| **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
+| **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
+| **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
+| **`MeeshyPublication`** | **rien.** Elle se projette en N `Post` (§ 1 bis) | **aucun type de ce nom** |
+
+```bash
+grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
+git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
+```
+
+**Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
+solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
+précède son implémentation. Ce qui doit être su, en revanche, c'est **où le
+vocabulaire cesse de correspondre** — parce que c'est là qu'un lot qui « suit le
+modèle » invente sa propre traduction, et que deux lots en inventent deux :
+
+> **Le composer sépare en DEUX noms — `MeeshyScene` et `MeeshySlide` — ce que le
+> contrat porte comme UN (`SceneV3`), et la description qui les distingue ne
+> voyage sur aucun des deux.** Chercher « slide » dans le contrat ne rend rien.
+
+Corollaire pour tout lot qui descend vers le fil : traduire `MeeshySlide` en
+`SceneV3` est CORRECT, et perdre la description en route est le défaut à
+surveiller — elle a son propre logement (le `content` du post en S/R, la
+légende du média en P, § 3), jamais la scène.
+
 ## 2. La simplification : une slide est TOUJOURS une scène
 
 Il n'existe **pas** deux formes de slide (« un média » d'un côté, « une scène » de
