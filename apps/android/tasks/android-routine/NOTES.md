@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — a doc-comment that PROMISES a behaviour is where to look for the half the code forgot (slice `banner-group-name-favorite-emoji`)
+`NotificationBannerViewModel`'s class doc said, in plain words, "Le nom LOCAL du groupe est résolu ici … renommage
+(`customName`) et emoji favori" — but the code twelve lines down resolved `groupName = customName ?: title` and never
+touched the favorite emoji. The intent was documented, the SSOT field (`ApiConversationPreferences.reaction`) existed
+and was already consumed by `ConversationFilter.FAVORITES`, and the iOS parity (`composedSubtitle`) was one function —
+yet the banner shipped naming a starred/classified thread by a bare name. Lessons:
+- **A doc-comment that names TWO inputs but the code reads ONE is a live gap, not just stale prose.** When a comment
+  promises "A + B" and the implementation carries only A, trust the comment's INTENT over the code and check whether B
+  was ever wired. It's the cheapest place to find an omission: the author already told you what should be there.
+- **iOS "presentation" types split resolution across a stored `name` and a computed accessor — port BOTH halves.**
+  `ConversationPresentation.name` is `customName ?? title` (set far away in `WidgetDataManager`); `composedSubtitle`
+  prepends the favorite. A faithful Android port folds both into one pure `composed(customName, title, favoriteEmoji)`
+  so the fallback AND the prefix are one tested SSOT — don't port only the accessor and leave the name resolution
+  scattered in the caller (which is exactly how the emoji got dropped).
+- **When you fix ONE surface of a shared concept, name the sibling that still has it.** The banner now resolves the
+  local-first name; the TOAST (`notificationToastSubtitle`) still reads the raw server title because its VM holds no
+  conversation snapshot. Different mechanism, larger fix — recorded in feature-parity §M + PROGRESS "Next" rather than
+  silently widened into this slice. (Same shape as the Prisme "which OTHER content type resolves this?" question.)
+
 ## 2026-08-31 — a "blocked, needs an SDK look" surface can be unblocked by asking what the sink ALREADY is (slice `story-viewer-dwell`)
 The story-viewer dwell surface sat deferred for three slices with the note "`markViewed(slideId)` carries no
 duration arg → needs an SDK look first." The SDK look took ten minutes and unblocked it entirely: **`StoryApi

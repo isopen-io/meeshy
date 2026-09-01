@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-09-01 **the in-app BANNER's "X dans <groupe>" framing finally leads the group name with its
+> favorite-classification emoji — the local rename it already carried was only HALF of what the device
+> knows** (slice `banner-group-name-favorite-emoji`, feature-parity §M in-app banner). The VM doc-comment
+> promised "renommage (`customName`) et emoji favori", but `NotificationBannerViewModel.handle` resolved
+> `groupName = customName ?: title` and dropped the favorite entirely: a thread the reader had starred (⭐️)
+> or classified (🔥) surfaced a bare name, where iOS `NotificationToastManager.ConversationPresentation.
+> composedSubtitle` leads with the favorite ("⭐️ Maman"). Dimension 6 (Cohérence) + dimension 13 (Complétude)
+> parity gap, and a promise the code didn't keep. The favorite emoji (`ApiConversationPreferences.reaction`)
+> and the local rename exist ONLY on the device — the one banner piece the gateway cannot compose.
+>
+> **Step 0 — the prior iteration's PR was open; merged it first.** `list_pull_requests` (open) → #4647
+> (`claude/apps/android/device-locale-header`, MY prior slice) plus #4622/#4599/#4590/#4541 (jcnm: gateway/web)
+> and dependabot. #4647: Android gate GREEN, reviewer PASS (documented in its body), diff `apps/android` only
+> (5 code/test + 2 tracking docs); the only red was **Quality (bun)** — an apps/web type-debt ratchet regression
+> (1184 vs baseline 1183), definitionally already on `main` since #4647 touches ZERO web files, unfixable from an
+> android session without breaking the hard rule. Squash-merged #4647 (the one legitimate "base failure, not mine";
+> ci.yml is not an Android gate — ROUTINE §CI reality). Then synced `main` (HEAD `8dd1aa26`), branched
+> `claude/apps/android/banner-group-name-favorite-emoji` off it.
+>
+> **The change — one pure composer + one wire.** New pure `:core:model` `ConversationBannerName.composed(
+> customName, title, favoriteEmoji) → String?`: port of iOS `composedSubtitle` PLUS its `name = customName ?? title`
+> resolution — `<favorite> <name>` favorite-first, `<name>` alone with no favorite, a blank/whitespace favorite
+> treated as absent (iOS `trimmingCharacters` guard), the local rename winning over the server title, and `null`
+> when the device knows no local name so `NotificationBannerFraming.present` keeps the server title (the Android
+> addition over iOS's pure surface, which never returns nil). Wired into `NotificationBannerViewModel` — the sole
+> local-name resolver (its own doc-comment says "résolu ici et nulle part ailleurs"). Blast radius: 1 new main +
+> 1 new test in `:core:model`, +1 import + a 4-line groupName expression in the feature VM, +1 VM test. **SOTA over
+> iOS:** the whole local-name resolution (rename fallback + favorite prefix + the null-omit) is one pure,
+> exhaustively-branch-tested value type, where iOS scatters it across `ConversationPresentation.name` (set in
+> `WidgetDataManager`) and `composedSubtitle`. Deliberately EXCLUDED (faithful boundary): the in-app TOAST surface
+> (`NotificationToastHost.notificationToastSubtitle`) reads the RAW server `conversationTitle` with no local-first
+> name at all — its VM holds no conversation snapshot, so that's a larger separate gap, noted in §M.
+>
+> **Tests: +11, RED-proven by mutation.** `ConversationBannerNameTest` +10 (favorite-first; no-favorite→name;
+> blank-favorite→name; whitespace-favorite trimmed before it leads; rename-wins-over-title; blank-rename→title still
+> favorite-first; title-only; both-name-fields-blank→null; both-absent→null; whitespace-name trimmed).
+> `NotificationBannerViewModelTest` +1 (a group notification whose cached conversation carries `customName` +
+> `reaction` surfaces a banner whose `InConversation` headline reads `actor="Alice"`, `groupName="😴 Mon équipe à
+> moi"`). **RED:** dropping the favorite prepend (`return "$favorite $name"` → `return name`) fails EXACTLY the 4
+> favorite-prepend tests (`ConversationBannerNameTest` 10 run, 4 failed, no collateral), the 6 no-favorite/null tests
+> staying green — verified this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 + `platforms;android-37.0`
+> /`android-35` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0` symlink resolved
+> `compileSdk = 37` for AGP. Kept `local.properties` out of the diff (`git check-ignore` confirms it's gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest,
+> 973 tasks) → **BUILD SUCCESSFUL in 4m 07s**. Reviewer **PASS** (diff `apps/android` only — 2 core files + 2 feature
+> files + tracking docs, no `local.properties`; SDK purity — pure `:core:model` value type, orchestration stays in
+> the `:feature` VM; SSOT — one `ConversationBannerName`, no re-implemented name resolution; instant-app — N/A, a
+> presentation string; UDF — VM `StateFlow` unchanged; no tautological tests — the composer is real logic,
+> mutation-proven; no coverage floor lowered; explicitApi honoured).
+>
+> **Next**: the in-app TOAST local-first name (above) — needs the toast VM to gain a `ConversationRepository` seam
+> like the banner VM, then reuse `ConversationBannerName`. OR an earlier build-order pure-core value type. The
+> unified Conversation info sheet (§C) remains a LARGE multi-slice surface (tab composables need extraction from
+> their `ModalBottomSheet` wrappers first). Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-09-01 **Android finally SENDS the Prisme's 4th-priority signal — `X-Device-Locale` now rides
 > every request, so `User.deviceLocale` fills and the device-locale arm of content resolution (dead
 > until now) actually fires** (slice `device-locale-header`, feature-parity §D "Automatic per-user
