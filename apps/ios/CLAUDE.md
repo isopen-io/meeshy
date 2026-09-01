@@ -488,6 +488,14 @@ des contrôleurs, de l'historique et de la création de slide.
 | **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
 | **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
 
+> **Le SOCLE n'est dans aucune de ces zones, et ce n'est pas un oubli.** Audience ·
+> Aperçu · Publier vivent au MEUBLE, sous les trois surfaces, et ne bougent jamais
+> (loi 5 de la planche — trois membres, jamais plus). `ComposerSceneSurface.swift:35`
+> l'écrit à l'endroit où on le chercherait : « Le SOCLE n'est pas ici ». Le « bas du
+> plateau » de la première ligne est la **rangée d'outils**, une autre rangée : y
+> ranger une entrée du socle, ou l'inverse, mélange ce qui décide de la PUBLICATION
+> avec ce qui agit sur la SCÈNE.
+
 **Ce que la révision déplace — FAIT et RESTE, mesuré le 2026-09-01 :**
 
 - ✅ **FAIT — undo / redo ont quitté le socle pour le rail DROIT** (#4586,
