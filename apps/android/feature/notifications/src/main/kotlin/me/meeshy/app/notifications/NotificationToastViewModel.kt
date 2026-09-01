@@ -20,7 +20,8 @@ import javax.inject.Inject
 /**
  * The in-app real-time notification toast orchestrator (feature-parity §M) — the stateful glue
  * that finally makes the three pure §M building blocks REAL: [ToastDedupWindow] (2 s dedup),
- * [NotificationToastPolicy] (active-screen/push/DND/per-type gate) and the `MeeshyNotificationToast`
+ * [NotificationToastPolicy] (active-screen / dedup / per-type gate — the in-app banner is NOT
+ * gated by push-master or DND, exactly like iOS `allowsInAppBanner`) and the `MeeshyNotificationToast`
  * atom. A faithful port of the toast half of iOS `NotificationToastManager`
  * (`handleNewNotification` + `showToast` + `onConversationOpened/onPostOpened`), with the decision
  * kept in the pure policy and only the "when" (clock, socket, timer) living here.
@@ -64,7 +65,6 @@ class NotificationToastViewModel @Inject constructor(
             activePostId = activePostId,
             isDuplicateDelivery = admit.isDuplicate,
             preferences = notificationPreferencesStore.preferences.value,
-            now = clock.localDateTime(),
         )
         if (decision is NotificationToastDecision.Show) {
             show(decision.notification)

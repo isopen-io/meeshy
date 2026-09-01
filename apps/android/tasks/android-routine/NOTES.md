@@ -5,6 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — re-baseline against `origin/main` BEFORE scoping, and a port's doc-comment is an assertion (slice `notification-inapp-gate-drops-push-dnd`)
+Two lessons, one painful, one substantive.
+
+- **Read from the branch you will BRANCH from, not the stale designated branch.** This run's first file
+  reads were taken on `claude/fervent-darwin-055sh3` (the designated branch, 788 commits behind main). It
+  showed an OLD `NotificationToastPolicy` with no per-type gate and an OLD `NotificationBannerViewModel`
+  with a hand-rolled dedup map — making an "add the per-type gate" slice look wide open when main had
+  ALREADY shipped both (`NotificationTypeToggle`, `ToastDedupWindow`, the per-type gate). I clobbered three
+  existing files with re-invented versions before catching it via `git diff --stat origin/main`. Fix: `git
+  fetch origin main` and `git checkout -B <slice> origin/main` FIRST, then read PROGRESS/feature-parity/
+  source. The stale designated branch is never the state of record — `origin/main` is.
+- **A port's doc-comment claiming "this is what iOS does" is an ASSERTION — verify it against the iOS
+  source.** `NotificationToastPolicy`'s doc said it was "extracted from iOS `handleNewNotification`'s
+  guard-chain" and applied push+DND. iOS `handleNewNotification` applies NEITHER — the in-app banner gate is
+  `allowsInAppBanner == isTypeEnabled`, per-type only, with an explicit doc-comment reason (push/DND protect
+  an ABSENT user; a present user must not go blind in-app). The Android policy embodied a factual
+  misunderstanding of iOS, not a deliberate divergence — and it was redundant, since `PushPresentationPolicy`
+  already owns push+DND for the foreground push banner. Same family as the gateway's "un commentaire qui
+  ÉNONCE une contrainte est une AFFIRMATION": when a comment says what another platform does, open that
+  platform's file. The fix (drop push/DND from the in-app gate) is a fidelity correction; the tests changed
+  to the corrected source-of-truth behaviour, which is aligning, not weakening.
+
 ## 2026-09-01 — a deferred follow-up is only closed when EVERY named site is wired (slice `engagement-consent-gate-surfaces`)
 The prior slice `engagement-consent-gate-detail` shipped the pure consent gate on `EngagementSessions.begin` but
 wired only the DETAIL surface, deferring reels/status/story as "three thin per-surface slices". This slice did all
