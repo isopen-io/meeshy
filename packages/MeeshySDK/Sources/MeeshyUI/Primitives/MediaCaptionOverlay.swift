@@ -98,6 +98,18 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     private let onToggle: () -> Void
     private let render: (String, CGFloat) -> TextBody
 
+    /// **Le retrait horizontal, dit par l'HÔTE** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// Il valait 20 en dur, dans les deux états. Le lecteur de réel monte sa
+    /// colonne d'information à 16 : la légende s'y retrouvait indentée de 36 pt
+    /// pendant que le nom de l'auteur, juste au-dessus, restait à 16 — deux
+    /// alignements pour une même colonne, visibles au premier coup d'œil.
+    ///
+    /// Le même nombre sert les DEUX états : replier puis déplier ne doit pas
+    /// faire sauter le texte latéralement.
+    private let horizontalInset: CGFloat
+
     /// **Ce que les surfaces partagent est la RÈGLE, pas le moteur de texte.**
     ///
     /// Le composant décide de replier, compte les mots, pose l'invite, ancre et
@@ -115,12 +127,14 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 isExpanded: Bool,
                 wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
                 wordHead: Int = MediaCaptionOverlay.defaultWordHead,
+                horizontalInset: CGFloat = 20,
                 onToggle: @escaping () -> Void,
                 @ViewBuilder render: @escaping (String, CGFloat) -> TextBody) {
         self.caption = caption
         self.isExpanded = isExpanded
         self.wordThreshold = wordThreshold
         self.wordHead = wordHead
+        self.horizontalInset = horizontalInset
         self.onToggle = onToggle
         self.render = render
     }
@@ -186,10 +200,18 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 .accessibilityHint(Self.seeMoreHint)
             }
         }
+        // **Le retrait AVANT le cadre, jamais après.** Posé après, il élargit
+        // une vue qui occupe déjà toute la largeur proposée : le conteneur
+        // déborde alors de `2 × inset`, se centre, et le texte sort par la
+        // GAUCHE — « …week-ends est très loin » amputé de son premier mot,
+        // mesuré au simulateur `Meeshy-iOS26` le 2026-09-01. Le voile masquait
+        // le symptôme sans le corriger ; l'ôter l'a rendu visible.
+        //
+        // > Un `padding` posé sur un `frame(maxWidth: .infinity)` ne creuse pas
+        // > la vue, il la fait déborder. L'ordre est la règle, pas un détail de
+        // > style.
+        .padding(.horizontal, horizontalInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-        .background(collapsedScrim)
     }
 
     /// Dépliée : le texte entier, ancré au coin BAS-GAUCHE, qui défile s'il
@@ -218,21 +240,38 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                     .accessibilityLabel(Self.seeLessLabel)
                     .accessibilityHint(Self.seeLessHint)
                 }
+                .padding(.horizontal, horizontalInset)
                 .frame(maxWidth: .infinity,
                        minHeight: proxy.size.height,
                        alignment: .bottomLeading)
-                .padding(.horizontal, 20)
             }
         }
     }
 
-    /// Repliée : un voile qui n'assombrit que la bande du texte, et qui ne
-    /// prend JAMAIS le doigt — le canvas garde sa navigation dessous.
-    private var collapsedScrim: some View {
-        LinearGradient(colors: [.clear, .black.opacity(0.42)],
-                       startPoint: .top, endPoint: .bottom)
-            .allowsHitTesting(false)
-    }
+    // **Repliée, la légende n'a PLUS de voile à elle** (directive porteur
+    // 2026-09-01) :
+    //
+    // > « sans dégradé noir transparent, mais posé correctement sur l'image et
+    // > correctement aligné exactement comme sur la card des réels »
+    //
+    // Elle en portait un — `[.clear, .black.opacity(0.42)]` — posé sur la seule
+    // bande du texte. Or les deux hôtes peignent DÉJÀ un voile de bas de page :
+    // `ReelsPlayerView` un `[.clear, .clear, .black.opacity(0.6)]` sur toute la
+    // page, la story le sien. Le voile de la légende s'y ajoutait, et comme il
+    // ne couvrait que le texte, il dessinait une bande sombre AUTOUR de lui —
+    // un cartouche qu'aucune autre ligne de la colonne ne porte.
+    //
+    // Ce qui rend le texte lisible sur l'image est `legibleOverCanvas()` — deux
+    // ombres portées, la manière de la carte de réel (`ReelFeedCard`), qui pose
+    // sa légende à même la vidéo avec une ombre et rien d'autre.
+    //
+    // > Un voile POSÉ SUR UN SEUL ÉLÉMENT d'une colonne n'assombrit pas un
+    // > fond : il dessine un cartouche. La question n'est pas « le texte est-il
+    // > lisible ? » mais « ce qui le rend lisible se voit-il ? ».
+    //
+    // L'état DÉPLIÉ garde le sien : il couvre l'écran ENTIER, ne cerne donc
+    // rien, et c'est lui qui rend un texte long lisible par-dessus une vidéo
+    // claire. Il est aussi la cible du toucher qui referme.
 
     /// Dépliée : le voile couvre l'écran et REFERME au toucher — c'est le geste
     /// attendu d'un texte plein écran.
@@ -304,11 +343,13 @@ public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
          isExpanded: Bool,
          wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
          wordHead: Int = MediaCaptionOverlay.defaultWordHead,
+         horizontalInset: CGFloat = 20,
          onToggle: @escaping () -> Void) {
         self.init(caption: caption,
                   isExpanded: isExpanded,
                   wordThreshold: wordThreshold,
                   wordHead: wordHead,
+                  horizontalInset: horizontalInset,
                   onToggle: onToggle,
                   render: { texte, taille in MediaCaptionPlainText(texte, size: taille) })
     }

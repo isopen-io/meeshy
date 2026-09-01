@@ -1733,7 +1733,13 @@ struct StoryCardView: View {
             if currentVoiceCaption == nil, let description = currentStoryDescription {
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
+                    // 20 pt — le retrait des couches voisines de ce canvas (la
+                    // transcription vocale juste au-dessus le pose aussi). Il
+                    // était en dur dans la couche ; il est désormais DIT ici,
+                    // pour que le lecteur de réel puisse aligner la sienne sur
+                    // sa propre colonne (directive porteur 2026-09-01).
                     MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
+                                        horizontalInset: 20,
                                         onToggle: onCaptionExpansionToggled)
                 }
                 .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)

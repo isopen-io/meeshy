@@ -148,6 +148,14 @@ extension ReelPageView {
                 MediaCaptionOverlay(
                     caption: displayedDescription,
                     isExpanded: descriptionExpanded,
+                    // **Aucun retrait à elle** (directive porteur 2026-09-01) :
+                    // la colonne d'information est déjà posée à 16 pt par
+                    // `ReelsPlayerView`, et les 20 pt que la couche ajoutait
+                    // indentaient la légende de 36 quand le nom de l'auteur,
+                    // juste au-dessus, restait à 16. La légende s'aligne
+                    // désormais sur ses voisines — la manière de la carte de
+                    // réel, où légende, auteur et actions partagent UN retrait.
+                    horizontalInset: 0,
                     onToggle: {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                     },
