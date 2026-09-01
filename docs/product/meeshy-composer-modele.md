@@ -64,15 +64,43 @@ la publication comme un objet** — mesuré le 2026-09-01, avec ses sites :
 | fil app → passerelle | `PublishIntent.swift:52` — douze champs, **pas une slide, pas un objet, pas un effet** |
 | base | `model Post` (`packages/shared/prisma/schema.prisma`) — **ni `storyId`, ni `sceneId`, ni index de slide** ; la scène voyage en `storyEffects Json?`, opaque, **un par post** |
 
-Une publication de quatre slides est donc **quatre lignes `Post` que rien ne
-relie**. Le mot « publication » a un référent dans le composer et n'en a plus
-aucun passé le fil.
+Une STORY de quatre scènes est donc **quatre lignes `Post` que rien ne relie** —
+et c'est conforme à la règle arbitrée ci-dessous, une story étant une suite
+d'unités autonomes. Ce qui n'a pas de référent passé le fil, c'est la
+publication **en tant qu'objet** : rien ne dit que ces quatre lignes viennent
+d'une même composition.
 
 > **Une `MeeshyPublication` ne se sérialise pas : elle se PROJETTE.** Ce qui est
 > composé est une publication ; ce qui est publié est un ensemble de posts. Tant
 > que la projection reste implicite — une boucle `for` sur les slides — personne
 > ne peut la contredire, et c'est ainsi qu'une slide vierge est partie en post
 > à côté du vrai (#4730).
+
+### La règle de projection — ARBITRÉE (porteur, 2026-09-02)
+
+**La projection dépend du PROFIL, et d'aucune autre condition :**
+
+| profil | M scènes composées | ce qui est publié |
+|---|---|---|
+| **P** (post) · **R** (réel) | M | **UN seul** post / réel, portant ses **M scènes / médias** |
+| **S** (story) | N | **N stories** — une par scène |
+
+Autrement dit : une story est une SUITE d'unités autonomes, un post est UNE
+unité à plusieurs pages. Le profil ne décide pas seulement d'un type sur le
+fil ; **il décide de la CARDINALITÉ de la projection.**
+
+**Écart mesuré au 2026-09-02** : `publishAllSlides()`
+(`StoryComposerView+Publication.swift:305`) boucle sur les slides **sans jamais
+regarder le profil** — `publishedType(requested:atelier:)` (`:347`) choisit le
+TYPE, jamais le NOMBRE. Un post ou un réel composé à l'atelier avec M scènes
+part donc en **M posts**. C'est la règle ci-dessus qui a raison ; le code est en
+dette.
+
+**Et cette dette en a une autre sous elle** : pour qu'UN post porte M scènes, il
+faut que la scène voyage avec lui. `PublishIntent` et `CreatePostBody` ne
+portent **aucun** `storyEffects` (#4756) — le chemin document perd la scène
+entière. #4756 n'est donc pas un confort : c'est le préalable de cette règle
+pour les profils P et R.
 
 ### Les trois obligations de la projection
 
