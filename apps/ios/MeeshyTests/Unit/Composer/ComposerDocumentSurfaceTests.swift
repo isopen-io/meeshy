@@ -87,21 +87,43 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertEqual(surface, .document,
                        "la story ne charge plus l'atelier depuis le fil (#4700)")
-        XCTAssertEqual(
-            ComposerMountedView.mounted(
-                surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false)
-            ),
-            .scene,
+        // **RETOURNÉ au #4513** : le canvas d'une story est désormais
+        // INCRUSTÉ (`1b`), plus plein écran. Ce que ce témoin affirmait — « le
+        // choix du format change l'écran » — reste vrai et se mesure au bon
+        // endroit : `showsCanvas`, qui dit s'il Y A un canvas. La vue montée,
+        // elle, reste `.document` tant que l'auteur n'est pas ENTRÉ dans
+        // l'éditeur, et c'est `ComposerDocumentSurface.showsScene` qui l'y
+        // peint.
+        XCTAssertTrue(
+            ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false),
             "Basculer le document en story doit montrer un canvas — sinon le choix ne change rien."
         )
         XCTAssertEqual(
             ComposerMountedView.mounted(
                 surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false)
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false),
+                editsScene: false
             ),
             .document,
-            "…et le même routage sous un POST vide reste un document : c'est le CHOIX qui change l'écran."
+            "…et il le montre INCRUSTÉ : l'éditeur plein écran ne se sert que sur un geste (#4513)."
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false),
+                editsScene: true
+            ),
+            .scene,
+            "…et il s'y sert quand l'auteur l'a demandé — sinon `1c` serait injoignable."
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false),
+                editsScene: true
+            ),
+            .document,
+            "…et un POST vide reste un document même en demandant l'éditeur : il n'y a rien à éditer."
         )
     }
 
@@ -122,21 +144,31 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// > change, puis rougit en accusant le mauvais coupable. Le retourner
     /// > demande de retrouver quelle couche porte VRAIMENT ce qu'il énonçait.
     ///
-    /// Ici c'est `ComposerMountedView.mounted(surface:hasScene:)` : elle monte
-    /// la scène dès qu'il Y A une scène, quelle que soit la surface commandée
-    /// par le format. C'est cette fonction, et elle seule, qui garantit qu'un
-    /// canvas composé survit au passage en post.
+    /// Ici c'est `ComposerMountedView.mounted(surface:hasScene:editsScene:)` :
+    /// elle porte la scène dès qu'il Y A une scène, quelle que soit la surface
+    /// commandée par le format. C'est cette fonction, et elle seule, qui
+    /// garantit qu'un canvas composé survit au passage en post.
+    ///
+    /// **Le #4513 y a ajouté une troisième entrée sans changer cela** : la
+    /// scène survit qu'on l'ÉDITE ou non — incrustée dans le document (`1b`)
+    /// ou en plein écran (`1c`). Ce témoin vérifie donc les DEUX, parce que
+    /// « survivre » ne doit dépendre d'aucun geste.
     func test_leCanvasComposé_surviTAuPassageEnPost() {
         let profil = ComposerProfile.profile(for: .storyTray)
         let surfaceEnPost = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post)
 
         XCTAssertEqual(
-            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: true),
+            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: true, editsScene: true),
             .scene,
             "Le canvas déjà composé ne disparaît pas parce que l'auteur publie en post."
         )
         XCTAssertEqual(
-            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: false),
+            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: true, editsScene: false),
+            .document,
+            "…et il survit AUSSI sans geste d'édition : il est alors incrusté (`1b`), pas absent."
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: false, editsScene: true),
             .document,
             "…et un post SANS rien de composé reste un document : c'est la scène "
                 + "qui commande, pas la porte d'où l'on vient."

@@ -492,6 +492,23 @@ struct MeeshyComposerHost: View {
     /// unique. Garder l'id en plus serait un état MORT, qui masquerait une
     /// lecture morte le jour où un lot suivant croirait s'en servir.
     @State var selectedSceneItemKind: StoryCanvasUIView.CanvasItemKind?
+
+    /// **L'auteur est-il ENTRÉ dans l'éditeur de scène ?** (#4513)
+    ///
+    /// `false` ⇒ la scène est INCRUSTÉE dans le document (`1b`) ; `true` ⇒ elle
+    /// occupe l'écran avec ses rails et son inspecteur (`1c`).
+    ///
+    /// **Un GESTE, jamais une dérivation de `selectedSceneItemKind`** — que le
+    /// code pose programmatiquement en au moins trois endroits (poser un texte
+    /// le sélectionne, `+Intake`; un fond tapé le sélectionne; une intake le
+    /// remet à `nil`). Dériver l'écran de la sélection ferait donc basculer
+    /// l'auteur dans l'éditeur au moment où il POSE un objet, pas au moment où
+    /// il demande à l'éditer.
+    ///
+    /// Il ne se remet pas à `false` quand la scène disparaît : la règle s'en
+    /// charge (`hasScene && editsScene`), et un second site qui l'éteindrait
+    /// serait une deuxième écriture de la même loi.
+    @State var editsScene = false
     /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
     /// JETAIT (`{ _, kind in … }`). Le kind suffisait à l'inspecteur, qui ne
     /// sert qu'un contrôle par famille ; le rail *trailing* offre des actions
@@ -1082,6 +1099,32 @@ struct MeeshyComposerHost: View {
     /// place : ça compilait, et ça ne pouvait jamais rendre vrai, la scène
     /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
     /// endroit ne peut pas être lue de travers ailleurs.
+    /// **Le prédicat de PRÉSENCE de la scène — un seul, pour la vue ET pour sa
+    /// branche** (#4513).
+    ///
+    /// Il existait en DEUX exemplaires, et la bascule de #4513 les a fait
+    /// diverger visiblement : `mountedComposerView` lisait `showsCanvas(...)`
+    /// (vrai pour une story, même vide — une story EST ses canvas), tandis que
+    /// `ComposerDocumentSurface(showsScene:)` recevait `documentHasScene` (faux
+    /// tant que rien n'est posé, la slide semée ne comptant pas comme matière).
+    ///
+    /// Tant que `.document + hasScene` montait `ComposerSceneSurface`, l'écart
+    /// ne se voyait pas : la scène était peinte par l'autre vue. Depuis que le
+    /// document la porte lui-même, la story ouverte n'avait plus AUCUN canvas —
+    /// la vue disait « il y a une scène », sa branche disait « non ».
+    ///
+    /// > Deux prédicats qui répondent à la même question restent d'accord tant
+    /// > qu'un seul est consulté. C'est le jour où le second est branché que
+    /// > l'écart devient un écran vide — et aucun témoin ne rougit, puisque
+    /// > chacun est juste séparément.
+    ///
+    /// Mesuré au simulateur, pas au gate : 263 témoins verts au-dessus de cette
+    /// régression.
+    var sceneIsPresent: Bool {
+        ComposerStoryCanvas.showsCanvas(format: selectedFormat,
+                                        documentHasScene: documentHasScene)
+    }
+
     var mountedComposerView: ComposerMountedView {
         ComposerMountedView.mounted(
             surface: mountedSurface,
@@ -1095,10 +1138,11 @@ struct MeeshyComposerHost: View {
             // La substitution se fait ICI et pas dans `documentHasScene`, dont
             // le MOOD est l'autre lecteur : y injecter le format ferait décider
             // l'offre de formats par le format déjà choisi.
-            hasScene: ComposerStoryCanvas.showsCanvas(
-                format: selectedFormat,
-                documentHasScene: documentHasScene
-            )
+            hasScene: sceneIsPresent,
+            // **`1b` par défaut, `1c` sur un geste** (#4513). L'éditeur ne se
+            // sert plus d'emblée : la scène naît INCRUSTÉE dans le document, et
+            // l'auteur y entre en tapant ce qu'il veut modifier.
+            editsScene: editsScene
         )
     }
 
