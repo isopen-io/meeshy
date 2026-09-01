@@ -306,7 +306,7 @@ struct MeeshyComposerHost: View {
     /// n'étant lus qu'en un seul endroit (`editedSoundTrack`).
     @State var editedBackgroundSoundId: String?
 
-    /// **L'IDENTITÉ de la feuille « Création audio »** (#4682).
+    /// **L'IDENTITÉ de la feuille « Création audio »** (#4684).
     ///
     /// `.sheet(item: $presentedPortal)` reconstruit son contenu quand l'ITEM
     /// change. Deux ouvertures successives portent la même valeur — `.sound` —

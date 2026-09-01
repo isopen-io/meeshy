@@ -99,7 +99,7 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let edition = corps("func editForegroundSound(", dans: son) else {
             return XCTFail("`editForegroundSound` introuvable.")
         }
-        // **Repointé au #4682** : l'ouverture est passée par un site UNIQUE
+        // **Repointé au #4684** : l'ouverture est passée par un site UNIQUE
         // (`openSoundSheet`), qui pose le placement ET renouvelle l'identité de
         // la feuille. Épingler les deux lignes d'avant ferait rougir la garde
         // sur le correctif qu'elle devrait protéger.
@@ -185,7 +185,7 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
                       "…et l'emprunt aussi : sans lui, `addBorrowedSound` en fait un PREMIER PLAN")
     }
 
-    /// **Une ouverture, une feuille NEUVE** (#4682).
+    /// **Une ouverture, une feuille NEUVE** (#4684).
     ///
     /// `.sheet(item:)` reconstruit sur changement d'ITEM ; deux ouvertures
     /// portent la même valeur `.sound`, donc SwiftUI peut réutiliser la vue et

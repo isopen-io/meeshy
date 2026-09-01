@@ -80,13 +80,13 @@ extension MeeshyComposerHost {
             // réglage.
             initialAudio: editedSoundTrack
         )
-        // **Une ouverture, une feuille NEUVE** (#4682). Voir
+        // **Une ouverture, une feuille NEUVE** (#4684). Voir
         // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la
         // vue — et son `@State` — d'une ouverture à la suivante.
         .id(soundSheetSession)
     }
 
-    /// **LA façon d'ouvrir « Création audio »** (#4682) — les quatre entrées y
+    /// **LA façon d'ouvrir « Création audio »** (#4684) — les quatre entrées y
     /// passent, et c'est ce qui rend l'inventaire structurel.
     ///
     /// Elles faisaient chacune leurs deux ou trois lignes : poser le placement,
