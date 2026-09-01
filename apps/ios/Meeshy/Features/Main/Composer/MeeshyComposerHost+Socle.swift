@@ -75,10 +75,15 @@ extension MeeshyComposerHost {
     // non bornée.
     //
     // Ce que la pastille SAVAIT ne s'est pas perdu avec elle : sa composition
-    // de crédit (titre · @auteur · durée) vit désormais dans
-    // `ComposerSoundCredit`, et la pastille de l'avatar la rend. Le retirer
-    // sans emporter cette moitié aurait fait disparaître l'attribution d'un son
-    // emprunté partout, en silence.
+    // de crédit (titre · @auteur · durée) a suivi le son jusqu'à la pastille de
+    // l'avatar, qui la rend. Le retirer sans emporter cette moitié aurait fait
+    // disparaître l'attribution d'un son emprunté partout, en silence.
+    //
+    // Elle vit depuis la fusion du 2026-09-01 en DEUX morceaux, séparés par ce
+    // dont chacun dépend : `StoryAudioIdentity.attribution` (SDK) pour ce qui
+    // dépend de la PISTE — titre et crédit, servis seulement à un emprunt — et
+    // `ComposerSoundCredit` pour ce qui dépend du LECTEUR, sa durée écrite pour
+    // l'œil ou dite à voix haute.
 
     // **L'HISTORIQUE A QUITTÉ LE SOCLE** (#4586, directive porteur 2026-08-31).
     //

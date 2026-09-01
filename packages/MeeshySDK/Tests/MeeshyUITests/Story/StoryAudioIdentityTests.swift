@@ -25,11 +25,10 @@ final class StoryAudioIdentityTests: XCTestCase {
 
     /// Un son CAPTÉ n'a ni titre ni auteur à créditer : son onde est le seul
     /// repère qu'on en ait.
-    func test_unEnregistrement_montreSonONDEEtSaDurée() {
-        guard case .recording(let duree) = StoryAudioIdentity.form(of: piste()) else {
+    func test_unEnregistrement_montreSonONDE() {
+        guard case .recording = StoryAudioIdentity.form(of: piste()) else {
             return XCTFail("une piste sans soundId est un enregistrement")
         }
-        XCTAssertEqual(duree, 12)
         XCTAssertTrue(StoryAudioIdentity.showsWaveform(for: piste()))
     }
 
@@ -45,6 +44,17 @@ final class StoryAudioIdentityTests: XCTestCase {
         XCTAssertEqual(credit, "belva")
         XCTAssertFalse(StoryAudioIdentity.showsWaveform(for: emprunte),
                        "l'onde d'un emprunt vole la place de son crédit")
+    }
+
+    /// **La DURÉE ne distingue rien** — elle se lit sur les deux formes, donc
+    /// elle n'appartient à aucune. La porter sur `.recording` seule faisait
+    /// dire à la somme qu'un emprunt n'en a pas, ce que la pastille dément à
+    /// l'écran depuis le premier jour.
+    func test_laDurée_neFaitPartieDAucuneForme() {
+        let capte = StoryAudioIdentity.form(of: piste(duration: 12))
+        let emprunte = StoryAudioIdentity.form(of: piste(soundId: "s9", duration: 300))
+        XCTAssertEqual(capte, .recording)
+        XCTAssertEqual(emprunte, .borrowed(title: nil, credit: nil))
     }
 
     // MARK: - Ce qui décide, et ce qui ne décide pas
@@ -88,6 +98,56 @@ final class StoryAudioIdentityTests: XCTestCase {
         }
         XCTAssertNil(titre)
         XCTAssertNil(credit)
+    }
+
+    // MARK: - L'ATTRIBUTION — la moitié qui vivait dans une seconde règle
+
+    /// **Le témoin de la FUSION.** `ComposerSoundCredit.attribution` lisait
+    /// `name` et `soundAuthorUsername` en direct, sans jamais consulter la
+    /// forme : un vocal NOMMÉ s'annonçait donc « Mémo du mardi », comme un
+    /// morceau de l'étagère, pendant que `form(of:)` le classait — à raison —
+    /// enregistrement. Deux règles pour une question rendaient deux réponses.
+    func test_unEnregistrementNOMMÉ_nAAUCUNEAttribution() {
+        XCTAssertEqual(StoryAudioIdentity.attribution(of: piste(name: "Mémo du mardi")), "")
+    }
+
+    /// Un emprunt joint son titre et le crédit de son auteur — le `@` et le
+    /// séparateur vivent ICI, pour que les deux surfaces les écrivent pareil.
+    func test_unEmprunt_jointSonTitreEtSonCrédit() {
+        let complet = piste(soundId: "s9", name: "Nuits blanches", author: "belva")
+        XCTAssertEqual(StoryAudioIdentity.attribution(of: complet), "Nuits blanches · @belva")
+    }
+
+    /// Chaque moitié tient seule : un emprunt sans titre rend son seul crédit,
+    /// et un emprunt sans auteur son seul titre — jamais un séparateur orphelin.
+    func test_uneAttributionÀMoitié_neLaisseAucunSéparateurOrphelin() {
+        XCTAssertEqual(StoryAudioIdentity.attribution(of: piste(soundId: "s9", author: "belva")),
+                       "@belva")
+        XCTAssertEqual(StoryAudioIdentity.attribution(of: piste(soundId: "s9", name: "Nuits blanches")),
+                       "Nuits blanches")
+        XCTAssertEqual(StoryAudioIdentity.attribution(of: piste(soundId: "s9")), "")
+    }
+
+    /// **L'attribution ne transporte JAMAIS la durée** (#4676) : servies en une
+    /// chaîne, la troncature en queue mangeait la durée — le dernier morceau
+    /// d'une phrase dont le titre est le sujet. La vue leur donne deux `Text`,
+    /// et cette règle ne compose que la moitié tronquable.
+    func test_lAttribution_neTransportePasLaDurée() {
+        let long = piste(soundId: "s9", name: "Feel the pulse", author: "jcnm", duration: 143)
+        XCTAssertFalse(StoryAudioIdentity.attribution(of: long).contains("2:23"))
+        XCTAssertFalse(StoryAudioIdentity.attribution(of: long).contains("143"))
+    }
+
+    // MARK: - Une forme, plusieurs questions
+
+    /// **`opensEditor` a sa propre RAISON, et lit la même forme.** Rouvrir un
+    /// emprunt le détacherait de son `soundId` ; c'est un motif de crédit, pas
+    /// d'affichage — les deux questions coïncident aujourd'hui et peuvent
+    /// diverger demain (rogner un emprunt déjà posé a son issue). Ce qu'elles
+    /// partagent est la LECTURE, jamais la conclusion.
+    func test_laMêmeForme_répondÀDeuxQuestionsDistinctes() {
+        XCTAssertTrue(StoryAudioIdentity.isRecording(piste()))
+        XCTAssertFalse(StoryAudioIdentity.isRecording(piste(soundId: "s9")))
     }
 
     // MARK: - Ce que la SURFACE montre du son

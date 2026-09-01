@@ -301,6 +301,23 @@ nonisolated enum ComposerChromeOwnership {
 /// son qui joue, ou n'est pas rendu du tout. Le paramètre a donc cessé d'être
 /// optionnel : le cas « pas de son » se traite chez l'appelant, en ne montrant
 /// rien, et non ici en fabriquant une phrase.
+/// **Ce qui reste ICI, et ce qui est parti** (fusion 2026-09-01).
+///
+/// La règle avait une JUMELLE au SDK — `StoryAudioIdentity` — écrite le même
+/// jour pour la même question, et les deux ne rendaient pas la même réponse :
+/// `attribution` lisait `name` et `soundAuthorUsername` en direct, sans jamais
+/// consulter `soundId`, si bien qu'un vocal NOMMÉ s'annonçait comme un morceau
+/// de l'étagère. Ce qui décide de la FORME d'une piste est parti là-bas, en un
+/// seul exemplaire.
+///
+/// Ce qui reste ici est ce qui ne peut pas y aller : la LOCALE du lecteur. Une
+/// durée s'écrit « 0:12 » pour l'œil et se dit « douze secondes » à voix haute,
+/// et les deux dépendent de la langue de l'appareil — le SDK, qui ne connaît ni
+/// l'une ni l'autre, ne peut composer que la moitié invariable.
+///
+/// > La frontière n'est donc pas « app ou SDK » mais **ce qui dépend du lecteur
+/// > et ce qui dépend de la piste**. C'est la seule qui ne se redessine pas au
+/// > premier champ ajouté.
 nonisolated enum ComposerSoundCredit {
 
     /// **Le crédit ne se fabrique jamais.** Il tient à `soundAuthorUsername`,
@@ -341,30 +358,6 @@ nonisolated enum ComposerSoundCredit {
     /// aucun sur une pastille d'état : un vocal se serait annoncé « Ajouter un
     /// son · 0:07 », une invitation servie comme un titre. Sans titre, le crédit
     /// est sa seule durée.
-    /// **Le TITRE et son auteur — ce qui SE TRONQUE quand la place manque.**
-    ///
-    /// La séparation d'avec la durée n'est pas cosmétique. Servi en une seule
-    /// chaîne, le crédit rendait « Feel the pulse · @jcnm · 2… » : la durée —
-    /// que le porteur a nommée explicitement dans sa directive (« la note
-    /// musicale et le son ou vague sinusoïde ET LA DURÉE ») — était le premier
-    /// morceau sacrifié, parce qu'il est le dernier de la phrase.
-    ///
-    /// > Une troncature en queue coupe ce qui vient en dernier, jamais ce qui
-    /// > compte le moins. Les deux coïncidaient sur la pastille du socle, où la
-    /// > durée fermait une ligne dont le titre était le sujet ; ils ne
-    /// > coïncident plus ici, où la durée EST une des trois choses demandées.
-    ///
-    /// La vue peut donc donner à chacun sa règle de mise en page : l'attribution
-    /// cède la largeur, la durée ne la cède jamais.
-    static func attribution(for sound: StoryAudioPlayerObject) -> String {
-        var morceaux: [String] = []
-        if let nom = sound.name, !nom.isEmpty { morceaux.append(nom) }
-        if let auteur = sound.soundAuthorUsername, !auteur.isEmpty {
-            morceaux.append("@\(auteur)")
-        }
-        return morceaux.joined(separator: " · ")
-    }
-
     /// La DURÉE seule, telle qu'on la VOIT. `nil` quand elle est inconnue — un
     /// « 0:00 » fabriqué se lit comme une piste vide.
     static func durationLabel(for sound: StoryAudioPlayerObject,
@@ -381,7 +374,7 @@ nonisolated enum ComposerSoundCredit {
                                 locale: Locale,
                                 duree: (Int, Locale) -> String) -> String {
         var morceaux: [String] = []
-        let credit = attribution(for: sound)
+        let credit = StoryAudioIdentity.attribution(of: sound)
         if !credit.isEmpty { morceaux.append(credit) }
         if let secondes = sound.duration, secondes > 0 {
             morceaux.append(duree(Int(secondes.rounded()), locale))

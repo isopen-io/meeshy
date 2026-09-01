@@ -40,10 +40,21 @@ import MeeshyUI
 /// ## Et elle porte le CRÉDIT, depuis #4669
 ///
 /// La pastille du socle disparaissant, elle était le seul endroit du composer
-/// qui montrait `soundAuthorUsername`. Le titre et l'auteur ont suivi ici, par
-/// la composition qui les rendait déjà (`ComposerSoundCredit`) : un son
-/// emprunté doit dire à qui on le doit, où qu'on le lise. Un vocal sans titre
-/// n'affiche rien de plus qu'avant — sa durée.
+/// qui montrait `soundAuthorUsername`. Le titre et l'auteur ont suivi ici : un
+/// son emprunté doit dire à qui on le doit, où qu'on le lise.
+///
+/// ## Ce qu'elle MONTRE se décide au SDK, depuis la fusion du 2026-09-01
+///
+/// La composition qui les rendait (`ComposerSoundCredit.attribution`) lisait
+/// `name` et `soundAuthorUsername` en direct : un vocal NOMMÉ s'annonçait donc
+/// « Mémo du mardi », comme un morceau de l'étagère, et son onde se peignait à
+/// côté — les deux moitiés de la directive contredites d'un coup, par une règle
+/// qui ne consultait jamais `soundId`.
+///
+/// `StoryAudioIdentity` tranche désormais seul : l'onde pour un enregistrement,
+/// le titre et le crédit pour un emprunt. Ce que la pastille garde en propre
+/// est la mise en forme de la DURÉE, qui dépend de la locale du lecteur — et
+/// que le SDK, qui ne la connaît pas, ne peut pas écrire.
 struct ComposerAvatarSoundBadge: View {
 
     let sound: StoryAudioPlayerObject
@@ -87,8 +98,19 @@ struct ComposerAvatarSoundBadge: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(tint)
 
-            wave
-                .frame(width: 44, height: 16)
+            // **L'onde ne se peint QUE pour un enregistrement** (directive
+            // porteur 2026-09-01, règle `StoryAudioIdentity`). Elle dessine ce
+            // que la piste CONTIENT — le seul repère qu'on ait d'un son qu'on a
+            // capté soi-même. Un morceau de l'étagère a un NOM : son onde
+            // n'apprend rien que son titre ne dise mieux, et elle occupait
+            // exactement la place où le crédit doit tenir.
+            //
+            // Les deux ne coexistent donc jamais, et la capsule garde sa
+            // largeur : ce qui part libère ce qui arrive.
+            if StoryAudioIdentity.showsWaveform(for: sound) {
+                wave
+                    .frame(width: 44, height: 16)
+            }
 
             // **Le crédit ne prend la place que s'il existe** (#4669). Un vocal
             // n'a ni titre ni auteur : la pastille garde alors exactement la
@@ -101,7 +123,7 @@ struct ComposerAvatarSoundBadge: View {
             // elle n'est pas le sujet. Elle est pourtant l'une des trois choses
             // que la directive nomme. Deux `Text`, deux règles : l'attribution
             // CÈDE la largeur, la durée la garde.
-            let credit = ComposerSoundCredit.attribution(for: sound)
+            let credit = StoryAudioIdentity.attribution(of: sound)
             if !credit.isEmpty {
                 Text(credit)
                     .font(.caption2.weight(.semibold))

@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 @testable import MeeshySDK
+import MeeshyUI
 
 /// **Le CRÉDIT d'un son — ce qui joue, et à qui on le doit** (#4669).
 ///
@@ -37,6 +38,7 @@ final class ComposerSoundCreditTests: XCTestCase {
     func test_unSonEmprunte_afficheSonCredit() {
         var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.soundId = "s-lume-9"
         son.name = "NUITS BLANCHES"
         son.soundAuthorUsername = "lume"
         son.duration = 28
@@ -72,6 +74,29 @@ final class ComposerSoundCreditTests: XCTestCase {
         let libelle = ComposerSoundCredit.label(for: son)
         XCTAssertEqual(libelle, LocalizedNumber.duration(seconds: 7),
                        "sans titre, le crédit est sa seule durée — \(libelle)")
+    }
+
+    /// **Le témoin de la FUSION, vu depuis la pastille** (2026-09-01).
+    ///
+    /// La composition lisait `name` en direct : un vocal que l'auteur a
+    /// INTITULÉ — « Mémo du mardi » — s'annonçait donc exactement comme un
+    /// morceau de l'étagère, titre en tête et onde à côté. `soundId` est la
+    /// seule marque d'un emprunt (`addBorrowedSound`, et lui seul, le pose), et
+    /// c'est lui que `StoryAudioIdentity` consulte.
+    ///
+    /// > Une règle qui lit les champs qu'une AUTRE règle a servi à décider finit
+    /// > par contredire celle-ci sur le cas qu'elles ont en commun.
+    func test_unVocalNOMMÉ_neSAnnoncePasCommeUnMorceau() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "Mémo du mardi"
+        son.duration = 7
+
+        let libelle = ComposerSoundCredit.label(for: son)
+        XCTAssertFalse(libelle.contains("Mémo du mardi"),
+                       "un titre saisi sur un VOCAL n'en fait pas un emprunt — \(libelle)")
+        XCTAssertEqual(libelle, LocalizedNumber.duration(seconds: 7),
+                       "il ne lui reste que sa durée — \(libelle)")
     }
 
     /// Un son sans durée connue ne fabrique pas « 0:00 » — un compteur faux se
@@ -113,6 +138,7 @@ final class ComposerSoundCreditTests: XCTestCase {
     func test_lesDeuxLibelles_decriventLaMEMEpastille() {
         var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.soundId = "s-lume-9"
         son.name = "NUITS BLANCHES"
         son.soundAuthorUsername = "lume"
         son.duration = 28
@@ -150,11 +176,12 @@ final class ComposerSoundCreditTests: XCTestCase {
     func test_lAttribution_neTransportePasLaDuree() {
         var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.soundId = "s-jcnm-1"
         son.name = "Feel the pulse"
         son.soundAuthorUsername = "jcnm"
         son.duration = 143
 
-        let credit = ComposerSoundCredit.attribution(for: son)
+        let credit = StoryAudioIdentity.attribution(of: son)
         XCTAssertTrue(credit.contains("Feel the pulse"))
         XCTAssertTrue(credit.contains("@jcnm"))
         XCTAssertFalse(credit.contains("2:23"),
@@ -184,12 +211,13 @@ final class ComposerSoundCreditTests: XCTestCase {
     func test_leLibelleComplet_appelleLAttribution_ilNeLaRecopiePas() {
         var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.soundId = "s-lume-9"
         son.name = "NUITS BLANCHES"
         son.soundAuthorUsername = "lume"
         son.duration = 28
 
         let complet = ComposerSoundCredit.label(for: son)
-        XCTAssertTrue(complet.hasPrefix(ComposerSoundCredit.attribution(for: son)),
+        XCTAssertTrue(complet.hasPrefix(StoryAudioIdentity.attribution(of: son)),
                       "le libellé complet commence par l'attribution — \(complet)")
         XCTAssertTrue(complet.hasSuffix(ComposerSoundCredit.durationLabel(for: son) ?? ""),
                       "…et se termine par la durée — \(complet)")

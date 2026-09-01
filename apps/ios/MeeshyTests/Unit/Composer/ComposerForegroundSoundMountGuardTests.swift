@@ -171,12 +171,37 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// pulse · @jcnm · 2… », ce que la vérification simulateur a mesuré.
     func test_laDureeDeLaPastille_neSeTronqueJamais() throws {
         let badge = try source("ComposerAvatarSoundBadge.swift")
-        XCTAssertTrue(badge.contains("ComposerSoundCredit.attribution(for: sound)"),
-                      "le titre et l'auteur viennent de la moitié TRONQUABLE")
+        XCTAssertTrue(badge.contains("StoryAudioIdentity.attribution(of: sound)"),
+                      "le titre et l'auteur viennent de la moitié TRONQUABLE — et de la règle UNIQUE")
         XCTAssertTrue(badge.contains("ComposerSoundCredit.durationLabel(for: sound)"),
                       "…et la durée de la sienne, rendue à part")
         XCTAssertFalse(badge.contains("ComposerSoundCredit.label(for: sound)"),
                        "le libellé COMPLET dans un seul `Text` est exactement ce qui tronquait la durée")
+    }
+
+    /// **L'onde ne se peint que pour un ENREGISTREMENT** (fusion 2026-09-01).
+    ///
+    /// La pastille montait `wave` inconditionnellement pendant que
+    /// `StoryAudioIdentity` disait, dans le même dépôt, qu'un emprunt n'en a
+    /// pas — deux règles pour une question, dont une seule était appliquée à
+    /// l'écran. La garde épingle la CONDITION, pas l'appel : `showsWaveform`
+    /// pouvait être importé sans que rien n'en dépende.
+    ///
+    /// Et la NOTE reste hors de toute condition : c'est elle qui porte le
+    /// toucher qui ouvre « Création audio ». La conditionner retirerait le seul
+    /// chemin vers l'éditeur pour la moitié des pistes.
+    func test_lOnde_estCONDITIONNÉE_maisJamaisLaNote() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        guard let capsule = corps("private var capsule: some View {", dans: badge) else {
+            return XCTFail("`capsule` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(capsule.contains("if StoryAudioIdentity.showsWaveform(for: sound) {"),
+                      "l'onde doit être posée SOUS la règle, pas à côté d'elle")
+        guard let avantOnde = capsule.components(separatedBy: "if StoryAudioIdentity.showsWaveform").first else {
+            return XCTFail("découpe impossible")
+        }
+        XCTAssertTrue(avantOnde.contains("Image(systemName: \"music.note\")"),
+                      "la note se peint AVANT toute condition — elle porte le toucher qui édite")
     }
 
     /// **Poser un son en FOND passe par le remplacement, jamais en direct**

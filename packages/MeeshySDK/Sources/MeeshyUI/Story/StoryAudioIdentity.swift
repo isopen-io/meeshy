@@ -30,10 +30,17 @@ import MeeshySDK
 public nonisolated enum StoryAudioIdentity {
 
     /// La forme à peindre.
+    ///
+    /// **La somme ne porte que ce qui DIFFÈRE.** La durée se lit sur les deux
+    /// formes — un extrait emprunté dure autant qu'un vocal — donc elle
+    /// n'appartient à aucune : la porter sur `.recording` seule faisait dire à
+    /// la somme qu'un emprunt n'en a pas, ce que la pastille dément à l'écran.
+    /// Elle se lit sur le modèle, et se MET EN FORME chez l'appelant, à qui
+    /// seul la locale du lecteur est connue.
     public enum Form: Equatable, Sendable {
-        /// Un son CAPTÉ : la note, l'onde, la durée. Rien d'autre à dire — il
-        /// n'a ni titre ni auteur à créditer.
-        case recording(duration: TimeInterval?)
+        /// Un son CAPTÉ : la note, l'onde. Rien d'autre à dire — il n'a ni
+        /// titre ni auteur à créditer.
+        case recording
         /// Un son EMPRUNTÉ : la note, son titre quand il en a un, son crédit.
         /// **Sans onde** — le titre dit mieux, et le crédit a besoin de la
         /// place.
@@ -49,18 +56,75 @@ public nonisolated enum StoryAudioIdentity {
     /// champ facultatif.
     public static func form(of audio: StoryAudioPlayerObject) -> Form {
         guard let soundId = audio.soundId, !soundId.isEmpty else {
-            return .recording(duration: audio.duration.map(TimeInterval.init))
+            return .recording
         }
         return .borrowed(title: nonEmpty(audio.name),
                          credit: nonEmpty(audio.soundAuthorUsername))
+    }
+
+    /// **Le prédicat NU, pour les questions qui ne sont pas d'affichage.**
+    ///
+    /// `ComposerSoundColumn.opensEditor` pose la même lecture pour une raison
+    /// tout autre : rouvrir un emprunt par « Création audio » rendrait un
+    /// FICHIER, donc le détacherait de son `soundId` et du crédit de son
+    /// auteur. Les deux conclusions coïncident aujourd'hui et peuvent diverger
+    /// demain — rogner un emprunt DÉJÀ POSÉ est un chemin qui a son issue.
+    ///
+    /// > Ce que deux questions partagent est la LECTURE du modèle, jamais leur
+    /// > conclusion. Les fondre en une seule fonction parce qu'elles rendent le
+    /// > même booléen les ferait diverger ensemble le jour où l'une bouge.
+    public static func isRecording(_ audio: StoryAudioPlayerObject) -> Bool {
+        form(of: audio) == .recording
+    }
+
+    /// **L'ATTRIBUTION — le titre et le crédit, joints comme les deux surfaces
+    /// les écrivent.**
+    ///
+    /// Vide pour un enregistrement, et c'est la moitié de la règle qui vivait
+    /// ailleurs : `ComposerSoundCredit.attribution` lisait `name` et
+    /// `soundAuthorUsername` en direct, sans consulter la forme. Un vocal
+    /// NOMMÉ — « Mémo du mardi », que l'auteur a intitulé lui-même —
+    /// s'annonçait donc comme un morceau de l'étagère, pendant que `form(of:)`
+    /// le classait, à raison, enregistrement.
+    ///
+    /// > Deux règles pour une question ne sont pas une redondance : ce sont
+    /// > deux réponses, et rien dans le code ne dit laquelle fait foi.
+    ///
+    /// Le `@` et le séparateur vivent ICI plutôt que chez chaque hôte : ce sont
+    /// eux qui rendent deux pastilles visiblement jumelles, et il suffit qu'un
+    /// site écrive « par belva » quand l'autre écrit « @belva » pour qu'un
+    /// lecteur croie voir deux choses différentes.
+    ///
+    /// **Cette règle gouverne le COMPOSER, pas le lecteur.**
+    /// `AudioChipDisplay.creditMarqueeText` compose la même phrase pour la puce
+    /// d'une story PUBLIÉE, et n'est pas absorbée ici : elle part d'une
+    /// `BackgroundAudioAnnouncement` — pas d'un `StoryAudioPlayerObject` — et
+    /// tranche un cas que le composer ne connaît pas, celui du CACHE FROID, où
+    /// la piste est un emprunt dont les métadonnées ne sont pas encore
+    /// arrivées. Elle y rend « ♫ — » plutôt que l'onde, qui mentirait sur la
+    /// provenance ; ici, une piste posée porte toujours ce que l'auteur vient
+    /// de choisir.
+    ///
+    /// > Deux sites qui composent la même phrase ne répondent pas forcément à
+    /// > la même question. Les fusionner sur la ressemblance du RENDU perdrait
+    /// > le cas que l'un des deux est seul à connaître.
+    ///
+    /// **Sans la durée** (#4676) : servies en une chaîne, la troncature en
+    /// queue mangeait la durée, dernier morceau d'une phrase dont le titre est
+    /// le sujet. La vue leur donne deux `Text` — celui-ci ne compose que la
+    /// moitié qui a le droit de céder sa largeur.
+    public static func attribution(of audio: StoryAudioPlayerObject) -> String {
+        guard case .borrowed(let title, let credit) = form(of: audio) else { return "" }
+        return [title, credit.map { "@\($0)" }]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 
     /// **L'onde ne se peint que pour un enregistrement.** Exposé à part de
     /// `form` : une vue qui ne veut que cette question ne doit pas avoir à
     /// filtrer une somme, et c'est la formulation que les gardes épinglent.
     public static func showsWaveform(for audio: StoryAudioPlayerObject) -> Bool {
-        if case .recording = form(of: audio) { return true }
-        return false
+        isRecording(audio)
     }
 
     /// **La NOTE se peint TOUJOURS** (même directive) : « toujours afficher la

@@ -73,8 +73,14 @@ nonisolated enum ComposerSoundColumn {
     /// Rogner un son emprunté DÉJÀ POSÉ demande de muter `sourceStart` /
     /// `sourceEnd` sur l'objet plutôt que de repasser par un fichier — un
     /// chemin qui n'existe pas encore. Il a son issue.
+    /// **La lecture est partagée, la conclusion non.** Le prédicat vient de
+    /// `StoryAudioIdentity`, site unique de « cette piste est-elle captée ou
+    /// empruntée ? » — le relire ici (`soundId?.isEmpty != false`) faisait un
+    /// TROISIÈME site à corriger le jour où la réponse bouge. Ce qui reste
+    /// propre à cette fonction est son MOTIF, qui n'a rien d'un motif
+    /// d'affichage : c'est le crédit qu'on protège, pas la place à l'écran.
     static func opensEditor(_ sound: StoryAudioPlayerObject) -> Bool {
-        sound.soundId?.isEmpty != false
+        StoryAudioIdentity.isRecording(sound)
     }
 }
 
