@@ -411,7 +411,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathPrefix(`/__v3/_next`)"
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l`))"
       - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"
