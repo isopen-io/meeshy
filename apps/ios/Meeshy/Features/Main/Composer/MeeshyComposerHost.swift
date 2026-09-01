@@ -450,6 +450,17 @@ struct MeeshyComposerHost: View {
     /// passage tout ce que l'auteur a composé DESSUS.
     @State var slideIdByMediaURL: [URL: String] = [:]
 
+    /// **Le RÔLE de chaque média posé — fond ou premier plan** (#4724).
+    ///
+    /// Sa jumelle `slideIdByMediaURL` ci-dessus ne connaît que les FONDS : c'est
+    /// sa définition, et c'est ce qui en fait la liste des tuiles. Il fallait
+    /// donc une seconde mémoire pour les autres, et elle porte deux charges à la
+    /// fois : dire ce qu'un média est devenu, et servir de garde d'idempotence
+    /// (« ce média a DÉJÀ été posé ») — rôle que l'index des fondations tenait
+    /// avant ce lot, et qu'il ne peut plus tenir depuis qu'un média peut être
+    /// posé sans rien fonder.
+    @State var mediaRoleByURL: [URL: ComposerMediaRole] = [:]
+
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois

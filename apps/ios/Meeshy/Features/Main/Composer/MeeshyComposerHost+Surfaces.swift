@@ -299,7 +299,7 @@ extension MeeshyComposerHost {
 
     var sceneSurface: some View {
         ComposerSceneSurface(
-            localMedia: documentLocalMedia,
+            localMedia: headerTileMedia,
             selectedMediaURL: selectedSlideMediaURL,
             selectableMediaURLs: Set(slideIdByMediaURL.keys),
             formatFan: mountsFormatFan
@@ -566,7 +566,7 @@ extension MeeshyComposerHost {
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) },
-            localMedia: documentLocalMedia,
+            localMedia: headerTileMedia,
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onPickBackground: { hex in
                 // Phase 2 (#3939) — choisir un fond pose la couleur SUR la slide
@@ -729,6 +729,26 @@ extension MeeshyComposerHost {
     /// **Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)`**,
     /// le SEUL classeur MIME du dépôt (six sites de production) — jamais un
     /// `hasPrefix` recopié, qui divergerait de la casse et des repli qu'il gère.
+    /// **Ce que la rangée haute montre — les FONDS, et rien d'autre** (#4724).
+    ///
+    /// > Directive porteur 2026-09-01 : « le comportement actuel qui fait que
+    /// > lorsqu'on ajoute n'importe quel média ça vient [dans] la trail des
+    /// > slides doit être supprimé ! »
+    ///
+    /// Les deux barres hautes recevaient `documentLocalMedia` — la liste
+    /// ENTIÈRE. Une tuile paraissait donc pour tout ce qui entre : une image
+    /// posée SUR la scène, un vocal qui a déjà sa carte sous le texte, un PDF
+    /// qui n'est aucune page. Le carrousel grossissait sans qu'on ait ajouté de
+    /// page, et taper la tuile ne menait nulle part — l'hôte ne sait naviguer
+    /// que vers une slide, et ces médias n'en fondaient aucune.
+    ///
+    /// La règle lit l'index des FONDATIONS, jamais une seconde vérité :
+    /// `slideIdByMediaURL` dit déjà « ce média a fondé cette slide », ce qui est
+    /// exactement l'ensemble des fonds.
+    var headerTileMedia: [ComposerDocumentMedia] {
+        ComposerHeaderTiles.tiles(documentLocalMedia, founding: slideIdByMediaURL)
+    }
+
     var documentContentMedia: [ComposerContentMedia] {
         documentLocalMedia.compactMap { media in
             switch ComposerIngestRouter.route(mime: media.mimeType) {

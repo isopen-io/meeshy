@@ -1,13 +1,23 @@
 import XCTest
 @testable import Meeshy
 
-/// **En Post, chaque média posé devient SA slide (#4038 — modèle § 3).**
+/// **En Post, un média posé EN FOND devient sa slide (#4038 — modèle § 3,
+/// révisé au #4724).**
 ///
 /// Le modèle dit qu'en profil Post une slide EST un média du post : c'est ce qui
 /// distingue un CARROUSEL (N slides d'un média) d'une SCÈNE COMPOSÉE (une slide,
 /// un fond et des premiers plans). Cette suite éprouve la SOURCE — même patron
 /// que `MeeshyComposerHostSceneInspectorGuardTests` : la dérivation vit dans une
 /// `View`, dont l'état `@State` n'est pas atteignable sans monter UIKit.
+///
+/// **Le mot qui manquait est « EN FOND »** (directive porteur 2026-09-01 : « le
+/// comportement actuel qui fait que lorsqu'on ajoute n'importe quel média ça
+/// vient [dans] la trail des slides doit être supprimé ! »). La doctrine ne
+/// distinguait pas le fond du premier plan, si bien que toute image posée SUR la
+/// scène ouvrait une page et gagnait une tuile — un carrousel qui grossit sans
+/// qu'on ait ajouté de page. Le modèle portait pourtant la distinction depuis
+/// toujours (`StoryMediaObject.isBackground`) ; c'est l'ingestion qui ne la
+/// demandait pas.
 final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
 
     private func hostSource() throws -> String {
@@ -78,6 +88,74 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             "Le meuble doit relayer le tap d'une vignette…")
         XCTAssertTrue(compacted.contains("viewModel.selectSlide(at:index)"),
             "…jusqu'à `selectSlide`, sans quoi taper une vignette ne changerait rien à l'écran.")
+    }
+
+    // MARK: - Le rôle d'un média posé (#4724)
+
+    /// **Le rôle vient de la RÈGLE, jamais d'une condition écrite dans le
+    /// `body`.** C'est la faute que ce dossier a déjà commise deux fois (la
+    /// conjonction de l'éventail, puis le gate du plateau) : une décision posée
+    /// en ligne est invisible aux tests, et se met à diverger de sa jumelle.
+    func test_sync_asksTheRuleForTheRoleOfEachMedia() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerMediaPlacement.role(door:porte,"),
+            "La dérivation doit DEMANDER le rôle à `ComposerMediaPlacement` — un `if` écrit ici serait "
+                + "une seconde loi, et la première à diverger.")
+        XCTAssertTrue(
+            compacted.contains("railPosedMediaURLs.contains(media.sourceURL)?.sceneRail:.documentRow"),
+            "La PORTE est ce qui distingue les deux gestes : le rail pose sur la scène, la rangée du "
+                + "document ouvre une page.")
+    }
+
+    /// **Le prédicat « cette slide a déjà un fond » doit être celui du MODÈLE,
+    /// mot pour mot.** `addMediaObject` refuse le rôle de fond à un média posé
+    /// sur une slide qui porte une image de fond au niveau de la SLIDE — pas
+    /// seulement un `mediaObject`. En omettre la seconde moitié ferait déclarer
+    /// « fond » un objet que le modèle écrirait en premier plan : une tuile pour
+    /// un média qui n'est pas une page, c'est-à-dire le défaut du #4724 dans
+    /// l'autre sens.
+    func test_sync_readsTheSameBackgroundPredicateAsTheModel() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("viewModel.currentSlide.effects.resolvedBackgroundMedia!=nil"),
+            "Première moitié du prédicat : un `mediaObject` résolu comme fond.")
+        XCTAssertTrue(compacted.contains("viewModel.slideImages[viewModel.currentSlide.id]!=nil"),
+            "Seconde moitié : une image de fond posée AU NIVEAU DE LA SLIDE — celle qu'on oublie.")
+    }
+
+    /// **Un média de premier plan ne fonde RIEN.** Le témoin lit la branche
+    /// `.foreground` et vérifie les deux faces : ce qu'elle fait (poser sur la
+    /// slide courante) et ce qu'elle ne fait pas (ni `addSlide`, ni entrée dans
+    /// l'index des fondations). La borne est prouvée non vide avant de conclure
+    /// — une garde négative qui mesure une tranche introuvable passe au vert en
+    /// ayant perdu sa protection.
+    func test_aForegroundMedia_foundsNoPageAndEarnsNoTile() throws {
+        let compacted = compact(try hostSource())
+        guard let debut = compacted.range(of: "case.foreground:"),
+              let fin = compacted.range(of: "case.background:", range: debut.upperBound..<compacted.endIndex)
+        else {
+            return XCTFail("Les deux branches de rôle sont introuvables — cette garde ne mesurerait RIEN.")
+        }
+        let branche = String(compacted[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(
+            branche.contains("viewModel.applyContentMedia([media],intoSlideId:viewModel.currentSlide.id)"),
+            "Un média de premier plan rejoint la scène COURANTE — sinon il n'atteint aucun écran.")
+        XCTAssertFalse(branche.contains("slideIdByMediaURL["),
+            "…et il n'entre PAS dans l'index des fondations : c'est cet index qui décide des tuiles.")
+        XCTAssertFalse(branche.contains("viewModel.addSlide()"),
+            "…et il n'ouvre AUCUNE page : poser sur la scène n'est pas ajouter une vue au carrousel.")
+    }
+
+    /// **La mémoire des rôles s'oublie avec son média.** Elle sert AUSSI de
+    /// garde d'idempotence (« ce média a déjà été posé ») : une garde qui
+    /// survit à son objet refuserait la pose suivante du même fichier, en
+    /// silence — exactement le défaut que `viewModel.reset()` ferme pour
+    /// `carriedContentSources`.
+    func test_theRoleMemory_isForgottenWithItsMedia() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("mediaRoleByURL.removeValue(forKey:url)"),
+            "Un média retiré doit rendre son rôle, sinon le re-choisir serait sauté.")
+        XCTAssertTrue(compacted.contains("mediaRoleByURL=[:]"),
+            "« Tout effacer » doit aussi vider la mémoire des rôles.")
     }
 
     // MARK: - Le rail en barre haute (#4047)
@@ -217,7 +295,7 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("case.clearAll:viewModel.reset()"),
             "L'effacement doit COMMENCER par `viewModel.reset()` — lui seul oublie les sources portées.")
         for efface in ["documentText=\"\"", "documentLocalMedia=[]", "documentBackground=nil",
-                       "documentLocation=nil", "slideIdByMediaURL=[:]"] {
+                       "documentLocation=nil", "slideIdByMediaURL=[:]", "mediaRoleByURL=[:]"] {
             XCTAssertTrue(compacted.contains(efface),
                 "« Tout effacer » laisse `\(efface)` derrière lui — un effacement partiel est pire "
                     + "qu'aucun : l'auteur croit être reparti de zéro.")
