@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import type { FastifyRequest } from 'fastify';
 import { AuthRouteContext } from './types';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
@@ -34,7 +35,58 @@ export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
           },
         },
       },
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+      // Ce plafond compte l'ADRESSE, et c'est une DÉCISION — pas l'héritage
+      // silencieux qu'il était. `mergeParams` d'@fastify/rate-limit est un
+      // `Object.assign` (`index.js:190`) : un littéral sans `keyGenerator`
+      // prenait celui des paramètres globaux (`global:${request.ip}`), donc
+      // comptait déjà par adresse, mais sans que rien ne le dise ni ne
+      // l'empêche de suivre le jour où le global compterait autre chose.
+      //
+      // Pourquoi l'adresse et non le compte, alors que le lot #4685 fait
+      // l'inverse sur `POST /invitations/email` — trois raisons :
+      //
+      //  1. Il n'y a AUCUN appelant connu avant le handler. Cette route ne
+      //     monte pas de garde d'authentification : elle prend un JWT en
+      //     querystring et le vérifie elle-même. Le dériver dans le
+      //     `keyGenerator` obligerait à `jwt.verify` une entrée entièrement
+      //     choisie par l'appelant, à chaque requête, AVANT tout plafond — le
+      //     limiteur deviendrait l'amplificateur qu'il borne.
+      //  2. La population à freiner n'a pas de compte : ce qu'on borne est une
+      //     rafale de jetons INVALIDES. Un jeton valide signifie que le
+      //     destinataire légitime a cliqué son lien.
+      //  3. Une route qui déclare `config.rateLimit` n'a PLUS le limiteur
+      //     global — `onRoute` (`index.js:174`) monte le sien à la place,
+      //     jamais en plus. Ce plafond est donc le seul rempart par adresse
+      //     de cette route.
+      //
+      // Ce que le choix cède : deux victimes derrière une même sortie NAT qui
+      // cliquent leur lien dans la même minute se partagent les cinq essais.
+      //
+      // `hook: 'onRequest'` est écrit plutôt que laissé au défaut du plugin :
+      // c'est la phase où l'on VEUT compter ici, y compris les requêtes qu'un
+      // schéma rejettera — un flot sans `token` est le même abus.
+      //
+      // `skipOnError: true` (le global le posait, sans qu'on l'ait choisi) :
+      // ce lien est le SEUL site du dépôt qui coupe réellement les sockets
+      // d'un intrus (#4141). L'échec fermé répondrait 500 à la victime pendant
+      // une panne du magasin de compteurs, et laisserait l'intrus connecté.
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
+          hook: 'onRequest' as const,
+          skipOnError: true,
+          keyGenerator: (request: FastifyRequest) => `revoke-all-sessions:ip:${request.ip}`,
+          errorResponseBuilder: () => ({
+            success: false,
+            statusCode: 429,
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: 'Too many attempts (auth/revoke-all-sessions). Please try again later.',
+            },
+          }),
+        },
+      },
     },
     async (request, reply) => {
       const { token } = request.query;

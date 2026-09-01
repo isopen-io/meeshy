@@ -262,6 +262,77 @@ export function createRateLimitConfig(
 }
 
 /**
+ * Limiteur de `POST /invitations/email` — dix invitations par heure, PAR COMPTE.
+ *
+ * ## Ce qu'il remplace, et pourquoi ce n'était pas un détail
+ *
+ * La route déclarait `{ max: 10, timeWindow: '1 hour' }` en toutes lettres.
+ * `mergeParams` d'@fastify/rate-limit est un `Object.assign`
+ * (`index.js:190`) : une config de route sans `keyGenerator` prend celui des
+ * paramètres GLOBAUX, soit `global:${request.ip}` (`registerGlobalRateLimiter`,
+ * `middleware/rate-limiter.ts`). Un plafond horaire manifestement pensé par
+ * compte comptait donc par ADRESSE, et se trompait dans les deux sens :
+ * plusieurs comptes derrière une même sortie (opérateur mobile, bureau, NAT)
+ * se partageaient dix invitations, un même compte disposant de plusieurs
+ * adresses en obtenait dix par adresse. Mesuré sur le vrai plugin, avec la
+ * route réelle et le vrai middleware d'authentification — deux comptes, une
+ * adresse : le second recevait 429 dès son premier appel, dix fois sur dix.
+ * Témoin : `__tests__/unit/middleware/rate-limit-key-invitations-count-the-account.test.ts`.
+ *
+ * Ce qui n'était PAS en cause : le partage du seau du limiteur global.
+ * `RedisStore.prototype.child` préfixe par `` `${method}${url}-` `` et
+ * `LocalStore.child` fabrique une LRU neuve — chaque route a le sien. Le
+ * défaut était la CLÉ, rien d'autre.
+ *
+ * ## Pourquoi cette fabrique vit ICI, et pas dans `rate-limiter.ts`
+ *
+ * Pour n'avoir qu'UNE dérivation de la clé d'appelant. `resolveCallerKey`
+ * (ci-dessus) est la seule du dépôt à préfixes DISJOINTS — `acct:` / `ip:`,
+ * deux populations qui ne peuvent pas se confondre — et à connaître la
+ * sentinelle `'anonymous'` de `createUnauthenticatedContext`. La recopier
+ * dans le fichier voisin en aurait fait une jumelle à tenir accordée ; l'y
+ * importer l'aurait rendue invisible à `account-keyed-rate-limit-sweep`, dont
+ * la résolution d'identifiants est par FICHIER.
+ *
+ * ## `hook: 'preHandler'` — même sans en avoir besoin sur cette route-ci
+ *
+ * Mesure du 2026-09-01, contre-intuitive et qu'il faut dire : sur cette route,
+ * `authContext` est présent aux TROIS placements de hook, `onRequest` par
+ * défaut compris. `addRouteRateHook` (`index.js:236`) fait
+ * `routeOptions[hook].push(hookHandler)` quand le tableau existe ; la route
+ * déclarant `onRequest: [fastify.authenticate]`, le limiteur est appendu
+ * DERRIÈRE l'authentification. La clé par compte y serait donc calculable par
+ * ACCIDENT d'ordonnancement. Le hook est posé quand même : il rend la
+ * propriété indépendante de la forme sous laquelle la route monte sa garde —
+ * la déplacer en `preValidation` suffirait, sinon, à faire retomber la clé sur
+ * l'adresse sans qu'une ligne de ce fichier bouge.
+ *
+ * ## `skipOnError: false` — la panne du gardien n'est pas l'absence de garde
+ *
+ * Ce geste fait partir un e-mail vers une adresse que l'APPELANT choisit :
+ * c'est la classe de `createContactChangeRateLimitConfig`, et son arbitrage.
+ * Sans cette ligne, la config héritait du `skipOnError: true` global, si bien
+ * qu'un Redis indisponible en faisait une primitive d'envoi sans plafond.
+ */
+export function createInvitationRateLimitConfig() {
+  return {
+    max: 10,
+    timeWindow: '1 hour',
+    hook: 'preHandler' as const,
+    skipOnError: false,
+    keyGenerator: (request: FastifyRequest) => `invitations:email:${resolveCallerKey(request)}`,
+    errorResponseBuilder: () => ({
+      success: false,
+      statusCode: 429,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many invitations (invitations/email). Please try again later.'
+      }
+    })
+  };
+}
+
+/**
  * Les trois limiteurs de la surface d'appels, chacun avec le sens d'échec
  * qu'il ASSUME — plus la valeur globale héritée en silence.
  *
