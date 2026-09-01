@@ -26,8 +26,38 @@
  *
  *   • soit VENIR D'UN NOM — fabrique ou constante partagée, dont le site est
  *     lisible, relisable et gardé par le balayage voisin ;
- *   • soit DÉCLARER `hook` ET `keyGenerator` sur place — c'est-à-dire dire
- *     quand elle compte et ce qu'elle compte.
+ *   • soit DÉCLARER `hook`, `keyGenerator` ET `skipOnError` sur place —
+ *     c'est-à-dire dire QUAND elle compte, CE QU'elle compte, et ce qu'elle
+ *     fait quand le compteur TOMBE.
+ *
+ * ── Pourquoi `skipOnError` a rejoint les deux autres (#4687) ───────────────
+ *
+ * Les trois propriétés répondent à trois questions distinctes, et l'omission
+ * de la troisième est la plus difficile à voir des trois — parce que le
+ * DÉFAUT DU PLUGIN dit l'inverse de ce que le dépôt hérite. `index.js:138`
+ * pose `globalParams.skipOnError = … : false` : qui vérifie « que se
+ * passe-t-il si je ne déclare rien ? » dans @fastify/rate-limit lit
+ * *fail-closed* et conclut que se taire est prudent. Faux ici :
+ * `registerGlobalRateLimiter` (`middleware/rate-limiter.ts`, monté par
+ * `server.ts`) enregistre le plugin avec `skipOnError: true`, et c'est CETTE
+ * valeur — pas celle du plugin — que `mergeParams` étale dans toute config de
+ * route muette. Une panne du magasin de compteurs y efface le plafond.
+ *
+ * Et l'effacement est TOTAL : `onRoute` (`index.js:174`) monte le limiteur de
+ * la route À LA PLACE du global, jamais en plus (`else if (globalParams.global)`).
+ * Une route qui déclare `config.rateLimit` n'a donc aucun autre rempart —
+ * fail-open y veut dire « aucune limite », et fail-closed « 500 sur CHAQUE
+ * requête », pas seulement sur celles qui dépassent (`index.js:301`, l'erreur
+ * du magasin est relancée avant tout verdict). Les deux côtés sont des
+ * extrêmes ; c'est exactement pourquoi le choix se déclare au lieu de
+ * s'hériter.
+ *
+ * Le dépôt avait déjà tranché deux fois que le côté prudent est celui qu'on
+ * obtient sans rien dire — `GARDES_DE_CLE = { hook, skipOnError: false }` et
+ * le paramètre `sensDeLEchec` de `createRateLimitConfig`, dont le défaut est
+ * `'ferme'`. Trois configs obtenaient pourtant l'inverse en se taisant. Ce
+ * balayage refuse désormais le silence, dans un sens comme dans l'autre : il
+ * n'impose AUCUNE valeur, il exige qu'une soit écrite.
  *
  * `rateLimit: false` est une troisième forme, et c'en est bien une : la route
  * DÉSACTIVE le limiteur du plugin (`onRoute` ne fusionne alors rien) parce
@@ -64,6 +94,7 @@ export type ConfigDeRoute = {
   readonly expression: string;
   readonly declareHook: boolean;
   readonly declareKeyGenerator: boolean;
+  readonly declareSkipOnError: boolean;
   readonly conforme: boolean;
 };
 
@@ -211,6 +242,7 @@ const IDENTIFIANT = /[A-Za-z_$][\w$]*/g;
 const EPANDAGE = /\.\.\.\s*([A-Za-z_$][\w$]*)/g;
 const DECLARE_HOOK = /\bhook\s*:/;
 const DECLARE_KEY_GENERATOR = /\bkeyGenerator\b/;
+const DECLARE_SKIP_ON_ERROR = /\bskipOnError\s*:/;
 
 type Index = ReadonlyMap<string, readonly { fichier: string; texte: string }[]>;
 
@@ -297,6 +329,7 @@ export function relever(
 
     const declareHook = forme === 'desactivee' || porte(DECLARE_HOOK);
     const declareKeyGenerator = forme === 'desactivee' || porte(DECLARE_KEY_GENERATOR);
+    const declareSkipOnError = forme === 'desactivee' || porte(DECLARE_SKIP_ON_ERROR);
 
     const resume = forme === 'desactivee'
       ? 'false'
@@ -311,7 +344,8 @@ export function relever(
       expression,
       declareHook,
       declareKeyGenerator,
-      conforme: declareHook && declareKeyGenerator,
+      declareSkipOnError,
+      conforme: declareHook && declareKeyGenerator && declareSkipOnError,
     });
   }
 

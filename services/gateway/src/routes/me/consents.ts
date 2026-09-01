@@ -177,6 +177,53 @@ function buildConsentEntry(purpose: ConsentPurpose, grantedAt: Date | null): Con
  * `read` (120/min, un écran de réglages relit souvent) et `write` (20 PAR
  * HEURE — un consentement ne se bascule pas en boucle, et c'est un geste
  * juridiquement significatif).
+ *
+ * ## `skipOnError: true` — le sens de l'échec, PESÉ puis écrit (#4687)
+ *
+ * Ces deux seaux héritaient du côté ouvert sans que personne l'ait décidé :
+ * `registerGlobalRateLimiter` (`middleware/rate-limiter.ts`) enregistre le
+ * plugin avec `skipOnError: true`, et `mergeParams` (`Object.assign`,
+ * @fastify/rate-limit `index.js:190`) l'étale dans toute config muette — alors
+ * que le DÉFAUT DU PLUGIN vaut `false` (`index.js:138`), ce qui fait lire
+ * l'omission comme prudente à qui va vérifier dans la dépendance. La valeur ne
+ * change pas ; ce qui change est qu'elle est désormais CHOISIE.
+ *
+ * Le choix se pèse entre deux extrêmes, pas entre « strict » et « laxiste ».
+ * Une route qui déclare `config.rateLimit` perd le limiteur global — `onRoute`
+ * (`index.js:174`) monte le sien À LA PLACE, jamais en plus. Fermé, une panne
+ * du magasin de compteurs répond 500 à CHAQUE requête de `/me/consents`, pas
+ * seulement à celles qui dépassent (`index.js:301`) ; ouvert, ces deux routes
+ * n'ont plus aucun plafond pendant la panne.
+ *
+ * Trois mesures ont décidé, et la première contredit l'intuition :
+ *
+ * 1. **Il n'y a PAS de journal de consentement à protéger.** Un consentement
+ *    vit dans UNE colonne `User.*ConsentAt` (`PURPOSE_COLUMN`), écrasée à
+ *    chaque `PUT` ; `schema.prisma` ne porte aucune table d'historique, et le
+ *    doc-comment de module dit que la versionner reste hors périmètre. Une
+ *    rafale ne peut donc pas polluer la preuve d'un choix : elle réécrit un
+ *    horodatage que seule la DERNIÈRE valeur porte.
+ * 2. **Rien ne part vers un tiers, et rien n'est créé.** Le `PUT` fait deux
+ *    requêtes Prisma sur la ligne de L'APPELANT, sans e-mail, sans push, sans
+ *    diffusion, sans ligne nouvelle. L'abus que le côté fermé préviendrait est
+ *    auto-adressé et ne survit pas à la panne.
+ * 3. **Ce `PUT` est le coupe-circuit de l'utilisateur.** `granted: false` met
+ *    la colonne à `null`, et `ConsentValidationService` lit exactement ces
+ *    colonnes pour autoriser (ou refuser) le traitement audio et le clonage
+ *    vocal. Répondre 500 à un RETRAIT pendant une panne Redis laisse tourner
+ *    le traitement sous un consentement que la personne est en train
+ *    d'enlever, sans trace de sa tentative.
+ *
+ * C'est la forme que le dépôt nomme déjà `'ouvert'` : on n'enferme pas
+ * quelqu'un dans un appel qu'il ne peut plus quitter (`ROUTE_RATE_LIMITS`,
+ * `middleware/rate-limit.ts`), on ne laisse pas un intrus connecté
+ * (`routes/auth/revoke-all-sessions.ts`). Le `read` suit le `write` : lui
+ * répondre 500 couperait l'écran qui AFFICHE les consentements au moment
+ * précis où l'on cherche à en retirer un.
+ *
+ * **Ce choix se repèse le jour où un HISTORIQUE de consentement est ajouté au
+ * schéma** — une table qui accumule une ligne par bascule ferait de la mesure
+ * 1 son contraire, et le côté fermé redeviendrait le bon.
  */
 function consentRateLimitConfig(usage: 'read' | 'write') {
   const max = usage === 'read' ? 120 : 20;
@@ -185,6 +232,7 @@ function consentRateLimitConfig(usage: 'read' | 'write') {
     max,
     timeWindow,
     hook: 'preHandler' as const,
+    skipOnError: true,
     keyGenerator: (request: FastifyRequest) => {
       const userId = request.auth?.userId;
       return userId ? `consents:${usage}:${userId}` : `consents:${usage}:ip:${request.ip}`;

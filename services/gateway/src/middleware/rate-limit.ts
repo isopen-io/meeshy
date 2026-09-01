@@ -1,13 +1,37 @@
 /**
- * Rate Limiting Middleware - Protects REST endpoints from DoS attacks
+ * Les limiteurs PAR ROUTE de la surface d'appels et des invitations.
  *
- * CVE-002 Fix: Implements configurable rate limiting using @fastify/rate-limit
- * to prevent denial-of-service attacks via excessive requests
+ * ## Ce que ce fichier n'enregistre PLUS, et pourquoi (#4687)
+ *
+ * `registerRateLimiting` — un enregistrement GLOBAL du plugin (100 req/min,
+ * `ENABLE_RATE_LIMITING`, `RATE_LIMITS.DEFAULT`) — a vécu ici sans qu'AUCUN
+ * appelant de production ne l'invoque. Mesuré, et déjà relevé par
+ * `docs/product/api-simplification/securite.md`, qui demandait exactement ce
+ * geste : « supprimer le code mort `registerRateLimiting` en conservant
+ * `ROUTE_RATE_LIMITS`, qui lui est bien utilisé ».
+ *
+ * Il est SUPPRIMÉ plutôt que laissé, parce qu'un enregistreur mort n'est pas
+ * neutre : c'est un PATRON à copier. Son `keyGenerator` ANNONÇAIT une clé par
+ * compte (`if (userId) return \`user:${userId}\``) et rendait TOUJOURS
+ * l'adresse — au hook `onRequest` du plugin, `authContext` n'existe pas
+ * encore. Son propre commentaire disait que la branche morte n'était sans
+ * conséquence QUE parce que rien ne le montait, et nommait le vrai risque :
+ * « ce qui n'est PAS sans conséquence, c'est de laisser la branche
+ * `if (userId)` se lire comme un patron ». C'est elle, recopiée sous
+ * `config.rateLimit`, qui a produit #4347, #4359 et #4429.
+ *
+ * Le remonter n'était pas une option : un SECOND enregistrement global
+ * entrerait en conflit avec `registerGlobalRateLimiter`
+ * (`middleware/rate-limiter.ts`, 300 req/min, le seul monté par `server.ts`),
+ * et son plafond de 100 req/min le contredirait. `RATE_LIMITS.DEFAULT` part
+ * avec lui : il n'avait pas d'autre lecteur.
+ *
+ * Ce qui RESTE ici — `ROUTE_RATE_LIMITS`, `createRateLimitConfig`,
+ * `createInvitationRateLimitConfig`, `resolveCallerKey` — est monté, testé, et
+ * documenté ci-dessous.
  */
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
-import rateLimit from '@fastify/rate-limit';
-import { logger } from '../utils/logger.js';
+import { FastifyRequest } from 'fastify';
 import { UnifiedAuthRequest } from './auth';
 
 /**
@@ -34,99 +58,7 @@ export const RATE_LIMITS = {
     timeWindow: '1 minute',
     description: 'Other call-related endpoints'
   },
-
-  // Default for all other endpoints
-  DEFAULT: {
-    max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
-    timeWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000')
-  }
 };
-
-/**
- * Register global rate limiting plugin
- *
- * @param fastify - Fastify instance
- */
-export async function registerRateLimiting(fastify: FastifyInstance): Promise<void> {
-  // Check if rate limiting is enabled
-  const isEnabled = process.env.ENABLE_RATE_LIMITING !== 'false';
-
-  if (!isEnabled) {
-    logger.warn('⚠️ Rate limiting is DISABLED - not recommended for production');
-    return;
-  }
-
-  // Register rate limit plugin with Redis for distributed rate limiting
-  await fastify.register(rateLimit, {
-    global: true,
-    max: RATE_LIMITS.DEFAULT.max,
-    timeWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    cache: 10000,
-    // Pas d'`allowList` fondée sur la forme de l'adresse. Elle valait
-    // `(req) => isLocalIp(req.ip)`, ce qui, derrière Traefik sur un réseau
-    // Docker (`request.ip` en 172.16.0.0/12 pour tout le monde), exemptait la
-    // planète entière. Cette fonction n'est aujourd'hui montée nulle part —
-    // raison de plus pour ne pas y laisser le piège en attendant : la remonter
-    // telle quelle aurait rouvert le défaut de #4137 sans qu'aucun témoin ne
-    // rougisse.
-    redis: fastify.redis ?? undefined, // Use Redis for distributed rate limiting (if available)
-    skipOnError: true, // Don't block requests if Redis is down
-    // Ce générateur ANNONCE une clé par compte et rend TOUJOURS l'adresse : au
-    // niveau du PLUGIN, il s'évalue au hook `onRequest` — avant toute garde de
-    // route — donc `authContext` n'existe jamais encore. C'est SANS
-    // CONSÉQUENCE ici, `registerRateLimiting` n'étant montée nulle part
-    // (mesuré) et un limiteur global devant de toute façon compter par
-    // adresse : il doit aussi freiner les flots NON authentifiés, qui
-    // n'atteignent jamais un `preHandler`. C'est le raisonnement écrit par
-    // `registerGlobalRateLimiter` (`rate-limiter.ts`), le seul des deux qui
-    // soit monté.
-    //
-    // Ce qui n'est PAS sans conséquence, c'est de laisser la branche
-    // `if (userId)` se lire comme un patron : c'est elle, recopiée sous
-    // `config.rateLimit`, qui a produit le défaut de `createRateLimitConfig`
-    // ci-dessous et ses jumeaux. Une clé de route se compte par compte, et
-    // exige alors `hook: 'preHandler'`. Cliquet :
-    // `__tests__/unit/middleware/account-keyed-rate-limit-sweep.test.ts`.
-    keyGenerator: (request) => {
-      const userId = (request as UnifiedAuthRequest).authContext?.userId;
-      if (userId) {
-        return `user:${userId}`;
-      }
-      return request.ip || 'unknown';
-    },
-    errorResponseBuilder: (request, context) => {
-      logger.warn('Rate limit exceeded', {
-        ip: request.ip,
-        userId: (request as UnifiedAuthRequest).authContext?.userId,
-        path: request.url,
-        limit: context.max,
-        after: context.after
-      });
-
-      return {
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: `Too many requests. Please try again after ${context.after}`,
-          retryAfter: context.after
-        }
-      };
-    },
-    onExceeding: (request, key) => {
-      logger.debug('Rate limit warning', {
-        key,
-        ip: request.ip,
-        path: request.url
-      });
-    }
-  });
-
-  logger.info('✅ Rate limiting enabled', {
-    defaultMax: RATE_LIMITS.DEFAULT.max,
-    defaultWindow: RATE_LIMITS.DEFAULT.timeWindow,
-    redisEnabled: !!fastify.redis
-  });
-}
 
 /**
  * `userId` SENTINELLE de `createUnauthenticatedContext()` (`middleware/auth.ts`).
