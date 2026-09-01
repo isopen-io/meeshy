@@ -158,3 +158,16 @@ fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux
 `MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
+
+**« Meeshes » est un terme de communication COMMERCIALE, jamais un nom du modèle**
+(arbitrage porteur, 2026-09-01, #4757). Il désigne les publications de type story,
+réel et post — **sans les moods** —, et c'est précisément pourquoi il ne peut pas
+être un nom du modèle : les quatre couches qui existent traitent les quatre profils
+ensemble (`PostType = POST | REEL | STORY | STATUS`, `ComposerFormat = story, post,
+reel, status`, la planche « S · R · P · M »). Le mot ne change ni l'état, ni la
+vision, ni le contrat.
+
+Il n'entre donc **ni dans le code, ni dans le schéma, ni dans une issue, ni dans une
+chaîne d'UI** — la règle de nommage ci-dessus reste entière. L'écrire ailleurs que
+dans un support de communication fabriquerait une cinquième terminologie, désignant
+un sous-ensemble qu'aucune couche ne modélise.
