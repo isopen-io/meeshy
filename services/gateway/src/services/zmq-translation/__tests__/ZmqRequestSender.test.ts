@@ -328,6 +328,24 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalises region-tagged targetLanguages before the wire (no fra_Latn fallback)', async () => {
+      // The translator resolves targets via LANGUAGE_MAPPINGS.get(code, 'fra_Latn'):
+      // a verbatim 'pt-BR' / 'en-US' / 'fr-FR' would silently translate to French.
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['pt-BR', 'en-US', 'fr-FR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['pt', 'en', 'fr']);
+    });
+
+    it('collapses regional variants of one language into a single target', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr', 'fr-FR', 'FR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr']);
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))
@@ -457,6 +475,15 @@ describe('ZmqRequestSender', () => {
     it('adds request to pendingRequests', async () => {
       await sender.sendAudioProcessRequest(makeAudioProcessRequest());
       expect(sender.getPendingRequestsCount()).toBe(1);
+    });
+
+    it('canonicalises region-tagged targetLanguages before the wire', async () => {
+      // POST /attachments/:id/translate accepts body.targetLanguages unnormalised.
+      await sender.sendAudioProcessRequest(
+        makeAudioProcessRequest({ targetLanguages: ['pt-BR', 'EN', 'fr'] })
+      );
+      const { msg } = firstSendMultipartArgs(connectionManager);
+      expect(msg.targetLanguages).toEqual(['pt', 'en', 'fr']);
     });
 
     it('continues gracefully when voice profile base64 decoding throws (catch branch)', async () => {
@@ -648,6 +675,18 @@ describe('ZmqRequestSender', () => {
       expect(msg.postId).toBe('post-001');
       expect(msg.textObjectIndex).toBe(0);
       expect(msg.targetLanguages).toEqual(['fr', 'de']);
+    });
+
+    it('canonicalises region-tagged targetLanguages before the wire', async () => {
+      await sender.sendStoryTextObjectRequest({
+        postId: 'post-canon',
+        textObjectIndex: 0,
+        text: 'Hello story',
+        sourceLanguage: 'en',
+        targetLanguages: ['pt-BR', 'en-US', 'fr'],
+      });
+      const msg = firstSendArg(connectionManager);
+      expect(msg.targetLanguages).toEqual(['pt', 'en', 'fr']);
     });
 
     it('returns void (no return value)', async () => {

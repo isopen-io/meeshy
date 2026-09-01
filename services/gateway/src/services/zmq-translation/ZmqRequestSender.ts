@@ -29,13 +29,30 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
 /**
- * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`). Les cibles
- * partent telles que l'appelant les donne (`'EN'`, `'pt-BR'`) et le translator
- * rend la sienne : sans forme commune, une langue rendue ne se reconnaîtrait pas
- * dans le jeu des langues attendues.
+ * Forme canonique d'un code langue (SSOT `normalizeLanguageCode`).
+ *
+ * Les cibles envoyées au translator DOIVENT être canoniques. Côté translator, la
+ * cible est résolue par un `dict.get` BRUT — `LANGUAGE_MAPPINGS.get(code, 'fra_Latn')`
+ * (`translation_ml/translator_engine.py`), keyé sur les codes canoniques (`'en'`,
+ * `'fr'`, `'pt'`), jamais sur une variante région-taggée. Un code `'pt-BR'`,
+ * `'en-US'`, `'FR'` ou `'fr-FR'` retombe donc SILENCIEUSEMENT sur `'fra_Latn'` :
+ * NLLB traduit vers le FRANÇAIS quelle que soit la langue demandée (violation
+ * directe du Prisme Linguistique). Les appelants passant des codes verbatim
+ * (préférences in-app persistées sans normalisation, `body.targetLanguages` d'une
+ * route REST) atteignent ce dispatch — dernier point avant le fil, donc le seul
+ * endroit où l'invariant se garantit pour TOUS.
  */
 const canonicalLanguage = (language: string): string =>
   normalizeLanguageCode(language) ?? language.toLowerCase();
+
+/**
+ * Canonicalise et déduplique une liste de langues cibles avant dispatch. Deux
+ * variantes régionales d'une même langue (`'fr'`, `'fr-FR'`, `'FR'`) comptent pour
+ * UNE cible — un `.toLowerCase()` brut les tenait pour trois, dupliquant le
+ * travail du worker pool ML et faisant diverger le fil du jeu de langues suivi.
+ */
+const canonicalizeTargetLanguages = (languages: readonly string[]): string[] =>
+  [...new Set(languages.map(canonicalLanguage))];
 
 
 export interface RequestSenderStats {
@@ -81,8 +98,8 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Canonicaliser + dédupliquer les langues cibles (SSOT `normalizeLanguageCode`)
+    const uniqueTargetLanguages = canonicalizeTargetLanguages(request.targetLanguages);
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +135,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
@@ -151,6 +168,11 @@ export class ZmqRequestSender {
     }
 
     const taskId = existingTaskId ?? randomUUID();
+
+    // Canonicaliser les cibles avant le fil : la route REST d'attachment accepte
+    // `body.targetLanguages` sans normalisation, et le pipeline audio les résout
+    // par le même `LANGUAGE_MAPPINGS.get(code, 'fra_Latn')` que le texte.
+    const targetLanguages = canonicalizeTargetLanguages(request.targetLanguages ?? []);
 
     // Charger l'audio en binaire (OBLIGATOIRE - pas de fallback URL)
     const audioData = await loadAudioAsBinary(request.audioPath);
@@ -204,7 +226,7 @@ export class ZmqRequestSender {
       binaryFrames: binaryFrameInfo,
       audioDurationMs: request.audioDurationMs,
       mobileTranscription: request.mobileTranscription,
-      targetLanguages: request.targetLanguages,
+      targetLanguages: targetLanguages,
       userLanguage: request.userLanguage,  // Langue de l'utilisateur pour la transcription
       generateVoiceClone: request.generateVoiceClone,
       modelType: request.modelType,
@@ -235,7 +257,7 @@ export class ZmqRequestSender {
       attachmentId: request.attachmentId,
       conversationId: request.conversationId,
       senderId: request.senderId,
-      targetLanguages: request.targetLanguages,
+      targetLanguages: targetLanguages,
       audioDurationMs: request.audioDurationMs,
       hasMobileTranscription: Boolean(request.mobileTranscription),
       audioSize: audioData.size,
@@ -401,13 +423,14 @@ export class ZmqRequestSender {
     sourceLanguage: string;
     targetLanguages: string[];
   }): Promise<void> {
+    const targetLanguages = canonicalizeTargetLanguages(params.targetLanguages);
     const requestMessage = {
       type: 'story_text_object_translation',
       postId: params.postId,
       textObjectIndex: params.textObjectIndex,
       text: params.text,
       sourceLanguage: params.sourceLanguage,
-      targetLanguages: params.targetLanguages,
+      targetLanguages: targetLanguages,
       timestamp: Date.now(),
     };
 
@@ -415,7 +438,7 @@ export class ZmqRequestSender {
       postId: params.postId,
       index: params.textObjectIndex,
       sourceLanguage: params.sourceLanguage,
-      targetLanguages: params.targetLanguages.length,
+      targetLanguages: targetLanguages.length,
     });
 
     await this.connectionManager.send(requestMessage);
