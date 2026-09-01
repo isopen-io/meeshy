@@ -247,22 +247,20 @@ extension AudioPostComposerView {
     /// utiliser ; il reste dans l'annonce d'accessibilité, où il ne coûte pas
     /// trois lignes d'écran.
     func errorPanel(_ error: String) -> some View {
-        // **Une ligne quand elle RENTRE, deux quand elle ne rentre pas.**
+        // **Le message, puis ses sorties DESSOUS** (directive porteur
+        // 2026-09-01). La ligne unique a été tentée et mesurée : à quatre
+        // éléments sur 402 pt, ou bien on force les largeurs et la rangée POUSSE
+        // son conteneur — toute la feuille se décalait, bords rognés — ou bien
+        // on les réduit et « Transcription indis… » n'apprend rien.
         //
-        // Quatre éléments sur 402 pt, c'est juste — et « juste » dépend de la
-        // langue, du Dynamic Type et de la largeur de l'appareil. Trois
-        // tentatives ont montré les deux échecs possibles : forcer la largeur
-        // intrinsèque des quatre POUSSE le conteneur (toute la feuille se
-        // décalait, bords rognés) ; la réduire TRONQUE le message, et
-        // « Transcription indis… » n'apprend rien.
-        //
-        // `ViewThatFits` tranche à la mesure plutôt qu'au pari : la ligne
-        // unique est servie partout où elle tient, et là où elle ne tient pas
-        // le message garde sa place entière au-dessus de ses actions.
-        ViewThatFits(in: .horizontal) {
-            ligneErreur(surUneLigne: true)
-            ligneErreur(surUneLigne: false)
+        // Empiler règle les deux d'un coup : le message garde sa phrase
+        // entière, les actions gardent leur largeur, et plus rien ne dépend de
+        // la langue ni du Dynamic Type.
+        VStack(alignment: .leading, spacing: 10) {
+            ligneMessage
+            ligneActions
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,11 +294,9 @@ extension AudioPostComposerView {
         }
     }
 
-    /// Les deux formes de la ligne d'erreur — le message, puis ses trois
-    /// sorties. En une ligne quand la largeur le permet, en deux sinon.
-    @ViewBuilder
-    private func ligneErreur(surUneLigne: Bool) -> some View {
-        let message = HStack(spacing: 6) {
+    /// Ce qui s'est passé.
+    private var ligneMessage: some View {
+        HStack(spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundColor(MeeshyColors.error)
@@ -309,10 +305,14 @@ extension AudioPostComposerView {
                         defaultValue: "Transcription indisponible"))
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        let actions = HStack(spacing: 6) {
+    }
+
+    /// Ce qu'on peut faire.
+    @ViewBuilder
+    private var ligneActions: some View {
+        HStack(spacing: 8) {
             if recordedURL != nil {
                 actionErreur(String(localized: "common.retry", defaultValue: "Réessayer"),
                              pleine: true, action: retryTranscription)
@@ -335,20 +335,7 @@ extension AudioPostComposerView {
                                     defaultValue: "Coller", bundle: .main),
                              pleine: false, action: collerTranscription)
             }
-        }
-
-        if surUneLigne {
-            HStack(spacing: 6) {
-                message
-                actions
-                Spacer(minLength: 0)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                message
-                actions
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
     }
 
