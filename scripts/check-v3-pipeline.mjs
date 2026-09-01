@@ -1060,9 +1060,13 @@ const replaceIn = (world, key, needle, replacement) => {
 
 const MUTATIONS = [
   [
+    // La sonde attendait `/login` tant que le legacy le servait seul. Depuis
+    // que la zone le sert, l'invariant ne le compte PLUS comme volé — et il a
+    // raison. `/links`, lui, reste au legacy : c'est la victime qui subsiste,
+    // et la sonde suit la réalité plutôt que sa formulation d'origine.
     'la barre finale retirée du PathPrefix de /l/ sur staging',
     (world) => replaceIn(world, 'staging', 'PathPrefix(`/l/`)', 'PathPrefix(`/l`)'),
-    'il emporte donc /login',
+    'il emporte donc /links',
   ],
   [
     'un préfixe retiré de V3_ZONE_PREFIXES sans être retiré du routeur',

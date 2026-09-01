@@ -107,6 +107,11 @@ export const documentDuSite = ({
  * change sans prévenir. Ces documents-ci ne dépendent d'aucun lecteur et ne
  * portent aucune donnée ; `no-store` leur ferait payer un aller-retour complet
  * à chaque visite — sur les surfaces mêmes qui vantent la légèreté.
+ *
+ * ELLE NE SERT PLUS `/`, et c'est le point : depuis que la racine choisit entre
+ * la vitrine et une redirection selon le cookie de session, sa réponse dépend
+ * d'un lecteur et pose sa propre politique (`app/route.ts`). Les cinq pages
+ * institutionnelles, elles, n'ont jamais dépendu de personne.
  */
 export const rendLePage = (html: string): Response =>
   new Response(html, {

@@ -124,6 +124,15 @@ struct ComposerDocumentSurface: View {
     /// de répondre et désigne son voisin.
     var onEditForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
 
+    /// **Retirer le son de la carte, par appui LONG** (#4696, directive porteur
+    /// 2026-09-01 : « introduire le longpress sur les objets pour avoir un menu
+    /// contenant la suppression »).
+    ///
+    /// Le geste double celui de la feuille, et c'est voulu : ouvrir puis
+    /// supprimer demande trois gestes pour défaire ce qu'un seul a posé.
+    /// `nil` ⇒ pas de menu — la surface ne fabrique pas une entrée sans effet.
+    var onDeleteForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
+
     /// **Le son placé en CONTENU de publication** (directive porteur
     /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
     /// jamais fouillé ici : la surface reste une présentation. `nil` ⇒ aucune
@@ -452,6 +461,8 @@ struct ComposerDocumentSurface: View {
             )
             .padding(.horizontal, 16)
             .padding(.top, 4)
+            .modifier(ComposerSoundDeletionMenu(
+                supprimer: onDeleteForegroundSound.map { rappel in { rappel(son) } }))
         }
     }
 
@@ -794,5 +805,29 @@ extension View {
 nonisolated enum ComposerMediaChipAffordance {
     static func showsRemove(isSelected: Bool, isSelectable: Bool) -> Bool {
         isSelected || !isSelectable
+    }
+}
+
+
+/// **Le menu de suppression d'une carte de son** (#4696).
+///
+/// Un modificateur plutôt qu'un `.contextMenu` posé en ligne : sans fermeture,
+/// AUCUN menu ne se monte — un `.contextMenu` vide s'ouvrirait quand même, sur
+/// rien, et un appui long qui répond par un cadre vide se lit comme une panne.
+private struct ComposerSoundDeletionMenu: ViewModifier {
+    let supprimer: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let supprimer {
+            content.contextMenu {
+                Button(role: .destructive, action: supprimer) {
+                    Label(String(localized: "composer.audio.delete.action",
+                                 defaultValue: "Supprimer le son", bundle: .main),
+                          systemImage: "trash")
+                }
+            }
+        } else {
+            content
+        }
     }
 }

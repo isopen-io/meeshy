@@ -195,7 +195,71 @@ extension AudioPostComposerView {
         return shortDisplayName(for: locale)
     }
 
-    func transcriptionPreview(_ t: OnDeviceTranscription) -> some View {
+    /// **Ce que la feuille dit du TEXTE** — et le site UNIQUE d'où l'éditeur
+    /// manuel se présente.
+    ///
+    /// La feuille de rédaction vivait sur `errorPanel`, donc « Rédiger »
+    /// n'existait QUE si la reconnaissance avait échoué. Une transcription
+    /// réussie n'était pas corrigeable, et un son ROUVERT — qui ne re-transcrit
+    /// pas — n'affichait rien du tout : ni son texte, ni le moyen d'en écrire un.
+    /// Le porteur l'a nommé le 2026-09-01 (#4697) : « avec toujours la possibilité
+    /// de rédiger la description ».
+    ///
+    /// Le montage est donc porté par le PARENT des deux branches, pas par l'une
+    /// d'elles — une feuille attachée à une vue qui disparaît disparaît avec
+    /// elle.
+    @ViewBuilder
+    var contentPanel: some View {
+        Group {
+            if let error = transcriptionError {
+                errorPanel(error)
+            } else if phase == .preview {
+                transcriptionPreview(transcription)
+            }
+        }
+        .sheet(isPresented: $showManualTranscription) {
+            ManualTranscriptionEditor(
+                initialText: transcription?.text ?? "",
+                language: Self.shortDisplayName(for: selectedLocale),
+                onValidate: { texte in
+                    adopterTranscriptionManuelle(texte)
+                    showManualTranscription = false
+                },
+                onCancel: { showManualTranscription = false }
+            )
+        }
+    }
+
+    /// **Reprendre un texte DÉJÀ écrit** — la traduction inverse de
+    /// `buildPayload`, qui rend à la feuille ce que le composer lui avait pris.
+    /// Les segments survivent : ce sont eux qui portent le défilement synchronisé
+    /// de la carte, et les jeter rendrait un texte immobile.
+    static func adopt(_ payload: MobileTranscriptionPayload?) -> OnDeviceTranscription? {
+        guard let payload else { return nil }
+        // **Une confiance ABSENTE n'est pas une confiance BASSE.** Le payload
+        // la rend optionnelle ; un texte écrit à la main n'en porte pas, et
+        // `adopterTranscriptionManuelle` pose déjà `1` pour la même raison —
+        // afficher un doute que personne n'a exprimé serait pire que se taire.
+        let confiance = payload.confidence ?? 1
+        return OnDeviceTranscription(
+            text: payload.text,
+            language: payload.language,
+            confidence: confiance,
+            segments: payload.segments.map { segment in
+                let debut = segment.start ?? 0
+                return OnDeviceTranscriptionSegment(
+                    text: segment.text,
+                    timestamp: debut,
+                    duration: max(0, (segment.end ?? debut) - debut),
+                    confidence: confiance)
+            }
+        )
+    }
+
+    /// `nil` ⇒ aucune transcription : la carte l'INVITE au lieu de se taire.
+    /// C'est l'état d'un son rouvert, et le silence s'y lisait comme « ce son
+    /// n'a pas de texte » alors qu'il en avait peut-être un.
+    func transcriptionPreview(_ t: OnDeviceTranscription?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "text.bubble.fill")
@@ -206,7 +270,7 @@ extension AudioPostComposerView {
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                 Spacer()
-                Text(t.language.uppercased())
+                Text((t?.language ?? Self.shortDisplayName(for: selectedLocale)).uppercased())
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, 8)
@@ -214,15 +278,31 @@ extension AudioPostComposerView {
                     .background(Capsule().fill(theme.surface(tint: "A5B4FC")))
             }
 
-            Text(t.text.isEmpty
+            let texte = t?.text ?? ""
+            Text(texte.isEmpty
                  ? String(localized: "composer.audio.transcription.none", defaultValue: "Aucune transcription disponible.")
-                 : t.text)
+                 : texte)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(texte.isEmpty ? theme.textMuted : theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineSpacing(4)
                 // La transcription est du contenu utilisateur → copiable (sélection native).
                 .textSelection(.enabled)
+
+            // **Écrire ou corriger, TOUJOURS** — c'est la seule porte de la
+            // description quand la reconnaissance a réussi, et la seule tout
+            // court sur un son rouvert.
+            Button { showManualTranscription = true } label: {
+                Label(texte.isEmpty
+                      ? String(localized: "composer.audio.transcription.write",
+                               defaultValue: "Rédiger", bundle: .main)
+                      : String(localized: "composer.audio.transcription.edit",
+                               defaultValue: "Modifier", bundle: .main),
+                      systemImage: "square.and.pencil")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(MeeshyColors.indigo400)
+            }
+            .frame(minHeight: 44)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -277,21 +357,8 @@ extension AudioPostComposerView {
         // occuper l'écran de quelqu'un qui n'en fera rien.
         .accessibilityElement(children: .contain)
         .accessibilityHint(error)
-        // **La feuille se monte ICI, sur le panneau qui l'ouvre.** Elle avait
-        // failli rester un état posé que rien ne présentait : le bouton
-        // fonctionnait, le build était vert, et « Rédiger » n'ouvrait rien —
-        // la forme exacte du contrôle inerte que la loi 4 interdit.
-        .sheet(isPresented: $showManualTranscription) {
-            ManualTranscriptionEditor(
-                initialText: transcription?.text ?? "",
-                language: Self.shortDisplayName(for: selectedLocale),
-                onValidate: { texte in
-                    adopterTranscriptionManuelle(texte)
-                    showManualTranscription = false
-                },
-                onCancel: { showManualTranscription = false }
-            )
-        }
+        // La feuille de rédaction est montée par `contentPanel`, au-dessus des
+        // DEUX branches : posée ici, elle ne servait que le cas d'erreur.
     }
 
     /// Ce qui s'est passé.

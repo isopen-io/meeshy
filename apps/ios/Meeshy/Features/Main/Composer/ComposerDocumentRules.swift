@@ -236,6 +236,29 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         canonicalRow.filter { $0.effect != nil }
     }
 
+    /// **La rangée canonique appartient au POST** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// > « Enlever les éléments de la rangée canonique car destinés pour les
+    /// > posts (seule entité qui peut avoir un texte spécifiquement pour
+    /// > contenu). »
+    ///
+    /// Les sept outils servent tous la même chose : composer un CHAMP DE TEXTE
+    /// et ce qu'on y joint. Emoji et mention s'insèrent dedans ; photo, caméra,
+    /// fichier, lieu et micro y attachent une pièce. Or une story n'a pas de
+    /// champ de contenu — on y écrit en POSANT un objet texte sur un canvas,
+    /// avec sa police, sa couleur et sa place. Servir la rangée sous une story
+    /// offrirait sept gestes qui visent un champ que l'écran n'a pas.
+    ///
+    /// **Le RÉEL la garde**, et ce n'est pas un oubli : ses canvas sont ses
+    /// médias, comme ceux d'un post, et il se compose depuis le même document.
+    /// Ce qui distingue la story n'est pas d'avoir un canvas — c'est que
+    /// chacun de ses canvas est une unité d'histoire à publier, pas un média de
+    /// la publication.
+    static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
+        format == .story ? [] : servedRow
+    }
+
     /// **Le jeu SF MODERNE — décision produit 2026-08-26 : SF retravaillés
     /// d'abord, glyphes à identité forte « dans un second temps ».**
     ///

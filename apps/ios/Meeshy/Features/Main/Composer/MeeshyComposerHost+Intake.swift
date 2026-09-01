@@ -336,7 +336,20 @@ extension MeeshyComposerHost {
     /// écrite ici. Le jour où un outil gagnera sa destination, il suffira de lui
     /// donner un `effect` : une énumération recopiée ici aurait exigé de penser
     /// aux DEUX endroits, et le second est celui qu'on oublie.
-    var servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }
+    /// La rangée SERVIE dépend du format : une story n'a pas de champ de
+    /// contenu à outiller (`ComposerDocumentTool.servedRow(for:)`).
+    var servedDocumentTools: [ComposerDocumentTool] {
+        ComposerDocumentTool.servedRow(for: selectedFormat)
+    }
+
+    /// **Semer la première unité d'histoire.** Appelé au changement de format
+    /// et au montage ; la règle décide, pas ce corps — c'est elle qui porte la
+    /// raison de ne pas se fier à l'initialisation d'un autre module.
+    func seedStoryCanvasIfNeeded() {
+        guard ComposerStoryCanvas.needsSeedSlide(format: selectedFormat,
+                                                 slideCount: viewModel.slides.count) else { return }
+        viewModel.addSlide()
+    }
 
     /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
     ///

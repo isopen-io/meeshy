@@ -14,6 +14,8 @@ import { PAGE_PARTENAIRES } from '@/app/partners/contenu';
 import { PAGE_CONFIDENTIALITE } from '@/app/privacy/contenu';
 import { echappe } from '@/app/socle';
 import { PAGE_CONDITIONS } from '@/app/terms/contenu';
+import { CONNEXION, INSCRIPTION } from '@/app/authentification/contenu';
+import { documentDeLEcran } from '@/app/authentification/vue';
 import { documentDeLaVitrine } from '@/app/vitrine/vue';
 
 /**
@@ -305,21 +307,32 @@ describe('les cinq pages institutionnelles', () => {
     });
 
   /**
-   * Ce que la v3 NE sert pas, et qui reste pourtant un lien légitime : les deux
-   * écrans d'authentification, encore au legacy (§ 4.9, entre les étapes 2 et
-   * 6). Ils sont NOMMÉS — c'est ce qui distingue une frontière assumée d'un
-   * oubli, et ce qui fera rougir le témoin le jour où la v3 les servira sans
-   * que cette liste ait suivi.
+   * Ce que la v3 NE sert pas, et qui reste pourtant un lien légitime. La liste
+   * s'est VIDÉE : `/login` et `/signup` y figuraient, et la v3 les sert
+   * désormais — c'est exactement ce que ce nommage devait rendre visible le
+   * jour venu, plutôt que de laisser une exemption survivre à sa raison.
+   *
+   * Elle reste déclarée parce que la frontière, elle, existe toujours :
+   * `/forgot-password` et `/auth/verify-2fa` sont atteints depuis ces écrans et
+   * vivent au legacy (§ 4.9, entre les étapes 2 et 6).
    */
-  const HORS_ZONE: readonly string[] = ['/login', '/signup'];
+  const HORS_ZONE: readonly string[] = ['/forgot-password', '/auth/verify-2fa'];
 
   it('ne renvoie que vers ce que la v3 sert, ou vers une frontière NOMMÉE', () => {
     const servies = new Set(routesServies(APP, ''));
     expect(servies).toContain('/about');
 
+    // LES DEUX ÉCRANS D'ACCÈS ENTRENT DANS LE BALAYAGE, et c'est là que
+    // l'exemption mord : « Mot de passe oublié ? » sort de la zone, et la seule
+    // façon de savoir qu'il ne meurt pas est de le NOMMER.
+    const ecran = (e: typeof CONNEXION): string =>
+      documentDeLEcran({ ecran: e, erreur: null, valeurs: {}, retour: null });
+
     const documents = [
       ['/', documentDeLaVitrine()] as const,
       ...PAGES.map(([route, page]) => [route, documentDeLaPage(page)] as const),
+      ['/login', ecran(CONNEXION)] as const,
+      ['/signup', ecran(INSCRIPTION)] as const,
     ];
 
     const morts = documents.flatMap(([route, doc]) =>

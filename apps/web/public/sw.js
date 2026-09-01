@@ -83,7 +83,10 @@ function log(...args) {
 // rougi — celui qui existait ne lisait que le compose de PRODUCTION et ne
 // reconnaissait que `PathPrefix(…)`, jamais `Path(…)`, qui est justement la
 // forme employée pour `/`. Les cinq pages institutionnelles entrent, elles,
-// dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686).
+// dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686). `/login` et
+// `/signup` suivent le même ordre : la v3 les sert désormais par un
+// `<form method="post">` sans JavaScript, et le shell du legacy sorti du cache
+// les recouvrirait sans cela chez tout visiteur revenant.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -93,6 +96,8 @@ const V3_ZONE_PREFIXES = [
   '/partners',
   '/terms',
   '/privacy',
+  '/login',
+  '/signup',
 ];
 
 function belongsToV3Zone(pathname) {

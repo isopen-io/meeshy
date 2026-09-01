@@ -42,6 +42,9 @@ struct AudioPostComposerView: View {
     /// vue s'ouvre alors directement sur l'aperçu, ses poignées et son
     /// placement.
     var initialAudio: ExistingAudio? = nil
+    /// **Supprimer le son qu'on ÉDITE.** `nil` ⇒ la feuille crée, elle n'édite
+    /// pas : le bouton ne se monte pas du tout (voir `+Deletion`).
+    var onDelete: (() -> Void)? = nil
     /// La transcription est-elle OFFERTE ? Un rognage pur ne transcrit pas — et
     /// monter le sélecteur de langue d'une transcription qui n'aura pas lieu
     /// serait un contrôle sans effet.
@@ -56,11 +59,16 @@ struct AudioPostComposerView: View {
         let url: URL
         let duration: TimeInterval
         let mimeType: String
+        /// Le texte DÉJÀ écrit pour cette piste. Sans lui, rouvrir un son
+        /// affichait une feuille muette sur une transcription qui existait.
+        let transcription: MobileTranscriptionPayload?
 
-        init(url: URL, duration: TimeInterval, mimeType: String = "audio/mp4") {
+        init(url: URL, duration: TimeInterval, mimeType: String = "audio/mp4",
+             transcription: MobileTranscriptionPayload? = nil) {
             self.url = url
             self.duration = duration
             self.mimeType = mimeType
+            self.transcription = transcription
         }
     }
 
@@ -86,6 +94,9 @@ struct AudioPostComposerView: View {
     @State var trimRange: ClosedRange<TimeInterval> = 0...0
     /// L'éditeur de transcription manuelle — le repli « Rédiger » (#4657).
     @State var showManualTranscription = false
+    /// La suppression se CONFIRME : un son enregistré est unique, et un doigt
+    /// posé de travers ne doit pas l'effacer.
+    @State var showDeleteConfirmation = false
     @State private var isExportingTrim = false
     /// **Où en est le rapatriement de la piste** (#4667). `direct` pour un
     /// enregistrement ou un import — leur fichier est déjà là.
@@ -222,6 +233,7 @@ struct AudioPostComposerView: View {
                     }
                     .foregroundColor(theme.textSecondary)
                 }
+                ToolbarItem(placement: .destructiveAction) { deleteButton }
             }
         }
         .sheet(isPresented: $showSoundLibrary) {
@@ -570,15 +582,6 @@ struct AudioPostComposerView: View {
         return "\(debut) → \(fin)"
     }
 
-    @ViewBuilder
-    private var contentPanel: some View {
-        if let error = transcriptionError {
-            errorPanel(error)
-        } else if phase == .preview, let transcription {
-            transcriptionPreview(transcription)
-        }
-    }
-
     // MARK: - Action Bar
 
     @ViewBuilder
@@ -704,6 +707,7 @@ struct AudioPostComposerView: View {
         recordedMimeType = initialAudio.mimeType
         recordedDuration = initialAudio.duration
         trimRange = 0...max(0.001, initialAudio.duration)
+        transcription = Self.adopt(initialAudio.transcription)
         phase = .preview
     }
 
