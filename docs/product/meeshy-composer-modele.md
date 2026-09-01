@@ -89,6 +89,25 @@ Autrement dit : une story est une SUITE d'unités autonomes, un post est UNE
 unité à plusieurs pages. Le profil ne décide pas seulement d'un type sur le
 fil ; **il décide de la CARDINALITÉ de la projection.**
 
+**N unités ne font pas N destins** (objection soulevée en revue, tranchée sur
+mesure). « N stories » décrit ce qui est PUBLIÉ, pas ce qui est ENTREPRIS :
+`StoryPublishQueue.shared.enqueue(item)`
+(`StoryViewModel+Publication.swift:647`) enfile **UN seul item** pour toute la
+composition, quel que soit N. La boucle par slide qui l'entoure (`:682`) ne sert
+qu'à l'affichage OPTIMISTE — une bulle par unité, tout de suite.
+
+Le geste de l'auteur est donc **atomique à la file** et **pluriel à l'écran**, et
+c'est la bonne combinaison : on ne demande pas trois fois à quelqu'un qui a
+appuyé une fois. Ce qui reste à dire, et qui n'est pas tranché ici : ce que
+devient l'item si son EXÉCUTION échoue à mi-parcours, deux stories étant déjà
+créées côté serveur. Une reprise non idempotente republierait les deux
+premières.
+
+> **Une règle de cardinalité doit dire de quoi elle compte les unités.** « N
+> stories » compte des PUBLICATIONS ; l'auteur, lui, compte des GESTES, et la
+> file compte des TRAVAUX. Trois cardinalités pour une phrase — les confondre
+> fait promettre trois échecs là où il n'y a qu'un bouton.
+
 **Écart mesuré au 2026-09-02** : `publishAllSlides()`
 (`StoryComposerView+Publication.swift:305`) boucle sur les slides **sans jamais
 regarder le profil** — `publishedType(requested:atelier:)` (`:347`) choisit le
