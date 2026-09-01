@@ -434,7 +434,7 @@ services:
       # REVENANTS, et le retour arrière du § 4.3 est inerte chez eux. Gardé par
       # l'invariant « le worker legacy s'efface devant ce que la règle réclame »
       # de `scripts/check-v3-pipeline.mjs`, posé une fois par déploiement.
-      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`))"
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`) || Path(`/login`) || Path(`/signup`))"
       - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"
