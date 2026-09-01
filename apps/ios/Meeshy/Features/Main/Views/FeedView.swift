@@ -1347,7 +1347,7 @@ struct FeedView: View {
                         await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
-                onPublishBorrowed: { sound in
+                onPublishBorrowed: { sound, _ in
                     showAudioComposer = false
                     Task { await publishBorrowedSoundPost(sound) }
                 }

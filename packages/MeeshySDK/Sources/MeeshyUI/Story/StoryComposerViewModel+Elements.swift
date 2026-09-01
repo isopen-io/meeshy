@@ -632,17 +632,27 @@ extension StoryComposerViewModel {
     ///   personne d'autre » ;
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
-    @discardableResult
     /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
     /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
     /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
     /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
     /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
     /// pose le premier.
-    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **Un son emprunté, éventuellement ROGNÉ** (#4657).
+    ///
+    /// `trim` porte l'intervalle conservé, en secondes depuis le début de la
+    /// piste. Il se pose en `sourceStart`/`sourceEnd` — **jamais** en découpant
+    /// un fichier : un son de la bibliothèque garde son `soundId`, et le crédit
+    /// de son auteur avec lui. Ré-encoder une copie rognée en ferait un fichier
+    /// anonyme, ce que la doctrine du crédit interdit.
+    ///
+    /// `nil` ⇒ la piste entière, comme avant ce lot.
+    @discardableResult
+    public func addBorrowedSound(_ sound: APISound,
+                                 trim: ClosedRange<TimeInterval>? = nil) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
-        let obj = StoryAudioPlayerObject(
+        var obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: "overlay",
             x: 0.5,
@@ -660,6 +670,15 @@ extension StoryComposerViewModel {
             soundId: sound.id,
             soundAuthorUsername: sound.uploader?.username
         )
+        // Le rognage se pose sur la SOURCE, pas sur un fichier : c'est ce qui
+        // laisse `soundId` intact, donc le crédit de l'auteur (#4657).
+        // `duration` suit l'intervalle — sans quoi la piste annoncerait sa
+        // longueur entière et le lecteur attendrait après la fin du segment.
+        if let trim {
+            obj.sourceStart = trim.lowerBound
+            obj.sourceEnd = trim.upperBound
+            obj.duration = Float(trim.upperBound - trim.lowerBound)
+        }
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
         audios.append(obj)

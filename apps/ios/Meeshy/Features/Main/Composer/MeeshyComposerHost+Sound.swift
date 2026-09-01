@@ -25,8 +25,13 @@ extension MeeshyComposerHost {
                 applyCreatedAudio(url: url, mimeType: mimeType,
                                   durationMs: durationMs, transcription: transcription)
             },
-            onPublishBorrowed: { _ in
+            onPublishBorrowed: { sound, rognage in
+                // Le crédit survit au découpage : `addBorrowedSound` garde le
+                // `soundId`, et l'intervalle se pose en `sourceStart`/`sourceEnd`
+                // plutôt que d'être gravé dans un fichier ré-uploadé (#4657).
+                viewModel.addBorrowedSound(sound, trim: rognage)
                 presentedPortal = nil
+                HapticFeedback.light()
             },
             placement: $chosenSoundPlacement
         )

@@ -20,7 +20,14 @@ struct AudioPostComposerView: View {
     /// Publication d'un son EMPRUNTÉ à la bibliothèque : aucun fichier à
     /// uploader — le parent publie un post/réel dont la piste référence
     /// `sound.id` (voir `FeedView+Attachments.publishBorrowedSoundPost`).
-    let onPublishBorrowed: (APISound) -> Void
+    /// Publication d'un son EMPRUNTÉ, **avec son rognage** (#4657).
+    ///
+    /// L'intervalle est `nil` quand rien n'a été rogné. Il ne voyage PAS comme
+    /// un fichier : un son de la bibliothèque garde son `soundId`, et son
+    /// rognage se porte par `sourceStart`/`sourceEnd` sur l'objet audio — le
+    /// crédit de son auteur survit au découpage, ce qu'un ré-upload aurait
+    /// détruit.
+    let onPublishBorrowed: (APISound, ClosedRange<TimeInterval>?) -> Void
     /// **Le PLACEMENT du son** (#4657) — en fond ou au premier plan.
     ///
     /// `nil` ⇒ l'hôte n'a qu'une destination et n'offre donc pas le choix : la
@@ -59,27 +66,29 @@ struct AudioPostComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    private var theme: ThemeManager { ThemeManager.shared }
+    var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioRecorder = AudioRecorderManager()
 
-    @State private var transcription: OnDeviceTranscription?
-    @State private var transcriptionError: String?
-    @State private var recordedURL: URL?
-    @State private var recordedDuration: TimeInterval = 0
-    @State private var recordedMimeType = "audio/mp4"
-    @State private var borrowedSound: APISound?
-    @State private var phase: ComposerPhase = .idle
-    @State private var selectedLocale: Locale = AudioPostComposerView.initialLocale()
-    @State private var showLanguagePicker = false
+    @State var transcription: OnDeviceTranscription?
+    @State var transcriptionError: String?
+    @State var recordedURL: URL?
+    @State var recordedDuration: TimeInterval = 0
+    @State var recordedMimeType = "audio/mp4"
+    @State var borrowedSound: APISound?
+    @State var phase: ComposerPhase = .idle
+    @State var selectedLocale: Locale = AudioPostComposerView.initialLocale()
+    @State var showLanguagePicker = false
     @State private var showAudioImporter = false
     @State private var showSoundLibrary = false
     /// L'intervalle CONSERVÉ de la piste (#4657). Il vaut la piste entière tant
     /// que l'auteur n'a pas touché une poignée — la sélection par défaut est
     /// « tout », jamais un rognage qu'on n'a pas demandé.
-    @State private var trimRange: ClosedRange<TimeInterval> = 0...0
+    @State var trimRange: ClosedRange<TimeInterval> = 0...0
+    /// L'éditeur de transcription manuelle — le repli « Rédiger » (#4657).
+    @State var showManualTranscription = false
     @State private var isExportingTrim = false
 
-    private enum ComposerPhase {
+    enum ComposerPhase {
         case idle, recording, transcribing, preview
     }
 
@@ -87,7 +96,7 @@ struct AudioPostComposerView: View {
     private let darkCanvasTop = Color(hex: "0F0D19")
     private let darkCanvasBase = Color(hex: "13111C")
 
-    private var isDark: Bool { colorScheme == .dark }
+    var isDark: Bool { colorScheme == .dark }
 
     // MARK: - Body
 
@@ -133,12 +142,17 @@ struct AudioPostComposerView: View {
                         } else {
                             statusCard
                         }
-                        if borrowedSound == nil, offersTranscription {
+                        if offersTranscription {
                             languageSelector
                         }
+                        // **Le placement suit immédiatement le carré du son**
+                        // (directive porteur 2026-09-01) : c'est la décision qui
+                        // dit ce que la publication DEVIENT, et elle se prend en
+                        // regardant ce qu'on vient d'enregistrer — pas en bas
+                        // d'un écran qu'il faut faire défiler.
+                        placementSection
                         contentPanel
                         trimSection
-                        placementSection
                         Color.clear.frame(height: 100)
                     }
                     .padding(.horizontal, MeeshySpacing.xl)
@@ -180,9 +194,8 @@ struct AudioPostComposerView: View {
         .sheet(isPresented: $showSoundLibrary) {
             SoundLibraryPicker(
                 onPick: { sound in
-                    borrowedSound = sound
-                    phase = .preview
                     showSoundLibrary = false
+                    adopterSonEmprunte(sound)
                 },
                 onCancel: { showSoundLibrary = false }
             )
@@ -332,144 +345,6 @@ struct AudioPostComposerView: View {
         }
     }
 
-    // MARK: - Language Selector
-
-    private var languageSelector: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "composer.audio.transcription.language", defaultValue: "Langue de transcription"))
-                    .font(.caption.weight(.semibold))
-                Spacer()
-            }
-            .foregroundColor(theme.textSecondary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(suggestedLocales, id: \.identifier) { loc in
-                        languageChip(for: loc)
-                    }
-                    moreLanguagesButton
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-        .disabled(phase == .recording || phase == .transcribing)
-        .opacity(phase == .recording || phase == .transcribing ? 0.5 : 1)
-        .sheet(isPresented: $showLanguagePicker) {
-            AudioLanguagePickerView(selectedLocale: $selectedLocale)
-        }
-    }
-
-    private func languageChip(for loc: Locale) -> some View {
-        let isSelected = loc.identifier == selectedLocale.identifier
-        return Button {
-            selectedLocale = loc
-            HapticFeedback.light()
-        } label: {
-            Text(Self.shortDisplayName(for: loc))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected ? .white : theme.textPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(
-                        isSelected
-                            ? AnyShapeStyle(MeeshyColors.brandGradient)
-                            : AnyShapeStyle(theme.surface(tint: "C7D2FE"))
-                    )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
-                )
-        }
-        // Le libellé visuel est un code court (« FR ») ; VoiceOver annonce le nom
-        // complet localisé. L'état sélectionné n'était signalé que par la couleur
-        // (fond gradient) → invisible sans la vue : on ajoute le trait `.isSelected`.
-        .accessibilityLabel(Self.fullDisplayName(for: loc))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var moreLanguagesButton: some View {
-        Button {
-            showLanguagePicker = true
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                    .font(.footnote)
-                    .accessibilityHidden(true)
-                Text(String(localized: "common.more", defaultValue: "Plus"))
-                    .font(.footnote.weight(.semibold))
-            }
-            .foregroundColor(MeeshyColors.indigo500)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().stroke(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1)
-            )
-        }
-        // « Plus » seul est ambigu en VoiceOver → intention explicite.
-        .accessibilityLabel(String(localized: "composer.audio.languages.more", defaultValue: "Plus de langues"))
-    }
-
-    private var suggestedLocales: [Locale] {
-        var seeds: [String] = []
-        let user = AuthManager.shared.currentUser
-        if let lang = user?.systemLanguage { seeds.append(lang) }
-        if let lang = user?.regionalLanguage, lang != user?.systemLanguage {
-            seeds.append(lang)
-        }
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            seeds.append(String(kbd.prefix(2)))
-        }
-        // **Les langues que l'app EXPÉDIE, toutes** (#4657). Le repli valait
-        // `["fr", "en"]` et le tout était coupé à quatre : un lecteur
-        // germanophone, hispanophone ou italophone devait passer par le « + »
-        // pour transcrire dans SA langue, alors que l'app la sert. Les sept
-        // locales du catalogue viennent donc en secours, dans l'ordre où
-        // `CFBundleLocalizations` les déclare, après ce que le compte et le
-        // clavier ont déjà nommé.
-        seeds.append(contentsOf: Self.shippedLanguageCodes)
-
-        let normalized = seeds.map { code in
-            EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: code))
-        }
-
-        var seen = Set<String>()
-        return normalized.filter { seen.insert($0.identifier).inserted }
-            .prefix(Self.shippedLanguageCodes.count).map { $0 }
-    }
-
-    /// Les langues expédiées, LUES au bundle plutôt que retapées : une huitième
-    /// locale ajoutée au catalogue apparaîtra ici sans qu'on y pense, et une
-    /// retirée disparaîtra — c'est ce qu'une liste recopiée ne fait jamais.
-    private static var shippedLanguageCodes: [String] {
-        let declarees = Bundle.main.object(forInfoDictionaryKey: "CFBundleLocalizations") as? [String]
-        let codes = (declarees ?? []).map { String($0.prefix(2)) }
-        return codes.isEmpty ? ["fr", "en", "de", "es", "it", "pt", "ar"] : codes
-    }
-
-    private static func shortDisplayName(for locale: Locale) -> String {
-        if let lang = locale.language.languageCode?.identifier {
-            return lang.uppercased()
-        }
-        return locale.identifier.uppercased()
-    }
-
-    // Nom complet localisé (« Français ») pour l'annonce VoiceOver — le chip
-    // n'affiche visuellement que le code court.
-    private static func fullDisplayName(for locale: Locale) -> String {
-        if let name = Locale.current.localizedString(forIdentifier: locale.identifier),
-           !name.isEmpty {
-            return name.prefix(1).uppercased() + name.dropFirst()
-        }
-        return shortDisplayName(for: locale)
-    }
-
     // MARK: - Rognage et placement
 
     /// **La zone de rognage** — montée dès qu'une piste existe, quelle que soit
@@ -514,32 +389,86 @@ struct AudioPostComposerView: View {
                 Text(ComposerSoundRoleCopy.title)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textSecondary)
-                HStack(spacing: 8) {
+
+                // **Un grand interrupteur, pas deux pastilles.** Le choix
+                // n'est pas un réglage parmi d'autres : c'est lui qui décide si
+                // la publication PORTE ce son ou si elle EST ce son. Deux
+                // moitiés pleine largeur le disent ; deux petites capsules le
+                // rangeaient au même niveau qu'un filtre.
+                HStack(spacing: 0) {
                     ForEach(ComposerAudioRole.allCases, id: \.self) { role in
-                        Button {
-                            placement.wrappedValue = role
-                            HapticFeedback.light()
-                        } label: {
-                            Text(ComposerSoundRoleCopy.label(role))
-                                .font(.footnote.weight(.semibold))
-                                .foregroundColor(placement.wrappedValue == role ? .white : theme.textPrimary)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .background(
-                                    Capsule().fill(
-                                        placement.wrappedValue == role
-                                            ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                            : AnyShapeStyle(theme.surface(tint: "C7D2FE"))
-                                    )
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(ComposerSoundRoleCopy.label(role))
-                        .accessibilityAddTraits(placement.wrappedValue == role ? [.isSelected] : [])
+                        placementHalf(role, binding: placement)
                     }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(theme.surface(tint: "C7D2FE"))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(MeeshyColors.indigo400.opacity(0.25), lineWidth: 1)
+                )
+
+                if borrowedSound != nil {
+                    Text(ComposerSoundRoleCopy.borrowedForegroundRefusal)
+                        .font(.caption2)
+                        .foregroundColor(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    /// Une moitié de l'interrupteur — son titre, et ce que ce titre VEUT DIRE.
+    ///
+    /// La description vit SOUS chaque titre plutôt que sous l'interrupteur :
+    /// une seule ligne changeante obligerait à sélectionner une option pour
+    /// savoir ce qu'elle fait, c'est-à-dire à essayer pour comprendre.
+    @ViewBuilder
+    private func placementHalf(_ role: ComposerAudioRole,
+                               binding: Binding<ComposerAudioRole>) -> some View {
+        let choisi = binding.wrappedValue == role
+        // Le premier plan fait du son une pièce jointe, c'est-à-dire un FICHIER
+        // de la publication : un son de la bibliothèque devrait être ré-uploadé
+        // pour en devenir une, donc détaché de son `soundId` et du crédit de son
+        // auteur. La moitié reste MONTRÉE et désactivée — une option absente se
+        // lit comme une capacité qui n'existe pas.
+        let refuse = (role == .foreground && borrowedSound != nil)
+
+        Button {
+            guard !refuse else { return }
+            binding.wrappedValue = role
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 4) {
+                Text(ComposerSoundRoleCopy.label(role))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(choisi ? .white : theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(ComposerSoundRoleCopy.description(role))
+                    .font(.caption2)
+                    .foregroundColor(choisi ? .white.opacity(0.85) : theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(choisi ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Color.clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .disabled(refuse)
+        .opacity(refuse ? 0.4 : 1)
+        .accessibilityLabel(ComposerSoundRoleCopy.label(role))
+        .accessibilityHint(refuse
+                           ? ComposerSoundRoleCopy.borrowedForegroundRefusal
+                           : ComposerSoundRoleCopy.description(role))
+        .accessibilityAddTraits(choisi ? [.isSelected] : [])
     }
 
     /// « 0:03 → 0:41 » — l'intervalle MONTRÉ.
@@ -561,93 +490,6 @@ struct AudioPostComposerView: View {
         } else if phase == .preview, let transcription {
             transcriptionPreview(transcription)
         }
-    }
-
-    private func transcriptionPreview(_ t: OnDeviceTranscription) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "text.bubble.fill")
-                    .font(.footnote)
-                    .foregroundColor(MeeshyColors.indigo400)
-                    .accessibilityHidden(true)
-                Text(String(localized: "composer.audio.transcription.title", defaultValue: "Transcription"))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
-                Spacer()
-                Text(t.language.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(theme.surface(tint: "A5B4FC")))
-            }
-
-            Text(t.text.isEmpty
-                 ? String(localized: "composer.audio.transcription.none", defaultValue: "Aucune transcription disponible.")
-                 : t.text)
-                .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineSpacing(4)
-                // La transcription est du contenu utilisateur → copiable (sélection native).
-                .textSelection(.enabled)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.35), lineWidth: 1)
-                )
-        )
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-
-    private func errorPanel(_ error: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.callout)
-                    .foregroundColor(MeeshyColors.error)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(String(localized: "composer.audio.transcription.unavailable", defaultValue: "Transcription indisponible"))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(4)
-                }
-                Spacer(minLength: 0)
-            }
-
-            if recordedURL != nil {
-                Button(action: retryTranscription) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                        Text(String(localized: "common.retry", defaultValue: "Réessayer"))
-                    }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(MeeshyColors.brandGradient))
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
-                )
-        )
     }
 
     // MARK: - Action Bar
@@ -676,8 +518,15 @@ struct AudioPostComposerView: View {
                     )
                 }
 
+                // **« Ajouter », pas « Publier »** (directive porteur
+                // 2026-09-01). Cette feuille ne publie rien : elle remet un son
+                // au composer, qui publiera plus tard. Un bouton qui dit
+                // « Publier » promet un envoi que le tap ne déclenche pas — et
+                // c'est le genre de promesse qui fait fermer l'app en croyant
+                // avoir posté.
                 Button(action: publish) {
-                    Text(String(localized: "common.publish", defaultValue: "Publier"))
+                    Text(String(localized: "composer.audio.confirm",
+                                defaultValue: "Ajouter", bundle: .main))
                         .font(.callout.weight(.bold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -761,6 +610,54 @@ struct AudioPostComposerView: View {
         phase = .preview
     }
 
+    /// **Rapatrier un son de la bibliothèque pour le rendre ROGNABLE**
+    /// (directive porteur 2026-09-01).
+    ///
+    /// Le rognage se règle à l'oreille : il faut ENTENDRE le segment qu'on
+    /// délimite, et une bande dessinée depuis `sound.waveform` sans fichier
+    /// derrière ne se joue pas. On copie donc la piste dans le dossier
+    /// temporaire — la même matière que pour un enregistrement ou un import,
+    /// donc le MÊME composant sans cas particulier.
+    ///
+    /// Ce fichier ne PART jamais : il ne sert qu'à écouter et à viser. Ce qui
+    /// voyage à la publication reste le `soundId` et l'intervalle
+    /// (`sourceStart`/`sourceEnd`), qui préservent le crédit de l'auteur.
+    ///
+    /// Un échec de téléchargement n'est pas fatal : la vue retombe sur ce
+    /// qu'elle faisait avant — le son est adopté, non rognable — plutôt que de
+    /// refuser un emprunt qui marchait.
+    private func adopterSonEmprunte(_ sound: APISound) {
+        borrowedSound = sound
+        // Le premier plan lui est refusé : le laisser SÉLECTIONNÉ afficherait
+        // un choix que la publication ne peut pas honorer.
+        if placement?.wrappedValue == .foreground { placement?.wrappedValue = .background }
+        recordedURL = nil
+        transcription = nil
+        transcriptionError = nil
+        phase = .preview
+        let duree = sound.durationSeconds ?? 0
+        recordedDuration = duree
+        trimRange = 0...max(0.001, duree)
+
+        guard let distante = MeeshyConfig.resolveMediaURL(sound.fileUrl) else { return }
+        Task {
+            guard let (donnees, _) = try? await URLSession.shared.data(from: distante),
+                  !donnees.isEmpty else { return }
+            let extension_ = distante.pathExtension.isEmpty ? "m4a" : distante.pathExtension
+            let locale = FileManager.default.temporaryDirectory
+                .appendingPathComponent("meeshy-borrowed-\(sound.id).\(extension_)")
+            try? donnees.write(to: locale, options: .atomic)
+            guard FileManager.default.fileExists(atPath: locale.path) else { return }
+            recordedURL = locale
+            recordedMimeType = Self.mimeType(forExtension: extension_)
+            if let secondes = try? await AVURLAsset(url: locale).load(.duration).seconds,
+               secondes.isFinite, secondes > 0 {
+                recordedDuration = secondes
+                trimRange = 0...secondes
+            }
+        }
+    }
+
     private func acceptRecording(url: URL, mimeType: String) {
         transcription = nil
         transcriptionError = nil
@@ -812,14 +709,14 @@ struct AudioPostComposerView: View {
         }
     }
 
-    private func retryTranscription() {
+    func retryTranscription() {
         guard let url = recordedURL else { return }
         transcriptionError = nil
         phase = .transcribing
         runTranscription(url: url)
     }
 
-    private func runTranscription(url: URL) {
+    func runTranscription(url: URL) {
         Task {
             do {
                 let result = try await EdgeTranscriptionService.shared.transcribe(
@@ -839,7 +736,7 @@ struct AudioPostComposerView: View {
         }
     }
 
-    private func cancelTranscription() {
+    func cancelTranscription() {
         EdgeTranscriptionService.shared.cancel()
         transcriptionError = String(
             localized: "composer.audio.transcription.cancelled", defaultValue: "Transcription annulée"
@@ -885,7 +782,10 @@ struct AudioPostComposerView: View {
     /// lui dirait.
     private func publish() {
         if let borrowedSound {
-            onPublishBorrowed(borrowedSound)
+            // Rogné ou non : c'est `needsExport` qui tranche, la même règle que
+            // pour un fichier local. `nil` ⇒ le son part entier, comme avant.
+            let rogne = AudioSegmentExporter.needsExport(range: trimRange, fullDuration: recordedDuration)
+            onPublishBorrowed(borrowedSound, rogne ? trimRange : nil)
             return
         }
         guard let url = recordedURL, !isExportingTrim else { return }
@@ -914,7 +814,7 @@ struct AudioPostComposerView: View {
         }
     }
 
-    private func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {
+    func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {
         let segments = t.segments.map { seg in
             MobileTranscriptionSegment(
                 text: seg.text,
