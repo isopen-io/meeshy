@@ -162,6 +162,11 @@ public struct AudioForegroundChip: View {
     public let slideDuration: TimeInterval?
 
     @GestureState private var dragOffset: CGSize = .zero
+    /// **Le facteur du pinch EN COURS** (#4722), éphémère comme `dragOffset` et
+    /// pour la même raison : le modèle n'est écrit qu'au relâchement, sinon
+    /// chaque tick du geste republierait la slide et ferait re-rendre tout ce
+    /// qui l'observe.
+    @GestureState private var pinchScale: CGFloat = 1
     @Environment(\.colorScheme) private var colorScheme
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
@@ -190,15 +195,49 @@ public struct AudioForegroundChip: View {
         Group {
             switch mode {
             case .composer:
-                positionedChip.gesture(dragGesture)
+                // **Les deux gestes SIMULTANÉMENT** (#4722). Chaînés par
+                // `.gesture()` successifs, SwiftUI n'en reconnaît qu'un : le
+                // pinch, à deux doigts, commence toujours par un déplacement
+                // que le drag revendique d'abord — la puce se déplaçait au
+                // lieu de grandir.
+                positionedChip
+                    .gesture(dragGesture.simultaneously(with: pinchGesture))
+                    // **Posées ICI et non dans `positionedChip`** : le lecteur
+                    // n'a pas de geste de taille, et une action nommée qui
+                    // n'agirait pas y serait un contrôle inerte annoncé à
+                    // VoiceOver — la loi 4 dans la forme où elle coûte le plus,
+                    // puisque seule une personne qui n'entend pas la promesse
+                    // échouer la découvrirait.
+                    .accessibilityAction(named: Text(Self.enlargeActionLabel)) {
+                        stepScale(by: Self.accessibilityScaleStep)
+                    }
+                    .accessibilityAction(named: Text(Self.shrinkActionLabel)) {
+                        stepScale(by: 1 / Self.accessibilityScaleStep)
+                    }
             case .reader:
                 positionedChip
             }
         }
     }
 
+    /// **La taille RENDUE** — celle du modèle, multipliée par le geste en cours
+    /// (#4722).
+    ///
+    /// En `.reader`, le pinch n'existe pas et `pinchScale` vaut son état de
+    /// repos : la même expression sert les deux modes sans les distinguer, ce
+    /// qui garantit qu'une puce publiée se lit exactement à la taille où
+    /// l'auteur l'a laissée.
+    private var renderedScale: CGFloat {
+        CGFloat(SceneObjectScalePolicy.clamped(audioObject.scale ?? 1)) * pinchScale
+    }
+
     private var positionedChip: some View {
         chipContent
+            // AVANT `.position` : le modificateur de position place le CENTRE
+            // du contenu, que l'échelle ne déplace pas. Appliqué après, il
+            // mettrait la coordonnée elle-même à l'échelle — une puce à droite
+            // de la scène partirait hors cadre en grandissant.
+            .scaleEffect(renderedScale)
             .position(
                 x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
                 y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
@@ -328,7 +367,9 @@ public struct AudioForegroundChip: View {
     private var accessibilityHintLabel: String {
         switch mode {
         case .composer:
-            return String(localized: "story.audio.chip.hint.composer", defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer.", bundle: .module)
+            return String(localized: "story.audio.chip.hint.composer",
+                          defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer, pincez pour redimensionner.",
+                          bundle: .module)
         case .reader:
             return String(localized: "story.audio.chip.hint.reader", defaultValue: "Double tap pour couper ou activer cette piste audio.", bundle: .module)
         }
@@ -345,6 +386,54 @@ public struct AudioForegroundChip: View {
                 audioObject.y = min(1, max(0, nextY))
                 onDragEnd()
             }
+    }
+
+    /// **Pincer redimensionne la puce** (#4722, directive porteur 2026-09-01 :
+    /// « en chip resizable sur la scène »).
+    ///
+    /// `MagnificationGesture` et non `MagnifyGesture` : la seconde est iOS 17+,
+    /// et le plancher de l'app est iOS 16. La dépréciation ne retire rien —
+    /// elle nomme le successeur qu'on prendra le jour où le plancher montera.
+    ///
+    /// Le modèle n'est écrit qu'au relâchement, comme pour le déplacement : la
+    /// slide est un `@Binding` que la scène entière observe, et la republier à
+    /// chaque tick du geste ferait re-rendre le canvas pendant qu'on pince —
+    /// exactement l'image perdue que la dimension 4 interdit.
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .updating($pinchScale) { value, state, _ in state = value }
+            .onEnded { value in
+                audioObject.scale = SceneObjectScalePolicy.settled(
+                    base: audioObject.scale ?? 1, gestureScale: Double(value))
+                onDragEnd()
+            }
+    }
+
+    /// **Le pas des actions d'accessibilité** — un cran qui SE VOIT sans
+    /// traverser la plage en deux pressions.
+    ///
+    /// VoiceOver ne pince pas : sans ces deux actions, le redimensionnement
+    /// serait une capacité réservée à qui voit l'écran et pose deux doigts
+    /// dessus. `1.25` donne dix crans entre les bornes — assez fin pour viser,
+    /// assez franc pour que chaque pression change quelque chose.
+    private static let accessibilityScaleStep: Double = 1.25
+
+    static var enlargeActionLabel: String {
+        String(localized: "story.audio.chip.action.enlarge",
+               defaultValue: "Agrandir la puce", bundle: .module)
+    }
+
+    static var shrinkActionLabel: String {
+        String(localized: "story.audio.chip.action.shrink",
+               defaultValue: "Réduire la puce", bundle: .module)
+    }
+
+    /// Applique un cran d'échelle. Passe par la MÊME règle que le pinch : deux
+    /// chemins vers une grandeur, une seule borne.
+    private func stepScale(by factor: Double) {
+        audioObject.scale = SceneObjectScalePolicy.settled(
+            base: audioObject.scale ?? 1, gestureScale: factor)
+        onDragEnd()
     }
 }
 

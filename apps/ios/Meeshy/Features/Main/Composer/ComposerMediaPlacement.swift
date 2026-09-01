@@ -94,3 +94,33 @@ nonisolated enum ComposerHeaderTiles {
         media.filter { slideIdByMediaURL[$0.url] != nil }
     }
 }
+
+/// **Quand la scène reste MONTÉE** (#4724, défaut V2 mesuré au simulateur).
+///
+/// La scène était liée aux seules FONDATIONS : `documentBackground != nil ||
+/// !slideIdByMediaURL.isEmpty`. C'était juste tant que tout média fondait une
+/// slide — la même coïncidence qui a cassé la garde d'idempotence, un cran plus
+/// bas. Depuis qu'un média peut être posé en PREMIER PLAN, retirer la dernière
+/// tuile vidait l'index sans vider la slide : `removeSlide` refuse de descendre
+/// sous une slide, ses objets restaient donc là, mais la scène se DÉMONTAIT et
+/// l'écran revenait au document vide. Les médias de premier plan devenaient
+/// invisibles ET irretirables — et repartaient quand même à la publication
+/// (mesuré : le `⋯` continuait de servir « Tout effacer », que
+/// `ComposerOverflowPolicy` ne sert que si `hasMedia`).
+///
+/// > **Ce qui décide de MONTRER une surface doit compter ce qu'elle CONTIENT,
+/// > jamais ce qui l'a fait naître.** Une condition de naissance placée là tient
+/// > tant que naître et contenir coïncident ; elle démonte la surface le jour
+/// > où ils divergent, et emporte son contenu hors de vue sans rien effacer.
+nonisolated enum ComposerScenePresence {
+
+    /// - Parameter sceneObjectCount: `StorySlide.sceneObjects.count` — la somme
+    ///   à cinq cas du SDK (texte · média · sticker · lieu · audio), jamais une
+    ///   énumération de tableaux réécrite ici : c'est exactement ce que le type
+    ///   `MeeshySceneObject` existe pour éviter.
+    static func hasScene(backgroundHex: String?,
+                         foundedSlides: Int,
+                         sceneObjectCount: Int) -> Bool {
+        backgroundHex != nil || foundedSlides > 0 || sceneObjectCount > 0
+    }
+}

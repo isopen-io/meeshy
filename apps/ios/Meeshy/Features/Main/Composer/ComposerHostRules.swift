@@ -433,25 +433,39 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les portes du rail *leading*. Passées à `ComposerRailDoor.offered`, qui
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
-    /// **La porte SON n'y est plus** (directive porteur 2026-08-31) :
+    /// **La porte SON est REVENUE le 2026-09-01** (#4722, directive porteur :
+    /// « lorsqu'on a posé une scène on puisse TOUJOURS ajouter un son sur la
+    /// scène, en son de fond de la scène ou en chip resizable sur la scène »).
+    ///
+    /// Elle en était partie la veille, et le motif était juste :
     ///
     /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
     /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker /
     /// > chip redimensionnable, déplaçable. »
     ///
-    /// **Elle ne coûtait aucune capacité, et c'est mesuré** : `handleRailDoor(.sound)`
-    /// appelait `presentSoundSources()`, dont le corps entier est
-    /// `presentedPortal = .sound` — la ligne EXACTE que la pastille du socle
-    /// exécute déjà. Deux boutons, une seule feuille.
+    /// Le retrait s'appuyait sur DEUX destinations de remplacement, nommées
+    /// dans ce doc-comment même : « le son POSÉ revient par la palette de
+    /// constructions (#4579) ; le son de FOND reste au socle, où il porte son
+    /// crédit ». **Aucune des deux n'existe plus.** La palette porte cinq
+    /// onglets — `emoji`, `love`, `time`, `place`, `library` — et pas de son,
+    /// #4579 étant ouvert ; et la pastille du socle est partie le lendemain
+    /// (« on n'a plus besoin du bouton ajouter un son en bas »), remplacée par
+    /// une pastille d'avatar qui affiche un CRÉDIT — donc qui ne se peint que
+    /// s'il y a déjà un son. La scène n'avait plus aucun chemin vers le son.
     ///
-    /// > Ce n'était pas une capacité en double, c'était un BOUTON en double. La
-    /// > différence décide du correctif : on retire l'un des deux sans rien
-    /// > perdre, là où deux capacités auraient demandé de choisir laquelle
-    /// > survit.
+    /// > **Deux retraits justifiés, chacun renvoyant vers un chemin que
+    /// > l'autre ne fournit pas.** Ni l'un ni l'autre commit n'était faux ;
+    /// > c'est leur SOMME qui a fermé la porte — et une somme n'a pas de site
+    /// > où rougir. Le témoin qui l'attrape ne peut donc pas interroger un
+    /// > retrait : il demande que la scène serve AU MOINS UN chemin vers le
+    /// > son, quel qu'il soit.
     ///
-    /// Le son POSÉ sur la scène (objet visible, déplaçable, redimensionnable)
-    /// revient par la palette de constructions (#4579), derrière l'entrée
-    /// sticker ; le son de FOND reste au socle, où il porte son crédit (#4071).
+    /// Ce qui rendait le retrait sûr reste vrai — la porte ne coûte aucune
+    /// capacité neuve : `handleRailDoor(.sound)` appelle `presentSoundSources()`,
+    /// et la feuille qui s'ouvre porte déjà le CHOIX des deux destinations
+    /// (`chosenSoundPlacement` : fond de la scène, ou puce posée dessus). La
+    /// directive d'aujourd'hui est donc servie par cette seule ligne : ce
+    /// n'était pas une capacité qui manquait, c'était son entrée.
     ///
     /// **`.hashtag` y entre le 2026-08-31** (#4636, directive porteur : « mettre
     /// l'outil hashtag dans la liste des outils d'un slide ou d'une
@@ -460,7 +474,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .text, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -656,7 +670,29 @@ nonisolated enum ComposerSoundRoleCopy {
                defaultValue: "Place du son", bundle: .main)
     }
 
-    static func label(_ role: ComposerAudioRole) -> String {
+    /// **Le libellé dépend de la DESTINATION, pas du seul rôle** (#4722).
+    ///
+    /// « Contenu de publication · Pièce jointe du post, avec son lecteur » est
+    /// juste sur un post texte, et FAUX sur une scène : là, le même choix pose
+    /// une puce sur la toile — déplaçable, redimensionnable, sans lecteur sous
+    /// le texte, puisqu'il n'y a pas de texte. Le rôle envoyé au modèle est
+    /// pourtant le même (`ComposerAudioRole.foreground`).
+    ///
+    /// > Un interrupteur dont le libellé décrit ce que l'option fait AILLEURS
+    /// > est pire qu'un libellé vague : il est vérifiable, et il est faux.
+    /// > L'auteur qui le lit choisit sciemment autre chose que ce qu'il obtient.
+    ///
+    /// Le paramètre a un DÉFAUT — `.contentCard`, le cas historique — parce que
+    /// deux appelants (`FeedView`) n'offrent aucun placement du tout et n'ont
+    /// donc rien à dire là-dessus. Le défaut sert ceux qui ne posent pas la
+    /// question, jamais ceux qui la posent : le meuble, lui, passe la
+    /// destination qu'il vient de résoudre.
+    static func label(_ role: ComposerAudioRole,
+                      destination: ComposerSoundDestination = .contentCard) -> String {
+        if role == .foreground, destination == .sceneChip {
+            return String(localized: "composer.sound.role.foreground.scene",
+                          defaultValue: "Puce sur la scène", bundle: .main)
+        }
         switch role {
         // **Ce que le son EST**, pas où il se place géométriquement (directive
         // porteur 2026-09-01). « En fond » et « au premier plan » décrivaient
@@ -690,7 +726,16 @@ nonisolated enum ComposerSoundRoleCopy {
     /// |---|---|
     /// | fond | le son se joue pendant la lecture ; **aucun lecteur** n'apparaît |
     /// | premier plan | le son devient une **pièce jointe** du post, avec son lecteur — un post audio |
-    static func description(_ role: ComposerAudioRole) -> String {
+    /// **Et sa définition suit la même destination** (#4722) — c'est elle qui
+    /// porte le mot « redimensionnable », donc la promesse que la directive
+    /// fait à l'auteur.
+    static func description(_ role: ComposerAudioRole,
+                            destination: ComposerSoundDestination = .contentCard) -> String {
+        if role == .foreground, destination == .sceneChip {
+            return String(localized: "composer.sound.role.foreground.scene.detail",
+                          defaultValue: "Posée sur la scène : déplaçable, redimensionnable.",
+                          bundle: .main)
+        }
         switch role {
         case .background:
             return String(localized: "composer.sound.role.background.detail",

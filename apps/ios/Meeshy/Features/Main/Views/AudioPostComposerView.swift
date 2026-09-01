@@ -35,6 +35,11 @@ struct AudioPostComposerView: View {
     /// l'entrée « Vocal » ET l'entrée « Ajouter un son » sans que la seconde
     /// hérite d'un contrôle sans effet chez la première.
     var placement: Binding<ComposerAudioRole>? = nil
+    /// **Ce que « premier plan » DEVIENT chez l'hôte** (#4722) — pièce jointe
+    /// sous le texte d'un post, puce posée sur une scène. Cette vue ne le
+    /// décide pas : elle le reçoit pour NOMMER juste, un interrupteur qui décrit
+    /// ce que son option fait ailleurs étant vérifiable ET faux.
+    var foregroundDestination: ComposerSoundDestination = .contentCard
     /// **Un son DÉJÀ acquis, à rogner** (#4657).
     ///
     /// C'est ce qui rend cette vue réutilisable partout où l'on doit rogner :
@@ -525,7 +530,8 @@ struct AudioPostComposerView: View {
                 // la ligne CONFIRME plutôt qu'elle n'enseigne.
                 Text(borrowedSound != nil
                      ? ComposerSoundRoleCopy.borrowedForegroundRefusal
-                     : ComposerSoundRoleCopy.description(placement.wrappedValue))
+                     : ComposerSoundRoleCopy.description(placement.wrappedValue,
+                                                       destination: foregroundDestination))
                     .font(.caption2)
                     .foregroundColor(theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -554,7 +560,7 @@ struct AudioPostComposerView: View {
             binding.wrappedValue = role
             HapticFeedback.light()
         } label: {
-            Text(ComposerSoundRoleCopy.label(role))
+            Text(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(choisi ? .white : theme.textPrimary)
                 .lineLimit(1)
@@ -571,10 +577,12 @@ struct AudioPostComposerView: View {
         .buttonStyle(.plain)
         .disabled(refuse)
         .opacity(refuse ? 0.4 : 1)
-        .accessibilityLabel(ComposerSoundRoleCopy.label(role))
+        // **La MÊME destination que ce que l'œil lit** (#4722) : de deux chaînes
+        // pour un bouton, celle qu'on n'entend pas est celle que nul ne corrige.
+        .accessibilityLabel(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
         .accessibilityHint(refuse
                            ? ComposerSoundRoleCopy.borrowedForegroundRefusal
-                           : ComposerSoundRoleCopy.description(role))
+                           : ComposerSoundRoleCopy.description(role, destination: foregroundDestination))
         .accessibilityAddTraits(choisi ? [.isSelected] : [])
     }
 

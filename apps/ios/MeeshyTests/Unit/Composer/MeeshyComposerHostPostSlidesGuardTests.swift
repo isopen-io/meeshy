@@ -158,6 +158,20 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             "« Tout effacer » doit aussi vider la mémoire des rôles.")
     }
 
+    /// **La scène se démonte sur ce qu'elle CONTIENT, jamais sur ce qui l'a
+    /// fait naître** (#4724, V2). Et elle compte les objets par la somme du SDK
+    /// (`StorySlide.sceneObjects`, cinq cas) : réénumérer `mediaObjects`,
+    /// `textObjects`, `stickerObjects`… ici en oublierait un, et le jour où une
+    /// sixième famille naîtrait, rien ne le dirait.
+    func test_laScene_seMonteSurCeQuElleContient_parLaSommeDuSDK() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerScenePresence.hasScene("),
+            "`documentHasScene` doit passer par la règle — une condition écrite en ligne serait "
+                + "invisible aux tests, et c'est elle qui a démonté la scène sous ses objets.")
+        XCTAssertTrue(compacted.contains("sceneObjectCount:viewModel.currentSlide.sceneObjects.count"),
+            "…et compter par `sceneObjects`, la somme à cinq cas du SDK, jamais tableau par tableau.")
+    }
+
     // MARK: - Le rail en barre haute (#4047)
 
     /// **Le rail DIT où l'on est, pas seulement ce que le post contient.**

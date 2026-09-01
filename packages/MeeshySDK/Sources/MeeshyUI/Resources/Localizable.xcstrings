@@ -32286,6 +32286,100 @@
         }
       }
     },
+    "story.audio.chip.action.enlarge": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تكبير الشارة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chip vergrößern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlarge chip"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar la ficha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agrandir la puce"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingrandisci il chip"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar o chip"
+          }
+        }
+      }
+    },
+    "story.audio.chip.action.shrink": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تصغير الشارة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chip verkleinern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shrink chip"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reducir la ficha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réduire la puce"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riduci il chip"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reduzir o chip"
+          }
+        }
+      }
+    },
     "story.audio.chip.active": {
       "localizations": {
         "ar": {
@@ -32333,47 +32427,48 @@
       }
     },
     "story.audio.chip.hint.composer": {
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر مرتين للتحديد. اسحب للتحريك."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double tap pour sélectionner. Faites glisser pour déplacer."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double tap to select. Drag to move."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca dos veces para seleccionar. Arrastra para mover."
+            "value": "انقر مرتين للتحديد. اسحب للتحريك، واقرص لتغيير الحجم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppeltippen zum Auswählen. Ziehen zum Verschieben."
+            "value": "Doppeltippen zum Auswählen. Ziehen zum Verschieben, Zusammenziehen zum Skalieren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double tap to select. Drag to move, pinch to resize."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para seleccionar. Arrastra para mover, pellizca para redimensionar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double tap pour sélectionner. Faites glisser pour déplacer, pincez pour redimensionner."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca due volte per selezionare. Trascina per spostare."
+            "value": "Tocca due volte per selezionare. Trascina per spostare, pizzica per ridimensionare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque duas vezes para selecionar. Arraste para mover."
+            "value": "Toque duas vezes para selecionar. Arraste para mover, belisque para redimensionar."
           }
         }
       }

@@ -96,6 +96,40 @@ final class ComposerMediaPlacementTests: XCTestCase {
         XCTAssertEqual(tuiles.map(\.url.lastPathComponent), ["a.jpg", "c.jpg"])
     }
 
+    // MARK: - Quand la scène reste montée (défaut V2)
+
+    /// **LE cas** : plus aucune fondation, mais la slide garde des objets. La
+    /// scène doit RESTER. Se démonter là rendait les médias de premier plan
+    /// invisibles et irretirables — pendant qu'ils repartaient à la publication.
+    func test_laScèneReste_quandLaSlideGardeDesObjets_sansAucuneFondation() {
+        XCTAssertTrue(ComposerScenePresence.hasScene(backgroundHex: nil,
+                                                     foundedSlides: 0,
+                                                     sceneObjectCount: 2))
+    }
+
+    /// Le composer NEUF n'a pas de scène : ni fond, ni fondation, ni objet.
+    /// Sans ce témoin, la règle pourrait rendre `true` partout et le premier
+    /// cas ci-dessus ne s'en apercevrait pas.
+    func test_unComposerVierge_nAAucuneScène() {
+        XCTAssertFalse(ComposerScenePresence.hasScene(backgroundHex: nil,
+                                                      foundedSlides: 0,
+                                                      sceneObjectCount: 0))
+    }
+
+    /// Un fond de COULEUR seul suffit — c'est le cas d'origine (Phase 2, #3885),
+    /// et il ne doit pas se perdre en chemin.
+    func test_unFondDeCouleurSeul_faitLaScène() {
+        XCTAssertTrue(ComposerScenePresence.hasScene(backgroundHex: "#112233",
+                                                     foundedSlides: 0,
+                                                     sceneObjectCount: 0))
+    }
+
+    func test_uneFondationSeule_faitLaScène() {
+        XCTAssertTrue(ComposerScenePresence.hasScene(backgroundHex: nil,
+                                                     foundedSlides: 1,
+                                                     sceneObjectCount: 0))
+    }
+
     /// Aucune fondation ⇒ aucune tuile. Pas une rangée à hauteur nulle, pas une
     /// tuile par défaut : un document dont rien n'a fondé de page n'a pas de
     /// carrousel à montrer (loi 4).
