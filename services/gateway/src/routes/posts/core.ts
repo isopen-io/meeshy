@@ -24,7 +24,6 @@ import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbid
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
-import { postWriteBadRequestSchema } from './write-refusal-schema';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
 import type { ResolvedPostMentions } from '../../services/posts/postMentions';
@@ -469,9 +468,6 @@ export function registerCoreRoutes(
     preValidation: [requiredAuth],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
-    // Le 400 est le seul code de statut DÉCLARÉ ici, et il l'est en SUPERSET :
-    // voir `write-refusal-schema.ts` pour ce qu'il porte et pourquoi.
-    schema: { response: { 400: postWriteBadRequestSchema } },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -735,10 +731,6 @@ export function registerCoreRoutes(
   fastify.put('/posts/:postId', {
     preValidation: [requiredAuth],
     bodyLimit: 1 * 1024 * 1024,
-    // Même refus, même helper (`rejectNonV3StoryEffects`), donc même schéma :
-    // une déclaration posée sur la seule création laisserait l'édition servir
-    // la même charge sans contrat.
-    schema: { response: { 400: postWriteBadRequestSchema } },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

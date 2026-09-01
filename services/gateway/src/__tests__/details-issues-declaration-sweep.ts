@@ -81,6 +81,9 @@ export type SiteQuiSertDesIssues = {
   readonly fichier: string;
   /** Le fichier, ou l'un de ses imports relatifs à un saut, porte `items: zodIssueSchema`. */
   readonly declare: boolean;
+  /** Le fichier déclare un `response:` — donc Fastify y compile un sérialiseur,
+   *  seule condition sous laquelle une clé non déclarée est SUPPRIMÉE (#4648). */
+  readonly serialise: boolean;
 };
 
 const CHAINES_OU_COMMENTAIRES =
@@ -164,11 +167,45 @@ export const balayerServicesDIssues = (racine: string): readonly SiteQuiSertDesI
     .map(({ fichier, source }) => ({
       fichier: relative(racine, fichier),
       declare: declareLaForme(fichier, source),
+      serialise: compileUnSerialiseur(source),
     }))
     .sort((a, b) => a.fichier.localeCompare(b.fichier));
 
-/** Les sites qui servent SANS déclarer — l'inventaire que le cliquet garde VIDE. */
+/**
+ * Un fichier compile-t-il un SÉRIALISEUR ? C'est la condition qui rend la
+ * non-déclaration dangereuse, et elle a été apprise à la dure (#4648).
+ *
+ * L'issue affirmait que `routes/posts/core.ts` perdait ses `issues` faute de
+ * les déclarer. **C'était faux** : ses quatre routes ne déclaraient AUCUN
+ * schéma de réponse, et Fastify ne compile un sérialiseur que pour les codes
+ * DÉCLARÉS — sans schéma, `JSON.stringify` sert l'objet entier et rien n'est
+ * retiré. La conséquence avait été importée des quatre autres sites, qui
+ * déclarent des schémas et dont les `issues` étaient réellement supprimés.
+ *
+ * > « Le schéma ne déclare pas le champ » n'implique « le champ est supprimé »
+ * > que s'il Y A un schéma. La condition qui rend `fast-json-stringify`
+ * > dangereux est sa PRÉSENCE.
+ *
+ * Un cliquet qui exigerait la déclaration partout ferait donc payer un contrat
+ * à des routes que rien ne menace — et pousserait à déclarer un `response`
+ * PARTIEL, ce que `security/response-schema-closure-guard.test.ts` compte
+ * précisément comme une dette (`response-no-success-code`). Mesuré : c'est
+ * exactement ce qui est arrivé quand la première version de ce lot a déclaré
+ * un `400` seul sur `POST /posts` et `PUT /posts/:postId`.
+ */
+const compileUnSerialiseur = (sourceNue: string): boolean => /\bresponse\s*:/.test(sourceNue);
+
+/**
+ * Les sites qui servent, PEUVENT être tronqués, et ne déclarent pas —
+ * l'inventaire que le cliquet garde VIDE.
+ *
+ * Imprécision assumée et bornée : le grain est le FICHIER. Un fichier qui
+ * déclarerait un `response` sur un statut et servirait ses `issues` sur un
+ * autre serait compté à tort. Aucun cas mesuré aujourd'hui ; le jour où il
+ * s'en présente un, c'est la ROUTE qu'il faudra prendre pour grain, pas le
+ * fichier.
+ */
 export const sitesNonDeclares = (racine: string): readonly string[] =>
   balayerServicesDIssues(racine)
-    .filter((site) => !site.declare)
+    .filter((site) => !site.declare && site.serialise)
     .map((site) => site.fichier);

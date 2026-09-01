@@ -94,22 +94,42 @@ describe('balayage : servir `details: { issues }` oblige à déclarer sa forme (
     const racine = bacAvec({
       'en-ligne.ts': [
         "const s = { properties: { issues: { type: 'array', items: zodIssueSchema } } };",
+        "fastify.post('/a', { schema: { response: { 400: s } } }, h);",
         "sendBadRequest(reply, 'X', { details: { issues: issuesServies(e.issues) } });",
       ].join('\n'),
       'schema-voisin.ts': "export const s = { properties: { issues: { items: zodIssueSchema } } };",
       'extrait.ts': [
         "import { s } from './schema-voisin';",
+        "fastify.post('/b', { schema: { response: { 400: s } } }, h);",
         "sendBadRequest(reply, 'X', { details: { issues: e.issues.slice(0, 5) } });",
       ].join('\n'),
-      'muet.ts': "sendBadRequest(reply, 'X', { details: { issues: e.issues.slice(0, 5) } });",
+      'muet.ts': [
+        "fastify.post('/c', { schema: { response: { 400: {} } } }, h);",
+        "sendBadRequest(reply, 'X', { details: { issues: e.issues.slice(0, 5) } });",
+      ].join('\n'),
       'sans-issues.ts': "sendBadRequest(reply, 'X', { details: { mediaIds: ids } });",
     });
 
     expect(balayerServicesDIssues(racine)).toEqual([
-      { fichier: 'en-ligne.ts', declare: true },
-      { fichier: 'extrait.ts', declare: true },
-      { fichier: 'muet.ts', declare: false },
+      { fichier: 'en-ligne.ts', declare: true, serialise: true },
+      { fichier: 'extrait.ts', declare: true, serialise: true },
+      { fichier: 'muet.ts', declare: false, serialise: true },
     ]);
+  });
+
+  it("n'accuse PAS un fichier que rien ne peut tronquer — sans `response`, pas de sérialiseur", () => {
+    // La leçon de #4648, gelée ici pour qu'elle ne se reperde pas : l'issue
+    // affirmait que `routes/posts/core.ts` perdait ses `issues`. Ses routes ne
+    // déclaraient AUCUN schéma de réponse, donc rien ne les retirait — la
+    // conséquence avait été importée de sites qui, eux, déclarent.
+    const racine = bacAvec({
+      'sans-contrat.ts': "sendBadRequest(reply, 'X', { details: { issues: e.issues } });",
+    });
+
+    expect(balayerServicesDIssues(racine)).toEqual([
+      { fichier: 'sans-contrat.ts', declare: false, serialise: false },
+    ]);
+    expect(sitesNonDeclares(racine)).toEqual([]);
   });
 
   it("ne se laisse pas déclarer conforme par le seul IMPORT de `zodIssueSchema`", () => {
@@ -124,6 +144,7 @@ describe('balayage : servir `details: { issues }` oblige à déclarer sa forme (
       ].join('\n'),
       'route.ts': [
         "import { issuesServies } from './utils/zod-issue-schema';",
+        "fastify.post('/d', { schema: { response: { 400: {} } } }, h);",
         "sendBadRequest(reply, 'X', { details: { issues: issuesServies(e.issues) } });",
       ].join('\n'),
     });
