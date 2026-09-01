@@ -23071,7 +23071,7 @@ Corollaire : **exclure n'empêche pas d'importer.** TypeScript suit toujours les
 `.d.ts` par la résolution de modules ; `exclude` ne fait que cesser de compiler
 les sources du paquet comme si elles étaient les nôtres.
 
-## Leçon 404 — Une grille PARTAGÉE par trois familles n'a qu'UNE destination, et la famille qui perd sa donnée le fait en silence
+## Leçon 406 — Une grille PARTAGÉE par trois familles n'a qu'UNE destination, et la famille qui perd sa donnée le fait en silence
 
 **Le lot.** La palette de stickers (#4579) montre trois familles de décorations
 — amour, heure, lieu — dans la *même* grille de vignettes. C'est ce qui leur
@@ -23097,7 +23097,7 @@ témoin qui devait prouver la loi 4 a révélé un défaut d'une autre nature.
 doit contenir `onLocationTemplateSelected(` **et** `onTemplateSelected(`. Un
 témoin qui n'aurait vérifié que « ça pose quelque chose » serait resté vert.
 
-## Leçon 405 — Une énumération de sites de glyphe est fausse par défaut : le troisième existe presque toujours
+## Leçon 407 — Une énumération de sites de glyphe est fausse par défaut : le troisième existe presque toujours
 
 **Le lot.** Retirer le smiley de la porte sticker (#4719). Le design a énuméré
 **deux** sites — la porte du rail (`ComposerRailDoor.symbolName`) et l'en-tête
@@ -23120,7 +23120,7 @@ ou `StickerPickerView(`) ne contienne pas `face.smiling`. Un cinquième site
 l'appliquera sans qu'on y pense. Le fusible (`examinés > 1`) empêche la garde de
 passer au vert par omission le jour où le balayage se casse.
 
-## Leçon 406 — Une garde de source qui nomme un FICHIER rougit pour un déplacement, et le rouge accuse le comportement
+## Leçon 408 — Une garde de source qui nomme un FICHIER rougit pour un déplacement, et le rouge accuse le comportement
 
 **Le lot.** L'extraction préalable (#4715) puis le découpage de la palette
 (#4579) ont déplacé la section « Mes stickers » de `StickerPickerView.swift`
