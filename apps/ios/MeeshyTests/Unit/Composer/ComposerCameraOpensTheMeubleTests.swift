@@ -80,6 +80,19 @@ final class ComposerCameraOpensTheMeubleTests: XCTestCase {
     /// Ce témoin est donc une DETTE NOMMÉE, pas une approbation : il tombera
     /// quand le meuble saura reprendre et semer, et c'est à ce moment-là qu'on
     /// le retournera — jamais avant.
+    ///
+    /// **La dette a désormais un document à citer** (2026-09-02) :
+    /// `docs/product/meeshy-composer-modele.md` § 1 bis « Ce qu'une publication
+    /// DEVIENT — la projection ». Il établit, avec ses sites, qu'aucune couche
+    /// sous le composer ne porte la publication comme un objet — `PublishIntent`
+    /// n'a ni slide ni objet ni effet, et `model Post` n'a aucune clé de
+    /// regroupement. C'est ce qui manque à `.resume` : non pas un champ oublié
+    /// dans `ComposerDocumentDraft`, mais **l'identité d'une publication
+    /// existante**, qui n'a de référent nulle part.
+    ///
+    /// Le § ne tranche PAS qui exécutera la projection (#4733). Ce témoin ne
+    /// doit donc pas se lire comme attendant une implémentation décidée : il
+    /// garde un état de fait, et le document dit lequel.
     func test_lesTroisAutresOuvertures_restentSurLAtelier_dettesNOMMEES() {
         for opening in [ComposerOpening.resume, .mediaSeeded, .videoCameraReady] {
             XCTAssertEqual(
