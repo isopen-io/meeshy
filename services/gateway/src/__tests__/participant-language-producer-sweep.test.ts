@@ -190,15 +190,18 @@ describe('chaque inventaire gelé PORTE quelque chose', () => {
     expect(sansExemption[0]).toContain('profile.language');
   });
 
-  it('le gel des écritures OPAQUES couvre `ban.ts`, et le dit', () => {
-    expect(Object.keys(ECRITURES_OPAQUES)).toEqual(['routes/conversations/ban.ts']);
-    expect(ECRITURES_OPAQUES['routes/conversations/ban.ts']).toContain('conversationBanState');
+  // #4713 a extrait le noyau des deux gestes de bannissement ; les deux
+  // écritures opaques ont suivi dans `participant-ban-core.ts`, inchangées.
+  // Seule la CLÉ change — ce gel est indexé par FICHIER.
+  it('le gel des écritures OPAQUES couvre le noyau du bannissement, et le dit', () => {
+    expect(Object.keys(ECRITURES_OPAQUES)).toEqual(['routes/conversations/participant-ban-core.ts']);
+    expect(ECRITURES_OPAQUES['routes/conversations/participant-ban-core.ts']).toContain('conversationBanState');
 
     const sansGel = ecrituresNonResolues(SRC, {});
 
     expect(sansGel.length).toBeGreaterThan(0);
     for (const nomme of sansGel) {
-      expect(nomme).toContain('routes/conversations/ban.ts');
+      expect(nomme).toContain('routes/conversations/participant-ban-core.ts');
     }
   });
 });
