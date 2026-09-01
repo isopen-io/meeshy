@@ -121,38 +121,66 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
                        "la ligne canonique survit — elle ne vise pas la toile")
     }
 
-    // MARK: - La porte SON est partie (directive porteur 2026-08-31)
+    // MARK: - Une scène posée accepte TOUJOURS un son (#4722)
 
-    /// **Retirer la porte son ne coûte AUCUNE capacité, et c'est mesuré.**
+    /// **LE témoin de la directive du 2026-09-01.**
     ///
-    /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
-    /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker / chip
-    /// > redimensionnable, déplaçable. »
+    /// > « Lorsqu'on a posé une scène on puisse TOUJOURS ajouter un son sur la
+    /// > scène, en son de fond de la scène ou en chip resizable sur la scène. »
     ///
-    /// `handleRailDoor(.sound)` appelait `presentSoundSources()`, dont le corps
-    /// ENTIER est `presentedPortal = .sound` — la ligne exacte que la pastille
-    /// du socle exécute déjà. Deux boutons, une seule feuille.
+    /// Il remplace son inverse — `test_laPorteSon_nEstPlusServie`, écrit la
+    /// veille et juste ce jour-là. Sa raison tenait à DEUX destinations de
+    /// remplacement, qu'il nommait lui-même : « le son de fond vit au socle, le
+    /// son POSÉ viendra de la palette (#4579) ». Les deux ont disparu APRÈS
+    /// lui — la pastille du socle est partie le lendemain, la palette n'a
+    /// jamais reçu son onglet son (cinq onglets : emoji, love, time, place,
+    /// library). La scène n'avait plus aucun chemin vers le son, et aucun
+    /// témoin ne pouvait le dire : chaque retrait était juste, c'est leur SOMME
+    /// qui a fermé la porte.
     ///
-    /// > Ce n'était pas une capacité en double, c'était un BOUTON en double. La
-    /// > différence décide du correctif : on retire l'un des deux sans rien
-    /// > perdre, là où deux capacités auraient demandé de choisir laquelle
-    /// > survit. Vérifier LAQUELLE des deux avant de retirer est ce qui sépare
-    /// > une déduplication d'une régression.
-    func test_laPorteSon_nEstPlusServie() {
-        XCTAssertFalse(ComposerSceneCapabilities.doors.contains(.sound),
-                       "le son de fond vit au socle, le son POSÉ viendra de la palette (#4579)")
-        XCTAssertTrue(ComposerSceneCapabilities.doors.contains(.sticker),
-                      "l'entrée qui portera la palette reste servie")
+    /// > Un témoin qui épingle une ABSENCE en s'appuyant sur ce qui existe
+    /// > ailleurs se périme en silence : ce qui le justifie n'est pas dans son
+    /// > champ de vision, donc rien ne rougit quand ça disparaît.
+    func test_laPorteSon_estServieSurLaScene() {
+        XCTAssertTrue(ComposerSceneCapabilities.doors.contains(.sound),
+                      "la porte du rail est le chemin vers la feuille où le placement se choisit")
     }
 
-    /// **Et elle ne réapparaît NULLE PART** — ni à gauche, ni sur la ligne
-    /// canonique. Une porte retirée d'un jeu servi mais laissée dans une des
-    /// deux rangées serait un contrôle sans chemin d'ingestion : la loi 4 dans
-    /// sa forme la plus banale.
-    func test_laPorteSon_neReparaitDansAucuneRangee() {
+    /// **Et il tient sur les QUATRE formats, pas seulement sur celui qu'on
+    /// mesure d'habitude.**
+    ///
+    /// La disponibilité demandée est « TOUJOURS ». Un jeu servi qui aurait
+    /// raison sur la story et tort sur le réel rendrait le témoin ci-dessus
+    /// vert tout en laissant la moitié des scènes sans chemin — et `status`,
+    /// qui n'a pas de toile, doit au contraire ne PAS la porter : c'est la même
+    /// règle (`appearsOnCanvas`) qui donne les deux réponses.
+    ///
+    /// > Le mot d'une directive qui dit « toujours » se teste sur l'ensemble
+    /// > qu'il quantifie, jamais sur un représentant.
+    func test_lePorteSon_estServieSurTouteScene_etSurAucunStatus() {
+        for format in [ComposerFormat.story, .reel, .post] {
+            let servies = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                   format: format, allowsCapture: true)
+            XCTAssertTrue(servies.contains(.sound),
+                          "\(format) porte une scène — elle doit accepter un son")
+        }
+        let sansToile = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                 format: .status, allowsCapture: true)
+        XCTAssertFalse(sansToile.contains(.sound),
+                       "un statut n'a pas de scène sur laquelle poser quoi que ce soit")
+    }
+
+    /// La porte vit à GAUCHE — la rangée de ce qui apparaît sur la toile — et
+    /// non sur la ligne canonique, qui porte ce qui classe la publication.
+    ///
+    /// Ce n'est pas un détail de position : la directive story du même jour
+    /// vide la ligne canonique pour ce format (« enlever les éléments de la
+    /// rangée canonique, destinés aux posts »). Une porte son rangée là serait
+    /// absente exactement du format où la scène est la publication entière.
+    func test_laPorteSon_vitAGauche_avecCeQuiApparaitSurLaToile() {
         let servies = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                format: .story, allowsCapture: true)
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: servies).contains(.sound))
+        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: servies).contains(.sound))
         XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: servies).contains(.sound))
     }
 
@@ -165,8 +193,9 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         // troisième fois de la session que j'affirme une valeur déduite au lieu
         // de l'avoir lue, et la troisième fois que le témoin me rattrape.
         XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: servies),
-                       [.media, .text, .drawing, .sticker],
-                       "quatre entrées à gauche — le compte des quatre pastilles de la planche 1b")
+                       [.media, .sound, .text, .drawing, .sticker],
+                       "cinq entrées à gauche — `.sound` est revenue le 2026-09-01 (#4722), à sa "
+                       + "place de `canonicalRail`, entre le média et le texte")
         XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies),
                        [.description, .mention, .hashtag, .place],
                        "`.hashtag` rejoint la ligne canonique (#4636) — un hashtag classe "

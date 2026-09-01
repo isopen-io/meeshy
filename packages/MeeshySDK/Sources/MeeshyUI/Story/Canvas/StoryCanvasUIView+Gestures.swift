@@ -170,7 +170,15 @@ extension StoryCanvasUIView {
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
+            // **La borne a un nom depuis le #4722.** Elle était écrite en
+            // littéral ici, et la puce audio en ajoute un SECOND geste de
+            // taille — en SwiftUI, sur un objet que ce recognizer ne saisit
+            // même pas (`manipulable` exclut `.audio`). Deux littéraux
+            // identiques divergent au premier ajustement de l'un, et aucun
+            // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
+            // lui-même.
+            let newScale = SceneObjectScalePolicy.settled(
+                base: baseScale, gestureScale: Double(recognizer.scale))
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:

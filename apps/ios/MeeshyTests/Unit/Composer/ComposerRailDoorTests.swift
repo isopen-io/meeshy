@@ -808,15 +808,35 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     ///
     /// La destination — le vrai sujet — se garde mieux qu'avant : elle est
     /// maintenant CONDITIONNELLE, et le témoin épingle les deux branches.
+    /// **Repointé une SECONDE fois au 2026-09-01 (#4722)**, et ses deux moitiés
+    /// n'avaient pas la même raison de rougir :
+    ///
+    /// - `case.background:attachBackgroundSound(url:url)` était périmée AVANT ce
+    ///   lot — mesuré sur `HEAD`, la chaîne n'y était pas non plus. Le fond
+    ///   passe par `attachBackgroundSound(url:)` appelé plus bas, hors du
+    ///   `case` ;
+    /// - `case.foreground:documentLocalMedia.append(` l'était aussi : le
+    ///   contenu se pose par `ComposerMediaOrder.replacing` depuis le #4698,
+    ///   qui remplace À SA PLACE plutôt que d'ajouter au bout.
+    ///
+    /// > **Un témoin de source rouge depuis un lot antérieur ne garde plus
+    /// > rien, et son rouge se confond avec celui du lot en cours.** C'est ce
+    /// > qui rend une CI durablement rouge coûteuse : elle transforme chaque
+    /// > nouveau rouge en question de datation.
+    ///
+    /// Ce que ce lot change VRAIMENT : le premier plan ne pose plus une chose,
+    /// il en choisit une selon la SURFACE. Les deux branches sont épinglées.
     func test_leSonEnregistre_atterritSelonSonPLACEMENT_jamaisAilleurs() throws {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("switchchosenSoundPlacement{"),
                       "la destination du son enregistré se décide sur le PLACEMENT choisi")
-        XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:url)"),
+        XCTAssertTrue(source.contains("attachBackgroundSound(url:url)"),
                       "placé en FOND, il rejoint la scène")
-        XCTAssertTrue(source.contains("case.foreground:documentLocalMedia.append("),
-                      "placé en CONTENU, il rejoint la liste média du document — c'est une pièce "
-                          + "jointe du post, pas une bande-son")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia=ComposerMediaOrder.replacing("),
+                      "placé en CONTENU sur une surface SANS scène, il rejoint la liste média du "
+                          + "document — c'est une pièce jointe du post, pas une bande-son")
+        XCTAssertTrue(source.contains("case.sceneChip:"),
+                      "et sur une SCÈNE, le même choix pose une puce dessus (#4722)")
         XCTAssertFalse(source.contains("case.record:handleDocumentTool(.microphone)"),
                        "ce chemin versait le vocal dans la liste média du DOCUMENT sans rien demander")
     }
@@ -832,7 +852,11 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     /// témoin qui l'épingle garde un mort.
     func test_lePlacement_estOffertEtDescendJusquALObjet() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("placement:$chosenSoundPlacement"),
+        // **Périmée depuis le #4671, pas depuis ce lot** : la liaison est
+        // désormais conditionnelle — une pastille du canvas n'a pas de
+        // placement à choisir, et la feuille reçoit alors `nil`. Mesuré sur
+        // `HEAD` : la chaîne exacte n'y était pas non plus.
+        XCTAssertTrue(source.contains("placement:editedSceneChipId==nil?$chosenSoundPlacement:nil"),
                       "la feuille doit recevoir le placement en LIAISON — sinon son commutateur "
                           + "n'écrirait rien")
         // **Le placement décide la DESTINATION, pas un argument passé plus
@@ -843,8 +867,16 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         // pas.
         XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:destination)"),
                       "un fichier placé en FOND doit remplacer le fond de la slide")
-        XCTAssertTrue(source.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
-                      "…et placé en CONTENU, devenir un objet de premier plan")
+        // **Et placé en premier plan, il demande D'ABORD où ce premier plan
+        // atterrit** (#4722) : une puce sur une scène, une carte de contenu
+        // sans scène. La pose inconditionnelle qu'épinglait ce témoin était
+        // juste sur une scène et fausse sur un post texte, où rien ne rend un
+        // objet de scène — le son y disparaissait de l'écran sans quitter la
+        // publication.
+        XCTAssertTrue(source.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "…et placé en CONTENU sur une SCÈNE, devenir une puce posée dessus")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia.append("),
+                      "…ou, sans scène, une pièce jointe du document")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un

@@ -84,6 +84,61 @@ nonisolated enum ComposerSoundColumn {
     }
 }
 
+/// **Où atterrit un son de PREMIER PLAN** (#4722, directive porteur
+/// 2026-09-01 : « ou en chip resizable sur la scène »).
+///
+/// ## Le mot « premier plan » désignait deux choses
+///
+/// `ComposerAudioRole.foreground` dit, au SDK, « un objet parmi les autres,
+/// avec sa place et sa durée » — une puce posée sur la scène. Le meuble le
+/// lisait « une carte de contenu, sous le texte ». Les deux lectures sont
+/// justes chacune sur SA surface, et le meuble en sert plusieurs.
+///
+/// Le résultat était trois chemins d'ingestion, trois réponses :
+///
+/// | ce que l'auteur fait | ce que « premier plan » produisait |
+/// |---|---|
+/// | il enregistre (`applyCreatedAudio`) | une carte dans `documentLocalMedia` |
+/// | il importe un fichier (`ingestSoundFiles`) | un objet de scène |
+/// | il emprunte à l'étagère | un objet de scène, rôle décidé par la règle auto |
+///
+/// **Et sur une surface qui n'a pas la place, le son devient INVISIBLE sans
+/// disparaître.** La carte de contenu n'est rendue que par `textOnlyContent`,
+/// la branche que la surface document ne montre QUE sans scène ; l'objet de
+/// scène n'est rendu que s'il y a une toile. Poser l'un sur la surface de
+/// l'autre laisse donc un son qui part à la publication et qu'aucun écran ne
+/// montre — le défaut exact que `ComposerForegroundSound.resolveAll` décrit
+/// pour son propre compte (#4672).
+///
+/// > Ce qui décide n'est ni le geste ni le chemin d'ingestion, c'est la
+/// > SURFACE : elle seule dit s'il existe une toile où poser une puce, ou une
+/// > colonne de texte sous laquelle glisser une carte. Une règle par chemin
+/// > donnait trois réponses à une question qui n'en a qu'une.
+nonisolated enum ComposerSoundDestination: Equatable {
+
+    /// Une puce POSÉE sur la scène — visible, déplaçable, redimensionnable.
+    case sceneChip
+
+    /// Une carte de lecture, sous le texte de la publication.
+    case contentCard
+
+    /// `switch` exhaustif : une cinquième vue montée ne compilera pas tant
+    /// qu'elle n'aura pas dit où son premier plan atterrit — ce qui est
+    /// exactement la question qu'on oublie en ajoutant un écran.
+    ///
+    /// `.mood` prend la carte, et c'est le repli SÛR plutôt qu'un choix : une
+    /// humeur n'a ni toile ni colonne de texte, mais la carte laisse le son
+    /// dans `documentLocalMedia`, d'où il part avec la publication. La puce
+    /// l'aurait posé sur une scène inexistante — perdu à la première
+    /// republication.
+    static func forForeground(on view: ComposerMountedView) -> ComposerSoundDestination {
+        switch view {
+        case .atelier, .scene:  return .sceneChip
+        case .document, .mood:  return .contentCard
+        }
+    }
+}
+
 /// **Ce qu'un nouveau son de FOND remplace** (#4676).
 ///
 /// Défaut trouvé à la vérification simulateur du 2026-09-01 : poser un son en

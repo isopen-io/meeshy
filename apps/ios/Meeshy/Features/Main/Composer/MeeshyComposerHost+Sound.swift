@@ -96,6 +96,13 @@ extension MeeshyComposerHost {
             // section — la feuille ne rend alors aucun choix qu'elle ne saurait
             // honorer.
             placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil,
+            // **Ce que « premier plan » VA devenir, pour que le libellé le
+            // dise** (#4722). Le rôle envoyé au modèle est le même partout ; sur
+            // une scène il pose une puce, sur un document une pièce jointe. La
+            // feuille ne le décide pas — elle le reçoit pour nommer juste, et un
+            // interrupteur qui décrit ce que son option fait ailleurs est
+            // vérifiable ET faux.
+            foregroundDestination: ComposerSoundDestination.forForeground(on: mountedComposerView),
             // **Éditer, c'est rouvrir la MÊME vue sur le son déjà posé**
             // (directive porteur 2026-09-01). Aucune seconde surface d'édition
             // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
@@ -445,23 +452,46 @@ extension MeeshyComposerHost {
         }
         switch chosenSoundPlacement {
         case .foreground:
-            // **À SA place, jamais au bout** : `removeAll` + `append` disaient
-            // « supprime et repose » là où l'auteur avait dit « modifie », et la
-            // carte rouverte sautait en dernière position sans qu'un geste l'ait
-            // demandé. Mesuré au simulateur le 2026-09-01 (#4698).
-            documentLocalMedia = ComposerMediaOrder.replacing(
-                documentLocalMedia,
-                at: edite?.url,
-                with: ComposerDocumentMediaFactory.media(
-                    url: url,
-                    declaredMimeType: mimeType,
-                    durationMs: durationMs
+            // **Où « premier plan » atterrit dépend de la SURFACE** (#4722).
+            // Sur une scène, c'est une puce posée sur la toile ; sur un
+            // document sans scène, une carte sous le texte. La carte n'est
+            // rendue que par `textOnlyContent` — la poser depuis la scène
+            // laissait un son qui part à la publication et qu'aucun écran ne
+            // montre.
+            switch ComposerSoundDestination.forForeground(on: mountedComposerView) {
+            case .sceneChip:
+                // L'entrée éditée quitte la colonne contenu : l'auteur peut
+                // avoir fait passer une carte en puce depuis la feuille, et le
+                // son se verrait alors en double — une fois sous le texte, une
+                // fois sur la scène. Même raison que la branche `.background`.
+                if let edite {
+                    documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: edite.url)
+                }
+                viewModel.attachPastedAudio(url: url, role: .foreground)
+            case .contentCard:
+                // **À SA place, jamais au bout** : `removeAll` + `append` disaient
+                // « supprime et repose » là où l'auteur avait dit « modifie », et la
+                // carte rouverte sautait en dernière position sans qu'un geste l'ait
+                // demandé. Mesuré au simulateur le 2026-09-01 (#4698).
+                documentLocalMedia = ComposerMediaOrder.replacing(
+                    documentLocalMedia,
+                    at: edite?.url,
+                    with: ComposerDocumentMediaFactory.media(
+                        url: url,
+                        declaredMimeType: mimeType,
+                        durationMs: durationMs
+                    )
                 )
-            )
+            }
             // **Sous la clé du fichier SERVI**, jamais sous celle du fichier
             // édité : `AudioSegmentExporter` rend une URL NEUVE dès qu'un
             // rognage a lieu, et la poser sous l'ancienne clé donnerait une
             // carte muette à côté d'une transcription orpheline.
+            //
+            // La description suit le son dans les DEUX destinations : une puce
+            // de scène a une URL locale, donc une clé dans la même carte, et
+            // c'est ce qui la fera réapparaître si la puce redevient un jour
+            // une carte de contenu.
             documentTranscriptions[url] = transcriptionServie
             oublierLaTranscriptionDe(pisteEditee, saufSi: url)
             if let transcriptionServie {
@@ -581,8 +611,22 @@ extension MeeshyComposerHost {
                 .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             switch chosenSoundPlacement {
-            case .background: attachBackgroundSound(url: destination)
-            case .foreground: viewModel.attachPastedAudio(url: destination, role: .foreground)
+            case .background:
+                attachBackgroundSound(url: destination)
+            case .foreground:
+                // **La MÊME règle que l'enregistrement** (#4722). Ce chemin
+                // posait un objet de scène quoi qu'il arrive, là où le chemin
+                // voisin posait toujours une carte de contenu : deux réponses
+                // pour une intention, et chacune fausse sur la surface de
+                // l'autre. Un fichier importé sur un post sans scène
+                // disparaissait de l'écran sans quitter la publication.
+                switch ComposerSoundDestination.forForeground(on: mountedComposerView) {
+                case .sceneChip:
+                    viewModel.attachPastedAudio(url: destination, role: .foreground)
+                case .contentCard:
+                    documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                        url: destination, declaredMimeType: "audio/mp4"))
+                }
             }
             HapticFeedback.light()
         }
