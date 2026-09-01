@@ -131,7 +131,7 @@ extension MeeshyComposerHost {
     ///   surface document qui n'a pas de canvas.
     ///
     /// > Un choix EXPLICITE de l'auteur ne se fait pas arbitrer par une règle
-    /// > écrite pour le cas où il n'a rien dit. « Fond de publication » est une
+    /// > écrite pour le cas où il n'a rien dit. « Fond de la slide » est une
     /// > phrase, pas une préférence : elle doit produire un fond, quel qu'en soit
     /// > le prix pour l'occupant.
     ///

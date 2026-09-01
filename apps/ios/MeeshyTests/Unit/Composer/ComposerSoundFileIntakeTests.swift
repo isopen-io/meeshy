@@ -151,13 +151,24 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     }
 
     /// **La moitié « destination », celle que le premier défaut cachait.** Un
-    /// fichier audio va sur la SCÈNE avec son rôle, jamais dans la liste média.
-    func test_unFichierAudio_estPoseSurLaScene_avecSonRole() throws {
+    /// fichier audio suit le PLACEMENT choisi dans la feuille — un état du
+    /// MEUBLE, qui survit donc à sa fermeture.
+    ///
+    /// **Le témoin s'est resserré au #4676.** Il exigeait
+    /// `attachPastedAudio(url:destination, role: chosenSoundPlacement)`, c'est-à-dire
+    /// que le rôle VOYAGE. C'était nécessaire et pas suffisant : posé en fond,
+    /// un son passé par ce chemin ajoutait un SECOND objet `isBackground` que
+    /// `resolvedBackgroundAudio` ne regardait pas — le rôle arrivait bien, et ne
+    /// produisait rien. Les deux branches sont donc épinglées séparément,
+    /// puisqu'elles n'appellent plus la même chose.
+    func test_unFichierAudio_suitSonPlacement_etLeFondREMPLACE() throws {
         let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcingestSoundFiles("))
-        XCTAssertTrue(code.contains("viewModel.attachPastedAudio(url:destination,role:chosenSoundPlacement)"),
-                      "Le rôle choisi dans la feuille doit suivre le fichier — il survit "
-                      + "à la fermeture parce qu'il est un état du MEUBLE.")
+        XCTAssertTrue(code.contains("case.background:attachBackgroundSound(url:destination)"),
+                      "posé en fond, le fichier doit REMPLACER le fond en place — "
+                      + "`attachPastedAudio` en ajouterait un second que personne ne regarde")
+        XCTAssertTrue(code.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "posé en contenu, il reste un objet de premier plan")
     }
 
     /// **L'intention retombe dès la lecture.** Laissée à `.sound`, elle ferait

@@ -12,9 +12,19 @@ import MeeshyUI
 /// ## Pourquoi à côté de l'avatar, et pas ailleurs
 ///
 /// L'avatar dit QUI publie. Le son de fond dit AVEC QUOI. Ce sont les deux
-/// attributs de la publication qui existent avant le premier caractère tapé —
-/// les poser sur la même ligne les donne à lire d'un coup d'œil, et fait
-/// descendre le texte de ce qu'ils occupent plutôt que de le recouvrir.
+/// choses qui existent avant le premier caractère tapé — les poser sur la même
+/// ligne les donne à lire d'un coup d'œil, et fait descendre le texte de ce
+/// qu'ils occupent plutôt que de le recouvrir.
+///
+/// **Le son de fond appartient à la SLIDE, pas à la publication** (arbitrage
+/// porteur 2026-09-01, #4673 : « clairement à un Slide ! »). Ce doc-comment
+/// affirmait le contraire, et le modèle disait déjà vrai — `currentEffects` EST
+/// la slide courante, donc la pastille SUIT la slide sans qu'aucune ligne
+/// change. Ce qui mentait était le mot, et un mot qui désigne le mauvais
+/// propriétaire laisse la question ouverte : chaque relecteur y lit la réponse
+/// qu'il a en tête. Sur une publication à une seule slide — le cas de la surface
+/// document — les deux lectures rendent le même écran, ce qui est exactement ce
+/// qui a permis à l'ambiguïté de durer.
 ///
 /// ## Elle OUVRE, depuis #4668
 ///

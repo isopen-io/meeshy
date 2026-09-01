@@ -45264,53 +45264,6 @@
         }
       }
     },
-    "composer.socle.sound.add": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إضافة صوت"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ton hinzufügen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a sound"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir un sonido"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter un son"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggiungi un suono"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adicionar um som"
-          }
-        }
-      }
-    },
     "composer.format.denied.reel": {
       "extractionState": "manual",
       "localizations": {
@@ -46633,43 +46586,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "خلفية المنشور"
+            "value": "خلفية الشريحة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beitrags-Hintergrund"
+            "value": "Hintergrund der Folie"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publication background"
+            "value": "Slide background"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fondo de la publicación"
+            "value": "Fondo de la diapositiva"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fond de publication"
+            "value": "Fond de la slide"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sottofondo della pubblicazione"
+            "value": "Sfondo della slide"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fundo da publicação"
+            "value": "Fundo do slide"
           }
         }
       }
@@ -46680,43 +46633,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يُشغَّل أثناء القراءة، دون مشغِّل ظاهر."
+            "value": "يُشغَّل أثناء عرض هذه الشريحة، دون مشغّل ظاهر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Läuft beim Lesen, ohne sichtbaren Player."
+            "value": "Läuft, während diese Folie angezeigt wird — ohne sichtbaren Player."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plays while reading, with no visible player."
+            "value": "Plays while this slide is shown, with no visible player."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suena durante la lectura, sin reproductor visible."
+            "value": "Suena mientras se muestra esta diapositiva, sin reproductor visible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se joue pendant la lecture, sans lecteur visible."
+            "value": "Se joue pendant cette slide, sans lecteur visible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Si riproduce durante la lettura, senza lettore visibile."
+            "value": "Si riproduce durante questa slide, senza player visibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca durante a leitura, sem player visível."
+            "value": "Toca enquanto este slide é exibido, sem player visível."
           }
         }
       }
@@ -49023,7 +48976,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The sound couldn’t be loaded."
+            "value": "The sound couldn't be loaded."
           }
         },
         "es": {
@@ -49035,13 +48988,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le son n’a pas pu être chargé."
+            "value": "Le son n'a pas pu être chargé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile caricare l’audio."
+            "value": "Impossibile caricare l'audio."
           }
         },
         "pt-BR": {
@@ -49088,7 +49041,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Caricamento dell’audio…"
+            "value": "Caricamento dell'audio…"
           }
         },
         "pt-BR": {

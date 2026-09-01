@@ -658,13 +658,20 @@ nonisolated enum ComposerSoundRoleCopy {
 
     static func label(_ role: ComposerAudioRole) -> String {
         switch role {
-        // **Ce que le son EST pour la publication**, pas où il se place
-        // géométriquement (directive porteur 2026-09-01). « En fond » et « au
-        // premier plan » décrivaient une position ; ce que l'auteur choisit est
-        // une NATURE — la publication porte ce son, ou elle EST ce son.
+        // **Ce que le son EST**, pas où il se place géométriquement (directive
+        // porteur 2026-09-01). « En fond » et « au premier plan » décrivaient
+        // une position ; ce que l'auteur choisit est une NATURE — la slide
+        // porte ce son, ou la publication EST ce son.
+        //
+        // **Et le fond appartient à la SLIDE, pas à la publication** (arbitrage
+        // porteur 2026-09-01, #4673 : « clairement à un Slide ! »). Le modèle le
+        // portait déjà — `StorySlide.effects.audioPlayerObjects` est par slide —
+        // et le mot disait le contraire. Un libellé qui désigne le mauvais
+        // propriétaire est exactement ce qui a permis à la question de rester
+        // ouverte : chaque relecteur y lisait la réponse qu'il avait en tête.
         case .background:
             return String(localized: "composer.sound.role.background",
-                          defaultValue: "Fond de publication", bundle: .main)
+                          defaultValue: "Fond de la slide", bundle: .main)
         case .foreground:
             return String(localized: "composer.sound.role.foreground",
                           defaultValue: "Contenu de publication", bundle: .main)
@@ -687,7 +694,7 @@ nonisolated enum ComposerSoundRoleCopy {
         switch role {
         case .background:
             return String(localized: "composer.sound.role.background.detail",
-                          defaultValue: "Se joue pendant la lecture, sans lecteur visible.",
+                          defaultValue: "Se joue pendant cette slide, sans lecteur visible.",
                           bundle: .main)
         case .foreground:
             return String(localized: "composer.sound.role.foreground.detail",
