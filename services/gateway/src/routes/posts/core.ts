@@ -23,6 +23,7 @@ import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
+import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
 import type { ResolvedPostMentions } from '../../services/posts/postMentions';
@@ -129,9 +130,12 @@ function rejectNonV3StoryEffects(
   }
   const parsedCanvas = CanvasV3Schema.safeParse(storyEffects);
   if (!parsedCanvas.success) {
+    // La borne est ICI : `issuesServies` ne tronque pas — elle NORMALISE la
+    // forme (site unique #4487). Cinq issues suffisent à se corriger, et un
+    // canvas cassé peut en rendre des dizaines sur un écran verrouillé.
     sendBadRequest(reply, 'Invalid canvas', {
       code: 'CANVAS_INVALID',
-      details: { issues: parsedCanvas.error.issues.slice(0, 5) },
+      details: { issues: issuesServies(parsedCanvas.error.issues.slice(0, 5)) },
     });
     return true;
   }

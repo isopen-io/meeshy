@@ -375,7 +375,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation first
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }
@@ -402,7 +402,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }
@@ -428,7 +428,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }
@@ -491,7 +491,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }
@@ -534,7 +534,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }
@@ -624,7 +624,7 @@ describe('CreateLinkModalV2', () => {
       });
 
       // Select a conversation
-      const conversationCard = screen.getByText('Group Conversation 1').closest('[data-testid="card"]');
+      const conversationCard = (await screen.findByText('Group Conversation 1')).closest('[data-testid="card"]');
       if (conversationCard) {
         fireEvent.click(conversationCard);
       }

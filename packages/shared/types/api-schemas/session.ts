@@ -63,6 +63,7 @@ export const sessionMinimalSchema = {
     osName: { type: 'string', nullable: true, description: 'OS name' },
     location: { type: 'string', nullable: true, description: 'Location' },
     isMobile: { type: 'boolean', description: 'Is mobile device' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Session creation' }
+    createdAt: { type: 'string', format: 'date-time', description: 'Session creation' },
+    isTrusted: { type: 'boolean', description: 'Is this a trusted device (user-marked at login via `rememberDevice`)' }
   }
 } as const;
