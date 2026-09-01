@@ -96,21 +96,46 @@ ROUTES — decision de ce tour (a inscrire dans la conception par la phase Conce
 - \`/\`            : vitrine (visiteur) OU tableau de bord (lecteur connecte) — deja aiguille par app/route.ts.
 - \`/chats\`       : liste des conversations (connecte) — existe, a styliser et rendre temps reel.
 - \`/chats/:cle\`  : le fil d'une conversation (connecte) — existe, a styliser et rendre temps reel.
-- \`/chat/:lien\`  : REJOINDRE par un lien partage (anonyme ou connecte), et TOUT ce qui suit se
-  passe SOUS CETTE MEME ADRESSE (directive du porteur, 2026-09-01) : l'apercu du lien et le
-  formulaire de jonction (vue \`join\`), les sept refus, la confirmation des droits (vue \`rights\`),
-  PUIS LE FIL de la conversation pour l'invite (vue \`thread\`, audience anonyme) — l'etat de
-  l'ecran est decide par le serveur d'apres ce que le lecteur detient (aucune session invitee ⇒
-  apercu + formulaire ; session invitee valide ⇒ le fil ; un lecteur connecte membre ⇒ le fil ;
-  un lecteur connecte non membre ⇒ apercu + « Rejoindre »). Il n'existe AUCUNE route \`/join\`,
-  aucune redirection vers une autre adresse pour rejoindre, aucun \`/chat/:lien/quelque-chose\`
+- \`/chat/:lien\`  : REJOINDRE par un lien partage — UNE adresse, gouvernee par un ETAT que le
+  SERVEUR decide d'apres ce que le lecteur detient (directive du porteur, 2026-09-01) :
+
+  ETAT « CHOIX » (aucune session — ni jeton de membre, ni session invitee pour ce lien) :
+    la page rend le CADRE du fil (en-tete au nom du lien, zone de messages VIDE, composeur
+    inactif) FLOUTE (filter: blur sur le fond), et par-dessus une MODALE (<dialog open>, rendue
+    par le serveur, qui marche sans JavaScript) qui demande : « vous venez en anonyme, ou avec
+    votre compte ? ». La modale porte l'apercu du lien (nom, description, l'accordeon des droits
+    en <details>/<summary>), le formulaire anonyme (pseudo, langue pre-remplie depuis
+    Accept-Language, POST vers la meme adresse), le bouton « Se connecter » (→ \`/login?next=/chat/:lien\`)
+    et « Creer un compte » (→ \`/signup?next=/chat/:lien\`). AUCUN message de la conversation
+    n'est charge ni servi dans cet etat, meme si le lien autorise l'historique : rien ne part
+    avant le choix. Les sept refus du § 6.3.A se peignent DANS la modale (409 pseudo pris ⇒
+    suggestion pre-remplie).
+  ETAT « INVITE » (session invitee valide pour ce lien) :
+    la MEME adresse rend le FIL de la conversation, avec le composeur regi par les droits du
+    lien (canSendMessages, canSendFiles, canSendImages, allowViewHistory…) relus a chaque
+    chargement ; juste apres la jonction, les droits obtenus s'annoncent DANS le fil (bandeau ou
+    <details> refermable — c'est ce que la planche appelle la vue \`rights\`, qui devient un ETAT du
+    fil et non une page) ; le temps reel s'y greffe apres le premier pixel. Les etats B a H du
+    § 6.3 (rechargement, retour d'arriere-plan, 401 ⇒ bandeau a BOUTON, 410 ⇒ composeur ferme
+    avec sa raison) s'appliquent tels quels. lib/api/guest-session.ts reste l'UNIQUE detenteur de
+    la session invitee ; si le serveur doit la lire pour decider l'etat, elle voyage dans un
+    cookie pose par ce meme module/cette meme route (portee au lien), jamais dans un second store.
+  ETAT « MEMBRE » (jeton de compte valide — arrive connecte, ou revient de /login?next=) :
+    le serveur JOINT le lecteur a la conversation s'il n'en est pas deja membre (par la route de
+    la passerelle qui applique la police du lien — verifie laquelle, jamais un contournement) et
+    repond 302 vers \`/chats/:cle\` : le membre lit et ecrit dans l'INTERFACE CONNECTEE, jamais dans
+    \`/chat/\`. Un lecteur connecte ne voit donc jamais la modale.
+
+  Il n'existe AUCUNE route \`/join\`, aucune redirection pour REJOINDRE, aucun \`/chat/:lien/...\`
   pour lire : un lien recu dans WhatsApp s'ouvre, se rejoint et se lit a UNE adresse. C'est la
   route LEGACY (apps/web/app/chat/[id], declaree dans l'AASA iOS pour les liens universels) : les
   liens deja partages pointent \`/chat/<id>\`, ils doivent continuer de s'ouvrir. La conception
-  ecrivait \`/chats/:lien\` pour join/rights : cette ecriture entrait en collision avec le fil
-  connecte \`/chats/:cle\` ; \`/chat/:lien\` la remplace, et la matrice suit. Le fil de l'invite
-  (\`/chat/:lien\`) et le fil du membre (\`/chats/:cle\`) sont rendus par le MEME module de vue
-  (app/connecte/fil-vue.ts, a faire evoluer) — deux portes, une seule vue, jamais une jumelle.
+  ecrivait \`/chats/:lien\` pour join/rights (collision avec le fil connecte \`/chats/:cle\`) et
+  faisait de \`rights\` une page : \`/chat/:lien\` et l'etat du fil les remplacent, la matrice et la
+  planche suivent (la vue \`join\` se redessine : cadre floute + modale ; \`rights\` : bandeau des
+  droits dans le fil). Le fil de l'invite (\`/chat/:lien\`) et le fil du membre (\`/chats/:cle\`)
+  sont rendus par le MEME module de vue (app/connecte/fil-vue.ts, a faire evoluer) — deux
+  portes, une seule vue, jamais une jumelle.
 
 REGLES DE LA V3, non negociables :
 - La v3 vit dans apps/web-v3. apps/web reste VIF et sert le trafic : on n'y touche que si la
@@ -492,25 +517,34 @@ mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
    sous-titre et la route : le harnais ECHOUE si MAP et le navigateur ne s'accordent pas).
    La vitrine se dessine d'apres ${V3}/app/vitrine/contenu.ts (le contenu, repris du legacy) et la
    charte : heros a gros CTA, trois atouts, la mission, l'appel final, le pied.
-   Si un ecran du focus EXISTE dans la planche mais que la charte le fait evoluer (gros boutons,
-   FAB, etats), METS LA PLANCHE A JOUR — elle est la source du design, pas une archive.
+   Si un ecran du focus EXISTE dans la planche mais que la charte ou la directive le fait evoluer
+   (gros boutons, FAB, etats), METS LA PLANCHE A JOUR — elle est la source du design, pas une
+   archive. En particulier : \`join\` se redessine en ETAT CHOIX (le cadre du fil floute, vide de
+   tout message, et la modale « anonyme ou compte ? » avec connexion / inscription / formulaire
+   anonyme / accordeon des droits) et \`rights\` en bandeau des droits DANS le fil de l'invite,
+   juste apres la jonction.
    VUES NEUVES : ${court(vuesNeuves, 3000)}
 2. REGENERE les captures : \`node ${D}/capture-cibles.js\` (Chromium local, cache npm dans
    .cache/dc-vendor). Verifie que \`cible/<id>.png\` existe pour chaque vue neuve et que vues.json /
    vues.md la portent. Si une route parametree entre, declare son jeton dans jetons-de-vues.json.
 3. LA MATRICE ${D}/matrice.json : une ligne par vue neuve (vue_id, titre_issue, lot, priorite,
-   route, audience, depend_de, critere_de_fin, dimensions_visees, corps_issue) ; \`join\`,
-   \`rights\` passent a la route \`/chat/:lien\`, et \`thread\` porte ses DEUX adresses
-   (\`/chat/:lien\` pour l'invite, \`/chats/:cle\` pour le membre — voir « ROUTES ») ; puis
+   route, audience, depend_de, critere_de_fin, dimensions_visees, corps_issue) ; \`join\` et
+   \`rights\` passent a la route \`/chat/:lien\` (join = etat CHOIX : cadre floute + modale ;
+   rights = etat INVITE juste apres la jonction : bandeau des droits dans le fil), et \`thread\`
+   porte ses DEUX adresses (\`/chat/:lien\` pour l'invite, \`/chats/:cle\` pour le membre — voir
+   « ROUTES ») ; declare dans jetons-de-vues.json le jeton \`lien\` de chaque vue de \`/chat/:lien\`
+   (un jeton par ETAT : lien vivant sans session, lien rejoint) ; puis
    \`node ${D}/ordre-des-ecrans.js\` doit rendre rc=0 et regenerer ordre.md. Ne touche jamais
    ordre.md a la main.
 4. LA CONCEPTION ${D}/conception-web-v3.md : ajoute (ou complete) un « § 12 — Directive du
    porteur (2026-09-01) » qui tranche par ecrit, avec la meme exigence de preuve que le reste du
    document : (a) la vitrine est un ecran de la v3 (ferme la question de #4476 point 2) ; (b) \`/\`
    sert le TABLEAU DE BORD au lecteur connecte (pas le fil) ; (c) \`/chat/:lien\` est LA route de
-   jonction ET de lecture pour l'invite — aucune route /join, aucune redirection, l'etat decide
-   par le serveur d'apres ce que le lecteur detient — et pourquoi (legacy, AASA, collision avec
-   /chats/:cle ; le § 6.3 etat par etat s'y applique tel quel) — avec l'etape de bascule
+   jonction ET de lecture pour l'invite, machine a trois ETATS decides par le serveur (CHOIX :
+   cadre floute + modale, rien de la conversation ne part ; INVITE : le fil sous la meme adresse
+   avec les droits du lien ; MEMBRE : jonction puis 302 vers /chats/:cle) — aucune route /join —
+   et pourquoi (legacy, AASA, collision avec /chats/:cle ; le § 6.3 etat par etat s'y applique
+   tel quel, l'etat A devenant l'etat CHOIX) — avec l'etape de bascule
    Traefik correspondante dans le tableau du § 4.9 ; (d) le TEMPS REEL de participation : un module
    ES ecrit a la main, charge apres le premier pixel, socket.io-client par import dynamique, servi
    dans la zone (ou et comment — decide-le en lisant § 4.4, § 4.4 bis, next.config.ts,
