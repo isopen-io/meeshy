@@ -1235,23 +1235,23 @@ describe('GET /conversations/:id/messages', () => {
     }
   });
 
-  // #4177 — même famille que le témoin `reaction.findMany` ci-dessus :
-  // `currentUserConsumption` n'est déclaré dans AUCUN schéma
-  // (`messageAttachmentSchema` ne le porte pas), donc jamais servi — le
-  // `attachmentStatusEntry.findMany` qui l'alimentait était payé pour rien à
-  // CHAQUE page portant une pièce jointe. Retiré ; ce témoin prouve
-  // maintenant l'absence de la requête et du champ.
-  it("sans consommateur possible, attachmentStatusEntry.findMany n'est plus appelé", async () => {
+  // #3909 — thèse INVERSÉE : sous #4177 ce témoin prouvait l'ABSENCE de la
+  // requête, `currentUserConsumption` n'étant déclaré nulle part donc jamais
+  // servi. `messageAttachmentSchema` le DÉCLARE : le trou gelé est fermé exprès.
+  // Reste la moitié vraie des deux côtés — servi à `null`, jamais `undefined`,
+  // que `fast-json-stringify` retirerait (« jamais consommé » = « serveur muet »).
+  it("sert currentUserConsumption à null quand le participant n'a rien consommé", async () => {
     const msg = makeMessage({
       attachments: [{ id: 'att-1', mimeType: 'audio/mp3', fileUrl: 'http://x.com/a.mp3', reactions: [], translations: null, transcription: null }],
     });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
+    prisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(prisma.attachmentStatusEntry.findMany).not.toHaveBeenCalled();
+    expect(prisma.attachmentStatusEntry.findMany).toHaveBeenCalled();
     const att = reply._body.data[0].attachments[0];
-    expect(att.currentUserConsumption).toBeUndefined();
+    expect(att.currentUserConsumption).toBeNull();
   });
 });
 

@@ -418,6 +418,11 @@ export async function loadCurrentUserConsumptionMap(
   try {
     const rows = await prisma.attachmentStatusEntry.findMany({
       where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+      // Borne EXACTE, pas arbitraire : `@@unique([attachmentId, participantId])`
+      // garantit au plus une ligne par pièce jointe pour ce participant, donc
+      // `take` ne peut rien tronquer — il DIT seulement la borne que le couple
+      // impose déjà, ce que le cliquet des `findMany` non bornés demande.
+      take: attachmentIds.length,
       select: {
         attachmentId: true,
         lastPlayPositionMs: true,

@@ -22307,7 +22307,7 @@ n'a rien protégé.
 Voir [[reference_a_built_view_that_is_dropped_never_turns_red]],
 [[reference_a_comment_asserting_more_than_the_fix_is_a_trap]].
 
-## Leçon 289 — Une exemption porte sur la NATURE d'un objet, pas sur la règle qui le lit
+## Leçon 380 — Une exemption porte sur la NATURE d'un objet, pas sur la règle qui le lit
 
 **Cycle #4328 (2026-09-01).** `LocalizationConsistencyTests.untranslatableKeys`
 déclare depuis 225i que les CGU (`onboarding.step.recap.terms.body`) ne se
@@ -22348,7 +22348,7 @@ pour des raisons différentes. 965 + 370. `private` étant de portée FICHIER en
 Swift, trois statiques s'élargissent en `internal` : le prix de la découpe, à
 dire à l'endroit où on le paie.
 
-## Leçon 290 — Vérifier qu'une valeur est ACCEPTÉE ne dit pas qu'elle REVIENT
+## Leçon 381 — Vérifier qu'une valeur est ACCEPTÉE ne dit pas qu'elle REVIENT
 
 **Cycle #4624 (2026-09-01).** Android n'envoyait aucun message : le corps portait
 `cmid_…` là où les trois portes du gateway exigent `^cid_`. Le correctif est
@@ -22379,7 +22379,7 @@ Deux corollaires de méthode :
   prouve que la porte est toujours là et que c'est bien lui, seul, qui la
   franchissait ou non.
 
-## Leçon 291 — Une garde qui refuse TOUTE écriture refuse aussi la BONNE
+## Leçon 382 — Une garde qui refuse TOUTE écriture refuse aussi la BONNE
 
 **Cycle #3914 (2026-09-01).** `ConversationViewModel.seedResumePositionSeconds`
 posait `guard !hasLocalPosition` : la position servie par le serveur n'écrivait
@@ -22406,7 +22406,7 @@ règles OPPOSÉES à quelques lignes d'écart. `MediaConsumptionStore` (teinte
 cosmétique) fusionnait en MAX depuis toujours, dans la MÊME boucle que le
 magasin de reprise qui refusait tout, et rien ne disait pourquoi.
 
-## Leçon 292 — Une projection non déclarée au schéma ne rougit nulle part
+## Leçon 383 — Une projection non déclarée au schéma ne rougit nulle part
 
 **Cycle #3909 (2026-09-01).** L'issue affirmait « le serveur expose déjà
 `currentUserConsumption` ». **Il ne l'exposait plus** : #4177 l'avait retiré, à
@@ -22427,7 +22427,7 @@ Corollaire de méthode, déjà payé au cycle #4625 : **la prémisse d'une issue
 DATÉE, le code ne l'est pas.** Deux issues sur trois ce jour-là reposaient sur un
 état du dépôt qui avait changé depuis leur rédaction.
 
-## Leçon 293 — Au démontage, React a déjà détaché le `ref` quand un nettoyage PASSIF s'exécute
+## Leçon 384 — Au démontage, React a déjà détaché le `ref` quand un nettoyage PASSIF s'exécute
 
 **Cycle #3911 (2026-09-01).** Le rapport de clôture d'une lecture audio/vidéo
 part du nettoyage d'un `useEffect`. Il lisait la position par
