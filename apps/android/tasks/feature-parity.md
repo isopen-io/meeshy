@@ -3216,9 +3216,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation (RED proof): dropping the reduction-target re-validation (`… && reduced in supportedCodeSet` →
       `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported` (14 run, 1 failed,
       no collateral). `:core:model` + `:sdk-ui` + all feature-module `testDebugUnitTest` green; full
-      `:app:assembleDebug` → BUILD SUCCESSFUL. **Follow-up:** app-side device-locale sourcing — inject
-      `Locale.getDefault()` into the resolution context + send the `X-Device-Locale` header (iOS parity) so
-      the gateway persists it; the pure resolution + API-decoded field are complete.
+      `:app:assembleDebug` → BUILD SUCCESSFUL. **Header sourcing shipped 2026-09-01** (slice
+      `device-locale-header`): the client now SENDS `X-Device-Locale` on every request, closing the loop so
+      the 4th-priority arm — dead until now on Android (nothing ever fed `User.deviceLocale`) — actually
+      fires. New pure `:core:model` `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag
+      (`Locale.getDefault().toLanguageTag()`, so `"fr-FR"`/`"zh-Hant-HK"` travel intact for the gateway to
+      reduce, exactly as iOS's `Locale.current.identifier`), or `null` when there is no usable language subtag
+      (`Locale.ROOT`/region-only → `"und"`/`"und-FR"`, or an ill-formed subtag → `"und"`) so the header is
+      omitted rather than sending `"und"` on every call. New `:core:network` `DeviceLocaleInterceptor` (twin
+      of `ClientCapabilitiesInterceptor`): reads the locale per request through an injectable provider, adds
+      the header, never clobbers a caller-set one, sends nothing for an unusable locale; registered in
+      `MeeshyApi`'s OkHttp chain. +12 tests (8 `DeviceLocaleTagTest` — region tag / bare language / script+
+      region verbatim / regional variant / root omitted / region-only omitted / ill-formed omitted / legacy→
+      modern; 4 `DeviceLocaleInterceptorTest` — announced / unusable→no-header / caller-header-wins / read-
+      per-request). Mutation (RED proof): dropping the `und` guard fails **exactly** the ill-formed-subtag
+      test (14 run, 1 failed, no collateral). **Remaining follow-up:** injecting the LIVE `Locale.getDefault()`
+      straight into the client-side resolution context (an optimisation over iOS, which resolves off the
+      persisted `User.deviceLocale`) is deliberately deferred to avoid diverging from the server-persisted
+      value — tracked as a separate note, not a gap.
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
       (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
