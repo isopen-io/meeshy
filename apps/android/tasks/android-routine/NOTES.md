@@ -5,6 +5,31 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — a REDUCED port can silently drop a SECURITY tier; and "any()" matches a defaulted-null arg (slice `engagement-consent-gate-detail`)
+Android's `EngagementSessions` was a deliberately-thin port of iOS `EngagementTracker` — it kept the dwell state
+machine and the qualification threshold, and dropped everything else (micro-actions, watch samples, the outbox…). Fine,
+except one of the dropped pieces was iOS's `begin` `guard consentProvider()`: the reader's `allowAnalytics` toggle. So
+Android reported dwell/watch analytics regardless of consent, and `PrivacyToggle.ALLOW_ANALYTICS` — persisted,
+round-tripped — governed nothing. Lessons:
+- **When you port a reduced version of a rich source, enumerate what you dropped and ask which drops were RULES, not
+  just features.** A dropped micro-action recorder is a feature gap; a dropped consent guard is a privacy regression. The
+  reduction note ("faithfully narrower") hid a dimension-1 hole in plain sight for four surfaces.
+- **The first surface you should re-read on any "we ported X" is the SECURITY/consent tier of the original.** iOS gated
+  ALL engagement at one `guard` in `begin`; the port scattered the machine across per-VM callers and lost the guard
+  because it lived in the ONE place the port collapsed.
+- **Two-tier telemetry: gate the analytics tier, NOT the accounting tier.** iOS fires the deduplicated `viewPost`
+  impression unconditionally (a view-count credit) and gates only the engagement SESSION. Port both tiers with their
+  DIFFERENT consent posture — gating the impression too would under-count views; leaving the session un-gated leaks
+  analytics. Read the original to learn WHICH calls each tier makes before deciding what the gate covers.
+- **Put the gate on the one machine every surface shares, guard-FIRST.** `EngagementSessions.begin` returns inert before
+  `pauseTop` when consent is withheld — so a non-consented overlay doesn't disturb the consented session underneath
+  (proven by the 1200-vs-1000 ms nesting test). One tested site beats four per-VM `if (!allow) return`s.
+- **MockK gotcha: `verify { f("p1", any()) }` MATCHES a call that used the parameter's DEFAULT (`null`).** `viewPost(postId:
+  String, duration: Int? = null)` is ONE function; the impression `viewPost("p1")` records as `viewPost("p1", null)`, and
+  `any()` matches null. To assert "no dwell record", assert the SPECIFIC non-null duration is absent (`viewPost("p1", 10000)`
+  exactly 0) — mirror the existing `viewPost("p1", 999)` pattern, don't reach for `any()`. The first draft failed exactly
+  because `any()` caught the impression.
+
 ## 2026-09-01 — a doc-comment that PROMISES a behaviour is where to look for the half the code forgot (slice `banner-group-name-favorite-emoji`)
 `NotificationBannerViewModel`'s class doc said, in plain words, "Le nom LOCAL du groupe est résolu ici … renommage
 (`customName`) et emoji favori" — but the code twelve lines down resolved `groupName = customName ?: title` and never

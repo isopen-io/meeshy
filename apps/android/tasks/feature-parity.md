@@ -5241,6 +5241,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       a same-slide re-emit does not restart the dwell clock; dismissing ends the current dwell; a failed
       dwell record does not crash or disturb the viewer. RED-proven by mutation: neutralising the `begin`
       fails EXACTLY the 6 dwell-recording tests while the 2 assert-no-record tests stay green.
+      **Analytics-consent gate shipped 2026-09-01** (slice `engagement-consent-gate-detail`): the four
+      dwell surfaces reported watch-time regardless of the reader's `allowAnalytics` privacy toggle,
+      while iOS gates ALL engagement at `EngagementTracker.begin`'s `guard consentProvider()` — a
+      dimension-1 (Sécurité/privacy) parity gap and a dead privacy control. The gate now lives on the
+      one machine every surface shares: `EngagementSessions.begin` gained a `consentGranted: Boolean`
+      (default `true`, the domain default) whose `false` arm returns inert BEFORE the topmost-owns-the-clock
+      pause — no session opens, so `end` reports nothing, and a non-consented overlay never pauses the
+      consented session underneath (the guard-first placement mirrors iOS returning before `pauseTop`).
+      The deduplicated `viewPost` impression stays **un-gated** — it is a view-count credit, not analytics
+      telemetry, exactly as iOS fires `viewPost` regardless of consent. **PostDetail wired this slice**
+      (`PrivacyPreferencesStore` injected; `beginDwell` passes `preferences.value.allowAnalytics`). +3
+      pure `EngagementSessionsTest` (non-consented begin opens no session / reports nothing; non-consented
+      begin does not pause the running session underneath — 1200 ms vs the consented 1000; explicit
+      `consentGranted=true` parity) + 3 `PostDetailViewModelTest` (consent withheld → no dwell record but
+      impression still credited; consent granted → dwell records). RED-proven by mutation: neutralising the
+      guard fails EXACTLY the 2 consent pure tests. **Follow-up (same gate, remaining surfaces):** wire
+      `ReelsViewModel`, `StatusesViewModel` and `StoryViewerViewModel` to pass `allowAnalytics` to their
+      `begin` calls (they default to `true` = current behaviour until wired) — three thin per-surface
+      slices, the pure gate is already in place.
       **Still open (deferred, deliberately narrower than iOS):**
       watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
       now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
