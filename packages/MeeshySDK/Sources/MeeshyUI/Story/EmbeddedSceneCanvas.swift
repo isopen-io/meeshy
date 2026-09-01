@@ -59,6 +59,27 @@ public struct EmbeddedSceneCanvas: View {
     /// ailleurs redonnerait deux géométries à tenir d'accord.
     public var canvasOverlay: AnyView?
 
+    /// **Les objets POSÉS sur la carte — un slot qui ne CAPTURE pas** (#4722).
+    ///
+    /// Distinct de `canvasOverlay`, et la différence n'est pas cosmétique :
+    /// celui-là éteint le hit-test du canvas (`allowsHitTesting(canvasOverlay
+    /// == nil)`), parce qu'un outil qui trace doit recevoir le doigt sur TOUTE
+    /// la carte. Un objet posé dessus, lui, ne veut que sa propre surface — le
+    /// texte et le sticker sous lui doivent rester saisissables.
+    ///
+    /// > Faire passer la puce audio par `canvasOverlay` aurait rendu la scène
+    /// > entière inerte pour tous les autres objets. Deux slots parce que deux
+    /// > rapports au doigt, pas parce que deux endroits où dessiner.
+    ///
+    /// Reçoit la taille de la CARTE (`fit`) : une puce porte des coordonnées
+    /// normalisées `0…1` et ne peut se placer sans elle. Seul ce corps la
+    /// connaît — la faire recalculer chez l'appelant redonnerait deux
+    /// géométries à tenir d'accord, ce que la note de `canvasOverlay` dit déjà.
+    ///
+    /// Rendu SOUS `canvasOverlay` : pendant qu'un outil capture la carte, ce
+    /// qui est posé dessus ne doit ni le masquer ni lui disputer le doigt.
+    public var objectOverlay: ((CGSize) -> AnyView)?
+
     /// Notifié quand l'utilisateur tape un objet de la scène (texte, média,
     /// sticker, lieu) — transmis tel quel à `StoryComposerCanvasView`.
     ///
@@ -140,6 +161,7 @@ public struct EmbeddedSceneCanvas: View {
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
         cornerRadius: CGFloat = 22,
         canvasOverlay: AnyView? = nil,
+        objectOverlay: ((CGSize) -> AnyView)? = nil,
         onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
         onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
         editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
@@ -158,6 +180,7 @@ public struct EmbeddedSceneCanvas: View {
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
         self.canvasOverlay = canvasOverlay
+        self.objectOverlay = objectOverlay
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
         self.editableKinds = editableKinds
@@ -231,6 +254,15 @@ public struct EmbeddedSceneCanvas: View {
             // Le calque de l'appelant est BORNÉ à la carte — même taille, même
             // découpe. C'est ce qui aligne l'outil de dessin sur le canvas
             // final au lieu du cadre de mise en page (#4515).
+            // Ce qui est POSÉ sur la carte, sous l'outil qui la capture — même
+            // découpe, même taille, mais le canvas garde ses touches.
+            .overlay {
+                if let objectOverlay {
+                    objectOverlay(fit)
+                        .frame(width: fit.width, height: fit.height)
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                }
+            }
             .overlay {
                 if let canvasOverlay {
                     canvasOverlay

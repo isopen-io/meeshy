@@ -23070,3 +23070,217 @@ plus.
 Corollaire : **exclure n'empêche pas d'importer.** TypeScript suit toujours les
 `.d.ts` par la résolution de modules ; `exclude` ne fait que cesser de compiler
 les sources du paquet comme si elles étaient les nôtres.
+
+## Leçon 406 — Une grille PARTAGÉE par trois familles n'a qu'UNE destination, et la famille qui perd sa donnée le fait en silence
+
+**Le lot.** La palette de stickers (#4579) montre trois familles de décorations
+— amour, heure, lieu — dans la *même* grille de vignettes. C'est ce qui leur
+donne un air de famille, et c'était le bon choix visuel.
+
+**Le défaut.** `templateTab(family:)` appelait `onTemplateSelected(gabarit,
+emplacements)` pour les trois. Or un LIEU ne se pose pas en sticker : lui seul
+porte des coordonnées et un id de POI que la plateforme LIT (`/posts/nearby`).
+Un `StorySticker` les aurait perdues — et **rien à l'écran ne l'aurait dit** :
+la pastille se serait dessinée correctement, au bon endroit, avec le bon nom de
+lieu. Seule la donnée serait partie.
+
+> **Ce qu'une surface POSE dépend de ce que la chose EST, jamais de la grille
+> qui la montre.** Partager la présentation est bon ; partager la destination
+> ne l'est que si les familles partagent leur nature.
+
+**Ce qui l'a attrapé.** Pas une relecture — le TÉMOIN. En écrivant la garde
+« taper une décoration pose quelque chose », il a fallu nommer l'appel visé, et
+c'est en l'écrivant qu'on voit qu'il n'y en a qu'un pour trois familles. Le
+témoin qui devait prouver la loi 4 a révélé un défaut d'une autre nature.
+
+**Le contre-témoin.** Il porte sur l'AIGUILLAGE, pas sur l'appel : le poseur
+doit contenir `onLocationTemplateSelected(` **et** `onTemplateSelected(`. Un
+témoin qui n'aurait vérifié que « ça pose quelque chose » serait resté vert.
+
+## Leçon 407 — Une énumération de sites de glyphe est fausse par défaut : le troisième existe presque toujours
+
+**Le lot.** Retirer le smiley de la porte sticker (#4719). Le design a énuméré
+**deux** sites — la porte du rail (`ComposerRailDoor.symbolName`) et l'en-tête
+de la feuille (`StickerPickerView`) — et un troisième à NE PAS toucher (le
+`case .emoji` du document, qui dit vrai).
+
+**Le défaut.** Il y en avait un **quatrième**, et il fallait le changer :
+`ComposerToolPanelHost` (SDK) porte un bouton `systemImage: "face.smiling"` qui
+ouvre **la même palette**. Il n'est apparu qu'en cherchant, au simulateur,
+comment atteindre la feuille — c'est-à-dire en se demandant *qui l'ouvre*, une
+question que l'énumération n'avait pas posée.
+
+> C'est la leçon 261 sur un objet plus humble qu'un résolveur de Prisme : **une
+> énumération porte deux affirmations — « ces sites appliquent la règle »
+> (vérifiable) et « ce sont les seuls » (presque jamais vérifiée).**
+
+**La forme du correctif.** La garde ne nomme plus : elle BALAIE les sources du
+composer et exige que **tout fichier qui ouvre la palette** (`onOpenStickerPicker?()`
+ou `StickerPickerView(`) ne contienne pas `face.smiling`. Un cinquième site
+l'appliquera sans qu'on y pense. Le fusible (`examinés > 1`) empêche la garde de
+passer au vert par omission le jour où le balayage se casse.
+
+## Leçon 408 — Une garde de source qui nomme un FICHIER rougit pour un déplacement, et le rouge accuse le comportement
+
+**Le lot.** L'extraction préalable (#4715) puis le découpage de la palette
+(#4579) ont déplacé la section « Mes stickers » de `StickerPickerView.swift`
+vers `StickerPickerView+Emoji.swift`, en la renommant `libraryTab`.
+
+**Le symptôme.** `StoryComposerStickerImagePoseTests
+.test_theLibraryThumbnails_areTappable` : `XCTUnwrap failed: expected non-nil
+value of type "String"`. Le message n'accuse ni le fichier ni le déplacement —
+il ressemble à une régression de comportement.
+
+> **Une garde qui NOMME un chemin mesure deux choses et n'en dit qu'une.** Elle
+> vérifie le comportement, mais elle échoue aussi sur la géographie — et son
+> message ne distingue pas les deux.
+
+**La forme du correctif.** `ComposerSourceGuard.allStorySources()` existait déjà
+et son doc-comment disait exactement pourquoi (« une garde nommant ses fichiers
+un par un laisse toujours passer le prochain doublon »). La garde balaie
+désormais et cherche le BLOC (`var libraryTab`) où qu'il soit.
+
+**Le rappel de méthode qui l'aurait évitée** : *avant d'extraire, `grep` le nom
+du fichier ET des symboles déplacés dans les tests — la liste EST le lot de
+repointage.* Il était en mémoire ; il n'a pas été appliqué.
+## Leçon 409 — Une clé qui sert d'INDEX et de GARDE D'IDEMPOTENCE à la fois se casse en deux dès que l'index cesse d'être total
+
+**Le lot.** #4724 : la rangée haute du composer montrait une tuile par média du
+document — un son, un PDF, une image posée sur la scène compris. La loi à poser
+était simple : une tuile dit le FOND d'une slide, et rien d'autre.
+
+**Ce que la loi a cassé en passant.** `slideIdByMediaURL` disait « ce média a
+fondé cette slide ». La boucle d'ingestion s'en servait AUSSI comme garde
+d'idempotence : `where slideIdByMediaURL[media.sourceURL] == nil` voulait dire
+« pas encore posé ». Les deux sens coïncidaient tant que TOUT média fondait une
+slide. Dès qu'un média peut être posé sans rien fonder, ils divergent — et la
+divergence ne se voit pas : la boucle se contente de re-poser le même média à
+chaque changement de la liste, indéfiniment, sans erreur ni trace. C'est
+`applyContentMedia`, idempotent de son côté, qui aurait absorbé le défaut en
+silence.
+
+> **Un index TOTAL peut servir de garde ; un index PARTIEL ne le peut plus, et
+> rien ne rougit le jour où il le devient.** Avant de restreindre ce qu'un index
+> contient, chercher qui l'interroge pour une question qu'il ne pose pas —
+> « existe-t-il ? » au lieu de « où est-il ? ».
+
+**Le correctif.** Une seconde mémoire (`mediaRoleByURL`) qui dit ce que CHAQUE
+média est devenu, et qui porte la garde. Elle s'oublie avec son média, sinon
+re-choisir le même fichier après un retrait serait sauté — exactement le défaut
+que `viewModel.reset()` ferme pour `carriedContentSources`, à un cran de plus.
+
+## Leçon 410 — Un rôle déclaré à l'ENTRÉE doit être celui que le modèle écrira à la SORTIE, sinon ce n'est pas un rôle, c'est un vœu
+
+**Le lot.** Même issue. La règle se résume naturellement à « la porte du rail
+pose en premier plan, la rangée du document ouvre une page ». Écrite comme ça,
+elle est fausse d'une moitié.
+
+`addMediaObject` décide `isBackground` depuis TRENTE lignes plus bas, et depuis
+toujours : `resolvedBackgroundMedia == nil && !hasSlideLevelBgImage`. Sur une
+slide VIERGE, le premier média posé par le rail devient donc le fond — quoi que
+la porte ait déclaré. Une règle qui aurait dit « premier plan » là aurait produit
+un objet que le modèle marque `isBackground: true` : la rangée haute n'aurait pas
+montré de tuile pour un média que la scène affiche PLEIN CADRE. Les deux se
+seraient contredits sur le même objet, ce qui est pire que le défaut d'origine —
+il est cohérent, lui.
+
+> **Une règle de placement écrite en amont doit lire le MÊME prédicat que le
+> site qui écrit réellement le champ, ses deux moitiés comprises.** Ici la
+> seconde moitié — l'image de fond posée au niveau de la SLIDE (`slideImages`),
+> pas un `mediaObject` — est celle qu'on oublie, parce qu'elle vit dans un autre
+> tableau et ne s'appelle pas « fond ».
+
+**Le témoin qui l'attrape** ne vérifie pas le rôle rendu : il vérifie que le
+prédicat de l'appelant contient les DEUX moitiés de celui du modèle. C'est une
+garde de source, et c'est le bon outil ici — la divergence est entre deux
+écritures d'une même question, pas dans un résultat observable.
+
+## Leçon 411 — Un prédicat GLOBAL ne peut pas répondre à une question PAR ÉLÉMENT, et sa propre documentation le disait
+
+**Le symptôme** (2026-09-01, story `6a9728e3…`) : la dernière story d'`atabeth` ne montre RIEN au lecteur. Sa scène v3 est `{"v":3,"scenes":[{"objects":[]}]}` — réellement vide. Deux posts `STORY` à **451 ms** d'intervalle, issus d'UNE publication : l'un peuplé, l'autre fantôme. Le bandeau montrant la plus récente, le fantôme masquait la vraie.
+
+**La chaîne.** Publier une story crée **un post PAR slide**. Entre le composer et cette boucle, trois sites, et pas un ne demande si UNE slide vaut d'être publiée :
+
+| site | portée |
+|---|---|
+| `canPublish` = `composerHasContent \|\| composerCarriesAudio` | `slides.contains { … }` — **toutes** |
+| `handoffSlides` | rend **toutes** les slides |
+| la boucle d'upload | **un POST par slide**, sans garde |
+
+Une seule slide pleine rend la publication légale, et **toutes** les autres partent avec elle.
+
+> **Un prédicat « y a-t-il DE QUOI » ne répond jamais « CELUI-CI en vaut-il la peine ».** Les deux se ressemblent au point qu'on prend l'un pour l'autre — jusqu'à ce qu'un deuxième élément existe.
+
+**Ce qui rend ce défaut remarquable : la règle par élément était DÉJÀ ÉCRITE.** `slideHasContent` existe, sert la page blanche de l'auteur, et son doc-comment nomme la divergence mot pour mot :
+
+> « `composerHasContent` répond "y a-t-il de quoi publier" ; la page blanche d'auteur pose l'autre question — "la slide que je REGARDE est-elle vierge" — **et les deux réponses divergent dès la 2ᵉ slide**. »
+
+Le chemin de publication ne l'appelait jamais. **Ce n'était pas une règle manquante, c'était une règle non BRANCHÉE là où elle décide** — la même forme que la « feature non alimentée », appliquée à un prédicat.
+
+> Quand un doc-comment décrit une divergence entre deux prédicats, chercher tout de suite **qui appelle lequel**. La phrase qui explique le piège est souvent écrite à côté du site qui y tombe.
+
+**Le piège du correctif.** Filtrer sur `slideHasContent` SEUL supprimerait la story « fond + musique », dont l'audio est la matière narrative : `canPublish` la reconnaît par un SECOND terme que le prédicat visuel ne porte pas. Un filtre doit reprendre **les deux moitiés** du gate qu'il raffine, sinon il corrige un défaut en en créant un pire — perdre le contenu de l'auteur. D'où `slideIsWorthPublishing = slideHasContent(…) || slideCarriesAudio(…)`, et un repli qui **rend la liste d'origine si le filtre vide tout** : une publication qui ne part pas est un bouton sans effet (loi 4).
+
+Détail : #4730. La moitié LECTEUR — que faire des stories vides déjà publiées — est une décision produit (#4731), pas une évidence technique.
+
+## Leçon 412 — Deux retraits justifiés, chacun renvoyant vers ce que l'autre ne fournit pas, ferment un chemin sans qu'aucun site ne rougisse
+
+**Le lot** (#4722). Sur la surface scène du composer, il n'existait plus AUCUN
+chemin pour ajouter un son. Deux commits l'avaient fermé, à un jour d'écart,
+chacun parfaitement défendable :
+
+| ce qui est parti | quand | vers quoi son auteur renvoyait |
+|---|---|---|
+| la porte `sound` du rail | 2026-08-31 | « le son POSÉ revient par la palette de constructions (#4579), le son de FOND reste au socle » |
+| la pastille « Ajouter un son » du socle | 2026-09-01 | la pastille de l'avatar — qui affiche un **crédit**, donc ne se peint que s'il y a DÉJÀ un son |
+
+La palette n'a jamais reçu son onglet son (#4579 est ouvert : cinq onglets,
+aucun audio). Le premier retrait renvoyait vers une chose qui n'existait pas
+encore ; le second a emporté la seule qui existait.
+
+> **Une somme n'a pas de site où rougir.** Chaque commit est juste, chaque
+> témoin est vert, chaque doc-comment dit la vérité de son jour. Le défaut ne
+> vit dans aucun des deux fichiers — il vit dans leur intersection, qui n'est
+> écrite nulle part.
+
+**Ce qui aurait pu l'attraper, et qui a échoué.** Un témoin gardait précisément
+ce retrait : `test_laPorteSon_nEstPlusServie`. Sa raison était écrite dans son
+message d'échec — « le son de fond vit au socle, le son POSÉ viendra de la
+palette ». Deux faits EXTÉRIEURS à son champ de vision, qu'il n'interrogeait
+pas. Les deux ont disparu après lui. Il est resté vert.
+
+> **Un témoin qui épingle une ABSENCE s'appuie presque toujours sur ce qui
+> existe AILLEURS — et cet ailleurs n'est pas dans ses assertions.** Il se
+> périme alors en silence, ce qu'une garde positive ne fait pas : celle-ci
+> tombe dès que ce qu'elle exige disparaît.
+
+**Le témoin de remplacement ne demande pas une absence, il demande une
+DISPONIBILITÉ**, et sur l'ensemble que le mot de la directive quantifie
+(« TOUJOURS » ⇒ les trois formats à scène, et aucun `status`). Il ne peut pas
+être satisfait par un jeu vide, et il tombe quel que soit le retrait qui ferme
+le dernier chemin.
+
+**Le corollaire trouvé en aval, et qui valait le lot à lui seul.** Une fois la
+porte rendue, elle ouvrait une feuille dont le choix « premier plan » ne
+produisait rien de visible. Le mot désignait DEUX choses :
+`ComposerAudioRole.foreground` dit au SDK « un objet posé sur la scène », le
+meuble le lisait « une carte de contenu sous le texte ». Trois chemins
+d'ingestion, trois réponses — l'enregistrement posait une carte, le fichier
+importé un objet de scène, l'emprunt laissait la règle automatique trancher. Et
+sur la surface de l'autre, chacun devenait INVISIBLE sans disparaître : la carte
+n'est rendue que par la branche sans scène, l'objet que s'il y a une toile. Le
+son partait à la publication sans qu'aucun écran ne le montre.
+
+> **Ce qui décide n'est ni le geste ni le chemin d'ingestion, c'est la SURFACE**
+> — elle seule dit s'il existe une toile où poser une puce, ou une colonne de
+> texte sous laquelle glisser une carte. Un mot qui désigne deux choses selon le
+> contexte a besoin d'un type qui le dise ; sinon chaque site tranche, et aucun
+> ne se sait en désaccord.
+
+**Et un libellé qui décrit ce que l'option fait AILLEURS est pire qu'un libellé
+vague** : il est vérifiable, et il est faux. « Contenu de publication · Pièce
+jointe du post, avec son lecteur » est juste sur un post texte et ment sur une
+scène, où le même choix pose une puce. L'auteur qui le lit choisit sciemment
+autre chose que ce qu'il obtient. La règle de libellé reçoit donc la destination
+— et les DEUX chaînes du bouton, celle de l'œil et celle de VoiceOver, la
+reçoivent ensemble : celle qu'on n'entend pas est celle que personne ne corrige.

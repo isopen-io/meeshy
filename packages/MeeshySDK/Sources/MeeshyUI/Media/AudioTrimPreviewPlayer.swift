@@ -120,8 +120,20 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
         }
     }
 
-    // Pas de `deinit` : le minuteur capture `self` FAIBLEMENT, donc il ne
-    // retient rien, et Swift 6 interdit de toucher un `Timer?` isolé au
-    // MainActor depuis un `deinit` nonisolated. `stop()` — appelé par
-    // `onDisappear` de l'hôte — est le site qui l'éteint.
+    // **Un `deinit` VIDE, et nonisolated.** Le raisonnement d'origine — « le
+    // minuteur capture `self` faiblement, donc il n'y a rien à défaire, et
+    // Swift 6 interdit de toucher un `Timer?` isolé au MainActor depuis un
+    // `deinit` nonisolated » — est juste sur le NETTOYAGE et rate la raison
+    // pour laquelle la garde existe.
+    //
+    // Ce n'est pas ce que le `deinit` FAIT qui compte, c'est le fait qu'il
+    // soit ÉCRIT : sans lui, Swift synthétise un `deinit` ISOLÉ au MainActor
+    // (SE-0466, isolation par défaut du module), qui double-libère sur
+    // iOS 26.1 — `pointer being freed was not allocated`, abrt. En l'écrivant
+    // vide et nonisolated, on ne touche à rien ET on n'hérite pas de la
+    // version synthétisée.
+    //
+    // `stop()` — appelé par `onDisappear` de l'hôte — reste le site qui éteint
+    // le minuteur ; rien ne change de ce côté.
+    nonisolated deinit {}
 }

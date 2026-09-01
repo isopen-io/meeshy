@@ -53,13 +53,18 @@ struct ComposerDocumentSurface: View {
 
     var onTool: ((ComposerDocumentTool) -> Void)? = nil
 
-    /// **Le média LOCAL déjà choisi (B, #3883).** La surface le REÇOIT et le
-    /// peint — elle reste sans état ; le meuble possède `documentLocalMedia`.
-    /// Sélectionner une photo ne montrait rien jusqu'ici : la preuve visible du
-    /// choix vit dans `slideRail`, monté en BARRE HAUTE (#4047) — en Post une
-    /// slide EST un média, le rail des slides et l'inventaire des pièces
-    /// jointes sont donc le MÊME objet, et n'en faire qu'un est ce qui les
-    /// empêche de diverger.
+    /// **Les médias qui ont une TUILE — les FONDS de slide (B, #3883, #4724).**
+    /// La surface les REÇOIT et les peint — elle reste sans état ; le meuble
+    /// possède `documentLocalMedia` et décide qui gagne une tuile
+    /// (`headerTileMedia`).
+    ///
+    /// **Ce n'est plus l'inventaire des pièces jointes**, et la nuance est le
+    /// #4724. « En Post une slide EST un média » reste vrai ; « donc le rail des
+    /// slides et l'inventaire des pièces jointes sont le MÊME objet » ne l'est
+    /// plus depuis qu'un média peut être posé SUR la scène sans ouvrir de page.
+    /// Un son, un document, une image de premier plan sont des pièces jointes
+    /// qui ne sont aucune page — les compter ici faisait grossir le carrousel
+    /// d'une tuile qui ne menait nulle part.
     var localMedia: [ComposerDocumentMedia] = []
 
     /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce

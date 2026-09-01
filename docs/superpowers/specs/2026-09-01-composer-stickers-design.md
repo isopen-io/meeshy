@@ -119,8 +119,15 @@ StickerTemplate                      ← SDK, PUR : aucune I/O, aucun UIKit
   slots         [Slot]               ← nom + NATURE
   fallbackEmoji "📍"                  ← ce que voit un lecteur qui ne sait pas rendre
   posedScale    1.0                  ← SON échelle de pose
-  a11yLabel(slots:) -> String        ← construit À PART du texte dessiné
 ```
+
+**Rectification à l'implémentation (2026-09-01).** Le libellé VoiceOver ne
+vit PAS sur le descripteur : `MeeshySDK` n'a **aucune ressource de
+localisation** — seul `MeeshyUI` en déclare (`Package.swift`). Le noyau porte
+donc la donnée pure, `MeeshyUI` porte les mots
+(`StickerPickerView.templateName(_:)` / `.accessibilityLabel(for:slots:)`) et
+le dessin. C'est une contrainte du paquet, pas une préférence — et elle sert
+la règle de pureté du SDK.
 
 `StickerTemplateCatalog` — `enum` sans état : `all`, `template(id:)`,
 `templates(family:)`. Un id inconnu rend `nil`, jamais un plantage.
@@ -262,7 +269,30 @@ Comportement, jamais implémentation :
 gestes), 8 (expérience), 11 (maintenabilité — aucune jumelle), 12 (la complexité
 du registre se paie dans le code), 13 (complétude).
 
-## 13. Source
+## 13. Ce que l'implémentation a appris
+
+Trois faits que le design n'avait pas prévus, consignés parce qu'ils
+gouvernent les lots suivants :
+
+1. **Une garde de source qui NOMME un fichier rougit pour un déplacement.**
+   Celle de « Mes stickers » nommait `StickerPickerView.swift` ; la section est
+   devenue l'onglet `libraryTab` d'un autre fichier. Elle balaie désormais les
+   sources du composer, ce qui la rend indifférente au prochain découpage.
+
+2. **Une énumération de sites porte deux affirmations**, et la seconde (« ce
+   sont les seuls ») n'avait pas été vérifiée : le glyphe sticker vivait à
+   **trois** endroits, pas deux — le troisième (`ComposerToolPanelHost`) ouvrait
+   la même palette avec un visage. La garde balaie maintenant *tout site qui
+   ouvre la palette*.
+
+3. **Une grille partagée par trois familles avait une seule destination.**
+   `templateTab` posait TOUT en `StorySticker`, y compris le lieu — qui y aurait
+   perdu ses coordonnées **en silence**, sous une décoration d'apparence juste.
+   C'est le défaut le plus coûteux du lot parce qu'il ne se voit pas à l'écran ;
+   il a été attrapé en écrivant le témoin qui devait le prouver, pas en relisant
+   le code.
+
+## 14. Source
 
 Directive porteur du 2026-09-01, en suite du #4579 (2026-08-31). Briques SDK
 vérifiées au dépôt à cette date.

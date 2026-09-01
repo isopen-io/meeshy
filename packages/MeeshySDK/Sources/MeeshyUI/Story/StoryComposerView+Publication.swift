@@ -311,7 +311,8 @@ extension StoryComposerView {
         let slides = Self.handoffSlides(
             viewModel.slides,
             currentIndex: viewModel.currentSlideIndex,
-            currentEffects: buildEffects()
+            currentEffects: buildEffects(),
+            slideImageIds: Set(viewModel.slideImages.keys)
         )
         HapticFeedback.success()
         // A11y-7 — le haptique n'a pas d'équivalent sonore : contrairement au
@@ -384,15 +385,48 @@ extension StoryComposerView {
     /// explicite par l'auteur, ce sera un champ dédié (ex:
     /// `effects.authorPinnedDuration`) lu en priorité dans
     /// `computedTotalDuration`.
+    /// - Parameter slideImageIds: les slides qui portent une image de FOND.
+    ///   Le bitmap ne vit pas dans `effects` mais dans `slideImages`, sous l'id
+    ///   de la slide : sans cet argument le filtre ci-dessous jetterait une
+    ///   story-photo. Requis, sans défaut — un défaut ferait passer le filtre
+    ///   au vert en jetant précisément ce qu'il doit garder.
     static func handoffSlides(
         _ slides: [StorySlide],
         currentIndex: Int,
-        currentEffects: StoryEffects
+        currentEffects: StoryEffects,
+        slideImageIds: Set<String>
     ) -> [StorySlide] {
         var copy = slides
         if currentIndex >= 0, currentIndex < copy.count {
             copy[currentIndex].effects = currentEffects
         }
+        // **Une slide VIERGE ne part pas** (#4730).
+        //
+        // Publier crée un post PAR slide (`StoryViewModel+PublicationUpload`,
+        // la boucle sur `upload.slides`) : une slide vide devient une story qui
+        // ne rend RIEN, et comme le bandeau montre la plus récente, elle masque
+        // celle qui a du contenu. Mesuré en production le 2026-09-01 — deux
+        // posts `STORY` à 451 ms d'intervalle, issus d'UNE publication.
+        //
+        // `canPublish` ne pouvait pas l'attraper : il demande « y a-t-il DE
+        // QUOI publier » (`slides.contains { … }`), pas « CETTE slide en
+        // vaut-elle un ». Le doc-comment de `slideHasContent` nommait déjà la
+        // divergence — « les deux réponses divergent dès la 2ᵉ slide » — sans
+        // que le chemin de publication l'appelle jamais. La règle était écrite
+        // et documentée ; elle n'était pas BRANCHÉE là où elle décide.
+        //
+        // Le filtre passe APRÈS le rabat de `currentEffects` : un sticker posé
+        // sur la slide courante ne vit encore que là, et filtrer avant l'aurait
+        // fait disparaître avec sa slide.
+        let servies = copy.filter { slideIsWorthPublishing($0, slideImageIds: slideImageIds) }
+        // **Si le filtre vide tout, on rend la liste d'origine.** Une
+        // publication qui ne part pas est un bouton SANS EFFET (loi 4), et
+        // perdre le travail de l'auteur est pire que publier une slide pauvre.
+        // Ce repli ne se déclenche que si `canPublish` a dit oui pour une
+        // raison que le prédicat par slide ne voit pas — c'est-à-dire si le
+        // prédicat a tort. Il échoue alors du côté de l'auteur.
+        if servies.isEmpty { return copy }
+        copy = servies
         // Le `content` n'est PAS touché. Les mentions du canevas voyagent dans le
         // champ `mentions` de `POST /posts` (`StoryViewModel.runStoryUpload` les
         // dérive des `textObjects`) — pas déguisées en légende. Le détour par le
@@ -409,7 +443,10 @@ extension StoryComposerView {
         let slides = Self.handoffSlides(
             viewModel.slides,
             currentIndex: viewModel.currentSlideIndex,
-            currentEffects: buildEffects()
+            currentEffects: buildEffects(),
+            // L'APERÇU montre ce qui PARTIRA : le même filtre, sinon l'œil
+            // promettrait une slide que la publication jette (#4730).
+            slideImageIds: Set(viewModel.slideImages.keys)
         )
         let enriched = await StoryThumbHashEnricher.enrich(
             slides: slides,
@@ -575,10 +612,40 @@ extension StoryComposerView {
     /// fantômes et l'offre de reprise doivent lire — un brouillon
     /// « fond + musique » est du travail, pas un fantôme.
     nonisolated static func slidesCarryAudio(_ slides: [StorySlide]) -> Bool {
-        slides.contains { slide in
-            slide.effects.backgroundAudioId != nil
-                || !(slide.effects.audioPlayerObjects ?? []).isEmpty
-        }
+        slides.contains(where: slideCarriesAudio)
+    }
+
+    /// La moitié PAR SLIDE de `slidesCarryAudio` — extraite parce que le
+    /// filtre de publication (#4730) décide slide par slide, et qu'un
+    /// prédicat global ne sait pas répondre « celle-CI ».
+    nonisolated static func slideCarriesAudio(_ slide: StorySlide) -> Bool {
+        slide.effects.backgroundAudioId != nil
+            || !(slide.effects.audioPlayerObjects ?? []).isEmpty
+    }
+
+    /// **Ce qui vaut d'être publié, slide par slide** (#4730).
+    ///
+    /// Les DEUX termes de `canPublish`, portés à l'échelle d'une slide :
+    /// du contenu, OU du son. Filtrer sur `slideHasContent` seul supprimerait
+    /// la story « fond + musique », dont l'audio est la matière narrative —
+    /// perdre le contenu de l'auteur est pire que le défaut qu'on corrige.
+    ///
+    /// Les trois drapeaux legacy (stickers/dessin du canvas courant) sont à
+    /// `false` : à ce stade `currentEffects` est déjà rabattu sur la slide
+    /// courante, donc ils se lisent dans `slide.effects`. Les passer une
+    /// seconde fois rendrait TOUTE slide « pleine » dès que le canvas porte un
+    /// sticker — un filtre qui ne filtre plus.
+    nonisolated static func slideIsWorthPublishing(
+        _ slide: StorySlide,
+        slideImageIds: Set<String>
+    ) -> Bool {
+        slideHasContent(
+            slide,
+            hasSlideImage: slideImageIds.contains(slide.id),
+            hasStickerObjects: false,
+            hasDrawingData: false,
+            hasDrawingStrokes: false
+        ) || slideCarriesAudio(slide)
     }
 
     var composerCarriesAudio: Bool {

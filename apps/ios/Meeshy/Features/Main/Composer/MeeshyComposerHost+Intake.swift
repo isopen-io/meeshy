@@ -68,25 +68,55 @@ extension MeeshyComposerHost {
         // > nulle part : elle continue de s'appliquer, correctement, à une
         // > question que plus personne ne pose.
 
+        // **Un média posé a un RÔLE, et c'est la PORTE qui le donne** (#4724,
+        // directive porteur 2026-09-01). Chaque média visuel ouvrait sa page,
+        // quelle que soit la porte : la rangée haute grossissait d'une tuile
+        // pour une image qu'on venait simplement de POSER sur la scène.
+        //
+        // `ComposerMediaPlacement` tranche, et sa moitié la moins évidente est
+        // celle qui garde la rangée haute d'accord avec le modèle : le rail ne
+        // pose en premier plan que s'il a un fond SUR QUOI poser.
         for media in documentContentMedia where media.kind != .audio
-            && slideIdByMediaURL[media.sourceURL] == nil {
-            let target: String
-            // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une porte
-            // du rail ajoute « en additif » ; créer une page est le geste de
-            // `[+]`, et lui seul (directive porteur 2026-08-30). La rangée du
-            // document, elle, garde la doctrine de la vue `1g` — en Post, une
-            // slide est UN média.
-            if railPosedMediaURLs.contains(media.sourceURL) {
-                target = viewModel.currentSlide.id
-            } else if slideIdByMediaURL.isEmpty,
-               (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
-                target = viewModel.currentSlide.id
-            } else {
-                viewModel.addSlide()
-                target = viewModel.currentSlide.id
+            && mediaRoleByURL[media.sourceURL] == nil {
+            let porte: ComposerMediaDoor =
+                railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
+            // **Le MÊME prédicat que `addMediaObject`**, mot pour mot : un fond
+            // de slide est un `mediaObject` résolu OU une image de fond posée
+            // au niveau de la slide. En omettre la seconde moitié ferait
+            // déclarer « fond » un objet que le modèle écrirait en premier
+            // plan — une tuile pour un média qui n'est pas une page.
+            let dejaUnFond = viewModel.currentSlide.effects.resolvedBackgroundMedia != nil
+                || viewModel.slideImages[viewModel.currentSlide.id] != nil
+            let role = ComposerMediaPlacement.role(door: porte,
+                                                   currentSlideHasBackground: dejaUnFond)
+            mediaRoleByURL[media.sourceURL] = role
+
+            switch role {
+            case .foreground:
+                // Il rejoint la scène COURANTE et n'y fonde rien : pas de
+                // `addSlide`, pas d'entrée dans l'index des fondations, donc
+                // pas de tuile. C'est tout le lot.
+                viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+
+            case .background:
+                let target: String
+                // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une
+                // porte du rail ajoute « en additif » ; créer une page est le
+                // geste de `[+]`, et lui seul (directive porteur 2026-08-30).
+                // La rangée du document, elle, garde la doctrine de la vue
+                // `1g` — en Post, une slide est UN média.
+                if porte == .sceneRail {
+                    target = viewModel.currentSlide.id
+                } else if slideIdByMediaURL.isEmpty,
+                   (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    target = viewModel.currentSlide.id
+                } else {
+                    viewModel.addSlide()
+                    target = viewModel.currentSlide.id
+                }
+                viewModel.applyContentMedia([media], intoSlideId: target)
+                slideIdByMediaURL[media.sourceURL] = target
             }
-            viewModel.applyContentMedia([media], intoSlideId: target)
-            slideIdByMediaURL[media.sourceURL] = target
         }
 
         let present = Set(documentContentMedia.filter { $0.kind != .audio }.map(\.sourceURL))
@@ -95,6 +125,13 @@ extension MeeshyComposerHost {
                 viewModel.removeSlide(at: index)
             }
             slideIdByMediaURL.removeValue(forKey: url)
+        }
+        // **Le rôle s'oublie avec le média**, sinon un fichier re-choisi après
+        // un retrait serait sauté en silence : la mémoire des rôles sert AUSSI
+        // de garde d'idempotence, et une garde qui survit à son objet refuse la
+        // pose suivante.
+        for (url, _) in mediaRoleByURL where !present.contains(url) {
+            mediaRoleByURL.removeValue(forKey: url)
         }
     }
 
@@ -194,6 +231,11 @@ extension MeeshyComposerHost {
             // La carte média→slide est un INDEX du meuble : la laisser pleine
             // ferait retirer, au prochain sync, des slides qui n'existent plus.
             slideIdByMediaURL = [:]
+            // Sa jumelle sert AUSSI de garde d'idempotence (#4724) : la laisser
+            // pleine ferait sauter la re-pose de la même photo après un « Tout
+            // effacer » — exactement le défaut que `viewModel.reset()` ferme
+            // trois lignes plus haut pour `carriedContentSources`.
+            mediaRoleByURL = [:]
             selectedSceneItemKind = nil
         }
     }
@@ -215,11 +257,17 @@ extension MeeshyComposerHost {
     }
 
     /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
-    /// choisi, ou au moins un média devenu slide. La lier au seul
+    /// choisi, un média devenu slide, ou un objet POSÉ dessus. La lier au seul
     /// `documentBackground` (Phase 2) la réservait aux fonds de COULEUR, donc
-    /// laissait un post de photos sans aucune scène.
+    /// laissait un post de photos sans aucune scène ; la lier aux seules
+    /// FONDATIONS la démontait dès que la dernière tuile partait, en emportant
+    /// hors de vue les objets de premier plan que la slide gardait (#4724, V2).
     var documentHasScene: Bool {
-        documentBackground != nil || !slideIdByMediaURL.isEmpty
+        ComposerScenePresence.hasScene(
+            backgroundHex: documentBackground,
+            foundedSlides: slideIdByMediaURL.count,
+            sceneObjectCount: viewModel.currentSlide.sceneObjects.count
+        )
     }
 
     func carryContentIntoSceneIfNeeded() {
@@ -952,6 +1000,21 @@ extension MeeshyComposerHost {
             viewModel.addSticker(image: item.thumbnail,
                                  provider: StoryStickerLibraryItem.provider,
                                  scale: StorySticker.posedScale)
+            presentedPortal = nil
+            HapticFeedback.light()
+        }, onTemplateSelected: { gabarit, emplacements in
+            // **L'échelle vient du GABARIT**, pas de `posedScale` : ce 2,2
+            // agrandit un glyphe NU, et ferait déborder un cartouche qui mesure
+            // déjà son contenu. `addSticker(template:slots:)` la lit lui-même.
+            viewModel.addSticker(template: gabarit, slots: emplacements)
+            presentedPortal = nil
+            HapticFeedback.light()
+        }, onLocationTemplateSelected: { lieu, gabarit in
+            // **Un lieu décoré reste un `StoryLocationObject`**, jamais un
+            // sticker jumeau : lui seul porte les coordonnées et l'id de POI
+            // que la plateforme LIT (`/posts/nearby`). Le gabarit n'en décore
+            // que l'apparence.
+            viewModel.addLocation(place: lieu, styleId: gabarit.id)
             presentedPortal = nil
             HapticFeedback.light()
         })

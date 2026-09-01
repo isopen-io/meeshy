@@ -167,8 +167,37 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
         XCTAssertTrue(code.contains("case.background:attachBackgroundSound(url:destination)"),
                       "posé en fond, le fichier doit REMPLACER le fond en place — "
                       + "`attachPastedAudio` en ajouterait un second que personne ne regarde")
-        XCTAssertTrue(code.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
-                      "posé en contenu, il reste un objet de premier plan")
+        XCTAssertTrue(code.contains("ComposerSoundDestination.forForeground(on:mountedComposerView)"),
+                      "posé en premier plan, il demande d'abord OÙ ce premier plan atterrit")
+        XCTAssertTrue(code.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "sur une scène, il devient une puce POSÉE dessus")
+        XCTAssertTrue(code.contains("case.contentCard:documentLocalMedia.append("),
+                      "sans scène, il devient une carte de contenu — sinon l'objet de scène "
+                      + "n'est rendu par rien et part quand même à la publication")
+    }
+
+    /// **Le témoin qui vient d'être retourné, et pourquoi** (#4722).
+    ///
+    /// Il exigeait `case .foreground: viewModel.attachPastedAudio(…)` — une pose
+    /// d'objet de scène INCONDITIONNELLE. C'était juste sur une scène et faux
+    /// sur un post texte, où rien ne rend un objet de scène : le son y
+    /// disparaissait de l'écran sans quitter la publication.
+    ///
+    /// > Un témoin qui épingle un APPEL épingle aussi, sans le dire, le fait
+    /// > qu'aucune condition ne le précède. C'est la moitié de son affirmation
+    /// > que personne ne relit — et celle qui se périme quand la question gagne
+    /// > un second cas.
+    ///
+    /// Le chemin voisin (`applyCreatedAudio`, l'enregistrement) faisait
+    /// l'inverse au même moment : toujours une carte de contenu. Deux réponses
+    /// pour une intention, chacune fausse sur la surface de l'autre.
+    func test_lesDeuxCheminsDuPremierPlan_nePosentPlusChacunLeurReponse() throws {
+        let code = compact(try hostUnit())
+        XCTAssertFalse(code.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                       "la pose inconditionnelle est ce que ce lot retire")
+        let consultations = code.components(separatedBy: "ComposerSoundDestination.forForeground(").count - 1
+        XCTAssertEqual(consultations, 3,
+                       "les deux poses et le libellé de la feuille interrogent la même règle")
     }
 
     /// **L'intention retombe dès la lecture.** Laissée à `.sound`, elle ferait

@@ -238,6 +238,27 @@ final class ComposerRailDoorTests: XCTestCase {
         XCTAssertEqual(Set(glyphes).count, glyphes.count,
                        "Deux portes qui partagent un glyphe sont deux verbes qu'on ne distingue pas (loi 7).")
     }
+
+    /// **#4719 — la porte sticker ne montre plus un visage.**
+    ///
+    /// Elle n'ouvre pas un clavier d'emoji : elle ouvre une palette de
+    /// CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ». Un
+    /// visage y annonçait le contenu d'un seul de ses cinq onglets.
+    ///
+    /// Le témoin porte sur la VALEUR et non sur la source : il ne peut donc pas
+    /// naître mort, et il rougit aussi bien si le smiley revient que si le
+    /// glyphe est remplacé par un troisième.
+    func test_porteSticker_montreLaFeuilleQuiSeDecolle_etPlusLeSmiley() {
+        XCTAssertEqual(ComposerRailDoor.sticker.symbolName,
+                       "rectangle.portrait.on.rectangle.portrait.angled")
+    }
+
+    /// Le smiley reste là où il dit vrai : la porte EMOJI de la rangée du
+    /// document, qui insère bien un emoji dans le texte. Retirer les deux
+    /// d'un même geste aurait été le contresens symétrique.
+    func test_lePorteEmojiDuDocument_gardeSonSmiley() {
+        XCTAssertEqual(ComposerDocumentTool.emoji.symbolName, "face.smiling")
+    }
 }
 
 /// La VUE du rail — trois faits qu'un rendu ne prouverait pas plus vite, et que
@@ -531,6 +552,32 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("viewModel.addSticker(image:item.thumbnail,"))
     }
 
+    /// **Les trois autres constructions de la palette POSENT aussi** (#4579).
+    ///
+    /// Une grille de décorations qui vibre sous le doigt sans rien poser coûte
+    /// plus qu'une grille absente : elle PROMET (loi 4). Le rappel n'ayant pas
+    /// de défaut côté SDK, ce meuble ne compilerait pas sans eux — mais le
+    /// témoin dit à QUOI ils sont branchés, ce que le compilateur ne dit pas.
+    func test_laFeuilleSticker_poseAussiLesDecorations() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addSticker(template:gabarit,slots:emplacements)"),
+                      "Une décoration d'amour ou d'heure doit devenir un sticker gabarit.")
+    }
+
+    /// **Et un LIEU décoré reste un lieu.**
+    ///
+    /// Lui seul porte les coordonnées et l'id de POI que la plateforme LIT
+    /// (`/posts/nearby`). Le poser en `StorySticker` donnerait une décoration
+    /// qui PARAÎT juste et dont la donnée géographique est partie — le défaut
+    /// le plus coûteux du lot, parce qu'il ne se voit pas à l'écran.
+    func test_uneDecorationDeLieu_posteUnObjetDeLieu_jamaisUnSticker() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addLocation(place:lieu,styleId:gabarit.id)"),
+                      "Un lieu décoré doit rester un StoryLocationObject.")
+        XCTAssertFalse(source.contains("addSticker(template:gabarit,slots:emplacements)placeSlots"),
+                       "Aucun chemin ne doit convertir un lieu en sticker.")
+    }
+
     /// L'empilement route vers le MODÈLE, jamais vers la vue UIKit.
     func test_lEmpilement_routeVersLeViewModel() throws {
         let source = compact(try hostSource())
@@ -761,15 +808,35 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     ///
     /// La destination — le vrai sujet — se garde mieux qu'avant : elle est
     /// maintenant CONDITIONNELLE, et le témoin épingle les deux branches.
+    /// **Repointé une SECONDE fois au 2026-09-01 (#4722)**, et ses deux moitiés
+    /// n'avaient pas la même raison de rougir :
+    ///
+    /// - `case.background:attachBackgroundSound(url:url)` était périmée AVANT ce
+    ///   lot — mesuré sur `HEAD`, la chaîne n'y était pas non plus. Le fond
+    ///   passe par `attachBackgroundSound(url:)` appelé plus bas, hors du
+    ///   `case` ;
+    /// - `case.foreground:documentLocalMedia.append(` l'était aussi : le
+    ///   contenu se pose par `ComposerMediaOrder.replacing` depuis le #4698,
+    ///   qui remplace À SA PLACE plutôt que d'ajouter au bout.
+    ///
+    /// > **Un témoin de source rouge depuis un lot antérieur ne garde plus
+    /// > rien, et son rouge se confond avec celui du lot en cours.** C'est ce
+    /// > qui rend une CI durablement rouge coûteuse : elle transforme chaque
+    /// > nouveau rouge en question de datation.
+    ///
+    /// Ce que ce lot change VRAIMENT : le premier plan ne pose plus une chose,
+    /// il en choisit une selon la SURFACE. Les deux branches sont épinglées.
     func test_leSonEnregistre_atterritSelonSonPLACEMENT_jamaisAilleurs() throws {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("switchchosenSoundPlacement{"),
                       "la destination du son enregistré se décide sur le PLACEMENT choisi")
-        XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:url)"),
+        XCTAssertTrue(source.contains("attachBackgroundSound(url:url)"),
                       "placé en FOND, il rejoint la scène")
-        XCTAssertTrue(source.contains("case.foreground:documentLocalMedia.append("),
-                      "placé en CONTENU, il rejoint la liste média du document — c'est une pièce "
-                          + "jointe du post, pas une bande-son")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia=ComposerMediaOrder.replacing("),
+                      "placé en CONTENU sur une surface SANS scène, il rejoint la liste média du "
+                          + "document — c'est une pièce jointe du post, pas une bande-son")
+        XCTAssertTrue(source.contains("case.sceneChip:"),
+                      "et sur une SCÈNE, le même choix pose une puce dessus (#4722)")
         XCTAssertFalse(source.contains("case.record:handleDocumentTool(.microphone)"),
                        "ce chemin versait le vocal dans la liste média du DOCUMENT sans rien demander")
     }
@@ -785,7 +852,11 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     /// témoin qui l'épingle garde un mort.
     func test_lePlacement_estOffertEtDescendJusquALObjet() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("placement:$chosenSoundPlacement"),
+        // **Périmée depuis le #4671, pas depuis ce lot** : la liaison est
+        // désormais conditionnelle — une pastille du canvas n'a pas de
+        // placement à choisir, et la feuille reçoit alors `nil`. Mesuré sur
+        // `HEAD` : la chaîne exacte n'y était pas non plus.
+        XCTAssertTrue(source.contains("placement:editedSceneChipId==nil?$chosenSoundPlacement:nil"),
                       "la feuille doit recevoir le placement en LIAISON — sinon son commutateur "
                           + "n'écrirait rien")
         // **Le placement décide la DESTINATION, pas un argument passé plus
@@ -796,8 +867,16 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         // pas.
         XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:destination)"),
                       "un fichier placé en FOND doit remplacer le fond de la slide")
-        XCTAssertTrue(source.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
-                      "…et placé en CONTENU, devenir un objet de premier plan")
+        // **Et placé en premier plan, il demande D'ABORD où ce premier plan
+        // atterrit** (#4722) : une puce sur une scène, une carte de contenu
+        // sans scène. La pose inconditionnelle qu'épinglait ce témoin était
+        // juste sur une scène et fausse sur un post texte, où rien ne rend un
+        // objet de scène — le son y disparaissait de l'écran sans quitter la
+        // publication.
+        XCTAssertTrue(source.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "…et placé en CONTENU sur une SCÈNE, devenir une puce posée dessus")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia.append("),
+                      "…ou, sans scène, une pièce jointe du document")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un
