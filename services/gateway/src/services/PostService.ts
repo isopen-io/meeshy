@@ -8,6 +8,7 @@ import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
+import { SecuritySanitizer } from '../utils/sanitize.js';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
@@ -999,12 +1000,32 @@ export class PostService {
     const requested = new Set(requestedMediaIds);
     const entries = Object.entries(texts).filter(([id]) => requested.has(id));
     if (entries.length === 0) return;
-    await Promise.all(entries.map(([id, text]) =>
-      client.postMedia.updateMany({
+    await Promise.all(entries.map(([id, text]) => {
+      // **L'ASSAINISSEMENT VIT ICI, et pas à la route comme `content`.**
+      //
+      // `content` est assaini dans `routes/posts/core.ts` (trois sites), à la
+      // frontière de confiance. `alt` et `caption` ne l'étaient à AUCUN : le
+      // texte partait brut de `parsed.data` jusqu'à `updateMany`. Une garde
+      // existait pourtant — `sanitizeMediaCaptions`, dans ce même `core.ts`,
+      // doc-comment citant #4055 — et aucune ligne du dépôt ne l'appelait.
+      //
+      // > Une garde écrite puis jamais câblée ne se signale nulle part. Elle
+      // > compile, elle se relit bien, et elle donne à qui la croise
+      // > l'impression que le champ est gardé.
+      //
+      // Elle est posée au point de passage OBLIGÉ avant la base plutôt qu'à la
+      // route, pour une raison que le défaut vient d'illustrer : deux routes
+      // écrivent ces colonnes (`createPost`, `updatePost`), et la troisième
+      // qu'on ajoutera repartirait sans garde. Ici, il n'y a rien à oublier.
+      const propre = SecuritySanitizer.sanitizeText(text);
+      return client.postMedia.updateMany({
         where: { id, postId },
-        data: { [column]: text.trim().length > 0 ? text : null },
-      }),
-    ));
+        // Un texte qui n'est QUE du balisage devient vide, donc `null` — la
+        // même phrase qu'une chaîne blanche : « il n'y a pas de légende ».
+        // Écrire `''` la rendrait présente et vide.
+        data: { [column]: propre.trim().length > 0 ? propre : null },
+      });
+    }));
   }
 
   /**
