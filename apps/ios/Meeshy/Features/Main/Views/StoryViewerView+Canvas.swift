@@ -1773,6 +1773,28 @@ struct StoryCardView: View {
                     scale: readerCanvasFraming.scale))
                 .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
                 .transition(.opacity)
+                // **L'invite doit recevoir le doigt** (#4762, mesuré au
+                // simulateur le 2026-09-02).
+                //
+                // La couche de gestes (`StoryGestureOverlayView`, « Layer 6 »)
+                // est montée APRÈS cette légende dans le même `ZStack` — donc
+                // AU-DESSUS. Son `Color.clear.contentShape(Rectangle())` couvre
+                // tout le cadre et son `DragGesture(minimumDistance: 0)`
+                // reconnaît dès le touch-down : le bouton « voir plus » ne
+                // recevait donc JAMAIS son tap. Mesuré : trois taps sur sa cible
+                // ont fait NAVIGUER le lecteur d'une story à l'autre, sans
+                // jamais déplier.
+                //
+                // > Un contrôle correctement rendu, correctement câblé, sous une
+                // > couche qui prend tous les touchers, est un contrôle INERTE —
+                // > et rien ne rougit : la couche fait exactement son travail.
+                //
+                // Le relèvement est SÛR parce que la légende repliée ne prend le
+                // doigt QUE sur son bouton : elle ne pose aucun `contentShape`
+                // sur son fond (doc de `MediaCaptionOverlay.collapsedCaption`),
+                // donc la navigation continue de passer partout ailleurs.
+                // Dépliée, son voile PREND les touchers — et c'est voulu : on lit.
+                .zIndex(60)
             }
 
             // === Background audio badge ===
