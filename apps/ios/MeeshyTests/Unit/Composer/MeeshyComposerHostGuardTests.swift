@@ -1616,7 +1616,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // composition que l'auteur vient d'ouvrir sans rien y poser.
             let montee = ComposerMountedView.mounted(
                 surface: surface,
-                hasScene: ComposerStoryCanvas.showsCanvas(format: format, documentHasScene: false)
+                hasScene: ComposerStoryCanvas.showsCanvas(format: format, documentHasScene: false),
+                // `false` : l'auteur vient d'ouvrir, il n'est entré dans aucun
+                // éditeur. C'est l'état où le socle est peint — donc celui où
+                // la flèche doit savoir publier.
+                editsScene: false
             )
             if montee == .document { atteintLeSocle = true }
 

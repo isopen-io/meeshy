@@ -326,7 +326,12 @@ extension MeeshyComposerHost {
                 ? AnyView(formatChip) : nil,
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
-            onClose: onDismiss,
+            // **Le `‹` de `1c` REVIENT à `1b`, il ne ferme pas** (#4513).
+            // La cible dessine un chevron ici et une croix sur la scène
+            // incrustée : deux glyphes différents pour deux gestes différents.
+            // `onDismiss` fermerait le composer entier — l'auteur perdrait sa
+            // composition pour avoir voulu sortir de l'inspecteur.
+            onClose: { editsScene = false },
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onSelectMedia: { media in
                 guard let slideId = slideIdByMediaURL[media.url],
@@ -606,7 +611,16 @@ extension MeeshyComposerHost {
             ),
             showsScene: documentHasScene,
             sceneAspectRatio: viewModel.currentCanvasRatio,
-            onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
+            // **LE geste d'entrée dans l'éditeur** (#4513). Sur la scène
+            // INCRUSTÉE (`1b`), taper un objet ouvre `1c` — c'est le seul
+            // chemin, et il est nommé ici plutôt que dérivé de la sélection :
+            // `selectedSceneItemKind` se pose aussi programmatiquement (poser
+            // un texte, taper un fond), et l'auteur se retrouverait alors dans
+            // un écran qu'il n'a pas demandé.
+            onSceneItemTapped: { _, kind in
+                selectedSceneItemKind = kind
+                editsScene = true
+            },
             // **#4035 — taper la scène quand son FOND est un média le
             // SÉLECTIONNE.** Sans cette ligne l'inspecteur était INATTEIGNABLE
             // sur l'écran document, et le câblage complet ne le disait pas :
