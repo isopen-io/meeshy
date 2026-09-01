@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ActiveContextMatch
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.ConversationBannerName
 import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationBannerPresentation
 import me.meeshy.sdk.model.NotificationToastDecision
@@ -154,8 +155,11 @@ class NotificationBannerViewModel @Inject constructor(
             notificationId = shown.id,
             presentation = NotificationBannerFraming.present(
                 notification = shown,
-                groupName = conversation?.preferences?.customName?.takeIf { it.isNotBlank() }
-                    ?: conversation?.title,
+                groupName = ConversationBannerName.composed(
+                    customName = conversation?.preferences?.customName,
+                    title = conversation?.title,
+                    favoriteEmoji = conversation?.preferences?.reaction,
+                ),
                 isDirect = (conversation?.type ?: shown.context?.conversationType)
                     .equals("direct", ignoreCase = true),
             ),

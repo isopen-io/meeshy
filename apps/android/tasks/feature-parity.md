@@ -6909,6 +6909,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       conversation leaves it, leaving all screens leaves it, no-banner is inert). RED-proven (stripping the
       predicate's null guards fails 6 predicate + 9 `NotificationToastPolicy` tests — proving the policy
       genuinely consults it; removing the dismiss wiring fails exactly the two open-the-thread tests).
+      **Local-first group name shipped 2026-09-01** (slice `banner-group-name-favorite-emoji`): the banner's
+      "X dans <groupe>" framing named the group by `customName ?: title` and DROPPED the favorite-classification
+      emoji — the VM doc-comment promised "renommage + emoji favori" but the code only carried the rename, so a
+      thread the reader had starred (⭐️) or classified (🔥) showed a bare name where iOS
+      `NotificationToastManager.ConversationPresentation.composedSubtitle` leads with the favorite (dimension 6
+      Cohérence + dimension 13 Complétude gap; the emoji + local rename live ONLY on the device, the one piece the
+      gateway cannot compose). New pure `:core:model` `ConversationBannerName.composed(customName, title,
+      favoriteEmoji) → String?` (port of iOS `composedSubtitle` + its `name = customName ?? title` resolution):
+      `<favorite> <name>` favorite-first, `<name>` alone with no favorite, blank/whitespace favorite treated as
+      absent (iOS `trimmingCharacters` guard), the rename winning over the server title, and `null` when the device
+      knows no local name at all so `NotificationBannerFraming.present` falls back to the server title (the Android
+      addition over iOS's pure surface). Wired into `NotificationBannerViewModel` (the sole local-name resolver).
+      +11 tests (10 `ConversationBannerNameTest` — favorite-first / no-favorite / blank-favorite / whitespace-favorite
+      trimmed / rename-wins / blank-rename→title still favorite-first / title-only / both-blank→null / both-absent→null
+      / whitespace-name trimmed; +1 `NotificationBannerViewModelTest` — a group banner leads its headline with the
+      local rename + favorite emoji). RED-proven by mutation (dropping the favorite prepend fails exactly the 4
+      favorite-prepend tests, the 6 no-favorite/null tests stay green). **Still open (§M):** the in-app TOAST surface
+      (`NotificationToastHost.notificationToastSubtitle`) still reads the RAW server `conversationTitle` with no
+      local-first name at all (its VM holds no conversation snapshot) — a larger, separate local-first gap.
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
