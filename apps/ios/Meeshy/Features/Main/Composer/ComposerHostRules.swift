@@ -658,13 +658,58 @@ nonisolated enum ComposerSoundRoleCopy {
 
     static func label(_ role: ComposerAudioRole) -> String {
         switch role {
+        // **Ce que le son EST pour la publication**, pas où il se place
+        // géométriquement (directive porteur 2026-09-01). « En fond » et « au
+        // premier plan » décrivaient une position ; ce que l'auteur choisit est
+        // une NATURE — la publication porte ce son, ou elle EST ce son.
         case .background:
             return String(localized: "composer.sound.role.background",
-                          defaultValue: "En fond", bundle: .main)
+                          defaultValue: "Fond de publication", bundle: .main)
         case .foreground:
             return String(localized: "composer.sound.role.foreground",
-                          defaultValue: "Au premier plan", bundle: .main)
+                          defaultValue: "Contenu de publication", bundle: .main)
         }
+    }
+
+    /// **Ce que le placement VEUT DIRE sur une publication** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// Deux mots — « fond », « premier plan » — décrivent une géométrie, et le
+    /// choix n'en est pas une : c'est un choix de NATURE. Le dire sous chaque
+    /// option coûte deux lignes et retire la seule question que l'auteur ne
+    /// pouvait pas trancher à l'œil.
+    ///
+    /// | placement | ce que le lecteur voit et entend |
+    /// |---|---|
+    /// | fond | le son se joue pendant la lecture ; **aucun lecteur** n'apparaît |
+    /// | premier plan | le son devient une **pièce jointe** du post, avec son lecteur — un post audio |
+    static func description(_ role: ComposerAudioRole) -> String {
+        switch role {
+        case .background:
+            return String(localized: "composer.sound.role.background.detail",
+                          defaultValue: "Se joue pendant la lecture, sans lecteur visible.",
+                          bundle: .main)
+        case .foreground:
+            return String(localized: "composer.sound.role.foreground.detail",
+                          defaultValue: "Pièce jointe du post, avec son lecteur.",
+                          bundle: .main)
+        }
+    }
+
+    /// **Pourquoi le premier plan est refusé à un son EMPRUNTÉ.**
+    ///
+    /// Une pièce jointe est un FICHIER de la publication : en faire une à
+    /// partir d'un son de la bibliothèque supposerait de le ré-uploader, donc
+    /// de le détacher de son `soundId` — et le crédit de son auteur avec lui.
+    /// Le fond, lui, référence le son sans le copier : c'est là que le rognage
+    /// d'un son emprunté vit, porté par `sourceStart`/`sourceEnd`.
+    ///
+    /// Désactiver l'option en le DISANT vaut mieux que la masquer : une option
+    /// absente se lit comme une capacité qui n'existe pas.
+    static var borrowedForegroundRefusal: String {
+        String(localized: "composer.sound.role.foreground.borrowed",
+               defaultValue: "Un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir une pièce jointe.",
+               bundle: .main)
     }
 }
 

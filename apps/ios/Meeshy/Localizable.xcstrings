@@ -46392,6 +46392,100 @@
         }
       }
     },
+    "composer.sound.role.foreground.borrowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يظل صوت المكتبة منسوبًا إلى مؤلفه: لا يمكن أن يصبح مرفقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Ton aus der Bibliothek bleibt seinem Urheber zugeschrieben: Er kann kein Anhang werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A library sound stays credited to its author: it cannot become an attachment."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un sonido de la biblioteca sigue acreditado a su autor: no puede convertirse en un adjunto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir une pièce jointe."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un suono della libreria resta accreditato al suo autore: non può diventare un allegato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um som da biblioteca continua creditado ao autor: não pode virar um anexo."
+          }
+        }
+      }
+    },
+    "composer.sound.role.foreground.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرفق بالمنشور، مع مشغِّله."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhang des Beitrags, mit eigenem Player."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment of the post, with its player."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjunto de la publicación, con su reproductor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pièce jointe du post, avec son lecteur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allegato del post, con il suo lettore."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anexo do post, com seu player."
+          }
+        }
+      }
+    },
     "composer.sound.role.title": {
       "extractionState": "manual",
       "localizations": {
@@ -46492,43 +46586,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "في الخلفية"
+            "value": "خلفية المنشور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Hintergrund"
+            "value": "Beitrags-Hintergrund"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In the background"
+            "value": "Publication background"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "De fondo"
+            "value": "Fondo de la publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En fond"
+            "value": "Fond de publication"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "In sottofondo"
+            "value": "Sottofondo della pubblicazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ao fundo"
+            "value": "Fundo da publicação"
+          }
+        }
+      }
+    },
+    "composer.sound.role.background.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُشغَّل أثناء القراءة، دون مشغِّل ظاهر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft beim Lesen, ohne sichtbaren Player."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plays while reading, with no visible player."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suena durante la lectura, sin reproductor visible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se joue pendant la lecture, sans lecteur visible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si riproduce durante la lettura, senza lettore visibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca durante a leitura, sem player visível."
           }
         }
       }
@@ -46539,43 +46680,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "في المقدمة"
+            "value": "محتوى المنشور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Vordergrund"
+            "value": "Beitragsinhalt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In the foreground"
+            "value": "Publication content"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En primer plano"
+            "value": "Contenido de la publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au premier plan"
+            "value": "Contenu de publication"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "In primo piano"
+            "value": "Contenuto della pubblicazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Em primeiro plano"
+            "value": "Conteúdo da publicação"
           }
         }
       }
@@ -47924,6 +48065,53 @@
         }
       }
     },
+    "composer.audio.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar"
+          }
+        }
+      }
+    },
     "composer.audio.import.error": {
       "extractionState": "manual",
       "localizations": {
@@ -48441,6 +48629,53 @@
         }
       }
     },
+    "composer.audio.transcription.paste": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لصق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pegar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coller"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incolla"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colar"
+          }
+        }
+      }
+    },
     "composer.audio.transcription.running": {
       "extractionState": "manual",
       "localizations": {
@@ -48578,6 +48813,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcrição indisponível"
+          }
+        }
+      }
+    },
+    "composer.audio.transcription.write": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كتابة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rédiger"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever"
+          }
+        }
+      }
+    },
+    "composer.audio.transcription.write.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب ما يُقال في التسجيل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben Sie auf, was in der Aufnahme gesagt wird."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write what is said in the recording."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe lo que se dice en la grabación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrivez ce qui est dit dans l'enregistrement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivi ciò che viene detto nella registrazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escreva o que é dito na gravação."
           }
         }
       }
