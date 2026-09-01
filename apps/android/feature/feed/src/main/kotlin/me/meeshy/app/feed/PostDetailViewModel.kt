@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -69,6 +70,7 @@ class PostDetailViewModel @Inject constructor(
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -130,10 +132,21 @@ class PostDetailViewModel @Inject constructor(
      * nothing (there is no post to attribute the dwell to). Runs right after the immediate
      * [recordView] impression, mirroring iOS `PostDetailView`'s `.trackEngagement(.detail)` sitting
      * beside its `.task` view record.
+     *
+     * Gated on the reader's `allowAnalytics` privacy toggle: with analytics consent
+     * withheld no dwell session opens, so [endDwellSession] later enriches nothing —
+     * the faithful port of iOS `EngagementTracker.begin`'s `guard consentProvider()`.
+     * The [recordView] impression above stays un-gated: it is a deduplicated
+     * view-count credit, not analytics telemetry (iOS fires `viewPost` regardless).
      */
     private fun beginDwell() {
         if (postId.isBlank()) return
-        sessions = sessions.begin(EngagementSurface.DETAIL, postId, clock.nowMillis())
+        sessions = sessions.begin(
+            EngagementSurface.DETAIL,
+            postId,
+            clock.nowMillis(),
+            consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+        )
     }
 
     /**

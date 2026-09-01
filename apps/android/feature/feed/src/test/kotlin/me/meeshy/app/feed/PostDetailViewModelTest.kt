@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
@@ -32,6 +33,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -107,6 +109,7 @@ class PostDetailViewModelTest {
     private fun viewModel(
         postId: String? = "p1",
         currentUser: MeeshyUser? = null,
+        allowAnalytics: Boolean = true,
     ): PostDetailViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
         every { socialSocket.commentAdded } returns commentAdded
@@ -114,7 +117,10 @@ class PostDetailViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostDetailViewModel(repository, session, socialSocket, config, clock, handle)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, handle)
     }
 
     @Test
@@ -650,6 +656,45 @@ class PostDetailViewModelTest {
         vm.endDwellSession()
 
         coVerify(exactly = 1) { repository.viewPost("p1", 1200) }
+    }
+
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld a qualifying dwell records no watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel(allowAnalytics = false)
+        clockNow = 10_000
+
+        vm.endDwellSession()
+
+        // A 10s dwell would qualify and fire `viewPost("p1", 10000)` — but consent was
+        // withheld so no session opened; that dwell record (the only duration this scenario
+        // could produce) must be absent, while the impression itself still credited the view.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+        coVerify(exactly = 0) { repository.viewPost("p1", 10_000) }
+    }
+
+    @Test
+    fun `the impression still fires when analytics consent is withheld`() = runTest {
+        clockNow = 0
+
+        viewModel(allowAnalytics = false)
+
+        // The deduplicated view-count credit is not analytics telemetry (iOS fires
+        // `viewPost` regardless of consent); only the dwell enrichment is gated.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+    }
+
+    @Test
+    fun `with analytics consent granted a qualifying dwell still records`() = runTest {
+        clockNow = 0
+        val vm = viewModel(allowAnalytics = true)
+        clockNow = 1000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1000) }
     }
 
     // --- Author-only reach stats projection (isAuthor) ---

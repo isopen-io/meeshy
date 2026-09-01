@@ -42,8 +42,23 @@ data class EngagementSessions private constructor(
      * First pauses whatever session currently owns the clock (topmost-owns-the-clock),
      * then makes this surface the new top. Re-opening an already-open surface
      * replaces its session (its dwell restarts) rather than stacking a duplicate.
+     *
+     * When [consentGranted] is `false` the call is inert — no session is opened and
+     * the running session underneath is **not** paused. This is the faithful port of
+     * iOS `EngagementTracker.begin`'s `guard consentProvider()` (the reader's
+     * `allowAnalytics` privacy toggle): a reader who withheld analytics consent
+     * accrues no dwell, so [end] later reports nothing. The gate lives here, on the
+     * one machine every surface shares, rather than re-coded per ViewModel; the
+     * deduplicated `viewPost` impression is a separate, un-gated view-count credit,
+     * exactly as on iOS.
      */
-    fun begin(surface: EngagementSurface, postId: String, nowMs: Long): EngagementSessions {
+    fun begin(
+        surface: EngagementSurface,
+        postId: String,
+        nowMs: Long,
+        consentGranted: Boolean = true,
+    ): EngagementSessions {
+        if (!consentGranted) return this
         val paused = pauseTop(nowMs)
         val active = Active(postId = postId, accumulatedMs = 0L, runningSinceMs = nowMs)
         return EngagementSessions(
