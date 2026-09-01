@@ -20763,3 +20763,36 @@ mesures ») :
   RÉELLE.** La conception invitait à lancer `baseline.mjs http://127.0.0.1:8931/`
   « pour éprouver la chaîne » — ce qui écrivait un `baseline.json` de localhost,
   vert. Éprouver une chaîne se fait avec l'outil dont c'est le métier.
+
+## Leçon 352 — un inline « SSOT ?? repli » n'est pas la SSOT, et le commentaire qui l'affirme est faux
+
+`resolveParticipantLanguage` portait `normalizeLanguageCode(x) ?? x.toLowerCase()`
+sous un commentaire annonçant « parité stricte avec le contrat
+`normalizeLanguageForDedup` ». Les deux ne sont PAS à parité : la SSOT strippe la
+région dans son repli (`code.split(/[-_]/)[0].toLowerCase()`), l'inline la
+conserve (`x.toLowerCase()`). L'écart n'apparaît QUE pour un code région-taggé
+HORS catalogue (`'yue-HK'` → l'inline rend `'yue-hk'`, la SSOT rend `'yue'`) —
+invisible sur tous les pins existants, qui n'utilisaient que des codes
+catalogués (`'pt-BR'`, `'en-US'`), pour lesquels `normalizeLanguageCode` strippe
+déjà.
+
+Le même inline vivait dans la branche anonyme de
+`MessageTranslationService._extractConversationLanguages` : sur le MÊME Set de
+langues cibles, un participant registered `'yue-HK'` contribuait `'yue'` et un
+anonyme `'yue-Hant-HK'` contribuait `'yue-hant-hk'` — deux entrées, une langue,
+une cible NLLB région-taggée invalide poussée au translator.
+
+> **Réécrire à la main le corps d'une SSOT « + un repli » produit une jumelle
+> qui diverge sur exactement les cas que la SSOT existe pour couvrir.** Le repli
+> est la moitié la moins testée (les pins tapent le chemin nominal), donc la
+> divergence s'y cache le plus longtemps. Et le commentaire qui promet la parité
+> est une AFFIRMATION (cycle 94) : ici son propre exemple (`'pt-BR' → 'pt-br'`)
+> nommait le défaut qu'il laissait passer un rang plus bas. Devant tout
+> `SSOT(x) ?? <repli maison>`, la question n'est pas « le repli est-il
+> plausible ? » mais **« la SSOT n'a-t-elle pas DÉJÀ ce repli, en mieux ? »** —
+> et si oui, appeler la SSOT nue.
+
+Le témoin qui l'attrape se construit sur un code HORS catalogue région-taggé,
+jamais sur un code catalogué : c'est la seule entrée où l'inline et la SSOT
+rendent des verdicts différents (parenté avec la leçon 261 : un témoin de rang
+s'écrit sur un rang autre que le premier).

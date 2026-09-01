@@ -239,4 +239,41 @@ describe('resolveParticipantLanguage', () => {
     const participant = { type: 'anonymous' as const, language: 'QQ' }
     expect(resolveParticipantLanguage(participant)).toBe('qq')
   })
+
+  // The docstring's own worked example ('pt-BR' -> 'pt', asserted above) claims
+  // "parité stricte avec le contrat normalizeLanguageForDedup" — but the inline
+  // `normalizeLanguageCode(x) ?? x.toLowerCase()` only region-strips when
+  // normalizeLanguageCode CAN reduce the code (i.e. catalogued languages). An
+  // UNCATALOGUED region-tagged code (Cantonese 'yue-HK', outside the Meeshy
+  // catalog) leaves normalizeLanguageCode returning undefined, so the inline
+  // fallback lowercased the whole string to 'yue-hk' — the exact region-tagged
+  // form the docstring says "manquerait les traductions". normalizeLanguageForDedup
+  // strips the region for EVERY code, catalogued or not, so parity is only real
+  // once the fallback goes through it. Registered participants already region-strip
+  // uncatalogued codes (resolveUserLanguagesOrdered -> normalizeInAppLanguage), so
+  // an anonymous 'yue-HK' and a registered systemLanguage 'yue-HK' must agree.
+  it('should strip the region subtag from an UNCATALOGUED region-tagged anonymous fallback', () => {
+    const participant = { type: 'anonymous' as const, language: 'yue-HK' }
+    expect(resolveParticipantLanguage(participant)).toBe('yue')
+  })
+
+  it('should strip the region subtag from an UNCATALOGUED region-tagged user fallback (no prefs)', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'yue-HK',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: null },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('yue')
+  })
+
+  it('should match the registered path for an uncatalogued region-tagged code (parity)', () => {
+    const anonymous = { type: 'anonymous' as const, language: 'yue-Hant-HK' }
+    const registered = {
+      type: 'user' as const,
+      language: 'en',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'yue-Hant-HK' },
+    }
+    expect(resolveParticipantLanguage(anonymous)).toBe(resolveParticipantLanguage(registered))
+    expect(resolveParticipantLanguage(anonymous)).toBe('yue')
+  })
 })

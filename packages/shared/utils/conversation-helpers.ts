@@ -415,17 +415,18 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   // Le fallback (langue déclarée par le call site) est normalisé comme les
   // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
   // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
-  // Ces niveaux réduisent la casse ET les sous-tags région/script via
-  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
-  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
-  // traductions indexées en minuscules 2/3-lettres exactement comme une
-  // préférence in-app non normalisée (violation du Prisme). Le repli
-  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
-  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
-  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
-  // déjà canoniques.
-  const fallback =
-    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
+  // Ces niveaux réduisent la casse ET les sous-tags région/script — via
+  // normalizeLanguageCode pour les codes catalogués ('it-IT' → 'it', 'FR' → 'fr')
+  // et via le strip du sous-tag primaire pour ceux qu'il ne sait pas réduire
+  // (normalizeInAppLanguage côté prefs). Un fallback laissé région-taggé
+  // ('pt-BR' → 'pt-br') ou en casse haute manquerait les traductions indexées
+  // en minuscules 2/3-lettres exactement comme une préférence in-app non
+  // normalisée (violation du Prisme). normalizeLanguageForDedup EST ce contrat
+  // — normalizeLanguageCode ?? strip-du-sous-tag-primaire, jamais `undefined` —
+  // donc l'appeler garantit la parité stricte annoncée y compris pour un code
+  // UNCATALOGUÉ région-taggé ('yue-HK' → 'yue', que le repli `?? .toLowerCase()`
+  // laissait à 'yue-hk', divergent du chemin inscrit qui, lui, strippe).
+  const fallback = normalizeLanguageForDedup(participant.language)
   if (participant.type !== 'user' || !participant.user) {
     return fallback
   }

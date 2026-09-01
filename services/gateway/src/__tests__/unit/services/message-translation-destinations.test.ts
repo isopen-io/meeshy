@@ -232,6 +232,43 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages).not.toContain('ES-ES');
   });
 
+  it('strips the region subtag from an UNCATALOGUED region-tagged anonymous participant.language', async () => {
+    // The registered branch region-strips uncatalogued codes via
+    // resolveUserLanguagesOrdered → normalizeInAppLanguage (split on '-'/'_'),
+    // so a registered 'yue-HK' contributes 'yue'. The anonymous branch used the
+    // inline `normalizeLanguageCode(x) ?? x.toLowerCase()`, which only strips
+    // the region for CATALOGUED codes — 'yue-HK' (Cantonese, outside the Meeshy
+    // catalog) slipped through as 'yue-hk', a region-tagged, never-matching NLLB
+    // target that ALSO deduped as a language distinct from the registered 'yue'.
+    // Routing both branches through normalizeLanguageForDedup collapses them.
+    const { prisma } = makePrismaMock({
+      participants: [
+        {
+          type: 'user',
+          user: {
+            id: 'alice',
+            username: 'alice',
+            systemLanguage: 'yue-HK',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        },
+        { type: 'anonymous', language: 'yue-Hant-HK' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-uncatalogued-region');
+
+    // Both the registered and the anonymous participant collapse onto the single
+    // canonical 'yue' — no region-tagged duplicate reaches the translator.
+    expect(languages).toEqual(['yue']);
+    expect(languages).not.toContain('yue-hk');
+    expect(languages).not.toContain('yue-hant-hk');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,
