@@ -2550,6 +2550,25 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(call?.targetLanguages).toBeDefined();
     });
 
+    it('canonicalises explicit region-tagged targets so a variant is not a second job', async () => {
+      // `['fr', 'fr-FR']` are ONE real NLLB target. Passed verbatim they reach the
+      // translator as two jobs — the most expensive stage of the audio pipeline
+      // (translation + TTS voice cloning). `'EN'` must fold to `'en'`.
+      await svc.translateAttachment('att-tl', { targetLanguages: ['fr', 'fr-FR', 'EN'] });
+
+      const call = mockZmqClient.sendAudioProcessRequest.mock.calls[0]?.[0] as any;
+      expect(call?.targetLanguages).toEqual(['fr', 'en']);
+    });
+
+    it('canonicalises underscore/region variants across several languages', async () => {
+      await svc.translateAttachment('att-tl', {
+        targetLanguages: ['pt-BR', 'PT', 'de_DE', 'de']
+      });
+
+      const call = mockZmqClient.sendAudioProcessRequest.mock.calls[0]?.[0] as any;
+      expect(call?.targetLanguages).toEqual(['pt', 'de']);
+    });
+
     it('falls back to en+fr when no conversation languages', async () => {
       prisma.conversation.findUnique.mockResolvedValue({ autoTranslateEnabled: false });
       prisma.participant.findMany.mockResolvedValue([]);

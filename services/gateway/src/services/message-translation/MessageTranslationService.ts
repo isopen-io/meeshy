@@ -502,6 +502,38 @@ export class MessageTranslationService extends EventEmitter {
     return normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase();
   }
 
+  /**
+   * Canonicalise ET déduplique une liste de langues cibles EXPLICITES avant le
+   * dispatch audio, avec la même parité SSOT (`normalizeLanguageCode`) que le
+   * chemin texte ({@link _resolveTargetLanguages}).
+   *
+   * Le chemin AUDIO ({@link processAudioAttachment}) prend les cibles explicites
+   * de l'appelant VERBATIM — le client passe `Locale.current` (`'fr-FR'`, `'EN'`,
+   * `'pt-BR'`) et rien n'est normalisé à l'écriture. Sans cette étape, une
+   * variante région-taguée ou en casse mixte atteignait le translator intacte :
+   * `['fr', 'fr-FR']` sont UNE cible NLLB, mais partaient comme DEUX travaux —
+   * l'étape la plus chère du pipeline (traduction ML + clonage vocal TTS) — et
+   * `'en-us'`, absent de la table NLLB, retombait silencieusement sur `'eng_Latn'`.
+   * `sendAudioProcessRequest` ne dédupliquait pas non plus (contrairement au
+   * chemin texte, où `sendTranslationRequest` le fait), donc la canonicalisation
+   * ET la déduplication doivent avoir lieu ici. La branche dérivée des
+   * participants ({@link _extractConversationLanguages}) est déjà canonique — cette
+   * étape n'y est appliquée que pour la branche explicite.
+   */
+  private _canonicalizeExplicitAudioTargets(
+    targetLanguages: readonly string[]
+  ): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of targetLanguages) {
+      const code = normalizeLanguageCode(raw) ?? raw.toLowerCase();
+      if (seen.has(code)) continue;
+      seen.add(code);
+      result.push(code);
+    }
+    return result;
+  }
+
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
     try {
       const startTime = Date.now();
@@ -2500,9 +2532,12 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ℹ️ Clonage vocal désactivé (pas de consentement)`);
       }
 
-      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation
+      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation.
+      //    Les cibles explicites sont canonicalisées + dédupliquées (SSOT
+      //    `normalizeLanguageCode`) — le dispatch audio ne le fait nulle part en aval,
+      //    contrairement au chemin texte. La branche dérivée est déjà canonique.
       let targetLanguages = params.targetLanguages && params.targetLanguages.length > 0
-        ? params.targetLanguages
+        ? this._canonicalizeExplicitAudioTargets(params.targetLanguages)
         : await this._extractConversationLanguages(params.conversationId);
 
       if (targetLanguages.length === 0) {
