@@ -98,10 +98,28 @@ qu'à l'affichage OPTIMISTE — une bulle par unité, tout de suite.
 
 Le geste de l'auteur est donc **atomique à la file** et **pluriel à l'écran**, et
 c'est la bonne combinaison : on ne demande pas trois fois à quelqu'un qui a
-appuyé une fois. Ce qui reste à dire, et qui n'est pas tranché ici : ce que
-devient l'item si son EXÉCUTION échoue à mi-parcours, deux stories étant déjà
-créées côté serveur. Une reprise non idempotente republierait les deux
-premières.
+appuyé une fois.
+
+**Mais une exécution qui échoue à mi-parcours n'a aucun moyen de reprendre où
+elle en était**, et le symptôme n'est pas celui qu'on attend. Mesuré :
+`StoryPublishQueueItem` porte `slidesPayload` — le lot ENTIER — sans aucun
+`publishedSlideIds` ni index ; aucune clé d'idempotence ne voyage vers le
+serveur ; et `createPost` ne déduplique pas. Une reprise repart donc du lot
+complet.
+
+Elle ne produit pourtant **pas** deux copies identiques : `unclaimedMediaWhere()`
+(`services/gateway/src/services/posts/mediaOwnership.ts:131`) exige `postId`
+nul, et les médias des unités déjà passées ont été RÉCLAMÉS au premier passage.
+
+> **La reprise crée une copie AMPUTÉE, pas un doublon.** L'unité republiée sort
+> **sans ses médias** — texte seul, là où l'originale portait une image. Deux
+> stories quasi identiques attireraient l'œil ; une story et son fantôme sans
+> image ressemblent à un bug d'AFFICHAGE, et l'auteur ira chercher du côté du
+> chargement. C'est la forme la plus coûteuse à diagnostiquer.
+
+**Cardinalité et idempotence ne sont donc pas indépendantes** : passer P et R à
+un seul envoi fait DISPARAÎTRE ce mode de panne pour ces deux profils — un
+envoi, un verdict, une réclamation. **S reste exposé**, puisqu'il reste à N.
 
 > **Une règle de cardinalité doit dire de quoi elle compte les unités.** « N
 > stories » compte des PUBLICATIONS ; l'auteur, lui, compte des GESTES, et la
