@@ -49,6 +49,9 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >
 > ### 271i — une clé promettait cinq chaînes, et personne ne comparait deux sites (#4651)
 >
+> **PR [#4652](https://github.com/isopen-io/meeshy/pull/4652)** — ouverte le 2026-09-01, en attente de CI.
+> Le squash sur `main` viendra compléter la table ci-dessus à la fusion.
+>
 > | mesure | avant | après |
 > |---|---|---|
 > | clés déclarant deux chaînes différentes | **5** | **0** |
