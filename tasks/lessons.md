@@ -22619,3 +22619,74 @@ là, aucune erreur n'est levée, et seul le compte trahit.
 Deux réflexes : lire `Executed N tests` avant de croire un vert, et construire
 un tableau d'arguments par `while IFS= read -r l; do ARGS+=("$l"); done < fichier`
 plutôt que par une expansion non quotée.
+
+## Leçon 391 — Une garantie de présentation qui repose sur « l'item a changé » ne tient pas quand l'item n'a pas de charge
+
+**Lot #4684 (2026-09-01).** Un agent de vérification observe UNE fois, sans le
+reproduire, que rouvrir un son de FOND affiche le commutateur sur « Contenu de
+publication » — et que valider sans rien changer DÉPLACE le son vers le contenu.
+Silencieux, destructeur, et non reproductible en trois tentatives.
+
+Ce qui l'a nommé n'est pas le code mais une CAPTURE : la feuille fautive rendait
+la carte d'après-enregistrement (coche verte, durée en grand) là où les trois
+reproductions rendent la carte de réouverture. **Ce n'était pas la même feuille.**
+C'était la précédente, re-présentée avec son `@State`.
+
+`.sheet(item: $portail)` reconstruit son contenu quand l'ITEM change. Deux
+ouvertures successives portent la même valeur — un cas d'énumération sans charge
+associée — donc SwiftUI est en droit de réutiliser la vue.
+
+> Un type somme sans charge rend deux ÉVÉNEMENTS distincts indiscernables. La
+> valeur dit « quelle feuille », jamais « quelle ouverture ». Tout ce que la
+> feuille apprend d'une session survit alors à la suivante.
+
+Deux remèdes, et le second est celui qui dure : une identité renouvelée par
+ouverture (`.id(UUID())` posé à l'ouverture) rend la réutilisation impossible ;
+et **un site UNIQUE d'ouverture** rend l'inventaire structurel — quatre entrées
+posaient chacune leurs deux lignes, un cinquième site aurait oublié la
+troisième sans qu'aucun témoin ne rougisse, le défaut ne se voyant qu'à la
+SECONDE ouverture.
+
+Corollaire de méthode : **un défaut vu une fois et non reproduit n'est pas un
+défaut à classer « à surveiller »** dès lors que son mécanisme s'explique. Ici
+l'explication était dans l'image, pas dans la pile — et elle suffisait à écrire
+une garantie de structure.
+
+## Leçon 392 — Un fragment de garde qui est le PRÉFIXE d'un autre compte les deux
+
+**Même lot.** La garde neuve devait prouver qu'aucun fichier hôte n'ouvre la
+feuille audio hors du site unique :
+
+```swift
+code.components(separatedBy: "presentedPortal = .sound").count - 1
+```
+
+Elle a rougi à sa première exécution sur `MeeshyComposerHost+Intake.swift`, qui
+ne l'ouvre pas. Le fichier contient `presentedPortal = .soundLibrary` — **un
+autre portail**, dont le fragment cherché est le préfixe.
+
+> Un compteur de sous-chaînes ne connaît pas les frontières de token. Deux cas
+> d'énumération dont l'un préfixe l'autre (`.sound` / `.soundLibrary`,
+> `.media` / `.mediaLibrary`, `.text` / `.textStyles`) rendent toute garde
+> écrite sur le premier ALÉATOIREMENT vraie.
+
+Le remède est de compter les deux et de retrancher. Le signe qui l'attrape : une
+garde neuve qui rougit sur un fichier dont on sait qu'il ne fait pas la chose —
+avant d'accuser le code, relire le FRAGMENT.
+
+## Leçon 393 — Une clé de catalogue survit à la surface qui l'affichait, et devient un mot que personne ne rend
+
+**Lot #4669.** Retirer la pastille du socle a laissé `composer.socle.sound.add`
+— « Ajouter un son » — traduite en sept langues, référencée par rien.
+
+`LocalizationConsistencyTests.test_everyAppCatalogIdentifierKeyIsReferencedInCode`
+l'a dit immédiatement, et c'est la bonne réponse : une clé morte n'est pas
+inoffensive. Elle se traduit à chaque passe de localisation, elle apparaît aux
+outils de comptage, et surtout elle donne à croire qu'un mot EXISTE quelque part
+dans l'app.
+
+Corollaire du même gate : **le `defaultValue` inline et l'entrée `fr` du
+catalogue sont la MÊME chaîne rendue par deux chemins**, donc l'apostrophe
+compte. J'avais écrit `’` (typographique) au catalogue et `'` (droite) dans le
+code ; le dépôt tient 266 chaînes françaises à apostrophe droite contre 7
+typographiques — la convention se LIT, elle ne se choisit pas au coup par coup.
