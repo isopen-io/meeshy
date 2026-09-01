@@ -22501,3 +22501,121 @@ message générique.
 
 Poser `chainable.to = () => chainable` et `chainable.except = () => chainable`
 coûte deux lignes et rend le double fidèle à l'API qu'il imite.
+
+## Leçon 387 — Retirer un contrôle, c'est déménager ce qu'il SAVAIT — pas seulement l'effacer
+
+**Lot #4669 (2026-09-01).** Le porteur demande de retirer la pastille « Ajouter
+un son » du socle : elle fait doublon depuis que deux autres chemins ouvrent la
+même feuille. Le geste paraît soustractif — un `if` et une propriété calculée en
+moins.
+
+Elle était pourtant le **seul endroit du composer qui affichait
+`soundAuthorUsername`**. La retirer telle quelle aurait fait disparaître
+l'attribution d'un son emprunté partout dans l'app, et **aucun témoin ne l'aurait
+signalé** : les tests assertaient que la composition RENDAIT le crédit, jamais
+qu'elle était MONTRÉE quelque part.
+
+> **Un contrôle qu'on retire emporte trois choses distinctes** : son geste (ici
+> un doublon, donc gratuit), sa PLACE (reprise par la pastille de l'avatar), et
+> ce qu'il DISAIT — la seule des trois qu'une revue de diff ne montre pas, parce
+> qu'elle vit dans une règle que le diff ne touche pas.
+
+La question à poser avant toute suppression n'est pas « ce bouton fait-il double
+emploi ? » mais **« quelle est la seule chose que ce bouton affichait ? »**. La
+réponse se cherche dans ses LECTURES, pas dans ses actions : ici
+`ComposerSocleSound.label` lisait `name`, `soundAuthorUsername` et `duration`,
+et deux de ces trois champs n'avaient aucun autre afficheur.
+
+Corollaire de témoin, vécu dans le même lot : `ComposerSocleDensityTests` gardait
+le plancher de 44 pt sur quatre ancres, dont `soundChip`. Retirer l'ancre fait
+repasser la garde au vert **en ayant rendu la protection à un contrôle sans la
+lui redonner ailleurs**. Le plancher a suivi le son jusqu'à la pastille de
+l'avatar, et un témoin neuf l'y épingle — sans quoi la suppression aurait éteint
+un cliquet en croyant le déplacer.
+
+## Leçon 388 — Une séparation tenue par « personne ne fait ça » n'est pas une séparation
+
+**Lot #4670 (2026-09-01).** Le porteur signale, capture à l'appui, une piste de
+7 s lue à DEUX endroits : la pastille près de l'avatar et la carte sous le texte.
+
+Lecture du code : les deux colonnes ne peuvent pas se croiser.
+`resolvedBackgroundAudio` ne lit que la scène, `ComposerForegroundSound.resolve`
+ne lit que la liste média du document. Deux magasins, aucun pont — la tentation
+est de répondre « ce n'est pas possible » et de chercher ailleurs.
+
+C'est vrai, et c'est une propriété des **quatre sites qui ÉCRIVENT** des sons
+(`applyCreatedAudio`, `ingestSoundFiles`, `attachPastedAudio`, la reprise de
+brouillon), jamais une garantie de ce qui LIT. Le jour où l'un d'eux pose le
+même fichier des deux côtés — ou le jour où un cinquième naît — la pastille se
+remet à mentir sans qu'une ligne ait changé chez le lecteur.
+
+> **« Aucun chemin actuel ne produit cet état » décrit l'ARBRE D'APPEL
+> d'aujourd'hui, pas l'invariant.** Un invariant se lit chez celui qui SERT la
+> valeur ; une propriété d'appelants se relit à chaque ajout d'appelant, et
+> personne ne sait qu'il doit la relire.
+
+Le correctif tient en une fonction (`ComposerSoundColumn.avatarBadge`) et son
+témoin s'écrit **sur le cas que la structure rate** — le même fichier des deux
+côtés. Un témoin sur le cas nominal (un fond ici, un contenu là) serait passé au
+vert sans que la loi existe : c'est la forme de la leçon 261 (un témoin de rang
+s'écrit sur un rang autre que le premier) appliquée à une séparation de sources.
+
+## Leçon 389 — Un `return` muet sert l'échec, l'attente et l'absence dans la même assiette
+
+**Lot #4667 (2026-09-01).** « Le son de bibliothèque ne peut pas être rogné
+correctement ! » Le rapatriement existait pourtant, écrit, correct, et il
+DÉPOSAIT bien le fichier.
+
+Ce qui manquait n'était pas le code mais ses ÉTATS. La zone « Rogner » se montait
+sur `recordedURL != nil && recordedDuration > 0` — deux conditions qui décrivent
+l'ARRIVÉE d'un fichier. Un son emprunté n'en a pas tant qu'il n'est pas
+téléchargé, et les deux sorties d'échec tenaient en deux mots :
+`guard … else { return }` sur la résolution d'URL, `try?` sur le réseau.
+
+Résultat : pendant le téléchargement, sur une URL irrésolue, sur un réseau coupé
+et quand il n'y a rien à rogner, l'écran affichait **exactement la même chose** —
+rien. Le porteur en a conclu, à raison, que le rognage ne marchait pas.
+
+> C'est la leçon « une erreur avalée en VIDE se lit comme un vide légitime »
+> vue depuis l'UI : ce n'est pas seulement le diagnostic qui se perd, c'est le
+> VERDICT PRODUIT. L'utilisateur ne dit pas « ça a échoué », il dit « ça n'existe
+> pas ».
+
+Le remède n'est pas un drapeau `isLoading` de plus : deux booléens rendent
+représentable un état qui n'existe pas (chargement ET échec) et obligent chaque
+lecteur à se souvenir de l'ordre dans lequel les interroger. Un type somme
+(`AudioTrackAcquisition`) plus une fonction qui traduit l'état en ce que l'écran
+rend (`AudioTrimSection.resolve`) donnent quatre cas exclusifs, éprouvables sans
+monter d'écran — et le témoin qui compte porte sur l'ORDRE des priorités : une
+piste PÉRIMÉE ne doit pas coiffer un rapatriement en cours, sans quoi l'auteur
+vise un extrait d'un son qui ne partira pas.
+
+## Leçon 390 — En zsh, `for x in $LISTE` ne découpe pas sur les sauts de ligne — et un `-only-testing` mal formé rend « passed, 0 test »
+
+**Lot #4667–#4670 (2026-09-01).** Pour balayer 106 suites, j'ai construit la
+liste des classes puis :
+
+```zsh
+for c in $CLASSES; do ARGS+=("-only-testing:MeeshyTests/$c"); done
+```
+
+**zsh ne fait pas de word splitting sur une expansion non quotée**, contrairement
+à bash. `ARGS` a donc reçu UN seul élément contenant les 106 noms collés par des
+retours à la ligne. Et `xcodebuild` a rendu :
+
+```
+Test Suite 'Selected tests' passed
+	 Executed 0 tests, with 0 failures
+```
+
+**`RC=0`, « passed », zéro test.** Un faux vert parfait : le mot « passed » est
+là, aucune erreur n'est levée, et seul le compte trahit.
+
+> **Le compte de tests exécutés est la seule preuve qu'un gate a mesuré quelque
+> chose.** « passed » sans nombre ne dit rien ; c'est la forme
+> `test-without-building` rejouant un bundle périmé, vue sous un autre angle —
+> le verdict est vrai, il ne porte simplement sur rien.
+
+Deux réflexes : lire `Executed N tests` avant de croire un vert, et construire
+un tableau d'arguments par `while IFS= read -r l; do ARGS+=("$l"); done < fichier`
+plutôt que par une expansion non quotée.
