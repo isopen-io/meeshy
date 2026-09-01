@@ -39,7 +39,11 @@ const SANS_CHARTE = A.sans_charte === true
 // Les ecrans PHARES du porteur : implementes EN PREMIER, par le modele le plus fort, avec une
 // recette au navigateur en plus des deux revues. `dabord` ordonne ; `phares` (defaut = dabord)
 // choisit le traitement.
-const DABORD = Array.isArray(A.dabord) ? A.dabord.filter((c) => typeof c === 'string') : []
+// Defaut : les deux fils (directive du porteur, 2026-09-01) — une reprise de run ne relit pas
+// toujours ses args, donc la priorite vit dans le script, pas seulement dans l'appel.
+const DABORD = Array.isArray(A.dabord) && A.dabord.length
+  ? A.dabord.filter((c) => typeof c === 'string')
+  : ['thread', 'join', 'rights']
 const PHARES = new Set(Array.isArray(A.phares) ? A.phares : DABORD)
 const DATE = typeof A.date === 'string' ? A.date : '(date non fournie — la lire avec `date -I`)'
 
