@@ -62,7 +62,7 @@ extension StoryComposerView {
             if doors.soundLibrary { showSoundLibrary = true }
         }) {
             NavigationStack {
-                UnifiedAudioRecorderSheet(
+                AudioRecorderSheet(
                     onImportAudioFile: {
                         recorderFollowUp = .audioFiles
                         showVoiceRecorderSheet = false

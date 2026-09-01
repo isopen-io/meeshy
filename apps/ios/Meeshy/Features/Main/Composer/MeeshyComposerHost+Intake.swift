@@ -231,55 +231,6 @@ extension MeeshyComposerHost {
         }
     }
 
-    /// **Le sixième outil (T2.6)**, dernier de la rangée — même composant que
-    /// le composer inline du fil monte déjà (`AudioPostComposerView`,
-    /// `FeedView+Attachments.swift`) : en fabriquer un second aurait donné
-    /// deux feuilles d'enregistrement/transcription à faire diverger,
-    /// exactement le défaut que `PublishIntent` existe pour fermer.
-    ///
-    /// **La destination est double, et c'est le cœur du lot.** L'enregistrement
-    /// rejoint `documentLocalMedia` comme un `ComposerDocumentMedia` ORDINAIRE
-    /// — il part par la file durable, comme tout média local (T2.3). La
-    /// transcription voyage À CÔTÉ dans `documentTranscription`, jamais fondue
-    /// dans le texte : `documentDraft` la transmet telle quelle à
-    /// `ComposerDocumentDraft.document(mobileTranscription:)`, que la porte
-    /// poste à `PublishIntent.document(transcription:)`.
-    ///
-    /// **La capsule de langue est SEMÉE, jamais imposée.** Poser
-    /// `documentLanguage = transcription.language` au retour rend le contrôle
-    /// RÉEL (loi 4) et évite qu'une voix parte étiquetée par la langue de
-    /// démarrage du meuble — mais ce n'est qu'un confort d'affichage : la
-    /// garantie qui compte est le `??` de `PublishIntent.document`, qui élit
-    /// la langue PARLÉE même si l'auteur rouvre la capsule et la change après
-    /// coup.
-    ///
-    /// **Un son EMPRUNTÉ à la bibliothèque est hors du périmètre de ce lot.**
-    /// `AudioPostComposerView.onPublishBorrowed` référence un `soundId` déjà
-    /// côté serveur, sans fichier LOCAL ni transcription — une matière que
-    /// `ComposerDocumentDraft` ne modélise pas ici. Fermer la feuille sans
-    /// effet est le choix assumé, plutôt qu'un second chemin d'envoi pour un
-    /// cas que la rangée du document n'offre nulle part ailleurs.
-    var documentAudioComposerSheet: some View {
-        AudioPostComposerView(
-            onPublish: { audioURL, mimeType, durationMs, transcription in
-                documentLocalMedia.append(ComposerDocumentMediaFactory.media(
-                    url: audioURL,
-                    declaredMimeType: mimeType,
-                    durationMs: durationMs
-                ))
-                documentTranscription = transcription
-                if let transcription {
-                    documentLanguage = transcription.language
-                }
-                presentedPortal = nil
-                HapticFeedback.light()
-            },
-            onPublishBorrowed: { _ in
-                presentedPortal = nil
-            }
-        )
-    }
-
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
     /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
     /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
@@ -538,7 +489,13 @@ extension MeeshyComposerHost {
             presentedPortal = .location
         case .attachesTranscribedAudio:
             HapticFeedback.light()
-            presentedPortal = .audio
+            // **La MÊME feuille que « Ajouter un son » (#4657).** Ce qui
+            // distinguait les deux portes n'était pas le geste — les deux
+            // enregistrent, importent et empruntent — mais la DESTINATION du
+            // résultat. Elle se choisit désormais dans la feuille ; l'entrée ne
+            // fait plus que POSER le défaut qui lui correspond.
+            chosenSoundPlacement = .foreground
+            presentedPortal = .sound
         case .none:
             break
         }

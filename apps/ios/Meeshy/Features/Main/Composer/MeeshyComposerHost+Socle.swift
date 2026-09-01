@@ -87,6 +87,9 @@ extension MeeshyComposerHost {
     var soundChip: AnyView {
         let fond = viewModel.currentEffects.resolvedBackgroundAudio
         return AnyView(Button {
+            // Le défaut de CETTE entrée (#4657) — l'auteur peut en changer dans
+            // la feuille, qui est désormais la même que celle de « Vocal ».
+            chosenSoundPlacement = .background
             presentedPortal = .sound
             HapticFeedback.light()
         } label: {

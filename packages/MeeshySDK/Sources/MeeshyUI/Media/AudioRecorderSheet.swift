@@ -16,7 +16,7 @@ import MeeshySDK
 /// Composant SDK au sens du « test du grain » : paramètres opaques (recorder
 /// injecté, closures de portes), aucune décision produit — les call sites
 /// décident quoi faire du fichier (éditeur story, transcription post, etc.).
-public struct UnifiedAudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
+public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     /// Hands back the recorded file together with the language the user tagged
     /// it with, so the downstream consumer (audio editor, transcription) opens
     /// pre-set.
@@ -347,15 +347,27 @@ public struct UnifiedAudioRecorderSheet<Recorder: AudioRecordingProviding>: View
 
 // MARK: - Source chips (Fichiers / Bibliothèque)
 
-/// Rangée d'accès aux sources d'audio alternatives, montée par le recorder
-/// hors enregistrement. Chaque chip n'existe que si SA closure est fournie ;
-/// sans aucune closure la rangée n'a aucune surface (absence structurelle) —
-/// les call sites qui ne passent rien rendent le recorder à l'identique.
-struct AudioRecorderSourceChips: View {
-    var onImportAudioFile: (() -> Void)?
-    var onOpenSoundLibrary: (() -> Void)?
+/// Rangée d'accès aux sources d'audio alternatives. Chaque chip n'existe que si
+/// SA closure est fournie ; sans aucune closure la rangée n'a aucune surface
+/// (absence structurelle) — les call sites qui ne passent rien rendent le
+/// recorder à l'identique.
+///
+/// **PUBLIQUE depuis #4657**, parce qu'un hôte peut vouloir la poser HORS du
+/// cadre « Enregistrement ». Enregistrer, importer un fichier et emprunter à la
+/// bibliothèque sont trois SOURCES au même rang : les deux dernières rangées
+/// sous le titre de la première se lisaient comme deux options de la capture,
+/// ce qu'elles ne sont pas (directive porteur du 2026-09-01).
+public struct AudioRecorderSourceChips: View {
+    public var onImportAudioFile: (() -> Void)?
+    public var onOpenSoundLibrary: (() -> Void)?
 
-    var body: some View {
+    public init(onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil) {
+        self.onImportAudioFile = onImportAudioFile
+        self.onOpenSoundLibrary = onOpenSoundLibrary
+    }
+
+    public var body: some View {
         if onImportAudioFile != nil || onOpenSoundLibrary != nil {
             HStack(spacing: 8) {
                 if let onImportAudioFile {
@@ -384,7 +396,7 @@ struct AudioRecorderSourceChips: View {
 
 // MARK: - Convenience init (uses DefaultSDKAudioRecorder)
 
-extension UnifiedAudioRecorderSheet where Recorder == DefaultSDKAudioRecorder {
+extension AudioRecorderSheet where Recorder == DefaultSDKAudioRecorder {
     public init(preferredLanguage: String = "fr",
                 showsLanguageStrip: Bool = true,
                 onImportAudioFile: (() -> Void)? = nil,

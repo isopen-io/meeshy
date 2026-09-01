@@ -58,17 +58,19 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
 
     /// Le sélecteur de lieu — MapKit, permissions, app-side.
     case location
-    /// Le composeur d'audio : enregistrer un vocal, le transcrire.
-    case audio
     /// Le sélecteur d'emoji — il INSÈRE dans le texte du document.
     case emoji
     /// La bibliothèque de stickers — elle POSE un objet sur la scène.
     case sticker
-    /// L'étagère des sons : emprunter une piste.
-    /// **LA feuille du son (#4483).** Elle remplace un choix à deux options qui
-    /// n'atterrissait pas au même endroit selon la branche : emprunter posait un
-    /// son SUR LA SCÈNE, enregistrer le versait dans la liste média du DOCUMENT.
-    /// Une porte, une feuille, une destination.
+    /// **LA feuille de CRÉATION AUDIO (#4483, fusionnée #4657).**
+    ///
+    /// #4483 avait déjà remplacé un choix à deux options qui n'atterrissait pas
+    /// au même endroit selon la branche. #4657 ferme le dernier doublon : le
+    /// portail `.audio`, qu'ouvrait l'outil « Vocal », montait une SECONDE vue
+    /// d'enregistrement dont tout — capture, import, étagère, transcription —
+    /// existait déjà ici. Les deux entrées ouvrent désormais cette feuille ; ce
+    /// qui les distinguait, la DESTINATION, s'y choisit au lieu de se deviner
+    /// au bouton pressé.
     case sound
     /// L'étagère seule, ouverte DEPUIS la feuille du son.
     case soundLibrary

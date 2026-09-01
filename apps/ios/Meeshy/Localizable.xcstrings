@@ -48165,43 +48165,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "منشور صوتي"
+            "value": "إنشاء صوتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio-Beitrag"
+            "value": "Audio-Erstellung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio post"
+            "value": "Audio creation"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publicación de audio"
+            "value": "Creación de audio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post audio"
+            "value": "Création audio"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post audio"
+            "value": "Creazione audio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publicação de áudio"
+            "value": "Criação de áudio"
           }
         }
       }
@@ -48531,6 +48531,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcrição indisponível"
+          }
+        }
+      }
+    },
+    "composer.audio.trim.error": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل القص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuschneiden fehlgeschlagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimming failed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al recortar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rognage a échoué"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taglio non riuscito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falha ao cortar"
+          }
+        }
+      }
+    },
+    "composer.audio.trim.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuschneiden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trim"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recortar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rogner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taglia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cortar"
           }
         }
       }

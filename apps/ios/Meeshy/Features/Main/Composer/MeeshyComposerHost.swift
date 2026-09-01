@@ -275,6 +275,14 @@ struct MeeshyComposerHost: View {
     /// « l'auteur n'a rien dit » — la règle automatique s'applique alors mot
     /// pour mot, et c'est ce qui garantit qu'aucun geste existant ne change.
     @State var chosenSoundRole: ComposerAudioRole?
+    /// **Le placement choisi dans la feuille de création audio** (#4657).
+    ///
+    /// NON optionnel, contrairement à `chosenSoundRole` : la feuille l'affiche
+    /// toujours, donc il y a toujours une valeur montrée. Ce sont les deux
+    /// ENTRÉES qui le posent — « Vocal » ⇒ premier plan, « Ajouter un son » ⇒
+    /// fond — et l'auteur en change dans la feuille. Un défaut arbitraire ici
+    /// contredirait le bouton qu'il vient de presser.
+    @State var chosenSoundPlacement: ComposerAudioRole = .background
 
 
     @State var showsMediaSourceChooser = false

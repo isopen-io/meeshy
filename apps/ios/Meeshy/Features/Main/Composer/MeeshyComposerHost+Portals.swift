@@ -128,7 +128,6 @@ extension MeeshyComposerHost {
         .sheet(item: $presentedPortal, onDismiss: { resumePendingPresentation() }) { portail in
             switch portail {
             case .location:     documentLocationPickerSheet
-            case .audio:        documentAudioComposerSheet
             case .emoji:        emojiPickerSheet
             case .sticker:      stickerPickerSheet
             case .sound:        composerSoundSheet

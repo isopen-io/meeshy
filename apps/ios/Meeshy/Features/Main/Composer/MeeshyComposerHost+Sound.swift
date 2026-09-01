@@ -20,18 +20,66 @@ extension MeeshyComposerHost {
     /// Le résultat va sur la SCÈNE (`attachPastedAudio`), jamais dans la liste
     /// média du document : c'est tout le correctif.
     var composerSoundSheet: some View {
-        UnifiedAudioRecorderSheet(
-            preferredLanguage: documentLanguage,
-            showsLanguageStrip: true,
-            onImportAudioFile: { presentSoundSource(.files) },
-            onOpenSoundLibrary: { presentSoundSource(.library) },
-            accessory: AnyView(soundRolePicker),
-            onRecordComplete: { url, _ in
-                viewModel.attachPastedAudio(url: url, role: chosenSoundRole)
+        AudioPostComposerView(
+            onPublish: { url, mimeType, durationMs, transcription in
+                applyCreatedAudio(url: url, mimeType: mimeType,
+                                  durationMs: durationMs, transcription: transcription)
+            },
+            onPublishBorrowed: { _ in
                 presentedPortal = nil
-                HapticFeedback.light()
-            }
+            },
+            placement: $chosenSoundPlacement
         )
+    }
+
+    /// **Ce que le PLACEMENT décide** (#4657) — la seule chose qui distinguait
+    /// les deux portes d'hier.
+    ///
+    /// | placement | destination |
+    /// |---|---|
+    /// | premier plan | la liste média du DOCUMENT — le vocal de la publication |
+    /// | fond | la scène, sous tout le reste (`attachPastedAudio`) |
+    ///
+    /// La transcription ne suit QUE le premier plan : elle décrit ce que la
+    /// publication DIT, et une bande-son n'est pas un propos. La poser sur un
+    /// son de fond ferait parler la publication à la place de son auteur.
+    ///
+    /// Trois points hérités de la feuille que #4657 remplace, et qui valent
+    /// toujours :
+    ///
+    /// - **L'enregistrement rejoint `documentLocalMedia` comme un média
+    ///   ORDINAIRE** — il part par la file durable, comme tout média local
+    ///   (T2.3). La transcription voyage À CÔTÉ, jamais fondue dans le texte.
+    /// - **La capsule de langue est SEMÉE, jamais imposée.** Poser
+    ///   `documentLanguage` au retour rend le contrôle RÉEL (loi 4) et évite
+    ///   qu'une voix parte étiquetée par la langue de démarrage du meuble —
+    ///   mais la garantie qui compte reste le `??` de `PublishIntent.document`,
+    ///   qui élit la langue PARLÉE même si l'auteur rouvre la capsule ensuite.
+    /// - **Un son EMPRUNTÉ à la bibliothèque reste hors périmètre** : il
+    ///   référence un `soundId` déjà côté serveur, sans fichier local ni
+    ///   transcription — une matière que `ComposerDocumentDraft` ne modélise
+    ///   pas. Fermer la feuille sans effet est le choix assumé, plutôt qu'un
+    ///   second chemin d'envoi pour un cas que la rangée n'offre nulle part.
+    func applyCreatedAudio(url: URL,
+                           mimeType: String,
+                           durationMs: Int,
+                           transcription: MobileTranscriptionPayload?) {
+        switch chosenSoundPlacement {
+        case .foreground:
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: mimeType,
+                durationMs: durationMs
+            ))
+            documentTranscription = transcription
+            if let transcription {
+                documentLanguage = transcription.language
+            }
+        case .background:
+            viewModel.attachPastedAudio(url: url, role: .background)
+        }
+        presentedPortal = nil
+        HapticFeedback.light()
     }
 
     /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
@@ -119,7 +167,7 @@ extension MeeshyComposerHost {
             let destination = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
-            viewModel.attachPastedAudio(url: destination, role: chosenSoundRole)
+            viewModel.attachPastedAudio(url: destination, role: chosenSoundPlacement)
             HapticFeedback.light()
         }
     }
