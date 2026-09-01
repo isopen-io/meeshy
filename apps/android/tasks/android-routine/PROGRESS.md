@@ -2,6 +2,72 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-09-01 **Android finally SENDS the Prisme's 4th-priority signal — `X-Device-Locale` now rides
+> every request, so `User.deviceLocale` fills and the device-locale arm of content resolution (dead
+> until now) actually fires** (slice `device-locale-header`, feature-parity §D "Automatic per-user
+> translation display"). The pure `LanguageResolver` already folded `MeeshyUser.deviceLocale` in at 4th
+> priority since `prisme-device-locale-priority` (2026-07-20) — but that field ONLY fills once the server
+> has been told the device locale, which iOS does via `ClientInfoProvider`'s `X-Device-Locale` header and
+> Android never did. So the arm was inert: a francophone on an English phone kept resolving exactly as
+> before, `deviceLocale` staying `null` forever (dimension 6 Cohérence + dimension 13 Complétude gap vs iOS,
+> and a dead code path — the resolver's 4th tier could never win on a real device).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4622/#4599/#4590 (jcnm: gateway),
+> #4541 (jcnm), plus dependabot; NONE a `claude/apps/android/<slice-id>` slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`banner-active-context-dismiss`) is on `main` (#4644, HEAD
+> `4a4d6138`). Branched `claude/apps/android/device-locale-header` off freshly-fetched `origin/main` (HEAD ==
+> origin/main, `rev-list --left-right --count` = 0/0). My designated env branch `claude/fervent-darwin-m75tmu`
+> is a stale non-android branch — ignored, the routine works off `main` with per-slice branches as every
+> prior slice did.
+>
+> **The change — one pure tag formatter + one interceptor + one wire.** (1) New pure `:core:model`
+> `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag from `Locale.toLanguageTag()` (so `"fr-FR"`,
+> `"zh-Hant-HK"` travel intact — the gateway `normalizeLanguageCode`s them, exactly the split iOS uses where
+> `Locale.current.identifier` is sent raw and reduced server-side), or `null` when there is no usable language
+> subtag. Two guards, both branch-tested: a blank language (`Locale.ROOT`, a region-only `Locale("","FR")` →
+> `"und-FR"`) and an ill-formed subtag whose language is non-blank yet `toLanguageTag()` collapses to `"und"`
+> (`Locale("123")`) — a `null` tells the caller to OMIT the header rather than post `"und"` on every request.
+> (2) New `:core:network` `DeviceLocaleInterceptor`, the twin of `ClientCapabilitiesInterceptor`: reads the
+> locale per request through an injectable `() -> Locale` (default `Locale.getDefault()` — a mid-session
+> locale change is reflected without rebuilding the client), adds `X-Device-Locale`, never clobbers a
+> caller-set header, sends nothing for an unusable locale. (3) Registered in `MeeshyApi`'s OkHttp builder
+> beside the capabilities interceptor. **SOTA over iOS:** `toLanguageTag()` yields a correct BCP-47 tag (and
+> normalises the JVM's legacy `iw`→`he`) where iOS does a raw `_`→`-` string swap; the und/omit logic is a
+> pure, exhaustively-branch-tested value type, not an inline transform. Blast radius: 2 new main + 2 new test
+> files + 4 wire lines in `MeeshyApi`. Deliberately EXCLUDED (faithful boundary): injecting the LIVE locale
+> straight into client-side resolution (iOS resolves off the persisted `User.deviceLocale`; doing otherwise
+> would diverge from the server value) and the telemetry `X-Meeshy-Locale`/`-Timezone`/`-Country` headers
+> (enrichment, not Prisme — a separate slice).
+>
+> **Tests: +12, RED-proven.** `DeviceLocaleTagTest` +8 (region tag `fr-FR`; bare language `en`; script+region
+> `zh-Hant-HK` verbatim; regional variant `pt-BR`; root omitted; region-only omitted; ill-formed omitted;
+> legacy `iw`→modern `he`). `DeviceLocaleInterceptorTest` +4 (announced as raw tag; unusable locale → no
+> header; caller-set header wins; locale read per-request not captured once) — via the same fake-`Chain`
+> pattern as `ClientCapabilitiesInterceptorTest`. **RED:** dropping the `und` guard
+> (`tag.isBlank() || tag == UNDETERMINED` → `tag.isBlank()`) fails **exactly** the ill-formed-subtag test
+> (`:core:model:testDebugUnitTest FAILED`, 1 failed, no collateral) — verified this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37` for AGP. Kept `local.properties` out of the diff
+> (gitignored, verified via `git check-ignore`).
+>
+> **Verified — targeted GREEN + full gate GREEN.** `:core:model` + `:core:network` `testDebugUnitTest` (new
+> classes) BUILD SUCCESSFUL; then `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check` gate CI
+> mirrors) — result recorded in the run log below. Reviewer **PASS** (diff `apps/android` only — 4 code files
+> + tracking docs, no `local.properties`; SDK purity — pure `:core:model` value type, the interceptor a
+> stateless building block, no orchestration; SSOT — one `DeviceLocaleTag`, the tag reduced only at the
+> gateway as for every other client, no re-implemented normalisation; instant-app — N/A, a request header;
+> UDF — N/A, a pure formatter + stateless interceptor; no tautological tests — the guards are real logic,
+> mutation-proven; no coverage floor lowered).
+>
+> **Next**: the LIVE-locale-into-resolution optimisation noted above (a §D follow-up, only if it can avoid
+> diverging from the persisted value); OR an earlier build-order pure-core value type. The unified
+> Conversation info sheet (§C "hero/direct headers; members/media/stats/options tabs") is a genuine gap but a
+> LARGE surface — its tab-content composables are all `ModalBottomSheet`-wrapped standalones that need
+> extraction before they can embed, so it wants its own multi-slice plan, not a single run. Read the chosen
+> box's iOS audit part read-only before branching.
+
 > On 2026-08-31 **the LIVE in-app banner now pulls down when the reader opens the very thread it is
 > about — and the "belongs to the open thread?" test became one SSOT predicate shared by the fresh-
 > notification gate and the shown-banner dismissal** (slice `banner-active-context-dismiss`,
