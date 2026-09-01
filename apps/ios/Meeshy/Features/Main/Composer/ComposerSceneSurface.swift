@@ -175,6 +175,36 @@ struct ComposerSceneSurface: View {
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
     var drawingSurface: AnyView?
 
+    /// **Ancre un rail au bas du DESSIN, jamais au bas de la frame** (#4119).
+    ///
+    /// La carte est figée à son ratio et se CENTRE dans la hauteur qu'on lui
+    /// donne. Un `.overlay(alignment: .bottom…)` tombe donc au bas de la FRAME,
+    /// c'est-à-dire SOUS la composition — d'un écart qui vaut la moitié de la
+    /// hauteur perdue, nul en 9:16 plein et maximal en paysage. Mesuré au
+    /// simulateur : environ 25 pt, assez pour que la dernière porte flotte à
+    /// côté du plateau plutôt qu'à côté de la scène.
+    ///
+    /// > Un rail qui suit la frame et non la composition n'est pas « un peu
+    /// > plus bas » : il cesse de dire à quoi il s'applique.
+    ///
+    /// Le `GeometryReader` lit la taille de la vue PADDÉE — celle qui inclut
+    /// les deux couloirs. C'est `ComposerRailGeometry.sceneBottomInset` qui en
+    /// retire l'encastrement pour retrouver la largeur de la carte : sans cette
+    /// soustraction, l'inset serait juste en portrait et faux partout ailleurs,
+    /// exactement le genre de justesse accidentelle qui survit à une relecture.
+    @ViewBuilder
+    private func ancreAuDessin<Contenu: View>(_ contenu: Contenu,
+                                              alignment: Alignment) -> some View {
+        GeometryReader { geo in
+            contenu
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+                .padding(.bottom, ComposerRailGeometry.sceneBottomInset(
+                    overlay: geo.size,
+                    ratio: aspectRatio,
+                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+    }
+
     // MARK: - Les sons POSÉS sur la scène (#4722)
 
     /// **Les puces sonores de premier plan, peintes SUR la carte.**
@@ -413,7 +443,7 @@ struct ComposerSceneSurface: View {
                 // jumeau, à portée du pouce, et avec les MÊMES marges — deux
                 // rails qui encadrent la même scène à deux hauteurs différentes
                 // se voient avant de se comprendre.
-                .overlay(alignment: .bottomLeading) { floatingRail }
+                .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
                 //
@@ -435,14 +465,17 @@ struct ComposerSceneSurface: View {
                 // 9:16 et l'écran ne l'est pas. L'occuper ne coûte rien ;
                 // occuper le canvas coûte une zone morte.
                 .overlay(alignment: .bottomTrailing) {
-                    ComposerTrailingRail(actions: trailingActions,
-                                         plateauTint: plateauTint,
-                                         onAction: onTrailingAction,
-                                         onAddSlide: onAddSlide,
-                                         onUndo: onUndo,
-                                         onRedo: onRedo)
-                        .padding(.trailing, ComposerRailGeometry.outerMargin)
-                        .padding(.bottom, ComposerRailGeometry.gutter)
+                    ancreAuDessin(
+                        ComposerTrailingRail(actions: trailingActions,
+                                             plateauTint: plateauTint,
+                                             onAction: onTrailingAction,
+                                             onAddSlide: onAddSlide,
+                                             onUndo: onUndo,
+                                             onRedo: onRedo)
+                            .padding(.trailing, ComposerRailGeometry.outerMargin)
+                            .padding(.bottom, ComposerRailGeometry.gutter),
+                        alignment: .bottomTrailing
+                    )
                 }
                 .padding(.top, 8)
 
