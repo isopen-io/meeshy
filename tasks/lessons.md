@@ -23318,6 +23318,19 @@ qu'il appelait serait partie à la mauvaise adresse.
 et a vu deux de ses fichiers disparus de la liste des modifiés. Sans cette
 relecture, la panne aurait été imputée à son propre commit suivant.
 
+**Pourquoi la vérification FAITE ne suffisait pas** (précision de l'auteur du
+commit, qui l'a reprise). Il avait bien vérifié sa liste — **au niveau du
+FICHIER** : « aucun fichier du voisin dans mes chemins », et c'était juste à ce
+niveau. Le voisin n'était pas dans la liste des fichiers, il était dans le
+CONTENU de l'un d'eux. Et vérifier au démarrage n'aurait rien donné : le fichier
+était propre quand il a commencé, l'autre session l'a édité pendant que ses
+gates tournaient.
+
+> La granularité de la vérification doit être celle du risque. Le risque n'est
+> pas « quel fichier je committe » — c'est « quelles LIGNES ce fichier porte au
+> moment où je le committe ». Une vérification juste à la mauvaise granularité
+> se lit comme une précaution accomplie.
+
 ### Comment l'éviter
 1. Stager par hunks (`git apply --cached`) et committer SANS chemins — le seul
    geste qui ne peut pas emporter les lignes d'autrui.
