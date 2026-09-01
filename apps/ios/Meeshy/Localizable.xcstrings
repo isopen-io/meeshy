@@ -83585,6 +83585,100 @@
         }
       }
     },
+    "settings.switchAccount.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستعود إلى شاشة تسجيل الدخول. سيبقى هذا الحساب في القائمة، وسيُطلب منك كلمة المرور مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kehrst zum Anmeldebildschirm zurück. Dieses Konto bleibt in der Liste, und das Passwort wird erneut abgefragt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You will return to the sign-in screen. This account stays in the list, and its password will be asked again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volverás a la pantalla de inicio de sesión. Esta cuenta seguirá en la lista y se te pedirá su contraseña."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tornerai alla schermata di accesso. Questo account resta nell’elenco e la password verrà richiesta di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você voltará à tela de login. Esta conta continuará na lista e a senha será solicitada novamente."
+          }
+        }
+      }
+    },
+    "settings.switchAccount.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل الحساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto wechseln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar de cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changer de compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trocar de conta"
+          }
+        }
+      }
+    },
     "settings.media.download.a11y": {
       "extractionState": "manual",
       "localizations": {
