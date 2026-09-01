@@ -226,7 +226,10 @@ const estTemoin: SelecteurDeFichier = (chemin) => isHandWrittenTest(chemin);
  * rougit rien, par construction des règles 2 et 3.
  */
 const DETTE_PRODUCTION: Readonly<Record<string, number>> = {
-  'types/socketio-events.ts': 3238,
+  // `types/socketio-events.ts` (3238) est SORTI de la dette le 2026-09-01 (#4645) :
+  // les charges vivent désormais dans `types/socketio-events/`, un fichier par
+  // domaine, et l'adresse historique est une façade de ré-export. La liste ne
+  // peut que rétrécir — cette entrée n'y revient pas.
   'utils/validation.ts': 2697,
   'utils/languages.ts': 1718,
   'types/video-call.ts': 1238,
