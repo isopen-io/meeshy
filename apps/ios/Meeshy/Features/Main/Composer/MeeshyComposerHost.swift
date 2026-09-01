@@ -323,6 +323,17 @@ struct MeeshyComposerHost: View {
     /// Un identifiant neuf par ouverture rend la réutilisation impossible :
     /// c'est une garantie de STRUCTURE, là où « n'oublie pas de remettre l'état
     /// à zéro » est une consigne que le prochain site d'appel ne lira pas.
+    /// **La pastille audio du CANVAS qu'on rouvre** (#4671).
+    ///
+    /// Un troisième contexte d'édition, et il fallait le distinguer des deux
+    /// autres : une pastille posée sur la scène n'est ni le fond de la slide ni
+    /// une pièce jointe du post. Le commutateur de placement n'a que ces deux
+    /// moitiés — l'offrir ici laisserait l'auteur DÉPLACER son objet en croyant
+    /// le rogner, et sans troisième valeur il ne pourrait jamais le remettre.
+    /// La feuille s'ouvre donc SANS commutateur, et le résultat remplace la
+    /// pastille à sa place.
+    @State var editedSceneChipId: String?
+
     @State var soundSheetSession = UUID()
 
 
@@ -541,7 +552,14 @@ struct MeeshyComposerHost: View {
     /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
     /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
     /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
-    @State var documentTranscription: MobileTranscriptionPayload?
+    /// **Une transcription PAR FICHIER** (#4672).
+    ///
+    /// C'était UNE valeur, écrasée à chaque retour de la feuille. Avec deux
+    /// vocaux, la seconde effaçait la première : une seule carte s'affichait,
+    /// et le premier son partait quand même à la publication, muet et
+    /// invisible. La clé est l'URL du fichier — le seul handle que
+    /// `documentLocalMedia` et la feuille partagent.
+    @State var documentTranscriptions: [URL: MobileTranscriptionPayload] = [:]
 
     init(
         intent: ComposerIntent,

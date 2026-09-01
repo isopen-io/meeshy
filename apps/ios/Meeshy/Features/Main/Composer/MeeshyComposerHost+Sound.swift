@@ -44,11 +44,26 @@ extension MeeshyComposerHost {
         return { editBackgroundSound(son) }
     }
 
-    /// Le son placé en CONTENU, résolu depuis l'état du meuble — la surface le
-    /// reçoit, elle ne le cherche pas.
-    var foregroundSound: ComposerForegroundSound? {
-        ComposerForegroundSound.resolve(localMedia: documentLocalMedia,
-                                        transcription: documentTranscription)
+    /// Les sons placés en CONTENU, résolus depuis l'état du meuble — la surface
+    /// les reçoit, elle ne les cherche pas (#4672).
+    var foregroundSounds: [ComposerForegroundSound] {
+        ComposerForegroundSound.resolveAll(localMedia: documentLocalMedia,
+                                           transcriptions: documentTranscriptions)
+    }
+
+    /// **La transcription qui PART avec la publication.**
+    ///
+    /// `PublishIntent.document` n'en porte qu'une : le fil ne modélise pas
+    /// encore une transcription par pièce jointe. Celle du DERNIER son posé est
+    /// servie — le même choix qu'avant #4672, désormais nommé au lieu d'être
+    /// une conséquence de l'écrasement.
+    ///
+    /// **La limite est du CÔTÉ FIL, pas du composer** : l'écran montre bien N
+    /// cartes, chacune avec son texte ; c'est la charge d'envoi qui n'en
+    /// transporte qu'un. Elle a son issue.
+    var documentTranscription: MobileTranscriptionPayload? {
+        guard let dernier = foregroundSounds.last else { return nil }
+        return documentTranscriptions[dernier.url]
     }
 
     /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
@@ -72,7 +87,12 @@ extension MeeshyComposerHost {
                 presentedPortal = nil
                 HapticFeedback.light()
             },
-            placement: $chosenSoundPlacement,
+            // **Pas de commutateur pour une pastille du canvas** (#4671) :
+            // ses deux moitiés désignent le fond de la slide et la pièce jointe
+            // du post, or une pastille n'est ni l'un ni l'autre. `nil` retire la
+            // section — la feuille ne rend alors aucun choix qu'elle ne saurait
+            // honorer.
+            placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil,
             // **Éditer, c'est rouvrir la MÊME vue sur le son déjà posé**
             // (directive porteur 2026-09-01). Aucune seconde surface d'édition
             // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
@@ -114,7 +134,7 @@ extension MeeshyComposerHost {
             return AudioPostComposerView.ExistingAudio(
                 url: son.url, duration: son.duration, mimeType: son.mimeType)
         }
-        guard let id = editedBackgroundSoundId,
+        guard let id = editedBackgroundSoundId ?? editedSceneChipId,
               let url = viewModel.loadedAudioURLs[id],
               let objet = viewModel.currentEffects.audioPlayerObjects?.first(where: { $0.id == id })
         else { return nil }
@@ -197,6 +217,35 @@ extension MeeshyComposerHost {
     func forgetEditedSound() {
         editedForegroundSound = nil
         editedBackgroundSoundId = nil
+        editedSceneChipId = nil
+    }
+
+    /// **Toucher une pastille audio du canvas la rouvre** (#4671, directive
+    /// porteur 2026-09-01 : « Toucher le chips sur le canvas ouvre la vue de
+    /// création audio »).
+    ///
+    /// Deux refus, et ils ne se valent pas :
+    ///
+    /// - **un son EMPRUNTÉ** ne s'ouvre pas — rouvrir passe par un fichier, ce
+    ///   qui le détacherait de son `soundId` et du crédit de son auteur. C'est
+    ///   la même loi que pour la pastille de l'avatar (`opensEditor`) ;
+    /// - **une piste dont la session ignore le fichier local** ne s'ouvre pas
+    ///   davantage : la feuille n'aurait rien à faire écouter, donc rien à
+    ///   faire viser.
+    ///
+    /// Dans les deux cas le tap reste ce qu'il était — une SÉLECTION. Il ne
+    /// promet rien qu'il ne tienne : c'est un geste qui fait moins, jamais un
+    /// bouton muet.
+    func editSceneSound(_ id: String) {
+        guard let objet = viewModel.currentEffects.audioPlayerObjects?
+                .first(where: { $0.id == id }),
+              ComposerSoundColumn.opensEditor(objet),
+              viewModel.loadedAudioURLs[id] != nil else { return }
+        editedForegroundSound = nil
+        editedBackgroundSoundId = nil
+        editedSceneChipId = id
+        openSoundSheet(placement: nil)
+        HapticFeedback.light()
     }
 
     /// **Toucher la pastille du son de fond rouvre « Création audio » DESSUS**
@@ -289,10 +338,23 @@ extension MeeshyComposerHost {
         // côté du type, pas ici : c'est elle qu'un témoin peut convoquer.
         let transcriptionServie = ComposerForegroundSound.survivingTranscription(
             returned: transcription,
-            previous: documentTranscription,
+            previous: edite.flatMap { documentTranscriptions[$0.url] },
             editedURL: edite?.url,
             returnedURL: url
         )
+        // **Une pastille du canvas se remplace À SA PLACE** (#4671) — avant le
+        // `switch`, qu'elle ne concerne pas : la feuille ne lui a offert aucun
+        // placement, donc `chosenSoundPlacement` porte ici le choix d'une AUTRE
+        // ouverture. L'appliquer ferait déménager l'objet sans que rien ne
+        // l'ait demandé.
+        if let pastille = editedSceneChipId {
+            viewModel.deleteElement(id: pastille)
+            editedSceneChipId = nil
+            viewModel.attachPastedAudio(url: url, role: .foreground)
+            presentedPortal = nil
+            HapticFeedback.light()
+            return
+        }
         switch chosenSoundPlacement {
         case .foreground:
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(
@@ -300,7 +362,12 @@ extension MeeshyComposerHost {
                 declaredMimeType: mimeType,
                 durationMs: durationMs
             ))
-            documentTranscription = transcriptionServie
+            // **Sous la clé du fichier SERVI**, jamais sous celle du fichier
+            // édité : `AudioSegmentExporter` rend une URL NEUVE dès qu'un
+            // rognage a lieu, et la poser sous l'ancienne clé donnerait une
+            // carte muette à côté d'une transcription orpheline.
+            documentTranscriptions[url] = transcriptionServie
+            if let edite, edite.url != url { documentTranscriptions[edite.url] = nil }
             if let transcriptionServie {
                 documentLanguage = transcriptionServie.language
             }

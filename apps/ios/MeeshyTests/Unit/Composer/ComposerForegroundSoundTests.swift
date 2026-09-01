@@ -27,46 +27,52 @@ final class ComposerForegroundSoundTests: XCTestCase {
     // MARK: - Ce que la règle élit
 
     func test_resolve_unSonEtDesImages_élitLeSon() {
-        let sound = ComposerForegroundSound.resolve(
+        let sons = ComposerForegroundSound.resolveAll(
             localMedia: [media("a.jpg", mime: "image/jpeg", ms: nil),
                          media("voix.m4a", mime: "audio/mp4"),
                          media("b.mp4", mime: "video/mp4")],
-            transcription: nil
+            transcriptions: [:]
         )
-        XCTAssertEqual(sound?.url.lastPathComponent, "voix.m4a")
-        XCTAssertEqual(sound?.duration, 12)
+        XCTAssertEqual(sons.map(\.url.lastPathComponent), ["voix.m4a"])
+        XCTAssertEqual(sons.first?.duration, 12)
     }
 
-    /// **Le DERNIER son gagne, et ce n'est pas un détail d'ordre.** Le meuble ne
-    /// garde qu'UNE transcription, écrasée à chaque retour de feuille : elle
-    /// décrit donc le son posé en dernier. Élire le premier ferait lire la
-    /// transcription d'un voisin sous une bande qui joue autre chose.
-    func test_resolve_deuxSons_élitLeDERNIER() {
-        let sound = ComposerForegroundSound.resolve(
+    /// **Les DEUX sons sont rendus, dans l'ordre de la POSE** (#4672).
+    ///
+    /// Cette suite épinglait l'inverse : « le DERNIER son gagne », au motif que
+    /// le meuble ne gardait qu'UNE transcription. Le témoin décrivait
+    /// fidèlement une CONSÉQUENCE de l'écrasement, pas une règle — et il
+    /// PROTÉGEAIT donc le défaut : le premier son restait dans la publication,
+    /// muet et invisible, et personne ne pouvait le retirer.
+    ///
+    /// > Un témoin qui grave la conséquence d'une limite en fait un invariant.
+    /// > Relire ce qu'il PROTÈGE, pas seulement s'il passe.
+    func test_resolve_deuxSons_lesRendTOUSLESDEUX() {
+        let sons = ComposerForegroundSound.resolveAll(
             localMedia: [media("premier.m4a", mime: "audio/mp4"),
                          media("dernier.m4a", mime: "audio/mp4")],
-            transcription: nil
+            transcriptions: [:]
         )
-        XCTAssertEqual(sound?.url.lastPathComponent, "dernier.m4a")
+        XCTAssertEqual(sons.map(\.url.lastPathComponent), ["premier.m4a", "dernier.m4a"])
     }
 
-    func test_resolve_aucunSon_rendNil() {
-        XCTAssertNil(ComposerForegroundSound.resolve(
+    func test_resolve_aucunSon_rendUneListeVide() {
+        XCTAssertTrue(ComposerForegroundSound.resolveAll(
             localMedia: [media("a.jpg", mime: "image/jpeg", ms: nil)],
-            transcription: transcription("un texte égaré")
-        ))
+            transcriptions: [:]
+        ).isEmpty)
     }
 
     /// Une durée absente ne disqualifie PAS le son : le lecteur relit la vraie
     /// durée du fichier et corrige. La refuser ici ferait disparaître la carte
     /// pour un champ que rien n'oblige à remplir.
     func test_resolve_duréeAbsente_gardeLeSon() {
-        let sound = ComposerForegroundSound.resolve(
+        let sons = ComposerForegroundSound.resolveAll(
             localMedia: [media("voix.m4a", mime: "audio/mp4", ms: nil)],
-            transcription: nil
+            transcriptions: [:]
         )
-        XCTAssertNotNil(sound)
-        XCTAssertEqual(sound?.duration, 0)
+        XCTAssertEqual(sons.count, 1)
+        XCTAssertEqual(sons.first?.duration, 0)
     }
 
     // MARK: - La transcription qui défile
@@ -97,12 +103,13 @@ final class ComposerForegroundSoundTests: XCTestCase {
     /// Une transcription saisie à la main (« Rédiger », « Coller ») n'a aucun
     /// segment : elle voyage par le texte entier, qui se lit sans s'allumer.
     func test_transcriptionManuelle_aucuneLigneDatée_maisLeTexteEstSERVI() {
-        let sound = ComposerForegroundSound.resolve(
-            localMedia: [media("voix.m4a", mime: "audio/mp4")],
-            transcription: transcription("Écrit à la main")
+        let voix = media("voix.m4a", mime: "audio/mp4")
+        let sons = ComposerForegroundSound.resolveAll(
+            localMedia: [voix],
+            transcriptions: [voix.url: transcription("Écrit à la main")]
         )
-        XCTAssertTrue(sound?.cues.isEmpty == true)
-        XCTAssertEqual(sound?.text, "Écrit à la main")
+        XCTAssertTrue(sons.first?.cues.isEmpty == true)
+        XCTAssertEqual(sons.first?.text, "Écrit à la main")
     }
 
     // MARK: - Ce qu'une édition fait à la transcription

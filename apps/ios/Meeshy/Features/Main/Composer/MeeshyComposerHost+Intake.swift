@@ -186,7 +186,7 @@ extension MeeshyComposerHost {
             documentBackground = nil
             documentLocation = nil
             documentDiscoverability.reset()
-            documentTranscription = nil
+            documentTranscriptions = [:]
             // Le contexte d'édition désigne une URL de `documentLocalMedia`
             // qu'on vient de vider : le laisser posé ferait remplacer une
             // entrée qui n'existe plus.

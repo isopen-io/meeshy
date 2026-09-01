@@ -62,6 +62,19 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
             carte.contains("MeeshyAudioTranscriptPlayer("),
             "La carte doit monter le lecteur du SDK, jamais une bande réécrite ici."
         )
+        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
+        // fichier ; les précédents partaient à la publication sans que rien à
+        // l'écran ne dise qu'ils existaient.
+        XCTAssertTrue(
+            carte.contains("ForEach(foregroundSounds)"),
+            "La carte doit se répéter sur TOUS les sons de contenu : un `if let` n'en montre "
+                + "qu'un, et les autres partent quand même à la publication."
+        )
+        XCTAssertTrue(
+            carte.contains("rappel(son)"),
+            "…et le tap doit désigner LE son touché : un rappel sans argument ouvrirait "
+                + "toujours le même, un contrôle qui a l'air de répondre et vise son voisin."
+        )
     }
 
     /// **La branche à SCÈNE ne la monte pas.** Contre-épreuve : sans elle, la
@@ -90,8 +103,8 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
             return XCTFail("`documentSurface` introuvable.")
         }
-        XCTAssertTrue(document.contains("foregroundSound: foregroundSound"),
-                      "La surface ne reçoit plus le son de contenu.")
+        XCTAssertTrue(document.contains("foregroundSounds: foregroundSounds"),
+                      "La surface ne reçoit plus les sons de contenu.")
         XCTAssertTrue(document.contains("editForegroundSound(son)"),
                       "Le tap de la carte n'est plus câblé : il ne ferait rien.")
 
@@ -233,6 +246,58 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
 
     private func occurrences(of fragment: String, dans code: String) -> Int {
         code.components(separatedBy: fragment).count - 1
+    }
+
+    // MARK: - La pastille audio du CANVAS (#4671)
+
+    /// **Toucher une pastille audio du canvas l'ouvre — le TAP, pas le
+    /// double-tap.** Le mot de la directive est « toucher ».
+    ///
+    /// Avant ce lot, le geste faisait le CONTRAIRE : `itemKind(forId:)` ignorait
+    /// `audioPlayerObjects`, donc `handleSingleTap` retombait sur sa branche
+    /// « fond » et DÉSÉLECTIONNAIT. Pas un contrôle inerte — un contrôle qui
+    /// fait l'inverse de ce qu'on attend.
+    func test_toucherUnePastilleAudio_ouvreLaFeuille() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        guard let tap = corps("onItemTapped: { id, kind in", dans: surfaces) else {
+            return XCTFail("`onItemTapped` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(tap.contains("if kind == .audio { editSceneSound(id) }"),
+                      "le tap simple doit ouvrir « Création audio » sur la pastille touchée")
+    }
+
+    /// **Elle n'offre AUCUN placement, et se remplace à sa place.**
+    ///
+    /// Les deux moitiés du commutateur désignent le fond de la slide et la
+    /// pièce jointe du post ; une pastille du canvas n'est ni l'un ni l'autre.
+    /// L'offrir laisserait l'auteur DÉPLACER son objet en croyant le rogner —
+    /// et, sans troisième valeur, il ne pourrait jamais le remettre.
+    func test_lePlacement_nEstPasOffertAUnePastilleDuCanvas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil"),
+                      "la feuille ne doit rendre aucun choix qu'elle ne saurait honorer")
+        guard let pose = corps("func applyCreatedAudio(", dans: sons) else {
+            return XCTFail("`applyCreatedAudio` introuvable.")
+        }
+        let avantSwitch = pose.components(separatedBy: "switch chosenSoundPlacement").first ?? ""
+        XCTAssertTrue(avantSwitch.contains("if let pastille = editedSceneChipId"),
+                      "le remplacement en place se décide AVANT le `switch` : sinon un placement "
+                      + "choisi lors d'une AUTRE ouverture ferait déménager l'objet")
+    }
+
+    /// **Un son emprunté, ou sans fichier local, ne s'ouvre pas.** Le premier
+    /// pour ne pas voler son crédit, le second parce qu'il n'y aurait rien à
+    /// faire écouter. Le tap reste alors une sélection — un geste qui fait
+    /// moins, jamais un bouton muet.
+    func test_unePastille_quOnNePeutPasEditer_neSOuvrePas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        guard let edition = corps("func editSceneSound(_ id: String) {", dans: sons) else {
+            return XCTFail("`editSceneSound` introuvable.")
+        }
+        XCTAssertTrue(edition.contains("ComposerSoundColumn.opensEditor(objet)"),
+                      "la loi du crédit est APPELÉE, pas réécrite")
+        XCTAssertTrue(edition.contains("viewModel.loadedAudioURLs[id] != nil"),
+                      "sans fichier local, la feuille n'aurait rien à faire viser")
     }
 
     /// **La pastille est alimentée par la LOI, jamais par la lecture directe.**

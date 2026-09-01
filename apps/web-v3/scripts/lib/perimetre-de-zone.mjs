@@ -14,15 +14,22 @@
 // fautif à l'étape même où `<Link>` devient universel. Le garde de la chaîne consomme désormais
 // `cheminsReclames` / `capture` d'ici [revue #4414].
 //
-// IL RESTE UNE TROISIÈME LECTURE, et la taire serait refaire la faute qu'on vient de corriger :
-// `apps/web/__tests__/public/sw.v3-zone.test.ts` → `traefikV3Prefixes()` lit la MÊME ligne, avec
-// la MÊME faiblesse (`/PathPrefix\(`([^`]+)`\)/g` seul, donc `Path(…)` jeté sans un mot). Elle
-// n'est pas fusionnée ici parce qu'elle vit dans `apps/web`, l'application VIVE, à qui la
-// conception de la v3 interdit de toucher hors de ce que le § 4 nomme — et faire dépendre l'arbre
-// de tests de l'app qui sert le trafic d'un module de `apps/web-v3` est une décision de
-// placement, pas un correctif de revue. Ce qu'elle coûte tant qu'elle vit : le gate
-// d'anti-divergence entre le routeur et `V3_ZONE_PREFIXES` sous-compterait les chemins le jour
-// où un `Path(…)` entrerait dans la règle. Ce jour-là, c'est ce module qu'elle doit appeler.
+// IL RESTE UNE TROISIÈME LECTURE — et ce qu'elle annonçait est ARRIVÉ.
+// `apps/web/__tests__/public/sw.v3-zone.test.ts` lit la MÊME ligne. Le paragraphe qui vivait ici
+// disait : « le gate d'anti-divergence sous-compterait les chemins le jour où un `Path(…)`
+// entrerait dans la règle ». Ce jour a été le 2026-09-01 : la vitrine a basculé sur staging par
+// un `Path(`/`)`, et le seul chemin humain de la zone est resté invisible à ce lecteur — donc
+// hors de `V3_ZONE_PREFIXES`, donc intercepté par le worker legacy chez tout visiteur revenant.
+// Le risque énoncé n'avait pas de témoin : l'énoncer n'était pas le garder.
+//
+// Ce qui a changé depuis : ce lecteur reconnaît désormais les DEUX matchers et lit les DEUX
+// déploiements, et surtout il a cessé d'être le gate d'anti-divergence. Ce rôle est passé à
+// `scripts/check-v3-pipeline.mjs` — invariant « le worker legacy s'efface devant ce que la règle
+// réclame », posé une fois PAR DÉPLOIEMENT et qui EXÉCUTE `belongsToV3Zone` au lieu de la
+// recopier. Le témoin de `apps/web` garde ce qu'il est seul à pouvoir garder : le COMPORTEMENT du
+// listener. La fusion complète de la lecture reste une décision de PLACEMENT — faire dépendre
+// l'arbre de tests de l'app qui sert le trafic d'un module de `apps/web-v3` — et non un correctif
+// de revue ; elle n'est simplement plus ce qui protège l'invariant.
 //
 // POURQUOI ICI, ET PAS À LA RACINE. La donnée lue est bien un fichier d'infrastructure de la
 // racine, et `scripts/lib/` y serait l'adresse naturelle — mais l'invariant (i) de

@@ -138,6 +138,10 @@ const V3_APP_DIRECTORY = `${V3_DIRECTORY}/app`;
 const V3_PUBLIC_DIRECTORY = `${V3_DIRECTORY}/public`;
 const LEGACY_ROUTER = 'frontend';
 
+// Le SECOND aiguilleur de l'origine. `apps/web` enregistre ce worker sur
+// `scope: '/'`, donc sur l'origine ENTIÈRE, zone v3 comprise.
+const WORKER_LEGACY = 'apps/web/public/sw.js';
+
 /**
  * **Les DEUX déploiements qui servent la zone.**
  *
@@ -284,6 +288,7 @@ const readWorld = async (root) => ({
   docker: await readFile(join(root, '.github/workflows/docker.yml'), 'utf8'),
   prod: await readFile(join(root, 'docker-compose.prod.yml'), 'utf8'),
   staging: await readFile(join(root, 'docker-compose.staging.yml'), 'utf8'),
+  worker: await readFile(join(root, WORKER_LEGACY), 'utf8'),
   typeDebt: await readFile(join(root, 'scripts/check-type-debt.sh'), 'utf8'),
   dockerfile: await readFile(join(root, `${V3_DIRECTORY}/Dockerfile`), 'utf8'),
   zone: zoneInventory(root),
@@ -682,6 +687,73 @@ const theRouterClaimsNothingTheZoneDoesNotServe = (dep) => (world) => {
 };
 
 // Le COPY du runner et l'existence de public/ vont ENSEMBLE, dans les deux sens.
+/**
+ * LE WORKER LEGACY S'EFFACE DEVANT TOUT CE QUE LE ROUTEUR RÉCLAME (§ 4.4 bis).
+ *
+ * Traefik n'est pas le seul aiguilleur de l'origine : `apps/web/public/sw.js`
+ * est enregistré sur `scope: '/'` et sa branche « App Shell » répond
+ * `cachedResponse || fetchPromise` à toute NAVIGATION. Un chemin basculé côté
+ * routeur mais absent de `V3_ZONE_PREFIXES` est donc servi par la v3 aux
+ * navigateurs NEUFS et par le cache du legacy aux REVENANTS — et le retour
+ * arrière du § 4.3 y est inerte.
+ *
+ * CE QUE CE GARDE AJOUTE À CELUI QUI EXISTAIT. `apps/web/__tests__/public/
+ * sw.v3-zone.test.ts` posait déjà la question, avec deux angles morts que la
+ * bascule de staging a traversés tous les deux :
+ *
+ *   1. il ne lit que `docker-compose.prod.yml` et le routeur `frontend-v3`,
+ *      alors que la bascule se joue sur `frontend-v3-staging` ;
+ *   2. son extraction ne connaît que `PathPrefix(…)` et jette `Path(…)` sans
+ *      un mot — or `Path(`/`)` est précisément la forme de l'étape « la
+ *      vitrine ».
+ *
+ * Résultat mesuré : `/` a été réclamé par le routeur de staging sans jamais
+ * entrer dans `V3_ZONE_PREFIXES`, et aucun témoin n'a rougi. C'est le défaut
+ * de #4630 rejoué sur un autre axe — un garde paramétré par le DÉPLOIEMENT ne
+ * suffit pas si le second lecteur de la même donnée, lui, ne l'est pas.
+ *
+ * LE PRÉDICAT N'EST PAS RECOPIÉ : il est EXÉCUTÉ. `belongsToV3Zone` et sa
+ * liste sont extraits de la source de production et évalués tels quels — une
+ * réécriture ici serait la quatrième lecture de cette donnée, et la plus
+ * dangereuse, puisqu'elle prétendrait garder la divergence.
+ */
+const zoneDuWorker = (source) => {
+  const bloc = source.match(
+    /const V3_ZONE_PREFIXES = \[[^\]]*\];[\s\S]*?function belongsToV3Zone\(pathname\) \{[\s\S]*?\n\}/,
+  );
+  if (bloc === null) return null;
+  return new Function(
+    `${bloc[0]}\nreturn { prefixes: V3_ZONE_PREFIXES, couvre: belongsToV3Zone };`,
+  )();
+};
+
+const leWorkerLegacySEfface = (dep) => (world) => {
+  const rule = v3RuleOf(world, dep);
+  if (rule === null) return [];
+
+  const zone = zoneDuWorker(world.worker);
+  if (zone === null) {
+    return [
+      `${WORKER_LEGACY} : ni V3_ZONE_PREFIXES ni belongsToV3Zone ne s'y lisent sous la forme ` +
+        `attendue — la frontière de zone du worker ne peut plus être opposée à la règle du ` +
+        `routeur ${dep.v3}, et son absence de verdict ressemblerait à un verdict favorable`,
+    ];
+  }
+
+  return cheminsReclames(rule)
+    .filter(({ valeur }) => !zone.couvre(valeur))
+    .map(
+      ({ matcher, valeur }) =>
+        `${dep.fichier} : le routeur ${dep.v3} réclame ${matcher}(\`${valeur}\`) que ` +
+        `V3_ZONE_PREFIXES de ${WORKER_LEGACY} ne couvre pas (${zone.prefixes.join(', ')}). ` +
+        `Le worker legacy, enregistré sur scope:'/', continue d'intercepter cette navigation ` +
+        `chez tout visiteur revenant : la v3 est servie aux navigateurs NEUFS seulement, et le ` +
+        `retour arrière du § 4.3 y est inerte. Remède (§ 4.4 bis, ordre dans UN sens) : ajouter ` +
+        `le préfixe à V3_ZONE_PREFIXES dans un commit ANTÉRIEUR, le DÉPLOYER, puis seulement ` +
+        `l'ajouter au routeur`,
+    );
+};
+
 const theRunnerShipsWhatPublicHolds = (world) => {
   const copies = /^COPY --from=builder[^\n]*\/app\/public\s+\.\/public\s*$/m.test(world.dockerfile);
   const held = world.zone.publicFiles.length;
@@ -904,6 +976,7 @@ const CHECKS = [
     [`${dep.fichier} : le service de la v3 déclare ce que son code lit`, theV3ServiceDeclaresWhatItsCodeReads(dep)],
     [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, noRootServedAssetEscapesTheZone(dep)],
     [`${dep.fichier} : la règle ne réclame que des chemins servis`, theRouterClaimsNothingTheZoneDoesNotServe(dep)],
+    [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, leWorkerLegacySEfface(dep)],
   ]),
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
   ["aucun fichier source de la v3 n'est ignoré par git", noSourceFileOfTheV3IsGitIgnored],
@@ -931,6 +1004,11 @@ const replaceIn = (world, key, needle, replacement) => {
 };
 
 const MUTATIONS = [
+  [
+    'un préfixe retiré de V3_ZONE_PREFIXES sans être retiré du routeur',
+    (world) => replaceIn(world, 'worker', /'\/l'/, "'/rien'"),
+    "réclame PathPrefix(`/l`) que V3_ZONE_PREFIXES",
+  ],
   [
     'le type-check de la v3 retiré de ci.yml',
     (world) =>

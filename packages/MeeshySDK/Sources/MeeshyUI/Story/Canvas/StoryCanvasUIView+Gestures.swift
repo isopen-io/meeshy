@@ -112,11 +112,26 @@ extension StoryCanvasUIView {
         onItemDoubleTapped?(id, kind)
     }
 
+    /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).
+    ///
+    /// `audio` y est entré le 2026-09-01, et son absence coûtait plus qu'un
+    /// éditeur manquant : `handleSingleTap` fait
+    /// `guard let id = hitTestItem(…), let kind = itemKind(forId: id) else { … onBackgroundTapped?() }`.
+    /// Le hit-test TROUVAIT bien la pastille audio — sa couche est nommée — mais
+    /// le kind manquait, donc toucher une pastille audio se comportait
+    /// exactement comme toucher le vide : ça DÉSÉLECTIONNAIT. Pas un contrôle
+    /// inerte : un contrôle qui fait le contraire.
+    ///
+    /// **Le menu contextuel POSAIT la même question et répondait autrement** :
+    /// son classifieur retombait sur `.media` pour un audio, là où celui-ci
+    /// rendait `nil`. Deux écritures d'une seule règle, déjà divergentes ; il
+    /// appelle désormais cette fonction.
     func itemKind(forId id: String) -> CanvasItemKind? {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
         if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
+        if (slide.effects.audioPlayerObjects ?? []).contains(where: { $0.id == id }) { return .audio }
         return nil
     }
 

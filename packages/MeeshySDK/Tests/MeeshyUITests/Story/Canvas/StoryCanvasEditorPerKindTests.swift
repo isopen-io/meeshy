@@ -105,6 +105,7 @@ final class StoryCanvasEditorPerKindTests: XCTestCase {
         case .media: return "m1"
         case .sticker: return "st1"
         case .location: return "loc1"
+        case .audio: return "au1"
         }
     }
 }

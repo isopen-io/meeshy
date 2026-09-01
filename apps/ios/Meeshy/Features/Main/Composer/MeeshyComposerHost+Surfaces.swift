@@ -326,6 +326,13 @@ extension MeeshyComposerHost {
             onItemTapped: { id, kind in
                 selectedSceneItemId = id
                 selectedSceneItemKind = kind
+                // **« Toucher le chips sur le canvas ouvre la vue de création
+                // audio »** (directive porteur 2026-09-01, #4671) — le mot est
+                // TOUCHER, donc le tap simple, pas le double-tap réservé aux
+                // éditeurs dédiés. La sélection est posée d'abord : si le son
+                // refuse de s'ouvrir (emprunté, ou fichier local inconnu), le
+                // geste reste une sélection franche plutôt qu'un tap sans effet.
+                if kind == .audio { editSceneSound(id) }
             },
             // **« Modifier » ouvre l'édition EN LIGNE du texte** (#4074, vue
             // `1d`). Le meuble câble déjà les trois entrées de cette édition
@@ -345,6 +352,13 @@ extension MeeshyComposerHost {
                     // exactement ce qui faisait diverger les deux chemins.
                     openObjectEditor(id)
                     HapticFeedback.medium()
+                case .audio:
+                    // **Toucher une pastille audio ouvre « Création audio » SUR
+                    // ce son** (#4671, directive porteur 2026-09-01). Le même
+                    // écran que les deux autres surfaces qui portent un son :
+                    // une seconde vue d'édition aurait divergé au premier
+                    // réglage.
+                    editSceneSound(id)
                 case .media, .sticker, .location:
                     break
                 }
@@ -607,10 +621,8 @@ extension MeeshyComposerHost {
             onEditBackgroundSound: editBackgroundSoundAction,
             // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
-            foregroundSound: foregroundSound,
-            onEditForegroundSound: foregroundSound.map { son in
-                { editForegroundSound(son) }
-            },
+            onEditForegroundSound: { son in editForegroundSound(son) },
+            foregroundSounds: foregroundSounds,
             // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à
