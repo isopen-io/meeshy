@@ -56,8 +56,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         var violations: [String] = []
         for file in env.sourceFiles {
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-            for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key),
+            for call in LocalizedCallScanner.calls(in: text) {
+                guard LocalizedCallScanner.isIdentifier(call.key),
                       !call.hasDefaultValue,
                       !Self.rawAllowlist.contains(call.key) else { continue }
                 let catalog = call.isModuleBundle ? env.sdkKeysWithEn : env.appKeysWithEn
@@ -81,7 +81,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // A clean quoted identifier token is matched even inside string
         // interpolation, so this is immune to the nested-literal pitfalls that
         // break naive literal extraction.
-        let quotedTokens = quotedIdentifierTokens(in: env.combinedSource)
+        let quotedTokens = LocalizedCallScanner.quotedIdentifierTokens(in: env.combinedSource)
 
         let orphans = env.appIdentifierKeys
             .filter { !Self.orphanAllowlist.contains($0) && !quotedTokens.contains($0) }
@@ -157,6 +157,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        // 271i — les deux écrans que le lot rend épinglables : la grille média du
+        // flux, dont les quatorze libellés VoiceOver parlaient anglais sous une clé
+        // intraduisible, et le site unique qui compose désormais « Média n sur N ».
+        "apps/ios/Meeshy/Features/Main/Views/FeedPostCard+Media.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Views/MediaPositionLabel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
@@ -266,7 +271,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
+        // 271i — sa clé `gallery.position` a MIGRÉ dans `MediaPositionLabel.swift`,
+        // épinglé ci-dessous. L'entrée reste : la liste est ADDITIVE, et un écran
+        // qui recevrait demain une chaîne doit la recevoir déjà protégée.
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 0
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
@@ -449,8 +457,8 @@ final class LocalizationConsistencyTests: XCTestCase {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
             let text = try pinnedScreenSource(at: url, path: path)
-            for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle,
+            for call in LocalizedCallScanner.calls(in: text) {
+                guard LocalizedCallScanner.isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key) else { continue }
                 let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
@@ -481,8 +489,8 @@ final class LocalizationConsistencyTests: XCTestCase {
             let url = env.repoRoot.appendingPathComponent(path)
             let catalog = env.catalog(resolvedFor: url)
             let text = try pinnedScreenSource(at: url, path: path)
-            for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle,
+            for call in LocalizedCallScanner.calls(in: text) {
+                guard LocalizedCallScanner.isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key),
                       let inline = call.defaultValue,
                       // Xcode rewrites `"… \(x)"` to `"… %@"` on extraction, so an
@@ -629,33 +637,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         return catalogs
     }
 
-    /// **Borne du scanner — il voit les DEUX écritures d'un appel (258i, #4292).**
-    ///
-    /// Le marqueur a été un littéral pendant huit itérations, et un appel réparti sur
-    /// plusieurs lignes lui était invisible. Le cliquet ci-dessus repose entièrement
-    /// sur ce que le scanner VOIT : rétréci à nouveau, il ne rougirait pas — il
-    /// compterait simplement moins, et le plafond deviendrait franchissable sans que
-    /// rien ne le signale.
-    ///
-    /// Cette borne épingle donc les deux formes contre un échantillon dont la réponse
-    /// est connue, plutôt que contre le dépôt, dont le contenu bouge.
-    func test_leScannerVoitLesAppelsRepartisSurPlusieursLignes() {
-        let source = """
-        let a = String(localized: "une.ligne", defaultValue: "A", bundle: .main)
-        let b = String(
-            localized: "plusieurs.lignes",
-            defaultValue: "B",
-            bundle: .main
-        )
-        """
-        let keys = localizedCalls(in: source).map(\.key).sorted()
-        XCTAssertEqual(
-            keys, ["plusieurs.lignes", "une.ligne"],
-            "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
-            + "plafond du cliquet borne une mesure partielle"
-        )
-    }
-
     /// Keys with at least one locale expressed as plural variations.
     private func pluralizedKeys(_ url: URL) throws -> [String] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
@@ -676,8 +657,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         for file in env.sourceFiles {
             let catalog = env.catalog(resolvedFor: file)
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-            for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
+            for call in LocalizedCallScanner.calls(in: text) {
+                guard LocalizedCallScanner.isIdentifier(call.key), !call.isModuleBundle else { continue }
                 if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
                     untranslated.insert(call.key)
                 }
@@ -707,11 +688,21 @@ final class LocalizationConsistencyTests: XCTestCase {
         // that already carried the same French text (see the `contacts.phonebook` /
         // `sync.pill.a11y` / `a11y.delivery` fills of that iteration).
         //
+        // RE-PINNED at 271i — 81 → 79. `feed.media.item` left the codebase rather than
+        // the backlog: it declared FIVE different defaults across fourteen call sites,
+        // so no single catalog entry could ever have served it, and the string it was
+        // trying to say already shipped in seven locales under `gallery.position`.
+        // `feed.media.moreItems`, the tile beside it, entered the catalog by composing
+        // two entries that were already there — the "N more X" frame of
+        // `bubble.reactions.moreCount` and the noun of `gallery.position`.
+        //
         // The number must only ever go DOWN: a failure means a new key was introduced
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
-        // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 81
+        // the target that OWNS the key — instead of raising the ceiling. And note the
+        // third exit this iteration used: a key whose string the app ALREADY owns is
+        // cleared by deleting the key, not by translating it twice.
+        let backlogCeiling = 79
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
@@ -888,11 +879,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         /// catalog that actually serves them, and the two widget sources unpinnable
         /// though both already pass both rules. `test_everyPerTargetCatalogIsMapped` is the
         /// witness that keeps the next extension from repeating it.
-        static let catalogByTargetFragment: [String: String] = [
-            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
-            "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
-            "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
-        ]
+        ///
+        /// **Moved to `LocalizationCatalogMap` at 271i** so that a second guard can
+        /// read it instead of copying it. Two copies of this map would reproduce the
+        /// 270i defect between files rather than inside one: an unnamed target falls
+        /// back to the app catalog silently, so a stale copy mis-measures without
+        /// going red.
+        static let catalogByTargetFragment = LocalizationCatalogMap.byTargetFragment
 
         let repoRoot: URL
         let sourceFiles: [URL]
@@ -971,7 +964,7 @@ final class LocalizationConsistencyTests: XCTestCase {
             repoRoot: repoRoot,
             sourceFiles: files,
             combinedSource: combined,
-            appIdentifierKeys: appKeys.keys.filter(isIdentifier),
+            appIdentifierKeys: appKeys.keys.filter(LocalizedCallScanner.isIdentifier),
             appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
             sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
             catalogs: catalogs,
@@ -1071,133 +1064,5 @@ final class LocalizationConsistencyTests: XCTestCase {
             if url.pathExtension == "swift" { files.append(url) }
         }
         return files
-    }
-
-    // MARK: - Source scanning
-
-    private func isIdentifier(_ key: String) -> Bool {
-        guard !key.contains(" "), key.contains(".") || key.contains("_") else { return false }
-        return key.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" || $0 == "-" }
-    }
-
-    private struct LocalizedCall {
-        let key: String
-        let hasDefaultValue: Bool
-        let isModuleBundle: Bool
-        /// The inline `defaultValue:` when it is a single-line literal. `nil` for a
-        /// multi-line `"""` block, which this scanner deliberately does not read.
-        let defaultValue: String?
-    }
-
-    /// Finds each `String(localized: "…" …)` call and reports its key plus
-    /// whether the call carries a `defaultValue:` and/or `bundle: .module`.
-    /// The call segment is delimited by a string-aware balanced-paren scan so
-    /// parentheses inside string literals don't end it prematurely.
-    ///
-    /// **The marker is a pattern, not a literal (258i, #4292).** It used to be the
-    /// exact string `"String(localized:"`, which a call broken over several lines —
-    /// `String(\n    localized: "…"` — does not contain. 226i measured that blind
-    /// spot at 92 calls over 46 files and deliberately left it, for a reason that was
-    /// sound at the time: widening the marker reveals keys and so RAISES the backlog,
-    /// which the ratchet forbids. It was sound against a ceiling believed tight. The
-    /// ceiling was 1545 against a real backlog of 102, so the answer was to widen AND
-    /// re-pin — the blind spot had meanwhile grown to 185 calls over 61 files, because
-    /// nothing stopped new ones being written.
-    ///
-    /// `\s*` after the paren matches both shapes at once. The `openParen` arithmetic
-    /// below is unaffected: `(` still immediately follows `String` in every call,
-    /// single-line or not.
-    private func localizedCalls(in source: String) -> [LocalizedCall] {
-        guard let marker = try? NSRegularExpression(pattern: #"String\(\s*localized:"#) else { return [] }
-        let ns = source as NSString
-        let stringPrefixLength = ("String" as NSString).length
-        var calls: [LocalizedCall] = []
-        var searchStart = 0
-        while searchStart < ns.length {
-            let found = marker.rangeOfFirstMatch(
-                in: source,
-                range: NSRange(location: searchStart, length: ns.length - searchStart)
-            )
-            if found.location == NSNotFound { break }
-
-            let openParen = found.location + stringPrefixLength
-            var i = openParen
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var end = ns.length - 1
-            while i < ns.length {
-                // Skip UTF-16 surrogate halves (emoji/flags) — they are never
-                // one of the control characters we track, and UnicodeScalar
-                // rejects them.
-                guard let scalar = UnicodeScalar(ns.character(at: i)) else { i += 1; continue }
-                let c = Character(scalar)
-                if inString {
-                    if escaped { escaped = false }
-                    else if c == "\\" { escaped = true }
-                    else if c == "\"" { inString = false }
-                } else {
-                    if c == "\"" { inString = true }
-                    else if c == "(" { depth += 1 }
-                    else if c == ")" { depth -= 1; if depth == 0 { end = i; break } }
-                }
-                i += 1
-            }
-
-            let segment = ns.substring(with: NSRange(location: found.location, length: end - found.location + 1))
-            if let key = firstKey(in: segment) {
-                calls.append(LocalizedCall(
-                    key: key,
-                    hasDefaultValue: segment.contains("defaultValue:"),
-                    isModuleBundle: segment.contains(".module"),
-                    defaultValue: inlineDefaultValue(in: segment)
-                ))
-            }
-            searchStart = end + 1
-        }
-        return calls
-    }
-
-    /// The inline `defaultValue:` literal of a call segment, when it is written on
-    /// one line. A multi-line `"""` block yields `nil` rather than the empty string
-    /// the naive single-quote regex would report for its opening delimiter.
-    private func inlineDefaultValue(in segment: String) -> String? {
-        guard segment.range(of: #"defaultValue:\s*""""#, options: .regularExpression) == nil,
-              let range = segment.range(
-                  of: #"defaultValue:\s*"((?:[^"\\]|\\.)*)""#,
-                  options: .regularExpression
-              )
-        else { return nil }
-        let match = segment[range]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
-    }
-
-    /// The first quoted string literal after `localized:` in a call segment.
-    private func firstKey(in segment: String) -> String? {
-        guard let keyRange = segment.range(
-            of: #"localized:\s*"([^"]*)""#,
-            options: .regularExpression
-        ) else { return nil }
-        let match = segment[keyRange]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
-    }
-
-    /// All clean quoted identifier tokens (`"a11y.foo.bar"`) in the source.
-    private func quotedIdentifierTokens(in source: String) -> Set<String> {
-        let ns = source as NSString
-        guard let regex = try? NSRegularExpression(pattern: #""([A-Za-z0-9_.\-]+)""#) else { return [] }
-        var tokens: Set<String> = []
-        regex.enumerateMatches(in: source, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
-            if let match, match.numberOfRanges > 1 {
-                tokens.insert(ns.substring(with: match.range(at: 1)))
-            }
-        }
-        return tokens
     }
 }

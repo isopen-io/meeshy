@@ -19,7 +19,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 270i, 2026-08-30)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 271i, 2026-09-01)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 >
 > | itération | PR | squash sur `main` | issue |
 > |---|---|---|---|
@@ -42,8 +42,63 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
 > | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
 > | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
+> | 270i | [#4368](https://github.com/isopen-io/meeshy/pull/4368) | `ba7af15c` | #4364 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+> - **Branche de travail 271i** : `claude/intelligent-noether-6mx60g`, **réinitialisée** (jamais supprimée) sur `origin/main` `8dd1aa26` — base de 271i.
+>   La branche de 270i était `claude/intelligent-noether-m8jpj8`, sur `origin/main` `56bc5fd9`.
+>
+> ### 271i — une clé promettait cinq chaînes, et personne ne comparait deux sites (#4651)
+>
+> | mesure | avant | après |
+> |---|---|---|
+> | clés déclarant deux chaînes différentes | **5** | **0** |
+> | cliquet i18n (`backlogCeiling`) | 81 | **79** |
+> | écrans épinglés | 246 | **248** |
+> | clés gardées sur les épinglés | 2 761 | **2 828** |
+> | règle A / règle B | 0 / 0 | **0 / 0** |
+> | `LocalizationConsistencyTests.swift` | 1 203 lignes | **1 068** |
+>
+> - **Toutes les gardes comparaient un site au CATALOGUE ; aucune ne comparait
+>   deux sites L'UN À L'AUTRE.** D'où deux angles morts exacts : une clé que le
+>   catalogue n'a pas (rien en face — la garde la saute en silence, alors que son
+>   `defaultValue` n'est pas un repli mais **ce qui part**, aux sept locales) et un
+>   écran non épinglé (~1090 sources hors champ). `InlineDefaultConsistencyTests`
+>   ajoute l'axe manquant : **5 violations sur `main`, 0 après.**
+> - **`feed.media.item` était un PIÈGE, pas une dette.** Quatorze sites, **cinq**
+>   `defaultValue` (*Media 1 of …* … *Media 5 of …*). Une clé se résout à UNE
+>   entrée : appliquer le remède que le cliquet prescrit lui-même (« ajoutez
+>   l'entrée au catalogue ») aurait annoncé **« Média 1 sur 5 » sur les cinq
+>   tuiles**. Une régression VoiceOver introduite en OBÉISSANT à la garde.
+>   → *La question à poser à une clé n'est pas seulement « est-elle traduite ? »
+>   mais « **PEUT-elle** l'être ? »*
+> - **La sortie n'était pas de la traduire : l'app possédait déjà la chaîne.**
+>   `gallery.position` (« Média %1$d sur %2$d ») ship dans les sept locales et
+>   était reconstruite EN LIGNE à deux endroits. Site unique `MediaPositionLabel`,
+>   branché aux trois écrans, clé supprimée. **Zéro mot inventé, zéro clé neuve.**
+> - **Un `defaultValue` anglais ne fait pas que s'afficher : il REMONTE.** Le
+>   catalogue du SDK portait `"fr": { "state": "new", "value": "Done" }` pour
+>   `common.done`, les six autres locales correctes. Xcode amorce l'entrée de
+>   langue source AVEC le littéral du code : le mauvais littéral **devient**
+>   l'entrée française, et les traductions en descendent. À l'écran, le même
+>   bouton disait « Terminé » dans l'app et **« Done »** dans le SDK.
+> - **Le scanner ENJAMBAIT les appels imbriqués** (même angle mort que 258i, un
+>   cran plus bas : pas un appel que le marqueur rate, un appel que le curseur
+>   saute). Trouvé parce que le **miroir CLI a DIVERGÉ** de la garde Swift — *un
+>   miroir n'a de valeur que là où il diverge*. Élargi après mesure : 3 appels
+>   dans tout le dépôt, dont 1 en `.module` et 2 traduites ⇒ **le plafond ne bouge
+>   pas**, et le dilemme de 258i ne se pose pas.
+> - **Extraction obligatoire avant ajout** : `LocalizationConsistencyTests` était à
+>   **1203 lignes**, hors budget 800–1100, donc fermé aux ajouts (`CLAUDE.md`).
+>   `LocalizedCallScanner` + `LocalizationCatalogMap` + `LocalizedCallScannerTests`
+>   en sortent — et deux copies de la carte des catalogues rejoueraient le défaut
+>   de 270i ENTRE fichiers au lieu de dedans.
+> - **Suite nommée — et sa raison, qui n'est pas un oubli.** Dix `defaultValue`
+>   restent en ANGLAIS (`security.verify.*` en tête : un écran de SÉCURITÉ).
+>   **Ils ne se réconcilient pas** : les 186 littéraux de 269i étaient sûrs parce
+>   que leur clé était AU catalogue — le littéral était MORT. Ici la clé est
+>   ABSENTE, donc le littéral est **VIVANT** : le passer au français DÉPLACE le
+>   défaut vers l'anglophone. Entrée et littéral doivent atterrir ENSEMBLE (#4328) ;
+>   trois sont en outre plurielles (#4329).
 >
 > ### 270i — le widget parlait sept langues, et la garde ne le savait pas (#4364)
 >

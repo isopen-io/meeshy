@@ -319,7 +319,7 @@ internal struct _InlineRenderer: View {
 
     private var playButtonAccessibilityLabel: String {
         switch player.availability {
-        case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la video", bundle: .module)
+        case .ready:         return String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module)
         case .needsDownload: return String(localized: "media.video.download", defaultValue: "Telecharger la video", bundle: .module)
         case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Telechargement en cours", bundle: .module)
         }

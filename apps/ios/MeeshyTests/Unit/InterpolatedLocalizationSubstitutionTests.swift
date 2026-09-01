@@ -70,6 +70,35 @@ final class InterpolatedLocalizationSubstitutionTests: XCTestCase {
         )
     }
 
+    /// Entrée neuve en 271i, sur la tuile « +N » de la grille média du flux. Son
+    /// `defaultValue` a longtemps été ANGLAIS (« N more media items ») et la clé
+    /// absente du catalogue : les sept locales lisaient donc l'anglais, francophone
+    /// comprise. L'entrée est arrivée avec sa traduction ; cette borne vérifie ce
+    /// que la traduction seule ne dit pas — que `%lld` reçoit bien l'entier.
+    func test_moreMediaItems_substitutesTheRemainingCount() {
+        let remaining = 42
+        assertFullySubstituted(
+            String(localized: "feed.media.moreItems",
+                   defaultValue: "\(remaining) médias de plus", bundle: .main),
+            contains: ["42"], "feed.media.moreItems"
+        )
+    }
+
+    /// Le libellé VoiceOver d'une tuile média : UN site, trois écrans (grille du
+    /// flux, pellicule, galerie plein écran). Il porte DEUX arguments positionnels,
+    /// la forme où une inversion passe le plus facilement inaperçue.
+    ///
+    /// `@MainActor` parce que `MediaPositionLabel` vit dans la cible app, isolée
+    /// MainActor par défaut (`SWIFT_DEFAULT_ACTOR_ISOLATION`), quand le bundle de
+    /// tests compile `nonisolated` — même motif que `repliesLabel` ci-dessus.
+    @MainActor
+    func test_mediaPosition_substitutesBothPositionalArguments() {
+        assertFullySubstituted(
+            MediaPositionLabel.text(position: 3, of: 7),
+            contains: ["3", "7"], "gallery.position"
+        )
+    }
+
     func test_addSelected_substitutesTheSelectionCount() {
         let selected = 3
         assertFullySubstituted(
