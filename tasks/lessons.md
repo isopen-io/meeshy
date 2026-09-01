@@ -23326,3 +23326,75 @@ relecture, la panne aurait été imputée à son propre commit suivant.
 3. Attribuer par `git show --stat <sha>` confronté aux périmètres déclarés,
    jamais par `--author`.
 
+
+## Leçon 414 — Un commit par CHEMINS filtre les fichiers, jamais les LIGNES : il peut emporter une MOITIÉ
+
+**Le fait (2026-09-01).** J'ai committé `ec6d641497` avec une liste de 22 chemins
+que j'avais vérifiée deux fois : aucun fichier d'une voisine, aucun `pbxproj`.
+La liste était juste **au niveau du fichier** et fausse au niveau du CONTENU —
+`MeeshyComposerHost.swift` et `ComposerStoryCanvasTests.swift` portaient aussi
+le WIP d'une session voisine sur son #4751. Mon commit a emporté 28 lignes que
+je n'ai pas écrites, dont un appel à `ComposerSurfaceRouting.armsCameraOnAppear`
+**dont la définition vivait dans son `ComposerSurfaceRules.swift` non
+committé**. `git grep "func armsCameraOnAppear" ec6d641497` rendait zéro :
+`dev` n'a pas compilé jusqu'à son commit suivant.
+
+**Ce que ma vérification ne pouvait pas voir.** Elle répondait à « ce fichier
+est-il de mon territoire ? » — la bonne question dans un arbre où chacun a ses
+fichiers. Elle ne répond à rien dans un arbre où **trois périmètres se croisent
+sur le même hôte**. Et vérifier au DÉMARRAGE ne suffisait pas non plus : le
+fichier était propre quand j'ai commencé, la voisine l'a édité pendant que je
+mesurais mes gates.
+
+> **Ce qu'un commit par chemins peut emporter n'est pas seulement « du code qui
+> n'est pas le mien » : c'est une MOITIÉ de quelque chose.** Le fichier voisin
+> qu'on ne nomme pas est exactement celui qui rendait le hunk compilable — par
+> construction, puisqu'on ne l'a pas nommé. Un demi-changement casse la
+> compilation là où un changement entier, même étranger, ne l'aurait pas fait.
+
+**Le geste.** Lire `git diff -- <mes chemins>` **juste avant** le commit, pas la
+liste des chemins. Toute ligne que je ne reconnais pas ⇒ stager par hunks
+(`git apply --cached`) et committer SANS chemins. C'est le seul filtre qui
+opère à la granularité où le problème existe.
+
+Corollaire d'attribution : **toutes nos sessions committent sous la même
+identité git**, donc `--author` ne sépare rien. Seule l'empreinte de FICHIERS
+attribue un commit à une session — c'est ainsi que la voisine a corrigé une
+attribution qui lui était tombée dessus par erreur.
+
+Voisines : `feedback_git_commit_takes_whole_index_not_just_your_add`,
+`reference_git_commit_paths_overrides_the_staged_blob`,
+`reference_explicit_paths_means_files_not_a_directory` — les trois disent que
+les chemins ne protègent pas de l'INDEX. Celle-ci dit qu'ils ne protègent pas
+non plus de l'ARBRE, et pour une raison de granularité, pas de mécanisme.
+
+## Leçon 415 — Une fonction qui LIT plus de familles qu'elle n'en ÉCRIT ne rougit nulle part
+
+**Le fait.** Une session voisine me signale que mes jumelles UIKit
+`bringForward` / `sendBackward` refont l'aplatissement de `allElementsSortedByZ`
+« sans la justification écrite » — une remarque de DUPLICATION. En allant la
+mesurer, j'ai trouvé autre chose : les deux fonctions **lisent cinq familles**
+(texte, média, son, sticker, lieu) et **écrivent par `mutateItem`, qui n'en
+connaît que quatre** — le son manque. Le son participe donc au classement et
+n'est jamais écrit. Avancer une chip de son ne fait rien ; faire passer un texte
+devant elle applique l'échange **à moitié** — le texte prend le rang du son, le
+son ne prend pas celui du texte. `allItemZIndexes` (donc `nextTopZ`) rate le son
+aussi : « mettre au premier plan » peut atterrir dessous. (#4759)
+
+> **L'asymétrie entre ce qu'une fonction LIT et ce qu'elle ÉCRIT est invisible à
+> toute vérification de ressemblance.** Deux copies peuvent être identiques ligne
+> pour ligne et fausses toutes les deux ; ici, la faute n'est même pas dans la
+> copie — elle est dans le SILENCE de l'écriture. `mutateItem` rend
+> `newSlide` inchangé quand aucune famille ne matche : pour l'appelant, « je
+> n'ai rien trouvé » et « j'ai muté » ont la même signature.
+
+**Le geste.** Devant une remarque de FORME (duplication, style, justification
+manquante), aller mesurer le COMPORTEMENT des deux copies avant de conclure que
+la remarque est cosmétique. Et devant un helper de mutation générique qui prend
+une closure par famille : compter ses paramètres contre l'énumération de ses
+appelants — un helper qui rend son entrée inchangée sur un cas non couvert est
+un `nil` silencieux déguisé en succès.
+
+Voisines : `reference_inert_control_vs_unfed_feature` (les cinq natures d'un
+contrôle qui ment — celle-ci en est une sixième : le contrôle AGIT, sur la
+moitié de sa cible), `reference_a_deduced_value_is_not_a_read_value`.
