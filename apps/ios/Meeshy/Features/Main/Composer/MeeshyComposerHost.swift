@@ -306,6 +306,25 @@ struct MeeshyComposerHost: View {
     /// n'étant lus qu'en un seul endroit (`editedSoundTrack`).
     @State var editedBackgroundSoundId: String?
 
+    /// **L'IDENTITÉ de la feuille « Création audio »** (#4682).
+    ///
+    /// `.sheet(item: $presentedPortal)` reconstruit son contenu quand l'ITEM
+    /// change. Deux ouvertures successives portent la même valeur — `.sound` —
+    /// donc SwiftUI est en droit de RÉUTILISER la vue, et avec elle tout son
+    /// `@State` : la piste enregistrée, la phase, le son emprunté. Une feuille
+    /// périmée se re-présente alors sur un son qu'elle n'édite pas.
+    ///
+    /// Observé une fois à la vérification simulateur du 2026-09-01, et
+    /// destructeur : rouvrir un son de FOND montrait le commutateur sur
+    /// « Contenu de publication », et valider déplaçait le son sans rien dire.
+    /// L'indice qui l'a nommé est visuel — la feuille rendait la carte
+    /// d'APRÈS-ENREGISTREMENT au lieu de celle de réouverture.
+    ///
+    /// Un identifiant neuf par ouverture rend la réutilisation impossible :
+    /// c'est une garantie de STRUCTURE, là où « n'oublie pas de remettre l'état
+    /// à zéro » est une consigne que le prochain site d'appel ne lira pas.
+    @State var soundSheetSession = UUID()
+
 
     @State var showsMediaSourceChooser = false
 

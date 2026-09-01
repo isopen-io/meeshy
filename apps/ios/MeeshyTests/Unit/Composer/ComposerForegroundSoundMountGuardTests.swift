@@ -99,10 +99,13 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         guard let edition = corps("func editForegroundSound(", dans: son) else {
             return XCTFail("`editForegroundSound` introuvable.")
         }
-        XCTAssertTrue(edition.contains("presentedPortal = .sound"),
-                      "L'édition doit rouvrir la vue « Création audio », pas une seconde surface.")
-        XCTAssertTrue(edition.contains("chosenSoundPlacement = .foreground"),
-                      "La feuille doit s'ouvrir sur la moitié du commutateur que le geste vient de désigner.")
+        // **Repointé au #4682** : l'ouverture est passée par un site UNIQUE
+        // (`openSoundSheet`), qui pose le placement ET renouvelle l'identité de
+        // la feuille. Épingler les deux lignes d'avant ferait rougir la garde
+        // sur le correctif qu'elle devrait protéger.
+        XCTAssertTrue(edition.contains("openSoundSheet(placement: .foreground)"),
+                      "L'édition doit rouvrir « Création audio » par le site unique, sur la "
+                      + "moitié du commutateur que le geste vient de désigner.")
 
         guard let feuille = corps("var composerSoundSheet: some View {", dans: son) else {
             return XCTFail("`composerSoundSheet` introuvable.")
@@ -180,6 +183,56 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         }
         XCTAssertTrue(emprunt.contains("retireLeSonDeFondActuel()"),
                       "…et l'emprunt aussi : sans lui, `addBorrowedSound` en fait un PREMIER PLAN")
+    }
+
+    /// **Une ouverture, une feuille NEUVE** (#4682).
+    ///
+    /// `.sheet(item:)` reconstruit sur changement d'ITEM ; deux ouvertures
+    /// portent la même valeur `.sound`, donc SwiftUI peut réutiliser la vue et
+    /// tout son `@State`. Observé une fois au simulateur : la feuille rendait la
+    /// carte d'après-enregistrement au lieu de celle de réouverture, et valider
+    /// déplaçait le son de fond vers le contenu, en silence.
+    ///
+    /// Le témoin garde les DEUX moitiés : l'identité posée sur la feuille, et le
+    /// fait qu'aucun site n'ouvre le portail par un chemin qui la contournerait.
+    /// La seconde est celle qui se perdrait — un cinquième site d'appel ne
+    /// rougirait nulle part, le défaut ne se voyant qu'à la SECONDE ouverture.
+    func test_laFeuilleAudio_estNEUVE_aChaqueOuverture() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains(".id(soundSheetSession)"),
+                      "sans identité renouvelée, SwiftUI réutilise la feuille et son état")
+        guard let ouverture = corps("func openSoundSheet(placement: ComposerAudioRole?) {",
+                                    dans: sons) else {
+            return XCTFail("`openSoundSheet` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(ouverture.contains("soundSheetSession = UUID()"),
+                      "l'ouverture doit RENOUVELER l'identité")
+        XCTAssertTrue(ouverture.contains("presentedPortal = .sound"),
+                      "…et présenter le portail, les deux dans le même geste")
+
+        for nom in ["MeeshyComposerHost+Sound.swift",
+                    "MeeshyComposerHost+Intake.swift",
+                    "MeeshyComposerHost+Socle.swift",
+                    "MeeshyComposerHost+Surfaces.swift",
+                    "MeeshyComposerHost+Portals.swift"] {
+            let code = try source(nom)
+            // **`.sound` est le PRÉFIXE de `.soundLibrary`.** Compté nu, ce
+            // fragment attribuait à la feuille audio une ouverture de
+            // l'ÉTAGÈRE — un faux positif qui a fait rougir cette garde à sa
+            // première exécution. Les deux portails se comptent donc, et l'un
+            // se retranche de l'autre.
+            let ouvertures = occurrences(of: "presentedPortal = .sound", dans: code)
+                - occurrences(of: "presentedPortal = .soundLibrary", dans: code)
+            let attendu = (nom == "MeeshyComposerHost+Sound.swift") ? 1 : 0
+            XCTAssertEqual(ouvertures, attendu,
+                           "\(nom) ouvre la feuille audio hors de `openSoundSheet` : "
+                           + "l'identité ne serait pas renouvelée, et la feuille se "
+                           + "re-présenterait périmée.")
+        }
+    }
+
+    private func occurrences(of fragment: String, dans code: String) -> Int {
+        code.components(separatedBy: fragment).count - 1
     }
 
     /// **La pastille est alimentée par la LOI, jamais par la lecture directe.**
