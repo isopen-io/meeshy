@@ -12,6 +12,45 @@ import MeeshyUI
 /// gardes qui ancrent sur ces membres restent vivantes.
 extension MeeshyComposerHost {
 
+    // MARK: - Ce que le meuble RÉSOUT à propos des sons
+
+    /// **Le son que la ligne de l'avatar affiche** — la loi convoquée, jamais
+    /// réécrite (#4670).
+    ///
+    /// L'URL locale vient de la session (`loadedAudioURLs`), seul handle commun
+    /// entre un objet de scène et un média de document. Elle manque pour un son
+    /// EMPRUNTÉ, qui n'a pas de fichier : la loi lit cette absence comme une
+    /// preuve, et non comme une lacune.
+    ///
+    /// **Les trois résolutions ci-dessous ont quitté `+Surfaces`** le
+    /// 2026-09-01 : ce fichier-là franchissait les 1 100 lignes, et la
+    /// directive du 2026-08-28 exige d'extraire AVANT d'ajouter. L'extraction
+    /// suit la responsabilité, pas la tranche — « ce que le meuble sait des
+    /// sons » vit avec le son, et la surface continue de RECEVOIR ces valeurs
+    /// sans jamais les chercher.
+    var avatarBadgeSound: StoryAudioPlayerObject? {
+        let fond = viewModel.currentEffects.resolvedBackgroundAudio
+        return ComposerSoundColumn.avatarBadge(
+            background: fond,
+            backgroundLocalURL: fond.flatMap { viewModel.loadedAudioURLs[$0.id] },
+            contentMediaURLs: documentLocalMedia.map(\.url)
+        )
+    }
+
+    /// **Ce que le doigt fait de la pastille** — `nil` quand la loi refuse
+    /// d'ouvrir (#4668), et la pastille redevient alors une lecture pure.
+    var editBackgroundSoundAction: (() -> Void)? {
+        guard let son = avatarBadgeSound, ComposerSoundColumn.opensEditor(son) else { return nil }
+        return { editBackgroundSound(son) }
+    }
+
+    /// Le son placé en CONTENU, résolu depuis l'état du meuble — la surface le
+    /// reçoit, elle ne le cherche pas.
+    var foregroundSound: ComposerForegroundSound? {
+        ComposerForegroundSound.resolve(localMedia: documentLocalMedia,
+                                        transcription: documentTranscription)
+    }
+
     /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
     /// déjà ses deux entrées « Fichiers » et « Bibliothèque », que le composer
     /// ne lui passait simplement jamais — et le rôle de mixage se pose SOUS le
@@ -39,14 +78,62 @@ extension MeeshyComposerHost {
             // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
             // pour exactement ça, et une vue jumelle aurait divergé au premier
             // réglage.
-            initialAudio: editedForegroundSound.map {
-                AudioPostComposerView.ExistingAudio(
-                    url: $0.url,
-                    duration: $0.duration,
-                    mimeType: $0.mimeType
-                )
-            }
+            initialAudio: editedSoundTrack
         )
+    }
+
+    /// **La piste que la feuille rouvre** — de CONTENU ou de FOND, un seul site.
+    ///
+    /// Les deux surfaces d'édition (#4657 pour le contenu, #4668 pour le fond)
+    /// remettent la même chose à la feuille : une URL, une durée, un type. Les
+    /// composer en deux endroits aurait donné deux façons d'ouvrir la même vue,
+    /// et la seconde aurait divergé au premier champ ajouté à `ExistingAudio`.
+    var editedSoundTrack: AudioPostComposerView.ExistingAudio? {
+        if let son = editedForegroundSound {
+            return AudioPostComposerView.ExistingAudio(
+                url: son.url, duration: son.duration, mimeType: son.mimeType)
+        }
+        guard let id = editedBackgroundSoundId,
+              let url = viewModel.loadedAudioURLs[id],
+              let objet = viewModel.currentEffects.audioPlayerObjects?.first(where: { $0.id == id })
+        else { return nil }
+        // La durée de l'OBJET, pas celle du fichier : elle porte déjà le
+        // rognage précédent. La feuille relit de toute façon la durée réelle de
+        // l'asset et corrige — ce qui compte est de ne pas rendre 0, qui ferait
+        // disparaître la zone de rognage.
+        return AudioPostComposerView.ExistingAudio(
+            url: url,
+            duration: objet.duration.map(TimeInterval.init) ?? 0,
+            mimeType: "audio/mp4")
+    }
+
+    /// **Oublier ce qu'on éditait — les DEUX contextes, en un geste** (#4668).
+    ///
+    /// Le portail se ferme par « Valider », par « Annuler » et par un
+    /// glissement ; un seul de ces trois chemins repasse par `applyCreatedAudio`.
+    /// C'est donc la FERMETURE qui doit éteindre, et elle doit éteindre les deux
+    /// : un contexte survivant ferait supprimer, au prochain retour de feuille,
+    /// un son que l'auteur n'avait pas ouvert.
+    func forgetEditedSound() {
+        editedForegroundSound = nil
+        editedBackgroundSoundId = nil
+    }
+
+    /// **Toucher la pastille du son de fond rouvre « Création audio » DESSUS**
+    /// (#4668).
+    ///
+    /// Le placement est forcé à `.background` — comme son jumeau de contenu
+    /// force `.foreground` : ouvrir la feuille sur l'autre moitié du
+    /// commutateur ferait mentir le geste qu'on vient de faire. L'auteur peut
+    /// toujours en changer DANS la feuille, ce qui fait alors passer le son du
+    /// fond au contenu ; `applyCreatedAudio` retire l'ancien objet dans les
+    /// deux cas.
+    func editBackgroundSound(_ sound: StoryAudioPlayerObject) {
+        editedForegroundSound = nil
+        editedBackgroundSoundId = sound.id
+        chosenSoundPlacement = .background
+        presentedPortal = .sound
+        HapticFeedback.light()
     }
 
     /// **Toucher la carte du son de contenu rouvre « Création audio » DESSUS.**
@@ -55,6 +142,7 @@ extension MeeshyComposerHost {
     /// son de contenu, et ouvrir la feuille sur l'autre moitié du commutateur
     /// ferait mentir le geste qui vient d'être fait.
     func editForegroundSound(_ son: ComposerForegroundSound) {
+        editedBackgroundSoundId = nil
         editedForegroundSound = son
         chosenSoundPlacement = .foreground
         presentedPortal = .sound
@@ -104,6 +192,16 @@ extension MeeshyComposerHost {
         if let edite {
             documentLocalMedia.removeAll { $0.url == edite.url }
             editedForegroundSound = nil
+        }
+        // **Et le son de FOND se remplace de la même façon** (#4668). Le
+        // retrait précède le `switch` pour la raison qui vaut déjà pour son
+        // jumeau : l'auteur peut avoir fait passer le son du fond au CONTENU
+        // depuis la feuille, et l'objet de scène doit disparaître dans ce cas
+        // aussi. Le mettre dans la branche `.background` aurait laissé le son
+        // en double — une fois sur la scène, une fois sous le texte.
+        if let ancienFond = editedBackgroundSoundId {
+            viewModel.deleteElement(id: ancienFond)
+            editedBackgroundSoundId = nil
         }
         // **Rouvrir la feuille pour rogner ne doit pas EFFACER la
         // transcription.** La feuille ne re-transcrit pas un son déjà acquis —

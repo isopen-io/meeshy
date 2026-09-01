@@ -1,0 +1,79 @@
+import Foundation
+import MeeshySDK
+import MeeshyUI
+
+/// **Ce que la ligne de l'AVATAR a le droit d'afficher** (#4670).
+///
+/// > Directive porteur 2026-09-01 : « Un son mis sur le contenu ne doit pas
+/// > apparaître à côté de l'avatar ! »
+///
+/// ## Deux places, deux propos
+///
+/// | place | ce qu'elle dit | ce qui l'alimente |
+/// |---|---|---|
+/// | à côté de l'avatar | AVEC QUOI la publication est publiée | le son de fond de la scène |
+/// | sous le texte | CE QUE la publication dit | les médias audio du document |
+///
+/// La ligne de l'avatar porte les attributs qui existent AVANT le premier
+/// caractère tapé — qui publie, et sous quelle bande-son. Un son de contenu est
+/// le propos lui-même : l'y montrer ferait lire deux pistes là où il n'y en a
+/// qu'une, et un doublon de cette forme ne se lit pas comme un doublon.
+///
+/// ## Pourquoi une LOI, et pas la propriété d'un site d'appel
+///
+/// Les deux colonnes ne se croisent pas aujourd'hui : `resolvedBackgroundAudio`
+/// ne lit que `currentEffects`, `ComposerForegroundSound.resolve` ne lit que
+/// `documentLocalMedia`. Mais c'est une propriété des sites qui ÉCRIVENT, pas
+/// une garantie de ce qui LIT — et ils sont quatre à écrire des sons
+/// (`applyCreatedAudio`, `ingestSoundFiles`, `attachPastedAudio`, la reprise de
+/// brouillon). Le jour où l'un d'eux pose le même fichier des deux côtés, la
+/// pastille se remet à mentir sans qu'aucune ligne n'ait changé ici.
+///
+/// > Une séparation tenue par « personne ne fait ça » n'est pas une séparation.
+/// > Elle tient jusqu'au prochain chemin, et c'est le chemin qui la casse qui
+/// > devra s'en apercevoir.
+nonisolated enum ComposerSoundColumn {
+
+    /// La pastille de la ligne d'avatar — le son de FOND, et rien d'autre.
+    ///
+    /// `nil` ⇒ la ligne reste ce qu'elle était : avatar et texte côte à côte.
+    ///
+    /// - Parameters:
+    ///   - background: ce que la scène tient pour son fond.
+    ///   - backgroundLocalURL: le fichier local de ce son, quand la session en
+    ///     connaît un (`StoryComposerViewModel.loadedAudioURLs`). C'est le SEUL
+    ///     handle commun aux deux magasins : un objet de scène et un média de
+    ///     document ne partagent ni identifiant ni type, seulement — quand le
+    ///     son est local — le chemin de leur fichier.
+    ///   - contentMediaURLs: les fichiers que le DOCUMENT publie.
+    static func avatarBadge(background: StoryAudioPlayerObject?,
+                            backgroundLocalURL: URL?,
+                            contentMediaURLs: [URL]) -> StoryAudioPlayerObject? {
+        guard let background else { return nil }
+        // Un son de fond DISTANT (emprunté à l'étagère) n'a pas de fichier
+        // local : il ne peut pas être un média du document, qui n'accepte que
+        // des fichiers. L'absence d'URL est donc une preuve, pas une lacune.
+        guard let backgroundLocalURL else { return background }
+        return contentMediaURLs.contains(backgroundLocalURL) ? nil : background
+    }
+
+    /// **La pastille s'OUVRE-t-elle ?** (#4668)
+    ///
+    /// Non pour un son EMPRUNTÉ, et le motif tient au crédit. Rouvrir passe par
+    /// « Création audio », qui rend un FICHIER (`onPublish`) : republier une
+    /// piste de l'étagère par ce chemin la détacherait de son `soundId`, donc
+    /// de l'attribution de son auteur. La doctrine du crédit
+    /// (`addBorrowedSound`) l'interdit, et un rognage qui vole une signature est
+    /// pire que pas de rognage du tout.
+    ///
+    /// **L'absence est structurelle, pas un refus.** Sans `onTap`, la pastille
+    /// ne s'annonce ni comme bouton ni comme activable : elle ne PROMET rien.
+    /// Un bouton monté puis muet serait la loi 4 dans sa forme la plus coûteuse.
+    ///
+    /// Rogner un son emprunté DÉJÀ POSÉ demande de muter `sourceStart` /
+    /// `sourceEnd` sur l'objet plutôt que de repasser par un fichier — un
+    /// chemin qui n'existe pas encore. Il a son issue.
+    static func opensEditor(_ sound: StoryAudioPlayerObject) -> Bool {
+        sound.soundId?.isEmpty != false
+    }
+}

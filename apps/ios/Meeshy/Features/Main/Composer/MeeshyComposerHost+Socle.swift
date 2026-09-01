@@ -42,7 +42,6 @@ extension MeeshyComposerHost {
 
     var socle: some View {
         HStack(spacing: 10) {
-            if ComposerSocleSound.isServed(surface: mountedSurface) { soundChip }
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
             if paintedSocleZones.contains(.preview) { previewButton }
@@ -54,88 +53,32 @@ extension MeeshyComposerHost {
     }
 
 
-    /// **La bande-son de la publication (#4071 — vues `1a` et `1b`).**
-    ///
-    /// Elle vit au socle parce que c'est là qu'est ce qui décide de l'ENVOI :
-    /// un son de fond appartient à la publication entière, pas à la slide
-    /// courante. La maquette la place à gauche, avant tout le reste.
-    ///
-    /// **Elle rend la porte son ATTEIGNABLE depuis le document.** La feuille
-    /// existait, complète — enregistreur, rôle de mixage, bibliothèque,
-    /// fichier — et la vérification simulateur du 2026-08-30 a établi qu'aucun
-    /// écran du parcours réel n'y menait de ce côté. C'était un défaut de
-    /// chemin, pas de surface, et c'est exactement le motif que la refonte
-    /// cherche à fermer.
-    ///
-    /// Une pastille, DEUX états : l'invitation quand rien n'est posé, le crédit
-    /// dès qu'un son l'est. Le mot vient d'une règle pure (`ComposerSocleSound`)
-    /// pour que « quel crédit afficher » s'éprouve sans monter la vue.
-    /// **Le type est EFFACÉ, et ce n'est pas une préférence de style.**
-    ///
-    /// Ajoutée telle quelle au `HStack` du socle, cette pastille a fait
-    /// DÉBORDER la profondeur de type de `MeeshyComposerHost.body` :
-    /// `SIGBUS / EXC_ARM_DA_ALIGN` dans `ViewBuilder.buildExpression`, 111
-    /// trames, reproductible à chaque ouverture du composer depuis le fil
-    /// (2026-08-30, simulateur `Meeshy-iOS26`). Le socle porte cinq zones
-    /// conditionnelles ; chacune multiplie le type générique de la pile, et la
-    /// cinquième l'a fait franchir la limite.
-    ///
-    /// `AnyView` coupe la chaîne : le meuble le fait déjà pour ses autres
-    /// accessoires (`toolOptions`, `railSystemEntry`), pour la même raison.
-    /// Le coût de diffing est réel et assumé — une vue qui plante n'a pas de
-    /// performance.
-    var soundChip: AnyView {
-        let fond = viewModel.currentEffects.resolvedBackgroundAudio
-        return AnyView(Button {
-            // Le défaut de CETTE entrée (#4657) — l'auteur peut en changer dans
-            // la feuille, qui est désormais la même que celle de « Vocal ».
-            chosenSoundPlacement = .background
-            presentedPortal = .sound
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "music.note")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                if socleShowsLabels {
-                    Text(ComposerSocleSound.label(for: fond))
-                        .font(MeeshyFont.relative(12, weight: .semibold))
-                        .lineLimit(1)
-                        // **Troncature en QUEUE, jamais au milieu.** J'avais
-                        // posé `.middle` en croyant préserver le début ET la
-                        // fin ; mesuré à l'écran, « Ajouter un son » devenait
-                        // « Aj…son » — pas un mot abrégé, un mot INEXISTANT :
-                        // l'œil le lit, butte et revient. En queue, « Ajouter
-                        // un… » et « NUITS BLANCHES · @… » restent lisibles, et
-                        // ce qui est coupé est ce qui compte le moins — le
-                        // titre du son passe avant son crédit, son crédit avant
-                        // sa durée.
-                        .truncationMode(.tail)
-                        // Elle CÈDE la place plutôt que de la prendre : le
-                        // socle porte l'action terminale, et un titre de son
-                        // long ne doit jamais pousser « Publier » vers le bord.
-                        .frame(maxWidth: 140, alignment: .leading)
-                }
-            }
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            // **44 pt est un PLANCHER, pas une conséquence du contenu.** Réduite
-            // à sa seule note de musique aux paliers d'accessibilité, la
-            // pastille tomberait à une cible d'une vingtaine de points — la
-            // même règle que l'audience et la flèche de publication, posée au
-            // même endroit qu'elles.
-            .frame(minWidth: 44, minHeight: 44)
-            .overlay(
-                Capsule().strokeBorder(
-                    MeeshyColors.textSecondary(isDark: true).opacity(0.28), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        // La pastille peut porter un titre long ; elle cède la place au reste
-        // du socle plutôt que de pousser « Publier » hors de l'écran.
-        .layoutPriority(0)
-        .accessibilityLabel(Text(ComposerSocleSound.spokenLabel(for: fond))))
-    }
+    // **LA PASTILLE DE SON A QUITTÉ LE SOCLE** (#4669, directive porteur
+    // 2026-09-01).
+    //
+    // > « On n'a plus besoin du bouton ajouter un son en bas. »
+    //
+    // Elle y était entrée pour une bonne raison — la porte du son était
+    // INATTEIGNABLE depuis le document, un défaut de chemin établi au
+    // simulateur le 2026-08-30. #4657 a ouvert deux autres chemins vers la MÊME
+    // feuille (l'outil micro de la rangée du document, la porte son du rail de
+    // la scène), et #4668 a fait de la pastille près de l'avatar le bouton
+    // d'édition du son de fond. La raison d'être de celle-ci a donc disparu, et
+    // ce qui restait était un doublon posé sur la rangée de l'ENVOI.
+    //
+    // Deux niveaux du modèle vivaient dans une seule rangée : l'audience et
+    // « Publier » décident de ce qui PART, une entrée de son décide de ce qu'on
+    // COMPOSE. Le doigt ne pouvait pas les distinguer.
+    //
+    // Bénéfice mesuré au passage : le socle cesse de déborder du viewport dès
+    // qu'un son porte un vrai crédit (#4582) — c'était sa seule zone à largeur
+    // non bornée.
+    //
+    // Ce que la pastille SAVAIT ne s'est pas perdu avec elle : sa composition
+    // de crédit (titre · @auteur · durée) vit désormais dans
+    // `ComposerSoundCredit`, et la pastille de l'avatar la rend. Le retirer
+    // sans emporter cette moitié aurait fait disparaître l'attribution d'un son
+    // emprunté partout, en silence.
 
     // **L'HISTORIQUE A QUITTÉ LE SOCLE** (#4586, directive porteur 2026-08-31).
     //

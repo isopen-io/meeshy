@@ -113,6 +113,54 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
                 + "enregistreur vierge et l'auteur perdrait sa prise."
         )
     }
+
+    // MARK: - La pastille du son de FOND (#4668/#4669)
+
+    /// **Le plancher de 44 pt a SUIVI le son.**
+    ///
+    /// `ComposerSocleDensityTests` le gardait sur la pastille du socle, qui a
+    /// été retirée (#4669). La pastille de l'avatar en hérite en devenant
+    /// bouton (#4668) : sans ce témoin, retirer l'ancre du socle aurait rendu
+    /// la protection à un contrôle sans la lui redonner ailleurs — un cliquet
+    /// éteint en croyant le déplacer.
+    func test_laPastilleDeLAvatar_gardeUneCibleDeQuaranteQuatrePoints() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertTrue(
+            badge.contains(".frame(minHeight: 44)"),
+            "Devenue bouton, la pastille du son de fond doit la cible de 44 pt : sa hauteur de "
+                + "lecture (28 pt) n'est pas une cible tactile."
+        )
+    }
+
+    /// **Elle ne s'annonce comme bouton que si elle OUVRE quelque chose.**
+    ///
+    /// La loi 4 dans les deux sens : un `.isButton` posé inconditionnellement
+    /// promettrait une action à VoiceOver sur un son emprunté, que
+    /// `ComposerSoundColumn.opensEditor` refuse justement d'ouvrir.
+    func test_laPastille_neSAnnoncePasBouton_sansAction() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        guard let corpsVue = corps("var body: some View {", dans: badge) else {
+            return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(corpsVue.contains("if let onTap"),
+                      "La forme bouton doit être CONDITIONNÉE par la présence d'une action.")
+        XCTAssertTrue(corpsVue.contains(".accessibilityAddTraits(.isButton)"),
+                      "…et la branche qui ouvre doit le DIRE au lecteur d'écran.")
+    }
+
+    /// **La pastille est alimentée par la LOI, jamais par la lecture directe.**
+    ///
+    /// `viewModel.currentEffects.resolvedBackgroundAudio` passé tel quel à la
+    /// surface était le motif d'avant #4670 : correct tant qu'aucun chemin ne
+    /// posait le même fichier des deux côtés, et muet le jour où l'un le ferait.
+    func test_laSurface_recoitLeSonDeLaLoi_jamaisDuViewModelEnDirect() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        XCTAssertTrue(surfaces.contains("backgroundSound: avatarBadgeSound"),
+                      "La surface doit recevoir ce que `ComposerSoundColumn` autorise.")
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerSoundColumn.avatarBadge("),
+                      "…et la résolution doit APPELER la loi, pas la réécrire.")
+    }
 }
 
 /// **Un son placé en CONTENU n'est pas AUSSI la bande-son de la scène**

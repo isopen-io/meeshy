@@ -2,42 +2,35 @@ import XCTest
 @testable import Meeshy
 @testable import MeeshySDK
 
-/// **La bande-son de la PUBLICATION vit au socle (#4071, vues `1a` et `1b`).**
+/// **Le CRÉDIT d'un son — ce qui joue, et à qui on le doit** (#4669).
 ///
-/// La maquette la place « parmi ce qui décide de l'envoi » — audience, aperçu,
-/// publier — et non dans les outils qui font entrer de la matière sur la scène.
-/// C'est cohérent avec ce qu'elle EST : un son de fond appartient à la
-/// publication entière, pas à la slide courante. `1a` la montre comme une
-/// invitation (« ♫ AJOUTER UN SON ») sur un document vide ; `1b` la montre
-/// comme un crédit (« ♫ NUITS BLANCHES · @lume · 0:28 ») dès qu'un son est
-/// posé. Une place, deux états.
+/// La règle a quitté le socle avec la pastille qui l'y montrait (directive
+/// porteur 2026-09-01 : « on n'a plus besoin du bouton ajouter un son en bas »)
+/// et suit le son là où il se lit : à côté de l'avatar.
 ///
-/// **Ce que cette entrée répare.** La porte son existait, sa feuille était
-/// complète — enregistreur, rôle de mixage, bibliothèque, fichier — et la
-/// vérification du 2026-08-30 au simulateur a montré qu'aucun écran du parcours
-/// réel n'y menait depuis le document. Le chemin manquait, pas la surface.
-final class ComposerSocleSoundTests: XCTestCase {
+/// **Le déménagement était nécessaire, pas cosmétique.** La pastille du socle
+/// était le SEUL endroit du composer qui affichait `soundAuthorUsername`. La
+/// retirer sans emporter sa composition aurait fait disparaître l'attribution
+/// d'un son emprunté partout — une perte qu'aucun témoin n'aurait signalée,
+/// puisque aucun n'assertait qu'elle était montrée quelque part.
+///
+/// Ce qui a changé de forme : la règle n'invite plus. « Ajouter un son » était
+/// le mot de la pastille VIDE ; une pastille vide n'existe plus, et le cas
+/// « pas de son » se traite chez l'appelant en ne montrant rien.
+final class ComposerSoundCreditTests: XCTestCase {
 
-    func test_leDocumentEtLaScenePortentLaBandeSon() {
-        XCTAssertTrue(ComposerSocleSound.isServed(surface: .document))
-        XCTAssertTrue(ComposerSocleSound.isServed(surface: .scene))
-    }
 
-    /// **Le Mood n'en porte pas, et ce n'est pas un oubli.** La vue `2k` le dit
-    /// en une phrase : « le profil RETIRE, il n'ajoute pas » — texte seul, une
-    /// heure. Son socle est d'ailleurs vide de toute zone
-    /// (`ComposerChromeOwnership.socleZones(for: .mood) == []`) : y poser une
-    /// bande-son contredirait la seule chose que ce profil affirme.
-    func test_leMoodNEnPorteAucune() {
-        XCTAssertFalse(ComposerSocleSound.isServed(surface: .mood))
-    }
+    // MARK: - Les témoins de la pastille du SOCLE ont été retirés avec elle
+    //
+    // `isServed(surface:)` gardait « quelles surfaces portent la bande-son au
+    // socle » — plus aucune ne la porte. `label(for: nil)` gardait le mot de la
+    // pastille VIDE — il n'y a plus de pastille vide.
+    //
+    // **Ils sont SUPPRIMÉS, pas neutralisés.** Un témoin qu'on désarme en
+    // gardant sa carcasse passe au vert en ayant perdu ce qu'il protégeait, et
+    // sa présence fait croire que la règle vit encore.
 
-    // MARK: - Les deux états de la pastille
-
-    func test_sansSon_laPastilleInvite() {
-        let libelle = ComposerSocleSound.label(for: nil)
-        XCTAssertEqual(libelle, ComposerSocleSound.emptyLabel)
-    }
+    // MARK: - Ce qu'un crédit dit, et ce qu'il ne fabrique pas
 
     /// Un son EMPRUNTÉ porte son crédit — c'est ce qui distingue l'étagère du
     /// micro, et le crédit est dû à son auteur.
@@ -48,7 +41,7 @@ final class ComposerSocleSoundTests: XCTestCase {
         son.soundAuthorUsername = "lume"
         son.duration = 28
 
-        let libelle = ComposerSocleSound.label(for: son)
+        let libelle = ComposerSoundCredit.label(for: son)
         XCTAssertTrue(libelle.contains("NUITS BLANCHES"))
         XCTAssertTrue(libelle.contains("@lume"), "le crédit est dû à l'auteur du son")
         XCTAssertTrue(libelle.contains("0:28"), "la durée dit ce qui va jouer")
@@ -62,9 +55,23 @@ final class ComposerSocleSoundTests: XCTestCase {
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
         son.duration = 12
 
-        let libelle = ComposerSocleSound.label(for: son)
+        let libelle = ComposerSoundCredit.label(for: son)
         XCTAssertFalse(libelle.contains("@"))
         XCTAssertTrue(libelle.contains("0:12"))
+    }
+
+    /// **Un son sans titre n'en reçoit pas un d'emprunt.** La composition
+    /// posait « Ajouter un son » comme nom de repli, ce qui avait un sens sur un
+    /// BOUTON d'ajout et n'en a plus aucun sur une pastille d'état : un vocal
+    /// s'y serait annoncé « Ajouter un son · 0:07 » — une invitation servie
+    /// comme un titre.
+    func test_unSonSansTitre_neReçoitPasUnTitreDEmprunt() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.duration = 7
+        let libelle = ComposerSoundCredit.label(for: son)
+        XCTAssertEqual(libelle, LocalizedNumber.duration(seconds: 7),
+                       "sans titre, le crédit est sa seule durée — \(libelle)")
     }
 
     /// Un son sans durée connue ne fabrique pas « 0:00 » — un compteur faux se
@@ -73,7 +80,7 @@ final class ComposerSocleSoundTests: XCTestCase {
         var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
                                          x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
         son.name = "SANS DURÉE"
-        XCTAssertFalse(ComposerSocleSound.label(for: son).contains("0:00"))
+        XCTAssertFalse(ComposerSoundCredit.label(for: son).contains("0:00"))
     }
 
     // MARK: - Ce qu'on VOIT et ce qu'on ENTEND ne sont pas la même chaîne
@@ -91,7 +98,7 @@ final class ComposerSocleSoundTests: XCTestCase {
         son.name = "NUITS BLANCHES"
         son.duration = 28
 
-        let dit = ComposerSocleSound.spokenLabel(for: son, locale: Locale(identifier: "fr_FR"))
+        let dit = ComposerSoundCredit.spokenLabel(for: son, locale: Locale(identifier: "fr_FR"))
 
         XCTAssertFalse(dit.contains("0:28"), "une horloge ne se dit pas — \(dit)")
         XCTAssertTrue(dit.localizedCaseInsensitiveContains("seconde"),
@@ -110,8 +117,8 @@ final class ComposerSocleSoundTests: XCTestCase {
         son.soundAuthorUsername = "lume"
         son.duration = 28
 
-        for libelle in [ComposerSocleSound.label(for: son),
-                        ComposerSocleSound.spokenLabel(for: son)] {
+        for libelle in [ComposerSoundCredit.label(for: son),
+                        ComposerSoundCredit.spokenLabel(for: son)] {
             XCTAssertTrue(libelle.contains("NUITS BLANCHES"), libelle)
             XCTAssertTrue(libelle.contains("@lume"), libelle)
         }
@@ -128,7 +135,7 @@ final class ComposerSocleSoundTests: XCTestCase {
         son.name = "NUITS BLANCHES"
         son.duration = 28
 
-        let arabe = ComposerSocleSound.label(for: son, locale: Locale(identifier: "ar_SA"))
+        let arabe = ComposerSoundCredit.label(for: son, locale: Locale(identifier: "ar_SA"))
         XCTAssertNil(arabe.range(of: "0:28", options: .literal),
                      "chiffres latins dans une pastille arabe — \(arabe)")
     }

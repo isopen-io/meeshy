@@ -542,13 +542,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// Le son placé en CONTENU, résolu depuis l'état du meuble — la surface le
-    /// reçoit, elle ne le cherche pas.
-    var foregroundSound: ComposerForegroundSound? {
-        ComposerForegroundSound.resolve(localMedia: documentLocalMedia,
-                                        transcription: documentTranscription)
-    }
-
     var documentSurface: some View {
         ComposerDocumentSurface(
             text: $documentText,
@@ -606,7 +599,12 @@ extension MeeshyComposerHost {
             },
             // #4657 — la rangée de l'avatar montre le son de fond : la note,
             // l'onde et la durée à côté du visage, et le texte descend.
-            backgroundSound: viewModel.currentEffects.resolvedBackgroundAudio,
+            // **Ce qu'elle a le DROIT de montrer est une loi** (#4670), pas la
+            // propriété du site qui écrit : la place dit le FOND, et un son de
+            // contenu n'y paraît jamais.
+            backgroundSound: avatarBadgeSound,
+            // #4668 — et le toucher l'OUVRE, comme la carte du son de contenu.
+            onEditBackgroundSound: editBackgroundSoundAction,
             // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
             foregroundSound: foregroundSound,

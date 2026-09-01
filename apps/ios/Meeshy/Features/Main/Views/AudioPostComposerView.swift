@@ -87,6 +87,12 @@ struct AudioPostComposerView: View {
     /// L'éditeur de transcription manuelle — le repli « Rédiger » (#4657).
     @State var showManualTranscription = false
     @State private var isExportingTrim = false
+    /// **Où en est le rapatriement de la piste** (#4667). `direct` pour un
+    /// enregistrement ou un import — leur fichier est déjà là.
+    @State var acquisition: AudioTrackAcquisition = .direct
+    /// Le son emprunté que « Réessayer » relance. Distinct de `borrowedSound`,
+    /// qui reste posé pendant l'échec : celui-ci dit ce qu'il faut RETENTER.
+    @State private var pendingBorrowedDownload: APISound?
 
     enum ComposerPhase {
         case idle, recording, transcribing, preview
@@ -369,29 +375,90 @@ struct AudioPostComposerView: View {
     /// sa provenance : un enregistrement, un fichier, un son de bibliothèque.
     @ViewBuilder
     private var trimSection: some View {
-        if let url = recordedURL, recordedDuration > 0 {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "scissors")
-                        .font(.caption.weight(.semibold))
-                        .accessibilityHidden(true)
-                    Text(String(localized: "composer.audio.trim.title",
-                                defaultValue: "Rogner", bundle: .main))
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    Text(Self.rangeLabel(trimRange))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(theme.textMuted)
+        // **Ce que la zone rend est une DÉCISION, prise ailleurs** (#4667) :
+        // quatre cas exclusifs, éprouvables sans monter l'écran. Les conditions
+        // écrites dans un `@ViewBuilder` ne s'interrogent qu'à la garde de
+        // source, et une garde de source ne dit pas ce que l'auteur VOIT.
+        switch AudioTrimSection.resolve(acquisition: acquisition,
+                                        hasLocalTrack: recordedURL != nil,
+                                        duration: recordedDuration) {
+        case .hidden:
+            EmptyView()
+        case .loading:
+            trimPlaceholder {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
+                    Text(String(localized: "composer.audio.trim.loading",
+                                defaultValue: "Chargement du son…", bundle: .main))
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
                 }
-                .foregroundColor(theme.textSecondary)
-
-                MeeshyAudioTrimmer(
-                    url: url,
-                    duration: recordedDuration,
-                    range: $trimRange,
-                    tint: MeeshyColors.indigo500
-                )
             }
+        case .failed:
+            trimPlaceholder {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "composer.audio.trim.load-failed",
+                                defaultValue: "Le son n'a pas pu être chargé.", bundle: .main))
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(String(localized: "common.retry",
+                                  defaultValue: "Réessayer", bundle: .main)) {
+                        retryBorrowedDownload()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(MeeshyColors.indigo500)
+                }
+            }
+        case .trimmer:
+            VStack(alignment: .leading, spacing: 10) {
+                trimHeader
+                if let url = recordedURL {
+                    MeeshyAudioTrimmer(
+                        url: url,
+                        duration: recordedDuration,
+                        range: $trimRange,
+                        tint: MeeshyColors.indigo500
+                    )
+                }
+            }
+        }
+    }
+
+    private var trimHeader: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "scissors")
+                .font(.caption.weight(.semibold))
+                .accessibilityHidden(true)
+            Text(String(localized: "composer.audio.trim.title",
+                        defaultValue: "Rogner", bundle: .main))
+                .font(.caption.weight(.semibold))
+            Spacer()
+            if acquisition == .direct {
+                Text(Self.rangeLabel(trimRange))
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .foregroundColor(theme.textSecondary)
+    }
+
+    /// **L'attente et l'échec occupent la MÊME place que les poignées.** Une
+    /// zone qui apparaît d'un coup pousse tout ce qui la suit ; en réservant sa
+    /// hauteur, le placement et le panneau de contenu ne sautent pas quand la
+    /// piste arrive.
+    @ViewBuilder
+    private func trimPlaceholder<Contenu: View>(@ViewBuilder _ contenu: () -> Contenu) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            trimHeader
+            contenu()
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(theme.surface(tint: "C7D2FE"))
+                )
         }
     }
 
@@ -535,6 +602,13 @@ struct AudioPostComposerView: View {
                 // « Publier » promet un envoi que le tap ne déclenche pas — et
                 // c'est le genre de promesse qui fait fermer l'app en croyant
                 // avoir posté.
+                // **Il ATTEND la piste** (#4667). Valider pendant le
+                // rapatriement posait le son ENTIER : `needsExport` refuse de
+                // découper une durée encore nulle, donc les poignées — que
+                // l'auteur n'a pas encore pu bouger — n'auraient rien changé.
+                // Un bouton grisé pendant deux secondes dit ce qui se passe ;
+                // un bouton qui répond en ignorant l'intention ne le dit pas.
+                let attend = acquisition != .direct
                 Button(action: publish) {
                     Text(String(localized: "composer.audio.confirm",
                                 defaultValue: "Ajouter", bundle: .main))
@@ -547,7 +621,9 @@ struct AudioPostComposerView: View {
                                 .fill(MeeshyColors.brandGradient)
                                 .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 12, y: 4)
                         )
+                        .opacity(attend ? 0.5 : 1)
                 }
+                .disabled(attend)
             }
         case .transcribing:
             Button(action: cancelTranscription) {
@@ -614,6 +690,7 @@ struct AudioPostComposerView: View {
     /// peut rejouer.
     private func adopterAudioInitial() {
         guard let initialAudio, phase == .idle, recordedURL == nil else { return }
+        acquisition = .direct
         recordedURL = initialAudio.url
         recordedMimeType = initialAudio.mimeType
         recordedDuration = initialAudio.duration
@@ -650,15 +727,44 @@ struct AudioPostComposerView: View {
         recordedDuration = duree
         trimRange = 0...max(0.001, duree)
 
-        guard let distante = MeeshyConfig.resolveMediaURL(sound.fileUrl) else { return }
+        rapatrier(sound)
+    }
+
+    /// **Le rapatriement, et ses trois issues NOMMÉES** (#4667).
+    ///
+    /// Il n'en avait qu'une avant : un `return` muet, servi aussi bien pour une
+    /// URL irrésolue que pour un réseau coupé ou un fichier vide. L'écran
+    /// affichait alors ce qu'il affiche quand il n'y a rien à rogner — et le
+    /// porteur en a conclu, à raison, que le rognage ne marchait pas.
+    ///
+    /// Ce fichier ne PART jamais : il ne sert qu'à écouter et à viser. Ce qui
+    /// voyage à la publication reste le `soundId` et l'intervalle
+    /// (`sourceStart`/`sourceEnd`), qui préservent le crédit de l'auteur.
+    private func rapatrier(_ sound: APISound) {
+        pendingBorrowedDownload = sound
+        guard let distante = MeeshyConfig.resolveMediaURL(sound.fileUrl) else {
+            acquisition = .failed
+            return
+        }
+        acquisition = .loading
         Task {
             guard let (donnees, _) = try? await URLSession.shared.data(from: distante),
-                  !donnees.isEmpty else { return }
+                  !donnees.isEmpty else {
+                acquisition = .failed
+                return
+            }
             let extension_ = distante.pathExtension.isEmpty ? "m4a" : distante.pathExtension
             let locale = FileManager.default.temporaryDirectory
                 .appendingPathComponent("meeshy-borrowed-\(sound.id).\(extension_)")
             try? donnees.write(to: locale, options: .atomic)
-            guard FileManager.default.fileExists(atPath: locale.path) else { return }
+            guard FileManager.default.fileExists(atPath: locale.path) else {
+                acquisition = .failed
+                return
+            }
+            // **L'auteur a pu changer de son pendant le téléchargement.**
+            // Écrire la piste d'un son qu'il ne regarde plus lui ferait rogner
+            // le mauvais extrait, sans que rien ne le dise.
+            guard borrowedSound?.id == sound.id else { return }
             recordedURL = locale
             recordedMimeType = Self.mimeType(forExtension: extension_)
             if let secondes = try? await AVURLAsset(url: locale).load(.duration).seconds,
@@ -666,13 +772,26 @@ struct AudioPostComposerView: View {
                 recordedDuration = secondes
                 trimRange = 0...secondes
             }
+            acquisition = .direct
         }
+    }
+
+    /// « Réessayer » relance le MÊME son — celui que l'échec a retenu.
+    private func retryBorrowedDownload() {
+        guard let sound = pendingBorrowedDownload else { return }
+        HapticFeedback.light()
+        rapatrier(sound)
     }
 
     private func acceptRecording(url: URL, mimeType: String) {
         transcription = nil
         transcriptionError = nil
         borrowedSound = nil
+        // Un enregistrement n'a rien à rapatrier : son fichier vient d'être
+        // écrit. Sans cette remise à zéro, l'échec d'un emprunt PRÉCÉDENT
+        // masquerait les poignées d'une piste pourtant présente.
+        pendingBorrowedDownload = nil
+        acquisition = .direct
         recordedURL = url
         recordedMimeType = mimeType
         recordedDuration = audioRecorder.duration
@@ -764,6 +883,10 @@ struct AudioPostComposerView: View {
         borrowedSound = nil
         transcription = nil
         transcriptionError = nil
+        // Sans cette remise à zéro, un échec de rapatriement survivrait à
+        // « Refaire » et masquerait les poignées de l'enregistrement suivant.
+        pendingBorrowedDownload = nil
+        acquisition = .direct
         phase = .idle
     }
 

@@ -108,6 +108,10 @@ struct ComposerDocumentSurface: View {
     /// à côte. Une pastille toujours montée, vide, occuperait la place d'un son
     /// qui n'existe pas.
     var backgroundSound: StoryAudioPlayerObject? = nil
+    /// **Ce que le doigt fait de la pastille du son de fond** (#4668). `nil` ⇒
+    /// elle reste une lecture : la surface ne fabrique pas d'action que l'hôte
+    /// ne lui a pas donnée.
+    var onEditBackgroundSound: (() -> Void)? = nil
 
     /// **Le son placé en CONTENU de publication** (directive porteur
     /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
@@ -390,7 +394,8 @@ struct ComposerDocumentSurface: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center, spacing: 12) {
                         avatarView
-                        ComposerAvatarSoundBadge(sound: backgroundSound)
+                        ComposerAvatarSoundBadge(sound: backgroundSound,
+                                                 onTap: onEditBackgroundSound)
                         Spacer(minLength: 0)
                     }
                     textOnlyField

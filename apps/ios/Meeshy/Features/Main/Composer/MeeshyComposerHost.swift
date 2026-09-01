@@ -292,6 +292,20 @@ struct MeeshyComposerHost: View {
     /// sans quoi éditer un son en aurait posé un second à côté du premier.
     @State var editedForegroundSound: ComposerForegroundSound?
 
+    /// **Le son de FOND que la feuille rouvre** (#4668) — l'identifiant de
+    /// l'objet de scène, pas le son lui-même.
+    ///
+    /// Un identifiant plutôt qu'une copie parce que c'est lui qu'il faudra
+    /// SUPPRIMER au retour : une copie prise à l'ouverture désignerait un objet
+    /// que le canvas a pu déplacer, renommer ou ré-empiler entre-temps, et le
+    /// remplacement viserait à côté.
+    ///
+    /// Les deux champs sont exclusifs — on n'édite qu'un son à la fois — et
+    /// chaque entrée efface l'autre. Un type somme les rendrait exclusifs par
+    /// construction ; il coûterait ici plus cher qu'il ne rapporte, les deux
+    /// n'étant lus qu'en un seul endroit (`editedSoundTrack`).
+    @State var editedBackgroundSoundId: String?
+
 
     @State var showsMediaSourceChooser = false
 

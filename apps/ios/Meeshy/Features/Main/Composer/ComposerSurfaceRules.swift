@@ -284,32 +284,31 @@ nonisolated enum ComposerChromeOwnership {
 /// vérification au simulateur du 2026-08-30 a montré qu'aucun écran du parcours
 /// réel n'y menait depuis le document : le chemin manquait, pas la surface.
 ///
-/// Une place, DEUX états — l'invitation quand rien n'est posé, le crédit dès
-/// qu'un son l'est. La pastille ne change pas de rôle entre les deux : elle
-/// ouvre la même porte, elle dit seulement ce qui joue.
-nonisolated enum ComposerSocleSound {
-
-    /// Le Mood en est exclu, et ce n'est pas un oubli : la vue `2k` dit « le
-    /// profil RETIRE, il n'ajoute pas » — texte seul, une heure. Son socle est
-    /// d'ailleurs vide de toute zone.
-    static func isServed(surface: ComposerSurfaceKind) -> Bool {
-        switch surface {
-        case .document, .scene: return true
-        case .mood: return false
-        }
-    }
-
-    static var emptyLabel: String {
-        String(localized: "composer.socle.sound.add",
-               defaultValue: "Ajouter un son", bundle: .main)
-    }
+/// **Le CRÉDIT d'un son — ce qui joue, et à qui on le doit** (#4669).
+///
+/// La règle a quitté le socle avec la pastille qui l'y montrait (directive
+/// porteur 2026-09-01 : « on n'a plus besoin du bouton ajouter un son en bas »)
+/// et suit le son là où il se lit maintenant : à côté de l'avatar.
+///
+/// **Le déménagement n'était pas cosmétique.** La pastille du socle était le
+/// SEUL endroit du composer qui affichait `soundAuthorUsername` ; la retirer
+/// sans emporter sa composition aurait fait disparaître l'attribution d'un son
+/// emprunté — une perte qu'aucun témoin n'aurait signalée, puisque rien
+/// n'assertait qu'elle était montrée quelque part.
+///
+/// Ce que la règle ne fait plus : inviter. « Ajouter un son » était le mot de
+/// la pastille VIDE, et une pastille vide n'existe plus — un crédit décrit un
+/// son qui joue, ou n'est pas rendu du tout. Le paramètre a donc cessé d'être
+/// optionnel : le cas « pas de son » se traite chez l'appelant, en ne montrant
+/// rien, et non ici en fabriquant une phrase.
+nonisolated enum ComposerSoundCredit {
 
     /// **Le crédit ne se fabrique jamais.** Il tient à `soundAuthorUsername`,
     /// que seul l'EMPRUNT renseigne ; un vocal mis en fond porte le bon mixage
     /// et aucun auteur, et lui en inventer un serait mentir sur la provenance.
     /// De même une durée inconnue ne devient pas « 0:00 » — un compteur faux se
     /// lit comme une piste vide.
-    static func label(for sound: StoryAudioPlayerObject?,
+    static func label(for sound: StoryAudioPlayerObject,
                       locale: Locale = .current) -> String {
         compose(sound, locale: locale) { LocalizedNumber.duration(seconds: $0, locale: $1) }
     }
@@ -330,17 +329,23 @@ nonisolated enum ComposerSocleSound {
     /// Le titre et le crédit sont IDENTIQUES dans les deux — c'est la même
     /// pastille — et c'est pourquoi la composition est un site UNIQUE : deux
     /// fonctions écrites côte à côte auraient divergé au premier champ ajouté.
-    static func spokenLabel(for sound: StoryAudioPlayerObject?,
+    static func spokenLabel(for sound: StoryAudioPlayerObject,
                             locale: Locale = .current) -> String {
         compose(sound, locale: locale) { LocalizedNumber.spokenDuration(seconds: $0, locale: $1) }
     }
 
-    private static func compose(_ sound: StoryAudioPlayerObject?,
+    /// **Un son sans titre n'en reçoit pas un d'emprunt.**
+    ///
+    /// La composition posait « Ajouter un son » comme nom de repli — ce qui
+    /// avait un sens tant qu'elle habillait un BOUTON d'ajout, et n'en a plus
+    /// aucun sur une pastille d'état : un vocal se serait annoncé « Ajouter un
+    /// son · 0:07 », une invitation servie comme un titre. Sans titre, le crédit
+    /// est sa seule durée.
+    private static func compose(_ sound: StoryAudioPlayerObject,
                                 locale: Locale,
                                 duree: (Int, Locale) -> String) -> String {
-        guard let sound else { return emptyLabel }
         var morceaux: [String] = []
-        morceaux.append(sound.name?.isEmpty == false ? sound.name! : emptyLabel)
+        if let nom = sound.name, !nom.isEmpty { morceaux.append(nom) }
         if let auteur = sound.soundAuthorUsername, !auteur.isEmpty {
             morceaux.append("@\(auteur)")
         }
