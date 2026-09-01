@@ -22,7 +22,7 @@ import {
 } from './SessionService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { recipientLanguage } from '../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { searchTokensFor } from '../utils/search-tokens';
 import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
@@ -900,7 +900,13 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Find user by email (include systemLanguage for i18n)
+      // Les QUATRE rangs du Prisme, jamais `systemLanguage` seul : la
+      // projection est la seule des deux moitiés de la descente qu'aucun témoin
+      // de rang ne peut voir (#4642). Un `select` étroit rend les rangs 2 à 4
+      // `undefined` chez `recipientLanguage`, donc « non réglés », donc le
+      // repli — et l'e-mail de vérification partait en `'fr'` vers tout lecteur
+      // dont la langue applicative vit dans `regionalLanguage` ou dans la seule
+      // locale appareil.
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -912,7 +918,7 @@ export class AuthService {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           emailVerifiedAt: true
         }
       });
