@@ -534,7 +534,11 @@ extension MeeshyComposerHost {
             // que la slide SEMÉE au montage ne compte pas comme de la matière.
             hasMedia: !documentLocalMedia.isEmpty
                 || (selectedFormat == .story
-                    && ComposerStoryCanvas.hasMatter(slides: viewModel.slides)),
+                    && ComposerStoryCanvas.hasMatter(
+                        slides: viewModel.slides,
+                        // L'image de fond ne vit pas dans `effects` : sans elle
+                        // une story-photo n'armerait pas la flèche (#4741).
+                        slideImageIds: Set(viewModel.slideImages.keys))),
             hasLocation: documentLocation != nil
         )
     }

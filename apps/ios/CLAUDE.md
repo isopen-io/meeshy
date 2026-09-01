@@ -550,11 +550,32 @@ rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
 `isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
 Les quatre autres noms restent à écrire.
 
-**Ce que la somme a rendu visible.** Trente-quatre fonctions interrogeaient
+**Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
 quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
 de l'ordre des familles, et les divergences n'étaient visibles nulle part. Douze
-sont repointées sur la somme, trois sont exclues par une raison écrite (l'ordre
-d'égalité y est significatif), dix-neuf restent.
+sont repointées sur la somme ; **une seule** exclusion est écrite dans le code
+(`StoryComposerViewModel+ZOrder.swift:59` — à `zIndex` égal, l'ordre décide avec
+qui `bringForward` permute).
+
+**Le reste se COMPTE, il ne se cite pas.** Les nombres qui vivaient ici
+(« trente-quatre », « trois exclues ») avaient été DÉRIVÉS d'une addition dont
+les trois termes n'avaient pas la même unité — des fonctions, des fonctions, et
+des *raisons*. Aucune garde ne les épinglait : ils ont donc pu dériver sans
+jamais contredire personne. Ce qui les remplace est le critère :
+
+```bash
+# les cascades restantes : un id cherché dans ≥ 2 familles, forme `first(where:)`
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\b.*first\(where:" -- '*.swift'
+# la forme que le critère ci-dessus NE VOIT PAS, et où vivaient deux bugs :
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\??\.removeAll" -- '*.swift'
+```
+
+> **Un inventaire qui rate une syntaxe rate le bug qu'il servait à trouver.** La
+> seconde commande est celle qui manquait : les trois chemins de SUPPRESSION
+> (#4758) et le couple `bringForward`/`sendBackward` (#4759) écrivent la cascade
+> en `removeAll { }` et en fermetures de mutation, jamais en `first(where:)`.
+> Ils étaient donc hors de tout compte — et c'est précisément là que la pastille
+> de lieu est devenue ineffaçable et que le son a cessé d'être classable.
 
 > **Un type qui n'existe pas ne peut pas diverger — il oblige seulement chaque
 > site à réinventer la règle.** C'est ainsi que la pastille de lieu s'est

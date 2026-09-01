@@ -170,10 +170,49 @@ struct ComposerSceneSurface: View {
     /// requête.
     var mentionStrip: AnyView?
 
+    /// **Le volet de description, replié ou non** (#4742). Construit par le
+    /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
+    /// chemin vers la saisie ; elle sait seulement OÙ il va.
+    ///
+    /// `nil` quand le meuble n'en sert pas (loi 4 : une surface qui peint un
+    /// volet sans rien derrière promettrait une description qu'on ne peut pas
+    /// écrire).
+    var descriptionPanel: AnyView?
+
     /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
     /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
     var drawingSurface: AnyView?
+
+    /// **Ancre un rail au bas du DESSIN, jamais au bas de la frame** (#4119).
+    ///
+    /// La carte est figée à son ratio et se CENTRE dans la hauteur qu'on lui
+    /// donne. Un `.overlay(alignment: .bottom…)` tombe donc au bas de la FRAME,
+    /// c'est-à-dire SOUS la composition — d'un écart qui vaut la moitié de la
+    /// hauteur perdue, nul en 9:16 plein et maximal en paysage. Mesuré au
+    /// simulateur : environ 25 pt, assez pour que la dernière porte flotte à
+    /// côté du plateau plutôt qu'à côté de la scène.
+    ///
+    /// > Un rail qui suit la frame et non la composition n'est pas « un peu
+    /// > plus bas » : il cesse de dire à quoi il s'applique.
+    ///
+    /// Le `GeometryReader` lit la taille de la vue PADDÉE — celle qui inclut
+    /// les deux couloirs. C'est `ComposerRailGeometry.sceneBottomInset` qui en
+    /// retire l'encastrement pour retrouver la largeur de la carte : sans cette
+    /// soustraction, l'inset serait juste en portrait et faux partout ailleurs,
+    /// exactement le genre de justesse accidentelle qui survit à une relecture.
+    @ViewBuilder
+    private func ancreAuDessin<Contenu: View>(_ contenu: Contenu,
+                                              alignment: Alignment) -> some View {
+        GeometryReader { geo in
+            contenu
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+                .padding(.bottom, ComposerRailGeometry.sceneBottomInset(
+                    overlay: geo.size,
+                    ratio: aspectRatio,
+                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+    }
 
     // MARK: - Les sons POSÉS sur la scène (#4722)
 
@@ -413,7 +452,7 @@ struct ComposerSceneSurface: View {
                 // jumeau, à portée du pouce, et avec les MÊMES marges — deux
                 // rails qui encadrent la même scène à deux hauteurs différentes
                 // se voient avant de se comprendre.
-                .overlay(alignment: .bottomLeading) { floatingRail }
+                .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
                 //
@@ -435,14 +474,17 @@ struct ComposerSceneSurface: View {
                 // 9:16 et l'écran ne l'est pas. L'occuper ne coûte rien ;
                 // occuper le canvas coûte une zone morte.
                 .overlay(alignment: .bottomTrailing) {
-                    ComposerTrailingRail(actions: trailingActions,
-                                         plateauTint: plateauTint,
-                                         onAction: onTrailingAction,
-                                         onAddSlide: onAddSlide,
-                                         onUndo: onUndo,
-                                         onRedo: onRedo)
-                        .padding(.trailing, ComposerRailGeometry.outerMargin)
-                        .padding(.bottom, ComposerRailGeometry.gutter)
+                    ancreAuDessin(
+                        ComposerTrailingRail(actions: trailingActions,
+                                             plateauTint: plateauTint,
+                                             onAction: onTrailingAction,
+                                             onAddSlide: onAddSlide,
+                                             onUndo: onUndo,
+                                             onRedo: onRedo)
+                            .padding(.trailing, ComposerRailGeometry.outerMargin)
+                            .padding(.bottom, ComposerRailGeometry.gutter),
+                        alignment: .bottomTrailing
+                    )
                 }
                 .padding(.top, 8)
 
@@ -501,6 +543,16 @@ struct ComposerSceneSurface: View {
                 // inconditionnellement (il se vide lui-même), donc `toolOptions
                 // == nil` était toujours faux et la rangée n'a jamais pu
                 // paraître. Mesuré à l'écran, pas déduit.
+                // **La description de la SLIDE, juste sous la scène** (#4742).
+                //
+                // Elle prend la place que la doctrine de ce fichier lui donnait
+                // depuis le début — « l'objet, la SCÈNE, la SLIDE, la
+                // PUBLICATION » — et qu'elle n'occupait pas : montée en overlay
+                // de bas d'écran et SEULEMENT en mode saisie, elle était
+                // invisible le reste du temps. Un texte qui part avec la
+                // publication et que l'auteur ne voit jamais est un texte qu'il
+                // oublie.
+                if let descriptionPanel { descriptionPanel }
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
                                            activeChipId: activeObjectChipId,

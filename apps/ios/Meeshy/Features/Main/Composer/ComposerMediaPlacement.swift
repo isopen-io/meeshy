@@ -112,6 +112,29 @@ nonisolated enum ComposerHeaderTiles {
 /// > jamais ce qui l'a fait naître.** Une condition de naissance placée là tient
 /// > tant que naître et contenir coïncident ; elle démonte la surface le jour
 /// > où ils divergent, et emporte son contenu hors de vue sans rien effacer.
+/// **Ce prédicat répond à « y a-t-il de la matière à CADRER ? », jamais à
+/// « cette unité mérite-t-elle un post ? »** (distinction établie avec la
+/// session voisine, 2026-09-01).
+///
+/// La seconde question a sa propre loi — `StorySlidePublishMatter.deservesAPost`
+/// (SDK) —, qui énumère les champs et TRIM les textes. Les deux coïncident
+/// presque partout et divergent exactement sur la page blanche EFFLEURÉE : le
+/// tap y pose une coquille de texte vide, donc `sceneObjects` n'est plus vide.
+/// Cette slide A une scène — son canevas et son inspecteur doivent rester — et
+/// ne mérite AUCUN post : la compter comme méritante fabriquait la story
+/// fantôme du #4730, un post vide publié à côté du vrai.
+///
+/// Ne repointer ni l'une sur l'autre. Y substituer `deservesAPost` ferait
+/// disparaître le canevas d'une slide qu'on vient d'ouvrir.
+///
+/// **Et le sixième lecteur n'est pas de la même nature que les cinq autres.**
+/// `backgroundPaletteIsReachable`, `socleZones`, `showsScene`, `sceneInspector`
+/// et `mountedComposerView` demandent tous s'il y a quelque chose à MONTRER.
+/// `ComposerMoodGate.compositionQualifiesAsMood` (par `moodGate`) décide, lui,
+/// de l'OFFRE des formats — et il ouvre par `guard !hasMedia, !hasScene`. Un
+/// prédicat qui gouverne à la fois le montage et l'offre couple deux choses :
+/// tout élargissement de ce que « avoir une scène » veut dire retire des
+/// formats de l'éventail, sans qu'aucun témoin de montage ne rougisse.
 nonisolated enum ComposerScenePresence {
 
     /// - Parameter sceneObjectCount: `StorySlide.sceneObjects.count` — la somme

@@ -89,30 +89,58 @@ nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
-        // **Les quatre ouvertures qui PORTENT DÉJÀ de la matière gardent la
-        // scène, story comprise** — et c'est une exemption RAISONNÉE, pas un
-        // reste de l'ancienne loi.
+        // **Les TROIS ouvertures qui portent déjà de la MATIÈRE gardent la
+        // scène** — une dette nommée, plus une exemption raisonnée.
         //
-        // Elles n'ouvrent pas sur un choix : elles arrivent avec une capture,
-        // un média reçu d'une conversation, ou un brouillon repeuplé, et
-        // l'atelier est le seul écran qui les tienne déjà. `.mediaSeeded` en
-        // fait la démonstration : `ConversationMediaComposerDoor` documente que
-        // router son média ailleurs le ferait disparaître de l'écran ET de la
-        // publication, `ComposerDocumentDraft` n'ayant ni `mediaIds`, ni
-        // fichier. Leur retirer la scène ferait perdre à l'auteur ce qu'il vient
-        // de confier — un prix que la directive ne demande pas.
-        case .cameraReady, .videoCameraReady, .resume, .mediaSeeded:
+        // Elles arrivent avec un média reçu d'une conversation ou un brouillon
+        // repeuplé, et l'atelier est le seul écran qui les tienne déjà.
+        // `.mediaSeeded` en fait la démonstration : `ConversationMediaComposerDoor`
+        // documente que router son média ailleurs le ferait disparaître de
+        // l'écran ET de la publication, `ComposerDocumentDraft` n'ayant ni
+        // `mediaIds`, ni fichier. Leur retirer la scène ferait perdre à
+        // l'auteur ce qu'il vient de confier.
+        //
+        // Elles tomberont quand le meuble saura REPRENDRE et SEMER (#4751) —
+        // et c'est à ce moment-là qu'on retournera leur témoin, jamais avant.
+        case .videoCameraReady, .resume, .mediaSeeded:
             return .scene
+        // **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751,
+        // directive porteur : « se concentrer sur le composer v3 et non
+        // l'ancien »).
+        //
+        // Elle y était entrée par RESSEMBLANCE. L'argument de l'exemption —
+        // « elles arrivent avec de la matière que le meuble ne tient pas » —
+        // valait pour les trois autres et pas pour elle : la caméra n'arrive
+        // avec RIEN. Elle promet un viseur, et le meuble sait l'ouvrir depuis
+        // toujours (`presentMediaIntake(.camera)`).
+        //
+        // > Une exemption qui couvre quatre cas d'un seul argument doit être
+        // > vérifiée sur les quatre. Ici le quatrième était la porte la plus
+        // > visible du Feed — « Créer une story » — et c'est elle qui montait
+        // > l'ancien écran.
+        //
+        // Ce que la promesse devient : `armsCameraOnAppear` l'honore DANS le
+        // meuble. Router sans armer aurait tenu la lettre de la directive en
+        // perdant ce que la porte annonce.
+        //
         // **Ici, l'auteur CHOISIT.** C'est le « nouveau composer » de la
         // directive porteur du 2026-09-01, et c'est là que la story cessait
         // d'être composée dans le meuble : `.scene` monte `StoryComposerView` —
         // l'atelier du SDK, la vue de composition de story qui préexistait au
         // meuble. Une story s'écrivait donc dans un composer et un post dans un
         // autre, sur un écran que l'auteur croit unique.
-        case .keyboardOnContent, .moodGrid:
+        case .cameraReady, .keyboardOnContent, .moodGrid:
             switch format {
             case .story: return .document
-            case .reel: return .scene
+            // **Le RÉEL rejoint le meuble le 2026-09-01** (#4751). Il était
+            // resté sur l'atelier au #4700 par prudence — sa timeline y vivait.
+            // Elle vit AUSSI au meuble depuis le #4082 : `ComposerSceneBand`
+            // porte une bande `timeline`, montée sous la scène.
+            //
+            // Le garder à part faisait changer de COMPOSER en changeant de
+            // format, sur un écran que l'auteur croit unique — le défaut exact
+            // que le #4700 avait corrigé pour la story et laissé pour le réel.
+            case .reel: return .document
             case .post: return .document
             case .status: return .mood
             }
@@ -136,6 +164,33 @@ nonisolated enum ComposerSurfaceRouting {
         switch opening {
         case .keyboardOnContent: return true
         case .cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded: return false
+        }
+    }
+
+    /// **Le VISEUR se lève là où la porte l'a promis** (#4751) — jumelle exacte
+    /// de la règle du clavier, et écrite à côté d'elle pour que la question
+    /// « qu'est-ce qui s'ouvre tout seul ? » ait UN endroit.
+    ///
+    /// `.cameraReady` a quitté l'exemption qui l'envoyait à l'atelier ; sans
+    /// cette règle, elle serait devenue une entrée neutre — le meuble se
+    /// serait ouvert sur une scène vide, et la porte la plus visible du Feed
+    /// aurait cessé de tenir ce que son nom annonce.
+    ///
+    /// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle
+    /// > PROMET. Ce qui était honoré par l'écran d'arrivée doit l'être
+    /// > explicitement au nouveau, sinon la promesse disparaît avec le
+    /// > déménagement — sans qu'aucun site ne rougisse, puisque plus personne
+    /// > ne la porte.
+    ///
+    /// **Les deux ne sont JAMAIS vrais ensemble** : un viseur et un clavier qui
+    /// s'ouvriraient de concert se disputeraient l'écran, et le second
+    /// recouvrirait le premier. L'exhaustivité des deux `switch` le garantit
+    /// case par case plutôt que par une assertion croisée, qu'un troisième
+    /// mode d'ouverture pourrait contourner.
+    static func armsCameraOnAppear(opening: ComposerOpening) -> Bool {
+        switch opening {
+        case .cameraReady, .videoCameraReady: return true
+        case .keyboardOnContent, .moodGrid, .resume, .mediaSeeded: return false
         }
     }
 }

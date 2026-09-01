@@ -178,6 +178,15 @@ extension StickerPickerView {
         case StickerTemplateCatalog.ID.locationTicket:
             return String(localized: "sticker.template.location.ticket",
                           defaultValue: "Étiquette", bundle: .module)
+        case StickerTemplateCatalog.ID.locationStamp:
+            return String(localized: "sticker.template.location.stamp",
+                          defaultValue: "Timbre", bundle: .module)
+        case StickerTemplateCatalog.ID.locationCompass:
+            return String(localized: "sticker.template.location.compass",
+                          defaultValue: "Boussole", bundle: .module)
+        case StickerTemplateCatalog.ID.locationMarquee:
+            return String(localized: "sticker.template.location.marquee",
+                          defaultValue: "Enseigne", bundle: .module)
         case StickerTemplateCatalog.ID.timeDigital:
             return String(localized: "sticker.template.time.digital",
                           defaultValue: "Heure numérique", bundle: .module)

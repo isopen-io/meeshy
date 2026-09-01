@@ -37,6 +37,11 @@ public enum StickerTemplatePalette {
         StoryTextLayer.parseHexColorNonisolated(MeeshyColors.errorHex) ?? .systemPink
     public static let loveCool: UIColor =
         StoryTextLayer.parseHexColorNonisolated(MeeshyColors.purple500Hex) ?? .systemPurple
+    /// Les ampoules d'une enseigne. `warningHex` est l'ambre de la marque —
+    /// jamais un `.systemYellow`, qui changerait de ton d'une version d'iOS à
+    /// l'autre et ferait dériver la décoration.
+    public static let warmBulb: UIColor =
+        StoryTextLayer.parseHexColorNonisolated(MeeshyColors.warningHex) ?? .systemOrange
 }
 
 // MARK: - Sticker Template Metrics
@@ -153,6 +158,12 @@ public enum StickerTemplateRenderer {
             return postcardSize(slots: slots, metrics: metrics)
         case StickerTemplateCatalog.ID.locationTicket:
             return ticketSize(slots: slots, metrics: metrics)
+        case StickerTemplateCatalog.ID.locationStamp:
+            return stampSize(slots: slots, metrics: metrics)
+        case StickerTemplateCatalog.ID.locationCompass:
+            return compassSize(slots: slots, metrics: metrics)
+        case StickerTemplateCatalog.ID.locationMarquee:
+            return marqueeSize(slots: slots, metrics: metrics)
         case StickerTemplateCatalog.ID.timeDigital:
             return digitalSize(slots: slots, metrics: metrics)
         case StickerTemplateCatalog.ID.timeAnalog:
@@ -188,6 +199,12 @@ public enum StickerTemplateRenderer {
             return postcardImage(slots: slots, metrics: metrics, screenScale: screenScale)
         case StickerTemplateCatalog.ID.locationTicket:
             return ticketImage(slots: slots, metrics: metrics, screenScale: screenScale)
+        case StickerTemplateCatalog.ID.locationStamp:
+            return stampImage(slots: slots, metrics: metrics, screenScale: screenScale)
+        case StickerTemplateCatalog.ID.locationCompass:
+            return compassImage(slots: slots, metrics: metrics, screenScale: screenScale)
+        case StickerTemplateCatalog.ID.locationMarquee:
+            return marqueeImage(slots: slots, metrics: metrics, screenScale: screenScale)
         case StickerTemplateCatalog.ID.timeDigital:
             return digitalImage(slots: slots, metrics: metrics, screenScale: screenScale)
         case StickerTemplateCatalog.ID.timeAnalog:

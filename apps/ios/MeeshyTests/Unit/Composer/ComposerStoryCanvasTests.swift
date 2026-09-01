@@ -40,8 +40,15 @@ final class ComposerStoryCanvasTests: XCTestCase {
     ///
     /// > Une exemption qu'aucun témoin ne nomme se lit comme un oubli, et le
     /// > prochain qui « range » la supprime.
+    /// **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751). Elle y
+    /// était entrée par ressemblance : l'argument — « elles arrivent avec du
+    /// contenu » — vaut pour les trois autres et pas pour elle, la caméra
+    /// n'arrivant avec RIEN. Elle promet un viseur, que le meuble sait ouvrir.
+    ///
+    /// > Une exemption qui couvre quatre cas d'un seul argument doit être
+    /// > vérifiée sur les quatre.
     func test_lesOuverturesQuiPORTENTDeLaMatière_gardentLaScène() {
-        for ouverture in [ComposerOpening.cameraReady, .videoCameraReady, .resume, .mediaSeeded] {
+        for ouverture in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
                 .scene,
@@ -50,19 +57,25 @@ final class ComposerStoryCanvasTests: XCTestCase {
         }
     }
 
-    /// **Le RÉEL n'a pas bougé**, et c'est une décision, pas un oubli : ses
-    /// canvas sont ses médias, comme ceux d'un post. Sans ce témoin, un
-    /// correctif futur élargirait la règle de la story au réel en croyant
-    /// ranger.
-    func test_leRÉEL_gardeSonAtelier() {
+    /// **Le RÉEL a rejoint le meuble le 2026-09-01** (#4751). Il était resté
+    /// sur l'atelier au #4700 par prudence — sa timeline y vivait. Elle vit
+    /// AUSSI au meuble depuis le #4082 (`ComposerSceneBand` porte une bande
+    /// `timeline`), et le garder à part faisait changer de COMPOSER en
+    /// changeant de format, sur un écran que l'auteur croit unique.
+    ///
+    /// > Ce témoin affirmait « c'est une décision, pas un oubli ». Il avait
+    /// > raison au moment où il l'écrivait, et la décision a été REPRISE — un
+    /// > témoin qui garde une décision doit pouvoir être retourné par une
+    /// > décision, pas seulement par un défaut.
+    func test_leRÉEL_rejointLeMeuble() {
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel),
-            .scene
+            .document
         )
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .cameraReady, format: .post),
-            .scene,
-            "une ouverture qui porte de la matière garde sa scène pour les autres formats"
+            .document,
+            "la caméra du tray ouvre le meuble, quel que soit le format servi"
         )
     }
 
@@ -94,8 +107,8 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// slide existe toujours ; compter les slides rendrait donc publiable une
     /// story qu'on vient d'ouvrir et où personne n'a rien posé.
     func test_laSlideSEMÉE_neCompteJamaisCommeDeLaMatière() {
-        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: [slideVierge()]))
-        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: []))
+        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: [slideVierge()], slideImageIds: []))
+        XCTAssertFalse(ComposerStoryCanvas.hasMatter(slides: [], slideImageIds: []))
     }
 
     /// Un objet POSÉ est de la matière — c'est ainsi qu'on écrit dans une story,
@@ -103,7 +116,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     func test_unObjetPOSÉ_estDeLaMatière() {
         var slide = slideVierge()
         slide.effects.textObjects = [StoryTextObject(text: "bonjour")]
-        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide]))
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide], slideImageIds: []))
     }
 
     /// Un FOND choisi aussi : c'est le geste le plus court qui produise une
@@ -111,7 +124,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     func test_unFOND_estDeLaMatière() {
         var slide = slideVierge()
         slide.effects.background = "#101010"
-        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide]))
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slide], slideImageIds: []))
     }
 
     /// La matière se cherche sur TOUTES les unités, pas sur la courante : une
@@ -119,7 +132,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     func test_laMatièreSeCherche_surTOUTESLesUnités() {
         var seconde = slideVierge()
         seconde.mediaURL = "file:///tmp/a.jpg"
-        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slideVierge(), seconde]))
+        XCTAssertTrue(ComposerStoryCanvas.hasMatter(slides: [slideVierge(), seconde], slideImageIds: []))
     }
 
     // MARK: - La rangée canonique appartient au post

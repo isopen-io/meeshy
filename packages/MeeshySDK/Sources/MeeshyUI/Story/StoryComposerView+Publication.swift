@@ -418,7 +418,10 @@ extension StoryComposerView {
         // Le filtre passe APRÈS le rabat de `currentEffects` : un sticker posé
         // sur la slide courante ne vit encore que là, et filtrer avant l'aurait
         // fait disparaître avec sa slide.
-        let servies = copy.filter { slideIsWorthPublishing($0, slideImageIds: slideImageIds) }
+        let servies = copy.filter {
+            StorySlidePublishMatter.deservesAPost($0,
+                                                  hasBackgroundImage: slideImageIds.contains($0.id))
+        }
         // **Si le filtre vide tout, on rend la liste d'origine.** Une
         // publication qui ne part pas est un bouton SANS EFFET (loi 4), et
         // perdre le travail de l'auteur est pire que publier une slide pauvre.
@@ -623,30 +626,12 @@ extension StoryComposerView {
             || !(slide.effects.audioPlayerObjects ?? []).isEmpty
     }
 
-    /// **Ce qui vaut d'être publié, slide par slide** (#4730).
-    ///
-    /// Les DEUX termes de `canPublish`, portés à l'échelle d'une slide :
-    /// du contenu, OU du son. Filtrer sur `slideHasContent` seul supprimerait
-    /// la story « fond + musique », dont l'audio est la matière narrative —
-    /// perdre le contenu de l'auteur est pire que le défaut qu'on corrige.
-    ///
-    /// Les trois drapeaux legacy (stickers/dessin du canvas courant) sont à
-    /// `false` : à ce stade `currentEffects` est déjà rabattu sur la slide
-    /// courante, donc ils se lisent dans `slide.effects`. Les passer une
-    /// seconde fois rendrait TOUTE slide « pleine » dès que le canvas porte un
-    /// sticker — un filtre qui ne filtre plus.
-    nonisolated static func slideIsWorthPublishing(
-        _ slide: StorySlide,
-        slideImageIds: Set<String>
-    ) -> Bool {
-        slideHasContent(
-            slide,
-            hasSlideImage: slideImageIds.contains(slide.id),
-            hasStickerObjects: false,
-            hasDrawingData: false,
-            hasDrawingStrokes: false
-        ) || slideCarriesAudio(slide)
-    }
+    // `slideIsWorthPublishing` a vécu ici du #4730 au #4741. Elle décidait la
+    // MÊME chose que `ComposerStoryCanvas.slideHasMatter` côté app, et les deux
+    // divergeaient dans les deux sens — une pastille de lieu seule n'armait pas
+    // la flèche, un fond choisi seul l'armait puis se faisait jeter ici. La
+    // règle vit désormais à UN endroit, dans le modèle :
+    // `StorySlidePublishMatter.deservesAPost`.
 
     var composerCarriesAudio: Bool {
         Self.composerCarriesAudio(
