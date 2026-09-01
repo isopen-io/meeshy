@@ -305,6 +305,11 @@ jobs:
       # cette étape le manifeste est absent et la garde de non-vacuité de
       # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
       # vert sur zéro route.
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          bun run build
+
       - name: Build apps/web-v3 (le manifeste que le balayage lit)
         run: |
           cd apps/web-v3
@@ -398,6 +403,11 @@ jobs:
       # par le serveur — mais `playwright.config.ts` lève quand même `next start`
       # (la preuve d'un build se prend sur le serveur de production, leçon 339),
       # qui exige ce build.
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          bun run build
+
       - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
         run: |
           cd apps/web-v3
@@ -486,6 +496,11 @@ jobs:
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          bun run build
 
       - name: Build apps/web-v3 (le serveur que les suites mesurent)
         run: |
