@@ -288,6 +288,35 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
                        "posée sur le panneau d'ERREUR, elle disparaissait avec lui")
     }
 
+    /// **« Refaire » DEMANDE avant de détruire** (#4702).
+    ///
+    /// L'asymétrie que la vérification simulateur a nommée : supprimer un son
+    /// demande « Supprimer ce son ? », alors que « Refaire » effaçait le MÊME
+    /// contenu — fichier compris, `resetToIdle` appelant `removeItem` — sans
+    /// rien demander. Et la barre d'action flotte au-dessus du défilement : 35
+    /// pt sur 72 de la bande de rognage tombent dessus, poignées comprises.
+    ///
+    /// La garde tient les DEUX moitiés : le bouton passe par la demande, et la
+    /// demande s'efface quand il n'y a rien à perdre — une confirmation posée
+    /// sur un geste sans conséquence apprend à valider sans lire.
+    func test_refaire_demandeAvantDeDetruire() throws {
+        let feuille = try source("AudioPostComposerView.swift",
+                                 dossier: "Meeshy/Features/Main/Views")
+        XCTAssertTrue(feuille.contains("Button(action: demanderRefaire)"),
+                      "« Refaire » ne doit plus appeler `resetToIdle` en direct")
+        XCTAssertTrue(feuille.contains("redoConfirmation(actionBar)"),
+                      "la confirmation se monte sur la BARRE, pas sur une branche de `phase`")
+        let destructif = try source("AudioPostComposerView+Deletion.swift",
+                                    dossier: "Meeshy/Features/Main/Views")
+        guard let demande = corps("func demanderRefaire() {", dans: destructif) else {
+            return XCTFail("`demanderRefaire` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(demande.contains("guard recordedURL != nil || borrowedSound != nil else {"),
+                      "sans prise, rien a perdre — et rien a demander")
+        XCTAssertTrue(demande.contains("resetToIdle()"),
+                      "le chemin sans prise doit rester IMMEDIAT")
+    }
+
     /// **La transcription SERVIE est la dernière qui EXISTE, pas la dernière
     /// carte** (#4695).
     ///

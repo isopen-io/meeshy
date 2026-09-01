@@ -64,3 +64,57 @@ extension AudioPostComposerView {
         }
     }
 }
+
+/// **« Refaire » détruit autant que la corbeille, et ne demandait rien**
+/// (#4702).
+///
+/// Trouvé par la vérification simulateur du 2026-09-01, et c'est une ASYMÉTRIE
+/// qui rend le défaut visible une fois nommée : supprimer un son demande
+/// « Supprimer ce son ? », alors que « Refaire » — qui efface le MÊME contenu,
+/// fichier compris (`resetToIdle` appelle `removeItem`) — ne demandait rien.
+///
+/// Ce qui transforme le risque en perte : la barre d'action FLOTTE au-dessus du
+/// défilement, et la bande de rognage passe dessous. Mesuré : 35 pt sur 72 de
+/// la bande, poignées comprises, tombent sur la barre — un doigt qui vise la
+/// poignée gauche dans sa moitié basse touche « Refaire ». La prise, son
+/// rognage et sa description partent ensemble, sans annulation possible.
+///
+/// La confirmation est le remède qui vaut dans TOUTES les positions de
+/// défilement ; la géométrie a son issue à part, parce qu'elle se corrige sur
+/// une mesure et non sur une intuition.
+extension AudioPostComposerView {
+
+    /// **Rien à perdre ⇒ rien à demander.** Sans prise, « Refaire » ne fait que
+    /// remettre l'écran à zéro : une confirmation y serait une friction posée
+    /// sur un geste sans conséquence, et c'est ainsi qu'on apprend aux gens à
+    /// valider sans lire.
+    func demanderRefaire() {
+        guard recordedURL != nil || borrowedSound != nil else {
+            resetToIdle()
+            return
+        }
+        showRedoConfirmation = true
+    }
+
+    /// Le libellé nomme ce qui PART, pas le bouton qu'on vient de toucher :
+    /// « Refaire » dit l'intention, « l'enregistrement sera supprimé » dit le
+    /// prix.
+    func redoConfirmation<V: View>(_ contenu: V) -> some View {
+        contenu.confirmationDialog(
+            String(localized: "composer.audio.redo.title",
+                   defaultValue: "Refaire l'enregistrement ?", bundle: .main),
+            isPresented: $showRedoConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "composer.audio.redo.confirm",
+                          defaultValue: "Refaire", bundle: .main),
+                   role: .destructive, action: resetToIdle)
+            Button(String(localized: "common.cancel",
+                          defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(String(localized: "composer.audio.redo.message",
+                        defaultValue: "La prise, son rognage et sa description seront perdus.",
+                        bundle: .main))
+        }
+    }
+}

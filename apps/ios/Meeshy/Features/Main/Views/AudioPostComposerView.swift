@@ -97,6 +97,11 @@ struct AudioPostComposerView: View {
     /// La suppression se CONFIRME : un son enregistré est unique, et un doigt
     /// posé de travers ne doit pas l'effacer.
     @State var showDeleteConfirmation = false
+    /// **Et « Refaire » aussi** (#4702). Il DÉTRUIT le fichier
+    /// (`resetToIdle` appelle `removeItem`), et la moitié basse de la bande de
+    /// rognage tombe dessus : mesuré au simulateur, un doigt qui vise la
+    /// poignée gauche perd la prise, son rognage et sa description.
+    @State var showRedoConfirmation = false
     @State private var isExportingTrim = false
     /// **Où en est le rapatriement de la piste** (#4667). `direct` pour un
     /// enregistrement ou un import — leur fichier est déjà là.
@@ -209,7 +214,10 @@ struct AudioPostComposerView: View {
                 // contenu se décalait, bords gauche et droit rognés — mesuré à
                 // l'écran, pas déduit.
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    actionBar
+                    // La confirmation se monte sur la BARRE, pas sur le bouton :
+                    // `actionBar` change de branche avec `phase`, et une feuille
+                    // attachée à une branche disparaît avec elle (#4697).
+                    redoConfirmation(actionBar)
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.top, MeeshySpacing.md)
                         .padding(.bottom, MeeshySpacing.lg)
@@ -589,7 +597,7 @@ struct AudioPostComposerView: View {
         switch phase {
         case .preview:
             HStack(spacing: 12) {
-                Button(action: resetToIdle) {
+                Button(action: demanderRefaire) {
                     Label(
                         String(localized: "common.redo", defaultValue: "Refaire"),
                         systemImage: "arrow.counterclockwise"
@@ -887,7 +895,7 @@ struct AudioPostComposerView: View {
         phase = .preview
     }
 
-    private func resetToIdle() {
+    func resetToIdle() {
         audioRecorder.cancelRecording()
         if let url = recordedURL {
             try? FileManager.default.removeItem(at: url)
