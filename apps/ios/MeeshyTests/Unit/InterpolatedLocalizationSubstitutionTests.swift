@@ -102,6 +102,19 @@ final class InterpolatedLocalizationSubstitutionTests: XCTestCase {
         )
     }
 
+    /// `feed.media.item` est entrée au catalogue en 271i. Deux entiers de plus
+    /// à surveiller : l'entrée porte `%1$lld` / `%2$lld`, et la tuile de galerie
+    /// interpole `position` puis `total`. Le libellé exact, langue par langue,
+    /// est jugé par `FeedMediaAccessibilityTests` ; ici on ne vérifie que la
+    /// SUBSTITUTION, indépendamment de la locale de la machine.
+    @MainActor
+    func test_feedMediaTile_substitutesPositionAndTotal() {
+        assertFullySubstituted(
+            FeedMediaAccessibility.tileLabel(position: 3, of: 7),
+            contains: ["3", "7"], "feed.media.item"
+        )
+    }
+
     func test_invitePermissionsSummary_substitutesBothStrings() {
         let expiration = "ExpirationSentinelle", list = "ListeSentinelle"
         assertFullySubstituted(
