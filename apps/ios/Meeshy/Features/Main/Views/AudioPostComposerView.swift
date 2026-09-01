@@ -163,11 +163,20 @@ struct AudioPostComposerView: View {
                         }
                         contentPanel
                         trimSection
-                        // Plus de réserve manuelle : `safeAreaInset` ci-dessous
-                        // retranche la hauteur RÉELLE de la barre, mesurée par
-                        // SwiftUI. Un nombre écrit à la main aurait menti au
-                        // premier changement de police ou de Dynamic Type.
-                        Color.clear.frame(height: MeeshySpacing.md)
+                        // `safeAreaInset` ci-dessous retranche la hauteur RÉELLE
+                        // de la barre, mesurée par SwiftUI — jamais un nombre
+                        // écrit à la main, qui mentirait au premier changement de
+                        // Dynamic Type. Ce ressort n'est donc PAS une réserve de
+                        // hauteur : c'est la RESPIRATION entre le dernier bloc et
+                        // la barre.
+                        //
+                        // Portée de `md` à `xxl` (#4676) : mesuré à l'écran, les
+                        // pilules « Refaire » / « Ajouter » venaient au contact
+                        // des poignées de rognage et rognaient leur arrondi bas.
+                        // L'inset réservait bien la place — il ne laissait aucun
+                        // air, et un contrôle collé à un autre se lit comme un
+                        // recouvrement.
+                        Color.clear.frame(height: MeeshySpacing.xxl)
                     }
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.lg)

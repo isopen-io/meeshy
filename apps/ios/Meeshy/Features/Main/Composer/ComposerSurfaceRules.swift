@@ -341,14 +341,48 @@ nonisolated enum ComposerSoundCredit {
     /// aucun sur une pastille d'état : un vocal se serait annoncé « Ajouter un
     /// son · 0:07 », une invitation servie comme un titre. Sans titre, le crédit
     /// est sa seule durée.
-    private static func compose(_ sound: StoryAudioPlayerObject,
-                                locale: Locale,
-                                duree: (Int, Locale) -> String) -> String {
+    /// **Le TITRE et son auteur — ce qui SE TRONQUE quand la place manque.**
+    ///
+    /// La séparation d'avec la durée n'est pas cosmétique. Servi en une seule
+    /// chaîne, le crédit rendait « Feel the pulse · @jcnm · 2… » : la durée —
+    /// que le porteur a nommée explicitement dans sa directive (« la note
+    /// musicale et le son ou vague sinusoïde ET LA DURÉE ») — était le premier
+    /// morceau sacrifié, parce qu'il est le dernier de la phrase.
+    ///
+    /// > Une troncature en queue coupe ce qui vient en dernier, jamais ce qui
+    /// > compte le moins. Les deux coïncidaient sur la pastille du socle, où la
+    /// > durée fermait une ligne dont le titre était le sujet ; ils ne
+    /// > coïncident plus ici, où la durée EST une des trois choses demandées.
+    ///
+    /// La vue peut donc donner à chacun sa règle de mise en page : l'attribution
+    /// cède la largeur, la durée ne la cède jamais.
+    static func attribution(for sound: StoryAudioPlayerObject) -> String {
         var morceaux: [String] = []
         if let nom = sound.name, !nom.isEmpty { morceaux.append(nom) }
         if let auteur = sound.soundAuthorUsername, !auteur.isEmpty {
             morceaux.append("@\(auteur)")
         }
+        return morceaux.joined(separator: " · ")
+    }
+
+    /// La DURÉE seule, telle qu'on la VOIT. `nil` quand elle est inconnue — un
+    /// « 0:00 » fabriqué se lit comme une piste vide.
+    static func durationLabel(for sound: StoryAudioPlayerObject,
+                              locale: Locale = .current) -> String? {
+        guard let secondes = sound.duration, secondes > 0 else { return nil }
+        return LocalizedNumber.duration(seconds: Int(secondes.rounded()), locale: locale)
+    }
+
+    /// **La composition reste UNIQUE** : elle APPELLE les deux moitiés plutôt
+    /// que de recomposer leur contenu. Deux assemblages écrits côte à côte
+    /// auraient divergé au premier champ ajouté — et c'est justement ce que la
+    /// séparation ci-dessus rendait tentant.
+    private static func compose(_ sound: StoryAudioPlayerObject,
+                                locale: Locale,
+                                duree: (Int, Locale) -> String) -> String {
+        var morceaux: [String] = []
+        let credit = attribution(for: sound)
+        if !credit.isEmpty { morceaux.append(credit) }
         if let secondes = sound.duration, secondes > 0 {
             morceaux.append(duree(Int(secondes.rounded()), locale))
         }

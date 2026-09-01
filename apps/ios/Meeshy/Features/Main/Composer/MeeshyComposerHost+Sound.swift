@@ -68,7 +68,7 @@ extension MeeshyComposerHost {
                 // Le crédit survit au découpage : `addBorrowedSound` garde le
                 // `soundId`, et l'intervalle se pose en `sourceStart`/`sourceEnd`
                 // plutôt que d'être gravé dans un fichier ré-uploadé (#4657).
-                viewModel.addBorrowedSound(sound, trim: rognage)
+                attachBorrowedBackgroundSound(sound, trim: rognage)
                 presentedPortal = nil
                 HapticFeedback.light()
             },
@@ -105,6 +105,65 @@ extension MeeshyComposerHost {
             url: url,
             duration: objet.duration.map(TimeInterval.init) ?? 0,
             mimeType: "audio/mp4")
+    }
+
+    // MARK: - Poser un son en FOND
+
+    /// **Un son posé en FOND REMPLACE celui qui y est** (#4676).
+    ///
+    /// Défaut trouvé à la vérification simulateur du 2026-09-01, et il perdait
+    /// des données en silence. Trois gestes, trois no-op :
+    ///
+    /// | fond en place | son proposé | ce qui arrivait |
+    /// |---|---|---|
+    /// | vocal 0:04 | un son de l'étagère | la pastille ne bougeait pas |
+    /// | son de l'étagère | un autre son de l'étagère | idem |
+    /// | son de l'étagère | un vocal enregistré | idem, **et l'enregistrement était perdu** |
+    ///
+    /// Deux causes distinctes, un seul symptôme :
+    ///
+    /// - `addAudioObject(role: .background)` AJOUTE un second objet
+    ///   `isBackground == true`, et `resolvedBackgroundAudio` sert le
+    ///   **premier** de la liste. Le nouveau existe, personne ne le regarde.
+    /// - `addBorrowedSound` applique sa règle automatique
+    ///   (`hasExistingBackgroundAudio ? nil : true`) : en présence d'un fond, le
+    ///   son emprunté devient un objet de PREMIER PLAN, invisible sur une
+    ///   surface document qui n'a pas de canvas.
+    ///
+    /// > Un choix EXPLICITE de l'auteur ne se fait pas arbitrer par une règle
+    /// > écrite pour le cas où il n'a rien dit. « Fond de publication » est une
+    /// > phrase, pas une préférence : elle doit produire un fond, quel qu'en soit
+    /// > le prix pour l'occupant.
+    ///
+    /// Limite assumée : un fond LEGACY (`backgroundAudioId`, synthétisé par
+    /// `resolvedBackgroundAudio` sous l'identifiant `legacy-bg-audio`) n'a pas
+    /// d'objet à supprimer. `deleteElement` y est un no-op, et le composer de
+    /// publication ne produit pas cette forme — seule une reprise de story
+    /// ancienne le ferait.
+    func retireLeSonDeFondActuel() {
+        let effets = viewModel.currentEffects
+        guard let ancien = ComposerBackgroundSoundReplacement.supersededId(
+            background: effets.resolvedBackgroundAudio,
+            audioObjects: effets.audioPlayerObjects ?? []
+        ) else { return }
+        viewModel.deleteElement(id: ancien)
+    }
+
+    /// Le fichier devient LE fond — l'ancien part d'abord.
+    func attachBackgroundSound(url: URL) {
+        retireLeSonDeFondActuel()
+        viewModel.attachPastedAudio(url: url, role: .background)
+    }
+
+    /// La piste empruntée devient LE fond, crédit intact.
+    ///
+    /// L'ordre compte : `addBorrowedSound` lit `resolvedBackgroundAudio` pour
+    /// décider de son propre `isBackground`. Retirer d'abord lui fait donc
+    /// répondre « aucun fond », et elle pose `true` — sans qu'on ait à lui
+    /// passer un rôle qu'elle n'accepte pas.
+    func attachBorrowedBackgroundSound(_ sound: APISound, trim: ClosedRange<TimeInterval>?) {
+        retireLeSonDeFondActuel()
+        viewModel.addBorrowedSound(sound, trim: trim)
     }
 
     /// **Oublier ce qu'on éditait — les DEUX contextes, en un geste** (#4668).
@@ -227,7 +286,7 @@ extension MeeshyComposerHost {
                 documentLanguage = transcriptionServie.language
             }
         case .background:
-            viewModel.attachPastedAudio(url: url, role: .background)
+            attachBackgroundSound(url: url)
         }
         presentedPortal = nil
         HapticFeedback.light()
@@ -318,7 +377,10 @@ extension MeeshyComposerHost {
             let destination = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
-            viewModel.attachPastedAudio(url: destination, role: chosenSoundPlacement)
+            switch chosenSoundPlacement {
+            case .background: attachBackgroundSound(url: destination)
+            case .foreground: viewModel.attachPastedAudio(url: destination, role: .foreground)
+            }
             HapticFeedback.light()
         }
     }

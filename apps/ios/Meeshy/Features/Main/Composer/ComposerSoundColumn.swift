@@ -77,3 +77,42 @@ nonisolated enum ComposerSoundColumn {
         sound.soundId?.isEmpty != false
     }
 }
+
+/// **Ce qu'un nouveau son de FOND remplace** (#4676).
+///
+/// Défaut trouvé à la vérification simulateur du 2026-09-01 : poser un son en
+/// fond alors qu'un fond existait ne faisait RIEN de visible, et perdait
+/// l'enregistrement dans un cas sur trois. Deux causes, un symptôme :
+///
+/// - `addAudioObject(role: .background)` AJOUTE un second objet
+///   `isBackground == true`, et `resolvedBackgroundAudio` sert le **premier**
+///   de la liste — le nouveau existe, personne ne le regarde ;
+/// - `addBorrowedSound` applique sa règle automatique
+///   (`hasExistingBackgroundAudio ? nil : true`) : en présence d'un fond, la
+///   piste empruntée devient un objet de PREMIER PLAN, invisible sur une
+///   surface document qui n'a pas de canvas.
+///
+/// > Un choix EXPLICITE de l'auteur ne se fait pas arbitrer par une règle
+/// > écrite pour le cas où il n'a rien dit.
+///
+/// La règle vit ici plutôt que dans l'hôte parce qu'elle se DÉCIDE — et une
+/// décision écrite dans un corps de vue ne s'interroge qu'à la garde de source.
+nonisolated enum ComposerBackgroundSoundReplacement {
+
+    /// L'identifiant de l'objet à retirer avant de poser un nouveau fond.
+    ///
+    /// `nil` ⇒ rien à retirer. Deux cas rendent `nil`, et ils ne sont pas le
+    /// même : **aucun fond**, et un fond **LEGACY** — celui que
+    /// `resolvedBackgroundAudio` SYNTHÉTISE depuis `backgroundAudioId` quand
+    /// aucun `audioPlayerObject` ne porte de drapeau. Le second n'a aucun objet
+    /// à supprimer : le retirer demanderait d'effacer un champ de la slide, ce
+    /// que ce chemin ne fait pas. Le composer de publication ne produit pas
+    /// cette forme — seule une reprise de story ancienne le ferait — et la
+    /// distinguer ici évite qu'un `deleteElement` sur un identifiant fabriqué
+    /// passe pour un retrait qui n'a pas eu lieu.
+    static func supersededId(background: StoryAudioPlayerObject?,
+                             audioObjects: [StoryAudioPlayerObject]) -> String? {
+        guard let background else { return nil }
+        return audioObjects.contains(where: { $0.id == background.id }) ? background.id : nil
+    }
+}

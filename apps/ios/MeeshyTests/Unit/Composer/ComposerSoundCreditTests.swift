@@ -139,4 +139,60 @@ final class ComposerSoundCreditTests: XCTestCase {
         XCTAssertNil(arabe.range(of: "0:28", options: .literal),
                      "chiffres latins dans une pastille arabe — \(arabe)")
     }
+    // MARK: - La durée n'est JAMAIS ce qu'on tronque (#4676)
+
+    /// **L'attribution et la durée se rendent SÉPARÉMENT.**
+    ///
+    /// Servies en une chaîne, la pastille de l'avatar rendait « Feel the pulse ·
+    /// @jcnm · 2… » : une troncature en queue coupe ce qui vient EN DERNIER,
+    /// jamais ce qui compte le moins — et la durée est l'une des trois choses
+    /// que la directive du porteur nomme explicitement.
+    func test_lAttribution_neTransportePasLaDuree() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "Feel the pulse"
+        son.soundAuthorUsername = "jcnm"
+        son.duration = 143
+
+        let credit = ComposerSoundCredit.attribution(for: son)
+        XCTAssertTrue(credit.contains("Feel the pulse"))
+        XCTAssertTrue(credit.contains("@jcnm"))
+        XCTAssertFalse(credit.contains("2:23"),
+                       "la durée doit vivre dans son propre `Text` — \(credit)")
+    }
+
+    func test_laDuree_seRendSeule() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.duration = 143
+        XCTAssertEqual(ComposerSoundCredit.durationLabel(for: son, locale: Locale(identifier: "fr_FR")),
+                       LocalizedNumber.duration(seconds: 143, locale: Locale(identifier: "fr_FR")))
+    }
+
+    /// Une durée inconnue rend `nil` — la vue ne peint alors rien, plutôt qu'un
+    /// « 0:00 » qui se lit comme une piste vide.
+    func test_uneDureeInconnue_neSeRendPas() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "SANS DURÉE"
+        XCTAssertNil(ComposerSoundCredit.durationLabel(for: son))
+    }
+
+    /// **Et la composition reste UNIQUE.** Séparer les deux moitiés rendait
+    /// tentant de recomposer le libellé complet à côté ; il APPELLE
+    /// `attribution`, si bien qu'un champ ajouté à l'une apparaît dans l'autre.
+    func test_leLibelleComplet_appelleLAttribution_ilNeLaRecopiePas() {
+        var son = StoryAudioPlayerObject(postMediaId: "", placement: "overlay",
+                                         x: 0.5, y: 0.5, volume: 1, waveformSamples: [])
+        son.name = "NUITS BLANCHES"
+        son.soundAuthorUsername = "lume"
+        son.duration = 28
+
+        let complet = ComposerSoundCredit.label(for: son)
+        XCTAssertTrue(complet.hasPrefix(ComposerSoundCredit.attribution(for: son)),
+                      "le libellé complet commence par l'attribution — \(complet)")
+        XCTAssertTrue(complet.hasSuffix(ComposerSoundCredit.durationLabel(for: son) ?? ""),
+                      "…et se termine par la durée — \(complet)")
+    }
+
 }

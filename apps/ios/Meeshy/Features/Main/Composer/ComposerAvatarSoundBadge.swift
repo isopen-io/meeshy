@@ -82,17 +82,32 @@ struct ComposerAvatarSoundBadge: View {
 
             // **Le crédit ne prend la place que s'il existe** (#4669). Un vocal
             // n'a ni titre ni auteur : la pastille garde alors exactement la
-            // forme qu'elle avait, note-onde-durée. Elle CÈDE la largeur plutôt
-            // que de la prendre — un titre long ne doit pas repousser le texte
-            // de la publication.
-            let credit = ComposerSoundCredit.label(for: sound)
+            // forme qu'elle avait, note-onde-durée.
+            //
+            // **Et la durée n'est JAMAIS ce qu'on tronque** (#4676). Servie en
+            // une seule chaîne avec le titre, elle rendait « Feel the pulse ·
+            // @jcnm · 2… » — la troncature en queue coupe ce qui vient en
+            // dernier, et la durée est le dernier morceau d'une phrase dont
+            // elle n'est pas le sujet. Elle est pourtant l'une des trois choses
+            // que la directive nomme. Deux `Text`, deux règles : l'attribution
+            // CÈDE la largeur, la durée la garde.
+            let credit = ComposerSoundCredit.attribution(for: sound)
             if !credit.isEmpty {
                 Text(credit)
-                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 150, alignment: .leading)
+                    .layoutPriority(0)
+            }
+
+            if let duree = ComposerSoundCredit.durationLabel(for: sound) {
+                Text(duree)
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(tint)
+                    .fixedSize()
+                    .layoutPriority(1)
             }
         }
         .padding(.horizontal, 10)

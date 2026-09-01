@@ -148,6 +148,40 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
                       "…et la branche qui ouvre doit le DIRE au lecteur d'écran.")
     }
 
+    /// **La durée survit à la troncature** (#4676).
+    ///
+    /// Attribution et durée sont DEUX `Text` : le premier cède la largeur, le
+    /// second ne la cède jamais. Les refondre en un seul rendrait « Feel the
+    /// pulse · @jcnm · 2… », ce que la vérification simulateur a mesuré.
+    func test_laDureeDeLaPastille_neSeTronqueJamais() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertTrue(badge.contains("ComposerSoundCredit.attribution(for: sound)"),
+                      "le titre et l'auteur viennent de la moitié TRONQUABLE")
+        XCTAssertTrue(badge.contains("ComposerSoundCredit.durationLabel(for: sound)"),
+                      "…et la durée de la sienne, rendue à part")
+        XCTAssertFalse(badge.contains("ComposerSoundCredit.label(for: sound)"),
+                       "le libellé COMPLET dans un seul `Text` est exactement ce qui tronquait la durée")
+    }
+
+    /// **Poser un son en FOND passe par le remplacement, jamais en direct**
+    /// (#4676). Un appel nu à `attachPastedAudio(role: .background)` ajouterait
+    /// un second fond que personne ne regarde.
+    func test_poserUnFond_passeParLeRemplacement() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerBackgroundSoundReplacement.supersededId("),
+                      "la règle doit être APPELÉE, pas réécrite dans l'hôte")
+        guard let poseur = corps("func attachBackgroundSound(url: URL) {", dans: sons) else {
+            return XCTFail("`attachBackgroundSound` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(poseur.contains("retireLeSonDeFondActuel()"),
+                      "le retrait précède la pose : `addAudioObject` ne remplace pas, il ajoute")
+        guard let emprunt = corps("func attachBorrowedBackgroundSound(", dans: sons) else {
+            return XCTFail("`attachBorrowedBackgroundSound` introuvable.")
+        }
+        XCTAssertTrue(emprunt.contains("retireLeSonDeFondActuel()"),
+                      "…et l'emprunt aussi : sans lui, `addBorrowedSound` en fait un PREMIER PLAN")
+    }
+
     /// **La pastille est alimentée par la LOI, jamais par la lecture directe.**
     ///
     /// `viewModel.currentEffects.resolvedBackgroundAudio` passé tel quel à la

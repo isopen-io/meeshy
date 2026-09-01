@@ -99,4 +99,53 @@ final class ComposerSoundColumnTests: XCTestCase {
         son.soundId = ""
         XCTAssertTrue(ComposerSoundColumn.opensEditor(son))
     }
+    // MARK: - Ce qu'un nouveau son de FOND remplace (#4676)
+
+    /// **Poser un fond alors qu'un fond existe le REMPLACE.**
+    ///
+    /// Sans ce retrait, `addAudioObject(role: .background)` ajoutait un SECOND
+    /// objet `isBackground == true` et `resolvedBackgroundAudio` continuait de
+    /// servir le premier : le geste n'avait aucun effet visible, trois fois de
+    /// suite, et perdait l'enregistrement dans un cas sur trois.
+    func test_unFondExistant_estDesigneCommeRemplace() {
+        let ancien = fond(id: "bg-1")
+        XCTAssertEqual(
+            ComposerBackgroundSoundReplacement.supersededId(background: ancien,
+                                                            audioObjects: [ancien]),
+            "bg-1")
+    }
+
+    func test_sansFond_rienNEstRetire() {
+        XCTAssertNil(ComposerBackgroundSoundReplacement.supersededId(background: nil,
+                                                                     audioObjects: []))
+    }
+
+    /// **Un fond LEGACY n'a aucun objet à retirer.**
+    ///
+    /// `resolvedBackgroundAudio` le SYNTHÉTISE depuis `backgroundAudioId` sous
+    /// l'identifiant `legacy-bg-audio` : il n'existe dans aucun tableau, et
+    /// appeler `deleteElement` dessus passerait pour un retrait qui n'a pas eu
+    /// lieu. Les deux `nil` de cette règle ne disent donc pas la même chose, et
+    /// c'est le second qui la justifie.
+    func test_unFondLegacySynthetise_nEstPasRetireParErreur() {
+        var legacy = fond(id: "legacy-bg-audio")
+        legacy.isBackground = true
+        XCTAssertNil(
+            ComposerBackgroundSoundReplacement.supersededId(background: legacy,
+                                                            audioObjects: []),
+            "un fond sans objet n'a rien à supprimer — le prétendre masquerait le vrai chemin")
+    }
+
+    /// Un son de fond ne fait pas disparaître ses VOISINS de premier plan : la
+    /// règle ne désigne que celui qui occupe la place.
+    func test_seulLOccupantDeLaPlace_estDesigne() {
+        let ancien = fond(id: "bg-1")
+        var voisin = fond(id: "fg-9")
+        voisin.isBackground = nil
+        XCTAssertEqual(
+            ComposerBackgroundSoundReplacement.supersededId(background: ancien,
+                                                            audioObjects: [voisin, ancien]),
+            "bg-1")
+    }
+
 }
