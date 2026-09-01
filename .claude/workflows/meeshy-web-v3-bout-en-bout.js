@@ -126,13 +126,6 @@ ROUTES — decision de ce tour (a inscrire dans la conception par la phase Conce
     repond 302 vers \`/chats/:cle\` : le membre lit et ecrit dans l'INTERFACE CONNECTEE, jamais dans
     \`/chat/\`. Un lecteur connecte ne voit donc jamais la modale.
 
-  ET \`/l/:token\` Y MENE EN UN SAUT : un lien trace qui pointe une CONVERSATION repond 302 vers
-  \`/chat/<cle du lien>\` (plus jamais vers \`/chats/<cle>\`, devenu le fil du membre, qui renvoie
-  l'anonyme vers /login en un SECOND saut — c'est ce que \`e2e/visual/v3-network-vitals.spec.ts\`
-  mesure aujourd'hui en rouge : « une seule requete avant la 302, et un seul saut »). Le site du
-  mapping est \`app/(public)/l/[token]/destination.ts\` ; la cible de \`/chat/:lien\` repond 200 en
-  etat CHOIX a un lecteur sans session, jamais une redirection de plus.
-
   Il n'existe AUCUNE route \`/join\`, aucune redirection pour REJOINDRE, aucun \`/chat/:lien/...\`
   pour lire : un lien recu dans WhatsApp s'ouvre, se rejoint et se lit a UNE adresse. C'est la
   route LEGACY (apps/web/app/chat/[id], declaree dans l'AASA iOS pour les liens universels) : les
@@ -225,6 +218,14 @@ elements le classe BLOQUANT — « la v3 en avait besoin » n'est pas une preuve
   chaque endpoint ou evenement bouchonne, le rapport nomme la route ou l'emetteur reel qu'il copie.
 - apps/web (legacy) reste vif ; seul apps/web/public/sw.js (V3_ZONE_PREFIXES) est modifiable,
   selon le § 4.4 bis.
+
+ROUTES — COMPLEMENT (2026-09-01, apres le lancement du tour) :
+  ET \`/l/:token\` Y MENE EN UN SAUT : un lien trace qui pointe une CONVERSATION repond 302 vers
+  \`/chat/<cle du lien>\` (plus jamais vers \`/chats/<cle>\`, devenu le fil du membre, qui renvoie
+  l'anonyme vers /login en un SECOND saut — c'est ce que \`e2e/visual/v3-network-vitals.spec.ts\`
+  mesure aujourd'hui en rouge : « une seule requete avant la 302, et un seul saut »). Le site du
+  mapping est \`app/(public)/l/[token]/destination.ts\` ; la cible de \`/chat/:lien\` repond 200 en
+  etat CHOIX a un lecteur sans session, jamais une redirection de plus.
 `
 
 
