@@ -335,21 +335,6 @@ describe('PostService', () => {
       );
     });
 
-    it('clears alt (null) when the client sends an empty string', async () => {
-      prisma.post.create.mockResolvedValue(makePost());
-      prisma.postMedia.findFirst.mockResolvedValue(null);
-
-      await service.createPost(
-        { ...basePostData, mediaIds: ['media-1'], mediaAlt: { 'media-1': '   ' } },
-        'user-1',
-      );
-
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: 'media-1', postId: 'post-1' },
-        data: { alt: null },
-      });
-    });
-
     // ── #4055 — la LÉGENDE par média, jumelle exacte de `alt` ──────────────
     //
     // `PostMedia.caption` existait, était SERVIE (`postIncludes.ts`) et n'était
@@ -381,48 +366,17 @@ describe('PostService', () => {
       expect(foreign).toEqual([]);
     });
 
-    it('clears the caption (null) when the client sends blank', async () => {
-      prisma.post.create.mockResolvedValue(makePost());
-      prisma.postMedia.findFirst.mockResolvedValue(null);
-
-      await service.createPost(
-        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': '   ' } },
-        'user-1',
-      );
-
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: 'media-1', postId: 'post-1' },
-        data: { caption: null },
-      });
-    });
-
-    // ── L'ASSAINISSEMENT — la garde qui existait et n'était appelée par rien ──
+    // ── L'ASSAINISSEMENT, de bout en bout (#4714) ─────────────────────────
     //
-    // `content` est assaini à TROIS sites de la route (`core.ts`, lignes 362,
-    // 507, 768) ; `mediaAlt` et `mediaCaption` ne l'étaient à AUCUN. Le texte
-    // partait brut de `parsed.data` jusqu'à `postMedia.updateMany`.
-    //
-    // Le plus troublant n'est pas l'absence de la garde mais sa PRÉSENCE :
-    // `sanitizeMediaCaptions` vivait dans `core.ts`, son doc-comment citait
-    // #4055, et aucune ligne du dépôt ne l'appelait. Une garde écrite puis
-    // jamais câblée ne se signale nulle part — elle compile, elle se relit
-    // bien, et elle donne à qui la croise l'impression que le champ est gardé.
-    //
-    // Les deux colonnes partagent leur écriture (`applyMediaText`), donc elles
-    // partagent leur assainissement : c'est le point de passage obligé avant la
-    // base, et le seul qu'un futur appelant de `createPost` ne puisse pas
-    // contourner.
-
+    // La règle et ses cas vivent chez la fonction extraite
+    // (`services/posts/__tests__/mediaText.test.ts`). Ce témoin garde la moitié
+    // qu'elle ne peut pas prouver seule : que `createPost` passe BIEN par elle.
     it('sanitizes the caption before it reaches the database', async () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
       await service.createPost(
-        {
-          ...basePostData,
-          mediaIds: ['media-1'],
-          mediaCaption: { 'media-1': 'Coucher de soleil <script>alert(1)</script>' },
-        },
+        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': 'Coucher de soleil <script>alert(1)</script>' } },
         'user-1',
       );
 
@@ -431,45 +385,6 @@ describe('PostService', () => {
         .find((args: any) => args.data?.caption !== undefined);
       expect(written?.data.caption).not.toContain('<script>');
       expect(written?.data.caption).toContain('Coucher de soleil');
-    });
-
-    it('sanitizes the alt text too — the two columns share one write', async () => {
-      prisma.post.create.mockResolvedValue(makePost());
-      prisma.postMedia.findFirst.mockResolvedValue(null);
-
-      await service.createPost(
-        {
-          ...basePostData,
-          mediaIds: ['media-1'],
-          mediaAlt: { 'media-1': '<img src=x onerror=alert(1)>un chat' },
-        },
-        'user-1',
-      );
-
-      const written = prisma.postMedia.updateMany.mock.calls
-        .map((call: any[]) => call[0])
-        .find((args: any) => args.data?.alt !== undefined);
-      expect(written?.data.alt).not.toContain('onerror');
-      expect(written?.data.alt).toContain('un chat');
-    });
-
-    // Un texte qui n'est QUE du balisage devient vide, donc `null` — la même
-    // phrase que la chaîne blanche : « il n'y a pas de légende ». Sans ce
-    // témoin, l'assainissement pourrait écrire `''`, une valeur que la lecture
-    // rend comme une légende présente et vide.
-    it('clears the column when sanitizing leaves nothing', async () => {
-      prisma.post.create.mockResolvedValue(makePost());
-      prisma.postMedia.findFirst.mockResolvedValue(null);
-
-      await service.createPost(
-        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': '<script>x</script>' } },
-        'user-1',
-      );
-
-      const written = prisma.postMedia.updateMany.mock.calls
-        .map((call: any[]) => call[0])
-        .find((args: any) => args.data?.caption !== undefined);
-      expect(written?.data.caption).toBeNull();
     });
 
     it('never touches postMedia for caption when mediaCaption is omitted', async () => {
