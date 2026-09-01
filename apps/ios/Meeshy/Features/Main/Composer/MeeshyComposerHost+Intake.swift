@@ -257,11 +257,17 @@ extension MeeshyComposerHost {
     }
 
     /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
-    /// choisi, ou au moins un média devenu slide. La lier au seul
+    /// choisi, un média devenu slide, ou un objet POSÉ dessus. La lier au seul
     /// `documentBackground` (Phase 2) la réservait aux fonds de COULEUR, donc
-    /// laissait un post de photos sans aucune scène.
+    /// laissait un post de photos sans aucune scène ; la lier aux seules
+    /// FONDATIONS la démontait dès que la dernière tuile partait, en emportant
+    /// hors de vue les objets de premier plan que la slide gardait (#4724, V2).
     var documentHasScene: Bool {
-        documentBackground != nil || !slideIdByMediaURL.isEmpty
+        ComposerScenePresence.hasScene(
+            backgroundHex: documentBackground,
+            foundedSlides: slideIdByMediaURL.count,
+            sceneObjectCount: viewModel.currentSlide.sceneObjects.count
+        )
     }
 
     func carryContentIntoSceneIfNeeded() {
