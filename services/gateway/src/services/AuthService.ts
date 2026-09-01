@@ -1162,6 +1162,15 @@ export class AuthService {
   /**
    * Convertir un User Prisma en SocketIOUser
    * Note: user.userFeature doit être inclus dans la requête pour les champs de préférences
+   *
+   * `banner` et `timezone` y sont depuis #4641. Ils manquaient — et c'est la
+   * forme de défaut que la garde de #4554 ne peut PAS voir : elle rougit quand
+   * ce projecteur lit un champ hors de son `select`, or ici il ne le lisait
+   * pas DU TOUT. En aval, `formatUserResponse` écrivait
+   * `banner: user.banner || null` sur un `undefined` par construction : tout
+   * compte portant une bannière recevait `null` à chaque connexion. Ce que ce
+   * projecteur doit porter n'est donc pas seulement ce que ses appelants
+   * lisent, mais ce que `userSchema` PROMET à ses clients.
    */
   private userToSocketIOUser(user: any): SocketIOUser {
     return {
@@ -1174,6 +1183,7 @@ export class AuthService {
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner,
       role: user.role,
       permissions: this.getUserPermissions({
         ...user,
@@ -1201,6 +1211,7 @@ export class AuthService {
       lastLoginLocation: user.lastLoginLocation,
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
+      timezone: user.timezone,
       profileCompletionRate: user.profileCompletionRate
     };
   }

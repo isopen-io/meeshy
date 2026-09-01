@@ -74,6 +74,14 @@ export interface UserResponseData {
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
+  /**
+   * `undefined` ⇒ l'appelant n'a pas CHARGÉ la colonne ; `null` ⇒ il l'a
+   * chargée et le compte n'a pas de fuseau. La distinction est servie telle
+   * quelle : fast-json-stringify supprime la clé dans le premier cas et sert
+   * `null` dans le second, si bien qu'aucune route ne DÉCLARE un fuseau
+   * qu'elle n'a pas lu (#4641).
+   */
+  timezone?: string | null;
   profileCompletionRate: number;
   createdAt: Date;
   updatedAt: Date;
@@ -96,6 +104,14 @@ export interface SessionResponseData {
 
 /**
  * Utility to format user data consistently across all routes
+ *
+ * **Un champ que `userSchema` déclare doit avoir un producteur ICI, et un
+ * producteur qui ne rende pas la même chose pour tout le monde (#4641).**
+ * `banner: user.banner || null` était le contre-exemple : son producteur
+ * existait, il rendait `null` pour TOUS les comptes parce que le projecteur
+ * d'amont (`AuthService.userToSocketIOUser`) ne portait pas la colonne. Une
+ * clé PRÉSENTE et constante est plus coûteuse qu'une clé absente — elle a
+ * l'air d'une donnée.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatUserResponse(user: any, permissions?: any): UserResponseData {
@@ -128,6 +144,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     lastLoginIp: user.lastLoginIp,
     lastLoginLocation: user.lastLoginLocation,
     lastLoginDevice: user.lastLoginDevice,
+    timezone: user.timezone,
     profileCompletionRate: user.profileCompletionRate,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,

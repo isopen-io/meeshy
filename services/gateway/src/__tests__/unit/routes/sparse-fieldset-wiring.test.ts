@@ -497,8 +497,20 @@ const COMPTE = {
 /**
  * Trente clés — les trente-deux que `formatUserResponse` compose, moins
  * `pendingEmail` et `pendingPhone` que `userSchema` ne déclare pas (supprimées
- * par fast-json-stringify). `phoneCountryCode` et `timezone` sont déclarés mais
- * jamais produits : absents.
+ * par fast-json-stringify).
+ *
+ * `phoneCountryCode` est déclaré et jamais produit : `SocketIOUser` ne le porte
+ * pas, donc le projecteur ne peut pas le servir sans élargir le type partagé.
+ *
+ * `timezone` A un producteur depuis #4641 — la phrase « jamais produit » qui
+ * valait pour lui est devenue fausse ce jour-là. Il reste absent ICI pour une
+ * raison DIFFÉRENTE, et c'est elle qu'il faut retenir : le `select` du cache
+ * d'auth ne charge pas la colonne, donc `user.timezone` vaut `undefined` et le
+ * projecteur ne pose pas la clé. `formatUserResponse` sert délibérément
+ * `user.timezone` SANS `?? null` : `undefined` (colonne non chargée) laisse la
+ * clé absente, `null` (colonne chargée et vide) sert `null`. Une route ne peut
+ * donc pas DÉCLARER un fuseau qu'elle n'a pas lu — et ce gel de trente clés
+ * tient toujours.
  */
 const CLES_ME_NU = [
   'autoTranslateEnabled',
