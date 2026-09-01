@@ -1,8 +1,10 @@
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { THEME_PAR_DEFAUT, themeScriptSource } from '@/app/theme-script';
 
-import { glypheDuSprite, tableDeJetons } from './actifs-inlines';
-import { FEUILLE_DE_L_ECRAN, SOCLE_DU_DOCUMENT } from './feuille';
+import { glypheDuSprite, tableDeJetons } from '@/app/actifs-inlines';
+import { echappe, SOCLE_DU_DOCUMENT } from '@/app/socle';
+
+import { FEUILLE_DE_L_ECRAN } from './feuille';
 
 /**
  * Le document que les DEUX écrans de `/l/:token` rendent — l'ouverture du lien
@@ -45,7 +47,7 @@ import { FEUILLE_DE_L_ECRAN, SOCLE_DU_DOCUMENT } from './feuille';
  *   • **Aucune sous-ressource** — ni feuille, ni sprite, ni image : le § 8.3
  *     gate `/l/:token` à UNE requête avant le premier pixel, et son écran clos
  *     à deux. Jetons et glyphes sont inlinés depuis leurs paquets par
- *     `actifs-inlines.ts`.
+ *     `app/actifs-inlines.ts`.
  *   • **Rien du réseau n'entre en balisage** — titre, description, jeton et
  *     valeurs d'en-tête passent tous par `echappe`.
  *
@@ -116,15 +118,6 @@ export type ParametresDuDocument = {
 const RETOUR = 'Revenir à l’accueil';
 const SUITE = 'Suite';
 
-const ENTITES: Readonly<Record<string, string>> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-const echappe = (valeur: string): string => valeur.replace(/[&<>"']/g, (c) => ENTITES[c] ?? c);
 
 const meta = (cle: 'name' | 'property', nom: string, contenu: string): string =>
   `<meta ${cle}="${nom}" content="${echappe(contenu)}"/>`;

@@ -513,8 +513,7 @@ extension MeeshyComposerHost {
             // enregistrent, importent et empruntent — mais la DESTINATION du
             // résultat. Elle se choisit désormais dans la feuille ; l'entrée ne
             // fait plus que POSER le défaut qui lui correspond.
-            chosenSoundPlacement = .foreground
-            presentedPortal = .sound
+            openSoundSheet(placement: .foreground)
         case .none:
             break
         }
@@ -619,7 +618,9 @@ extension MeeshyComposerHost {
     /// donc jamais cette scène.
     func presentSoundSources() {
         HapticFeedback.light()
-        presentedPortal = .sound
+        // La porte du rail n'a pas d'avis sur le placement : ce que l'auteur a
+        // choisi la fois d'avant tient. `nil` le dit ; `.background` l'imposerait.
+        openSoundSheet(placement: nil)
     }
 
     /// Les provenances SECONDAIRES, offertes sous le micro dans la feuille.

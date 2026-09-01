@@ -748,22 +748,56 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     ///
     /// Ce témoin garde la destination — le vrai sujet — plutôt que la
     /// distinction des chemins, qui n'était que le moyen.
-    func test_leSonEnregistre_atterritSurLaScene_jamaisDansLeDocument() throws {
+    ///
+    /// **Repointé au 2026-09-01.** Ce témoin épinglait
+    /// `attachPastedAudio(url:url,role:chosenSoundRole)` — une chaîne que le
+    /// #4657 a fait disparaître en fusionnant « Vocal » et « Ajouter un son »
+    /// dans UNE vue, où l'auteur choisit désormais le PLACEMENT. Il rougissait
+    /// donc en permanence sur du code juste, et ne gardait plus rien.
+    ///
+    /// > Un renommage n'emmène pas les témoins qui citent l'ancien nom : ils
+    /// > passent au ROUGE, ce qui a l'air d'une régression, et cessent de
+    /// > garder, ce qui n'a l'air de rien.
+    ///
+    /// La destination — le vrai sujet — se garde mieux qu'avant : elle est
+    /// maintenant CONDITIONNELLE, et le témoin épingle les deux branches.
+    func test_leSonEnregistre_atterritSelonSonPLACEMENT_jamaisAilleurs() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("viewModel.attachPastedAudio(url:url,role:chosenSoundRole)"),
-                      "le son enregistré doit rejoindre la SCÈNE, avec le rôle choisi par l'auteur")
+        XCTAssertTrue(source.contains("switchchosenSoundPlacement{"),
+                      "la destination du son enregistré se décide sur le PLACEMENT choisi")
+        XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:url)"),
+                      "placé en FOND, il rejoint la scène")
+        XCTAssertTrue(source.contains("case.foreground:documentLocalMedia.append("),
+                      "placé en CONTENU, il rejoint la liste média du document — c'est une pièce "
+                          + "jointe du post, pas une bande-son")
         XCTAssertFalse(source.contains("case.record:handleDocumentTool(.microphone)"),
-                       "ce chemin versait le vocal dans la liste média du DOCUMENT")
+                       "ce chemin versait le vocal dans la liste média du DOCUMENT sans rien demander")
     }
 
-    /// Le rôle de mixage est OFFERT, et il descend jusqu'à l'objet créé — un
+    /// Le placement est OFFERT, et il descend jusqu'à l'objet créé — un
     /// sélecteur qui ne changerait rien serait un contrôle sans effet (loi 4).
-    func test_leRoleDeMixage_estOffertEtDescendJusquALObjet() throws {
+    ///
+    /// **Repointé au 2026-09-01**, même raison que ci-dessus : le choix vit
+    /// dans `chosenSoundPlacement` depuis le #4657, et il est écrit par le
+    /// commutateur de « Création audio » plutôt que par un sélecteur du meuble.
+    /// L'ancienne moitié (`chosenSoundRole`) survit dans `soundRolePicker`, une
+    /// vue que plus aucun écran ne monte — c'est le sujet de #4664, et un
+    /// témoin qui l'épingle garde un mort.
+    func test_lePlacement_estOffertEtDescendJusquALObjet() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("chosenSoundRole=role"),
-                      "le sélecteur doit ÉCRIRE le choix")
-        XCTAssertTrue(source.contains("role:chosenSoundRole"),
-                      "et ce choix doit atteindre la création de l'objet audio")
+        XCTAssertTrue(source.contains("placement:$chosenSoundPlacement"),
+                      "la feuille doit recevoir le placement en LIAISON — sinon son commutateur "
+                          + "n'écrirait rien")
+        // **Le placement décide la DESTINATION, pas un argument passé plus
+        // bas.** Il ne voyage plus comme un `role:` — il choisit la branche, et
+        // chaque branche appelle le site qui sait poser ce qu'elle vise. C'est
+        // plus fort que ce que ce témoin exigeait : un argument peut se perdre
+        // dans une fonction qui l'ignore, une branche non prise ne s'exécute
+        // pas.
+        XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:destination)"),
+                      "un fichier placé en FOND doit remplacer le fond de la slide")
+        XCTAssertTrue(source.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "…et placé en CONTENU, devenir un objet de premier plan")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un

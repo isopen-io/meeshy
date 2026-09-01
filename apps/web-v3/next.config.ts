@@ -24,6 +24,17 @@ const nextConfig: NextConfig = {
      * un document sans ses glyphes, et le défaut ne se verrait qu'en production.
      */
     '/**': ['./node_modules/@meeshy/icons/critical.svg'],
+    /**
+     * La vitrine inline la table de jetons — même lecture par CHEMIN que
+     * l'écran d'un lien, donc même invisibilité pour le traceur. Elle ne
+     * déclare PAS `sprite.svg` : elle n'affiche aucun glyphe, et l'ajouter
+     * ferait voyager 40 Ko dans l'image pour une surface qui n'en lit rien.
+     */
+    '/': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+    ],
     '/l/[token]': [
       './node_modules/@meeshy/design-tokens/tokens.css',
       './node_modules/@meeshy/design-tokens/dark.css',

@@ -80,6 +80,27 @@ extension MeeshyComposerHost {
             // réglage.
             initialAudio: editedSoundTrack
         )
+        // **Une ouverture, une feuille NEUVE** (#4684). Voir
+        // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la
+        // vue — et son `@State` — d'une ouverture à la suivante.
+        .id(soundSheetSession)
+    }
+
+    /// **LA façon d'ouvrir « Création audio »** (#4684) — les quatre entrées y
+    /// passent, et c'est ce qui rend l'inventaire structurel.
+    ///
+    /// Elles faisaient chacune leurs deux ou trois lignes : poser le placement,
+    /// poser le portail. Un cinquième site aurait pu naître en oubliant la
+    /// troisième — renouveler l'identité de la feuille — sans qu'aucun témoin ne
+    /// rougisse, puisque le défaut ne se voit qu'à la SECONDE ouverture.
+    ///
+    /// `placement` à `nil` ⇒ la porte n'a pas d'avis, et ce que l'auteur avait
+    /// choisi la fois d'avant tient. C'est le cas de la porte du rail, qui ouvre
+    /// la feuille sans rien présumer.
+    func openSoundSheet(placement: ComposerAudioRole?) {
+        if let placement { chosenSoundPlacement = placement }
+        soundSheetSession = UUID()
+        presentedPortal = .sound
     }
 
     /// **La piste que la feuille rouvre** — de CONTENU ou de FOND, un seul site.
@@ -131,7 +152,7 @@ extension MeeshyComposerHost {
     ///   surface document qui n'a pas de canvas.
     ///
     /// > Un choix EXPLICITE de l'auteur ne se fait pas arbitrer par une règle
-    /// > écrite pour le cas où il n'a rien dit. « Fond de publication » est une
+    /// > écrite pour le cas où il n'a rien dit. « Fond de la slide » est une
     /// > phrase, pas une préférence : elle doit produire un fond, quel qu'en soit
     /// > le prix pour l'occupant.
     ///
@@ -190,8 +211,7 @@ extension MeeshyComposerHost {
     func editBackgroundSound(_ sound: StoryAudioPlayerObject) {
         editedForegroundSound = nil
         editedBackgroundSoundId = sound.id
-        chosenSoundPlacement = .background
-        presentedPortal = .sound
+        openSoundSheet(placement: .background)
         HapticFeedback.light()
     }
 
@@ -203,8 +223,7 @@ extension MeeshyComposerHost {
     func editForegroundSound(_ son: ComposerForegroundSound) {
         editedBackgroundSoundId = nil
         editedForegroundSound = son
-        chosenSoundPlacement = .foreground
-        presentedPortal = .sound
+        openSoundSheet(placement: .foreground)
         HapticFeedback.light()
     }
 
