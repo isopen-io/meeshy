@@ -1,17 +1,17 @@
 package me.meeshy.sdk.model
 
 import com.google.common.truth.Truth.assertThat
-import java.time.LocalDateTime
 import org.junit.Test
 
 /**
- * Pure decision core for the in-app real-time notification toast (feature-parity §M) — the
- * dedup/active-screen-suppression/push+DND/per-type gate extracted from iOS's impure
- * `NotificationToastManager.handleNewNotification` guard-chain.
+ * Pure decision core for the in-app real-time notification toast (feature-parity §M) — a faithful
+ * port of iOS's in-app banner rule (`NotificationToastManager.handleNewNotification` +
+ * `UserNotificationPreferences.allowsInAppBanner`): active-screen suppression, then dedup, then
+ * the PER-TYPE toggle. The push-master and DND window are deliberately NOT applied to the in-app
+ * banner (they gate the foreground push banner via `PushPresentationPolicy`), so a user with the
+ * app open never goes blind inside it.
  */
 class NotificationToastPolicyTest {
-
-    private val now = LocalDateTime.of(2026, 8, 17, 12, 0)
 
     private fun notification(
         id: String = "n1",
@@ -32,7 +32,6 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.Show(notification()))
@@ -46,7 +45,6 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.SuppressedActiveScreen)
@@ -60,7 +58,6 @@ class NotificationToastPolicyTest {
             activePostId = "p1",
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.SuppressedActiveScreen)
@@ -74,7 +71,6 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.Show(notification(conversationId = "c1")))
@@ -88,30 +84,35 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = true,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.Deduplicated)
     }
 
     @Test
-    fun decide_blocksWhenPushIsDisabled() {
+    fun decide_showsWhenPushIsDisabled_theInAppBannerIgnoresThePushMaster() {
+        // iOS `allowsInAppBanner` deliberately does NOT consult `pushEnabled`: cutting push off
+        // asks not to be interrupted OUTSIDE the app, not to go blind INSIDE it. The push master
+        // gates the foreground push banner (`PushPresentationPolicy`), never the in-app banner.
+        val target = notification(type = "new_message")
         val decision = NotificationToastPolicy.decide(
-            notification = notification(),
+            notification = target,
             activeConversationId = null,
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(pushEnabled = false),
-            now = now,
         )
 
-        assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
+        assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
     }
 
     @Test
-    fun decide_blocksInsideTheDndWindow() {
+    fun decide_showsInsideTheDndWindow_theInAppBannerIgnoresQuietHours() {
+        // Same reasoning as the push master: DND protects an ABSENT user; here the user is present
+        // and looking at the app. DND gates the foreground push banner, not the in-app banner.
+        val target = notification(type = "new_message")
         val decision = NotificationToastPolicy.decide(
-            notification = notification(),
+            notification = target,
             activeConversationId = null,
             activePostId = null,
             isDuplicateDelivery = false,
@@ -120,10 +121,9 @@ class NotificationToastPolicyTest {
                 dndStartTime = "00:00",
                 dndEndTime = "23:59",
             ),
-            now = now,
         )
 
-        assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
+        assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
     }
 
     @Test
@@ -135,7 +135,6 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
@@ -150,16 +149,15 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
     }
 
     @Test
-    fun decide_showsAToggleLessTypeEvenWhenTheNearbyToggleIsOff() {
+    fun decide_showsAToggleLessTypeEvenWhenNearbyTogglesAreOff() {
         // translation notifications have no per-type toggle → they survive even with
-        // reaction/system toggles off (push + DND still pass).
+        // reaction/system toggles off (the in-app gate is the per-type toggle alone).
         val target = notification(type = "translation_completed")
         val decision = NotificationToastPolicy.decide(
             notification = target,
@@ -167,35 +165,49 @@ class NotificationToastPolicyTest {
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(systemEnabled = false, reactionEnabled = false),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
     }
 
     @Test
-    fun decide_pushMasterOverridesAnEnabledPerTypeToggle() {
+    fun decide_perTypeToggleStillGovernsWhenPushIsDisabled() {
+        // The push master is irrelevant to the in-app banner, but the per-type toggle still gates:
+        // a disabled type is blocked whether push is on or off.
         val decision = NotificationToastPolicy.decide(
-            notification = notification(type = "new_message"),
+            notification = notification(type = "member_left"),
             activeConversationId = null,
             activePostId = null,
             isDuplicateDelivery = false,
             preferences = UserNotificationPreferences(pushEnabled = false),
-            now = now,
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
     }
 
     @Test
+    fun decide_deduplicationWinsOverADisabledPerTypeToggle() {
+        // Dedup is checked before the per-type gate (iOS order): a duplicate of a muted type is
+        // Deduplicated, not BlockedByPreferences.
+        val decision = NotificationToastPolicy.decide(
+            notification = notification(type = "member_left"),
+            activeConversationId = null,
+            activePostId = null,
+            isDuplicateDelivery = true,
+            preferences = UserNotificationPreferences(),
+        )
+
+        assertThat(decision).isEqualTo(NotificationToastDecision.Deduplicated)
+    }
+
+    @Test
     fun decide_activeScreenSuppressionWinsOverDeduplicationAndPrefs() {
         val decision = NotificationToastPolicy.decide(
-            notification = notification(conversationId = "c1"),
+            notification = notification(conversationId = "c1", type = "member_left"),
             activeConversationId = "c1",
             activePostId = null,
             isDuplicateDelivery = true,
-            preferences = UserNotificationPreferences(pushEnabled = false),
-            now = now,
+            preferences = UserNotificationPreferences(),
         )
 
         assertThat(decision).isEqualTo(NotificationToastDecision.SuppressedActiveScreen)

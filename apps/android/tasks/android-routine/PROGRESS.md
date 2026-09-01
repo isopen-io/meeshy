@@ -2,6 +2,74 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-09-01 **the in-app notification banner now matches iOS `allowsInAppBanner` exactly — it is
+> gated by the PER-TYPE toggle alone, no longer by the push-master or the Do-Not-Disturb window, so a
+> user with the app OPEN is never blinded in-app by a setting meant for when they are away** (slice
+> `notification-inapp-gate-drops-push-dnd`, feature-parity §M in-app toast/banner). iOS
+> `NotificationToastManager.handleNewNotification` surfaces the in-app banner `if allowsInAppBanner(type)`
+> — and `allowsInAppBanner == isTypeEnabled`, per-type ONLY. Its own doc-comment reasons that `pushEnabled`
+> and the DND window protect an ABSENT user (background push, lock screen) and must NOT be re-applied to
+> the in-app surface. Android's `NotificationToastPolicy` had extracted push+DND into the in-app gate
+> (its doc-comment mis-claimed this came "from iOS handleNewNotification"), while `PushPresentationPolicy`
+> already owns push+DND for the FOREGROUND push banner — the surface that actually needs them. Net effect
+> on Android before this slice: a present user saw NO in-app banner when push was off or inside quiet
+> hours (dimension-6 Cohérence + dimension-8 UX regression vs iOS), and the per-type toggles were the only
+> thing that surface honoured.
+>
+> **Step 0 — no open android-routine PR to merge.** `list_pull_requests` (open) → #4656/#4652/#4622/#4599/#4590
+> (all jcnm: gateway) + #4541 + dependabot; none a `claude/apps/android/<slice-id>` slice, no `apps/android`
+> collision. Prior slice (`engagement-consent-gate-surfaces`, #4655) is on `main`. **Re-baseline lesson this
+> run:** the initial file reads were taken on the stale designated branch (`claude/fervent-darwin-055sh3`,
+> 788 behind main) BEFORE checkout — they showed an OLD `NotificationToastPolicy` without the per-type gate
+> and made a "add the per-type gate" slice look open when main already shipped it. Reverted the three
+> clobbered files, re-read PROGRESS/feature-parity/source from `origin/main`, and re-scoped. Branched
+> `claude/apps/android/notification-inapp-gate-drops-push-dnd` off freshly-fetched `origin/main`
+> (HEAD == origin/main before branching).
+>
+> **The change — the in-app policy drops push+DND, keeps active-screen/dedup/per-type.**
+> `NotificationToastPolicy.decide` now returns `SuppressedActiveScreen` (thread on screen) → `Deduplicated`
+> (2 s window) → `BlockedByPreferences` (per-type toggle off, `NotificationTypeToggle.isEnabled`) → `Show`.
+> The `pushEnabled` and `DndWindow.isActive` gates — and the `now: LocalDateTime` parameter they needed —
+> are removed; `PushPresentationPolicy` (unchanged) remains the sole owner of push+DND, for the foreground
+> push banner. Both in-app orchestrators (`NotificationToastViewModel`, `NotificationBannerViewModel`) drop
+> the `now = clock.localDateTime()` argument, and `NotificationToastClock` loses its now-unused
+> `localDateTime()` (interface + impl), keeping only `nowMillis()` for the dedup window. `DndWindow` stays
+> alive via `PushPresentationPolicy` + the Settings DND editor — no orphan. Blast radius: 1 `:core:model`
+> policy (−push/−DND/−param), 2 `:feature` VMs (−1 arg each), 1 clock seam (−1 method), 3 test files.
+>
+> **Tests: net +2, corrected + mutation-proven.** `NotificationToastPolicyTest` reworked: the two now-wrong
+> assertions (`decide_blocksWhenPushIsDisabled`, `decide_blocksInsideTheDndWindow`) become
+> `decide_showsWhenPushIsDisabled_theInAppBannerIgnoresThePushMaster` /
+> `decide_showsInsideTheDndWindow_theInAppBannerIgnoresQuietHours` (Show, iOS-faithful);
+> `decide_pushMasterOverridesAnEnabledPerTypeToggle` → `decide_perTypeToggleStillGovernsWhenPushIsDisabled`;
+> added `decide_deduplicationWinsOverADisabledPerTypeToggle`; kept per-type + active-screen precedence (the
+> latter now uses a disabled type instead of push-off). `NotificationToastViewModelTest` +
+> `NotificationBannerViewModelTest`: the push-disabled tests flip to assert the toast/banner SHOWS an
+> enabled type, and `NotificationBannerViewModelTest` gains `aTypeWhosePerTypeToggleIsOffIsSuppressed`; both
+> FakeClocks drop the `localDateTime()` override. **RED:** re-adding `if (!preferences.pushEnabled) return
+> BlockedByPreferences` fails EXACTLY `decide_showsWhenPushIsDisabled_theInAppBannerIgnoresThePushMaster`
+> (1 of 13, other 12 green) — verified this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37`. Kept `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest, 973 tasks) → **BUILD SUCCESSFUL in 3m 59s**. Reviewer **PASS** (diff `apps/android`
+> only — 1 core file + 2 feature files + 1 clock seam + 3 test files + tracking docs, no `local.properties`;
+> SDK purity — the decision stays the pure `:core:model` machine, the clock read stays in the `:feature`
+> VMs; SSOT — the in-app gate is now the one per-type resolver, push+DND live only in `PushPresentationPolicy`;
+> coherence — matches iOS `allowsInAppBanner` exactly; no tautological tests — mutation-proven; no coverage
+> floor lowered — the changed tests assert the CORRECTED source-of-truth behaviour, not weaker behaviour).
+>
+> **Next**: engagement §F still defers (watch-time samples + completion from the reels player, micro-action
+> recording, and the durable outbox / crash-recovery net — all blocked on an engagement REPORT endpoint the
+> `posts/{id}/view` dwell path does not provide). Conversation §B `uncategorize` (categoryId → null) is open
+> but blocked on an explicit-null PUT path (the shared `explicitNulls = false` encoder drops a null
+> categoryId; needs an apps/android serialization solution that does not also clear customName). For a fresh
+> pure-core slice, consider a Chat or Feed value type / resolver from the audit. Read the chosen box's iOS
+> audit part read-only before branching.
+
 > On 2026-09-01 **the analytics-consent gate now covers ALL FOUR dwell surfaces — reels, status bubble and
 > story viewer joined post detail, so the `allowAnalytics` privacy toggle is live everywhere it should be**
 > (slice `engagement-consent-gate-surfaces`, feature-parity §F engagement). The prior slice

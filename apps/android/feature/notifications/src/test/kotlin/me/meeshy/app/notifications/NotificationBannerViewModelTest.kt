@@ -28,14 +28,14 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.time.LocalDateTime
 
 /**
  * The live in-app banner orchestrator (feature-parity §M). Its dedup is now the SHARED pure
  * [me.meeshy.sdk.model.ToastDedupWindow] (tested exhaustively in `ToastDedupWindowTest`) instead
  * of a private re-implementation, and its clock is the injected [NotificationToastClock] seam —
  * so this proves the STATEFUL wiring: the 2 s dedup window, the active-screen suppression, the
- * push/DND gate, the navigation payload, and the auto-dismiss + its cancellation. Mirrors the
+ * per-type gate (the in-app banner ignores push-master/DND, like iOS `allowsInAppBanner`), the
+ * navigation payload, and the auto-dismiss + its cancellation. Mirrors the
  * `NotificationToastViewModelTest` harness (same socket + clock seams) — the two orchestrators
  * are now consistent by construction.
  */
@@ -55,10 +55,8 @@ class NotificationBannerViewModelTest {
 
     private class FakeClock(
         var millis: Long = 0,
-        var local: LocalDateTime = LocalDateTime.of(2026, 8, 31, 12, 0),
     ) : NotificationToastClock {
         override fun nowMillis(): Long = millis
-        override fun localDateTime(): LocalDateTime = local
     }
 
     private val clock = FakeClock()
@@ -174,11 +172,26 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
-    fun pushDisabledSuppressesTheBanner() = runTest(dispatcher.scheduler) {
+    fun pushDisabledDoesNotSuppressTheInAppBanner() = runTest(dispatcher.scheduler) {
+        // iOS `allowsInAppBanner` ignores the push master: a user with the app open still sees the
+        // in-app banner for enabled types. Push/DND gate the foreground push banner, not this.
         val vm = viewModel(UserNotificationPreferences(pushEnabled = false))
         runCurrent()
 
-        received.emit(notification(id = "n1"))
+        received.emit(notification(id = "n1", type = "new_message"))
+        runCurrent()
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun aTypeWhosePerTypeToggleIsOffIsSuppressed() = runTest(dispatcher.scheduler) {
+        // memberLeftEnabled defaults off → a member_left banner is gated by the per-type toggle,
+        // the one gate the in-app banner DOES honour.
+        val vm = viewModel(UserNotificationPreferences())
+        runCurrent()
+
+        received.emit(notification(id = "n1", type = "member_left"))
         runCurrent()
 
         assertThat(vm.banner.value).isNull()

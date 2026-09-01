@@ -1,7 +1,5 @@
 package me.meeshy.sdk.model
 
-import java.time.LocalDateTime
-
 /** What a real-time `notification:new` event should do to the in-app toast (feature-parity §M). */
 public sealed interface NotificationToastDecision {
     /** Surface [notification] as a toast. */
@@ -13,23 +11,34 @@ public sealed interface NotificationToastDecision {
     /** A duplicate delivery (APN + socket racing for the same event) within the dedup window. */
     public data object Deduplicated : NotificationToastDecision
 
-    /** Push disabled, inside the quiet-hours window, or this type's per-type toggle is off. */
+    /** The user turned this notification type's toggle off — no in-app banner. */
     public data object BlockedByPreferences : NotificationToastDecision
 }
 
 /**
- * Pure decision core for the in-app real-time notification toast (feature-parity §M) — the
- * dedup/active-screen-suppression/push+DND gate extracted into a testable function from iOS
- * `NotificationToastManager.handleNewNotification`'s impure guard-chain (iOS has no isolated
- * pure version of this logic; this is a genuine extraction, not a straight port).
+ * Pure decision core for the in-app real-time notification toast (feature-parity §M) — a faithful
+ * port of iOS's in-app banner rule (`NotificationToastManager.handleNewNotification` +
+ * `UserNotificationPreferences.allowsInAppBanner`).
  *
- * The gate has three preference layers, applied in order once active-screen suppression and
- * dedup are cleared: [UserNotificationPreferences.pushEnabled] (the push master), the DND
- * window ([DndWindow.isActive]), then the PER-TYPE toggle ([NotificationTypeToggle.isEnabled],
- * a faithful port of iOS `isTypeEnabled` keyed on the wire `type` string). Any of the three
- * failing yields [NotificationToastDecision.BlockedByPreferences]; a type with no governing
- * toggle (translation, gamification, and the not-yet-modelled incoming-call / friend-content
- * categories) passes the third layer, exactly as iOS treats its toggle-less types.
+ * The gates, in iOS's order:
+ *  1. **Active screen** — the notification's conversation/post is the one already on screen (its
+ *     content is being consumed live), so it never re-announces itself ([ActiveContextMatch]).
+ *     This is the one suppression the caller owns and no preference carries.
+ *  2. **Dedup** — the socket `notification:new` and an APN can fire for the same event within
+ *     milliseconds; the banner must appear exactly once ([isDuplicateDelivery]).
+ *  3. **Per-type toggle** — [NotificationTypeToggle], the switch Settings ▸ Notifications promises
+ *     to honour. A disabled type yields [NotificationToastDecision.BlockedByPreferences]; a
+ *     toggle-less type (translation, gamification, …) passes, exactly as iOS treats them.
+ *
+ * **`pushEnabled` and the Do-Not-Disturb window are deliberately NOT applied here**, matching iOS
+ * `allowsInAppBanner`'s documented reasoning: those two filters protect the attention of an
+ * ABSENT user (background push, lock screen). Here the user has the app open in front of them —
+ * cutting push off asks not to be interrupted OUTSIDE the app, not to go blind INSIDE it, and the
+ * DND window is the same protection carried to its conclusion. They still gate the FOREGROUND
+ * push banner ([PushPresentationPolicy], which owns `pushEnabled` + [DndWindow] for the surface
+ * that actually needs them); re-applying them here both over-suppressed the present user and made
+ * the per-type toggles the only thing the in-app surface honoured — the amalgam iOS's own
+ * doc-comment warns against restoring.
  *
  * [isDuplicateDelivery] is a precomputed boolean rather than a self-managed time window: the
  * "was this id already shown in the last 2s" check is inherently stateful (compares across
@@ -44,7 +53,6 @@ public object NotificationToastPolicy {
         activePostId: String?,
         isDuplicateDelivery: Boolean,
         preferences: UserNotificationPreferences,
-        now: LocalDateTime,
     ): NotificationToastDecision {
         val context = notification.context
         val matchesActiveScreen = ActiveContextMatch.matches(
@@ -57,8 +65,6 @@ public object NotificationToastPolicy {
             return NotificationToastDecision.SuppressedActiveScreen
         }
         if (isDuplicateDelivery) return NotificationToastDecision.Deduplicated
-        if (!preferences.pushEnabled) return NotificationToastDecision.BlockedByPreferences
-        if (DndWindow.isActive(preferences, now)) return NotificationToastDecision.BlockedByPreferences
         if (!NotificationTypeToggle.isEnabled(notification.type, preferences)) {
             return NotificationToastDecision.BlockedByPreferences
         }

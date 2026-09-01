@@ -6890,6 +6890,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `notificationToastSenderName`/`notificationToastSubtitle` projections. +25 tests (13 `ToastDedupWindow`
       + 6 host projection + 14 VM incl. the 2 s dedup window, 7 s auto-dismiss and its non-clobber, and every
       active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
+      **In-app gate aligned to iOS `allowsInAppBanner` — 2026-09-01** (slice
+      `notification-inapp-gate-drops-push-dnd`): `NotificationToastPolicy` re-applied `pushEnabled`
+      + the DND window to the IN-APP banner, but iOS `handleNewNotification` gates the in-app banner
+      on the PER-TYPE toggle ALONE (`allowsInAppBanner = isTypeEnabled`) — its doc-comment reasons
+      explicitly that push-off/DND protect an ABSENT user (background push, lock screen) and must
+      NOT blind a user who has the app open. Android already owns push+DND for the surface that
+      needs them (`PushPresentationPolicy`, the foreground push banner), so the in-app copy was both
+      redundant and a dimension-6/8 regression: a present user saw no in-app banner when push was
+      off or during quiet hours (and the policy's own doc-comment mis-claimed it was "extracted from
+      iOS handleNewNotification"). The gate is now active-screen → dedup → per-type only; the unused
+      `now`/`NotificationToastClock.localDateTime()` DND seam was removed (the clock keeps only
+      `nowMillis()` for the dedup window). Both in-app orchestrators (`NotificationToastViewModel`,
+      `NotificationBannerViewModel`) benefit. Tests updated to the corrected behaviour (push-off /
+      DND → SHOWS an enabled type; per-type toggle still gates), mutation-proven (re-adding the push
+      gate fails EXACTLY the "ignores push master" test). `meeshy.sh check` green.
       **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
       `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
 - [x] In-app banner dedup — one SSOT window, not a re-coded twin — **shipped 2026-08-31** (slice

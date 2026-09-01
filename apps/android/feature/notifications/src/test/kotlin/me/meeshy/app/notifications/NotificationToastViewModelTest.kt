@@ -21,7 +21,6 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.time.LocalDateTime
 
 /**
  * The in-app toast orchestrator (feature-parity §M): drives [ToastDedupWindow] +
@@ -41,10 +40,8 @@ class NotificationToastViewModelTest {
 
     private class FakeClock(
         var millis: Long = 0,
-        var local: LocalDateTime = LocalDateTime.of(2026, 8, 17, 12, 0),
     ) : NotificationToastClock {
         override fun nowMillis(): Long = millis
-        override fun localDateTime(): LocalDateTime = local
     }
 
     private val clock = FakeClock()
@@ -134,14 +131,16 @@ class NotificationToastViewModelTest {
     }
 
     @Test
-    fun pushDisabledSuppressesTheToast() = runTest(dispatcher.scheduler) {
+    fun pushDisabledDoesNotSuppressTheInAppToast() = runTest(dispatcher.scheduler) {
+        // iOS `allowsInAppBanner` ignores the push master: a user with the app open still sees
+        // in-app toasts for enabled types. Push/DND gate the foreground push banner, not this.
         val vm = viewModel(UserNotificationPreferences(pushEnabled = false))
         runCurrent()
 
-        received.emit(notification(id = "n1"))
+        received.emit(notification(id = "n1", type = "new_message"))
         runCurrent()
 
-        assertThat(vm.currentToast.value).isNull()
+        assertThat(vm.currentToast.value?.id).isEqualTo("n1")
     }
 
     @Test

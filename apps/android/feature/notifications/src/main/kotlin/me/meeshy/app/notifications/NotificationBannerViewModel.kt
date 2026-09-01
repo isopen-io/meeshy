@@ -37,8 +37,9 @@ data class InAppBanner(
 /**
  * **Le consommateur qui manquait à `NotificationToastPolicy` (#4457).**
  *
- * La politique portait la décision — dédoublonnage, écran actif, push + heures calmes — avec
- * ses tests, et n'avait AUCUN appelant de production : un `notification:new` reçu app ouverte
+ * La politique portait la décision — écran actif, dédoublonnage, interrupteur par type (le
+ * banner in-app n'obéit ni au push-master ni aux heures calmes, comme iOS `allowsInAppBanner`) —
+ * avec ses tests, et n'avait AUCUN appelant de production : un `notification:new` reçu app ouverte
  * ne produisait rien de visible sur Android, pendant qu'iOS et le web affichaient les sept
  * cadrages. Une règle sans lecteur ne protège personne ; c'est la même forme que la garde
  * jamais montée ou le `Closes` qui ne ferme rien.
@@ -139,7 +140,6 @@ class NotificationBannerViewModel @Inject constructor(
             activePostId = activePostId,
             isDuplicateDelivery = admit.isDuplicate,
             preferences = preferencesStore.preferences.value,
-            now = clock.localDateTime(),
         )
         val shown = (decision as? NotificationToastDecision.Show)?.notification ?: return
 
