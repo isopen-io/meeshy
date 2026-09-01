@@ -200,7 +200,7 @@ NC='\033[0m'
 # 1184 (rouge) a 1182 (amelioration non enregistree) par un correctif dont
 # l'effet est ENTIEREMENT attribue : les deux erreurs retirees nommaient toutes
 # deux `ConversationPreferencesPayload` et le champ absent.
-readonly WEB_BASELINE=1182
+readonly WEB_BASELINE=1180
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
