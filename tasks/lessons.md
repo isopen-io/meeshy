@@ -23411,3 +23411,106 @@ un `nil` silencieux déguisé en succès.
 Voisines : `reference_inert_control_vs_unfed_feature` (les cinq natures d'un
 contrôle qui ment — celle-ci en est une sixième : le contrôle AGIT, sur la
 moitié de sa cible), `reference_a_deduced_value_is_not_a_read_value`.
+
+## Leçon 416 — Un témoin qui ÉNONCE une loi et ne l'applique qu'à un de ses deux arguments
+
+`ComposerMentionStripContrastTests` (#4122, 2026-09-01) portait ce doc-comment :
+« composition alpha AVANT la luminance — mesurer une couleur translucide sans la
+composer sur son fond rend un ratio qui n'existe nulle part à l'écran ». Il
+composait scrupuleusement la CAPSULE… et mesurait le TEXTE brut.
+
+Or `textMuted(isDark:)` vaut `indigo300.opacity(0.7)` et `textSecondary(isDark:)`
+vaut `indigo300` — **mêmes composantes RVB**. `contrastRatio` passant par
+`.luminance`, qui ignore l'alpha, les deux tokens rendaient le MÊME chiffre : le
+témoin mesurait `textSecondary` en croyant mesurer `textMuted`, concluait que le
+token discret tenait AA (6,65:1), et **contredisait le commentaire JUSTE du code
+de production** qui annonçait 4,01:1. Vérifié par calcul WCAG hors Swift : la
+production avait raison, le témoin avait tort.
+
+> Une loi écrite dans un fichier ne s'applique pas d'elle-même aux deux côtés
+> d'une comparaison. Ce qui manquait n'était pas la connaissance — elle était
+> dix lignes plus haut — c'était son application au SECOND argument.
+
+Correctif : la composition devient une fonction unique (`ratioRendu(_:sur:)`)
+qui aplatit le texte avec SON PROPRE alpha ; opaque ⇒ identique à la mesure
+directe, donc sûre pour tous les témoins. Plus un témoin qui garde la loi
+elle-même — sans lui, remplacer `ratioRendu` par un appel direct laisserait
+trois témoins VERTS (tokens opaques) et n'en ferait rougir qu'un, sans dire
+pourquoi.
+
+Voisines : leçon 275 (« qu'est-ce qui part À CÔTÉ »), et
+`reference_a_deduced_value_is_not_a_read_value` — ici l'inverse instructif :
+c'est la valeur MESURÉE qui était fausse, parce que la mesure était mal cadrée.
+
+## Leçon 417 — Une exemption qui couvre N cas d'un seul argument doit être vérifiée sur les N
+
+`ComposerSurfaceRouting.surface` exemptait quatre ouvertures du routage vers le
+meuble, sous un argument unique : « elles n'ouvrent pas sur un choix, elles
+ARRIVENT avec du contenu, et l'atelier est le seul écran qui le tienne déjà ».
+
+Vrai de `.resume`, `.mediaSeeded`, `.videoCameraReady`. **Faux de `.cameraReady`,
+qui n'arrive avec RIEN** : elle promet un viseur, que le meuble sait ouvrir
+depuis toujours. Elle était entrée dans la liste par RESSEMBLANCE — et c'était
+la porte la plus visible du Feed (« Créer une story »), donc celle par qui
+l'ancien composer restait vivant.
+
+Deux corollaires de forme, tirés du même lot :
+
+- **La promesse suit la porte.** Router `.cameraReady` sans armer le viseur
+  aurait tenu la lettre de la directive en perdant ce que la porte ANNONCE.
+  D'où `armsCameraOnAppear`, jumelle exacte de `focusesContentOnAppear`, écrite
+  à côté d'elle — jamais un `if` dans un corps de vue. Les deux ne sont jamais
+  vraies ensemble : un viseur et un clavier se disputeraient l'écran.
+- **L'idempotence est un état de l'HÔTE, pas de la règle.** La règle est pure et
+  rend la même réponse à chaque appel, ce qui est correct pour elle et faux
+  comme garde : un `.task` rejoué poserait un second viseur que rien ne referme.
+
+## Leçon 418 — Une garde qui énonce sa PROPRE condition de péremption vaut plus que la règle qu'elle protège
+
+`test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle` gardait un refus
+inconditionnel (`onPublishDocument: { _ in false }`) en disant, en toutes
+lettres : « le jour où cette ouverture changerait, ce refus deviendrait une
+flèche qui ne publie rien — en silence. Cette garde est le bruit qui manquerait
+alors. »
+
+Ce jour est arrivé avec la leçon 417. Le mécanisme :
+`ComposerScenePresence.hasScene` compte ce que la scène CONTIENT, jamais la
+slide SEMÉE. Basculer l'éventail sur « Post » sans rien poser laissait donc
+`documentHasScene` faux ⇒ le meuble montait le SOCLE ⇒ sa flèche appelait le
+refus. **La bascule de routage, livrée seule, aurait produit le bon écran avec
+une flèche d'envoi inerte.**
+
+> Une règle de routage qui ouvre un chemin doit livrer ce que ce chemin promet.
+> Router sans publier ne corrige pas le défaut : il l'échange contre un défaut
+> MUET, et le déplace vers la loi 4 dans sa forme la plus dure — la flèche
+> d'envoi.
+
+Cette garde n'était PAS dans le gate ciblé du lot ; elle a été trouvée en
+balayant `grep -l storyTray apps/ios/MeeshyTests/`. **Un changement de règle
+partagée se balaye par le NOM de ce qu'on change, jamais par les suites qu'on
+croit concernées.**
+
+Trois notes qui valent pour la suite :
+
+- **Un état intermédiaire non nommé produit deux couches justes qui se
+  contredisent** : une slide SEMÉE existe sans être une MATIÈRE — le canvas la
+  montre, la présence ne la compte pas. Une forme qui ne connaît que « scène » /
+  « pas de scène » ne peut pas décrire ça, et c'est là que naissent les flèches
+  inertes. (Repris par la session qui tient la forme unifiée.)
+- **Un témoin qui affirme A et mesure B reste vert jusqu'au jour où B change,
+  puis rougit en accusant le mauvais coupable.**
+  `test_surface_duStoryTray_resteLaScene_memeAuFormatPost` affirmait « le canvas
+  composé survit » et mesurait « la caméra est exemptée ». Le retourner a
+  demandé de retrouver quelle couche portait vraiment son énoncé —
+  `ComposerMountedView.mounted(surface:hasScene:)`.
+- **Un témoin écrit pour prouver qu'un chemin marche peut prouver qu'il
+  REFUSE** : j'attendais qu'un `.reel` texte-seul parte sous le type « REEL ».
+  Rien n'est parti, et le refus était juste — un réel EST une vidéo. C'est
+  l'attente qu'on corrige alors, jamais le code qu'elle accuse.
+
+Vérifié au simulateur (iPhone 16 Pro, binaire de 3 min) : « Add a story » ouvre
+le meuble, le viseur s'arme, l'éventail sert les quatre formats, la bascule en
+Post monte le document, et la flèche PUBLIE — composer fermé, post présent dans
+le fil. Elle levait au passage #4746 : un volet câblé par une session voisine,
+avec témoins verts, n'était jamais apparu parce que le flux story montait
+l'atelier.
