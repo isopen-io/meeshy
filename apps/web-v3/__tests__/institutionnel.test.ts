@@ -69,6 +69,7 @@ const textesDeLaPage = (page: PageDeContenu): readonly string[] => [
   ...(page.mention === undefined ? [] : [page.mention]),
   ...page.sections.flatMap((section) => [section.titre, ...section.blocs.flatMap(textesDuBloc)]),
   page.suite.titre,
+  ...(page.suite.accroche === undefined ? [] : [page.suite.accroche]),
   ...page.suite.liens.map((lien) => lien.libelle),
 ];
 
@@ -173,15 +174,26 @@ describe('les cinq pages institutionnelles', () => {
    * Le remède n'est pas de renommer : c'est de ne pas grouper ce que le contenu
    * ne groupe pas.
    */
-  it('ne porte jamais, en section, le titre d’une de ses propres cartes', () => {
-    const redites = PAGES.flatMap(([route, page]) =>
-      page.sections.flatMap((section) =>
+  it('ne porte jamais deux fois le même titre de niveau 2', () => {
+    const redites = PAGES.flatMap(([route, page]) => {
+      const dansSaPropreCarte = page.sections.flatMap((section) =>
         section.blocs
           .flatMap((bloc) => (bloc.genre === 'cartes' ? bloc.cartes : []))
           .filter((carte) => carte.titre === section.titre)
-          .map(() => `${route} → « ${section.titre} »`),
-      ),
-    );
+          .map(() => `${route} → carte « ${section.titre} » sous la section du même nom`),
+      );
+
+      // La rangée de suite EST un `<h2>` : `/partners` terminait sur « Devenir
+      // Partenaire » deux fois, une fois au-dessus du paragraphe et une fois
+      // au-dessus des boutons. Un témoin qui ne regarde que les SECTIONS ne
+      // voit pas le dernier titre de la page.
+      const titres = [...page.sections.map((section) => section.titre), page.suite.titre];
+      const deuxFois = titres
+        .filter((titre, rang) => titres.indexOf(titre) !== rang)
+        .map((titre) => `${route} → « ${titre} » deux fois en <h2>`);
+
+      return [...dansSaPropreCarte, ...deuxFois];
+    });
 
     expect(redites).toEqual([]);
   });

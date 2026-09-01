@@ -89,7 +89,18 @@ export type PageDeContenu = {
   readonly mention?: string;
   readonly description: string;
   readonly sections: readonly Section[];
-  readonly suite: { readonly titre: string; readonly liens: readonly Lien[] };
+  /**
+   * La rangée de suite EST une section — titre, corps facultatif, puis des
+   * liens. Son `accroche` existe parce que `/partners` termine sur « Devenir
+   * Partenaire », un titre qu'elle portait DÉJÀ : la page l'affichait deux fois
+   * de suite, une fois au-dessus du paragraphe, une fois au-dessus des boutons.
+   * Le paragraphe entre donc ici plutôt que dans une section jumelle.
+   */
+  readonly suite: {
+    readonly titre: string;
+    readonly accroche?: string;
+    readonly liens: readonly Lien[];
+  };
 };
 
 const paragraphe = (texte: string): string => `<p>${echappe(texte)}</p>`;
@@ -147,6 +158,7 @@ const corpsDeLaPage = (page: PageDeContenu): string =>
   page.sections.map(rendLaSection).join('') +
   '<section class="suite" aria-labelledby="suite">' +
   `<h2 id="suite">${echappe(page.suite.titre)}</h2>` +
+  (page.suite.accroche === undefined ? '' : `<p>${echappe(page.suite.accroche)}</p>`) +
   `<nav>${page.suite.liens.map(lienDeChrome).join('')}</nav>` +
   '</section>';
 

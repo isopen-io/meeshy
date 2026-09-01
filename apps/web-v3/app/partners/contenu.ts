@@ -154,18 +154,10 @@ export const PAGE_PARTENAIRES: PageDeContenu = {
         },
       ],
     },
-    {
-      titre: 'Devenir Partenaire',
-      blocs: [
-        {
-          genre: 'paragraphes',
-          corps: ['Rejoignez notre programme de partenariat et développez votre activité'],
-        },
-      ],
-    },
   ],
   suite: {
     titre: 'Devenir Partenaire',
+    accroche: 'Rejoignez notre programme de partenariat et développez votre activité',
     liens: [{ libelle: 'Contactez-nous', href: '/contact' }, { libelle: 'En savoir plus', href: '/about' }],
   },
 };
