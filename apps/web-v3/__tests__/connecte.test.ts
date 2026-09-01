@@ -126,7 +126,15 @@ describe('la porte de la zone connectée', () => {
 
 describe('le tableau de bord', () => {
   const doc = documentDuTableau({
-    lecteur: { prenom: 'Sonde', nomAffiche: 'Sonde Neuf', pseudonyme: 's1' },
+    lecteur: {
+      id: 'u1',
+      prenom: 'Sonde',
+      nomAffiche: 'Sonde Neuf',
+      pseudonyme: 's1',
+      systemLanguage: 'fr',
+      regionalLanguage: null,
+      customDestinationLanguage: null,
+    },
     conversations: [CONVERSATION({ nonLus: 3 }), CONVERSATION({ id: 'b', titre: 'Marta Ruiz', nonLus: 2 })],
     total: 7,
     maintenant: MAINTENANT,
@@ -185,8 +193,11 @@ describe('la liste des conversations', () => {
     expect(doc).toContain('class="compte">3<span class="hors-ecran"> non lus</span>');
   });
 
-  it('donne à chaque ligne une destination réelle', () => {
-    expect(doc).toContain('href="/conversations/68f2a81417a557e8ce4ddfbb"');
+  it('mène au fil servi par la v3, par l’identifiant de BASE', () => {
+    expect(doc).toContain('href="/chats/68f2a81417a557e8ce4ddfbb"');
+    // `identifier` est facultatif et peut changer ; une adresse partagée doit
+    // survivre au renommage.
+    expect(doc).not.toContain('href="/chats/meeshy"');
   });
 
   it('échappe le titre d’une conversation, qui vient du réseau', () => {

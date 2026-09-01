@@ -23,6 +23,12 @@
  *   4. **Des libellés en petites capitales espacées** pour ce qui qualifie,
  *      comme la puce « AUTO · Focal » de la planche `chats`.
  *
+ * `.alerte` et `.hors-ecran` y sont montées le jour où un TROISIÈME écran les a
+ * demandées — l'accès, la liste et le fil. Une règle qu'un seul écran emploie
+ * reste chez lui ; à partir de deux, elle appartient au chrome, sans quoi la
+ * troisième feuille en porte une COPIE et la cascade sert la même chose deux
+ * fois (le témoin « aucun sélecteur déclaré deux fois » le dirait).
+ *
  * Aucune COULEUR n'est écrite (§ 3.2 corollaire 2 : la seconde table de jetons
  * est interdite), et l'ESPACEMENT est en pixels littéraux — il n'existe aucun
  * jeton `--space-*` dans la table servie, et en inventer un ici FABRIQUERAIT
@@ -42,6 +48,9 @@ export const FEUILLE_DU_CHROME = compacte(`
 .cta.secondaire{color:var(--color-text);border-color:var(--color-border-interactive)}
 
 section h2{margin:0 0 8px;font-size:var(--text-2xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.01em}
+
+.alerte{margin:0 0 22px;padding:12px 16px;border-radius:var(--radius-sm);border-left:3px solid var(--color-danger);background:color-mix(in srgb,var(--color-danger) 12%,transparent);color:var(--color-danger-soft);font-weight:var(--font-weight-medium);font-size:var(--text-sm);line-height:var(--leading-relaxed)}
+.hors-ecran{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 
 .pied{margin-top:72px;padding-top:22px;border-top:1px solid var(--color-neutral-900);display:flex;flex-direction:column;gap:12px;font-size:var(--text-xs);color:var(--color-text-subtle)}
 .pied .devise{margin:0;color:var(--color-text-muted);font-size:var(--text-sm)}

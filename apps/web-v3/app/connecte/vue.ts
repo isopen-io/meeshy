@@ -54,15 +54,16 @@ export const quand = (iso: string | null, maintenant: number): string => {
 };
 
 /**
- * OÙ MÈNE UNE CONVERSATION. `/conversations/:id` est encore servi par le
- * legacy : la v3 ne rend aucun fil, et une ligne qui ne mène nulle part est un
- * contrôle qui ment. C'est une frontière de zone ASSUMÉE, du même genre que
- * « Mot de passe oublié ? », et elle est NOMMÉE dans le témoin des liens
- * sortants — ce qui la fera rougir le jour où la v3 servira le fil sans que ce
- * site ait suivi.
+ * OÙ MÈNE UNE CONVERSATION — chez nous, désormais. Ce site pointait vers
+ * `/conversations/:id` du legacy tant que la v3 ne rendait aucun fil ; elle en
+ * rend un (`app/chats/[cle]/route.ts`), et la frontière se referme.
+ *
+ * L'IDENTIFIANT DE BASE PLUTÔT QUE LE LISIBLE, alors que la passerelle accepte
+ * les deux : `identifier` est facultatif et peut changer, `id` ne peut ni
+ * manquer ni bouger. Une adresse partagée par un lecteur doit survivre au
+ * renommage de la conversation.
  */
-export const versLeFil = (conversation: Conversation): string =>
-  `/conversations/${conversation.id}`;
+export const versLeFil = (conversation: Conversation): string => `/chats/${conversation.id}`;
 
 const ligne = (conversation: Conversation, maintenant: number): string => {
   const meta = [
