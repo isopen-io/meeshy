@@ -420,6 +420,95 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # CHAÎNES: les suites de CHAÎNE de la v3 — LEUR PORTEUR
+  # ===========================================================================
+  # Troisième fois que cette leçon se paie ici. Les deux jobs ci-dessus la
+  # portent déjà dans leurs commentaires — « un instrument déclaré n'est pas un
+  # instrument lancé » — et pourtant `v3-network-vitals.spec.ts` et
+  # `v3-lien-expire.spec.ts` n'étaient lancés par AUCUN job : `test:chaines`
+  # n'apparaissait que dans sa propre définition. Les deux portent les critères
+  # de fin de #4495 (une seule requête avant la 302, zéro `<script>` hors
+  # ThemeScript) et #4496 (quatre raisons distinctes, aucun composant client
+  # monté) — donc deux issues qu'aucun gate ne pouvait prouver.
+  #
+  # Ce job invoque le PROJET, jamais les fichiers. `playwright.config.ts` donne
+  # à `chaines` un `testIgnore` et non un `testMatch` : le projet prend tout ce
+  # qui n'est pas une suite de PAGE, si bien qu'une suite neuve y entre d'office
+  # et se trouve lancée sans que personne ait à penser à elle. Nommer les deux
+  # fichiers ici rouvrirait le trou au premier fichier suivant.
+  #
+  # Séparé des deux autres parce que la contrainte est d'EXÉCUTION, pas de
+  # worker : les suites de page importent `routes-emises.mjs` statiquement et
+  # installent le chargeur de Playwright pour tout `.mjs`, ce que le chargement
+  # dynamique des suites de chaîne ne supporte pas (#4510).
+  chaines-v3:
+    name: Chaînes web-v3 (lien partagé, vitals réseau)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build apps/web-v3 (le serveur que les suites mesurent)
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Gate chaînes — lien partagé, causes de clôture, vitals réseau
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
+
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: web-v3-chaines-traces
+          path: apps/web-v3/test-results/
+          retention-days: 7
+
+  # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================

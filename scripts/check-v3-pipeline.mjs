@@ -92,7 +92,7 @@
 // aucun `next build` local ne pouvait les rendre.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -290,6 +290,10 @@ const readWorld = async (root) => ({
   outside: declaredWorkspaceDependencies(root, V3_DIRECTORY),
   escapes: escapingRequests(root, V3_DIRECTORY),
   envChains: runtimeEnvChains(root, V3_DIRECTORY),
+  v3Package: await readFile(join(root, `${V3_DIRECTORY}/package.json`), 'utf8'),
+  playwright: await readFile(join(root, `${V3_DIRECTORY}/playwright.config.ts`), 'utf8'),
+  suites: readdirSync(join(root, `${V3_DIRECTORY}/e2e/visual`))
+    .filter((nom) => nom.endsWith('.spec.ts')),
 });
 
 // --- lecture structurée du peu de YAML dont ce garde a besoin ----------------
@@ -808,9 +812,71 @@ const theV3ContainerIsDisjointFromTheLegacy = (dep) => (world) => {
   return failures;
 };
 
+/**
+ * **Une suite e2e qui existe est une suite e2e LANCÉE.**
+ *
+ * Le dépôt a payé cette leçon deux fois — les commentaires des jobs `a11y-v3`
+ * et `lifecycle-v3` la portent mot pour mot : « un instrument déclaré n'est pas
+ * un instrument lancé ». Elle n'avait pourtant pas été appliquée à la troisième
+ * famille : `v3-network-vitals.spec.ts` et `v3-lien-expire.spec.ts` vivaient
+ * dans le dépôt, passaient (19/19 en local), et AUCUN job ne les lançait. Elles
+ * portent les critères de fin de #4495 et #4496 — deux issues qu'aucun gate ne
+ * pouvait donc prouver.
+ *
+ * Ce contrôle ne compte pas les suites : il les DÉRIVE du disque et vérifie que
+ * chacune est atteinte. Une énumération aurait rejoué le défaut au premier
+ * fichier suivant.
+ *
+ * La couverture se calcule comme Playwright la calcule : une suite est atteinte
+ * si un script invoqué par ci.yml la nomme, ou si elle appartient au projet
+ * qu'il lance — `pages` par sa liste, `chaines` par le complément de cette même
+ * liste (`testIgnore`), qui est ce qui fait entrer d'office toute suite neuve.
+ */
+const everyV3SuiteIsLaunched = (world) => {
+  const listeDePages = /const SUITES_DE_PAGE\s*=\s*\[([^\]]*)\]/.exec(world.playwright);
+  if (listeDePages === null) {
+    return ["playwright.config.ts ne déclare plus SUITES_DE_PAGE : la couverture par projet n'est plus calculable"];
+  }
+  const suitesDePage = new Set(
+    [...listeDePages[1].matchAll(/([A-Za-z0-9._-]+\.spec\.ts)/g)].map((m) => m[1]),
+  );
+  if (world.suites.length === 0) {
+    return ['aucune suite e2e trouvée sous e2e/visual : le contrôle garderait le vide'];
+  }
+
+  const scripts = JSON.parse(world.v3Package).scripts ?? {};
+  // Les CORPS D'ÉTAPES, jamais le fichier entier : le commentaire du job
+  // `chaines-v3` nomme `test:chaines` pour expliquer pourquoi il existe, et un
+  // `world.ci.includes(...)` le prenait pour une invocation. Ce contrôle est
+  // né mort à sa première écriture, et c'est son propre doc-comment qui
+  // l'aveuglait — vérifié en retirant l'invocation : la garde restait verte.
+  const etapes = stepsOf(world.ci);
+  const lances = Object.entries(scripts).filter(
+    ([nom, corps]) => /playwright|run e2e/.test(corps) && etapes.some((e) => e.body.includes(nom)),
+  );
+
+  const atteintes = new Set();
+  for (const [, corps] of lances) {
+    for (const suite of world.suites) {
+      if (corps.includes(suite)) atteintes.add(suite);
+    }
+    if (/--project=pages/.test(corps)) {
+      for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
+    }
+    if (/--project=chaines/.test(corps)) {
+      for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
+    }
+  }
+
+  return world.suites
+    .filter((suite) => !atteintes.has(suite))
+    .map((suite) => `la suite e2e ${suite} n'est lancée par aucune étape de ci.yml`);
+};
+
 const CHECKS = [
   ['le type-check de la v3 est BLOQUANT', theV3TypeCheckIsBlocking],
   ['le lint de la v3 est BLOQUANT', theV3LintIsBlocking],
+  ['toute suite e2e de la v3 est LANCÉE', everyV3SuiteIsLaunched],
   ["aucune étape nommant la v3 n'est amnistiée", noV3StepIsAmnestied],
   ['le ratchet de dette ne connaît pas la v3', theDebtRatchetIgnoresTheV3],
   ['la matrice de tests porte la v3', theTestMatrixCarriesTheV3],
