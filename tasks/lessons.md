@@ -22762,3 +22762,113 @@ Deux corollaires de forme :
   court-circuité, les suivants s'exécutent. C'est ainsi que la feuille de la
   vitrine n'a pas été réécrite pendant que la nouvelle était ajoutée — la
   jumelle exacte que l'extraction devait supprimer.
+
+## Leçon 396 — Un correctif qui ferme une perte peut en OUVRIR une autre, plus discrète
+
+**Contexte.** #4676 corrigeait un défaut réel : poser un son en fond alors qu'un
+fond existait ne faisait rien — trois gestes, trois no-op, et un enregistrement
+perdu dans un cas sur trois. Le remède : retirer l'occupant avant de poser le
+nouveau. Le symptôme visé a disparu. Une perte de données est née à sa place.
+
+Le porteur l'a nommé au geste suivant : « normalement deux vocaux en fond =
+2 cartes ». Chaque remplacement DÉTRUISAIT le son précédent, définitivement, sans
+qu'aucun écran ne le dise — et comme la disparition ressemble exactement à ce
+que l'auteur vient de demander, elle ne se lit pas comme une perte.
+
+**La leçon.** Devant tout correctif de REMPLACEMENT, poser la question qui n'a
+rien à voir avec le symptôme : **qu'advient-il de ce qui occupait la place ?**
+Trois réponses possibles, et deux d'entre elles sont des pertes — il meurt, il
+s'en va sans qu'on sache où, il DESCEND quelque part de visible. Seule la
+troisième est un produit.
+
+Ici, la troisième existait déjà : la colonne CONTENU dessine une carte par son.
+Le fond remplacé y descend, et la carte le rend visible, ré-ouvrable et
+supprimable. Corollaire trouvé en l'écrivant : la descente est impossible pour un
+son EMPRUNTÉ (pas de fichier — sa carte serait muette) et inutile pour un son
+DÉJÀ servi en contenu (elle la doublerait). Ces trois cas ne diffèrent pas par
+leur gravité mais par **ce que l'écran peut MONTRER** — d'où un type somme
+(`ComposerSupersededBackground.Fate`) plutôt qu'un `deleteElement` au site
+d'appel.
+
+**Le témoin.** Il s'écrit sur le second son, jamais sur le premier : au premier,
+« remplacer » et « détruire » rendent le même écran.
+
+## Leçon 397 — Un contrôle monté par la branche d'ÉCHEC n'existe que quand ça rate
+
+**Contexte.** « Rédiger » — la seule porte pour écrire à la main la description
+d'un vocal — était monté par `errorPanel`, le panneau de la reconnaissance
+ÉCHOUÉE. Conséquences, toutes invisibles à la relecture du code qui l'entoure :
+une transcription RÉUSSIE n'était pas corrigeable, et un son ROUVERT — qui ne
+re-transcrit pas, délibérément — n'affichait ni son texte ni le moyen d'en
+écrire un. La directive porteur (« avec toujours la possibilité de rédiger la
+description ») disait « toujours », le code disait « en cas d'erreur ».
+
+**La leçon.** Un contrôle hérite de la CONDITION de la vue qui le monte. La
+question ne se pose pas au bouton (« existe-t-il ? ») mais à son hôte : **sur
+quelle branche est-il monté, et cette branche est-elle celle où le contrôle doit
+vivre ?** Le motif est double, et la seconde moitié est la plus vicieuse : une
+`.sheet` attachée à une vue conditionnelle **disparaît avec elle**. Elle avait
+d'ailleurs déjà été posée là pour une bonne raison — un commentaire du fichier
+raconte qu'elle avait failli n'être montée nulle part, et qu'on l'avait donc
+attachée « sur le panneau qui l'ouvre ». Le correctif d'hier devient l'angle
+mort d'aujourd'hui : le montage appartient au PARENT des branches.
+
+## Leçon 398 — `removeAll` + `append` disent « supprime et repose » là où l'auteur a dit « modifie »
+
+**Contexte.** Rouvrir la première carte d'un son et valider sans rien changer la
+renvoyait en DERNIÈRE position. `A, B` devenait `B, A`. Le commit qui avait livré
+les N cartes posait pourtant l'ordre de la pose en invariant, dans son propre
+témoin : « l'ordre est celui de la POSE — le seul que l'auteur puisse prévoir ».
+
+**La leçon.** Le couple `removeAll { … } / append(…)` est le motif à chercher
+dans tout chemin d'ÉDITION. Il grave son défaut dans l'ORDRE — une propriété que
+presque aucun test n'observe, parce qu'un test à UN élément ne peut pas la voir.
+Un remplacement à l'index (`ComposerMediaOrder.replacing`) dit ce qui se passe.
+
+Difficulté propre au domaine, qui interdit un simple `firstIndex(of:)` : un
+rognage rend une URL NEUVE. **La clé cherchée et la valeur posée ne portent pas
+la même URL** — c'est ce que la règle doit tenir, et ce qu'un site d'appel
+réécrirait de travers une fois sur deux.
+
+## Leçon 399 — Un lot qui change la POPULATION d'une liste doit relire ce qui la LIT
+
+**Contexte.** Faire descendre le fond remplacé en son de contenu (leçon 396) a
+rendu possible, pour la première fois, qu'une carte de contenu soit MUETTE : un
+son de fond n'a pas de transcription. Or `documentTranscription` — écrite trois
+semaines plus tôt, dans un autre lot, non touchée par celui-ci — servait
+`documentTranscriptions[foregroundSounds.last.url]`. La dernière carte étant
+désormais le son rétrogradé, elle rendait `nil` et **effaçait en silence la
+transcription qu'un son précédent portait**.
+
+**La leçon.** Le défaut ne vit pas dans les lignes que le correctif touche : il
+vit dans celles qui LISENT ce que le correctif change. Une relecture du diff ne
+peut pas le voir — par construction, la ligne fautive n'y figure pas. Après tout
+changement de la population d'une collection (ce qui peut y entrer, dans quel
+ordre, avec quelles propriétés absentes), **énumérer ses lecteurs et demander à
+chacun : cette hypothèse tient-elle encore ?** Ici l'hypothèse était « la
+dernière carte a une transcription », vraie tant que les cartes ne venaient que
+d'un enregistrement.
+
+C'est la forme de la leçon 275 (« une protection se mesure sur tout ce que la
+charge TRANSPORTE ») appliquée non à une charge mais à un INVARIANT partagé.
+
+## Leçon 400 — Dans un arbre partagé, un rouge de COMPILATION du bundle de tests peut être le WIP du voisin
+
+**Contexte.** `xcodebuild test` rend `EXIT=65` avec sept
+« missing argument for parameter 'declaredType' » dans des fichiers de tests que
+je n'avais pas touchés. Réflexe correct : `git status` AVANT d'attribuer. Un
+voisin, à qui le porteur venait d'assigner la bascule story, avait ajouté un
+paramètre REQUIS à `PublishIntent.document` et n'avait pas encore mis à jour les
+appels de test.
+
+**La leçon.** Le rouge d'un gate mesure l'ARBRE, jamais un commit — c'est déjà
+écrit pour les gates de comportement, et ça vaut aussi, plus brutalement, pour la
+COMPILATION : une signature changée par un voisin rend le bundle entier
+inconstructible, donc **toutes** mes suites rouges d'un coup, sans qu'aucune
+ligne de mon diff soit en cause.
+
+Corollaire de coordination : le débloquer soi-même est légitime quand la valeur
+manquante est prescrite par le voisin lui-même (ici son doc-comment disait
+« `nil` laisse la déduction faire son travail »), à condition de le lui DIRE et
+de nommer ce qu'on n'a pas décidé pour lui — si l'un de ces témoins doit
+désormais éprouver `.story`, c'est à lui de le poser.

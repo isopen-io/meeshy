@@ -15,13 +15,17 @@ import XCTest
 /// comptage global, qui ne dirait pas si l'appel est au bon endroit.
 final class ComposerForegroundSoundMountGuardTests: XCTestCase {
 
-    private func source(_ chemin: String) throws -> String {
+    /// `dossier` par défaut : le Composer. La feuille audio vit sous `Views/`,
+    /// et une garde qui ne sait pas y aller ne peut pas mesurer ce que la
+    /// feuille rend — or c'est là que la description se rédige.
+    private func source(_ chemin: String,
+                        dossier: String = "Meeshy/Features/Main/Composer") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Composer
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/\(chemin)")
+            .appendingPathComponent("\(dossier)/\(chemin)")
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
@@ -207,10 +211,17 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// **Poser un son en FOND passe par le remplacement, jamais en direct**
     /// (#4676). Un appel nu à `attachPastedAudio(role: .background)` ajouterait
     /// un second fond que personne ne regarde.
+    ///
+    /// La règle appelée a CHANGÉ le 2026-09-01, et c'est le fond du correctif :
+    /// `supersededId` disait seulement QUI part ; `ComposerSupersededBackground.fate`
+    /// dit ce qu'il DEVIENT — il descend en son de contenu plutôt que d'être
+    /// détruit, pour que deux vocaux rendent bien deux cartes.
     func test_poserUnFond_passeParLeRemplacement() throws {
         let sons = try source("MeeshyComposerHost+Sound.swift")
-        XCTAssertTrue(sons.contains("ComposerBackgroundSoundReplacement.supersededId("),
+        XCTAssertTrue(sons.contains("ComposerSupersededBackground.fate("),
                       "la règle doit être APPELÉE, pas réécrite dans l'hôte")
+        XCTAssertTrue(sons.contains("case .demoteToContent(let id, let url):"),
+                      "le cas nominal est la DESCENTE — sans lui, remplacer redevient détruire")
         guard let poseur = corps("func attachBackgroundSound(url: URL) {", dans: sons) else {
             return XCTFail("`attachBackgroundSound` introuvable — la garde ne mesurerait rien.")
         }
@@ -221,6 +232,89 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
         }
         XCTAssertTrue(emprunt.contains("retireLeSonDeFondActuel()"),
                       "…et l'emprunt aussi : sans lui, `addBorrowedSound` en fait un PREMIER PLAN")
+    }
+
+    /// **Éditer une carte ne la DÉPLACE pas** (directive porteur 2026-09-01).
+    ///
+    /// `removeAll` + `append` disaient « supprime et repose » là où l'auteur
+    /// avait dit « modifie » : rouvrir la première carte et valider sans rien
+    /// changer la renvoyait en dernière position. Le témoin de comportement vit
+    /// dans `ComposerSoundDispositionTests` ; celui-ci garde le CÂBLAGE, qui est
+    /// ce qui se perdrait — la règle peut rester juste pendant que l'hôte cesse
+    /// de l'appeler.
+    func test_editerUnSonDeContenu_neLeDeplacePas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerMediaOrder.replacing("),
+                      "la pose et l'édition passent par la MÊME règle d'ordre")
+        XCTAssertFalse(sons.contains("documentLocalMedia.removeAll"),
+                       "le couple removeAll/append est exactement le défaut corrigé")
+    }
+
+    /// **Un son posé se SUPPRIME** (directive porteur 2026-09-01 : « mettre un
+    /// (x) pour supprimer les éléments »).
+    ///
+    /// Le geste doit exister ET être offert : la fermeture nulle en création est
+    /// ce qui retire le bouton, et c'est elle qui rendrait le contrôle inerte si
+    /// elle devenait inconditionnelle.
+    func test_unSonEdite_peutEtreSupprime() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("onDelete: deleteEditedSoundAction"),
+                      "la feuille doit RECEVOIR la suppression, sinon le bouton ne se monte pas")
+        guard let action = corps("var deleteEditedSoundAction: (() -> Void)? {", dans: sons) else {
+            return XCTFail("`deleteEditedSoundAction` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(action.contains("else { return nil }"),
+                      "une feuille de CRÉATION n'a rien à supprimer — le bouton ne doit pas s'y monter")
+    }
+
+    /// **La description se rédige TOUJOURS** (directive porteur 2026-09-01).
+    ///
+    /// L'éditeur manuel était monté par `errorPanel` : « Rédiger » n'existait
+    /// donc que si la reconnaissance avait ÉCHOUÉ. Une transcription réussie
+    /// n'était pas corrigeable, et un son rouvert n'affichait rien du tout.
+    func test_laRedactionDeLaDescription_neDependPasDUnEchec() throws {
+        let transcription = try source("AudioPostComposerView+Transcription.swift",
+                                       dossier: "Meeshy/Features/Main/Views")
+        guard let panneau = corps("var contentPanel: some View {", dans: transcription) else {
+            return XCTFail("`contentPanel` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(panneau.contains(".sheet(isPresented: $showManualTranscription)"),
+                      "la feuille de rédaction se monte AU-DESSUS des deux branches")
+        guard let erreur = corps("func errorPanel(_ error: String) -> some View {",
+                                 dans: transcription) else {
+            return XCTFail("`errorPanel` introuvable.")
+        }
+        XCTAssertFalse(erreur.contains(".sheet(isPresented: $showManualTranscription)"),
+                       "posée sur le panneau d'ERREUR, elle disparaissait avec lui")
+    }
+
+    /// **La transcription SERVIE est la dernière qui EXISTE, pas la dernière
+    /// carte** (#4695).
+    ///
+    /// Depuis que le fond remplacé descend en contenu, la dernière carte peut
+    /// être un son muet — un fond n'a pas de transcription. `foregroundSounds.last`
+    /// aurait alors rendu `nil` et effacé, en silence, le texte qu'un son
+    /// précédent portait. Le défaut naît d'un lot qui ne touche PAS cette ligne :
+    /// c'est ce qui le rend invisible à sa propre relecture.
+    func test_laTranscriptionServie_estLaDerniereQuiEXISTE() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        guard let servie = corps("var documentTranscription: MobileTranscriptionPayload? {",
+                                 dans: sons) else {
+            return XCTFail("`documentTranscription` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(servie.contains("compactMap"),
+                      "il faut CHERCHER la dernière transcription, pas lire la dernière carte")
+        XCTAssertFalse(servie.contains("foregroundSounds.last"),
+                       "la dernière carte peut être un son de fond rétrogradé, donc muet")
+    }
+
+    /// **Un son rouvert emporte son TEXTE.** Sans ce champ, la feuille s'ouvrait
+    /// muette sur une transcription qui existait — et un rognage la perdait,
+    /// `survivingTranscription` ne gardant l'ancienne qu'à URL inchangée.
+    func test_unSonRouvert_emporteSaTranscription() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("transcription: documentTranscriptions[son.url]"),
+                      "la piste rouverte doit porter le texte déjà écrit")
     }
 
     /// **Une ouverture, une feuille NEUVE** (#4684).

@@ -61,9 +61,12 @@ extension MeeshyComposerHost {
     /// **La limite est du CÔTÉ FIL, pas du composer** : l'écran montre bien N
     /// cartes, chacune avec son texte ; c'est la charge d'envoi qui n'en
     /// transporte qu'un. Elle a son issue.
+    /// Le DERNIER son qui en a une — pas le dernier son. Depuis que le fond
+    /// remplacé DESCEND en contenu (#4695), la dernière carte peut être un son
+    /// muet ; servir sa transcription vide effacerait celle qu'un son précédent
+    /// portait, sans qu'aucun écran ne le dise.
     var documentTranscription: MobileTranscriptionPayload? {
-        guard let dernier = foregroundSounds.last else { return nil }
-        return documentTranscriptions[dernier.url]
+        foregroundSounds.reversed().compactMap { documentTranscriptions[$0.url] }.first
     }
 
     /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
@@ -98,7 +101,10 @@ extension MeeshyComposerHost {
             // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
             // pour exactement ça, et une vue jumelle aurait divergé au premier
             // réglage.
-            initialAudio: editedSoundTrack
+            initialAudio: editedSoundTrack,
+            // **Supprimer n'est offert qu'en ÉDITION** — voir
+            // `deleteEditedSoundAction`, dont le `nil` retire le bouton.
+            onDelete: deleteEditedSoundAction
         )
         // **Une ouverture, une feuille NEUVE** (#4684). Voir
         // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la
@@ -131,8 +137,15 @@ extension MeeshyComposerHost {
     /// et la seconde aurait divergé au premier champ ajouté à `ExistingAudio`.
     var editedSoundTrack: AudioPostComposerView.ExistingAudio? {
         if let son = editedForegroundSound {
+            // **Le texte VOYAGE avec la piste** (#4697, directive porteur 2026-09-01 :
+            // « toujours la possibilité de rédiger la description »). Sans lui,
+            // la feuille rouverte s'ouvrait MUETTE sur un son qui avait pourtant
+            // sa transcription : l'auteur ne pouvait ni la relire, ni la
+            // corriger — et un rognage la perdait, `survivingTranscription` ne
+            // gardant l'ancienne que si l'URL ne change pas.
             return AudioPostComposerView.ExistingAudio(
-                url: son.url, duration: son.duration, mimeType: son.mimeType)
+                url: son.url, duration: son.duration, mimeType: son.mimeType,
+                transcription: documentTranscriptions[son.url])
         }
         guard let id = editedBackgroundSoundId ?? editedSceneChipId,
               let url = viewModel.loadedAudioURLs[id],
@@ -145,7 +158,12 @@ extension MeeshyComposerHost {
         return AudioPostComposerView.ExistingAudio(
             url: url,
             duration: objet.duration.map(TimeInterval.init) ?? 0,
-            mimeType: "audio/mp4")
+            mimeType: "audio/mp4",
+            // **Le fond aussi garde sa description** (#4697). Sa piste a une URL
+            // locale, donc une clé dans la même carte que les sons de contenu —
+            // sans quoi « Rédiger » sur un fond aurait été un contrôle qui écrit
+            // dans le vide, le texte disparaissant à la validation.
+            transcription: documentTranscriptions[url])
     }
 
     // MARK: - Poser un son en FOND
@@ -183,11 +201,27 @@ extension MeeshyComposerHost {
     /// ancienne le ferait.
     func retireLeSonDeFondActuel() {
         let effets = viewModel.currentEffects
-        guard let ancien = ComposerBackgroundSoundReplacement.supersededId(
-            background: effets.resolvedBackgroundAudio,
-            audioObjects: effets.audioPlayerObjects ?? []
-        ) else { return }
-        viewModel.deleteElement(id: ancien)
+        let fond = effets.resolvedBackgroundAudio
+        switch ComposerSupersededBackground.fate(
+            background: fond,
+            audioObjects: effets.audioPlayerObjects ?? [],
+            localURL: fond.flatMap { viewModel.loadedAudioURLs[$0.id] },
+            contentMediaURLs: documentLocalMedia.map(\.url)
+        ) {
+        case .none:
+            return
+        case .discard(let id):
+            viewModel.deleteElement(id: id)
+        case .demoteToContent(let id, let url):
+            // L'objet de scène part, la carte le reprend — dans cet ordre : la
+            // pastille de l'avatar et la carte de contenu lisent la MÊME URL, et
+            // `ComposerSoundColumn.avatarBadge` masque la première dès que la
+            // seconde existe. L'inverse ferait clignoter la pastille.
+            let duree = fond?.duration.map { Int($0 * 1000) }
+            viewModel.deleteElement(id: id)
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url, declaredMimeType: "audio/mp4", durationMs: duree))
+        }
     }
 
     /// Le fichier devient LE fond — l'ancien part d'abord.
@@ -218,6 +252,58 @@ extension MeeshyComposerHost {
         editedForegroundSound = nil
         editedBackgroundSoundId = nil
         editedSceneChipId = nil
+    }
+
+    /// **Supprimer le son qu'on est en train d'éditer** (#4696, directive
+    /// porteur 2026-09-01 : « lors de l'édition mettre un (x) pour supprimer »).
+    ///
+    /// Poser un son était jusqu'ici IRRÉVERSIBLE : aucune surface n'offrait de
+    /// le retirer, ni la carte, ni la pastille, ni le canvas. La seule façon
+    /// d'en défaire un était d'en poser un autre par-dessus — c'est-à-dire d'en
+    /// perdre un pour en perdre un autre.
+    ///
+    /// Le geste vit dans la FEUILLE et nulle part ailleurs, parce que c'est le
+    /// seul endroit que les trois contextes traversent : carte de contenu,
+    /// pastille de l'avatar, pastille du canvas y arrivent par le même
+    /// `openSoundSheet`. Trois boutons dispersés auraient été trois lois.
+    func deleteEditedSound() {
+        if let edite = editedForegroundSound {
+            documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: edite.url)
+            documentTranscriptions[edite.url] = nil
+        }
+        if let fond = editedBackgroundSoundId { viewModel.deleteElement(id: fond) }
+        if let pastille = editedSceneChipId { viewModel.deleteElement(id: pastille) }
+        forgetEditedSound()
+        presentedPortal = nil
+        HapticFeedback.medium()
+    }
+
+    /// **Retirer un son de contenu depuis SA carte** (#4696).
+    ///
+    /// L'appui long est la seconde porte de la suppression, et la plus courte :
+    /// ouvrir la feuille pour supprimer coûte trois gestes là où poser en a
+    /// coûté un. Elle passe par le même retrait que la feuille — le
+    /// dictionnaire de transcriptions doit perdre sa clé en même temps que la
+    /// liste perd sa pièce, sinon un son posé plus tard sous la même URL
+    /// temporaire hériterait d'un texte qui n'est pas le sien.
+    func deleteForegroundSound(_ son: ComposerForegroundSound) {
+        documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: son.url)
+        documentTranscriptions[son.url] = nil
+        // Le son supprimé pouvait être celui que la feuille tenait ouvert.
+        if editedForegroundSound?.url == son.url { editedForegroundSound = nil }
+        HapticFeedback.medium()
+    }
+
+    /// **`nil` quand la feuille ne fait que CRÉER** — une création n'a rien à
+    /// supprimer, et un bouton de suppression posé là serait un contrôle sans
+    /// effet. L'absence est structurelle : la feuille ne reçoit pas la fermeture,
+    /// donc elle ne rend pas le bouton.
+    var deleteEditedSoundAction: (() -> Void)? {
+        guard editedForegroundSound != nil
+                || editedBackgroundSoundId != nil
+                || editedSceneChipId != nil
+        else { return nil }
+        return { deleteEditedSound() }
     }
 
     /// **Toucher une pastille audio du canvas la rouvre** (#4671, directive
@@ -315,11 +401,13 @@ extension MeeshyComposerHost {
         // média du document quand même. Le mettre dans la branche « premier
         // plan » aurait laissé le son en double, une fois sur la scène et une
         // fois sous le texte.
+        // **La piste éditée se lit AVANT que les contextes ne s'éteignent** —
+        // `editedSoundTrack` les interroge tous les trois, et c'est elle qui
+        // porte l'URL d'origine ET le texte déjà écrit, quelle que soit la
+        // colonne d'où le son vient.
+        let pisteEditee = editedSoundTrack
         let edite = editedForegroundSound
-        if let edite {
-            documentLocalMedia.removeAll { $0.url == edite.url }
-            editedForegroundSound = nil
-        }
+        editedForegroundSound = nil
         // **Et le son de FOND se remplace de la même façon** (#4668). Le
         // retrait précède le `switch` pour la raison qui vaut déjà pour son
         // jumeau : l'auteur peut avoir fait passer le son du fond au CONTENU
@@ -338,8 +426,8 @@ extension MeeshyComposerHost {
         // côté du type, pas ici : c'est elle qu'un témoin peut convoquer.
         let transcriptionServie = ComposerForegroundSound.survivingTranscription(
             returned: transcription,
-            previous: edite.flatMap { documentTranscriptions[$0.url] },
-            editedURL: edite?.url,
+            previous: pisteEditee?.transcription,
+            editedURL: pisteEditee?.url,
             returnedURL: url
         )
         // **Une pastille du canvas se remplace À SA PLACE** (#4671) — avant le
@@ -357,25 +445,54 @@ extension MeeshyComposerHost {
         }
         switch chosenSoundPlacement {
         case .foreground:
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
-                url: url,
-                declaredMimeType: mimeType,
-                durationMs: durationMs
-            ))
+            // **À SA place, jamais au bout** : `removeAll` + `append` disaient
+            // « supprime et repose » là où l'auteur avait dit « modifie », et la
+            // carte rouverte sautait en dernière position sans qu'un geste l'ait
+            // demandé. Mesuré au simulateur le 2026-09-01 (#4698).
+            documentLocalMedia = ComposerMediaOrder.replacing(
+                documentLocalMedia,
+                at: edite?.url,
+                with: ComposerDocumentMediaFactory.media(
+                    url: url,
+                    declaredMimeType: mimeType,
+                    durationMs: durationMs
+                )
+            )
             // **Sous la clé du fichier SERVI**, jamais sous celle du fichier
             // édité : `AudioSegmentExporter` rend une URL NEUVE dès qu'un
             // rognage a lieu, et la poser sous l'ancienne clé donnerait une
             // carte muette à côté d'une transcription orpheline.
             documentTranscriptions[url] = transcriptionServie
-            if let edite, edite.url != url { documentTranscriptions[edite.url] = nil }
+            oublierLaTranscriptionDe(pisteEditee, saufSi: url)
             if let transcriptionServie {
                 documentLanguage = transcriptionServie.language
             }
         case .background:
+            // Le son PART de la colonne contenu quand l'auteur le fait passer en
+            // fond depuis la feuille — sinon il s'y verrait en double, une fois
+            // sur la scène et une fois sous le texte.
+            if let edite {
+                documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: edite.url)
+            }
             attachBackgroundSound(url: url)
+            // Le fond range sa description sous SA piste — même carte, même clé
+            // que les sons de contenu. C'est ce qui la fera réapparaître si ce
+            // fond redescend un jour en contenu (#4695).
+            documentTranscriptions[url] = transcriptionServie
+            oublierLaTranscriptionDe(pisteEditee, saufSi: url)
         }
         presentedPortal = nil
         HapticFeedback.light()
+    }
+
+    /// **Une piste rognée change d'URL, donc de clé.** L'ancienne entrée doit
+    /// partir : sans quoi une transcription orpheline reste dans le
+    /// dictionnaire, et c'est elle qui ressortirait au prochain son posé sous la
+    /// même URL temporaire.
+    private func oublierLaTranscriptionDe(_ piste: AudioPostComposerView.ExistingAudio?,
+                                          saufSi urlServie: URL) {
+        guard let ancienne = piste?.url, ancienne != urlServie else { return }
+        documentTranscriptions[ancienne] = nil
     }
 
     /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
