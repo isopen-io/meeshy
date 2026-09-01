@@ -547,12 +547,14 @@ extension StoryCanvasUIView {
         isEditClockThrottled = true
         editDisplayLink?.isPaused = true
         suspendEditModeMediaForIdle()
+        onEditClockThrottleChanged?(true)
     }
 
     private func resumeEditClockFromIdle() {
         isEditClockThrottled = false
         editDisplayLink?.isPaused = false
         resumeEditModeMediaFromIdle()
+        onEditClockThrottleChanged?(false)
     }
 
     /// Suspends the ambient edit-mode preview loop when the edit clock idles

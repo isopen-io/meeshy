@@ -1328,6 +1328,9 @@ extension StoryComposerView {
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
             },
+            onEditClockThrottleChanged: { throttled in
+                isEditClockThrottled = throttled
+            },
             onCanvasZoomScaleChanged: { scale, state in
                 // Pinch 3-doigts piloté par UIKit (cf. `ThreeFingerPinchGestureRecognizer`).
                 // On remplace l'ancien `MagnificationGesture` SwiftUI 2-doigts
@@ -1460,6 +1463,7 @@ extension StoryComposerView {
                         mode: .composer,
                         isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
                         isUserMuted: binding.wrappedValue.volume <= 0,
+                        isEditClockThrottled: isEditClockThrottled,
                         onDragEnd: { HapticFeedback.light() },
                         onTap: {
                             HapticFeedback.light()

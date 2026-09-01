@@ -113,6 +113,19 @@ public final class StoryReaderPlayheadState: ObservableObject {
 @MainActor
 public struct AudioForegroundChip: View {
 
+    /// **Ce qui suspend l'animation de la puce** (#3915) — DEUX raisons, et
+    /// elles ne se remplacent pas.
+    ///
+    /// La sourdine est une décision de l'AUTEUR : elle survit à l'inactivité et
+    /// se voit (l'icône change, l'opacité tombe). Le repos de l'écran est une
+    /// décision de l'APPAREIL : il ne change rien à ce que la puce dit, il
+    /// arrête seulement de le redessiner. Les confondre en un seul drapeau
+    /// ferait qu'un réveil rallumerait le son d'une piste que l'auteur a coupée.
+    public nonisolated static func animationIsPaused(isUserMuted: Bool,
+                                                     isEditClockThrottled: Bool) -> Bool {
+        isUserMuted || isEditClockThrottled
+    }
+
     public enum Mode: Sendable {
         case composer
         case reader
@@ -123,6 +136,20 @@ public struct AudioForegroundChip: View {
     public let mode: Mode
     public let isSelected: Bool
     public let isUserMuted: Bool
+    /// **L'écran est-il au repos ?** (#3915)
+    ///
+    /// `StoryCanvasUIView` met son horloge d'édition en veille après une
+    /// fenêtre d'inactivité (`EditClockThrottle`, #3906). Ce ralenti ne
+    /// touchait PAS cette puce : ses deux `TimelineView(.animation(…))`
+    /// tournent sur l'horloge d'ANIMATION propre de SwiftUI, indépendante de
+    /// `editDisplayLink`. Une piste non mise en sourdine — le cas courant
+    /// d'une musique de fond — redessinait donc à 30 fps indéfiniment sur un
+    /// écran que personne ne touche.
+    ///
+    /// > Mettre une horloge en veille n'endort pas les autres. Une veille se
+    /// > mesure sur ce qui continue de se réveiller tout seul par-dessous,
+    /// > jamais sur celle qu'on vient d'arrêter.
+    public let isEditClockThrottled: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
     /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
@@ -142,6 +169,7 @@ public struct AudioForegroundChip: View {
                 mode: Mode = .composer,
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
+                isEditClockThrottled: Bool = false,
                 slideDuration: TimeInterval? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {},
@@ -151,6 +179,7 @@ public struct AudioForegroundChip: View {
         self.mode = mode
         self.isSelected = isSelected
         self.isUserMuted = isUserMuted
+        self.isEditClockThrottled = isEditClockThrottled
         self.slideDuration = slideDuration
         self.onDragEnd = onDragEnd
         self.onTap = onTap
@@ -205,12 +234,16 @@ public struct AudioForegroundChip: View {
             )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,
-                                 paused: isUserMuted,
+                                 paused: Self.animationIsPaused(
+                                    isUserMuted: isUserMuted,
+                                    isEditClockThrottled: isEditClockThrottled),
                                  window: readerPlaybackWindow)
                     .frame(width: readerPlaybackWindow == nil ? 92 : 124, height: 18)
                     .opacity(isUserMuted ? 0.55 : 1.0)
             case .waveform:
-                AudioForegroundSineWave(paused: isUserMuted)
+                AudioForegroundSineWave(paused: Self.animationIsPaused(
+                    isUserMuted: isUserMuted,
+                    isEditClockThrottled: isEditClockThrottled))
                     .frame(width: 54, height: 18)
                     .opacity(isUserMuted ? 0.35 : 1.0)
             }

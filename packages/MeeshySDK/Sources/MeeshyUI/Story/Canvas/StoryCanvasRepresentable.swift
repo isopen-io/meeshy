@@ -69,6 +69,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// Le canvas passe en veille, ou en sort (#3915) — la couche SwiftUI
+    /// posée par-dessus doit suspendre ses propres animations, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
     /// Notifié pendant un pinch à 3 doigts sur le canvas. Pilote
     /// `canvasScale` + l'overlay éphémère `viewportPinchDelta` côté
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
@@ -132,6 +136,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
                 inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
+                onEditClockThrottleChanged: ((Bool) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
@@ -157,6 +162,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
+        self.onEditClockThrottleChanged = onEditClockThrottleChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -211,6 +217,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         view.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         view.onManipulationLayerChanged = onManipulationLayerChanged
+        view.onEditClockThrottleChanged = onEditClockThrottleChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -248,6 +255,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        uiView.onEditClockThrottleChanged = onEditClockThrottleChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged

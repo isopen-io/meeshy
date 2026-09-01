@@ -533,6 +533,20 @@ public final class StoryCanvasUIView: UIView {
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
 
+    /// **Le canvas DIT quand il s'endort** (#3915).
+    ///
+    /// `isEditClockThrottled` vivait en UIKit et n'en sortait pas : la couche
+    /// SwiftUI posée par-dessus — la puce audio de premier plan et ses deux
+    /// `TimelineView(.animation(…))` — continuait donc de redessiner à 30 fps
+    /// sur un écran au repos, sur l'horloge d'ANIMATION de SwiftUI, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    ///
+    /// Appelé aux DEUX bascules (`idleDownEditClock`, `resumeEditClockFromIdle`)
+    /// et à elles seules : c'est ce qui garantit qu'un réveil n'attend aucune
+    /// frame — l'interaction qui réveille l'horloge réveille l'animation dans le
+    /// même tour.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
+
     /// Notifié pendant un pinch à 3 doigts (zoom du viewport). Le composer
     /// SwiftUI s'y abonne pour piloter `canvasScale` + l'overlay éphémère
     /// `viewportPinchDelta` sans avoir besoin d'un `MagnificationGesture`
