@@ -80,22 +80,16 @@ nonisolated enum ComposerStoryCanvas {
     ///
     /// > Ce qu'on sème pour donner une page à l'auteur ne doit jamais compter
     /// > comme ce que l'auteur y a écrit.
-    static func hasMatter(slides: [StorySlide]) -> Bool {
-        slides.contains(where: slideHasMatter)
-    }
-
-    private static func slideHasMatter(_ slide: StorySlide) -> Bool {
-        if slide.mediaURL?.isEmpty == false { return true }
-        if slide.mediaData != nil { return true }
-        if slide.content?.isEmpty == false { return true }
-        let effets = slide.effects
-        if effets.background?.isEmpty == false { return true }
-        if !effets.textObjects.isEmpty { return true }
-        if effets.mediaObjects?.isEmpty == false { return true }
-        if effets.audioPlayerObjects?.isEmpty == false { return true }
-        if effets.stickerObjects?.isEmpty == false { return true }
-        if effets.drawingStrokes?.isEmpty == false { return true }
-        if effets.drawingData != nil { return true }
-        return false
+    /// **Une règle, un site** (#4741). Elle vivait ICI en toutes lettres et
+    /// dans `StoryComposerView` sous un autre nom, et les deux divergeaient
+    /// dans les DEUX sens : une pastille de lieu seule n'armait pas la flèche,
+    /// un fond choisi seul l'armait puis se faisait jeter par le filtre de
+    /// publication. Le meuble ne la réécrit plus — il la DEMANDE.
+    ///
+    /// - Parameter slideImageIds: les slides qui portent un bitmap de fond. Il
+    ///   ne vit pas dans `effects` : sans lui, une story-photo n'armerait pas
+    ///   la flèche.
+    static func hasMatter(slides: [StorySlide], slideImageIds: Set<String>) -> Bool {
+        StorySlidePublishMatter.anySlideDeservesAPost(slides, slideImageIds: slideImageIds)
     }
 }

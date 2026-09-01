@@ -23284,3 +23284,361 @@ scène, où le même choix pose une puce. L'auteur qui le lit choisit sciemment
 autre chose que ce qu'il obtient. La règle de libellé reçoit donc la destination
 — et les DEUX chaînes du bouton, celle de l'œil et celle de VoiceOver, la
 reçoivent ensemble : celle qu'on n'entend pas est celle que personne ne corrige.
+
+## Leçon 413 — Un commit par chemins peut emporter une MOITIÉ de quelque chose
+
+2026-09-01, arbre partagé, trois sessions. Le commit `ec6d641497` nommait ses
+fichiers — il ne nommait pas un répertoire, la leçon précédente était appliquée.
+Il a pourtant laissé `dev` non compilable pendant ~40 minutes.
+
+`MeeshyComposerHost.swift` portait, en plus des lignes de son auteur, le WIP
+d'une session voisine : un APPEL à `ComposerSurfaceRouting.armsCameraOnAppear`.
+La DÉFINITION de cette règle vivait dans `ComposerSurfaceRules.swift`, non
+committé. Mesure : `git grep "func armsCameraOnAppear" ec6d641497` → zéro.
+
+> **Un commit par chemins n'emporte pas seulement du code qui n'est pas le sien :
+> il peut en emporter une MOITIÉ.** Le fichier voisin qu'on ne nomme pas est
+> précisément celui qui rendait le hunk compilable.
+
+C'est un cran plus fin que la leçon 397 (« explicite = les fichiers, jamais un
+répertoire ») : ici la liste de fichiers était juste au sens de la règle, et le
+défaut vient de ce qu'un fichier NOMMÉ contenait du code étranger dont la
+dépendance vivait dans un fichier NON nommé. Emporter du code d'autrui est
+visible à la relecture du diff ; emporter un fragment orphelin ne l'est pas —
+le hunk se lit comme complet.
+
+**Et l'attribution ne se fait PAS par l'auteur git.** Toutes les sessions
+committent sous la même identité (`J. Charles N. M. <jcnm@sylorion.com>`) :
+`git log --author` rend un journal qui mélange les trois. Seule l'EMPREINTE DE
+FICHIERS sépare deux sessions — comparée aux périmètres que chacune a déclarés.
+Le commit a d'abord été attribué à la mauvaise session, et la coordination
+qu'il appelait serait partie à la mauvaise adresse.
+
+**Ce qui l'a attrapé** : la session lésée a relu `git status` AVANT de committer
+et a vu deux de ses fichiers disparus de la liste des modifiés. Sans cette
+relecture, la panne aurait été imputée à son propre commit suivant.
+
+**Pourquoi la vérification FAITE ne suffisait pas** (précision de l'auteur du
+commit, qui l'a reprise). Il avait bien vérifié sa liste — **au niveau du
+FICHIER** : « aucun fichier du voisin dans mes chemins », et c'était juste à ce
+niveau. Le voisin n'était pas dans la liste des fichiers, il était dans le
+CONTENU de l'un d'eux. Et vérifier au démarrage n'aurait rien donné : le fichier
+était propre quand il a commencé, l'autre session l'a édité pendant que ses
+gates tournaient.
+
+> La granularité de la vérification doit être celle du risque. Le risque n'est
+> pas « quel fichier je committe » — c'est « quelles LIGNES ce fichier porte au
+> moment où je le committe ». Une vérification juste à la mauvaise granularité
+> se lit comme une précaution accomplie.
+
+### Comment l'éviter
+1. Stager par hunks (`git apply --cached`) et committer SANS chemins — le seul
+   geste qui ne peut pas emporter les lignes d'autrui.
+2. À défaut : avant de committer un fichier partagé, `git diff -- <fichier>` et
+   lire chaque hunk. Un hunk qu'on ne reconnaît pas appelle son fichier voisin.
+3. Attribuer par `git show --stat <sha>` confronté aux périmètres déclarés,
+   jamais par `--author`.
+
+
+## Leçon 414 — Un commit par CHEMINS filtre les fichiers, jamais les LIGNES : il peut emporter une MOITIÉ
+
+**Le fait (2026-09-01).** J'ai committé `ec6d641497` avec une liste de 22 chemins
+que j'avais vérifiée deux fois : aucun fichier d'une voisine, aucun `pbxproj`.
+La liste était juste **au niveau du fichier** et fausse au niveau du CONTENU —
+`MeeshyComposerHost.swift` et `ComposerStoryCanvasTests.swift` portaient aussi
+le WIP d'une session voisine sur son #4751. Mon commit a emporté 28 lignes que
+je n'ai pas écrites, dont un appel à `ComposerSurfaceRouting.armsCameraOnAppear`
+**dont la définition vivait dans son `ComposerSurfaceRules.swift` non
+committé**. `git grep "func armsCameraOnAppear" ec6d641497` rendait zéro :
+`dev` n'a pas compilé jusqu'à son commit suivant.
+
+**Ce que ma vérification ne pouvait pas voir.** Elle répondait à « ce fichier
+est-il de mon territoire ? » — la bonne question dans un arbre où chacun a ses
+fichiers. Elle ne répond à rien dans un arbre où **trois périmètres se croisent
+sur le même hôte**. Et vérifier au DÉMARRAGE ne suffisait pas non plus : le
+fichier était propre quand j'ai commencé, la voisine l'a édité pendant que je
+mesurais mes gates.
+
+> **Ce qu'un commit par chemins peut emporter n'est pas seulement « du code qui
+> n'est pas le mien » : c'est une MOITIÉ de quelque chose.** Le fichier voisin
+> qu'on ne nomme pas est exactement celui qui rendait le hunk compilable — par
+> construction, puisqu'on ne l'a pas nommé. Un demi-changement casse la
+> compilation là où un changement entier, même étranger, ne l'aurait pas fait.
+
+**Le geste.** Lire `git diff -- <mes chemins>` **juste avant** le commit, pas la
+liste des chemins. Toute ligne que je ne reconnais pas ⇒ stager par hunks
+(`git apply --cached`) et committer SANS chemins. C'est le seul filtre qui
+opère à la granularité où le problème existe.
+
+Corollaire d'attribution : **toutes nos sessions committent sous la même
+identité git**, donc `--author` ne sépare rien. Seule l'empreinte de FICHIERS
+attribue un commit à une session — c'est ainsi que la voisine a corrigé une
+attribution qui lui était tombée dessus par erreur.
+
+Voisines : `feedback_git_commit_takes_whole_index_not_just_your_add`,
+`reference_git_commit_paths_overrides_the_staged_blob`,
+`reference_explicit_paths_means_files_not_a_directory` — les trois disent que
+les chemins ne protègent pas de l'INDEX. Celle-ci dit qu'ils ne protègent pas
+non plus de l'ARBRE, et pour une raison de granularité, pas de mécanisme.
+
+## Leçon 415 — Une fonction qui LIT plus de familles qu'elle n'en ÉCRIT ne rougit nulle part
+
+**Le fait.** Une session voisine me signale que mes jumelles UIKit
+`bringForward` / `sendBackward` refont l'aplatissement de `allElementsSortedByZ`
+« sans la justification écrite » — une remarque de DUPLICATION. En allant la
+mesurer, j'ai trouvé autre chose : les deux fonctions **lisent cinq familles**
+(texte, média, son, sticker, lieu) et **écrivent par `mutateItem`, qui n'en
+connaît que quatre** — le son manque. Le son participe donc au classement et
+n'est jamais écrit. Avancer une chip de son ne fait rien ; faire passer un texte
+devant elle applique l'échange **à moitié** — le texte prend le rang du son, le
+son ne prend pas celui du texte. `allItemZIndexes` (donc `nextTopZ`) rate le son
+aussi : « mettre au premier plan » peut atterrir dessous. (#4759)
+
+> **L'asymétrie entre ce qu'une fonction LIT et ce qu'elle ÉCRIT est invisible à
+> toute vérification de ressemblance.** Deux copies peuvent être identiques ligne
+> pour ligne et fausses toutes les deux ; ici, la faute n'est même pas dans la
+> copie — elle est dans le SILENCE de l'écriture. `mutateItem` rend
+> `newSlide` inchangé quand aucune famille ne matche : pour l'appelant, « je
+> n'ai rien trouvé » et « j'ai muté » ont la même signature.
+
+**Le geste.** Devant une remarque de FORME (duplication, style, justification
+manquante), aller mesurer le COMPORTEMENT des deux copies avant de conclure que
+la remarque est cosmétique. Et devant un helper de mutation générique qui prend
+une closure par famille : compter ses paramètres contre l'énumération de ses
+appelants — un helper qui rend son entrée inchangée sur un cas non couvert est
+un `nil` silencieux déguisé en succès.
+
+Voisines : `reference_inert_control_vs_unfed_feature` (les cinq natures d'un
+contrôle qui ment — celle-ci en est une sixième : le contrôle AGIT, sur la
+moitié de sa cible), `reference_a_deduced_value_is_not_a_read_value`.
+
+## Leçon 416 — Un témoin qui ÉNONCE une loi et ne l'applique qu'à un de ses deux arguments
+
+`ComposerMentionStripContrastTests` (#4122, 2026-09-01) portait ce doc-comment :
+« composition alpha AVANT la luminance — mesurer une couleur translucide sans la
+composer sur son fond rend un ratio qui n'existe nulle part à l'écran ». Il
+composait scrupuleusement la CAPSULE… et mesurait le TEXTE brut.
+
+Or `textMuted(isDark:)` vaut `indigo300.opacity(0.7)` et `textSecondary(isDark:)`
+vaut `indigo300` — **mêmes composantes RVB**. `contrastRatio` passant par
+`.luminance`, qui ignore l'alpha, les deux tokens rendaient le MÊME chiffre : le
+témoin mesurait `textSecondary` en croyant mesurer `textMuted`, concluait que le
+token discret tenait AA (6,65:1), et **contredisait le commentaire JUSTE du code
+de production** qui annonçait 4,01:1. Vérifié par calcul WCAG hors Swift : la
+production avait raison, le témoin avait tort.
+
+> Une loi écrite dans un fichier ne s'applique pas d'elle-même aux deux côtés
+> d'une comparaison. Ce qui manquait n'était pas la connaissance — elle était
+> dix lignes plus haut — c'était son application au SECOND argument.
+
+Correctif : la composition devient une fonction unique (`ratioRendu(_:sur:)`)
+qui aplatit le texte avec SON PROPRE alpha ; opaque ⇒ identique à la mesure
+directe, donc sûre pour tous les témoins. Plus un témoin qui garde la loi
+elle-même — sans lui, remplacer `ratioRendu` par un appel direct laisserait
+trois témoins VERTS (tokens opaques) et n'en ferait rougir qu'un, sans dire
+pourquoi.
+
+Voisines : leçon 275 (« qu'est-ce qui part À CÔTÉ »), et
+`reference_a_deduced_value_is_not_a_read_value` — ici l'inverse instructif :
+c'est la valeur MESURÉE qui était fausse, parce que la mesure était mal cadrée.
+
+## Leçon 417 — Une exemption qui couvre N cas d'un seul argument doit être vérifiée sur les N
+
+`ComposerSurfaceRouting.surface` exemptait quatre ouvertures du routage vers le
+meuble, sous un argument unique : « elles n'ouvrent pas sur un choix, elles
+ARRIVENT avec du contenu, et l'atelier est le seul écran qui le tienne déjà ».
+
+Vrai de `.resume`, `.mediaSeeded`, `.videoCameraReady`. **Faux de `.cameraReady`,
+qui n'arrive avec RIEN** : elle promet un viseur, que le meuble sait ouvrir
+depuis toujours. Elle était entrée dans la liste par RESSEMBLANCE — et c'était
+la porte la plus visible du Feed (« Créer une story »), donc celle par qui
+l'ancien composer restait vivant.
+
+Deux corollaires de forme, tirés du même lot :
+
+- **La promesse suit la porte.** Router `.cameraReady` sans armer le viseur
+  aurait tenu la lettre de la directive en perdant ce que la porte ANNONCE.
+  D'où `armsCameraOnAppear`, jumelle exacte de `focusesContentOnAppear`, écrite
+  à côté d'elle — jamais un `if` dans un corps de vue. Les deux ne sont jamais
+  vraies ensemble : un viseur et un clavier se disputeraient l'écran.
+- **L'idempotence est un état de l'HÔTE, pas de la règle.** La règle est pure et
+  rend la même réponse à chaque appel, ce qui est correct pour elle et faux
+  comme garde : un `.task` rejoué poserait un second viseur que rien ne referme.
+
+## Leçon 418 — Une garde qui énonce sa PROPRE condition de péremption vaut plus que la règle qu'elle protège
+
+`test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle` gardait un refus
+inconditionnel (`onPublishDocument: { _ in false }`) en disant, en toutes
+lettres : « le jour où cette ouverture changerait, ce refus deviendrait une
+flèche qui ne publie rien — en silence. Cette garde est le bruit qui manquerait
+alors. »
+
+Ce jour est arrivé avec la leçon 417. Le mécanisme :
+`ComposerScenePresence.hasScene` compte ce que la scène CONTIENT, jamais la
+slide SEMÉE. Basculer l'éventail sur « Post » sans rien poser laissait donc
+`documentHasScene` faux ⇒ le meuble montait le SOCLE ⇒ sa flèche appelait le
+refus. **La bascule de routage, livrée seule, aurait produit le bon écran avec
+une flèche d'envoi inerte.**
+
+> Une règle de routage qui ouvre un chemin doit livrer ce que ce chemin promet.
+> Router sans publier ne corrige pas le défaut : il l'échange contre un défaut
+> MUET, et le déplace vers la loi 4 dans sa forme la plus dure — la flèche
+> d'envoi.
+
+Cette garde n'était PAS dans le gate ciblé du lot ; elle a été trouvée en
+balayant `grep -l storyTray apps/ios/MeeshyTests/`. **Un changement de règle
+partagée se balaye par le NOM de ce qu'on change, jamais par les suites qu'on
+croit concernées.**
+
+Trois notes qui valent pour la suite :
+
+- **Un état intermédiaire non nommé produit deux couches justes qui se
+  contredisent** : une slide SEMÉE existe sans être une MATIÈRE — le canvas la
+  montre, la présence ne la compte pas. Une forme qui ne connaît que « scène » /
+  « pas de scène » ne peut pas décrire ça, et c'est là que naissent les flèches
+  inertes. (Repris par la session qui tient la forme unifiée.)
+- **Un témoin qui affirme A et mesure B reste vert jusqu'au jour où B change,
+  puis rougit en accusant le mauvais coupable.**
+  `test_surface_duStoryTray_resteLaScene_memeAuFormatPost` affirmait « le canvas
+  composé survit » et mesurait « la caméra est exemptée ». Le retourner a
+  demandé de retrouver quelle couche portait vraiment son énoncé —
+  `ComposerMountedView.mounted(surface:hasScene:)`.
+- **Un témoin écrit pour prouver qu'un chemin marche peut prouver qu'il
+  REFUSE** : j'attendais qu'un `.reel` texte-seul parte sous le type « REEL ».
+  Rien n'est parti, et le refus était juste — un réel EST une vidéo. C'est
+  l'attente qu'on corrige alors, jamais le code qu'elle accuse.
+
+Vérifié au simulateur (iPhone 16 Pro, binaire de 3 min) : « Add a story » ouvre
+le meuble, le viseur s'arme, l'éventail sert les quatre formats, la bascule en
+Post monte le document, et la flèche PUBLIE — composer fermé, post présent dans
+le fil. Elle levait au passage #4746 : un volet câblé par une session voisine,
+avec témoins verts, n'était jamais apparu parce que le flux story montait
+l'atelier.
+
+## Leçon 419 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
+
+Deux témoins de `apps/web-v3/e2e/visual/v3-network-vitals.spec.ts` tenaient le
+critère de #4495 : un lien partagé s'ouvre en un aller-retour. Ils rougissaient
+sur `dev`, et ils accusaient le lien. Chaîne réellement observée :
+
+```
+/l/8fz3-lagos  --302-->  /chats/8fz3-lagos  --302-->  /login?returnUrl=…
+```
+
+Le premier lisait `finale.request().redirectedFrom()` — UN cran en arrière — et
+recevait donc `/chats/…` là où il attendait `/l/…`. Le second comptait TOUTES
+les 302 de la navigation et en trouvait deux. **Aucun des deux ne mesurait le
+lien : ils mesuraient la longueur totale de la navigation.** Le second saut est
+le comportement VOULU de la destination — `/chats/:cle` renvoie un lecteur sans
+session vers `/login`, couvert par `__tests__/fil.test.ts:250`.
+
+Ce qui rend le cas instructif, c'est POURQUOI ils passaient avant. Tant que
+`/chats/:cle` n'existait pas, la navigation s'arrêtait sur un 404 : un seul cran
+à remonter, une seule 302 à compter. Les deux témoins avaient donc gelé un trou
+qui n'était même pas dans leur propre sujet — il était chez le VOISIN.
+
+> « Un témoin qui GÈLE un trou tombe quand le trou se ferme » est déjà écrit.
+> La forme qui manquait : **le trou gelé n'est pas forcément dans le sujet du
+> témoin.** Ici il était dans la route d'à côté, et le témoin est tombé en
+> accusant son propre sujet — qui n'avait pas bougé d'une ligne depuis sa
+> livraison. Un rouge qui désigne un fichier dont `git log` ne montre aucun
+> changement depuis le dernier vert désigne le VOISIN, pas le fichier.
+
+Le remède n'est pas de relâcher l'assertion — ce serait la faire passer pour la
+mauvaise raison. Il est de lui faire énoncer son invariant : remonter la chaîne
+jusqu'à SA RACINE et épingler nommément le premier saut (`chaine[0]` est
+`/l/:token`, sans ancêtre, en 302 ; `chaine[1]` est `/chats/:token`), et
+reconnaître la 302 DU LIEN à l'adresse qui l'a produite (`redirectResponse.url`)
+plutôt qu'à son seul statut. **La précision AUGMENTE** : l'atterrissage du lien
+est désormais épinglé, alors qu'il n'était que déduit de la dernière adresse
+visitée. Rouge prouvé par mutation — `destination.ts` renvoyant
+`/chats-mutant/:token` fait tomber le témoin exactement sur `chaine[1]`.
+
+Deux notes de méthode :
+
+- **Reproduire AVANT d'expliquer.** La lecture du journal de CI donnait
+  « Received length: 2 » sans dire d'où venait la seconde. Rejouer les deux
+  tests localement a rendu la valeur qui tranche —
+  `Received: "http://127.0.0.1:38245/chats/8fz3-lagos"` — et c'est elle, pas le
+  raisonnement, qui a nommé le voisin.
+- **Chercher la décision AVANT d'ouvrir un suivi.** J'allais ouvrir « un lecteur
+  sans session paie deux sauts sur un lien partagé ». #4522 portait déjà la
+  directive du porteur du 2026-09-01 : le lien va vers `/chat/:lien` au
+  SINGULIER, sans redirection, précisément parce que `/chats/:cle` est le fil
+  connecté. Le témoin le dit maintenant dans son doc-comment, pour que le rouge
+  du jour-là se lise comme une attente et non comme une panne.
+
+## Leçon 419 — Deux valeurs correctement calculées, non consultées ensemble : la forme dominante d'une nuit
+
+Trois défauts trouvés en quelques heures sur le composer, par trois sessions, avec
+la MÊME structure — et aucun ne rougissait nulle part, parce que **chaque moitié
+est juste séparément** :
+
+| # | ce qui est calculé | ce qui le consomme | le symptôme |
+|---|---|---|---|
+| 4759 | `bringForward` LIT cinq familles d'objets | `mutateItem` en ÉCRIT quatre | l'échange de rang s'applique à MOITIÉ : les deux objets finissent au même rang |
+| (pair) | `backgroundSoundAccentHex` calcule une garde AA et la PASSE | la branche `.credit` la laisse tomber, la branche `.original` la lit | crédit à **1,03:1**, invisible |
+| 4513 | `showsCanvas(...)` dit « une story a un canvas » | `ComposerDocumentSurface(showsScene:)` reçoit `documentHasScene`, qui dit « non » | la story ouverte n'a **plus aucun canvas** |
+
+> **Une valeur lue à un seul endroit ne peut pas être lue de travers ailleurs —
+> mais rien ne garantit que ce qu'on LIT soit ce qu'on puisse ÉCRIRE, ni que ce
+> qu'on CALCULE soit ce qu'on CONSULTE.** L'asymétrie entre le fourni et le
+> consommé ne produit aucun rouge : les deux côtés compilent, chaque valeur est
+> valide, et le test de chaque moitié passe.
+
+**Ce qui les rend invisibles longtemps** : tant qu'un seul consommateur existe,
+l'écart n'a aucun effet. Le #4513 le montre à l'état pur — les deux prédicats
+divergeaient depuis toujours, sans conséquence, parce que `.document + hasScene`
+montait une AUTRE vue qui peignait la scène. Le jour où le document l'a portée
+lui-même, l'écart est devenu un écran vide.
+
+**Ce qui les attrape** : pas le gate. 263 témoins étaient VERTS au-dessus de la
+régression du #4513, et la suite du #4759 l'était aussi avant son correctif.
+C'est la mesure à l'ÉCRAN qui a tranché, sur un binaire dont l'horodatage a été
+vérifié avant l'installation.
+
+**Ce qui les prévient** : ancrer la garde sur le NOM du prédicat, pas sur sa
+valeur. `test_laPresenceDeLaScene_aUnSeulPredicat` n'affirme pas un résultat —
+elle rend IMPOSSIBLE qu'un site lise `documentHasScene` pour décider de la
+présence d'une scène. Une garde sur la valeur serait restée verte le jour où un
+second lecteur apparaît ; une garde sur le nom rougit à l'instant où il est
+écrit.
+
+### Corollaire — deux témoins faux la même nuit, dans les deux sens
+
+Aucun des deux n'était rouge :
+- un témoin **visuel** de la session voisine « prouvait » deux couleurs sur une
+  même rangée ; il avait échantillonné un bouton à l'autre bout de la carte ;
+- mon témoin de **calcul** concluait que `textMuted` tenait AA ; il ne composait
+  l'alpha que d'un côté de la comparaison, donc mesurait `textSecondary`.
+
+Les deux ont été trouvés en cherchant à s'appuyer dessus pour autre chose.
+
+> **Un témoin peut être faux sans être rouge, et c'est le cas le plus coûteux** —
+> il ne se contente pas de ne rien garder : il ATTESTE. Les deux fois, le fait
+> qui restait après correction était plus faible à raconter et infiniment plus
+> solide.
+
+## Leçon 420 — Un balayage par LABEL rate ce qui arrive par NUMÉRO
+
+`grep "loi 8"` sur `docs/product/MeeshyComposerDesign/BOUCLE.md` rend **zéro**.
+J'en ai conclu, à voix haute, que la loi 8 n'existait pas. Elle est ligne 45.
+
+Le document NUMÉROTE ses lois (`**8. LE PRISME N'AFFICHE QUE…**`) et ne les nomme
+jamais « loi 8 » — mais ses renvois internes, eux, écrivent bien « loi 4 » et
+« loi 7 » (`grep "loi 4"` rend trois résultats).
+
+> **Le pire cas d'un balayage n'est pas le silence : c'est le silence dans un
+> corpus où la même méthode répond pour les VOISINS.** L'absence se lit alors
+> comme un fait sur le monde plutôt que comme une limite de la requête — la
+> méthode paraît validée par les frères, et échoue précisément sur celui qu'on
+> cherche.
+
+Le réflexe qui l'attrape : avant de conclure « X n'existe pas », **chercher X±1**.
+Si les voisins répondent et pas X, c'est la REQUÊTE qu'il faut changer, pas la
+conclusion qu'il faut tirer.
+
+Cette leçon existait déjà en mémoire
+(`reference_a_sweep_by_label_misses_values_that_arrive_by_name`, écrite pour un
+champ atteint par un nom plutôt qu'un label) et je l'ai refaite sur un document
+au lieu d'un fichier de code. La forme est indifférente au support.

@@ -159,9 +159,17 @@ extension MeeshyComposerHost {
     /// La question se pose au MEUBLE parce que c'est lui qui monte les vues ;
     /// `ComposerOverflowPolicy`, elle, ne reçoit qu'un FAIT — pas un nom de
     /// surface, qu'elle n'aurait aucun moyen d'éprouver.
+    /// **Elle lit la vue MONTÉE, elle ne la recalcule pas** (#4513). Elle
+    /// refaisait l'appel à `mounted(surface:hasScene:)` avec ses propres
+    /// arguments — une seconde écriture de la même question, qui a divergé dès
+    /// que la règle a pris une troisième entrée : elle aurait continué de
+    /// répondre « scène » pour une scène simplement INCRUSTÉE, où la rangée
+    /// d'outils du document offre pourtant bien la palette.
+    ///
+    /// > Une valeur lue à un seul endroit ne peut pas être lue de travers
+    /// > ailleurs.
     var backgroundPaletteIsReachable: Bool {
-        ComposerMountedView.mounted(surface: mountedSurface,
-                                    hasScene: documentHasScene) != .scene
+        mountedComposerView != .scene
     }
 
     /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la

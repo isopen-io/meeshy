@@ -386,6 +386,21 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             onItemModified?(slide)
             return
         }
+        // **Chip de SON** (#4759). Sans cette branche, « mettre au premier
+        // plan » sur une chip de son était un no-op silencieux — la même
+        // absence que celle qui rendait `bringForward` inerte, un site plus
+        // loin. Le rang ET la position dans le tableau sont posés, comme dans
+        // les trois branches ci-dessus : le rendu lit les deux.
+        if var sons = slide.effects.audioPlayerObjects,
+           let idx = sons.firstIndex(where: { $0.id == id }) {
+            guard (sons[idx].zIndex ?? 0) < topZ - 1 || idx != sons.count - 1 else { return }
+            sons[idx].zIndex = topZ
+            let item = sons.remove(at: idx)
+            sons.append(item)
+            slide.effects.audioPlayerObjects = sons
+            onItemModified?(slide)
+            return
+        }
     }
 
     func contextDuplicate(id: String) {

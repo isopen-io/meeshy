@@ -49,9 +49,47 @@ env:
   # Default to bun, can be overridden by workflow_dispatch
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
+# `cancel-in-progress` — VRAI sur une branche de PR, FAUX sur les deux branches
+# d'intégration. C'est la piste (a) de #4395, appliquée telle qu'elle y est
+# écrite.
+#
+# CE QUE LE RÉGLAGE UNIFORME COÛTAIT, mesuré le 2026-09-01 à 22:30 UTC : ONZE
+# runs consécutifs de `dev` annulés, aucune `conclusion` sur la branche depuis
+# 20:51 UTC — près de deux heures pendant lesquelles personne ne pouvait dire
+# si `dev` était vert. Trois de ces onze commits réparaient précisément la CI.
+#
+# ET UN RUN ANNULÉ N'EST PAS GRATUIT : les huit derniers ont tourné de 2,8 à
+# 8,0 minutes avant d'être tués (moyenne 5,6, soit environ un tiers d'un run
+# complet), chacun en éventail sur dix-huit jobs. Le réglage ne fait donc pas
+# l'économie des minutes, il les dépense sans jamais rendre de verdict.
+#
+# L'ASYMÉTRIE QUI AGGRAVE LE TOUT : un run qui aboutit VERT met au moins 16,3
+# minutes (médiane 19,6) ; un run qui aboutit ROUGE conclut en ~3 minutes, en
+# s'arrêtant au premier job qui tombe. 65 % des intervalles entre poussées sont
+# sous 16,3 min, mais seulement 27 % sous 2,6 — la famine mange donc les VERTS
+# environ deux fois plus souvent que les ROUGES, et la branche paraît plus rouge
+# qu'elle n'est. C'est l'inverse de ce dont la règle `to-integrate` a besoin,
+# puisqu'elle ne peut se satisfaire que d'un `success`.
+#
+# POURQUOI FAUX PLUTÔT QUE `group: ci-${{ github.sha }}` (la piste (b)) : la
+# file de concurrence ne garde qu'UN run en attente — le dernier arrivé écrase
+# celui qui patientait — donc le run EN COURS va au bout et `dev` obtient
+# toujours un verdict, sans multiplier les runs par le nombre de commits. C'est
+# le comportement sur lequel `pilotage-pages.yml` repose déjà en production
+# depuis le 2026-08-30, et son en-tête le décrit dans ces termes ; cinq autres
+# workflows du dépôt (`release`, `ios-release`, `ios-fastlane-release`,
+# `ios-beta-trigger`, `pilotage-milestone`) portent le même réglage.
+#
+# ⚠️ CE QUI RESTE À VÉRIFIER, ET COMMENT LE VOIR : la sémantique de la file
+# ci-dessus n'a pas pu être confirmée sur `docs.github.com`, bloqué par le
+# proxy de sortie. Si la file s'ACCUMULE au lieu de se remplacer, le symptôme
+# sera visible en une lecture — des runs de `dev` qui démarrent longtemps après
+# leur création (`run_started_at` - `created_at` qui grandit d'un run à
+# l'autre). Le remède est alors le retour à `true`, une ligne, ou la piste (b).
+# Ne pas lire une file d'attente comme une panne : c'est le compromis assumé.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 jobs:
   # ===========================================================================
@@ -305,16 +343,10 @@ jobs:
       # cette étape le manifeste est absent et la garde de non-vacuité de
       # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
       # vert sur zéro route.
-      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
-      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
-      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
-      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
-      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
-      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
-      - name: Build @meeshy/shared (le dist que son exports map sert)
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
         run: |
           cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          bun run build
 
       - name: Build apps/web-v3 (le manifeste que le balayage lit)
         run: |
@@ -409,16 +441,10 @@ jobs:
       # par le serveur — mais `playwright.config.ts` lève quand même `next start`
       # (la preuve d'un build se prend sur le serveur de production, leçon 339),
       # qui exige ce build.
-      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
-      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
-      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
-      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
-      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
-      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
-      - name: Build @meeshy/shared (le dist que son exports map sert)
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
         run: |
           cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          bun run build
 
       - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
         run: |
@@ -509,16 +535,10 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
 
-      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
-      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
-      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
-      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
-      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
-      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
-      - name: Build @meeshy/shared (le dist que son exports map sert)
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
         run: |
           cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          bun run build
 
       - name: Build apps/web-v3 (le serveur que les suites mesurent)
         run: |

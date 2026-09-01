@@ -82,6 +82,21 @@ extension MeeshyComposerHost {
         // l'aurait rangée parmi ce qui QUALIFIE la publication, où elle n'est
         // pas.
         .storyComposerToolRowLeadingAccessory { atelierDescriptionButton }
+        // **Le volet de description, sous la scène de l'ATELIER** (#4742).
+        //
+        // Il est aussi monté par `ComposerSceneSurface` (la scène incrustée
+        // d'un post). Deux surfaces, un seul volet : c'est la même propriété
+        // qui les sert, et elles ne peuvent donc pas montrer deux descriptions
+        // différentes du même texte.
+        //
+        // La leçon coûte d'être dite : ce volet a d'abord été monté SEULEMENT
+        // dans `ComposerSceneSurface`, et il n'a jamais paru — une story se
+        // compose dans l'ATELIER, que ce flux monte à la place. Un composant
+        // écrit, câblé et invisible parce qu'il est posé sur la surface que
+        // l'écran n'affiche pas.
+        .storyComposerBelowCanvasAccessory {
+            if let volet = sceneDescriptionPanel { volet }
+        }
         // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
         // cadrage), exactement comme il le fait déjà devant une band. `0` quand
@@ -311,7 +326,12 @@ extension MeeshyComposerHost {
                 ? AnyView(formatChip) : nil,
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
-            onClose: onDismiss,
+            // **Le `‹` de `1c` REVIENT à `1b`, il ne ferme pas** (#4513).
+            // La cible dessine un chevron ici et une croix sur la scène
+            // incrustée : deux glyphes différents pour deux gestes différents.
+            // `onDismiss` fermerait le composer entier — l'auteur perdrait sa
+            // composition pour avoir voulu sortir de l'inspecteur.
+            onClose: { editsScene = false },
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onSelectMedia: { media in
                 guard let slideId = slideIdByMediaURL[media.url],
@@ -549,6 +569,7 @@ extension MeeshyComposerHost {
             // verre vide quand aucun ami accepté ne correspond — un état
             // NOMINAL, pas une erreur.
             mentionStrip: sceneMentionStrip,
+            descriptionPanel: sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
@@ -588,9 +609,23 @@ extension MeeshyComposerHost {
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
             ),
-            showsScene: documentHasScene,
+            // **Le MÊME prédicat que la vue montée** (#4513) — `sceneIsPresent`,
+            // jamais `documentHasScene` en direct. Les deux répondaient à la
+            // même question et divergeaient sur une story vide : la vue disait
+            // « il y a une scène », cette branche disait « non », et l'écran
+            // n'en montrait aucune.
+            showsScene: sceneIsPresent,
             sceneAspectRatio: viewModel.currentCanvasRatio,
-            onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
+            // **LE geste d'entrée dans l'éditeur** (#4513). Sur la scène
+            // INCRUSTÉE (`1b`), taper un objet ouvre `1c` — c'est le seul
+            // chemin, et il est nommé ici plutôt que dérivé de la sélection :
+            // `selectedSceneItemKind` se pose aussi programmatiquement (poser
+            // un texte, taper un fond), et l'auteur se retrouverait alors dans
+            // un écran qu'il n'a pas demandé.
+            onSceneItemTapped: { _, kind in
+                selectedSceneItemKind = kind
+                editsScene = true
+            },
             // **#4035 — taper la scène quand son FOND est un média le
             // SÉLECTIONNE.** Sans cette ligne l'inspecteur était INATTEIGNABLE
             // sur l'écran document, et le câblage complet ne le disait pas :
@@ -845,6 +880,34 @@ extension MeeshyComposerHost {
     /// et ce n'est pas un rangement : monté en fermeture d'`.overlay` dans
     /// `body`, il plantait à l'ouverture — débordement de pile par profondeur de
     /// type SwiftUI. Le fichier du type porte la trace et la leçon.
+    /// **Le volet de description servi à la surface** (#4742).
+    ///
+    /// Il LIT ; la saisie reste l'affaire de `sceneDescriptionEditor`, qui
+    /// monte au-dessus du clavier. Deux champs pour un même texte auraient
+    /// divergé au premier réglage — ici il n'y en a qu'un, et le volet ouvre
+    /// celui-là.
+    ///
+    /// Pendant la SAISIE le volet s'efface : l'éditeur affiche déjà le texte,
+    /// et le laisser derrière montrerait la description en double.
+    var sceneDescriptionPanel: AnyView? {
+        guard !editsSceneDescription else { return nil }
+        return AnyView(
+            ComposerSceneDescriptionPanel(
+                text: sceneDescriptionBinding.wrappedValue,
+                placeholder: String(localized: "composer.description.placeholder",
+                                    defaultValue: "Ajouter une description",
+                                    bundle: .main),
+                isCollapsed: $sceneDescriptionCollapsed,
+                onEdit: {
+                    // Ouvrir la saisie DÉPLIE : écrire dans un volet rangé
+                    // laisserait l'auteur taper sans voir ce qu'il écrit.
+                    sceneDescriptionCollapsed = false
+                    editsSceneDescription = true
+                }
+            )
+        )
+    }
+
     var sceneDescriptionEditor: some View {
         ComposerSceneDescriptionEditor(
             text: sceneDescriptionBinding,

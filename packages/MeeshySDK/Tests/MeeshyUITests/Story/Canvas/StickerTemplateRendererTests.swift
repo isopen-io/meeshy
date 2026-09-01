@@ -87,6 +87,47 @@ final class StickerTemplateRendererTests: XCTestCase {
         }
     }
 
+    /// #4745 — **« bien distinctes » rendu vérifiable.**
+    ///
+    /// Le porteur voulait des pastilles de lieu qu'on distingue au premier coup
+    /// d'œil. Une revue à l'œil ne se rejoue pas ; deux dessins IDENTIQUES, si.
+    /// Le témoin compare les six deux à deux, sur le MÊME lieu — ce qui varie
+    /// est alors la seule forme.
+    func test_theSixLocationTemplates_allLookDifferent() throws {
+        let m = mesuresLieu
+        let s = emplacements(for: .location)
+        var rendus: [String: Data] = [:]
+        for gabarit in StickerTemplateCatalog.templates(family: .location) {
+            let png = try XCTUnwrap(
+                StickerTemplateRenderer.image(templateID: gabarit.id, slots: s,
+                                              metrics: m, screenScale: 2)?.0?.pngData(),
+                "\(gabarit.id) ne se dessine pas")
+            for (autre, déjà) in rendus {
+                XCTAssertNotEqual(png, déjà,
+                                  "\(gabarit.id) et \(autre) rendent le MÊME dessin.")
+            }
+            rendus[gabarit.id] = png
+        }
+        XCTAssertEqual(rendus.count, 6, "six pastilles de lieu attendues")
+    }
+
+    /// Et elles ne se distinguent pas seulement par leur contenu : leurs
+    /// SILHOUETTES diffèrent. Un timbre est plus haut que large, une enseigne
+    /// plus large que haute — deux cartouches de mêmes proportions se
+    /// ressembleraient dans la palette quel que soit leur décor.
+    func test_theLocationTemplates_doNotAllShareOneSilhouette() {
+        let m = mesuresLieu
+        let s = emplacements(for: .location)
+        let rapports = StickerTemplateCatalog.templates(family: .location).compactMap { gabarit -> CGFloat? in
+            guard let taille = StickerTemplateRenderer.measuredSize(
+                templateID: gabarit.id, slots: s, metrics: m), taille.height > 0
+            else { return nil }
+            return (taille.width / taille.height * 100).rounded() / 100
+        }
+        XCTAssertGreaterThanOrEqual(Set(rapports).count, 4,
+                                    "Six pastilles pour moins de quatre silhouettes : elles se confondent.")
+    }
+
     func test_unknownTemplate_drawsNothing_ratherThanGuessing() {
         XCTAssertNil(StickerTemplateRenderer.measuredSize(
             templateID: "venu.du.futur", slots: [:], metrics: mesuresSticker))

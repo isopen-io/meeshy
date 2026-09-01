@@ -498,21 +498,43 @@ extension StoryCanvasUIView {
                                                             bakedScale: bakedScale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
-            // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
-            // dans bounds (baseSide × scale), transform = rotation only.
-            // Mêmes raisons que la branche media — éviter le double-scale au
-            // 2e geste sur le même sticker.
-            let designSide = CGFloat(sticker.baseSize * sticker.scale)
-            let renderedSide = geo.render(designSide)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
-            if layer.bounds.size != newBounds.size {
-                layer.bounds = newBounds
+            if sticker.kind == .template {
+                // **Un gabarit n'est PAS carré** (#4744). La branche ci-dessous
+                // reconstruit des bounds de côté `baseSize × scale` — vrai d'un
+                // GLYPHE, qui est carré par nature ; faux d'une décoration, dont
+                // la boîte est MESURÉE par `StickerTemplateRenderer` (une carte
+                // postale est large et basse, un ruban plus large encore).
+                // L'imposer écrasait la décoration dans un carré faux pendant
+                // tout le geste, puis la laissait sauter au rebuild de fin.
+                //
+                // Même remède que le texte et la pastille de lieu, dont la
+                // boîte est mesurée pour les mêmes raisons : un RATIO
+                // transitoire par-dessus la rotation, la re-rasterisation nette
+                // venant à `.ended`. On ne touche pas aux bounds : les
+                // remesurer à chaque image coûterait un dessin Core Graphics
+                // par frame.
+                let bakedScale = (layer as? StoryStickerLayer)?.sticker?.scale ?? sticker.scale
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                layer.transform = Self.liveTextGestureTransform(rotationDegrees: sticker.rotation,
+                                                               modelScale: sticker.scale,
+                                                               bakedScale: bakedScale)
+            } else {
+                // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
+                // dans bounds (baseSide × scale), transform = rotation only.
+                // Mêmes raisons que la branche media — éviter le double-scale au
+                // 2e geste sur le même sticker.
+                let designSide = CGFloat(sticker.baseSize * sticker.scale)
+                let renderedSide = geo.render(designSide)
+                let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+                if layer.bounds.size != newBounds.size {
+                    layer.bounds = newBounds
+                }
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                let rotation = CGFloat(sticker.rotation * .pi / 180)
+                layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             }
-            layer.position = renderPosition(x: sticker.x, y: sticker.y)
-            let rotation = CGFloat(sticker.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
             // La pastille position rasterise son scale dans `bounds` au

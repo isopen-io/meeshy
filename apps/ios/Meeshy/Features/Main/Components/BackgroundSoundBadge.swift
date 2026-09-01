@@ -38,6 +38,28 @@ struct BackgroundSoundBadge: View, Equatable {
     /// fixe, pas de calcul de contraste par pixel.
     static let overMediaAccentHex = "FFFFFF"
 
+    /// **La teinte que CHAQUE branche sert : l'accent que l'hôte déclare.**
+    ///
+    /// Existe pour être interrogeable, parce que le défaut ne se voyait dans
+    /// aucune couleur écrite ici. `FeedPostCard.backgroundSoundAccentHex` porte
+    /// la garde AA (`isDark ? accent : indigo600`) et la PASSE ; la branche
+    /// `.original` la consultait, la branche `.credit` la laissait tomber en
+    /// déléguant à `AudioChipMarquee`, dont le blanc en dur est juste sur un
+    /// média et faux sur une carte thémée. Mesuré en mode clair : **1,03:1**.
+    ///
+    /// > Une garde calculée, passée, et consultée par UNE branche sur deux ne
+    /// > garde qu'une branche — et la branche qui la rate ne rougit nulle part,
+    /// > puisqu'elle rend une couleur parfaitement valide.
+    ///
+    /// `nil` ⇒ aucune ligne à peindre (`.none` ne rend rien).
+    nonisolated static func servedTintHex(for announcement: BackgroundAudioAnnouncement,
+                                          accentHex: String) -> String? {
+        switch announcement {
+        case .none: return nil
+        case .original, .credit: return accentHex
+        }
+    }
+
     static func == (lhs: BackgroundSoundBadge, rhs: BackgroundSoundBadge) -> Bool {
         lhs.announcement == rhs.announcement && lhs.accentHex == rhs.accentHex
     }
@@ -59,7 +81,8 @@ struct BackgroundSoundBadge: View, Equatable {
             AudioChipMarquee(
                 text: Self.creditText(title: title, username: username, duration: duration),
                 height: 14,
-                fontSize: 11
+                fontSize: 11,
+                tint: Color(hex: Self.servedTintHex(for: announcement, accentHex: accentHex) ?? accentHex)
             )
             .frame(width: 124)
             .opacity(0.85)

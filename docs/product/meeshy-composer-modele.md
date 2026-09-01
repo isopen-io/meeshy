@@ -51,6 +51,96 @@ l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais êtr
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 
+## 1 bis. Ce qu'une publication DEVIENT — la projection
+
+`MeeshyPublication` est une notion de **COMPOSITION**. Le tableau du § 1 le dit
+en creux (« pas un post serveur ») sans dire ce qui arrive au moment de publier ;
+c'est le trou que ce paragraphe ferme. **Aucune couche sous le composer ne porte
+la publication comme un objet** — mesuré le 2026-09-01, avec ses sites :
+
+| couche | ce qu'on y trouve |
+|---|---|
+| publication d'une story | `StoryComposerView+Publication.swift:305` `publishAllSlides()` — **un post par slide** |
+| fil app → passerelle | `PublishIntent.swift:52` — douze champs, **pas une slide, pas un objet, pas un effet** |
+| base | `model Post` (`packages/shared/prisma/schema.prisma`) — **ni `storyId`, ni `sceneId`, ni index de slide** ; la scène voyage en `storyEffects Json?`, opaque, **un par post** |
+
+Une publication de quatre slides est donc **quatre lignes `Post` que rien ne
+relie**. Le mot « publication » a un référent dans le composer et n'en a plus
+aucun passé le fil.
+
+> **Une `MeeshyPublication` ne se sérialise pas : elle se PROJETTE.** Ce qui est
+> composé est une publication ; ce qui est publié est un ensemble de posts. Tant
+> que la projection reste implicite — une boucle `for` sur les slides — personne
+> ne peut la contredire, et c'est ainsi qu'une slide vierge est partie en post
+> à côté du vrai (#4730).
+
+### Les trois obligations de la projection
+
+Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
+
+1. **Le prédicat** — quelles unités méritent un post. Site unique existant :
+   `StorySlidePublishMatter.deservesAPost(_:hasBackgroundImage:)`
+   (`packages/MeeshySDK/Sources/MeeshySDK/Models/Story/`), pure, publique, douze
+   témoins. À **absorber**, jamais réécrire.
+2. **L'élection** — laquelle des N unités REPRÉSENTE la publication. Les posts
+   sortent à ~451 ms d'intervalle et le fil montre le plus récent : sans
+   élection, **la dernière unité composée devient la vitrine**, par effet de bord
+   de l'horloge.
+3. **Le troisième état** — entre « pas de scène » et « une scène », il y a **une
+   scène NÉE ET VIDE** : la slide semée. Les deux couches en tirent des
+   conclusions opposées et **ont raison toutes les deux** — le canvas la MONTRE
+   (`ComposerStoryCanvas.showsCanvas`), la présence ne la COMPTE pas
+   (`ComposerScenePresence` compte ce que la scène contient, jamais ce qui l'a
+   fait naître). Une forme qui ne connaît que deux états ne peut pas décrire ça,
+   et c'est par cet état que le socle a été atteint sans publieur (#4751).
+
+### Ce qu'il ne faut pas écrire
+
+Ne nommer dans la forme **aucune clé de regroupement serveur** : il n'en existe
+pas. Une enveloppe qui attendrait un `storyId` mentirait à la première
+relecture, et la forme iOS attendrait un champ que le fil ne rend pas. **Le
+regroupement serveur est une décision distincte, avec sa migration.**
+
+### Ce qui reste à trancher
+
+Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733**
+(« le meuble publie la story par un second chemin »), non arbitré à ce jour. Ce
+paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
+pas #4733, et ne doit pas être lu comme le faisant.
+
+## 1 ter. Ce que chaque nom devient SOUS le composer
+
+Les quatre noms du § 1 sont le vocabulaire du composer. Deux d'entre eux n'ont
+**aucun correspondant** sous lui — ni sur le fil, ni en base, ni comme type
+Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
+
+| nom du modèle | contrat partagé (`packages/shared/types/canvas-v3.ts`) | type Swift livré |
+|---|---|---|
+| **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
+| **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
+| **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
+| **`MeeshyPublication`** | **rien.** Elle se projette en N `Post` (§ 1 bis) | **aucun type de ce nom** |
+
+```bash
+grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
+git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
+```
+
+**Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
+solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
+précède son implémentation. Ce qui doit être su, en revanche, c'est **où le
+vocabulaire cesse de correspondre** — parce que c'est là qu'un lot qui « suit le
+modèle » invente sa propre traduction, et que deux lots en inventent deux :
+
+> **Le composer sépare en DEUX noms — `MeeshyScene` et `MeeshySlide` — ce que le
+> contrat porte comme UN (`SceneV3`), et la description qui les distingue ne
+> voyage sur aucun des deux.** Chercher « slide » dans le contrat ne rend rien.
+
+Corollaire pour tout lot qui descend vers le fil : traduire `MeeshySlide` en
+`SceneV3` est CORRECT, et perdre la description en route est le défaut à
+surveiller — elle a son propre logement (le `content` du post en S/R, la
+légende du média en P, § 3), jamais la scène.
+
 ## 2. La simplification : une slide est TOUJOURS une scène
 
 Il n'existe **pas** deux formes de slide (« un média » d'un côté, « une scène » de
@@ -158,3 +248,16 @@ fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux
 `MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
+
+**« Meeshes » est un terme de communication COMMERCIALE, jamais un nom du modèle**
+(arbitrage porteur, 2026-09-01, #4757). Il désigne les publications de type story,
+réel et post — **sans les moods** —, et c'est précisément pourquoi il ne peut pas
+être un nom du modèle : les quatre couches qui existent traitent les quatre profils
+ensemble (`PostType = POST | REEL | STORY | STATUS`, `ComposerFormat = story, post,
+reel, status`, la planche « S · R · P · M »). Le mot ne change ni l'état, ni la
+vision, ni le contrat.
+
+Il n'entre donc **ni dans le code, ni dans le schéma, ni dans une issue, ni dans une
+chaîne d'UI** — la règle de nommage ci-dessus reste entière. L'écrire ailleurs que
+dans un support de communication fabriquerait une cinquième terminologie, désignant
+un sous-ensemble qu'aucune couche ne modélise.

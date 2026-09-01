@@ -1580,36 +1580,76 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// **La porte du tray n'atteint AUCUNE surface qui publie par le socle**, et
-    /// c'est ce qui rend son `onPublishDocument: { _ in false }` honnête plutôt
-    /// que dangereux.
+    /// **RETOURNÉE le 2026-09-01 (#4751), à la condition de levée qu'elle
+    /// nommait elle-même.**
     ///
-    /// `.storyTray` ouvre sur `.cameraReady`, que `ComposerSurfaceRouting` route
-    /// TOUJOURS vers la scène, quel que soit le format ensuite choisi. Le socle
-    /// n'y est donc jamais peint. Le jour où cette ouverture changerait, ce refus
-    /// deviendrait une flèche qui ne publie rien — en silence. Cette garde est le
-    /// bruit qui manquerait alors.
-    func test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle() {
+    /// Elle affirmait « la porte du tray n'atteint AUCUNE surface qui publie par
+    /// le socle », ce qui rendait son `onPublishDocument: { _ in false }`
+    /// honnête plutôt que dangereux — `.cameraReady` routant TOUJOURS vers la
+    /// scène. Et elle disait, en toutes lettres : « le jour où cette ouverture
+    /// changerait, ce refus deviendrait une flèche qui ne publie rien, en
+    /// silence. Cette garde est le bruit qui manquerait alors. »
+    ///
+    /// C'est ce jour-là, et le bruit a été entendu : la porte atteint le socle
+    /// dès que l'auteur bascule l'éventail sur « Post » sans avoir rien posé sur
+    /// la scène — la slide SEMÉE ne compte pas comme matière, `ComposerScenePresence`
+    /// comptant ce que la scène CONTIENT et non ce qui l'a fait naître.
+    ///
+    /// > Une garde qui énonce sa propre condition de péremption vaut plus que
+    /// > la règle qu'elle protège : sans cette phrase, la bascule de routage
+    /// > aurait livré une flèche d'envoi inerte, et le témoin qui l'aurait dit
+    /// > n'existait nulle part.
+    ///
+    /// Ce qu'elle garde désormais est l'INVERSE, et c'est le seul énoncé qui
+    /// tienne dans les deux mondes : **une porte qui peut monter le socle doit
+    /// pouvoir publier par lui.** Elle mesure donc la vue MONTÉE — jamais le
+    /// `ComposerSurfaceKind` seul, qui ne sait rien de la scène — et exige un
+    /// publieur au site de montage.
+    func test_laPorteDuTray_quiAtteintLeSocle_saitPublierParLui() throws {
         let profil = ComposerProfile.profile(for: .storyTray, compositionQualifiesAsReel: true)
         XCTAssertFalse(profil.offeredFormats.isEmpty, "Le tray offre au moins un format — sinon la boucle ne mesure rien.")
 
+        var atteintLeSocle = false
         for format in profil.offeredFormats {
             let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
-            XCTAssertEqual(
-                surface, .scene,
-                "Le tray atteint la surface \(surface) en \(format) : son `onPublishDocument` REFUSE, et cette "
-                    + "flèche ne publierait donc rien. Lui donner un vrai publieur, ou re-router la porte."
+            // La vue réellement montée, `hasScene: false` — l'état d'une
+            // composition que l'auteur vient d'ouvrir sans rien y poser.
+            let montee = ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: format, documentHasScene: false),
+                // `false` : l'auteur vient d'ouvrir, il n'est entré dans aucun
+                // éditeur. C'est l'état où le socle est peint — donc celui où
+                // la flèche doit savoir publier.
+                editsScene: false
             )
-            // **RETOURNÉ au #4135.** La garde exigeait un socle VIDE sous la
-            // scène, parce que l'atelier y peignait les trois commandes. Il
-            // n'en peint plus aucune : c'est le socle qui les porte, et un
-            // socle vide serait maintenant une scène SANS chemin de départ.
+            if montee == .document { atteintLeSocle = true }
+
             XCTAssertTrue(
                 ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
-                "… et le socle doit y peindre sa flèche : depuis #4135 l'atelier n'assemble plus que le `⋯`, "
+                "… et le socle doit peindre sa flèche : depuis #4135 l'atelier n'assemble plus que le `⋯`, "
                     + "un socle vide laisserait la composition sans aucun chemin de départ."
             )
         }
+
+        XCTAssertTrue(
+            atteintLeSocle,
+            "Aucun format du tray ne monte le document : la garde ci-dessous ne mesurerait plus rien, "
+                + "et il faudrait la RETOURNER — pas la laisser verte par omission."
+        )
+
+        let porte = compact(AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayActions.swift")))
+
+        XCTAssertFalse(
+            porte.contains(compact("onPublishDocument: { _ in")),
+            "La porte du tray atteint le socle : un `onPublishDocument` qui IGNORE son brouillon "
+                + "ne peut rien publier, et sa flèche serait inerte."
+        )
+        XCTAssertTrue(
+            porte.contains(compact("await ComposerDocumentDurablePublisher.publish(draft)")),
+            "Elle doit publier par le publieur DURABLE — le seul chemin qui ne demande pas de "
+                + "`FeedViewModel`, qu'aucune des deux racines appliquant ce cover ne tient."
+        )
     }
 
     // MARK: - Aucune UI morte : rien à l'écran sans raison (loi 4)

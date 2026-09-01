@@ -1,4 +1,5 @@
 import CoreGraphics
+import MeeshyUI
 
 /// **La géométrie des deux rails, et la largeur qu'ils laissent à la scène**
 /// (#4061, planche rév. 27 § P4).
@@ -69,6 +70,38 @@ nonisolated enum ComposerRailGeometry {
     /// se signale.
     static func sceneWidth(usableWidth: CGFloat, railsShown: Bool) -> CGFloat {
         max(0, usableWidth - 2 * sceneInset(railsShown: railsShown))
+    }
+
+    /// **Ce qui sépare le bas de la FRAME du bas du DESSIN** (#4119).
+    ///
+    /// La carte est figée à son ratio et se CENTRE dans la hauteur qu'on lui
+    /// donne (`EmbeddedSceneCanvas` : `frame(maxHeight: .infinity)` puis
+    /// `aspectFitSize`). Les deux rails, posés en `.overlay(alignment:
+    /// .bottom…)`, s'ancraient donc au bas de la frame — soit **sous** la
+    /// composition, d'un écart qui vaut la moitié de la hauteur perdue et qui
+    /// GRANDIT avec le ratio : nul en 9:16 plein, maximal en paysage.
+    ///
+    /// > Un rail qui suit la frame et non la composition n'est pas « un peu
+    /// > plus bas » : il cesse de dire à quoi il s'applique. En paysage, les
+    /// > portes se retrouvent en face de rien.
+    ///
+    /// **Le ratio est DÉJÀ connu de la vue** — la correction ne passe donc par
+    /// aucune hauteur codée en dur, ce que le critère de fin de #4119 interdit
+    /// explicitement.
+    ///
+    /// - Parameter overlay: la taille de la vue sur laquelle l'overlay se pose.
+    ///   C'est celle de la vue PADDÉE : elle inclut les deux couloirs, que la
+    ///   carte n'a pas. D'où le second paramètre — sans lui, le `fit` serait
+    ///   calculé sur une largeur que la carte n'occupe jamais, et l'inset
+    ///   rendrait une valeur juste par accident en portrait seulement.
+    /// - Parameter horizontalInset: l'encastrement par côté (`sceneInset`).
+    static func sceneBottomInset(overlay: CGSize,
+                                 ratio: CGFloat,
+                                 horizontalInset: CGFloat) -> CGFloat {
+        let carte = CGSize(width: max(0, overlay.width - 2 * horizontalInset),
+                           height: overlay.height)
+        let dessin = CanvasGeometry.aspectFitSize(in: carte, ratio: ratio)
+        return max(0, (overlay.height - dessin.height) / 2)
     }
 
     // MARK: - Ce qu'une rangée REQUIERT, et ce qui déborde

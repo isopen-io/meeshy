@@ -18,35 +18,35 @@ final class ComposerSceneSurfaceTests: XCTestCase {
 
     /// Le point de la règle : `hasScene` n'est lu que pour `.document`.
     func test_unDocumentAvecScene_monteLaSurfaceDeScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: true), .scene)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: true, editsScene: true), .scene)
     }
 
     func test_unDocumentSansScene_resteLeDocument() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: false), .document)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .document, hasScene: false, editsScene: false), .document)
     }
 
     /// **L'atelier EST une scène : la question ne se pose pas.** Lire `hasScene`
     /// ici l'aurait fait dépendre d'un état qui ne le concerne pas.
     func test_lAtelier_neDependPasDeHasScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: false), .atelier)
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: true), .atelier)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: false, editsScene: false), .atelier)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene, hasScene: true, editsScene: false), .atelier)
     }
 
     /// **Un mood n'a pas de scène**, et la tâche 4.3 lui a justement retiré les
     /// exceptions qu'il ne porte pas. Ce témoin garde qu'on ne lui en rend
     /// aucune.
     func test_leMood_neDependPasDeHasScene() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: false), .mood)
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: true), .mood)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: false, editsScene: false), .mood)
+        XCTAssertEqual(ComposerMountedView.mounted(surface: .mood, hasScene: true, editsScene: false), .mood)
     }
 
     /// Les quatre vues sont atteignables — aucune n'est du code mort.
     func test_lesQuatreVues_sontToutesAtteignables() {
         let atteintes = Set([
-            ComposerMountedView.mounted(surface: .scene, hasScene: false),
-            ComposerMountedView.mounted(surface: .document, hasScene: true),
-            ComposerMountedView.mounted(surface: .document, hasScene: false),
-            ComposerMountedView.mounted(surface: .mood, hasScene: false)
+            ComposerMountedView.mounted(surface: .scene, hasScene: false, editsScene: false),
+            ComposerMountedView.mounted(surface: .document, hasScene: true, editsScene: true),
+            ComposerMountedView.mounted(surface: .document, hasScene: false, editsScene: false),
+            ComposerMountedView.mounted(surface: .mood, hasScene: false, editsScene: false)
         ])
         XCTAssertEqual(atteintes, Set(ComposerMountedView.allCases))
     }
