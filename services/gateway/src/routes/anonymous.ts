@@ -192,7 +192,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     // paramètre (`:key`), donc une FONCTION de la requête plutôt qu'un
     // gabarit non suivable (cf. `utils/deprecation.ts` § « Le successeur
     // peut dépendre de la requête »). `linkId` est le MÊME identifiant que
-    // `key` sur la porte cible : les deux acceptent linkId/identifier/id.
+    // `key` sur la porte cible : les deux acceptent linkId/identifier — plus
+    // l'ObjectId jusqu'à #4692, qui l'a retiré de `findShareLinkByKey`.
     onRequest: [depreciee({
       depuis: '2026-08-30',
       successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}/members`),

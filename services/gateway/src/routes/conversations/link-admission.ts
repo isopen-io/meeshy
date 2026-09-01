@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
-import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { toAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 import { generateNickname } from '../../utils/anonymous-nickname';
@@ -112,15 +111,45 @@ export function resolveClientIp(request: FastifyRequest): string {
   return request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 }
 
-/** `key` = `linkId` (`mshy_…`) OU `identifier` lisible OU `id` Mongo — les trois portes acceptaient déjà un sous-ensemble de ce triplet. */
+/**
+ * Les colonnes qui OUVRENT la porte de jointure — la loi, sous forme de donnée
+ * (#4692).
+ *
+ * Toute valeur d'une de ces colonnes vaut une invitation : les trois portes
+ * (`POST /links/:key/members` en `optionalAuth`, `POST /anonymous/join/:linkId`
+ * purement anonyme, `POST /conversations/join/:linkId`) les acceptent
+ * indifféremment, et `admitLinkEntry` ne demande jamais par laquelle le lien a
+ * été trouvé. Une porte d'administration qui sert l'une d'elles distribue une
+ * invitation, quel que soit le nom de la colonne.
+ *
+ * La liste est EXPORTÉE parce que le témoin qui garde cette règle en dérive son
+ * fixture : une énumération tenue à la main dans un test reste verte le jour où
+ * une quatrième colonne rejoint le `OR` (c'est exactement ce qui a laissé
+ * `identifier` sortir pendant que `linkId` était retiré).
+ */
+export const SHARE_LINK_JOIN_KEY_COLUMNS = ['linkId', 'identifier'] as const;
+
+/**
+ * `key` = `linkId` (`mshy_…`) OU `identifier` lisible — **jamais l'ObjectId**.
+ *
+ * L'arme `{ id: key }` a été retirée (#4692) : la console d'administration sert
+ * `ConversationShareLink.id` à BIGBOSS, ADMIN, MODERATOR et AUDIT, et l'appelait
+ * déjà « la référence OPAQUE ». Elle ne l'était pas — cette ligne en faisait une
+ * clé de jointure de plus. Retirer l'ObjectId de la LOI est ce qui rend cette
+ * phrase vraie, plutôt que de retirer à la console le seul identifiant sur
+ * lequel elle agit.
+ *
+ * Coût MESURÉ du retrait, un seul appelant : Android
+ * `GuestJoinViewModel:109` — `info.linkId.ifBlank { info.id }.ifBlank { identifier }`
+ * — un repli défensif dont la branche primaire est peuplée par la passerelle
+ * elle-même (`GET /anonymous/link/:identifier` sert `linkId`). `identifier` et
+ * `linkId` RESTENT acceptées : une URL partagée sous un slug lisible
+ * (`mshy_meeshy-public`) arrive verbatim dans `:key` depuis les trois clients.
+ */
 async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<ShareLinkWithConversation | null> {
   const shareLink = await prisma.conversationShareLink.findFirst({
     where: {
-      OR: [
-        { linkId: key },
-        { identifier: key },
-        ...(isValidMongoId(key) ? [{ id: key }] : []),
-      ],
+      OR: SHARE_LINK_JOIN_KEY_COLUMNS.map((colonne) => ({ [colonne]: key })),
     },
     include: {
       conversation: {
@@ -667,7 +696,7 @@ export function registerLinkAdmissionRoutes(
         params: {
           type: 'object',
           required: ['key'],
-          properties: { key: { type: 'string', description: 'linkId (mshy_…), identifier, or database id' } },
+          properties: { key: { type: 'string', description: 'linkId (mshy_…) or identifier — never the database id (#4692)' } },
         },
         body: {
           type: 'object',

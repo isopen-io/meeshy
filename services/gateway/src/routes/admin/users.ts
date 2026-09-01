@@ -423,16 +423,19 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.conversationShareLink.findMany({
           where: { createdBy: userId },
           select: {
+            // #4157 c.3 / #4692 — AUCUNE colonne de `SHARE_LINK_JOIN_KEY_COLUMNS`
+            // (`linkId`, `identifier`) : les deux OUVRENT la porte de jointure,
+            // indifféremment (`findShareLinkByKey`), et les lecteurs de cette
+            // route sont BIGBOSS, ADMIN, MODERATOR et AUDIT — les deux derniers
+            // sans `canViewSensitiveData`. Le premier lot n'avait retiré que
+            // `linkId` en écrivant qu'« `id` suffit à désigner le lien » ; c'était
+            // faux deux fois — `identifier` sortait à sa place, et `id` était
+            // lui-même une clé de jointure. #4692 a retiré l'ObjectId de la LOI
+            // (link-admission.ts), ce qui rend enfin `id` opaque et le laisse
+            // servir de référence à la console. Le secret ne se lit qu'au geste
+            // souverain `POST /admin/share-links/:id/reveal`, qui rend désormais
+            // les DEUX clés.
             id: true,
-            // #4157 c.3 — `linkId` EST le secret qui permet de REJOINDRE la
-            // conversation. Le même lot l'a retiré de `GET /admin/share-links`
-            // et lui a dédié un geste souverain tracé (`POST …/reveal`) ; il
-            // continuait de sortir ICI, dans un autre fichier, à des rôles pour
-            // qui `canViewSensitiveData` est `false`. Une protection posée sur
-            // une porte et pas sur sa voisine ne protège rien : `id` suffit à
-            // désigner le lien, et le geste dédié reste la seule façon de le
-            // révéler.
-            identifier: true,
             name: true,
             description: true,
             maxUses: true,
@@ -454,8 +457,30 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            // #4157 c.3 — jeton d'accès retiré, même raison que `linkId`
-            // ci-dessus : `shortUrl` suffit à désigner le lien pour une revue.
+            // #4694 — `token` REVIENT, et le commentaire qui prétendait le
+            // protéger est retiré : il ne protégeait rien.
+            //
+            // Le lot #4157 c.3 l'avait sorti du `select` « comme `linkId` », en
+            // gardant `shortUrl` — que `TrackingLinkService` compose
+            // exactement `/l/${token}` (l. 148, et l. 926 au changement de
+            // jeton ; `schema.prisma` le dit aussi : « URL courte générée
+            // (meeshy.me/l/<token>) »). **Le champ retiré était contenu dans le
+            // champ conservé.** Le témoin ne tombait pas parce que sa fixture
+            // valait `'https://s'` au lieu de la forme de production.
+            //
+            // MESURE des routes clefées par `:token`, qui décide de la sortie
+            // retenue : `GET /l/:token` est une redirection PUBLIQUE,
+            // `GET /tracking-links/:token/resolve` est publique PAR DESIGN (son
+            // doc-comment l'écrit), `POST …/:token/click` est en `authOptional`
+            // et `POST …/:token/redirect-status` n'a aucun hook. Tout ce qui
+            // MUTE (`PATCH`, `DELETE`, `…/deactivate`) est `authRequired` +
+            // contrôle de propriétaire, et `GET /tracking-links/:token`
+            // (les stats) l'est aussi. Ce jeton est donc une clé de ROUTAGE
+            // publique, pas un secret : le masquer coûterait à la console le
+            // libellé d'un lien sans nom (`link.name || link.token`) sans rien
+            // fermer. `AffiliateToken.token` reste retiré — lui consomme une
+            // place de `maxUses` sur `POST /affiliate/register`.
+            token: true,
             name: true,
             campaign: true,
             source: true,
