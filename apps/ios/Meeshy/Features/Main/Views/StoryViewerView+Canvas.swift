@@ -1624,6 +1624,25 @@ struct StoryCardView: View {
                     // Coupée en plein écran (carte = plein bord, pas d'ombre).
                     .shadow(color: .black.opacity(canvasIsExpanded ? 0 : 0.4),
                             radius: 20, y: 8)
+                    // **Déplier la légende FLOUTE la scène** (directive porteur
+                    // 2026-09-02) : « pour les story pas besoin de cacher quoi
+                    // que ce soit, quand on déplie, on floute juste la story et
+                    // on affiche le texte déplié ».
+                    //
+                    // La story n'a rien à sacrifier — pas de carte d'auteur en
+                    // bas, pas de pellicule : sa scène OCCUPE déjà tout. Elle
+                    // recule donc au lieu de céder la place, et le texte passe
+                    // devant. C'est l'inverse de la galerie plein écran, où
+                    // c'est l'auteur qui s'efface (`ConversationMediaGalleryView`)
+                    // — deux réponses à la même question, « où trouver la
+                    // place ? », parce que les deux surfaces n'ont pas le même
+                    // voisinage.
+                    //
+                    // Le flou est posé APRÈS l'ombre et le cadrage : il porte
+                    // sur la carte telle qu'elle est rendue, coins compris, et
+                    // ne déborde donc pas de son clip.
+                    .blur(radius: CaptionExpansionSpace.storySceneBlurRadius(captionExpanded: isCaptionExpanded))
+                    .animation(.easeInOut(duration: 0.2), value: isCaptionExpanded)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
