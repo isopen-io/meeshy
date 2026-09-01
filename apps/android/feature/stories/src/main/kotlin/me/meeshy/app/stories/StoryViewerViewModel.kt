@@ -31,6 +31,7 @@ import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
@@ -266,6 +267,7 @@ class StoryViewerViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val reportRepository: ReportRepository,
     private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -545,7 +547,14 @@ class StoryViewerViewModel @Inject constructor(
         sessions = afterEnd
         view?.let { recordDwellView(it) }
         currentDwellStoryId = nextId
-        nextId?.let { sessions = sessions.begin(EngagementSurface.STORY_VIEWER, it, clock.nowMillis()) }
+        nextId?.let {
+            sessions = sessions.begin(
+                EngagementSurface.STORY_VIEWER,
+                it,
+                clock.nowMillis(),
+                consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+            )
+        }
     }
 
     /**

@@ -18,11 +18,13 @@ import io.mockk.coVerify
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -76,12 +78,16 @@ class ReelsViewModelTest {
     private fun viewModel(
         thread: List<ApiPost> = emptyList(),
         currentUserId: String? = "me",
+        allowAnalytics: Boolean = true,
     ): ReelsViewModel {
         every { session.currentUserId } returns currentUserId
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         coEvery { repository.getReels(any(), any(), any()) } returns NetworkResult.Success(thread)
-        return ReelsViewModel(repository, session, socialSocket, config, clock)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return ReelsViewModel(repository, session, socialSocket, config, clock, privacyStore)
     }
 
     // MARK: - Post room membership
@@ -194,6 +200,22 @@ class ReelsViewModelTest {
         vm.setCurrentReel(null)
 
         coVerify(exactly = 1) { repository.viewPost("r1", 1000) }
+    }
+
+    // MARK: - Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`)
+
+    @Test
+    fun `with analytics consent withheld a qualifying reel dwell records no view`() = runTest {
+        val vm = viewModel(allowAnalytics = false)
+
+        clockNow = 0
+        vm.setCurrentReel("r1")
+        clockNow = 1000
+        vm.setCurrentReel("r2") // a 1000ms dwell WOULD qualify — but consent was withheld
+
+        // No session opened, so the dwell record (the only view the reels surface produces)
+        // never fires. 1000 is the exact duration this scenario could have recorded.
+        coVerify(exactly = 0) { repository.viewPost("r1", 1000) }
     }
 
     // MARK: - Live like state

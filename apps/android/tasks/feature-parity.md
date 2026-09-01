@@ -5256,10 +5256,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       begin does not pause the running session underneath — 1200 ms vs the consented 1000; explicit
       `consentGranted=true` parity) + 3 `PostDetailViewModelTest` (consent withheld → no dwell record but
       impression still credited; consent granted → dwell records). RED-proven by mutation: neutralising the
-      guard fails EXACTLY the 2 consent pure tests. **Follow-up (same gate, remaining surfaces):** wire
-      `ReelsViewModel`, `StatusesViewModel` and `StoryViewerViewModel` to pass `allowAnalytics` to their
-      `begin` calls (they default to `true` = current behaviour until wired) — three thin per-surface
-      slices, the pure gate is already in place.
+      guard fails EXACTLY the 2 consent pure tests. **All four dwell surfaces now obey the toggle
+      (slice `engagement-consent-gate-surfaces`, 2026-09-01):** `ReelsViewModel`, `StatusesViewModel`
+      and `StoryViewerViewModel` each inject the existing Hilt-provided `PrivacyPreferencesStore` and
+      pass `consentGranted = preferences.value.allowAnalytics` into their `begin` call, closing the
+      dimension-1 gap the detail slice opened — the privacy toggle is now live across reels / post
+      detail / status bubble / story viewer. Each surface's un-gated impression stays un-gated (status
+      still fires `viewPost(id)` on open; story still fires `storyRepository.markViewed`). +4 behavioural
+      tests (reels: withheld consent → no dwell record; status: withheld → no dwell but impression still
+      credits + a second test the impression fires; story: withheld → no dwell record), RED-proven by
+      mutation: stripping the reels wiring fails EXACTLY that surface's consent test (1 of 18), the other
+      17 green.
       **Still open (deferred, deliberately narrower than iOS):**
       watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
       now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
