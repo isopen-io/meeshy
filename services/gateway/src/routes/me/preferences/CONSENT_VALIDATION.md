@@ -194,18 +194,34 @@ Cette approche garantit que les préférences existantes restent conformes aux c
 
 ## Comment donner les consentements ?
 
-Les consentements sont gérés via le modèle `User` dans Prisma :
+Les CONSENTEMENTS sont quatre colonnes du modèle `User` — les quatre, et
+seulement les quatre, que `getConsentStatus` met dans son `select`
+(`packages/shared/prisma/schema.prisma`, § `model User`) :
 
 ```typescript
 await prisma.user.update({
   where: { id: userId },
   data: {
-    dataProcessingConsentAt: new Date(),      // Consentement de base
-    voiceDataConsentAt: new Date(),           // Pour audio
-    audioTranscriptionEnabledAt: new Date()   // Activer transcription
+    dataProcessingConsentAt: new Date(),   // Base obligatoire
+    voiceDataConsentAt: new Date(),        // Pour l'audio
+    voiceProfileConsentAt: new Date(),     // Pour le profil vocal
+    voiceCloningEnabledAt: new Date()      // Pour le clonage
   }
 });
 ```
+
+**Les cinq autres noms que cette page emploie ne sont PAS des colonnes `User`.**
+`audioTranscriptionEnabledAt`, `textTranslationEnabledAt`,
+`audioTranslationEnabledAt`, `translatedAudioGenerationEnabledAt` et
+`voiceCloningConsentAt` : les écrire sur `prisma.user.update` lève
+`PrismaClientValidationError: Unknown argument` — mesuré contre le client
+généré. Les quatre premiers sont des clés LEGACY du blob JSON
+`UserPreferences.audio`, que `getConsentStatus` lit encore en priorité ; leurs
+écrivains ACTUELS sont les booléens d'`AudioPreferenceSchema`
+(`transcriptionEnabled`, `audioTranslationEnabled`, `ttsEnabled`), posés par
+`PATCH /me/preferences/audio`. Les cinq restent en revanche exacts dans les
+`requiredConsents` d'une violation et dans les tableaux ci-dessus : c'est le
+vocabulaire que le service émet sur le fil, pas une adresse en base.
 
 ## API de Statut de Consentement
 
@@ -230,35 +246,78 @@ console.log(status);
 
 ## Tests
 
-### Helper pour les tests
+### Le patron : un double Prisma LOCAL, jamais une base
 
-Utilisez `consent-test-helper.ts` pour créer des utilisateurs de test avec différents niveaux de consentement :
+Aucune suite de consentement du gateway ne parle à MongoDB, et aucune ne le
+peut : `jest.config.json` fait pointer `@meeshy/shared/prisma/client` sur
+`src/__tests__/__stubs__/prisma-client.ts` pour **tous** les runs,
+`jest.setup.js` pose `DATABASE_URL='file:./test.db'`, et le seul répertoire qui
+ouvre un vrai client (`src/__tests__/integration/`) est dans
+`testPathIgnorePatterns`. Un consentement de test se pose donc dans un DOUBLE,
+et c'est le VRAI `ConsentValidationService` qu'on interroge — jamais une copie
+de sa hiérarchie.
+
+Le patron des deux suites vivantes, `makePrisma`, copié depuis
+`src/__tests__/unit/services/ConsentValidationService.test.ts` :
 
 ```typescript
-import { CONSENT_LEVELS, createTestUserWithConsents } from '@/__tests__/helpers/consent-test-helper';
+import { ConsentValidationService } from '../../../services/ConsentValidationService';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-// Créer un utilisateur avec transcription activée
-const user = await createTestUserWithConsents(prisma, CONSENT_LEVELS.TRANSCRIPTION);
+const NOW = new Date();
 
-// Créer un utilisateur sans consentement
-const userNoConsent = await createTestUserWithConsents(prisma, CONSENT_LEVELS.NONE);
+function makeUser(overrides: Record<string, any> = {}) {
+  return {
+    dataProcessingConsentAt: null,
+    voiceDataConsentAt: null,
+    voiceProfileConsentAt: null,
+    voiceCloningEnabledAt: null,
+    ...overrides,
+  };
+}
 
-// Créer un utilisateur avec tous les consentements
-const userFull = await createTestUserWithConsents(prisma, CONSENT_LEVELS.FULL);
+function makePrisma(
+  userOverrides: Record<string, any> = {},
+  prefsOverrides: { audio?: any; application?: any } = {}
+) {
+  return {
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue(makeUser(userOverrides)),
+    },
+    userPreferences: {
+      findUnique: jest.fn<any>().mockResolvedValue({
+        audio: prefsOverrides.audio ?? {},
+        application: prefsOverrides.application ?? {},
+      }),
+    },
+  } as unknown as PrismaClient;
+}
 ```
 
-### Niveaux de consentement disponibles
+Un cas ne nomme alors que ce qui le distingue :
 
-- `CONSENT_LEVELS.NONE` - Aucun consentement
-- `CONSENT_LEVELS.BASIC` - Consentement de base uniquement
-- `CONSENT_LEVELS.VOICE_DATA` - Données vocales
-- `CONSENT_LEVELS.TRANSCRIPTION` - Transcription audio
-- `CONSENT_LEVELS.TEXT_TRANSLATION` - Traduction texte
-- `CONSENT_LEVELS.AUDIO_TRANSLATION` - Traduction audio
-- `CONSENT_LEVELS.TTS` - Text-to-speech
-- `CONSENT_LEVELS.VOICE_PROFILE` - Profil vocal
-- `CONSENT_LEVELS.VOICE_CLONING` - Clonage vocal
-- `CONSENT_LEVELS.FULL` - Tous les consentements
+```typescript
+it('canTranscribeAudio requires voiceDataConsent + audioTranscriptionEnabledAt', async () => {
+  const prisma = makePrisma(
+    { voiceDataConsentAt: NOW, dataProcessingConsentAt: NOW },
+    { audio: { audioTranscriptionEnabledAt: NOW } }
+  );
+  const status = await new ConsentValidationService(prisma).getConsentStatus('u1');
+
+  expect(status.canTranscribeAudio).toBe(true);
+});
+```
+
+**Le premier argument porte les quatre COLONNES, le second le blob de
+préférences** — la seule répartition que le schéma accepte (§ « Comment donner
+les consentements ? »). Un helper qui rangerait les dix noms dans un unique
+`prisma.user.create` ne pourrait pas s'exécuter : il en a existé un
+(`__tests__/helpers/consent-test-helper.ts`), recommandé depuis cette page et
+importé par aucune suite ; #4552 l'a supprimé plutôt que réparé, parce que son
+`getUserConsentStatus` recopiait `ConsentValidationService.getConsentStatus` —
+une copie que le § « Tests » de `services/gateway/CLAUDE.md` interdit, et qui
+avait déjà divergé (elle rendait `hasThirdPartyServicesConsent`, retiré par
+#4343, et calculait la hiérarchie À PLAT).
 
 ## Implémentation
 
@@ -336,6 +395,8 @@ async validateNewCategoryPreferences(
 ## Support
 
 Pour toute question sur la validation de consentement, consultez :
-- `ConsentValidationService.ts` - Logique de validation
-- `consent-test-helper.ts` - Helpers pour tests
-- `preferences-consent.e2e.test.ts` - Exemples de tests
+- `services/ConsentValidationService.ts` - Logique de validation
+- `src/__tests__/unit/services/ConsentValidationService.test.ts` - Le patron `makePrisma` et la hiérarchie, cas par cas
+- `src/__tests__/ConsentValidationService.test.ts` - La même surface, sur l'aiguillage par catégorie
+- `src/__tests__/unit/services/consent-third-party-services-requirement-removed.test.ts` - Ce que #4343 a retiré, et qui ne doit pas revenir
+- `src/__tests__/routes/preferences-consent.e2e.test.ts` - Les DÉFAUTS des préférences concernées ; il n'exerce pas le service, son en-tête le dit
