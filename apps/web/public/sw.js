@@ -69,7 +69,13 @@ function log(...args) {
 // l'en retirer rouvrirait le défaut le temps d'une propagation de worker.
 // Gardé par `__tests__/public/sw.v3-zone.test.ts`, qui lit la règle réelle du
 // compose de production et exige `règle Traefik ⊆ cette liste`.
-const V3_ZONE_PREFIXES = ['/__v3'];
+// `/l` entre ici pour l'ÉTAPE 2 du § 4.9 (« le rôle premier, une seule
+// route »), et il y entre SEUL : la v3 ne sert aujourd'hui que
+// `/l/:token` et `/l/:token/expired`. Ce commit est l'antérieur exigé
+// ci-dessus — le `PathPrefix` correspondant n'est ajouté au routeur qu'une
+// fois cette image DÉPLOYÉE, sans quoi la bascule ne couvrirait que les
+// navigateurs neufs et son retour arrière serait inerte chez les revenants.
+const V3_ZONE_PREFIXES = ['/__v3', '/l'];
 
 function belongsToV3Zone(pathname) {
   return V3_ZONE_PREFIXES.some(
