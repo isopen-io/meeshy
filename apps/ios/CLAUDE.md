@@ -488,19 +488,47 @@ des contrôleurs, de l'historique et de la création de slide.
 | **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
 | **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
 
-**Ce que la révision déplace, et qui reste à faire :**
+**Ce que la révision déplace — FAIT et RESTE, mesuré le 2026-09-01 :**
 
-- **undo / redo quittent le socle pour le rail DROIT.** Ils agissent sur ce qui
-  a été fait aux objets, pas sur l'envoi ; au socle, ils voisinaient avec
-  l'audience et le bouton publier, qui décident de la publication.
-- **la création d'une slide est CONDITIONNELLE** : « dès lors qu'on a déjà un
-  slide de créé ». Le `[+]` est aujourd'hui monté sans condition.
+- ✅ **FAIT — undo / redo ont quitté le socle pour le rail DROIT** (#4586,
+  première moitié). Ils sont montés sur le rail *trailing*
+  (`MeeshyComposerHost+Surfaces.swift:464-466` → `ComposerTrailingRail.swift:60,99`)
+  et le socle n'en porte plus qu'un commentaire. La raison qui l'a décidé tient
+  toujours : ils agissent sur ce qui a été fait aux OBJETS, pas sur l'envoi ; au
+  socle ils voisinaient avec l'audience et le bouton publier, qui décident de la
+  publication.
+- ⬜ **RESTE — la création d'une slide doit être CONDITIONNELLE** : « dès lors
+  qu'on a déjà un slide de créé ». Le `[+]` est monté **sans condition**
+  (`MeeshyComposerHost+Surfaces.swift:458`), et `ComposerTrailingRail.swift:70`
+  revendique explicitement l'inverse (« créer une slide s'offre en
+  permanence ») — les deux doivent tomber dans le même commit, sans quoi le
+  correctif laissera derrière lui un doc-comment qui le contredit.
 
-**Le son n'a plus de porte** (même directive) : il n'y a qu'une façon d'ajouter
-un son sur le canvas — une chip redimensionnable et déplaçable, par la palette
-du § 3 — et le son de FOND reste au socle. La porte du rail ouvrait la MÊME
-feuille que la pastille du socle (`presentedPortal = .sound`, ligne pour ligne) :
-c'était un bouton en double, jamais une capacité en double.
+**⚠️ Le son A DE NOUVEAU une porte, depuis le 2026-09-01** (#4722). Le
+paragraphe qui suit décrit l'état d'AVANT ce jour ; il est conservé parce que le
+raisonnement qui l'a produit reste juste et que la panne qu'il a causée est
+instructive.
+
+*Ce qui avait été écrit* : « le son n'a plus de porte — il n'y a qu'une façon
+d'ajouter un son sur le canvas, une chip par la palette du § 3, et le son de
+FOND reste au socle ». La porte du rail ouvrait alors la MÊME feuille que la
+pastille du socle (`presentedPortal = .sound`, ligne pour ligne) : un bouton en
+double, jamais une capacité en double.
+
+*Ce qui est vrai aujourd'hui*, mesuré : `ComposerRailDoor.sound` existe
+(`ComposerRailDoor.swift:89`) et `ComposerHostRules.swift:436` écrit « **La
+porte SON est REVENUE le 2026-09-01** ». Les deux destinations de remplacement
+sur lesquelles le retrait s'appuyait **n'existaient ni l'une ni l'autre** : la
+palette porte cinq onglets — `emoji`, `love`, `time`, `place`, `library` — et
+pas de son (#4579 **ouvert**), et la pastille du socle est partie le lendemain,
+remplacée par une pastille d'avatar qui n'affiche qu'un CRÉDIT — donc qui ne se
+peint que s'il y a déjà un son.
+
+> **Deux retraits justifiés, chacun renvoyant vers un chemin que l'autre ne
+> fournit pas.** Ni l'un ni l'autre commit n'était faux ; c'est leur SOMME qui a
+> fermé la porte — et une somme n'a pas de site où rougir. Le témoin qui
+> l'attrape n'interroge donc aucun retrait : il demande que la scène serve AU
+> MOINS UN chemin vers le son.
 
 > **Vérifier LAQUELLE des deux avant de retirer est ce qui sépare une
 > déduplication d'une régression.** Deux boutons qui ouvrent la même feuille se
