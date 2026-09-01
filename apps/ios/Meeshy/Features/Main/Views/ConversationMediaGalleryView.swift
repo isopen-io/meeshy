@@ -43,6 +43,13 @@ struct ConversationMediaGalleryView: View {
     let accentColor: String
     /// Maps attachment.id → caption text (message content or attachment caption)
     var captionMap: [String: String] = [:]
+
+    /// **Le repli de la légende est un état d'ÉCRAN, pas de média** (#4768) —
+    /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
+    /// une autre légende : la garder dépliée ferait s'ouvrir en grand un texte
+    /// que l'utilisateur n'a pas demandé à lire, et masquerait le média qu'il
+    /// vient d'atteindre.
+    @State private var captionExpanded = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -221,6 +228,13 @@ struct ConversationMediaGalleryView: View {
     private func handlePageChange(from oldID: String?, to newID: String?) {
         guard let newID, let newIndex = indexByID[newID] else { return }
 
+        // **Le repli se REMET à chaque média** (#4768). Feuilleter présente une
+        // AUTRE légende ; la garder dépliée ouvrirait en grand un texte que
+        // personne n'a demandé à lire, par-dessus le média qu'on vient
+        // d'atteindre. C'est l'inverse du volet de description du composer, qui
+        // est une préférence d'écran parce qu'il commente TOUTE la publication.
+        if oldID != newID, captionExpanded { captionExpanded = false }
+
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
             if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
@@ -287,15 +301,32 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Caption Overlay
 
+    /// **La légende du plein écran rejoint la couche PARTAGÉE** (#4768).
+    ///
+    /// Elle était la TROISIÈME façon de replier la même chose : `Text` brut,
+    /// `lineLimit(4)`, aucune bascule — exactement la forme INERTE que la story
+    /// portait avant #4474 et le lecteur de réel avant #4484. Une légende de
+    /// cinq lignes s'y arrêtait au milieu d'une phrase, sans que rien n'indique
+    /// qu'il en restait, ni ne permette de la lire.
+    ///
+    /// > Deux surfaces converties sur trois, c'est une règle qui a l'air
+    /// > partagée. La troisième ne rougit pas : elle affiche un texte, tronqué
+    /// > proprement, et seule la comparaison avec ses sœurs le révèle.
+    ///
+    /// Ce qui passe au composant est la RÈGLE — 15 mots de tête au-delà de 30,
+    /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
+    /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
+    /// colonne, comme en réel (directive porteur 2026-09-01).
     private func captionOverlay(_ text: String) -> some View {
-        Text(text)
-            .font(MeeshyFont.relative(14, weight: .medium))
-            .foregroundColor(.white.opacity(0.85))
-            .multilineTextAlignment(.leading)
-            .lineLimit(4)
-            .padding(.horizontal, 16)
+        MediaCaptionOverlay(caption: text,
+                            isExpanded: captionExpanded,
+                            horizontalInset: 16,
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    captionExpanded.toggle()
+                                }
+                            })
             .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Controls Overlay
