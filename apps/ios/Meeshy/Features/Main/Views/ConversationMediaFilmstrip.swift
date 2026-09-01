@@ -200,11 +200,7 @@ struct ConversationMediaFilmstrip: View {
             isCurrent: attachment.id == currentPageID,
             accentColor: accentColor,
             side: FilmstripMetrics.itemSide,
-            accessibilityLabel: String(
-                format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
-                index + 1,
-                attachments.count
-            ),
+            accessibilityLabel: MediaPositionLabel.text(position: index + 1, of: attachments.count),
             onTap: { select(attachment.id) }
         )
         .equatable()

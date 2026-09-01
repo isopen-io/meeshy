@@ -378,7 +378,7 @@ extension UniversalComposerBar {
                         )
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
-                    .accessibilityLabel(String(localized: "composer.effects.item.state", defaultValue: "\(item.label), \(isSelected ? String(localized: "common.active", defaultValue: "actif", bundle: .main) : String(localized: "common.inactive", defaultValue: "inactif", bundle: .main))", bundle: .main))
+                    .accessibilityLabel(String(localized: "composer.effects.item.state", defaultValue: "\(item.label), \(isSelected ? String(localized: "common.active", defaultValue: "Actif", bundle: .main) : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main))", bundle: .main))
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }

@@ -128,11 +128,7 @@ struct ConversationMediaGalleryView: View {
     /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
     /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
     private var galleryPositionAccessibilityLabel: String {
-        String(
-            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
-            currentIndex + 1,
-            allAttachments.count
-        )
+        MediaPositionLabel.text(position: currentIndex + 1, of: allAttachments.count)
     }
 
     /// Libellé VoiceOver d'une image plein écran : la légende si le call site en

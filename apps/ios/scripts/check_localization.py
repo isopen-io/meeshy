@@ -26,6 +26,19 @@ DIRECTION 2 — every EXISTING app-catalog identifier key is used (catalog -> co
   somewhere in the scanned sources (app targets + extensions + SDK, since SDK
   code references app-catalog keys via `bundle: .main`).
 
+DIRECTION 3 — one key, one string (code <-> code), added 271i:
+  Two call sites of the same key, resolving against the same catalog, must not
+  declare two different inline `defaultValue`s. A key resolves to ONE entry, so
+  divergent sites cannot all be served. Directions 1 and 2 compare code to the
+  CATALOG and are therefore blind here: a key the catalog does not have has
+  nothing to be compared against, and its `defaultValue` is not a fallback but
+  what SHIPS, to all seven locales.
+  Comparison is on the literal SKELETON — interpolations replaced by a single
+  placeholder, escapes decoded — so `"Supprimer \\(a)"` and `"Supprimer \\(b(c))"`
+  compare equal (same promise, two expressions) while `"Media 1 of \\(n)"` and
+  `"Media 2 of \\(n)"` do not (two strings, one entry).
+  Mirrors `InlineDefaultConsistencyTests` — the two must be edited together.
+
 Run: python3 apps/ios/scripts/check_localization.py
 Exit code 0 = consistent, 1 = violations found.
 """
@@ -109,6 +122,66 @@ def call_segment(text: str, start: int) -> str:
     return text[seg_start : i + 1]
 
 
+INLINE_DEFAULT = re.compile(r'defaultValue:\s*"((?:[^"\\]|\\.)*)"')
+MULTILINE_DEFAULT = re.compile(r'defaultValue:\s*"""')
+SIMPLE_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "0": "\0"}
+
+
+def inline_default(segment: str) -> str | None:
+    """The single-line `defaultValue:` literal of a call segment, or None."""
+    if MULTILINE_DEFAULT.search(segment):
+        return None
+    match = INLINE_DEFAULT.search(segment)
+    return match.group(1) if match else None
+
+
+def literal_skeleton(default: str) -> str:
+    """The string the literal DENOTES: `\\(…)` replaced by one placeholder, escapes
+    decoded. Mirrors `LocalizedCallScanner.literalSkeleton(of:)`."""
+    out: list[str] = []
+    i, n = 0, len(default)
+    while i < n:
+        if default[i] == "\\" and i + 1 < n:
+            nxt = default[i + 1]
+            if nxt == "(":
+                j, depth, in_str, esc = i + 2, 1, False, False
+                while j < n and depth > 0:
+                    c = default[j]
+                    if in_str:
+                        if esc:
+                            esc = False
+                        elif c == "\\":
+                            esc = True
+                        elif c == '"':
+                            in_str = False
+                    else:
+                        if c == '"':
+                            in_str = True
+                        elif c == "(":
+                            depth += 1
+                        elif c == ")":
+                            depth -= 1
+                    j += 1
+                out.append("￼")
+                i = j
+                continue
+            if nxt == "u" and i + 2 < n and default[i + 2] == "{":
+                close = default.find("}", i + 3)
+                if close != -1:
+                    try:
+                        out.append(chr(int(default[i + 3 : close], 16)))
+                        i = close + 1
+                        continue
+                    except ValueError:
+                        pass
+            out.append(SIMPLE_ESCAPES.get(nxt, nxt))
+            i += 2
+            continue
+        out.append(default[i])
+        i += 1
+    return "".join(out)
+
+
 def has_en(catalog: dict, key: str) -> bool:
     entry = catalog.get(key)
     return bool(entry and entry.get("localizations", {}).get("en") is not None)
@@ -143,8 +216,18 @@ def main() -> int:
                 continue
             files.append(path)
 
+    def catalog_name(path: Path, is_module: bool) -> str:
+        """Which catalog a call resolves against — the identity DIRECTION 3 groups on."""
+        if is_module:
+            return str(SDK_CATALOG.relative_to(REPO))
+        for fragment, catalog_path in CATALOG_BY_TARGET_FRAGMENT.items():
+            if fragment in str(path):
+                return catalog_path
+        return str(APP_CATALOG.relative_to(REPO))
+
     blob_parts = []
     raw_violations = []  # (key, file, catalog_name)
+    declarations: dict[tuple[str, str], dict[str, set[str]]] = {}
     for path in files:
         text = path.read_text(encoding="utf-8")
         blob_parts.append(text)
@@ -153,13 +236,25 @@ def main() -> int:
             if not is_identifier(key) or key in ALLOWLIST_RAW:
                 continue
             segment = call_segment(text, m.start())
+            is_module = ".module" in segment
+            default = inline_default(segment)
+            if default is not None:
+                slot = declarations.setdefault((catalog_name(path, is_module), key), {})
+                slot.setdefault(literal_skeleton(default), set()).add(
+                    str(path.relative_to(REPO))
+                )
             if "defaultValue:" in segment:
                 continue
-            is_module = ".module" in segment
             catalog = sdk if is_module else main_bundle_catalog(path)
             if not has_en(catalog, key):
                 raw_violations.append((key, path.name, "SDK" if is_module else "APP"))
     blob = "\n".join(blob_parts)
+
+    divergent = sorted(
+        (catalog, key, shapes)
+        for (catalog, key), shapes in declarations.items()
+        if len(shapes) > 1
+    )
 
     orphans = sorted(
         k
@@ -188,6 +283,17 @@ def main() -> int:
             print(f"    {key}")
     else:
         print("✓ DIRECTION 2 — every app-catalog identifier key is referenced in code")
+
+    if divergent:
+        ok = False
+        print(f"\n✗ DIRECTION 3 — {len(divergent)} key(s) declare two different inline "
+              f"defaultValues (one key resolves to ONE catalog entry):")
+        for catalog, key, shapes in divergent:
+            print(f"    {key}   [{catalog}]")
+            for skeleton, sites in sorted(shapes.items()):
+                print(f'        "{skeleton}"  ← {", ".join(sorted(sites))}')
+    else:
+        print("✓ DIRECTION 3 — every key says the same thing at every call site")
 
     if not ok:
         print("\nLocalization consistency check FAILED.")

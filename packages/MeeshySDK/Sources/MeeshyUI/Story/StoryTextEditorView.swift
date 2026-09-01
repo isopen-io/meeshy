@@ -83,7 +83,7 @@ public struct StoryTextEditorView: View {
             // l'utilisateur (textColor) — c'est le rendu réel du texte sur le
             // canvas. Si la couleur est trop claire pour le fond clair de
             // l'éditeur, on ajoute un overlay subtil pour la lisibilité.
-            TextField(String(localized: "story.textEditor.placeholder", defaultValue: "Saisissez votre texte...", bundle: .module), text: contentBinding, axis: .vertical)
+            TextField(String(localized: "story.textEditor.placeholder", defaultValue: "Exprimez-vous…", bundle: .module), text: contentBinding, axis: .vertical)
                 .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 20)))
                 .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
                 .multilineTextAlignment(resolvedAlignment)

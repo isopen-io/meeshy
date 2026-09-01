@@ -25,13 +25,13 @@ extension FeedPostCard {
                 galleryImageView(mediaList[0])
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
+                    .accessibilityLabel(MediaPositionLabel.text(position: 1, of: count))
                     .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                     .accessibilityAddTraits(.isButton)
                 galleryImageView(mediaList[1])
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[1]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
+                    .accessibilityLabel(MediaPositionLabel.text(position: 2, of: count))
                     .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                     .accessibilityAddTraits(.isButton)
             }
@@ -44,7 +44,7 @@ extension FeedPostCard {
                     .aspectRatio(0.75, contentMode: .fill)
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
+                    .accessibilityLabel(MediaPositionLabel.text(position: 1, of: count))
                     .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                     .accessibilityAddTraits(.isButton)
 
@@ -52,13 +52,13 @@ extension FeedPostCard {
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 2, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 3, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                 }
@@ -72,13 +72,13 @@ extension FeedPostCard {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 1, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 2, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                 }
@@ -86,13 +86,13 @@ extension FeedPostCard {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 3, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 4, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                 }
@@ -106,13 +106,13 @@ extension FeedPostCard {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 1, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 2, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                 }
@@ -120,13 +120,13 @@ extension FeedPostCard {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 3, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
+                        .accessibilityLabel(MediaPositionLabel.text(position: 4, of: count))
                         .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                         .accessibilityAddTraits(.isButton)
                     ZStack {
@@ -142,8 +142,8 @@ extension FeedPostCard {
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[4]) }
                     .accessibilityLabel(count > 5
-                        ? String(localized: "feed.media.moreItems", defaultValue: "\(count - 5) more media items", bundle: .main)
-                        : String(localized: "feed.media.item", defaultValue: "Media 5 of \(count)", bundle: .main))
+                        ? String(localized: "feed.media.moreItems", defaultValue: "\(count - 5) médias de plus", bundle: .main)
+                        : MediaPositionLabel.text(position: 5, of: count))
                     .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
                     .accessibilityAddTraits(.isButton)
                 }

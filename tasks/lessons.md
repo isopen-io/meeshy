@@ -20763,3 +20763,90 @@ mesures ») :
   RÉELLE.** La conception invitait à lancer `baseline.mjs http://127.0.0.1:8931/`
   « pour éprouver la chaîne » — ce qui écrivait un `baseline.json` de localhost,
   vert. Éprouver une chaîne se fait avec l'outil dont c'est le métier.
+
+---
+
+## Leçon 352 — La question à poser à une clé de traduction n'est pas « est-elle traduite ? » mais « PEUT-elle l'être ? » (2026-09-01, itération 271i)
+
+**Une clé se résout à UNE entrée de catalogue. Deux sites qui lui donnent deux
+textes différents ont déjà rompu cette promesse — et la rupture reste invisible
+jusqu'au jour où on la traduit, ce jour-là étant celui où une garde le demande.**
+
+`feed.media.item` était employée à **quatorze** endroits de la grille média du
+flux, avec **cinq** `defaultValue` distincts : *Media 1 of …* jusqu'à
+*Media 5 of …*. La clé étant absente du catalogue, chaque site servait le sien :
+les positions étaient justes, et toutes en anglais.
+
+Le cliquet `test_untranslatedKeyBacklogDoesNotGrow` prescrit, mot pour mot,
+*« Add the catalog entry … instead of raising the ceiling »*. Appliqué ici, ce
+remède aurait fait annoncer **« Média 1 sur 5 » sur les cinq tuiles** d'un post :
+une régression VoiceOver introduite **en obéissant à la garde**.
+
+> Une garde qui mesure « traduit / pas traduit » ne peut pas voir une clé
+> **intraduisible** : dans sa grille, elle est simplement « pas encore traduite ».
+> Le témoin qui l'attrape ne regarde ni le catalogue ni la langue — il compare
+> **deux sites l'un à l'autre**, ce qu'aucune garde ne faisait.
+
+### Corollaire 1 — une clé absente a une TROISIÈME sortie
+
+À côté de « la traduire » et « la laisser » : **constater que l'app possède déjà
+la chaîne.** `gallery.position` (« Média %1$d sur %2$d ») ship dans les sept
+locales depuis toujours, et deux écrans la reconstruisaient EN LIGNE, chacun de
+son côté. Un site unique, branché aux trois écrans, a supprimé la clé au lieu de
+la traduire : zéro mot inventé, zéro clé neuve, et la duplication qui avait rendu
+le défaut possible disparaît avec lui.
+
+### Corollaire 2 — un `defaultValue` anglais ne fait pas que s'afficher, il REMONTE
+
+Le catalogue du SDK portait, pour `common.done` :
+`"fr": { "state": "new", "value": "Done" }` — les six autres locales correctes,
+**la langue source en anglais**. Xcode amorce l'entrée de langue source AVEC le
+littéral du code : le mauvais littéral **DEVIENT** l'entrée française, en
+`state: "new"`, et les traductions en descendent. À l'écran, le même bouton se
+lisait « Terminé » sur les écrans de l'app et **« Done »** sur ceux du SDK.
+
+Corriger un `defaultValue` anglais n'est donc pas « ajouter l'entrée » : l'entrée
+est déjà là, déjà fausse, et déjà propagée.
+
+### Corollaire 3 — réconcilier un littéral est sûr quand il est MORT, et change ce qui s'affiche quand il est VIVANT
+
+269i a réconcilié 186 littéraux sans risque **parce que leur clé était au
+catalogue** : le littéral ne servait plus à rien, l'édition ne changeait pas un
+pixel. La même édition sur une clé **ABSENTE** n'est pas un nettoyage — c'est un
+changement de ce qui part, aux six autres locales. Passer « Attempt 3 » à
+« Tentative 3 » ne corrige pas le défaut, il le **DÉPLACE** vers l'anglophone.
+**Entrée et littéral doivent atterrir ENSEMBLE.**
+
+C'est pourquoi les dix derniers `defaultValue` anglais du dépôt sont restés :
+non par oubli, mais parce que la moitié du correctif — six traductions neuves,
+dont l'arabe — n'est pas disponible sans traducteur.
+
+### Corollaire 4 — une garde qui signale un non-défaut gagne l'allowlist qui la tue
+
+Trois décisions du témoin neuf n'ont pas d'autre fonction que celle-là :
+
+| décision | le faux positif qu'elle évite |
+|---|---|
+| comparer le **squelette** (interpolations réduites à un placeholder) | `"Supprimer \(label)"` vs `"Supprimer \(labelFor(x))"` — une seule promesse, deux expressions |
+| **décoder les échappements** | `"R\u{00E9}initialiser"` vs `"Réinitialiser"` — une seule chaîne, deux orthographes source |
+| grouper par **(catalogue, clé)** | `share.empty` — deux bundles, deux catalogues, deux entrées, aucun conflit |
+
+Sans elles, la première exécution du témoin aurait rendu 12 « violations » dont 7
+n'en sont pas. Un témoin dont les premiers résultats contiennent du bruit se fait
+allowlister, et une allowlist est l'endroit où un témoin cesse de travailler.
+
+### Corollaire 5 — un miroir n'a de valeur que là où il DIVERGE
+
+`apps/ios/scripts/check_localization.py` double la suite XCTest depuis six
+itérations, et passait pour fidèle. Sur ce lot il a rendu **deux violations de
+plus** que la garde Swift. Ce n'était pas son erreur : le scanner Swift reprenait
+son balayage après la FIN de l'appel qu'il venait de mesurer, si bien qu'un appel
+écrit dans l'**interpolation** d'un autre était avalé tout entier — même angle
+mort que 258i, un cran plus bas (pas un appel que le marqueur rate, un appel que
+le curseur **enjambe**).
+
+258i avait dû arbitrer un dilemme : élargir un scanner RÉVÈLE des clés et fait
+donc MONTER le cliquet, ce que le cliquet interdit. **Le dilemme se tranche par la
+mesure, pas par le principe** — ici 3 appels imbriqués dans tout le dépôt, dont 1
+en `.module` que le cliquet ne compte pas et 2 déjà traduites : le plafond ne
+bouge pas, et l'élargissement est gratuit.

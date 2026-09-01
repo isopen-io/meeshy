@@ -183,7 +183,7 @@ public struct AudienceUserPickerView: View {
             HStack {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
                 Spacer()
-                Button(String(localized: "common.done", defaultValue: "OK")) {
+                Button(String(localized: "common.done", defaultValue: "Terminé")) {
                     onDone(vm.selectedIds)
                     dismiss()
                 }
