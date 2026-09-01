@@ -15,12 +15,28 @@ import { baseDeLaPasserelle } from './links';
  * confondre ferait lire « une erreur est survenue » à qui doit simplement se
  * reconnecter.
  *
- * UN 403 N'EST PAS UN 401, et ces deux routes ne le confondent plus. Le second
- * dit « ce jeton ne vaut plus » ; le premier dit « il vaut, mais pas pour
- * ceci ». Renvoyer se connecter sur un 403 fabrique une BOUCLE — le lecteur se
- * reconnecte, revient, est refusé de la même façon. Le défaut a été mesuré sur
- * `/chats/:cle` (voir `lib/api/fil.ts`) ; ces deux routes portaient la même
- * confusion, sans témoin pour la dire.
+ * SUR CES DEUX ROUTES, UN 403 VEUT AUSSI DIRE « RECONNECTE-TOI ». La sémantique
+ * de manuel — 401 « le jeton ne vaut plus », 403 « il vaut, mais pas pour ceci »
+ * — ne décrit PAS cette passerelle. `middleware/auth.ts:886` rend
+ * `403 PERMISSION_DENIED` avec le message « Authentication required » dès qu'il
+ * n'y a pas d'authentification valide, et c'est le cas nominal d'une session
+ * expirée sur `/auth/me`, qui n'exige aucune permission particulière.
+ *
+ * Traiter ce 403 en panne enferme le lecteur : il lit « le service ne répond
+ * pas » alors qu'il doit simplement se reconnecter, et rien sur l'écran ne l'y
+ * mène. Le témoin `it.each([401, 403])` de `__tests__/connecte.test.ts` dit
+ * exactement cela, et il a raison.
+ *
+ * LA CRAINTE DE LA BOUCLE EST RÉELLE, mais elle vise un AUTRE 403 :
+ * `auth.ts:873` rend le même code pour « Insufficient permissions » — un lecteur
+ * authentifié à qui il manque un droit. Renvoyer celui-là au login bouclerait.
+ * Les deux sont indiscernables par le client : `PERMISSION_DENIED` désigne les
+ * deux. C'est un défaut de la passerelle, pas de cet appelant, et il est nommé
+ * dans une issue à part.
+ *
+ * L'arbitrage tient à la ROUTE, pas au statut : `/auth/me` et `/conversations`
+ * ne demandent aucun droit particulier, donc leur 403 ne peut pas être un refus
+ * de permission — il ne reste que « pas authentifié ».
  */
 
 export type Recuperateur = (url: string, options: RequestInit) => Promise<Response>;
@@ -142,7 +158,7 @@ export const moi = async ({
   const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_MOI}`, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
 
   const enveloppe = objet(await reponse.json().catch(() => null));
   if (enveloppe?.success !== true) return { genre: 'panne' };
@@ -183,7 +199,7 @@ export const conversations = async ({
   const reponse = await demande(url, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
 
   const corps = await reponse.json().catch(() => null);
   const enveloppe = objet(corps);
