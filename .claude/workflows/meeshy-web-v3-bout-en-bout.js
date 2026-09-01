@@ -173,6 +173,46 @@ INTERDITS :
 const dossierDeTravail = `${SCRATCH}` // hors du depot suivi (.cache est gitignore)
 
 // ---------------------------------------------------------------------------
+// LA PASSERELLE — la v3 s'y conforme, elle ne la modifie jamais
+// ---------------------------------------------------------------------------
+
+const PASSERELLE = `
+CONFORMITE A LA PASSERELLE (directive du porteur, 2026-09-01) — la v3 NE TOUCHE JAMAIS
+services/gateway, ni le schema Prisma, ni les types partages cote serveur : elle SE CONFORME a la
+passerelle TELLE QU'ELLE EST. Une issue gateway compagnon peut s'ouvrir ; un patch serveur, jamais.
+- Avant d'ecrire un appel, LIS la route REELLE dans services/gateway/src/routes/** : chemin exact
+  (prefixe /api/v1), methode, schema de corps (Zod/JSON schema), prevalidation d'authentification
+  (jwt Authorization: Bearer / session invitee X-Session-Token / optionalAuth / allowAnonymous),
+  forme de la reponse ({ success, data, error, pagination }) et codes d'erreur nommes. Cite
+  fichier:ligne dans ton rapport pour CHAQUE endpoint attaque. Un endpoint qui n'existe pas ne
+  s'invente pas : la capacite n'est PAS exposee dans l'interface (regime 3, § 5.2 de la conception)
+  et une issue gateway compagnon est ouverte — jamais un contournement (par exemple : rejoindre en
+  anonyme passe par POST /anonymous/join/:linkId, la SEULE route qui applique la police du lien,
+  jamais par POST /conversations/join/:linkId ; un membre rejoint par la route qui existe pour lui —
+  lis routes/links/*, routes/conversations/*, routes/anonymous.ts pour la trouver).
+- TEMPS REEL : UN client socket.io vers le namespace PAR DEFAUT (la passerelle ne declare aucun
+  .of()), authentifie comme services/gateway/src/socketio/handlers/AuthHandler.ts l'attend (jeton
+  JWT, ou session invitee — lis _authenticateAnonymousUser), rooms par conversation:join /
+  conversation:leave, et UNIQUEMENT les evenements declares dans
+  packages/shared/types/socketio-events.ts (SERVER_EVENTS / CLIENT_EVENTS, format
+  entity:action-word a tirets) avec leurs charges REELLES — lis
+  services/gateway/src/socketio/handlers/** et socketio/buildTranslationEvent.ts pour la forme
+  exacte de chaque charge (message:new, message:translation, typing:start/stop, reaction:added,
+  conversation:unread-updated, presence:snapshot, auth:token-expired…). Aucun evenement invente,
+  aucun champ devine : ce que la charge porte se lit dans l'emetteur.
+- DELTA et cache : GET /api/v1/sync tel que services/gateway/src/routes/sync.ts le sert (ETag/304,
+  curseur keyset, hasGap, allowAnonymous) — pas un second moteur.
+- La PASSERELLE DE BOUCHON (apps/web-v3/e2e/visual/lib/serveurs.ts, et tout bouchon socket) MIME
+  la passerelle reelle : memes chemins, memes codes, memes formes de charge, PRISES DANS LE CODE du
+  gateway — un vert obtenu contre un bouchon qui ne ressemble pas au serveur ne prouve rien. Pour
+  chaque endpoint ou evenement bouchonne, le rapport nomme la route ou l'emetteur reel qu'il copie.
+- apps/web (legacy) reste vif ; seul apps/web/public/sw.js (V3_ZONE_PREFIXES) est modifiable,
+  selon le § 4.4 bis. Un relecteur qui trouve un diff sous services/gateway/ ou packages/shared/
+  (hors types purement client) le classe BLOQUANT.
+`
+
+
+// ---------------------------------------------------------------------------
 // SCHEMAS
 // ---------------------------------------------------------------------------
 
@@ -503,7 +543,7 @@ ${court(propositions, 12000)}`,
   // -------------------------------------------------------------------------
   const vuesNeuves = cadrage.vues_a_ajouter_a_la_planche || []
   const conception = await agent(`${SOCLE}
-${CHARTE}
+${PASSERELLE}${CHARTE}
 TA MISSION — FAIRE ENTRER CE TOUR DANS LES DOCUMENTS DE DESIGN, avant la premiere ligne de code.
 Ce sont des documents de DESIGN (planche, matrice, conception) : ils portent la CIBLE et les
 mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
@@ -618,7 +658,7 @@ ${travaux.map(ligneDeTravail).join('\n')}`,
       : ''
 
     const fait = await agent(`${SOCLE}
-${CHARTE}
+${PASSERELLE}${CHARTE}
 TA MISSION — LIVRER ce travail, en TDD, en ENTIER.
 
 TRAVAIL : ${t.titre_issue}
@@ -657,7 +697,7 @@ sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute cont
     phase('Revue')
     const revues = await parallel([
       () => agent(`${SOCLE}
-
+${PASSERELLE}
 Tu RELIS le travail qui vient d'etre fait et ta consigne est de LE PRENDRE EN DEFAUT, sur la
 SURFACE : tu ne le reecris pas, tu constates (git diff, git status, fichiers), tu prouves, tu
 proposes le correctif.
@@ -684,7 +724,7 @@ ${fait || '(aucun rapport rendu)'}`,
         { label: `revue-surface:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'sonnet', effort: 'high' }),
 
       () => agent(`${SOCLE}
-
+${PASSERELLE}
 Tu es un ingenieur staff HOSTILE a ce travail. Tu attaques la CONCEPTION et ce qui a ete OUBLIE —
 pas la surface (un autre relecteur s'en charge en parallele).
 
@@ -706,6 +746,9 @@ Les questions, sans complaisance :
 - Ce que le travail a laisse DERRIERE : un champ ajoute et non relaye, un appelant non migre, une
   jumelle non supprimee, un doc de design non mis a jour, un budget non declare (budgets.json).
 - La CHARTE : quelle regle est violee, avec sa preuve ?
+- La PASSERELLE : un diff sous services/gateway/ ou packages/shared/ (hors types client) ⇒ BLOQUANT ;
+  chaque endpoint et chaque evenement attaques existent-ils, avec cette forme de charge, dans le code
+  du gateway (fichier:ligne) ? le bouchon copie-t-il la route reelle ?
 
 TRAVAIL : ${t.titre_issue}
 CRITERE DE FIN : ${t.critere_de_fin}
@@ -724,7 +767,7 @@ ${fait || '(aucun rapport rendu)'}`,
       phase('Implementer')
       log(`${t.cle} : ${aCorriger.length} defauts non mineurs a corriger (passe ${passe})`)
       const correction = await agent(`${SOCLE}
-${CHARTE}
+${PASSERELLE}${CHARTE}
 TA MISSION — CORRIGER les defauts que la revue croisee a trouves sur « ${t.titre_issue} ».
 
 Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve
@@ -742,7 +785,7 @@ pourquoi, les commandes rejouees et leurs sorties).`,
       if (passe === 1 && correction && correction.corriges > 0) {
         phase('Revue')
         const contre = await agent(`${SOCLE}
-
+${PASSERELLE}
 CONTRE-REVUE. Des defauts ont ete corriges sur « ${t.titre_issue} ». Verifie que CHAQUE correction
 est reelle (git diff) et n'a rien casse, et que chaque refutation est fondee. Ne rends que ce qui
 reste BLOQUANT ou MAJEUR — un defaut resolu ne se recopie pas.
@@ -772,7 +815,7 @@ ${court(correction, 6000)}`,
   let gates = null
   for (let passe = 1; passe <= 3; passe += 1) {
     gates = await agent(`${SOCLE}
-
+${PASSERELLE}
 TA MISSION — FAIRE PASSER LES GATES, et CORRIGER ce qui est rouge (passe ${passe}/3).
 
 Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
@@ -813,7 +856,7 @@ TRAVAUX DE CE TOUR : ${travaux.map((t) => t.cle).join(', ')}`,
     phase('Implementer')
     log(`Gates rouges (${rouges.map((g) => g.nom).join(', ')}) — correction de fond, passe ${passe}`)
     await agent(`${SOCLE}
-${CHARTE}
+${PASSERELLE}${CHARTE}
 TA MISSION — CORRIGER A LA RACINE les gates restes rouges apres la passe ${passe}. Un gate rouge
 est un BUG du lot : trouve la cause, corrige, garde le test. Interdit : desactiver, ignorer, baisser
 un seuil, retirer un ecran pour passer.
@@ -831,7 +874,7 @@ Rends ce que tu as corrige, avec les commandes rejouees et leurs sorties.`,
   phase('Documenter')
   // -------------------------------------------------------------------------
   const documentation = await agent(`${SOCLE}
-
+${PASSERELLE}
 TA MISSION — FAIRE DIRE AUX DOCUMENTS DE DESIGN CE QUI A ETE CONSTRUIT. La phase Concevoir a
 ecrit la CIBLE avant le code ; le code a pu s'en ecarter (une contradiction tranchee, un chemin
 d'actif, un jeton ajoute, un etat de plus). Les documents doivent decrire la v3 telle qu'elle EST,
@@ -905,7 +948,7 @@ ${(documentation || '').slice(0, 3000)}`,
   phase('Completude')
   // -------------------------------------------------------------------------
   const completude = await agent(`${SOCLE}
-
+${PASSERELLE}
 TU ES LE CRITIQUE DE COMPLETUDE. Le tour ${tour} vient de livrer : ${resultats.map((r) => r.cle).join(', ')}.
 Ta question : QU'EST-CE QUI MANQUE ENCORE, et dans quel ordre le prochain tour doit-il le prendre ?
 
