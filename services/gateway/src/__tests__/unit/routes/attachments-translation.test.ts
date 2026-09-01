@@ -33,22 +33,6 @@ jest.mock('../../../services/ConsentValidationService', () => ({
   })),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: {
-    type: 'object',
-    properties: {},
-    additionalProperties: true,
-  },
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';

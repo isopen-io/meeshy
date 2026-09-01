@@ -71,21 +71,19 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Les schemas de REPONSE sont le SUJET de ce temoin : ils viennent du vrai
+// module (#4649). Un bouchon d'`errorResponseSchema` remplace le contrat qu'on
+// pretend mesurer — fast-json-stringify supprime alors, en silence, tout champ
+// que le bouchon ne declare pas.
+//
+// Les deux schemas de REQUETE restent permissifs, et c'est une DECISION : les
+// rendre reels ferait refuser le corps par AJV AVANT le handler, ce qui change
+// le sujet du temoin (le refus mesure ici est celui du `safeParse` du handler)
+// et decouvre un autre defaut — voir le rapport de #4649.
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-  signalPreKeyBundleSchema: { type: 'object', additionalProperties: true },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   generatePreKeyBundleRequestSchema: { type: 'object', additionalProperties: true },
-  generatePreKeyBundleResponseSchema: { type: 'object', additionalProperties: true },
-  getPreKeyBundleResponseSchema: { type: 'object', additionalProperties: true },
   establishSessionRequestSchema: { type: 'object', additionalProperties: true },
-  establishSessionResponseSchema: { type: 'object', additionalProperties: true },
 }));
 
 // ─── Import under test ────────────────────────────────────────────────────────

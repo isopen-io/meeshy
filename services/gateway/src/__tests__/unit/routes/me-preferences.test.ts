@@ -29,17 +29,6 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-    },
-  },
-}));
-
 // Mock @meeshy/shared/types/socketio-events so ROOMS and SERVER_EVENTS are available
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: { USER_PREFERENCES_UPDATED: 'user:preferences-updated' },

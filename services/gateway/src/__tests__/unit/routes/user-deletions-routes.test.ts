@@ -48,16 +48,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import under test ────────────────────────────────────────────────────────
 
 import userDeletionsRoutes from '../../../routes/user-deletions';

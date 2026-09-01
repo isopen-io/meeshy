@@ -18,11 +18,6 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  communityMemberSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
-}));
-
 jest.mock('../../../routes/communities/types', () => ({
   AddMemberSchema: { parse: (data: any) => data },
   UpdateMemberRoleSchema: { parse: (data: any) => data },

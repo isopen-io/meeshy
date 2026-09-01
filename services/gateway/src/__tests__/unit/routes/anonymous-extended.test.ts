@@ -30,14 +30,6 @@ jest.mock('../../../utils/session-token', () => ({
   generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
-  anonymousParticipantSchema: { type: 'object', additionalProperties: true },
-  conversationLinkSchema: { type: 'object', additionalProperties: true },
-  conversationMinimalSchema: { type: 'object', additionalProperties: true },
-  userMinimalSchema: { type: 'object', additionalProperties: true },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { anonymousRoutes } from '../../../routes/anonymous';
