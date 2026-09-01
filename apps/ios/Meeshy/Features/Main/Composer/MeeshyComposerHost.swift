@@ -323,6 +323,17 @@ struct MeeshyComposerHost: View {
     /// Un identifiant neuf par ouverture rend la réutilisation impossible :
     /// c'est une garantie de STRUCTURE, là où « n'oublie pas de remettre l'état
     /// à zéro » est une consigne que le prochain site d'appel ne lira pas.
+    /// **La pastille audio du CANVAS qu'on rouvre** (#4671).
+    ///
+    /// Un troisième contexte d'édition, et il fallait le distinguer des deux
+    /// autres : une pastille posée sur la scène n'est ni le fond de la slide ni
+    /// une pièce jointe du post. Le commutateur de placement n'a que ces deux
+    /// moitiés — l'offrir ici laisserait l'auteur DÉPLACER son objet en croyant
+    /// le rogner, et sans troisième valeur il ne pourrait jamais le remettre.
+    /// La feuille s'ouvre donc SANS commutateur, et le résultat remplace la
+    /// pastille à sa place.
+    @State var editedSceneChipId: String?
+
     @State var soundSheetSession = UUID()
 
 

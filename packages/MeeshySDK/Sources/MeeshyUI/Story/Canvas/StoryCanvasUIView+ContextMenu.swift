@@ -170,12 +170,16 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
         
-        let kind: CanvasItemKind = {
-            if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
-            if slide.effects.stickerObjects?.contains(where: { $0.id == id }) == true { return .sticker }
-            if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
-            return .media
-        }()
+        // **Une famille, UNE fonction** (#4671). Ce bloc redemandait « de quel
+        // type est cet objet ? » et répondait autrement que `itemKind(forId:)` :
+        // il retombait sur `.media` pour tout inconnu — donc pour une pastille
+        // AUDIO — pendant que l'autre rendait `nil`. Deux écritures d'une seule
+        // règle, déjà divergentes le jour où la troisième famille est apparue.
+        //
+        // Le repli `.media` disparaît avec la duplication : un objet dont la
+        // famille est inconnue n'a pas de menu, plutôt qu'un menu de média posé
+        // sur autre chose.
+        guard let kind = itemKind(forId: id) else { return nil }
 
         return UIContextMenuConfiguration(
             identifier: id as NSString,

@@ -87,7 +87,12 @@ extension MeeshyComposerHost {
                 presentedPortal = nil
                 HapticFeedback.light()
             },
-            placement: $chosenSoundPlacement,
+            // **Pas de commutateur pour une pastille du canvas** (#4671) :
+            // ses deux moitiés désignent le fond de la slide et la pièce jointe
+            // du post, or une pastille n'est ni l'un ni l'autre. `nil` retire la
+            // section — la feuille ne rend alors aucun choix qu'elle ne saurait
+            // honorer.
+            placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil,
             // **Éditer, c'est rouvrir la MÊME vue sur le son déjà posé**
             // (directive porteur 2026-09-01). Aucune seconde surface d'édition
             // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
@@ -129,7 +134,7 @@ extension MeeshyComposerHost {
             return AudioPostComposerView.ExistingAudio(
                 url: son.url, duration: son.duration, mimeType: son.mimeType)
         }
-        guard let id = editedBackgroundSoundId,
+        guard let id = editedBackgroundSoundId ?? editedSceneChipId,
               let url = viewModel.loadedAudioURLs[id],
               let objet = viewModel.currentEffects.audioPlayerObjects?.first(where: { $0.id == id })
         else { return nil }
@@ -212,6 +217,35 @@ extension MeeshyComposerHost {
     func forgetEditedSound() {
         editedForegroundSound = nil
         editedBackgroundSoundId = nil
+        editedSceneChipId = nil
+    }
+
+    /// **Toucher une pastille audio du canvas la rouvre** (#4671, directive
+    /// porteur 2026-09-01 : « Toucher le chips sur le canvas ouvre la vue de
+    /// création audio »).
+    ///
+    /// Deux refus, et ils ne se valent pas :
+    ///
+    /// - **un son EMPRUNTÉ** ne s'ouvre pas — rouvrir passe par un fichier, ce
+    ///   qui le détacherait de son `soundId` et du crédit de son auteur. C'est
+    ///   la même loi que pour la pastille de l'avatar (`opensEditor`) ;
+    /// - **une piste dont la session ignore le fichier local** ne s'ouvre pas
+    ///   davantage : la feuille n'aurait rien à faire écouter, donc rien à
+    ///   faire viser.
+    ///
+    /// Dans les deux cas le tap reste ce qu'il était — une SÉLECTION. Il ne
+    /// promet rien qu'il ne tienne : c'est un geste qui fait moins, jamais un
+    /// bouton muet.
+    func editSceneSound(_ id: String) {
+        guard let objet = viewModel.currentEffects.audioPlayerObjects?
+                .first(where: { $0.id == id }),
+              ComposerSoundColumn.opensEditor(objet),
+              viewModel.loadedAudioURLs[id] != nil else { return }
+        editedForegroundSound = nil
+        editedBackgroundSoundId = nil
+        editedSceneChipId = id
+        openSoundSheet(placement: nil)
+        HapticFeedback.light()
     }
 
     /// **Toucher la pastille du son de fond rouvre « Création audio » DESSUS**
@@ -308,6 +342,19 @@ extension MeeshyComposerHost {
             editedURL: edite?.url,
             returnedURL: url
         )
+        // **Une pastille du canvas se remplace À SA PLACE** (#4671) — avant le
+        // `switch`, qu'elle ne concerne pas : la feuille ne lui a offert aucun
+        // placement, donc `chosenSoundPlacement` porte ici le choix d'une AUTRE
+        // ouverture. L'appliquer ferait déménager l'objet sans que rien ne
+        // l'ait demandé.
+        if let pastille = editedSceneChipId {
+            viewModel.deleteElement(id: pastille)
+            editedSceneChipId = nil
+            viewModel.attachPastedAudio(url: url, role: .foreground)
+            presentedPortal = nil
+            HapticFeedback.light()
+            return
+        }
         switch chosenSoundPlacement {
         case .foreground:
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(
