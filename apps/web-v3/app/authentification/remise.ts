@@ -66,6 +66,29 @@ export const ECRAN_DEUXIEME_FACTEUR = '/auth/verify-2fa';
 export const COOKIE_DE_SESSION = 'meeshy_session';
 
 /**
+ * LE JETON, EN COOKIE — ce qui rend la zone connectée RENDABLE PAR LE SERVEUR.
+ *
+ * Le jeton porteur vit dans `localStorage`, que le serveur ne voit pas : un
+ * écran connecté de la v3 ne pouvait donc rien demander à la passerelle sans
+ * embarquer du JavaScript, c'est-à-dire sans renoncer à ce qui fait la v3 — un
+ * document complet en UNE requête, sans un octet de runtime.
+ *
+ * CE QUE CE COOKIE CHANGE, ET CE QU'IL NE CHANGE PAS. Il n'élargit PAS la
+ * surface d'une injection : un script hostile qui tourne sur l'origine lit déjà
+ * `localStorage`, et ce cookie n'est pas plus caché que lui. Il n'est
+ * volontairement pas `HttpOnly`, pour la même raison que `meeshy_session` :
+ * `clearAllSessions()` du legacy efface par `document.cookie` tout nom
+ * commençant par `meeshy`, et un cookie `HttpOnly` SURVIVRAIT à la déconnexion
+ * — une demi-session laissée derrière, exactement ce qu'on veut éviter. Le nom
+ * choisi entre donc dans ce balayage.
+ *
+ * Ce qu'il ajoute est un envoi automatique vers NOTRE origine. `SameSite=Lax`
+ * le retient sur toute requête de sous-ressource venue d'un autre site et sur
+ * tout POST inter-site ; la v3 ne s'en sert que pour RENDRE, jamais pour agir.
+ */
+export const COOKIE_DE_JETON = 'meeshy_auth';
+
+/**
  * MIROIR EXACT de `AuthManagerService.setSessionCookie`
  * (`apps/web/services/auth-manager.service.ts`). Ce cookie gouverne le
  * middleware du legacy, qui décide si le bundle `/admin` se charge : une
@@ -102,7 +125,13 @@ const jsonPourScript = (valeur: unknown): string =>
  * La garde se juge sur ce que le NAVIGATEUR fera de la chaîne, jamais sur ce
  * qu'elle a l'air d'être — voir `porteUnCaractereInterdit`.
  */
-export const DESTINATION_PAR_DEFAUT = '/dashboard';
+/**
+ * OÙ L'ON ARRIVE APRÈS S'ÊTRE CONNECTÉ. `/` et non `/dashboard` : depuis que la
+ * v3 sert le tableau de bord à la racine (décision du porteur, 2026-09-01), `/`
+ * EST l'accueil connecté. Y renvoyer plutôt que vers l'écran du legacy évite au
+ * lecteur un aller-retour de plus, et évite surtout deux accueils concurrents.
+ */
+export const DESTINATION_PAR_DEFAUT = '/';
 
 /**
  * L'ORIGINE de la remise, et pourquoi elle est INVALIDE.
@@ -194,9 +223,14 @@ export type Ecriture = {
   readonly valeur: string;
 };
 
+export type Biscuit = {
+  readonly nom: string;
+  readonly valeur: string;
+};
+
 export type Remise = {
   readonly ecritures: readonly Ecriture[];
-  readonly cookie: string | null;
+  readonly cookies: readonly Biscuit[];
   readonly vers: string;
 };
 
@@ -218,7 +252,10 @@ export const remiseDeSession = (session: Session, vers: string): Remise => ({
       valeur: JSON.stringify(session.utilisateur),
     },
   ],
-  cookie: cookieDeSession(session),
+  cookies: [
+    { nom: COOKIE_DE_SESSION, valeur: cookieDeSession(session) },
+    { nom: COOKIE_DE_JETON, valeur: session.jeton },
+  ],
   vers,
 });
 
@@ -236,13 +273,14 @@ export const remiseDeDeuxiemeFacteur = (etape: DeuxiemeFacteur, vers: string): R
     },
     { magasin: 'sessionStorage', cle: CLES_DEUXIEME_FACTEUR.pseudonyme, valeur: etape.pseudonyme },
   ],
-  // Aucune session n'est encore ouverte : poser le cookie ici accorderait au
-  // middleware du legacy un utilisateur qui n'a pas fini de prouver qui il est.
-  cookie: null,
+  // Aucune session n'est encore ouverte : poser un cookie ici accorderait au
+  // middleware du legacy — et à la zone connectée de la v3 — un utilisateur qui
+  // n'a pas fini de prouver qui il est.
+  cookies: [],
   vers,
 });
 
-const scriptDeRemise = ({ ecritures, cookie, vers }: Remise): string =>
+const scriptDeRemise = ({ ecritures, cookies, vers }: Remise): string =>
   '(function(){' +
   'try{' +
   ecritures
@@ -252,10 +290,15 @@ const scriptDeRemise = ({ ecritures, cookie, vers }: Remise): string =>
     )
     .join('') +
   '}catch(e){}' +
-  (cookie === null
+  (cookies.length === 0
     ? ''
     : 'try{' +
-      `document.cookie=${jsonPourScript(COOKIE_DE_SESSION)}+"="+${jsonPourScript(cookie)}+";max-age=${DUREE_DU_COOKIE_S};path=/;SameSite=Lax;Secure";` +
+      cookies
+        .map(
+          ({ nom, valeur }) =>
+            `document.cookie=${jsonPourScript(nom)}+"="+${jsonPourScript(encodeURIComponent(valeur))}+";max-age=${DUREE_DU_COOKIE_S};path=/;SameSite=Lax;Secure";`,
+        )
+        .join('') +
       '}catch(e){}') +
   // `replace` et non `assign` : la remise ne doit pas rester dans l'historique,
   // sinon un retour arrière rejoue une page qui porte un jeton.

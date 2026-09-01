@@ -155,7 +155,7 @@ describe('les deux écrans d’accès', () => {
     expect(doc).toContain(`localStorage.setItem("${CLES.jetonDeSession}","sess-1")`);
     expect(doc).toContain(`localStorage.setItem("${CLES.utilisateur}"`);
     expect(doc).toContain(COOKIE_DE_SESSION);
-    expect(doc).toContain('location.replace("/dashboard")');
+    expect(doc).toContain('location.replace("/")');
   });
 
   it('remet l’étape de vérification en sessionStorage, et n’ouvre AUCUNE session', async () => {
@@ -179,10 +179,10 @@ describe('les deux écrans d’accès', () => {
    * sur une page qui a toute l'apparence de la nôtre.
    */
   it.each([
-    ['//attaquant.example', '/dashboard'],
-    ['https://attaquant.example/x', '/dashboard'],
-    ['javascript:alert(1)', '/dashboard'],
-    [null, '/dashboard'],
+    ['//attaquant.example', '/'],
+    ['https://attaquant.example/x', '/'],
+    ['javascript:alert(1)', '/'],
+    [null, '/'],
     ['/conversations/42', '/conversations/42'],
   ])('ne sort jamais de l’origine : %s → %s', (retour, attendu) => {
     expect(destination(retour)).toBe(attendu);
@@ -229,13 +229,20 @@ describe('les deux écrans d’accès', () => {
 
   // MARK: — la racine sert le bon écran à chacun
 
-  it('renvoie un lecteur CONNECTÉ vers l’accueil applicatif, sans mise en cache', () => {
-    const reponse = RACINE(
+  /**
+   * LE COOKIE DE SESSION N'AUTORISE RIEN. Il DIT qu'il y a une session — donc
+   * la racine sert la zone connectée — mais c'est le JETON qui ouvre les
+   * données. Un descripteur sans jeton renvoie se connecter, avec le chemin
+   * demandé pour y revenir : c'est ce qui arrive quand la session a expiré et
+   * que seule sa trace subsiste.
+   */
+  it('renvoie vers la connexion quand le descripteur survit au jeton', async () => {
+    const reponse = await RACINE(
       new Request('https://meeshy.me/', { headers: { cookie: `${COOKIE_DE_SESSION}=abc; autre=1` } }),
     );
 
     expect(reponse.status).toBe(302);
-    expect(reponse.headers.get('location')).toBe('/dashboard');
+    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
     expect(reponse.headers.get('cache-control')).toBe('no-store, private');
   });
 
@@ -244,12 +251,14 @@ describe('les deux écrans d’accès', () => {
     ['un cookie VIDE — un reste de déconnexion', `${COOKIE_DE_SESSION}=`],
     ['un cookie voisin au nom proche', `${COOKIE_DE_SESSION}_autre=abc`],
   ])('sert la vitrine à un visiteur : %s', async (_cas, cookie) => {
-    const reponse = RACINE(
+    const reponse = await RACINE(
       new Request('https://meeshy.me/', cookie === undefined ? {} : { headers: { cookie } }),
     );
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('barrières linguistiques');
+    // La vitrine servie ICI depend d'un cookie : elle ne se met plus en cache.
+    expect(reponse.headers.get('cache-control')).toBe('no-store, private');
   });
 
   // MARK: — les miroirs sont des miroirs

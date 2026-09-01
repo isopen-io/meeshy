@@ -25,11 +25,11 @@ const nextConfig: NextConfig = {
      */
     '/**': ['./node_modules/@meeshy/icons/critical.svg'],
     /**
-     * La vitrine, les cinq pages institutionnelles et les deux écrans d'accès
-     * inlinent la table de jetons — même lecture par CHEMIN que l'écran d'un
+     * La vitrine, les cinq pages institutionnelles, les deux écrans d'accès et
+     * les deux écrans de la zone connectée inlinent la table de jetons — même lecture par CHEMIN que l'écran d'un
      * lien, donc même invisibilité pour le traceur. Aucune ne déclare
      * `sprite.svg` : elles n'affichent aucun glyphe, et l'ajouter ferait voyager
-     * 40 Ko dans l'image pour huit surfaces qui n'en lisent rien.
+     * 40 Ko dans l'image pour neuf surfaces qui n'en lisent rien.
      *
      * `/login` et `/signup` la lisent DEUX fois — pour le formulaire, et pour le
      * document de REMISE que leur POST rend. La même entrée couvre les deux :
@@ -38,10 +38,10 @@ const nextConfig: NextConfig = {
      * LA DÉCLARATION EST PAR ROUTE, et c'est ce qui rend l'oubli si coûteux :
      * une page dont l'entrée manque n'échoue NI au build, NI aux témoins, NI au
      * lint — elle sert un document SANS STYLE, et seulement dans l'image. Les
-     * huit entrées sont donc composées à partir d'UNE liste, jamais recopiées.
+     * neuf entrées sont donc composées à partir d'UNE liste, jamais recopiées.
      */
     ...Object.fromEntries(
-      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup'].map((route) => [
+      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup', '/chats'].map((route) => [
         route,
         [
           './node_modules/@meeshy/design-tokens/tokens.css',

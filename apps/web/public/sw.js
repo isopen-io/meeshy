@@ -86,7 +86,10 @@ function log(...args) {
 // dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686). `/login` et
 // `/signup` suivent le même ordre : la v3 les sert désormais par un
 // `<form method="post">` sans JavaScript, et le shell du legacy sorti du cache
-// les recouvrirait sans cela chez tout visiteur revenant.
+// les recouvrirait sans cela chez tout visiteur revenant. `/chats` entre au
+// meme titre : la v3 y sert desormais la liste des conversations du lecteur, et
+// un shell mis en cache par le worker y montrerait celles de la session
+// PRECEDENTE — le pire des defauts que ce cache puisse produire.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -98,6 +101,7 @@ const V3_ZONE_PREFIXES = [
   '/privacy',
   '/login',
   '/signup',
+  '/chats',
 ];
 
 function belongsToV3Zone(pathname) {

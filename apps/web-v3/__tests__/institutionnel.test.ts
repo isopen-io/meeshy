@@ -316,7 +316,15 @@ describe('les cinq pages institutionnelles', () => {
    * `/forgot-password` et `/auth/verify-2fa` sont atteints depuis ces écrans et
    * vivent au legacy (§ 4.9, entre les étapes 2 et 6).
    */
-  const HORS_ZONE: readonly string[] = ['/forgot-password', '/auth/verify-2fa'];
+  const HORS_ZONE: readonly string[] = [
+    '/forgot-password',
+    '/auth/verify-2fa',
+    // Le FIL d'une conversation est encore servi par le legacy : la v3 rend la
+    // liste, pas les messages. `/conversations/:id` est donc une frontière
+    // assumée — et le témoin la fera rougir le jour où la v3 servira le fil
+    // sans que ce nom ait suivi.
+    '/conversations',
+  ];
 
   it('ne renvoie que vers ce que la v3 sert, ou vers une frontière NOMMÉE', () => {
     const servies = new Set(routesServies(APP, ''));
@@ -335,9 +343,19 @@ describe('les cinq pages institutionnelles', () => {
       ['/signup', ecran(INSCRIPTION)] as const,
     ];
 
+    // Un chemin PARAMÉTRÉ est ramené à son premier segment : `/conversations/42`
+    // est la même frontière que `/conversations`, et l'énumérer identifiant par
+    // identifiant serait une liste infinie.
+    const racineDe = (href: string): string => `/${href.split('/')[1] ?? ''}`;
+
     const morts = documents.flatMap(([route, doc]) =>
       hrefsInternes(doc)
-        .filter((href) => !servies.has(href) && !HORS_ZONE.includes(href))
+        .filter(
+          (href) =>
+            !servies.has(href) &&
+            !HORS_ZONE.includes(href) &&
+            !HORS_ZONE.includes(racineDe(href)),
+        )
         .map((href) => `${route} → ${href}`),
     );
 
