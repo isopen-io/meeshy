@@ -165,7 +165,11 @@ const FROZEN_BARE_INCLUDES: Readonly<Record<string, number>> = {
   // désormais dans core-lifecycle.ts (compte inchangé : 1).
   'conversations/core-lifecycle.ts': 1,
   'conversations/participant-removal.ts': 1,
-  'conversations/participant-role.ts': 1,
+  // #4713 a extrait le NOYAU de `PATCH …/role` hors de son gestionnaire ; ce
+  // site (`include: { user: true }` sur la ligne du demandeur) vit desormais
+  // dans `participant-role-core.ts`, inchange. Compte inchange : 1 — meme
+  // mecanique que #4284 sur `core-lifecycle.ts`.
+  'conversations/participant-role-core.ts': 1,
   'reactions.ts': 1,
   'translation-non-blocking.ts': 1,
   'translation.ts': 1,

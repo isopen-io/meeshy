@@ -108,7 +108,11 @@ export const EXEMPTIONS: Readonly<Record<string, string>> = {
  * exactement l'effet recherché.
  */
 export const ECRITURES_OPAQUES: Readonly<Record<string, string>> = {
-  'routes/conversations/ban.ts': [
+  // #4713 a extrait le NOYAU des deux gestes hors de `routes/conversations/ban.ts` :
+  // les deux ecritures opaques ont suivi TELLES QUELLES dans
+  // `participant-ban-core.ts`. Seule la CLE change — l'inventaire est indexe par
+  // FICHIER, et rien de ce qu'il gele n'a bouge.
+  'routes/conversations/participant-ban-core.ts': [
     '`data: ban.data` / `data: unban.data` — une transition d’état composée par',
     '`conversationBanState.ts`, à deux sauts. Ses deux littéraux ne portent que',
     '`bannedAt`, `isActive` et `leftAt`.',
