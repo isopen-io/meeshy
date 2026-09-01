@@ -177,9 +177,19 @@ const dossierDeTravail = `${SCRATCH}` // hors du depot suivi (.cache est gitigno
 // ---------------------------------------------------------------------------
 
 const PASSERELLE = `
-CONFORMITE A LA PASSERELLE (directive du porteur, 2026-09-01) — la v3 NE TOUCHE JAMAIS
+CONFORMITE A LA PASSERELLE (directive du porteur, 2026-09-01) — la v3 NE TOUCHE PAS
 services/gateway, ni le schema Prisma, ni les types partages cote serveur : elle SE CONFORME a la
-passerelle TELLE QU'ELLE EST. Une issue gateway compagnon peut s'ouvrir ; un patch serveur, jamais.
+passerelle TELLE QU'ELLE EST. Une issue gateway compagnon peut s'ouvrir ; un patch serveur pour
+une CAPACITE nouvelle ou une commodite de la v3, jamais.
+SEULE EXCEPTION — un BOGUE PROUVE, decouvert en chemin : un comportement de la passerelle qui
+contredit son propre contrat (sa doc, son schema, son test existant, ou la conception § 5/§ 6,
+par ex. un decrement sans plancher, un 500 sur une entree valide, une route qui repond hors de son
+schema). Il se corrige alors A LA RACINE, et seulement ainsi : (1) un test du gateway qui ECHOUE
+et reproduit le bogue, ecrit AVANT le correctif ; (2) le correctif MINIMAL, sans capacite ajoutee ;
+(3) la suite du gateway rejouee sur le perimetre touche (\`cd services/gateway && bun run test --
+<fichier>\`) ; (4) sa propre issue (label gateway, « bug ») et son propre commit, distinct de
+l'ecran ; (5) le rapport cite la preuve. Un relecteur qui trouve un diff serveur SANS ces cinq
+elements le classe BLOQUANT — « la v3 en avait besoin » n'est pas une preuve de bogue.
 - Avant d'ecrire un appel, LIS la route REELLE dans services/gateway/src/routes/** : chemin exact
   (prefixe /api/v1), methode, schema de corps (Zod/JSON schema), prevalidation d'authentification
   (jwt Authorization: Bearer / session invitee X-Session-Token / optionalAuth / allowAnonymous),
@@ -207,8 +217,7 @@ passerelle TELLE QU'ELLE EST. Une issue gateway compagnon peut s'ouvrir ; un pat
   gateway — un vert obtenu contre un bouchon qui ne ressemble pas au serveur ne prouve rien. Pour
   chaque endpoint ou evenement bouchonne, le rapport nomme la route ou l'emetteur reel qu'il copie.
 - apps/web (legacy) reste vif ; seul apps/web/public/sw.js (V3_ZONE_PREFIXES) est modifiable,
-  selon le § 4.4 bis. Un relecteur qui trouve un diff sous services/gateway/ ou packages/shared/
-  (hors types purement client) le classe BLOQUANT.
+  selon le § 4.4 bis.
 `
 
 
@@ -746,9 +755,11 @@ Les questions, sans complaisance :
 - Ce que le travail a laisse DERRIERE : un champ ajoute et non relaye, un appelant non migre, une
   jumelle non supprimee, un doc de design non mis a jour, un budget non declare (budgets.json).
 - La CHARTE : quelle regle est violee, avec sa preuve ?
-- La PASSERELLE : un diff sous services/gateway/ ou packages/shared/ (hors types client) ⇒ BLOQUANT ;
-  chaque endpoint et chaque evenement attaques existent-ils, avec cette forme de charge, dans le code
-  du gateway (fichier:ligne) ? le bouchon copie-t-il la route reelle ?
+- La PASSERELLE : un diff sous services/gateway/ ou packages/shared/ (hors types client) sans les
+  CINQ elements de la preuve de bogue (test qui echouait avant, correctif minimal, suite rejouee,
+  issue, commit distinct) ⇒ BLOQUANT ; chaque endpoint et chaque evenement attaques existent-ils,
+  avec cette forme de charge, dans le code du gateway (fichier:ligne) ? le bouchon copie-t-il la
+  route reelle ?
 
 TRAVAIL : ${t.titre_issue}
 CRITERE DE FIN : ${t.critere_de_fin}
