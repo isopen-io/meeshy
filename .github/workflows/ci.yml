@@ -305,6 +305,17 @@ jobs:
       # cette étape le manifeste est absent et la garde de non-vacuité de
       # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
       # vert sur zéro route.
+      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
+      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
+      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
+      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
+      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
+      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
+      - name: Build @meeshy/shared (le dist que son exports map sert)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3 (le manifeste que le balayage lit)
         run: |
           cd apps/web-v3
@@ -398,6 +409,17 @@ jobs:
       # par le serveur — mais `playwright.config.ts` lève quand même `next start`
       # (la preuve d'un build se prend sur le serveur de production, leçon 339),
       # qui exige ce build.
+      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
+      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
+      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
+      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
+      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
+      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
+      - name: Build @meeshy/shared (le dist que son exports map sert)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
         run: |
           cd apps/web-v3
@@ -486,6 +508,17 @@ jobs:
       - name: Install dependencies (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: pnpm install --no-frozen-lockfile
+
+      # `@meeshy/shared` sert ses modules depuis `dist/` (exports map), que
+      # `.gitignore` exclut : sans ce build, `next build` ne résout pas
+      # `@meeshy/shared/utils/conversation-helpers` (mesuré sur dev, run
+      # 33553656790, les trois jobs Playwright rouges à cette étape). Le job
+      # `test` et `apps/web-v3/Dockerfile` construisent déjà le paquet ; ces
+      # jobs appellent `bun run build` SANS turbo, donc sans `^build`.
+      - name: Build @meeshy/shared (le dist que son exports map sert)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Build apps/web-v3 (le serveur que les suites mesurent)
         run: |
