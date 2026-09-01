@@ -666,8 +666,16 @@ struct ComposerToolPanelHost: View {
                 // call site depuis le retrait du tool dédié. Foyer choisi :
                 // le panneau Texte (les stickers sont des overlays de la
                 // même famille).
+                // **Le même glyphe que la feuille qu'il ouvre** (#4719) : ce
+                // bouton n'appelle pas un clavier d'emoji, il ouvre la palette
+                // de CONSTRUCTIONS (#4579) — amour, heure, lieu, « Mes
+                // stickers ». Un visage y annonçait un seul de ses onglets.
+                //
+                // Troisième site de ce glyphe, trouvé APRÈS avoir cru la liste
+                // close à deux : c'est pourquoi la garde balaie désormais les
+                // sources au lieu de les nommer.
                 toolIconButton(
-                    systemImage: "face.smiling",
+                    systemImage: StickerPickerView.sheetSymbolName,
                     a11y: String(localized: "story.sticker.title",
                                  defaultValue: "Stickers", bundle: .module),
                     action: { onOpenStickerPicker?() }

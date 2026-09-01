@@ -48,6 +48,10 @@ extension MeeshyComposerHost {
         .storyRecentCameraRollProvided()
         .storyPasteProvided()
         .storyStickerLibraryProvided()
+        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
+        // quand l'autorisation de localisation est refusée : c'est l'injecteur
+        // qui le décide, pas la feuille.
+        .stickerNearbyPlacesProvided()
         // **Les deux accessoires de la rangée haute de l'atelier** (#4124). Le
         // SDK expose deux emplacements ; ce qu'on y met reste app-side — le chip
         // lit l'éventail et la mémoire de format, l'icône ouvre un éditeur dont

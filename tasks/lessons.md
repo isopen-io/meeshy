@@ -23070,3 +23070,76 @@ plus.
 Corollaire : **exclure n'empêche pas d'importer.** TypeScript suit toujours les
 `.d.ts` par la résolution de modules ; `exclude` ne fait que cesser de compiler
 les sources du paquet comme si elles étaient les nôtres.
+
+## Leçon 404 — Une grille PARTAGÉE par trois familles n'a qu'UNE destination, et la famille qui perd sa donnée le fait en silence
+
+**Le lot.** La palette de stickers (#4579) montre trois familles de décorations
+— amour, heure, lieu — dans la *même* grille de vignettes. C'est ce qui leur
+donne un air de famille, et c'était le bon choix visuel.
+
+**Le défaut.** `templateTab(family:)` appelait `onTemplateSelected(gabarit,
+emplacements)` pour les trois. Or un LIEU ne se pose pas en sticker : lui seul
+porte des coordonnées et un id de POI que la plateforme LIT (`/posts/nearby`).
+Un `StorySticker` les aurait perdues — et **rien à l'écran ne l'aurait dit** :
+la pastille se serait dessinée correctement, au bon endroit, avec le bon nom de
+lieu. Seule la donnée serait partie.
+
+> **Ce qu'une surface POSE dépend de ce que la chose EST, jamais de la grille
+> qui la montre.** Partager la présentation est bon ; partager la destination
+> ne l'est que si les familles partagent leur nature.
+
+**Ce qui l'a attrapé.** Pas une relecture — le TÉMOIN. En écrivant la garde
+« taper une décoration pose quelque chose », il a fallu nommer l'appel visé, et
+c'est en l'écrivant qu'on voit qu'il n'y en a qu'un pour trois familles. Le
+témoin qui devait prouver la loi 4 a révélé un défaut d'une autre nature.
+
+**Le contre-témoin.** Il porte sur l'AIGUILLAGE, pas sur l'appel : le poseur
+doit contenir `onLocationTemplateSelected(` **et** `onTemplateSelected(`. Un
+témoin qui n'aurait vérifié que « ça pose quelque chose » serait resté vert.
+
+## Leçon 405 — Une énumération de sites de glyphe est fausse par défaut : le troisième existe presque toujours
+
+**Le lot.** Retirer le smiley de la porte sticker (#4719). Le design a énuméré
+**deux** sites — la porte du rail (`ComposerRailDoor.symbolName`) et l'en-tête
+de la feuille (`StickerPickerView`) — et un troisième à NE PAS toucher (le
+`case .emoji` du document, qui dit vrai).
+
+**Le défaut.** Il y en avait un **quatrième**, et il fallait le changer :
+`ComposerToolPanelHost` (SDK) porte un bouton `systemImage: "face.smiling"` qui
+ouvre **la même palette**. Il n'est apparu qu'en cherchant, au simulateur,
+comment atteindre la feuille — c'est-à-dire en se demandant *qui l'ouvre*, une
+question que l'énumération n'avait pas posée.
+
+> C'est la leçon 261 sur un objet plus humble qu'un résolveur de Prisme : **une
+> énumération porte deux affirmations — « ces sites appliquent la règle »
+> (vérifiable) et « ce sont les seuls » (presque jamais vérifiée).**
+
+**La forme du correctif.** La garde ne nomme plus : elle BALAIE les sources du
+composer et exige que **tout fichier qui ouvre la palette** (`onOpenStickerPicker?()`
+ou `StickerPickerView(`) ne contienne pas `face.smiling`. Un cinquième site
+l'appliquera sans qu'on y pense. Le fusible (`examinés > 1`) empêche la garde de
+passer au vert par omission le jour où le balayage se casse.
+
+## Leçon 406 — Une garde de source qui nomme un FICHIER rougit pour un déplacement, et le rouge accuse le comportement
+
+**Le lot.** L'extraction préalable (#4715) puis le découpage de la palette
+(#4579) ont déplacé la section « Mes stickers » de `StickerPickerView.swift`
+vers `StickerPickerView+Emoji.swift`, en la renommant `libraryTab`.
+
+**Le symptôme.** `StoryComposerStickerImagePoseTests
+.test_theLibraryThumbnails_areTappable` : `XCTUnwrap failed: expected non-nil
+value of type "String"`. Le message n'accuse ni le fichier ni le déplacement —
+il ressemble à une régression de comportement.
+
+> **Une garde qui NOMME un chemin mesure deux choses et n'en dit qu'une.** Elle
+> vérifie le comportement, mais elle échoue aussi sur la géographie — et son
+> message ne distingue pas les deux.
+
+**La forme du correctif.** `ComposerSourceGuard.allStorySources()` existait déjà
+et son doc-comment disait exactement pourquoi (« une garde nommant ses fichiers
+un par un laisse toujours passer le prochain doublon »). La garde balaie
+désormais et cherche le BLOC (`var libraryTab`) où qu'il soit.
+
+**Le rappel de méthode qui l'aurait évitée** : *avant d'extraire, `grep` le nom
+du fichier ET des symboles déplacés dans les tests — la liste EST le lot de
+repointage.* Il était en mémoire ; il n'a pas été appliqué.

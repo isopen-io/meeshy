@@ -408,11 +408,18 @@ extension StoryComposerViewModel {
     /// `currentEffects`, la seule source de vérité (et la seule unité persistée
     /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
     /// deux lieux successifs ne se superposent pas exactement.
+    /// - Parameter styleId: le gabarit qui DÉCORE la pastille (#4717). `nil`
+    ///   rend la pastille d'origine, au pixel près — c'est le cas de la porte
+    ///   canonique du lieu, qui n'a pas à choisir une décoration.
+    /// `public` depuis le #4579 : la palette de constructions du composer
+    /// unifié — qui vit dans l'APP — pose des lieux décorés. Son voisin
+    /// `addSticker` l'était déjà pour la même raison.
     @discardableResult
-    func addLocation(place: SharedPlace) -> StoryLocationObject {
+    public func addLocation(place: SharedPlace, styleId: String? = nil) -> StoryLocationObject {
         let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
         let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset,
-                                        sourceLanguage: declaredContentLanguage)
+                                        sourceLanguage: declaredContentLanguage,
+                                        styleId: styleId)
         var effects = currentEffects
         effects.locationObjects.append(badge)
         currentEffects = effects
@@ -451,6 +458,41 @@ extension StoryComposerViewModel {
         stickers.append(sticker)
         effects.stickerObjects = stickers
         currentEffects = effects
+        bringToFront(id: sticker.id)
+        return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
+    /// **Pose une DÉCORATION** — un gabarit et ses emplacements déjà figés
+    /// (#4716).
+    ///
+    /// Le placement, la cascade et le z-order sont ceux de `addSticker(emoji:)` :
+    /// une décoration est un sticker, pas une sixième famille de scène.
+    ///
+    /// Deux choses lui sont propres :
+    /// - **l'échelle vient du GABARIT**, jamais de `StorySticker.posedScale` —
+    ///   ce 2,2 agrandit un glyphe nu, et ferait déborder un cartouche qui
+    ///   mesure déjà son contenu ;
+    /// - **l'emoji de repli est écrit ICI**, pas à la publication : un brouillon
+    ///   relu par une version antérieure — qui ne sait rien du gabarit — doit
+    ///   déjà montrer un glyphe. Même règle que le sticker image juste en
+    ///   dessous.
+    @discardableResult
+    public func addSticker(template: StickerTemplate,
+                           slots: [String: String]) -> StorySticker {
+        let count = currentEffects.stickerObjects?.count ?? 0
+        let offset = Double(count % 5) * 0.04
+        var sticker = StorySticker(emoji: template.fallbackEmoji,
+                                   templateId: template.id,
+                                   slots: slots,
+                                   sourceLanguage: declaredContentLanguage,
+                                   x: 0.5 + offset, y: 0.5 + offset)
+        sticker.scale = template.posedScale
+        var effects = currentEffects
+        var stickers = effects.stickerObjects ?? []
+        stickers.append(sticker)
+        effects.stickerObjects = stickers
+        currentEffects = effects
+        selectedElementId = sticker.id
         bringToFront(id: sticker.id)
         return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
     }

@@ -110,6 +110,18 @@ extension StoryComposerView {
                 viewModel.addSticker(image: item.thumbnail,
                                      provider: StoryStickerLibraryItem.provider)
                 HapticFeedback.light()
+            }, onTemplateSelected: { gabarit, emplacements in
+                // L'échelle vient du GABARIT — `addSticker(template:slots:)` la
+                // lit lui-même. `StorySticker.posedScale` agrandit un glyphe NU
+                // et ferait déborder un cartouche qui mesure son contenu.
+                viewModel.addSticker(template: gabarit, slots: emplacements)
+                HapticFeedback.light()
+            }, onLocationTemplateSelected: { lieu, gabarit in
+                // Un lieu décoré reste un `StoryLocationObject` : lui seul porte
+                // les coordonnées que la plateforme LIT. Le gabarit n'en décore
+                // que l'apparence.
+                viewModel.addLocation(place: lieu, styleId: gabarit.id)
+                HapticFeedback.light()
             })
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)

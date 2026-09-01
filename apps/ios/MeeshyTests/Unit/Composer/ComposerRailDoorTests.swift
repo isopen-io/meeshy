@@ -238,6 +238,27 @@ final class ComposerRailDoorTests: XCTestCase {
         XCTAssertEqual(Set(glyphes).count, glyphes.count,
                        "Deux portes qui partagent un glyphe sont deux verbes qu'on ne distingue pas (loi 7).")
     }
+
+    /// **#4719 — la porte sticker ne montre plus un visage.**
+    ///
+    /// Elle n'ouvre pas un clavier d'emoji : elle ouvre une palette de
+    /// CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ». Un
+    /// visage y annonçait le contenu d'un seul de ses cinq onglets.
+    ///
+    /// Le témoin porte sur la VALEUR et non sur la source : il ne peut donc pas
+    /// naître mort, et il rougit aussi bien si le smiley revient que si le
+    /// glyphe est remplacé par un troisième.
+    func test_porteSticker_montreLaFeuilleQuiSeDecolle_etPlusLeSmiley() {
+        XCTAssertEqual(ComposerRailDoor.sticker.symbolName,
+                       "rectangle.portrait.on.rectangle.portrait.angled")
+    }
+
+    /// Le smiley reste là où il dit vrai : la porte EMOJI de la rangée du
+    /// document, qui insère bien un emoji dans le texte. Retirer les deux
+    /// d'un même geste aurait été le contresens symétrique.
+    func test_lePorteEmojiDuDocument_gardeSonSmiley() {
+        XCTAssertEqual(ComposerDocumentTool.emoji.symbolName, "face.smiling")
+    }
 }
 
 /// La VUE du rail — trois faits qu'un rendu ne prouverait pas plus vite, et que
@@ -529,6 +550,32 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
                       "Un sticker se pose EN GRAND : à l'échelle de référence il faut l'agrandir "
                         + "avant de le placer, soit deux gestes pour un.")
         XCTAssertTrue(source.contains("viewModel.addSticker(image:item.thumbnail,"))
+    }
+
+    /// **Les trois autres constructions de la palette POSENT aussi** (#4579).
+    ///
+    /// Une grille de décorations qui vibre sous le doigt sans rien poser coûte
+    /// plus qu'une grille absente : elle PROMET (loi 4). Le rappel n'ayant pas
+    /// de défaut côté SDK, ce meuble ne compilerait pas sans eux — mais le
+    /// témoin dit à QUOI ils sont branchés, ce que le compilateur ne dit pas.
+    func test_laFeuilleSticker_poseAussiLesDecorations() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addSticker(template:gabarit,slots:emplacements)"),
+                      "Une décoration d'amour ou d'heure doit devenir un sticker gabarit.")
+    }
+
+    /// **Et un LIEU décoré reste un lieu.**
+    ///
+    /// Lui seul porte les coordonnées et l'id de POI que la plateforme LIT
+    /// (`/posts/nearby`). Le poser en `StorySticker` donnerait une décoration
+    /// qui PARAÎT juste et dont la donnée géographique est partie — le défaut
+    /// le plus coûteux du lot, parce qu'il ne se voit pas à l'écran.
+    func test_uneDecorationDeLieu_posteUnObjetDeLieu_jamaisUnSticker() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addLocation(place:lieu,styleId:gabarit.id)"),
+                      "Un lieu décoré doit rester un StoryLocationObject.")
+        XCTAssertFalse(source.contains("addSticker(template:gabarit,slots:emplacements)placeSlots"),
+                       "Aucun chemin ne doit convertir un lieu en sticker.")
     }
 
     /// L'empilement route vers le MODÈLE, jamais vers la vue UIKit.

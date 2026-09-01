@@ -184,7 +184,20 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .description: return "text.alignleft"
         case .media:       return "photo"
         case .sound:       return "music.note"
-        case .sticker:     return "face.smiling"
+        // **Pas un smiley** (directive porteur 2026-09-01) : cette porte
+        // n'ouvre pas un clavier d'emoji, elle ouvre une palette de
+        // CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ».
+        // Un visage y dirait le contenu d'un seul de ses cinq onglets.
+        //
+        // Aucun glyphe Apple ne s'appelle « sticker » ni « peel » — vérifié
+        // dans `CoreGlyphs.bundle`, noms ET index de recherche, zéro
+        // correspondance. `rectangle.portrait.on.rectangle.portrait.angled`
+        // est le seul qui DIT le geste : deux rectangles portrait, celui de
+        // devant incliné — la feuille qui se soulève de la planche.
+        //
+        // iOS 16.0, soit notre plancher exact : aucune garde de version. Et
+        // style LIGNE, comme les huit autres portes.
+        case .sticker:     return "rectangle.portrait.on.rectangle.portrait.angled"
         case .mention:     return "at"
         // `number` — le glyphe SYSTÈME du `#`. Posé à côté du `at` de la
         // mention, il dit la parenté : deux références dérivées du texte.

@@ -996,6 +996,21 @@ extension MeeshyComposerHost {
                                  scale: StorySticker.posedScale)
             presentedPortal = nil
             HapticFeedback.light()
+        }, onTemplateSelected: { gabarit, emplacements in
+            // **L'échelle vient du GABARIT**, pas de `posedScale` : ce 2,2
+            // agrandit un glyphe NU, et ferait déborder un cartouche qui mesure
+            // déjà son contenu. `addSticker(template:slots:)` la lit lui-même.
+            viewModel.addSticker(template: gabarit, slots: emplacements)
+            presentedPortal = nil
+            HapticFeedback.light()
+        }, onLocationTemplateSelected: { lieu, gabarit in
+            // **Un lieu décoré reste un `StoryLocationObject`**, jamais un
+            // sticker jumeau : lui seul porte les coordonnées et l'id de POI
+            // que la plateforme LIT (`/posts/nearby`). Le gabarit n'en décore
+            // que l'apparence.
+            viewModel.addLocation(place: lieu, styleId: gabarit.id)
+            presentedPortal = nil
+            HapticFeedback.light()
         })
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
