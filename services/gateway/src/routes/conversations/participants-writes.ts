@@ -24,6 +24,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { hasMinimumMemberRole, memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { recipientLanguage } from '../../utils/recipient-language';
 import { z } from 'zod';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
@@ -487,7 +488,16 @@ export function registerParticipantWriteRoutes(
       displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
       avatar: userToAdd.avatar,
       role: 'member',
-      language: userToAdd.systemLanguage ?? 'en',
+      // #4662 — `Participant.language` est la colonne que ses lecteurs prennent
+      // pour la langue du membre quand aucun prisme `User` ne se résout
+      // (`resolveParticipantLanguage`, `offlineParticipantQueue`). La poser
+      // depuis `systemLanguage` NU y inscrivait le repli du site pour tout
+      // compte dont la langue vit au rang 2, 3 ou 4 — le cas NOMINAL dès que la
+      // locale appareil (rang 4) diffère de la langue applicative. Le repli
+      // reste un PARAMÈTRE du site : `'en'` est celui de cette porte, et
+      // trancher « quelle langue pour un compte sans AUCUNE préférence ? » est
+      // un arbitrage produit, pas un correctif de Prisme.
+      language: recipientLanguage(userToAdd, 'en'),
       permissions: { ...NEW_MEMBER_PERMISSIONS }
     };
 
