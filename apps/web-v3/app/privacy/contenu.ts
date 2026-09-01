@@ -10,10 +10,17 @@ import type { PageDeContenu } from '@/app/institutionnel/document';
  * `footer.home` non plus — le retour à l'accueil est porté par l'en-tête de
  * chrome, à la même place sur les cinq pages, et le répéter en bas dédoublerait
  * un repère.
+ *
+ * ET AUCUNE ACCROCHE. Le catalogue n'en porte pas — la page legacy affiche son
+ * titre, sa date, puis sa section « Introduction ». Lui en fabriquer une en
+ * reprenant `introduction.content` faisait lire DEUX FOIS le même paragraphe,
+ * l'un sous l'autre : c'est ce que le rendu a montré, et ce que le témoin
+ * « aucune page ne répète son accroche en section » interdit désormais. La
+ * description `<meta>`, elle, reste alimentée par ce texte — un résumé pour un
+ * robot n'est pas un doublon pour un lecteur.
  */
 export const PAGE_CONFIDENTIALITE: PageDeContenu = {
   titre: 'Politique de Confidentialité',
-  accroche: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   mention: 'Dernière mise à jour : 29 janvier 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   sections: [

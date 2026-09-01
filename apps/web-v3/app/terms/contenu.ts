@@ -9,6 +9,10 @@ import type { PageDeContenu } from '@/app/institutionnel/document';
  * applicatif, ce bouton serait INERTE — un contrôle qui existe sans avoir
  * d'effet, ce que la loi 4 interdit. Le geste natif du navigateur
  * (⌘P / Ctrl+P) reste disponible et fait exactement la même chose.
+ *
+ * `intro` MONTE EN ACCROCHE, et c'est le seul ajout. Le catalogue le porte, la
+ * page legacy ne le rend nulle part — un texte écrit puis perdu. Il dit
+ * exactement ce qu'une accroche doit dire, et la page en manquait une.
  */
 export const PAGE_CONDITIONS: PageDeContenu = {
   titre: "Conditions d'Utilisation",

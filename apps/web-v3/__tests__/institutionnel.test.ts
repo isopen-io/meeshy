@@ -65,7 +65,7 @@ const textesDuBloc = (bloc: Bloc): readonly string[] => {
 
 const textesDeLaPage = (page: PageDeContenu): readonly string[] => [
   page.titre,
-  page.accroche,
+  ...(page.accroche === undefined ? [] : [page.accroche]),
   ...(page.mention === undefined ? [] : [page.mention]),
   ...page.sections.flatMap((section) => [section.titre, ...section.blocs.flatMap(textesDuBloc)]),
   page.suite.titre,
@@ -136,6 +136,31 @@ describe('les cinq pages institutionnelles', () => {
   it('exerce les CINQ genres de bloc sur du contenu réel', () => {
     const exerces = new Set(PAGES.flatMap(([, page]) => genresDeLaPage(page)));
     expect([...exerces].sort()).toEqual(['accent', 'cartes', 'encadre', 'liste', 'paragraphes']);
+  });
+
+  /**
+   * LE TÉMOIN QUE LE RENDU A DICTÉ. `/privacy` n'a pas de sous-titre au
+   * catalogue ; lui en fabriquer un en reprenant sa première section faisait
+   * lire DEUX FOIS le même paragraphe, l'un sous l'autre — visible à la
+   * capture, invisible à toute assertion de présence, puisque les deux textes
+   * ÉTAIENT bien là.
+   *
+   * Une accroche est une PROMESSE : elle annonce ce que la page va dire. Quand
+   * elle est le premier paragraphe de la page, elle n'annonce rien, et le
+   * lecteur relit. L'absence d'accroche est alors la bonne forme — pas un trou
+   * de mise en page.
+   */
+  it('ne répète jamais son accroche dans une section', () => {
+    const repetitions = PAGES.flatMap(([route, page]) =>
+      page.accroche === undefined
+        ? []
+        : page.sections
+            .flatMap((section) => section.blocs.flatMap(textesDuBloc))
+            .filter((texte) => texte === page.accroche)
+            .map(() => `${route} → « ${page.accroche?.slice(0, 50)}… »`),
+    );
+
+    expect(repetitions).toEqual([]);
   });
 
   /**

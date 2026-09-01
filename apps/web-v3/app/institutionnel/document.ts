@@ -77,7 +77,14 @@ export type Section = {
 
 export type PageDeContenu = {
   readonly titre: string;
-  readonly accroche: string;
+  /**
+   * FACULTATIVE, et son absence est un CONTENU absent, pas un oubli de mise en
+   * page : `/privacy` n'a pas de sous-titre au catalogue, et lui en fabriquer
+   * un en reprenant sa première section faisait lire deux fois le même
+   * paragraphe, l'un sous l'autre. Gardé par « aucune page ne répète son
+   * accroche en section ».
+   */
+  readonly accroche?: string;
   /** « Dernière mise à jour : … » — les deux pages légales seules la portent. */
   readonly mention?: string;
   readonly description: string;
@@ -134,7 +141,7 @@ const rendLaSection = (section: Section, rang: number): string =>
 const corpsDeLaPage = (page: PageDeContenu): string =>
   '<div class="entete">' +
   `<h1>${echappe(page.titre)}</h1>` +
-  `<p class="accroche">${echappe(page.accroche)}</p>` +
+  (page.accroche === undefined ? '' : `<p class="accroche">${echappe(page.accroche)}</p>`) +
   (page.mention === undefined ? '' : `<p class="mention">${echappe(page.mention)}</p>`) +
   '</div>' +
   page.sections.map(rendLaSection).join('') +
