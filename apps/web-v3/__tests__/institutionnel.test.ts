@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PAGE_A_PROPOS } from '@/app/about/contenu';
@@ -164,12 +164,88 @@ describe('les cinq pages institutionnelles', () => {
   });
 
   /**
+   * MÊME FAMILLE QUE LE PRÉCÉDENT, un cran plus bas. Grouper deux cartes sous un
+   * chapeau demande un titre de groupe ; quand le seul disponible est celui de
+   * la première carte, la section et sa carte portent le même libellé — un
+   * repère dédoublé pour un lecteur d'écran, une redite pour l'œil. `/partners`
+   * l'a porté jusqu'à la capture, avec « Solutions Entreprise » deux fois.
+   *
+   * Le remède n'est pas de renommer : c'est de ne pas grouper ce que le contenu
+   * ne groupe pas.
+   */
+  it('ne porte jamais, en section, le titre d’une de ses propres cartes', () => {
+    const redites = PAGES.flatMap(([route, page]) =>
+      page.sections.flatMap((section) =>
+        section.blocs
+          .flatMap((bloc) => (bloc.genre === 'cartes' ? bloc.cartes : []))
+          .filter((carte) => carte.titre === section.titre)
+          .map(() => `${route} → « ${section.titre} »`),
+      ),
+    );
+
+    expect(redites).toEqual([]);
+  });
+
+  /**
    * Le legacy porte une date de mise à jour sur ses DEUX pages légales, et sur
    * elles seules. La poser partout la rendrait fausse là où rien ne date.
    */
   it('ne date que les deux pages légales', () => {
     const datees = PAGES.filter(([, page]) => page.mention !== undefined).map(([route]) => route);
     expect(datees).toEqual(['/terms', '/privacy']);
+  });
+
+  /**
+   * LE TÉMOIN QUI TIENT LA PROMESSE DES CINQ DOC-COMMENTS.
+   *
+   * Chaque `contenu.ts` affirme « le contenu de `apps/web/locales/fr/<page>.json`,
+   * MOT POUR MOT ». C'était une affirmation, pas une propriété : rien ne
+   * l'opposait au catalogue, et la reprise a effectivement inventé trois mots —
+   * « …et la collaboration internationale **dans votre établissement** » —
+   * qu'aucune relecture n'aurait distingués d'une phrase du produit.
+   *
+   * POURQUOI CE TÉMOIN A LE DROIT DE SORTIR DU PAQUET. L'invariant (i) de
+   * `scripts/check-v3-pipeline.mjs` interdit à une SOURCE de la v3 d'atteindre
+   * le disque hors de `apps/web-v3/` : l'étage builder du Dockerfile ne copie
+   * que ce répertoire. Un test ne voyage pas dans l'image — c'est la raison
+   * exacte pour laquelle `runtimeEnvChains` exclut déjà `__tests__` de son
+   * champ. La lecture se fait par CHEMIN et non par `import`, ce qui la tient
+   * de plus hors du graphe de modules que le traceur suit.
+   *
+   * Le jour où le legacy est décommissionné (§ 4.9 étape 7), ce témoin
+   * disparaît avec sa source : la copie devient alors l'original.
+   */
+  it('ne porte, dans ses cinq pages, que des phrases du catalogue legacy', () => {
+    const CATALOGUES: Readonly<Record<string, string>> = {
+      '/about': 'about',
+      '/contact': 'contact',
+      '/partners': 'partners',
+      '/terms': 'terms',
+      '/privacy': 'privacy',
+    };
+
+    const feuillesDuJson = (valeur: unknown): readonly string[] => {
+      if (typeof valeur === 'string') return [valeur];
+      if (Array.isArray(valeur)) return valeur.flatMap(feuillesDuJson);
+      if (valeur !== null && typeof valeur === 'object') {
+        return Object.values(valeur).flatMap(feuillesDuJson);
+      }
+      return [];
+    };
+
+    const inventees = PAGES.flatMap(([route, page]) => {
+      const nom = CATALOGUES[route] ?? '';
+      const source = readFileSync(
+        join(__dirname, '..', '..', 'web', 'locales', 'fr', `${nom}.json`),
+        'utf8',
+      );
+      const catalogue = new Set(feuillesDuJson(JSON.parse(source)));
+      return textesDeLaPage(page)
+        .filter((texte) => !catalogue.has(texte))
+        .map((texte) => `${route} → « ${texte} »`);
+    });
+
+    expect(inventees).toEqual([]);
   });
 
   // MARK: — le chrome est le MÊME partout (dimension 6)

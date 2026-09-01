@@ -22,32 +22,38 @@ export const PAGE_PARTENAIRES: PageDeContenu = {
           corps: ['Des solutions sur mesure pour les grandes organisations avec des besoins spécifiques'],
         },
         {
-          genre: 'cartes',
-          cartes: [
-            {
-              titre: 'Solutions Entreprise',
-              items: [
-                'Déploiement sur site ou cloud privé',
-                'Authentification SSO (SAML, OAuth)',
-                'Analytics et rapports avancés',
-                'Support prioritaire 24/7',
-                "Personnalisation complète de l'interface",
-              ],
-              mention: 'Tarification personnalisée',
-            },
-            {
-              titre: 'Solutions Éducation',
-              items: [
-                'Salles de classe virtuelles multilingues',
-                "Support pour les programmes d'échange",
-                "Outils d'apprentissage intégrés",
-                'Gestion centralisée des comptes',
-                'Intégration avec les plateformes LMS',
-              ],
-              mention: "Tarifs préférentiels pour l'éducation",
-            },
+          genre: 'liste',
+          items: [
+            'Déploiement sur site ou cloud privé',
+            'Authentification SSO (SAML, OAuth)',
+            'Analytics et rapports avancés',
+            'Support prioritaire 24/7',
+            "Personnalisation complète de l'interface",
           ],
         },
+        { genre: 'accent', corps: 'Tarification personnalisée' },
+      ],
+    },
+    {
+      titre: 'Solutions Éducation',
+      blocs: [
+        {
+          genre: 'paragraphes',
+          corps: [
+            "Facilitez l'apprentissage multilingue et la collaboration internationale",
+          ],
+        },
+        {
+          genre: 'liste',
+          items: [
+            'Salles de classe virtuelles multilingues',
+            "Support pour les programmes d'échange",
+            "Outils d'apprentissage intégrés",
+            'Gestion centralisée des comptes',
+            'Intégration avec les plateformes LMS',
+          ],
+        },
+        { genre: 'accent', corps: "Tarifs préférentiels pour l'éducation" },
       ],
     },
     {
