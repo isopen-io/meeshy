@@ -142,6 +142,9 @@ const LEGACY_ROUTER = 'frontend';
 // `scope: '/'`, donc sur l'origine ENTIÈRE, zone v3 comprise.
 const WORKER_LEGACY = 'apps/web/public/sw.js';
 
+// L'App Router du LEGACY — ce que la zone peut lui VOLER sans le vouloir.
+const LEGACY_APP_DIRECTORY = 'apps/web/app';
+
 /**
  * **Les DEUX déploiements qui servent la zone.**
  *
@@ -289,6 +292,12 @@ const readWorld = async (root) => ({
   prod: await readFile(join(root, 'docker-compose.prod.yml'), 'utf8'),
   staging: await readFile(join(root, 'docker-compose.staging.yml'), 'utf8'),
   worker: await readFile(join(root, WORKER_LEGACY), 'utf8'),
+  legacyRoutes: readdirSync(join(root, LEGACY_APP_DIRECTORY), { withFileTypes: true })
+    .filter(
+      (entree) =>
+        entree.isDirectory() && !entree.name.startsWith('(') && !entree.name.startsWith('_'),
+    )
+    .map((entree) => `/${entree.name}`),
   typeDebt: await readFile(join(root, 'scripts/check-type-debt.sh'), 'utf8'),
   dockerfile: await readFile(join(root, `${V3_DIRECTORY}/Dockerfile`), 'utf8'),
   zone: zoneInventory(root),
@@ -754,6 +763,51 @@ const leWorkerLegacySEfface = (dep) => (world) => {
     );
 };
 
+/**
+ * AUCUN `PathPrefix` NE VOLE UNE ROUTE VOISINE DU LEGACY.
+ *
+ * `PathPrefix` de Traefik est un préfixe de CHAÎNE, pas de SEGMENTS : la règle
+ * qui réclame `PathPrefix(`/l`)` pour l'écran d'un lien réclame aussi `/login`,
+ * `/links` et `/lien`. Mesuré sur staging le 2026-09-01 — les trois étaient
+ * servis par la zone, donc par le 404 du routeur Pages de la v3, alors que le
+ * legacy les sert. `/login` est l'appel à l'action de la vitrine : il était mort
+ * depuis la bascule de l'étape 2, et la production n'y échappait que parce que
+ * sa règle n'a pas encore franchi l'étape 1.
+ *
+ * POURQUOI RIEN NE L'AVAIT VU. Les trois lecteurs de cette règle modélisaient
+ * `PathPrefix` comme un préfixe SEGMENTÉ — un modèle plus prudent que la
+ * réalité, donc un modèle qui DÉCLARE une frontière que l'aiguilleur ne trace
+ * pas. L'invariant « la règle ne réclame que des chemins servis » regardait les
+ * VALEURS réclamées (`/l` est bien servi) ; celui-ci regarde ce que ces valeurs
+ * EMPORTENT. C'est la question du § 4.4 bis posée dans l'autre sens : non pas
+ * « ce que je bascule est-il servi ? » mais « qu'est-ce qui bascule AVEC ? ».
+ *
+ * Le remède est dans l'écriture de la règle : un `PathPrefix` destiné à un
+ * sous-chemin porte sa barre finale (`/l/`), qui rend le préfixe de chaîne et le
+ * préfixe de segments équivalents.
+ */
+const aucunPrefixeNeVoleUneRouteVoisine = (dep) => (world) => {
+  const rule = v3RuleOf(world, dep);
+  if (rule === null) return [];
+
+  const servies = new Set(world.zone.routeUrls);
+
+  return cheminsReclames(rule)
+    .filter(({ matcher }) => matcher === 'PathPrefix')
+    .flatMap(({ valeur }) =>
+      world.legacyRoutes
+        .filter((route) => route !== valeur && route.startsWith(valeur) && !servies.has(route))
+        .map(
+          (route) =>
+            `${dep.fichier} : le routeur ${dep.v3} réclame PathPrefix(\`${valeur}\`), et ` +
+            `PathPrefix de Traefik est un préfixe de CHAÎNE — il emporte donc ${route}, que ` +
+            `${LEGACY_APP_DIRECTORY} sert et que la zone NE sert pas. Le visiteur y reçoit le 404 ` +
+            `du routeur Pages de la v3. Remède : écrire le préfixe avec sa barre finale ` +
+            `(PathPrefix(\`${valeur}/\`)), ou servir ${route} depuis la zone`,
+        ),
+    );
+};
+
 const theRunnerShipsWhatPublicHolds = (world) => {
   const copies = /^COPY --from=builder[^\n]*\/app\/public\s+\.\/public\s*$/m.test(world.dockerfile);
   const held = world.zone.publicFiles.length;
@@ -977,6 +1031,7 @@ const CHECKS = [
     [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, noRootServedAssetEscapesTheZone(dep)],
     [`${dep.fichier} : la règle ne réclame que des chemins servis`, theRouterClaimsNothingTheZoneDoesNotServe(dep)],
     [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, leWorkerLegacySEfface(dep)],
+    [`${dep.fichier} : aucun PathPrefix ne vole une route voisine du legacy`, aucunPrefixeNeVoleUneRouteVoisine(dep)],
   ]),
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
   ["aucun fichier source de la v3 n'est ignoré par git", noSourceFileOfTheV3IsGitIgnored],
@@ -1005,9 +1060,14 @@ const replaceIn = (world, key, needle, replacement) => {
 
 const MUTATIONS = [
   [
+    'la barre finale retirée du PathPrefix de /l/ sur staging',
+    (world) => replaceIn(world, 'staging', 'PathPrefix(`/l/`)', 'PathPrefix(`/l`)'),
+    'il emporte donc /login',
+  ],
+  [
     'un préfixe retiré de V3_ZONE_PREFIXES sans être retiré du routeur',
     (world) => replaceIn(world, 'worker', /'\/l'/, "'/rien'"),
-    "réclame PathPrefix(`/l`) que V3_ZONE_PREFIXES",
+    "réclame PathPrefix(`/l/`) que V3_ZONE_PREFIXES",
   ],
   [
     'le type-check de la v3 retiré de ci.yml',

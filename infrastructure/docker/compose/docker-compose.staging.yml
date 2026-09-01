@@ -411,7 +411,30 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l`) || Path(`/`))"
+      # LE PÉRIMÈTRE DE LA ZONE v3 SUR STAGING — § 4.9 de la conception.
+      #
+      # `Path` plutôt que `PathPrefix` pour les six chemins humains : `Path` est
+      # une ÉGALITÉ, donc `/about` est pris au legacy sans lui prendre
+      # `/about/quoi-que-ce-soit`, que la v3 ne sert pas et qui répondrait 404.
+      # `PathPrefix` reste la forme juste pour `/__v3/_next` (les bundles) et
+      # `/l/` (le jeton est un sous-chemin).
+      #
+      # LA BARRE FINALE DE `/l/` N'EST PAS UNE COQUETTERIE. `PathPrefix` de
+      # Traefik est un préfixe de CHAÎNE, pas de SEGMENTS : `PathPrefix(`/l`)`
+      # emportait `/login`, `/links` et `/lien` — trois routes que le legacy sert
+      # — et le visiteur y recevait le 404 du routeur Pages de la v3. Mesuré sur
+      # staging le 2026-09-01 ; `/login` est l'appel à l'action de la vitrine, et
+      # il était mort depuis la bascule de l'étape 2. Gardé par l'invariant
+      # « aucun PathPrefix ne vole une route voisine du legacy ».
+      #
+      # ORDRE, dans UN sens seulement (§ 4.4 bis) : un chemin entre d'abord dans
+      # `V3_ZONE_PREFIXES` de `apps/web/public/sw.js`, dont l'image est DÉPLOYÉE,
+      # avant d'être ajouté ici. Sans quoi le worker legacy — enregistré sur
+      # `scope: '/'` — continue de servir son shell depuis le cache aux visiteurs
+      # REVENANTS, et le retour arrière du § 4.3 est inerte chez eux. Gardé par
+      # l'invariant « le worker legacy s'efface devant ce que la règle réclame »
+      # de `scripts/check-v3-pipeline.mjs`, posé une fois par déploiement.
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`))"
       - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"

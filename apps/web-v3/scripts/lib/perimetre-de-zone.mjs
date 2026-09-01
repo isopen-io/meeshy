@@ -100,14 +100,27 @@ export const cheminsReclames = (regle) =>
     ),
   );
 
-// Le prédicat de Traefik, et non une approximation : `Path` est une ÉGALITÉ, `PathPrefix` est
-// l'égalité OU un sous-chemin. Le `endsWith('/')` n'est pas une coquetterie — sans lui, un
-// `PathPrefix(`/`)` (étape 7) compare contre `` `//` `` et ne capture plus rien, ce qui rend le
-// périmètre le plus LARGE possible équivalent au plus étroit.
+// Le prédicat de Traefik, et non une approximation. `Path` est une ÉGALITÉ ; `PathPrefix` est un
+// PRÉFIXE DE CHAÎNE, pas un préfixe de SEGMENTS — et cette nuance a coûté deux routes vivantes.
+//
+// Ce prédicat a longtemps comparé contre `` `${valeur}/` ``, c'est-à-dire un préfixe segmenté :
+// il tenait `/login` pour HORS de `PathPrefix(`/l`)`. Traefik, lui, y répond OUI. Mesuré sur
+// staging le 2026-09-01, la règle réclamant `PathPrefix(`/l`)` : `/login`, `/links` et `/lien`
+// étaient tous les trois servis par la ZONE — donc par le 404 du routeur Pages de la v3 — alors
+// que le legacy les sert et que rien ne les avait basculés. `/login` est l'appel à l'action de la
+// vitrine ; il était mort depuis la bascule de l'étape 2.
+//
+// Un modèle PLUS PRUDENT que la réalité ne protège pas : il DÉCLARE une frontière que
+// l'aiguilleur ne trace pas, et tout ce qui s'appuie dessus hérite du même angle mort. Le modèle
+// suit donc Traefik, et c'est le RÈGLEMENT qui doit être écrit sans ambiguïté — un `PathPrefix`
+// destiné à un sous-chemin s'écrit avec sa barre finale (`/l/`), ce que garde l'invariant « aucun
+// PathPrefix ne vole une route voisine » de `scripts/check-v3-pipeline.mjs`.
+//
+// Bénéfice de bord : le cas dégénéré disparaît de lui-même. `PathPrefix(`/`)` (étape 7) capture
+// bien toute l'origine, là où la comparaison contre `` `//` `` ne capturait plus rien — le
+// périmètre le plus LARGE devenait équivalent au plus étroit.
 export const capture = ({ matcher, valeur }, chemin) =>
-  matcher === 'Path'
-    ? chemin === valeur
-    : chemin === valeur || chemin.startsWith(valeur.endsWith('/') ? valeur : `${valeur}/`);
+  matcher === 'Path' ? chemin === valeur : chemin.startsWith(valeur);
 
 // LE PÉRIMÈTRE DE NAVIGATION — ce que la v3 sert à un HUMAIN, ce qui n'est pas ce que la règle
 // réclame.
