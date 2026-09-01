@@ -342,6 +342,23 @@ final class MessageListViewController: UIViewController {
             // dans les deux sens (#3947).
             syncThreadQuiescence()
             collectionView.collectionViewLayout.invalidateLayout()
+            // #4602 — le mémo de la pastille de jour est aveugle au LAYOUT.
+            //
+            // `updateStickyDayLabel` sort tôt quand l'item de tête n'a pas
+            // changé d'IDENTITÉ (`lastStickyTopItem`) — juste, tant que la
+            // géométrie ne bouge pas. Une bascule de mode change les hauteurs
+            // de rangée sans changer les items : le même message reste en tête
+            // pendant qu'un séparateur de date d'un AUTRE jour entre dans la
+            // bande de la pastille. Le mémo faisait alors garder à la sticky
+            // le jour d'avant, superposé au séparateur natif — deux pastilles,
+            // deux dates, jusqu'au premier défilement qui change l'item de
+            // tête (d'où la résorption spontanée en quelques secondes).
+            //
+            // On VIDE plutôt qu'on ne recalcule ici : `invalidateLayout()` est
+            // paresseux, la nouvelle géométrie n'existe pas encore. Le
+            // recalcul juste a lieu dans la complétion d'`applySnapshot`
+            // ci-dessous, « dès que les cellules sont en place ».
+            lastStickyTopItem = nil
             if rendersThread {
                 applySnapshot(reconfigure: .allItems)
             }
@@ -665,13 +682,7 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
         configureDataSource()
         observeStore()
-        // `syncThreadQuiescence()` et non `startSeenTracking()` : le mode de
-        // lecture est PERSISTANT et arrive AVANT le chargement de la vue, si
-        // bien que son `didSet` y sort sur `isViewLoaded`. Une conversation
-        // ouverte DIRECTEMENT en Rivière ou en Résumé — le cas nominal, pas un
-        // cas limite — démarrait donc son timer 4 Hz et ne le voyait jamais
-        // s'arrêter, faute de changement de mode ultérieur (#3947).
-        syncThreadQuiescence()
+        startSeenTracking()
         // Apply the initial snapshot from whatever the store already holds.
         // The store's `messagesDidChange` PassthroughSubject is fire-and-forget:
         // any emission that happened before this VC subscribed is lost. The
