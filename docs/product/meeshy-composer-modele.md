@@ -153,7 +153,7 @@ du document », planche ligne 1193 ; « une scène projetée en familles v1 EST 
 ligne 562) — donc elle ne coûte aucune migration de fil. Elle supprime une question que
 l'utilisateur n'a aucune raison de se poser. Et elle rend vraie, sans cas particulier, la
 demande de départ : *une scène doit pouvoir être un seul média présentable dans un réel
-ou dans un post.* La complexité se paie dans le code, jamais chez l'utilisateur (loi 11).
+ou dans un post.* La complexité se paie dans le code, jamais chez l'utilisateur (**dimension 12** de la roadmap produit — la planche dit explicitement que ce n'est PAS une loi du composer, dont la loi 11 est « Personne ne lit du vide »).
 
 ## 3. Ce qu'une slide SIGNIFIE dépend du profil
 
