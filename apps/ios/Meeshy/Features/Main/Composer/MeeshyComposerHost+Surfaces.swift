@@ -597,6 +597,9 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // #4657 — la rangée de l'avatar montre le son de fond : la note,
+            // l'onde et la durée à côté du visage, et le texte descend.
+            backgroundSound: viewModel.currentEffects.resolvedBackgroundAudio,
             // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à

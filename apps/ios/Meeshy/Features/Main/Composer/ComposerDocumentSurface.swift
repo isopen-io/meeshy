@@ -103,6 +103,11 @@ struct ComposerDocumentSurface: View {
     /// premier, qui montrerait exactement la même chose (loi 2). `nil` ⇒ le rail
     /// reste ce qu'il était, un inventaire avec son bouton de retrait.
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)? = nil
+    /// **Le son de FOND de la publication** (#4657) — `nil` quand il n'y en a
+    /// pas, et la rangée retrouve alors sa forme d'avant : avatar et texte côte
+    /// à côte. Une pastille toujours montée, vide, occuperait la place d'un son
+    /// qui n'existe pas.
+    var backgroundSound: StoryAudioPlayerObject? = nil
 
     /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
     ///
@@ -362,22 +367,47 @@ struct ComposerDocumentSurface: View {
     /// posé par la loi 8 sans y contrevenir — il ne dépend d'aucun contenu,
     /// c'est une propriété de la SESSION, présente dès l'ouverture.
     private var textOnlyContent: some View {
-        HStack(alignment: .top, spacing: 12) {
-            MeeshyAvatar(
-                name: AuthManager.shared.currentUser?.displayName
-                    ?? AuthManager.shared.currentUser?.username ?? "M",
-                context: .feedComposer,
-                avatarURL: AuthManager.shared.currentUser?.avatar,
-                // Loi 6 — une vignette montre la DONNÉE. Le ThumbHash évite le
-                // rond vide pendant que l'image arrive : le substitut porte
-                // déjà les couleurs du vrai avatar.
-                thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
-            )
-            .padding(.leading, 16)
-            .padding(.top, 10)
-            .accessibilityHidden(true)
-            textOnlyField
+        // **Deux dispositions, et le son décide** (#4657). Sans son de fond, la
+        // rangée reste ce qu'elle était : avatar et texte côte à côte. Avec un
+        // son, la pastille prend la place à droite de l'avatar — les deux
+        // attributs qui existent AVANT le premier caractère tapé se lisent d'un
+        // coup d'œil — et le texte descend de ce qu'ils occupent, au lieu
+        // d'être recouvert.
+        Group {
+            if let backgroundSound {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 12) {
+                        avatarView
+                        ComposerAvatarSoundBadge(sound: backgroundSound)
+                        Spacer(minLength: 0)
+                    }
+                    textOnlyField
+                }
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    avatarView
+                        .padding(.top, 10)
+                    textOnlyField
+                }
+            }
         }
+    }
+
+    /// L'avatar, extrait des deux dispositions : le monter deux fois le ferait
+    /// diverger au premier réglage, et c'est le même visage dans les deux cas.
+    private var avatarView: some View {
+        MeeshyAvatar(
+            name: AuthManager.shared.currentUser?.displayName
+                ?? AuthManager.shared.currentUser?.username ?? "M",
+            context: .feedComposer,
+            avatarURL: AuthManager.shared.currentUser?.avatar,
+            // Loi 6 — une vignette montre la DONNÉE. Le ThumbHash évite le
+            // rond vide pendant que l'image arrive : le substitut porte
+            // déjà les couleurs du vrai avatar.
+            thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+        )
+        .padding(.leading, 16)
+        .accessibilityHidden(true)
     }
 
     private var textOnlyField: some View {
