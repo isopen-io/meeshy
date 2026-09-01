@@ -609,7 +609,12 @@ extension MeeshyComposerHost {
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
             ),
-            showsScene: documentHasScene,
+            // **Le MÊME prédicat que la vue montée** (#4513) — `sceneIsPresent`,
+            // jamais `documentHasScene` en direct. Les deux répondaient à la
+            // même question et divergeaient sur une story vide : la vue disait
+            // « il y a une scène », cette branche disait « non », et l'écran
+            // n'en montrait aucune.
+            showsScene: sceneIsPresent,
             sceneAspectRatio: viewModel.currentCanvasRatio,
             // **LE geste d'entrée dans l'éditeur** (#4513). Sur la scène
             // INCRUSTÉE (`1b`), taper un objet ouvre `1c` — c'est le seul

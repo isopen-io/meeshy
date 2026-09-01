@@ -26,7 +26,7 @@ import XCTest
 ///
 /// ## Pourquoi c'est la règle de divulgation progressive, à l'échelle de l'écran
 ///
-La doctrine est la **loi 8** du composer (`docs/product/MeeshyComposerDesign/BOUCLE.md`,
+/// La doctrine est la **loi 8** du composer (`docs/product/MeeshyComposerDesign/BOUCLE.md`,
 /// ligne 45, directive porteur 2026-08-30) : « le prisme n'affiche que ce dont
 /// on a besoin, au moment où on en a besoin — un contrôle dont l'objet n'existe
 /// pas ENCORE est absent, et il paraît à l'instant où son objet apparaît ».
@@ -146,6 +146,55 @@ final class ComposerSceneEditorEntryTests: XCTestCase {
         XCTAssertTrue(
             src.contains("onClose:{editsScene=false}"),
             "la sortie de `1c` doit revenir à `1b`, pas démonter le composer"
+        )
+    }
+
+    /// **UN SEUL prédicat de présence, pour la vue ET pour sa branche.**
+    ///
+    /// C'est le témoin qui manquait, et son absence a coûté une régression que
+    /// 263 tests verts n'ont pas vue : `mountedComposerView` lisait
+    /// `showsCanvas(...)` — vrai pour une story même vide — pendant que
+    /// `ComposerDocumentSurface(showsScene:)` recevait `documentHasScene`, faux
+    /// tant que rien n'est posé. Tant que `.document + hasScene` montait une
+    /// AUTRE vue, l'écart ne se voyait pas ; le jour où le document a porté la
+    /// scène lui-même, la story ouverte n'avait plus aucun canvas.
+    ///
+    /// > Deux prédicats qui répondent à la même question restent d'accord tant
+    /// > qu'un seul est consulté. Aucun témoin ne rougit, puisque chacun est
+    /// > juste séparément — c'est la mesure à l'ÉCRAN qui l'a rendu visible.
+    ///
+    /// La garde s'ancre sur le nom, pas sur la valeur : ce qui doit être
+    /// impossible est qu'un site LISE `documentHasScene` pour décider de la
+    /// présence d'une scène, quand `sceneIsPresent` est là pour ça.
+    func test_laPresenceDeLaScene_aUnSeulPredicat() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        XCTAssertTrue(
+            surfaces.contains("showsScene:sceneIsPresent"),
+            "la branche du document doit lire le MÊME prédicat que la vue montée — "
+            + "sinon une story ouverte n'a plus de canvas"
+        )
+        XCTAssertFalse(
+            surfaces.contains("showsScene:documentHasScene"),
+            "`documentHasScene` répond à « y a-t-il de la matière ? », pas à « y a-t-il une "
+            + "scène à montrer ? » — une story vide a la seconde sans la première"
+        )
+    }
+
+    /// Et le prédicat unique dit bien qu'une STORY montre son canvas dès son
+    /// ouverture — le cas exact qui a régressé.
+    func test_uneStoryOuverte_aUneScene_desLOuverture() {
+        XCTAssertTrue(
+            ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false),
+            "une story EST ses canvas : elle en montre un avant toute matière"
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(
+                surface: .document,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false),
+                editsScene: false
+            ),
+            .document,
+            "…et le document le porte INCRUSTÉ, ce qui n'a de sens que si sa branche le peint"
         )
     }
 
