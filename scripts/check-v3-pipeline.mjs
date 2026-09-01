@@ -305,6 +305,7 @@ const readWorld = async (root) => ({
   escapes: escapingRequests(root, V3_DIRECTORY),
   envChains: runtimeEnvChains(root, V3_DIRECTORY),
   v3Package: await readFile(join(root, `${V3_DIRECTORY}/package.json`), 'utf8'),
+  v3TsConfig: await readFile(join(root, `${V3_DIRECTORY}/tsconfig.json`), 'utf8'),
   playwright: await readFile(join(root, `${V3_DIRECTORY}/playwright.config.ts`), 'utf8'),
   suites: readdirSync(join(root, `${V3_DIRECTORY}/e2e/visual`))
     .filter((nom) => nom.endsWith('.spec.ts')),
@@ -808,6 +809,54 @@ const aucunPrefixeNeVoleUneRouteVoisine = (dep) => (world) => {
     );
 };
 
+/**
+ * LES PAQUETS COPIÉS SOUS LA RACINE SORTENT DU TYPE-CHECK DE LA V3.
+ *
+ * Le Dockerfile copie les paquets du monorepo SOUS la racine de l'application
+ * (`/app/packages/…`) — c'est ce qui crée le lien de workspace dans l'image.
+ * Or le `tsconfig.json` de la v3 inclut tous les `.ts` depuis cette même racine :
+ * dans l'image, et dans l'image SEULEMENT, les sources des paquets deviennent
+ * les siennes.
+ *
+ * Mesuré : l'ajout de `@meeshy/shared` a fait type-checker
+ * `packages/shared/prisma/migrations/migrate-user-roles.ts` par `next build`,
+ * qui a échoué sur `Cannot find module '../client'` — le client Prisma que la
+ * v3 ne génère pas et n'a aucune raison de générer. Dix minutes de
+ * construction pour l'apprendre, et RIEN en local ne pouvait le dire : le
+ * défaut est créé par la GÉOGRAPHIE de l'image. `@meeshy/design-tokens` et
+ * `@meeshy/icons` ne l'avaient jamais révélé — ils ne portent aucun `.ts`.
+ *
+ * Exclure n'empêche pas d'importer : TypeScript suit toujours les `.d.ts` par
+ * la résolution de modules. Cela l'empêche seulement de compiler les sources du
+ * paquet comme si elles étaient les nôtres.
+ */
+const COPIE_DE_PAQUET = /^COPY\s+packages\/([\w.-]+)\/\s+\.\/packages\//gm;
+
+const lesPaquetsCopiesSortentDuTypeCheck = (world) => {
+  const copies = [...world.dockerfile.matchAll(COPIE_DE_PAQUET)].map(([, nom]) => nom);
+  if (copies.length === 0) return [];
+
+  const exclus = (() => {
+    const bloc = world.v3TsConfig.match(/"exclude"\s*:\s*\[([^\]]*)\]/);
+    return bloc === null ? [] : [...bloc[1].matchAll(/"([^"]+)"/g)].map(([, valeur]) => valeur);
+  })();
+
+  const couvre = (nom) =>
+    exclus.some((motif) => motif === 'packages' || motif.startsWith(`packages/${nom}`));
+
+  return [...new Set(copies)]
+    .filter((nom) => !couvre(nom))
+    .map(
+      (nom) =>
+        `${V3_DIRECTORY}/Dockerfile copie packages/${nom}/ SOUS la racine de l'application, et ` +
+        `${V3_DIRECTORY}/tsconfig.json ne l'exclut pas : dans l'image — et dans l'image seulement ` +
+        `— le glob des sources balaie ses fichiers comme si ils étaient ceux de la v3. ` +
+        `next build type-checkera des fichiers du paquet (scripts de migration, seeds, outils) ` +
+        `avec la configuration de la v3, et échouera sur ce qu'ils importent. Remède : ajouter ` +
+        `"packages" à "exclude"`,
+    );
+};
+
 const theRunnerShipsWhatPublicHolds = (world) => {
   const copies = /^COPY --from=builder[^\n]*\/app\/public\s+\.\/public\s*$/m.test(world.dockerfile);
   const held = world.zone.publicFiles.length;
@@ -1033,6 +1082,7 @@ const CHECKS = [
     [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, leWorkerLegacySEfface(dep)],
     [`${dep.fichier} : aucun PathPrefix ne vole une route voisine du legacy`, aucunPrefixeNeVoleUneRouteVoisine(dep)],
   ]),
+  ['les paquets copiés sous la racine sortent du type-check', lesPaquetsCopiesSortentDuTypeCheck],
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
   ["aucun fichier source de la v3 n'est ignoré par git", noSourceFileOfTheV3IsGitIgnored],
 ];
@@ -1059,6 +1109,11 @@ const replaceIn = (world, key, needle, replacement) => {
 };
 
 const MUTATIONS = [
+  [
+    'le tsconfig de la v3 cesse d\'exclure les paquets copiés dans l\'image',
+    (world) => replaceIn(world, 'v3TsConfig', /,\s*"packages"/, ''),
+    'balaie ses fichiers comme si ils étaient ceux de la v3',
+  ],
   [
     // La sonde attendait `/login` tant que le legacy le servait seul. Depuis
     // que la zone le sert, l'invariant ne le compte PLUS comme volé — et il a
