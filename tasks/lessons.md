@@ -22905,7 +22905,7 @@ diagnostic de code. Et prévoir la place : un run de tests iOS produit un
 `.xcresult` volumineux à chaque essai — une boucle de retry qui ne les supprime
 pas au fur et à mesure fabrique elle-même la panne qu'elle finira par subir.
 
-## Leçon 396 — Un backtick dans une commande `ssh` s'exécute SUR LE SERVEUR, et une règle Traefik n'est faite que de backticks
+## Leçon 402 — Un backtick dans une commande `ssh` s'exécute SUR LE SERVEUR, et une règle Traefik n'est faite que de backticks
 
 **Lot des écrans d'accès v3.** Pour poser la nouvelle règle du routeur de
 staging, j'ai interpolé la valeur lue localement dans une commande `ssh` :
