@@ -36,6 +36,11 @@ const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
 const SANS_CHARTE = A.sans_charte === true
+// Les ecrans PHARES du porteur : implementes EN PREMIER, par le modele le plus fort, avec une
+// recette au navigateur en plus des deux revues. `dabord` ordonne ; `phares` (defaut = dabord)
+// choisit le traitement.
+const DABORD = Array.isArray(A.dabord) ? A.dabord.filter((c) => typeof c === 'string') : []
+const PHARES = new Set(Array.isArray(A.phares) ? A.phares : DABORD)
 const DATE = typeof A.date === 'string' ? A.date : '(date non fournie — la lire avec `date -I`)'
 
 // ---------------------------------------------------------------------------
@@ -228,6 +233,84 @@ ROUTES — COMPLEMENT (2026-09-01, apres le lancement du tour) :
   etat CHOIX a un lecteur sans session, jamais une redirection de plus.
 `
 
+
+// ---------------------------------------------------------------------------
+// LES ECRANS PHARES — le fil du membre et le fil de l'invite
+// ---------------------------------------------------------------------------
+
+const PHARE = `
+CET ECRAN EST UN ECRAN PHARE (directive du porteur, 2026-09-01) : « les deux fils, /chats/:id et
+/chat/:id, sont ce qui compte le plus ; ils doivent etre 100 % FONCTIONNELS, attrayants, aeres,
+agreables, modernes et TOTALEMENT TEMPS REEL, au maximum ». Tu y mets toute ton intelligence : rien
+d'approximatif, rien d'inerte, rien de « pour plus tard ». Le rendu que le porteur verra est celui
+que tu livres.
+
+LE FIL, ce qui doit MARCHER (chaque ligne est un temoin a ecrire — jest sur le document rendu,
+Playwright avec la passerelle de bouchon ET un bouchon socket.io fidele aux handlers du gateway) :
+1. SANS JAVASCRIPT : le fil rendu par le serveur avec le Prisme (resolvePrismTranslation), le
+   composeur <form method="post"> envoie et revient par Post/Redirect/Get ; les droits du lien ou
+   de la conversation ferment ce qui est interdit, avec sa raison ; les etats vide / introuvable /
+   session expiree / panne / hors-droits sont dessines.
+2. AVEC JAVASCRIPT — le module de participation (§ 12.4 de la conception), charge APRES le premier
+   pixel, jamais avant, et UNIQUEMENT sur ces surfaces : UNE connexion socket.io (auth JWT ou
+   session invitee, comme AuthHandler.ts l'attend), conversation:join a l'ouverture,
+   conversation:leave au depart ; puis, EN DIRECT, sans rechargement :
+   - message:new ⇒ la bulle apparait (auteur, heure, texte resolu par le Prisme du lecteur —
+     la charge porte les traductions disponibles ; sinon le texte d'origine avec sa langue) ;
+   - message:translation ⇒ la bulle passe a la langue du lecteur DES que la traduction arrive,
+     pastille de langue et lang= mis a jour, l'original repliable ;
+   - message:edited / message:deleted ⇒ la bulle change ou se retire, avec la mention ;
+   - reaction:added / reaction:removed ⇒ compteurs de reactions, et l'on peut reagir (si le
+     gateway l'expose au lecteur) ;
+   - typing:start / typing:stop ⇒ « X ecrit… » sous le fil ; on EMET typing:start a la frappe
+     (debounce) et typing:stop a l'envoi ou apres 3 s de silence ;
+   - conversation:unread-updated, message:pending-delivered et les accuses que le gateway sert ⇒
+     etats « envoye / recu / lu » discrets sur ses propres bulles ;
+   - presence (user:status / presence:snapshot) ⇒ le point de presence SEULEMENT si le serveur
+     le sert (directive 2026-08-25 : rien hors amitie acceptee — le client ne fabrique rien) ;
+   - audio:transcription-ready / audio:translation-ready ⇒ la transcription d'un vocal s'affiche
+     et suit le Prisme ; une piece jointe se rend selon son type (image, audio, fichier) avec
+     son poids ANNONCE avant tout telechargement.
+3. LE COMPOSEUR (« l'input ») — 100 % fonctionnel : textarea qui grandit avec le texte (1 a 6
+   lignes), Entree envoie et Maj+Entree passe a la ligne (documente et accessible), bouton
+   d'envoi 56 px, envoi OPTIMISTE (la bulle apparait grisee avec une horloge puis se confirme sur
+   l'accuse ou le message:new portant son identifiant client), erreur d'envoi VISIBLE avec
+   « reessayer » (jamais perdue en silence), brouillon conserve par conversation, compteur si
+   une limite existe, piece jointe selon les droits (canSendFiles / canSendImages), focus
+   conserve apres l'envoi, cible tactile >= 44 px partout.
+4. LA LISTE ET LE DEFILEMENT : ancre en bas ; un message recu quand on est en bas fait glisser
+   la liste, un message recu quand on lit plus haut affiche une pastille « N nouveaux messages »
+   qui ramene en bas au tap ; jamais de saut de position ; chargement de l'historique plus ancien
+   en remontant (pagination de GET /conversations/:id/messages) avec conservation de la position ;
+   separateurs de jour ; groupement des bulles consecutives d'un meme auteur ; 60 fps.
+5. LE RESEAU DEGRADE (§ 7 de la conception) : socket tombe < 30 s ⇒ point d'etat creux, rien
+   d'autre ; > 30 s ⇒ au retour reconnectAttempts=0, connect(), GET /sync depuis le curseur,
+   messages manques inseres sans sauter, separateur « des messages manquent ici » si hasGap ;
+   hors-ligne ⇒ bandeau sobre, composeur ACTIF, envois en file (offline-queue, idb-keyval),
+   grises avec horloge ; retour en ligne ⇒ vidage FIFO dans l'ordre d'ecriture ; onglet cache ⇒
+   ZERO requete (gate lifecycle) ; retour visible / pageshow{persisted} ⇒ reprise immediate ; une
+   erreur reseau n'efface JAMAIS un jeton.
+6. L'INVITE (/chat/:lien, etat INVITE) : la MEME vue, les droits du lien relus a chaque
+   chargement et annonces dans le bandeau des droits, 401 ⇒ bandeau a BOUTON « reprendre » et
+   lecture conservee, 410 ⇒ composeur ferme avec sa raison, jamais de re-jonction silencieuse,
+   battement de bail (/anonymous/refresh) tenu par UN onglet ; et l'etat CHOIX (cadre floute +
+   modale) puis l'etat MEMBRE (jonction + 302 /chats/:cle) comme le socle le dit.
+7. LE STYLE (charte § 12.5) : aere, bulles a filet fin ou pleines selon l'auteur, rayons de la
+   table, en-tete compact avec titre, membres, point d'etat et retour (44 px), pastille de langue
+   du Prisme discrete, composeur pose au bas de l'ecran, mode clair ET sombre regardes,
+   prefers-reduced-motion respecte, animations qui EXPLIQUENT (arrivee d'une bulle, confirmation
+   d'envoi) et jamais decoratives.
+8. LA MESURE, rendue dans ton rapport : poids gzip du module de participation et de
+   socket.io-client tel que servi, requetes avant le premier pixel, LCP en 3G Fast, temps entre un
+   message:new recu et sa bulle peinte (assertion Playwright), tout cela contre budgets.json.
+
+METHODE : lis d'abord services/gateway/src/socketio/handlers/** pour la forme EXACTE de chaque
+charge (message:new porte le message avec ses translations ? avec quels champs ? — cite les
+lignes), routes/conversations/*, routes/messages/*, routes/sync.ts, routes/anonymous.ts. Ecris le
+bouchon socket (serveur socket.io de test qui rejoue ces charges) dans e2e/visual/lib/ a cote de la
+passerelle de bouchon, puis les temoins, puis le code. Une capacite que le gateway n'expose pas au
+lecteur ne s'affiche PAS (regime 3), et tu le dis.
+`
 
 // ---------------------------------------------------------------------------
 // SCHEMAS
@@ -453,7 +536,9 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
     resultatsDesTours.push({ tour, arret: 'prerequis manquant', blocage: cadrage.blocage, etat: cadrage.etat })
     break
   }
-  const travaux = (cadrage.travaux || []).slice(0, PLAFOND)
+  const choisis = (cadrage.travaux || []).slice(0, PLAFOND)
+  const rang = (cle) => { const i = DABORD.indexOf(cle); return i === -1 ? DABORD.length : i }
+  const travaux = [...choisis].sort((a, b) => rang(a.cle) - rang(b.cle))
   if (!travaux.length) {
     log('Rien a faire : tout le focus et l ordre sont livres.')
     resultatsDesTours.push({ tour, arret: 'rien a faire', etat: cadrage.etat })
@@ -674,8 +759,9 @@ ${travaux.map(ligneDeTravail).join('\n')}`,
       ? `\nLa capture CIBLE de cet ecran est ${D}/cible/${t.cle}.png — REGARDE-LA (outil Read) avant d'ecrire. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; la CHARTE fait foi sur le style.`
       : ''
 
+    const phare = PHARES.has(t.cle)
     const fait = await agent(`${SOCLE}
-${PASSERELLE}${CHARTE}
+${PASSERELLE}${CHARTE}${phare ? PHARE : ''}
 TA MISSION — LIVRER ce travail, en TDD, en ENTIER.
 
 TRAVAIL : ${t.titre_issue}
@@ -708,7 +794,7 @@ METHODE, dans cet ordre :
 
 Rends un rapport texte : ce que tu as fait, les fichiers touches, les commandes lancees et leurs
 sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute contradiction trouvee.`,
-      { label: `livrer:${t.cle}`, phase: 'Implementer', model: 'opus', effort: 'high' })
+      { label: `livrer:${t.cle}`, phase: 'Implementer', model: phare ? 'fable' : 'opus', effort: phare ? 'max' : 'high' })
 
     // ------------------------------------------------------------------ Revue
     phase('Revue')
@@ -778,15 +864,40 @@ ${fait || '(aucun rapport rendu)'}`,
     ])
 
     const [revueS, revueO] = revues
-    let aCorriger = [...((revueS && revueS.defauts) || []), ...((revueO && revueO.defauts) || [])]
-      .filter((d) => d.gravite !== 'mineur')
+
+    const recette = phare
+      ? await agent(`${SOCLE}
+${PASSERELLE}${PHARE}
+TU ES LE RECETTEUR de l'ecran phare « ${t.titre_issue} ». Tu ne lis pas seulement le code : tu
+FAIS TOURNER l'ecran au navigateur (\`cd ${V3} && bun run build && bun run start\` en arriere-plan,
+la passerelle de bouchon et le bouchon socket de e2e/visual/lib/, Chromium de /opt/pw-browsers,
+deux pages dans un meme contexte pour jouer deux lecteurs) et tu joues chacune des huit familles
+ci-dessus comme un utilisateur exigeant sur un telephone : un message envoye par A apparait-il
+chez B sans rechargement ? la traduction arrive-t-elle en direct ? la frappe se voit-elle ?
+l'envoi hors-ligne repart-il dans l'ordre ? la position de lecture tient-elle ? le composeur
+grandit-il, envoie-t-il a Entree, garde-t-il le focus ? l'invite voit-il ses droits, puis un
+401 devient-il un bouton ? le mode clair est-il aussi soigne que le sombre ? les cibles font-elles
+44 px ? Rends CHAQUE defaut avec sa preuve (capture, assertion, sortie), classe bloquant tout ce
+qui rend l'ecran non fonctionnel ou inerte, majeur ce qui degrade l'usage, mineur le reste.
+Pose tes captures dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les.
+
+RAPPORT DE L'IMPLEMENTEUR :
+${fait || '(aucun rapport rendu)'}`,
+        { label: `recette:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'fable', effort: 'max' })
+      : null
+
+    let aCorriger = [
+      ...((revueS && revueS.defauts) || []),
+      ...((revueO && revueO.defauts) || []),
+      ...((recette && recette.defauts) || []),
+    ].filter((d) => d.gravite !== 'mineur')
 
     const corrections = []
     for (let passe = 1; passe <= 2 && aCorriger.length; passe += 1) {
       phase('Implementer')
       log(`${t.cle} : ${aCorriger.length} defauts non mineurs a corriger (passe ${passe})`)
       const correction = await agent(`${SOCLE}
-${PASSERELLE}${CHARTE}
+${PASSERELLE}${CHARTE}${phare ? PHARE : ''}
 TA MISSION — CORRIGER les defauts que la revue croisee a trouves sur « ${t.titre_issue} ».
 
 Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve
@@ -798,7 +909,7 @@ ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d
 
 Rends : corriges (nombre), refutes (nombre), rapport (ce qui a ete corrige, ce qui a ete refute et
 pourquoi, les commandes rejouees et leurs sorties).`,
-        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: 'opus', effort: 'high' })
+        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: phare ? 'fable' : 'opus', effort: phare ? 'max' : 'high' })
       corrections.push(correction)
 
       if (passe === 1 && correction && correction.corriges > 0) {
@@ -822,7 +933,7 @@ ${court(correction, 6000)}`,
     }
 
     resultats.push({
-      cle: t.cle, titre: t.titre_issue, issue: num, fait, revueS, revueO, corrections,
+      cle: t.cle, titre: t.titre_issue, issue: num, fait, revueS, revueO, recette, corrections,
       dimensions_mures: (revueO && revueO.dimensions_mures) || (revueS && revueS.dimensions_mures) || [],
       dimensions_restantes: (revueO && revueO.dimensions_restantes) || (revueS && revueS.dimensions_restantes) || [],
     })
