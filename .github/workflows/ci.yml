@@ -364,6 +364,26 @@ jobs:
           cd apps/web-v3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:a11y
 
+      # Les DEUX autres suites de PAGE (`SUITES_DE_PAGE`, playwright.config.ts) —
+      # les cibles tactiles de la charte (§ 12.5 règles 4 et 6) et axe sur la
+      # page VIVANTE du fil, module de participation greffé — étaient déclarées
+      # et jamais lancées : `test:chaines` les ignore par construction
+      # (`testIgnore`), et aucun job ne les nommait. Quatrième fois que la leçon
+      # se paie ici ; `scripts/check-v3-pipeline.mjs` (« toute suite e2e de la
+      # v3 est LANCÉE ») les rougissait, et le rapport de l'écran ne le disait
+      # pas. Elles vivent dans CE job parce qu'elles mesurent une PAGE servie
+      # par le `webServer` de la config — et que les cibles sont un gate
+      # d'accessibilité (WCAG 2.5.8), pas un gate de chaîne.
+      - name: Gate cibles — 0 cible sous 44 px, action primaire à 56
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:cibles
+
+      - name: Gate axe — la page VIVANTE du fil, module de participation greffé
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:fil-a11y
+
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
       # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
       # quand celle-ci tourne.

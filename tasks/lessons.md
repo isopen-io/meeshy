@@ -23642,3 +23642,163 @@ Cette leçon existait déjà en mémoire
 (`reference_a_sweep_by_label_misses_values_that_arrive_by_name`, écrite pour un
 champ atteint par un nom plutôt qu'un label) et je l'ai refaite sur un document
 au lieu d'un fichier de code. La forme est indifférente au support.
+
+## Leçon 422 — Un bouchon qui ne rejoue pas la COURSE du serveur rend vert un client qui la perd
+
+Trois des seize défauts de la revue croisée du fil temps réel (#4524) avaient la
+même forme : le témoin était vert contre `e2e/visual/lib/*` et faux contre la
+passerelle, parce que le bouchon avait copié la RÉPONSE de la route sans copier
+sa LOI.
+
+| ce que le bouchon faisait | ce que la passerelle fait | ce qui passait vert |
+|---|---|---|
+| posait l'identité du socket SYNCHRONEMENT dans `connection` | `handleTokenAuthentication(socket)` lancé SANS être attendu (`MeeshySocketIOManager.ts:1740`) — un `conversation:join` émis sur `connect` reçoit `not_authenticated` (`ConversationHandler.ts:129-134`) | un module qui rejoignait la room sur `connect` et n'y entrait jamais |
+| `hasGap: sync.trou`, inconditionnel | `hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD` (`routes/sync/index.ts:279`), et `checkpointSeq = 0` pour une session anonyme (`:274-278`) | un client qui n'envoyait jamais `seq`, et un cas de recette qui promettait à l'INVITÉ un séparateur que la passerelle ne sait pas lui servir |
+| servait `POST /anonymous/refresh` comme une route vivante | `depreciee({ depuis: '2026-08-30', successeur: '/guest-sessions/me' })` (`anonymous.ts:341`) | un battement de bail bâti sur un alias condamné au Sunset |
+
+> **Un bouchon copie une LOI, pas une réponse.** La question à poser à chaque
+> route ou événement bouchonné : « à quelle condition la passerelle répond-elle
+> AUTRE chose ? » — l'asynchronie, la garde sur un paramètre absent, la
+> dépréciation. Si le bouchon ne peut pas produire cette autre réponse, le
+> témoin ne peut pas tomber, et son vert est celui de la vacuité.
+
+Le remède a eu deux faces, et la seconde est la plus facile à oublier : rendre
+au bouchon la course (un `setTimeout` avant `authenticated`, `hasGap` calculé
+par la formule du serveur, l'alias déprécié gardé mais JAMAIS attendu par un
+spec), PUIS faire tomber le témoin AVANT le correctif — c'est le seul moment où
+l'on sait que le bouchon voit vraiment.
+
+Corollaire de recette : **une capacité que la passerelle n'expose pas à un
+lecteur ne s'affiche pas (régime 3), même si la conception l'énonce pour
+lui.** Le cas D du § 6.5 promettait `hasGap` à l'invité ; la loi du serveur dit
+qu'un `Participant.id` n'a pas de curseur. Le cas est resté — il gage l'ordre
+d'envoi et le rattrapage —, le séparateur est gagé côté membre, et la
+conception le DIT au lieu de le laisser croire.
+
+## Leçon 423 — Un critère écrit dans le vocabulaire d'un adaptateur est vert par vacuité sur la porte qu'il gate
+
+**Le fait (2026-09-02, livraison de `join`, #4522).** Le critère de fin de
+l'écran, le § 6.3.A de la conception et la charte (règle 20) nommaient « les
+sept refus » : `403 REQUIRES_ACCOUNT`, `429 MAX_CONCURRENT_USERS`, `410
+LINK_MAX_USES`… Les témoins jest et la passerelle de bouchon les rejouaient
+fidèlement, et tout était vert. Or la porte que la v3 appelle — `POST
+/links/:key/members`, la seule que le § 12.3 retienne — émet SIX codes
+d'admission (`linkAdmission.ts:112-118`), et **`REQUIRES_ACCOUNT` comme
+`MAX_CONCURRENT_USERS` ne sont émis par AUCUNE route du gateway** : `grep`
+sur `services/gateway/src` ne les trouve que dans des commentaires. La liste
+décrivait l'adaptateur `POST /anonymous/join/:linkId` d'AVANT #4167, dont
+`410 LINK_MAX_USES` et `429 MAX_CONCURRENT_USERS` ont fusionné en `409
+LINK_EXHAUSTED` (`routes/anonymous.ts:238-239`).
+
+Ce que ça cassait vraiment n'était pas cosmétique : `refusGardeLeFormulaire`
+tranchait sur le STATUT (« 409 ⇒ le pseudo est pris, on ressaisit »), donc
+un vrai `409 LINK_EXHAUSTED` aurait peint « ce lien a atteint son nombre
+d'entrées » comme une erreur de PSEUDO, formulaire ouvert, et le visiteur
+aurait ressaisi en boucle un lien plein.
+
+> **Une liste de codes dans un critère porte deux affirmations : « voilà ce
+> qu'on peint » (vérifiable) et « voilà ce que la porte émet » (jamais
+> vérifiée). La seconde se relit dans l'ÉMETTEUR, pas dans le document — et
+> quand deux portes parlent deux vocabulaires pour le même lien (l'aperçu
+> dit `LINK_MAX_USES`, la jonction `LINK_EXHAUSTED`), c'est le code, jamais le
+> statut, qui dit si l'on ressaisit ou si l'on referme.**
+
+C'est la leçon 422 (« un bouchon copie une LOI, pas une réponse ») portée un
+cran plus haut : ici la loi était copiée juste — le bouchon rejouait ce qu'on
+lui dictait — mais ce qu'on lui dictait venait d'un document, pas du code. Le
+remède a trois faces : le bouchon produit ses refus depuis l'ÉTAT du lien
+(`passerelle.lien`, la séquence d'`admitLinkEntry` dans son ordre) et non
+depuis un code injecté ; la table des phrases ne connaît que des codes qu'une
+route émet (un témoin l'affirme : `REQUIRES_ACCOUNT` absent) ; et le document
+qui portait la liste dit désormais d'où elle venait (§ 6.3.A encadré, § 12.9).
+
+Deux voisines du même lot, de la même forme « la donnée arrive, personne ne la
+consomme » (leçon 421) : l'aperçu servait `requireEmail` / `requireBirthday`
+et la porte refusait 400 sans eux — la modale ne les demandait pas ; et
+`allowedIpRanges` est jugé sur `request.ip`, que la v3 — qui poste depuis son
+SERVEUR, là où le legacy poste depuis le navigateur — présentait comme celle
+du conteneur. La question qui attrape les trois est la même : **pour chaque
+champ que la porte LIT, qui le lui FOURNIT, et depuis quel bord ?**
+
+## Leçon 424 — Un refus qui arrive AVANT la lecture de ce que le lecteur détient tranche à sa place
+
+**Le fait (2026-09-02, revue croisée de `join`, #4522).** `/chat/:lien`
+lisait le cookie de la place APRÈS l'aperçu du lien, parce que c'est l'aperçu
+qui rend la clé canonique (`linkId`) dont le cookie porte le nom. Or l'aperçu
+refuse 410 un lien inactif, échu ou PLEIN (`routes/anonymous.ts:602-613`),
+et un lien plein l'est PAR son dernier admis — dont la place est active, et
+que le battement (qui ne connaît pas `maxUses`) aurait servie. Le refus
+court-circuitait donc la lecture du cookie : le dernier admis recevait son
+201, son cookie, puis la modale du visiteur ; tout invité d'un lien fermé
+pendant sa lecture était renvoyé à « anonyme ou compte ? » au rechargement.
+L'état G du § 6.3, DOCUMENTÉ dans le docblock de la route, était inatteignable
+pour deux de ses trois codes. Le témoin jest le certifiait pourtant vert :
+il réglait l'aperçu à 200 et le battement à 410 `LINK_DEACTIVATED` — une
+combinaison que la passerelle ne produit jamais, puisque les deux routes
+lisent la même ligne (`isActive`, `expiresAt`).
+
+> **Quand une réponse de REFUS ne porte pas la clé qui nommerait ce que le
+> lecteur détient, l'ordre « demander d'abord, lire le cookie ensuite » fait
+> du refus le juge de la place.** La question à poser à tout écran gouverné
+> par « ce que le lecteur DÉTIENT » : à quel appel la route apprend-elle la
+> clé de ce qu'il détient — et cet appel peut-il refuser AVANT de la rendre ?
+> Si oui, il faut une porte qui reconnaisse ce qu'il présente sans juger
+> l'objet (`GET /links/:identifier` : « ce jeton tient-il une place ici ? »),
+> et le bouchon d'un tel écran se règle par l'ÉTAT partagé, jamais par
+> endpoint — c'est la leçon 422 vue du client : un mock par route certifie
+> des chemins que le serveur ne produit pas.
+
+Trois voisines du même lot, de la même famille « la charge a un effet que la
+provenance ne justifie pas » : un `GET` qui JOINT (état MEMBRE) répondait
+aussi à un préchargement du navigateur ; un `POST` sans regard sur `Origin`
+posait une place — et son cookie — dans le navigateur de qui n'avait rien
+soumis ; un second `POST` du même formulaire prenait une seconde place parce
+que le cookie de la première était lu APRÈS le champ `pseudo`. La question
+qui attrape les trois : **avant d'agir, la requête a-t-elle dit d'où elle
+vient (`Sec-Purpose`, `Sec-Fetch-Site`) et ce qu'elle tient déjà (le cookie)
+— et la route les lit-elle AVANT de lire ce qu'elle demande ?** Sites :
+`apps/web-v3/app/provenance.ts`, `app/(public)/chat/[lien]/route.ts` ›
+`situeLInvite` / `rejonction`.
+
+## Leçon 425 — Un document qui dit ce que la passerelle PORTE sans citer l'émetteur fait écrire un bouchon qui le porte — et un témoin vert par vacuité
+
+**Le fait (2026-09-02, revue croisée de `rights`, #4523).** La conception
+(§ 12.3), le critère de fin, trois doc-commentaires et le spec affirmaient
+« les droits sont RELUS à chaque battement — l'hôte a pu les changer ». Le
+bouchon faisait ce que le document disait : son battement servait un objet
+MUTABLE que le spec changeait à la main, et le témoin « un droit retiré se voit
+au battement suivant » était vert. La passerelle, elle, rend au battement
+l'INSTANTANÉ pris au join (`participantConversationPayload`,
+`link-admission.ts:566-575` : `participant.permissions` +
+`shareLink.allowViewHistory`), que `services/participantRights.ts:6-13`
+déclare noir sur blanc ne suivre ni le lien ni le delta posé par l'hôte. Le
+changement de l'hôte voyage par un ÉVÉNEMENT — `participant:rights-updated`,
+poussé sur la room de conversation et, en charge complète, sur la room
+personnelle de l'invité (`participants-writes.ts:403-425`, room rejointe par
+`AuthHandler.ts:381`) — que personne n'écoutait (`grep rights participate.ts`
+: rien). En production : bandeau « Écrire et répondre », composeur ouvert,
+droit retiré.
+
+> **Une affirmation sur ce qu'une route PORTE se relit dans son ÉMETTEUR,
+> jamais dans le document qui la répète — et la question suivante est : « par
+> quel AUTRE canal la passerelle dit-elle ce changement ? ».** Un bouchon
+> écrit d'après le document copie la réponse que le document imagine (leçon
+> 422 en amont : la loi n'était même pas connue) ; un événement que la
+> passerelle pousse et que personne n'écoute est la forme « la donnée
+> arrive, personne ne la consomme » (leçon 421) côté socket.
+
+Trois voisines du même lot, de la forme « le serveur sert quelque chose que
+le document ne sert pas » : un battement 410 (état G) faisait rendre ZÉRO
+message et quatre verdicts REFUSÉS que rien n'avait relus, alors que la liste
+ne lit pas `isActive` et que la reconnaissance NOMME l'occupant
+(`currentUser`) ; un droit rendu après un chargement fermé ne rouvrait rien,
+parce que le serveur ne servait aucun `<form>` à révéler (le symétrique de la
+raison cachée qu'il servait déjà) ; et une page d'historique gardait la
+teinte « neuve » parce que le PEINTRE la posait — peindre n'est pas signaler.
+La question qui attrape les trois : **ce que le document affiche dans cet
+état est-il ce que la passerelle a SERVI — ni plus (un verdict fabriqué), ni
+moins (une liste non demandée, un formulaire non servi) ?** Sites :
+`apps/web-v3/lib/realtime/droits-peinture.ts` › `droitsDuChangement`,
+`app/(public)/chat/[lien]/route.ts` › `occupantDeLaPlace`,
+`app/connecte/fil-vue.ts` › `Composeur.cause`, `e2e/visual/lib/bouchon-fil.ts`
+› `PlaceDeLInvite` / `porteDeLHote`.

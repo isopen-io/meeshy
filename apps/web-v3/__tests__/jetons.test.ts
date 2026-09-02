@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 import {
   audit,
+  focusInvisibles,
+  focusInvisiblesDans,
   basculesAutomatiques,
   blocsCss,
   contrastesInsuffisants,
@@ -56,6 +58,7 @@ const rapportVide = {
   moteurs: [],
   orphelins: [],
   contrastes: [],
+  focus: [],
   ordres: [],
   suivis: [],
 };
@@ -277,7 +280,24 @@ describe('packages/design-tokens, LA table de jetons de la v3', () => {
     expect(jetonsOrphelins(JETONS)).toEqual([]);
   });
 
+  /**
+   * L'EXCEPTION NOMMÉE, et pourquoi elle n'est pas une brèche.
+   *
+   * `--font-body` de la planche vaut « Inter, … » et la planche la CHARGE, chez
+   * Google Fonts, dans son `<helmet>`. La charte (§ 12.5 règle 2) interdit à la
+   * v3 toute requête de police : son jeton s'appelle `--font-native` et ne
+   * nomme que la pile système. Les deux ne peuvent donc pas se reconduire — ce
+   * n'est pas une dérive, c'est l'écart typographique ASSUMÉ entre la planche et
+   * le design system Meeshy, celui-là même que la mission déclare (« polices,
+   * couleurs et rayons viennent du design system ; l'écart typographique avec la
+   * planche est assumé »).
+   *
+   * L'exception est une LISTE, pas un filtre : un second jeton qui cesserait de
+   * se reconduire ferait tomber ce témoin, et devrait s'écrire ici avec sa
+   * raison.
+   */
   it('reconduit exactement les jetons reconstitués de la planche (ds-shim.css)', () => {
+    const NON_RECONDUITS = new Set(['--font-body']);
     const shim = Object.assign(
       {},
       ...blocsCss(lis(join(PLANCHE, 'ds-shim.css'))).map((bloc) => bloc.jetons),
@@ -285,10 +305,11 @@ describe('packages/design-tokens, LA table de jetons de la v3', () => {
     const table = { ...jetonsDe('tokens.css', ':root'), ...jetonsDe('dark.css', ':root') };
 
     expect(Object.keys(shim).length).toBeGreaterThan(0);
+    expect([...NON_RECONDUITS].filter((nom) => shim[nom] === undefined)).toEqual([]);
     expect(
-      Object.entries(shim).filter(
-        ([nom, valeur]) => table[nom]?.toLowerCase() !== valeur.toLowerCase(),
-      ),
+      Object.entries(shim)
+        .filter(([nom]) => !NON_RECONDUITS.has(nom))
+        .filter(([nom, valeur]) => table[nom]?.toLowerCase() !== valeur.toLowerCase()),
     ).toEqual([]);
   });
 
@@ -319,6 +340,37 @@ describe('la table est LISIBLE — la dimension 5 se calcule, elle ne s\'affirme
         .map((rang) => contraste(encre, servi(schema, `--color-avatar-${rang}`)))
         .filter((rapport) => rapport < 4.5),
     ).toEqual([]);
+  });
+
+  /**
+   * L'ÉTAT SE MESURE COMME LE REPOS. La charte (règle 4) peint le SURVOL de
+   * l'action principale avec `--color-primary-strong`, sous la MÊME encre
+   * qu'au repos. Rien ne mesurait ce fond-là : en sombre il rendait 4,37:1,
+   * c'est-à-dire une infraction permanente sur la plus grosse cible de l'écran,
+   * pendant que le gate rendait vert. Une paire se déclare par SITUATION DE
+   * LECTURE, jamais par jeton.
+   */
+  it.each(SCHEMAS)('tient 4,5:1 sur le SURVOL de l’action principale ($nom)', (schema) => {
+    expect(
+      contraste(servi(schema, '--color-on-primary'), servi(schema, '--color-primary-strong')),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * `strong` s'ÉLOIGNE du plan, `soft` s'en rapproche — c'est la loi que
+   * `light.css` appliquait et que `dark.css` inversait. Elle se mesure : sur le
+   * plan de la page, le survol doit être PLUS contrasté que le repos, dans les
+   * deux schémas.
+   */
+  it.each(SCHEMAS)('peint un survol qui s’éloigne du plan, jamais qui s’en rapproche ($nom)', (schema) => {
+    const plan = servi(schema, '--color-bg');
+
+    expect(contraste(servi(schema, '--color-primary-strong'), plan)).toBeGreaterThan(
+      contraste(servi(schema, '--color-primary'), plan),
+    );
+    expect(contraste(servi(schema, '--color-primary-soft'), plan)).toBeLessThan(
+      contraste(servi(schema, '--color-primary'), plan),
+    );
   });
 
   it.each(SCHEMAS)('tient 3:1 pour le contour visible d\'un contrôle ($nom)', (schema) => {
@@ -544,5 +596,163 @@ describe('le scan de apps/web-v3', () => {
 
     expect(verdict(rapport)).toBe(1);
     expect(formateAudit(rapport)).toContain("n'est pas plus clair que");
+  });
+});
+
+/**
+ * LES JETONS QUE LA CHARTE FAIT ENTRER DANS LA TABLE — conception § 12.5 règle 1.
+ *
+ * « Couleur, rayon, police, ESPACE, CIBLE et GÉOMÉTRIE viennent de
+ * `packages/design-tokens` » : jusqu'à la directive du 2026-09-01, la table ne
+ * portait que les trois premières, et les feuilles écrivaient leurs espacements
+ * en pixels littéraux — la SECONDE table du corollaire 2, sous un autre nom.
+ * Ces témoins gardent l'entrée : les valeurs, leur unicité, et la lisibilité des
+ * quatre voiles, que `contrastesInsuffisants` ne pouvait pas mesurer tant que
+ * `resout` ne savait pas calculer un `color-mix`.
+ */
+describe('les jetons d’ESPACE, de CIBLE et de GÉOMÉTRIE de la charte', () => {
+  const HORS_SCHEMA = () => jetonsDe('tokens.css', ':root');
+
+  it('porte l’échelle fermée 4·8·12·16·24·32·48·64·96', () => {
+    const table = HORS_SCHEMA();
+
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9].map((rang) => table[`--space-${rang}`])).toEqual([
+      '4px',
+      '8px',
+      '12px',
+      '16px',
+      '24px',
+      '32px',
+      '48px',
+      '64px',
+      '96px',
+    ]);
+  });
+
+  it('porte les cibles de la règle 4 et les traits de la règle 10', () => {
+    const table = HORS_SCHEMA();
+
+    expect(table['--target-min']).toBe('44px');
+    expect(table['--action-height']).toBe('56px');
+    expect(table['--action-height-secondary']).toBe('52px');
+    expect(table['--stroke-hair']).toBe('1px');
+    expect(table['--stroke-strong']).toBe('2px');
+    expect(table['--stroke-focus']).toBe('3px');
+  });
+
+  it('sert la pile SYSTÈME, sans une police à télécharger', () => {
+    const native = HORS_SCHEMA()['--font-native'];
+
+    expect(native).toBeDefined();
+    expect(native).not.toContain('Inter');
+    expect(HORS_SCHEMA()['--font-body']).toBeUndefined();
+  });
+
+  it.each(SCHEMAS)('déclare les quatre voiles sur --color-surface ($nom)', (schema) => {
+    const table = jetonsDe(schema.fichier, schema.selecteur);
+
+    expect(
+      ['primary', 'success', 'warning', 'danger'].filter(
+        (etat) => !(table[`--color-tint-${etat}`] ?? '').includes('color-mix'),
+      ),
+    ).toEqual([]);
+  });
+
+  it.each(SCHEMAS)('tient 4,5:1 pour le texte sur chacun des quatre voiles ($nom)', (schema) => {
+    const encre = servi(schema, '--color-text');
+
+    expect(
+      ['primary', 'success', 'warning', 'danger']
+        .map((etat) => ({
+          etat,
+          rapport: contraste(encre, servi(schema, `--color-tint-${etat}`)),
+        }))
+        .filter(({ rapport }) => rapport < 4.5),
+    ).toEqual([]);
+  });
+
+  it.each(SCHEMAS)('tient 3:1 entre l’anneau de focus et son contre-anneau ($nom)', (schema) => {
+    expect(
+      contraste(servi(schema, '--color-focus'), servi(schema, '--color-focus-contra')),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * LE CONTRAT RÉEL DE L'ANNEAU, ET POURQUOI CE N'EST PAS UNE PAIRE.
+   *
+   * La règle 15 pose DEUX anneaux parce qu'UN seul est invisible quelque part.
+   * Sur `--color-primary` — le bouton que la charte rend le plus GROS — l'encre
+   * rend 2,58:1 en sombre et 2,94:1 en clair : aucun couple ne tient 3:1 partout
+   * avec ses deux membres. Ce qui doit tenir, c'est « pour chaque fond, AU MOINS
+   * UN des deux ». Un anneau peint à l'accent passait la paire ci-dessus tout en
+   * rendant 1,43:1 sur ce bouton — le défaut que cette disjonction attrape et
+   * que la conjonction laissait passer.
+   */
+  it('laisse au moins un anneau visible sur chaque fond, dans les deux schémas', () => {
+    expect(focusInvisibles(JETONS)).toEqual([]);
+  });
+
+  /**
+   * LA SONDE. Zéro entrée ne prouve rien tant qu'on n'a pas vu la mécanique
+   * rougir : un couple dont les DEUX membres s'évanouissent sur un même fond
+   * doit être nommé, avec le meilleur des deux rapports.
+   */
+  it('rougit sur un couple dont les deux anneaux s’évanouissent sur un fond', () => {
+    const table = {
+      '--color-focus': '#161826',
+      '--color-focus-contra': '#0d0e16',
+      '--color-bg-sunken': '#08090f',
+      '--color-bg': '#0d0e16',
+      '--color-surface': '#161826',
+      '--color-surface-raised': '#22243a',
+      '--color-primary': '#818cf8',
+      '--color-tint-primary': '#23263f',
+      '--color-tint-success': '#182a29',
+      '--color-tint-warning': '#231f22',
+      '--color-tint-danger': '#2c1f2b',
+    };
+
+    expect(focusInvisiblesDans(table).map(({ fond }) => fond)).toContain('--color-bg');
+  });
+
+  /**
+   * POURQUOI DEUX ANNEAUX, mesuré plutôt qu'affirmé : l'encre du schéma — la
+   * couleur la plus contrastée de la table — ne tient PAS 3:1 sur le bouton
+   * principal, et un anneau peint à l'accent y tomberait encore plus bas. C'est
+   * le contre-anneau qui porte là, et l'anneau qui porte sur les plans.
+   */
+  it.each(SCHEMAS)('mesure ce qu’un anneau SEUL perdrait sur le bouton principal ($nom)', (schema) => {
+    expect(contraste(servi(schema, '--color-text'), servi(schema, '--color-primary'))).toBeLessThan(3);
+    expect(
+      contraste(servi(schema, '--color-primary-soft'), servi(schema, '--color-primary')),
+    ).toBeLessThan(3);
+    expect(
+      contraste(servi(schema, '--color-focus-contra'), servi(schema, '--color-primary')),
+    ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * `resout` ne rendait que des alias et des hex : un jeton écrit `color-mix(…)`
+ * rendait `null`, c'est-à-dire — pour `contrastesInsuffisants` — une paire NON
+ * MESURABLE, donc une infraction. Les quatre voiles de la charte sont des
+ * `color-mix` : sans cette arithmétique, soit ils restaient hors de la table,
+ * soit le gate de contraste devenait rouge en permanence.
+ */
+describe('l’arithmétique d’un voile — color-mix(in srgb, A p%, B)', () => {
+  const TABLE = { '--a': '#ffffff', '--b': '#000000', '--v': 'color-mix(in srgb, var(--a) 50%, var(--b))' };
+
+  it('mélange deux jetons dans l’espace srgb', () => {
+    expect(resout(TABLE, '--v')).toBe('#808080');
+  });
+
+  it('prend 100 % moins le pourcentage écrit quand le second terme n’en porte pas', () => {
+    expect(resout({ ...TABLE, '--v': 'color-mix(in srgb, var(--a) 0%, var(--b))' }, '--v')).toBe(
+      '#000000',
+    );
+  });
+
+  it('rend null sur un espace de couleur qu’il ne sait pas mélanger', () => {
+    expect(resout({ ...TABLE, '--v': 'color-mix(in oklch, var(--a) 50%, var(--b))' }, '--v')).toBeNull();
   });
 });

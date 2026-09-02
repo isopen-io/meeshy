@@ -73,7 +73,7 @@ describe('GET /l/:token — un humain', () => {
     const reponse = await demande('8fz3-lagos', { 'user-agent': UA_IPHONE });
 
     expect(reponse.status).toBe(302);
-    expect(reponse.headers.get('location')).toBe('/chats/8fz3-lagos');
+    expect(reponse.headers.get('location')).toBe('/chat/8fz3-lagos');
     expect(await reponse.text()).toBe('');
   });
 
@@ -204,7 +204,7 @@ describe('GET /l/:token — un robot d’aperçu', () => {
     expect(reponse.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('<meta property="og:title" content="Équipe Lagos"/>');
     expect(html).toContain('og:description');
-    expect(html).toContain('href="/chats/8fz3"');
+    expect(html).toContain('href="/chat/8fz3"');
   });
 
   it('ne relaie AUCUNE identité de créateur dans le HTML qu’il rend', async () => {

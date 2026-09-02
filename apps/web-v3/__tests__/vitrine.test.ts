@@ -1,5 +1,7 @@
-import { PIED } from '@/app/enveloppe/contenu';
+import { PIED, REPERE_DU_COMPTE, REPERE_DU_PIED } from '@/app/enveloppe/contenu';
 import { ATOUTS, HEROS, MISSION } from '@/app/vitrine/contenu';
+import { GLYPHE_DE_LA_MARQUE } from '@/app/enveloppe/contenu';
+import { GLYPHE_DU_BADGE, glypheDeLAtout } from '@/app/vitrine/glyphes';
 import { documentDeLaVitrine } from '@/app/vitrine/vue';
 
 /**
@@ -84,5 +86,75 @@ describe('la vitrine', () => {
   it('n’annonce pas une navigation que la v3 ne sert pas', () => {
     expect(doc).not.toContain('href="/features"');
     expect(doc).not.toContain('>Accueil<');
+  });
+
+  // MARK: — la forme de la charte (§ 12.5)
+
+  /**
+   * Règle 4 — l'action principale est la CIBLE de 56 px, la secondaire celle de
+   * 52 px. Le témoin porte sur la CLASSE parce que c'est elle qui porte la
+   * hauteur : la mesure en pixels, elle, se prend au navigateur
+   * (`e2e/visual/v3-cibles.spec.ts`).
+   */
+  it('sert ses appels à l’action dans le vocabulaire de la charte', () => {
+    expect(doc).toContain('<a class="action primaire" href="/signup">');
+    expect(doc).toContain('<a class="action contour" href="/login">');
+    expect(doc).not.toContain('class="cta');
+  });
+
+  /**
+   * Règle 23 — le glyphe est une PONCTUATION, pris au sprite commité et inliné :
+   * la vitrine est gatée à UNE requête avant le premier pixel (§ 12.6), donc
+   * elle ne peut pas attendre le sprite externe.
+   */
+  it('inline ses glyphes depuis le sprite, sans une requête de plus', () => {
+    expect(doc).toContain(`<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">`);
+    expect(doc).not.toContain('<use ');
+    expect(doc).not.toContain('sprite.svg');
+    expect(GLYPHE_DE_LA_MARQUE).toBe('ph-chat-circle');
+    expect(GLYPHE_DU_BADGE).toBe('ph-translate');
+  });
+
+  /**
+   * NEUF cartes, NEUF tuiles : une grille qui perdrait une tuile rendrait une
+   * carte muette sans qu'aucune assertion de présence ne tombe.
+   */
+  it('donne sa tuile à chacun des neuf atouts', () => {
+    expect(new Set(ATOUTS.map((atout) => glypheDeLAtout(atout.titre))).size).toBe(ATOUTS.length);
+    const grille = doc.slice(doc.indexOf('<ul>'), doc.indexOf('</ul>'));
+
+    expect((grille.match(/<span class="tuile" aria-hidden="true">/g) ?? []).length).toBe(
+      ATOUTS.length,
+    );
+  });
+
+  /**
+   * Règle 7 — un contrôle existe s'il a un effet. Ni ancre morte, ni bouton sans
+   * gestionnaire : cette page ne porte aucun JavaScript qui pourrait en armer un.
+   */
+  it('ne porte aucun contrôle inerte', () => {
+    expect(doc).not.toContain('href="#"');
+    expect(doc).not.toContain('onclick');
+    expect(doc).not.toContain('type="button"');
+  });
+
+  /**
+   * Règle 7 — du HTML réel : les deux navigations sont NOMMÉES, sans quoi elles
+   * se confondent pour un lecteur d'écran.
+   *
+   * LE COMPTE NE SUFFIT PAS, ET C'EST LA LEÇON. Ce témoin ne vérifiait que la
+   * PRÉSENCE de deux `aria-label` : la navigation du héros portait le texte du
+   * BADGE — « navigation, Traduction en temps réel » annoncé pour l'accès au
+   * compte — et il restait vert, `axe` avec lui (l'étiquette n'était pas vide,
+   * elle était fausse). Un repère se garde sur la VALEUR de son nom.
+   */
+  it('nomme chacune de ses deux navigations par sa FONCTION', () => {
+    expect((doc.match(/<nav /g) ?? []).length).toBe(2);
+    expect((doc.match(/<nav [^>]*aria-label="/g) ?? []).length).toBe(2);
+
+    expect(doc).toContain(`<nav class="actions" aria-label="${REPERE_DU_COMPTE}">`);
+    expect(doc).toContain(`aria-label="${REPERE_DU_PIED}"`);
+    expect(doc).not.toContain(`aria-label="${HEROS.badge}"`);
+    expect(doc).not.toContain('aria-label="Meeshy"');
   });
 });

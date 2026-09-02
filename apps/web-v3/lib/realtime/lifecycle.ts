@@ -1,7 +1,3 @@
-'use client';
-
-import { useEffect, useRef } from 'react';
-
 /**
  * Le SITE UNIQUE du cycle de vie de la v3 (conception § 3.3, § 6.2, § 7).
  *
@@ -391,37 +387,4 @@ export const observeCycleDeVie = (options: OptionsDuCycleDeVie): (() => void) =>
       canal.close();
     }
   };
-};
-
-/**
- * La SEULE voie ouverte à un composant.
- *
- * L'attache ne dépend que de valeurs PRIMITIVES : un composant qui reconstruit
- * son objet d'options à chaque rendu — le cas nominal — ne redémarre ni les
- * écouteurs ni l'élection, et ne peut donc pas produire la boucle
- * effet → état → rendu → nouvelle identité → effet.
- */
-export const useCycleDeVie = (options: OptionsDuCycleDeVie): void => {
-  const dernieres = useRef(options);
-  const { cleDuJeton, onglet } = options;
-  const intervalleMs = options.battement?.intervalleMs;
-
-  useEffect(() => {
-    dernieres.current = options;
-  });
-
-  useEffect(
-    () =>
-      observeCycleDeVie({
-        sur: (transition) => dernieres.current.sur(transition),
-        cleDuJeton,
-        telemetrie: () => dernieres.current.telemetrie?.() ?? null,
-        battement:
-          intervalleMs === undefined
-            ? undefined
-            : { intervalleMs, battre: () => dernieres.current.battement?.battre() },
-        onglet,
-      }),
-    [cleDuJeton, intervalleMs, onglet],
-  );
 };

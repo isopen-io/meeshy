@@ -1,5 +1,5 @@
 {
-  "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4 et § 8.5",
+  "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4, § 8.5 et § 12.6 (directive du porteur 2026-09-01)",
   "lu_par": [
     "apps/web-v3/scripts/check-bundle-budget.mjs (groupes, routes)",
     "apps/web-v3/scripts/mesure-reseau.mjs (reseau)",
@@ -47,7 +47,7 @@
   "groupes": [
     {
       "id": "(public)",
-      "role": "rôle premier — lecture partagée et jonction anonyme, sans compte",
+      "role": "rôle premier — lecture partagée et jonction anonyme, sans compte ; la vitrine (`/` sans session) et `/chat/:lien` (états CHOIX et INVITÉ) y vivent, en gestionnaires de route",
       "motifs": [
         "/l/*",
         "/stories/*",
@@ -55,7 +55,7 @@
         "/post/*",
         "/reels/*",
         "/moods/*",
-        "/chats/[key]/*",
+        "/chat/*",
         "/login/*",
         "/signup/*",
         "/_not-found/page"
@@ -80,7 +80,7 @@
     },
     {
       "id": "(connected)",
-      "role": "rôle secondaire — après authentification",
+      "role": "rôle secondaire — après authentification ; `/chats` (liste) et `/chats/:cle` (fil du membre) sont ici, le fil de l'invité vit sous `/chat/*` dans (public) — deux portes, un module de vue (§ 12.3)",
       "motifs": [
         "/page",
         "/chats/*",
@@ -238,14 +238,14 @@
       },
       {
         "motifs": [
-          "/chats/*"
+          "/chat/*"
         ],
-        "role": "aperçu de lien puis conversation anonyme",
+        "role": "/chat/:lien — état CHOIX (cadre flouté + modale, rien de la conversation ne part) puis état INVITÉ (le fil de l'invité) ; § 12.3",
         "plafonds": {
           "requetes_avant_premier_pixel": {
             "valeur": 4,
             "statut": "GATE",
-            "source": "§ 8.3 — aperçu de lien (/chats/:key, non rejoint) ≤ 4 ; après « Rejoindre » le § 8.3 en autorise 6, mesuré par le spec de cycle de vie et non par ce gate de premier pixel"
+            "source": "§ 8.3 — aperçu de lien (non rejoint) ≤ 4, porté de /chats/:key à /chat/:lien par le § 12.3 ; l'état INVITÉ, mesuré par le spec de cycle de vie, en autorise 6 après la jonction (§ 8.3)"
           },
           "lcp_ms": {
             "valeur": 2200,
@@ -261,13 +261,53 @@
       },
       {
         "motifs": [
-          "/",
+          "/chats/*"
+        ],
+        "role": "le fil du MEMBRE (/chats/:cle) et la liste (/chats) — documents autoporteurs composés par un gestionnaire de route ; le module de participation arrive APRÈS le premier pixel et n'entre pas dans ce compte",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 4,
+            "statut": "GATE",
+            "source": "§ 8.3 — le § 8.3 gate à 4 l'aperçu de lien non rejoint ; la directive du 2026-09-01 (§ 12.3) déplace cet aperçu sous /chat/:lien et fait de /chats/:cle le fil du membre ; le plafond de 4 est CONSERVÉ pour /chats/* (jamais baissé, § 12.6) et posé à l'identique sur /chat/*"
+          },
+          "lcp_ms": {
+            "valeur": 2200,
+            "statut": "CIBLE",
+            "source": "§ 8.3"
+          },
+          "cls": {
+            "valeur": 0.05,
+            "statut": "GATE",
+            "source": "§ 8.5 — toute route (public)"
+          }
+        }
+      },
+      {
+        "motifs": [
+          "/"
+        ],
+        "role": "la racine — vitrine (visiteur) OU tableau de bord (lecteur connecté), deux documents autoporteurs composés par app/route.ts (§ 12.1, § 12.2) ; sans cookie la mesure rend la vitrine, avec le cookie meeshy_session + meeshy_auth elle rend le tableau de bord (option de mesure-reseau.mjs à porter — § 12.6)",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 1,
+            "statut": "GATE",
+            "source": "§ 12.6 et charte règle 3 — le HTML porte sa table de jetons, sa feuille et ses glyphes (0 image, 0 police, 0 script avant le premier pixel) : la même forme que /l/:token/expired, mesurée à 1 (budgets-mesures.json → l_token_expired_requetes) ; le module de participation du tableau de bord arrive APRÈS le premier pixel"
+          },
+          "lcp_ms": {
+            "valeur": 3000,
+            "statut": "CIBLE",
+            "source": "§ 8.3 — accueil connecté ≤ 3,0 s ; la vitrine, plus légère, vise ce même plafond en attendant sa première mesure"
+          }
+        }
+      },
+      {
+        "motifs": [
           "/feed/*",
           "/notifications/*",
           "/contacts/*",
           "/search/*"
         ],
-        "role": "accueil connecté / chats",
+        "role": "fil, notifications, contacts, recherche (connecté)",
         "plafonds": {
           "requetes_avant_premier_pixel": {
             "valeur": 8,
@@ -301,5 +341,6 @@
         }
       }
     ]
-  }
+  },
+  "temps_reel_note": "Le module de participation (§ 12.4) — lib/realtime/participate.ts compilé en UN module ES servi dans la zone sous /__v3/rt/, et socket.io-client (12 796 o gzip mesurés, § 8.1) chargé par lui — arrive APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (état INVITÉ) : il n'entre ni dans requetes_avant_premier_pixel ni dans le JS de page (0 Ko : ces écrans sont des gestionnaires de route). Son poids propre est À MESURER au commit qui le livre (budgets-mesures.json → participate), jamais inventé."
 }

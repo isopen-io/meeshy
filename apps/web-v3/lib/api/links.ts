@@ -34,6 +34,9 @@
  *     lecture est bornée et l'expiration se lit comme une indisponibilité.
  */
 
+import { apercuServi } from './invite';
+import { baseDeLaPasserelle } from './passerelle';
+
 const PREFIXE = '/api/v1';
 
 const CHEMIN_RESOLUTION = (jeton: string): string =>
@@ -227,15 +230,12 @@ const instant = (valeur: unknown): number | null => {
 const INTROUVABLE: Cloture = { etat: 'clos', genre: null, echeance: null };
 
 /**
- * La base de la passerelle. Lue à CHAQUE appel, jamais au chargement du
- * module : `next build` évalue les modules serveur, et une base figée à la
- * construction serait celle de l'image, pas celle du déploiement.
+ * Les deux origines de la passerelle vivent dans `lib/api/passerelle.ts` —
+ * le site le plus bas de la pile, que `lib/api/invite.ts` lit aussi. Elles
+ * sont ré-exportées ici pour que les importateurs de ce module n'aient rien à
+ * apprendre.
  */
-export const baseDeLaPasserelle = (): string =>
-  (process.env.MEESHY_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-    /\/+$/,
-    '',
-  );
+export { baseDeLaPasserelle, baseDeLaPasserellePublique } from './passerelle';
 
 const lis = async (reponse: Response): Promise<object | null> => {
   try {
@@ -357,21 +357,13 @@ export const apercuDuLien = async ({
 
   if (reponse === null || !reponse.ok) return null;
 
-  const corps = await lis(reponse);
-  const donnee = corps === null ? null : objet(champ(corps, 'data'));
-  if (donnee === null) return null;
-
-  const conversation = objet(champ(donnee, 'conversation'));
-  const nom =
-    texte(champ(donnee, 'name')) ?? (conversation === null ? null : texte(champ(conversation, 'title')));
-  if (nom === null) return null;
-
-  return {
-    nom,
-    description:
-      texte(champ(donnee, 'description')) ??
-      (conversation === null ? null : texte(champ(conversation, 'description'))),
-  };
+  // UN seul lecteur de la charge de `GET /anonymous/link/:identifier` dans la
+  // v3 : celui de la porte de l'invité. Ici on n'en garde que ce qu'une carte
+  // d'aperçu montre — le nom et la description —, et un aperçu qui ne porte
+  // pas encore de `linkId` (version plus ancienne, réponse tronquée) sert
+  // quand même son nom : une carte n'a pas besoin de nommer une place.
+  const servi = apercuServi(champ((await lis(reponse)) ?? {}, 'data'));
+  return servi === null ? null : { nom: servi.nom, description: servi.description };
 };
 
 /**

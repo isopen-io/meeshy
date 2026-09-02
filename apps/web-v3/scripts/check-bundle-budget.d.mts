@@ -80,12 +80,20 @@ export declare const mesuresDepuisLignes: (
   lignes: readonly LigneDeGroupe[],
 ) => Record<string, { socle_ko: number | null; ecran_ko: number; cumul_p95_ko: number }>;
 
+export declare const MODULES_INTERDITS: readonly string[];
+
+export declare const modulesExpedies: (
+  entrees: readonly EntreeDeManifeste[],
+  interdits: readonly string[],
+) => readonly string[];
+
 export declare const composeRapport: (args: {
   readonly entrees: readonly EntreeDeManifeste[];
   readonly groupes: readonly Groupe[];
   readonly routes?: readonly RegleDeRoute[];
   readonly tailleGzip: (chunk: string) => number;
   readonly mesuresEnregistrees?: MesuresEnregistrees | null;
+  readonly interdits?: readonly string[];
 }) => RapportDeBudget;
 
 export declare const formateRapport: (rapport: RapportDeBudget) => string;

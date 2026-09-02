@@ -1,4 +1,5 @@
 import { baseDeLaPasserelle } from './links';
+import { DELAI_DE_REPONSE_MS } from './passerelle';
 
 /**
  * CE QUE LA ZONE CONNECTÉE DEMANDE À LA PASSERELLE, au nom du lecteur.
@@ -56,10 +57,28 @@ export type Fil =
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'panne' };
 
-const DELAI_MS = 6000;
+const DELAI_MS = DELAI_DE_REPONSE_MS;
 
 const CHEMIN_CONVERSATIONS = '/api/v1/conversations';
 const CHEMIN_MOI = '/api/v1/auth/me';
+
+/**
+ * `GET /links` — les liens de partage du lecteur connecté
+ * (`services/gateway/src/routes/links/user.ts:314`, `onRequest: [authRequired]`
+ * posé avec `requireAuth: true, allowAnonymous: false` : donc un porteur, jamais
+ * une session invitée).
+ *
+ * `?expand=conversation` n'est pas une commodité : SANS lui, la charge ne porte
+ * ni `conversationId` ni `conversation` (`user.ts:571-581` — l'extension est le
+ * seul site qui les pose), et une carte de lien ne pourrait alors mener nulle
+ * part. Un contrôle qui ne mène nulle part n'est pas rendu (charte règle 7) :
+ * demander l'extension est ce qui lui donne son effet.
+ *
+ * `limit=3` parce que le tableau de bord RÉCAPITULE : la cible `home.png` en
+ * dessine une, la page des liens n'existe pas encore dans la v3, et rapatrier
+ * cinquante liens pour en peindre trois se paierait sur une 3G rurale.
+ */
+const CHEMIN_LIENS = '/api/v1/links?limit=3&expand=conversation';
 
 const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
   typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur)
@@ -109,6 +128,25 @@ const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | n
   };
 };
 
+/**
+ * UN LIEN DE PARTAGE, PROJETÉ — quatre champs, pris dans la charge que la
+ * passerelle sert. Ce qui n'est pas ici n'est pas relayé : `creator` porte
+ * l'identité complète de qui a créé le lien, et la projection se fait AVANT que
+ * quoi que ce soit n'entre dans le HTML (même règle que `apercuDuLien`).
+ */
+export type LienDePartage = {
+  readonly identifiant: string;
+  readonly nom: string;
+  /** `currentUses` — l'emploi RÉEL du lien. Aucun agrégat n'est fabriqué. */
+  readonly utilisations: number;
+  /** L'identifiant de la conversation qu'il ouvre, `null` si la passerelle ne l'a pas étendu. */
+  readonly conversation: string | null;
+};
+
+export type LiensDuLecteur =
+  | { readonly genre: 'liste'; readonly liens: readonly LienDePartage[] }
+  | { readonly genre: 'indisponible' };
+
 export type Lecteur = {
   readonly id: string | null;
   readonly prenom: string | null;
@@ -123,6 +161,18 @@ export type Lecteur = {
   readonly systemLanguage: string | null;
   readonly regionalLanguage: string | null;
   readonly customDestinationLanguage: string | null;
+};
+
+const lienDePartage = (brut: Readonly<Record<string, unknown>>): LienDePartage | null => {
+  const identifiant = chaine(brut.identifier);
+  if (identifiant === null) return null;
+
+  return {
+    identifiant,
+    nom: chaine(brut.name) ?? chaine(brut.conversationTitle) ?? identifiant,
+    utilisations: entier(brut.currentUses),
+    conversation: chaine(objet(brut.conversation)?.id),
+  };
 };
 
 export type Identite =
@@ -215,5 +265,46 @@ export const conversations = async ({
     genre: 'liste',
     conversations: liste,
     total: entier(objet(enveloppe.pagination)?.total) || liste.length,
+  };
+};
+
+/**
+ * LES LIENS DU LECTEUR, ET LE SEUL ÉTAT D'ÉCHEC QU'ILS CONNAISSENT.
+ *
+ * Ils ne rendent JAMAIS `session-expiree`, et ce n'est pas un oubli : la porte
+ * décide de renvoyer se connecter d'après `/auth/me` et `/conversations`, les
+ * deux appels qui font l'écran. Si `GET /links` refusait un jeton que ces deux-là
+ * viennent d'accepter, ce serait un fait sur la ROUTE des liens, jamais sur la
+ * session — et le lecteur serait éjecté d'un tableau de bord parfaitement
+ * servable. Un seul état d'échec, donc : « indisponible », et la section se tait.
+ *
+ * UN LIEN INACTIF N'EST PAS SERVI. `isActive` dit qu'il n'ouvre plus rien ; le
+ * peindre sur le tableau de bord dirait au lecteur qu'il peut encore le
+ * partager.
+ */
+export const liensDuLecteur = async ({
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LiensDuLecteur> => {
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_LIENS}`, jeton, recuperer);
+
+  if (reponse === null || !reponse.ok) return { genre: 'indisponible' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'indisponible' };
+
+  return {
+    genre: 'liste',
+    liens: enveloppe.data
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .filter((brut) => brut.isActive !== false)
+      .map(lienDePartage)
+      .filter((lien): lien is LienDePartage => lien !== null),
   };
 };
