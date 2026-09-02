@@ -99,6 +99,43 @@ PROPOSE quand l'hôte ne demande rien, le second si l'hôte a seulement le droit
 demander. Seule la carte de fil verrouille — un viewer porte son propre muet
 persistant, piloté au rail.
 
+### Le player n'est PAS le seul chemin de rendu — et « trois chromes » ne les compte pas tous
+
+Le tableau ci-dessus énumère les hôtes de **`MeeshyScenePlayer`**. Il en existe
+un **quatrième chemin**, qui ne passe par aucun `ScenePlayerConfig` :
+`StoryReaderRepresentable`, monté à quatre sites —
+`PostDetailView+Canvas.swift:69`, `PostDetailView+RepostEmbed.swift:178`, et
+`StoryViewerView+Canvas.swift:1045` et `:1107`.
+
+Le viewer story monte donc **les deux** : le player à `:1034`/`:1090`, le
+représentable à `:1045`/`:1107`.
+
+> **« Trois chromes, un moteur » décrit les hôtes du PLAYER, pas les surfaces qui
+> rendent une scène.** La loi 6 reste vraie de ce qu'elle nomme ; elle ne couvre
+> pas tout ce qui peint. Ne pas lire son énumération comme un inventaire.
+
+### La scène 0 est figée PARTOUT, et c'est une décision que personne n'a écrite
+
+`MeeshyScenePlayer` prend un `sceneIndex: Binding<Int>` — il SAIT paginer. Or les
+**trois** sites de montage passent `.constant(0)` (`StoryViewerView+Canvas:1035`
+et `:1091`, `FeedPostCard:365`), et le balayage ne trouve **aucun** `@State` ni
+`$sceneIndex` dans le dépôt : **aucun hôte ne pilote l'index.**
+
+La lecture n'est donc prête pour M scènes qu'au niveau du TYPE. Chaque hôte a
+déjà tranché « scène 0 », trois fois, en silence — pour la vignette de fil c'est
+probablement juste, pour le viewer ce n'est écrit nulle part.
+
+**Et ce n'est pas un défaut**, la distinction important pour savoir qui doit
+agir : mesuré sur staging, `posts/feed?limit=25` rend **zéro** post portant un
+`canvasV3`, donc zéro à plusieurs scènes. Le pont d'écriture étant mono-scène
+(`scenes: [scene]`, #4770), le cas n'existe pas encore.
+
+> **Une capacité qu'aucune donnée n'exerce n'est pas cassée — elle est NON
+> ÉPROUVÉE.** Un défaut appelle un correctif ; une capacité non éprouvée appelle
+> un témoin le jour où le producteur fabrique le cas. Écrire la décision
+> « scène 0 » AVANT ce jour évite qu'on la « corrige » sans savoir qu'elle en
+> était une.
+
 ### `.preview` est une absence DÉCLARÉE, pas un trou
 
 L'œil du socle a été retiré au lot 4.9, et la raison est écrite au site
