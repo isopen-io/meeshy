@@ -293,7 +293,10 @@ public extension CanvasV3 {
             // Les trois autres clés suivent le sticker à la lettre — c'est la
             // MÊME famille temporelle (`TimelineClipKind.place`). Omises quand
             // `nil`, donc toute pastille posée avant ce lot se réencode octet
-            // pour octet et garde le fantôme que `Plan2DLayout.bar(...)` rend.
+            // pour octet, et sa barre reste le FANTÔME que la timeline rend
+            // pour une fenêtre absente (le type qui le dessine vit dans `MeeshyUI` —
+            // le nommer ici ferait fuir le plan dans la cible core, et une garde
+            // le refuse à juste titre).
             if let duration = location.duration { payload["duration"] = .number(duration) }
             if let fadeIn = location.fadeIn { payload["fadeIn"] = .number(fadeIn) }
             if let fadeOut = location.fadeOut { payload["fadeOut"] = .number(fadeOut) }

@@ -396,7 +396,7 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 | champs des cinq modèles d'objet | **123** |
 | champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **65** (53 %) |
 | champs jamais exercés — donc jamais comparés | **58** (47 %) |
-| clés que le pont Swift émet et que la passerelle ne recompose pas | **14** (#4905) |
+| clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 |
 | pertes silencieuses corrigées en deux jours | **8** |
 
 **Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
@@ -405,19 +405,27 @@ comparé par rien.
 
 ### La forme qui immunise, et elle existe déjà dans le dépôt
 
-Sur les cinq branches du convertisseur passerelle, **une seule RÉPAND**
+Sur les cinq branches du convertisseur passerelle, **une seule RÉPANDAIT**
 (`textObjects` : `o.payload = rest` après destructuration de l'enveloppe) ; les
-quatre autres RECOMPOSENT clé par clé. Les huit morsures sont toutes tombées sur
-une branche qui recompose. La branche qui répand porte les 36 champs de
+quatre autres RECOMPOSAIENT clé par clé. Les huit morsures sont toutes tombées
+sur une branche qui recompose. La branche qui répand porte les 36 champs de
 `StoryTextObject` — dont cinq ajoutés cette semaine — sans que personne n'ait eu
 à y penser.
+
+**Les quatre autres répandent depuis #4905** (2026-09-02). Ne sortent du `rest`
+que les champs d'ENVELOPPE (déjà logés par `baseObject` — les laisser passer les
+mettrait en double) et les champs à RÈGLE, dont la valeur ne se recopie pas
+telle quelle : `muted` se déduit, quatre clés se forcent à `null` quand elles
+manquent, `anchor` ne voyage que s'il est un pivot, `slots` que s'il est une
+carte de chaînes. Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
 
 > **Un inventaire humain se maintient à la main ; un `rest` se maintient tout
 > seul.** Devant une charge opaque par contrat, la seule discipline qui tient à
 > l'échelle est de ne pas énumérer.
 
 Trois façons de fermer le trou, non exclusives, par coût croissant :
-1. **répandre** au lieu de recomposer (#4905) — supprime quatre inventaires ;
+1. **répandre** au lieu de recomposer — **fait** (#4905) : quatre inventaires
+   supprimés ;
 2. **compléter le blob v1 partagé** pour que le golden exerce les 123 champs —
    utile après (1), pour les clés dérivées que le `rest` ne couvre pas ;
 3. **typer la charge par kind au contrat** — le seul remède qui rendrait la
