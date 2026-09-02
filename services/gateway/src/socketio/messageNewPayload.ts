@@ -1,5 +1,6 @@
 import type { Message } from '@meeshy/shared/types/index';
 import { resolveWireSenderId } from './messageEditedPayload';
+import { stickerFromMetadata } from '../services/stickers/messageSticker';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -165,6 +166,12 @@ export function buildMessageNewPayload(
     storyReplyToId: message.storyReplyToId || undefined,
     forwardedFromId: message.forwardedFromId || undefined,
     forwardedFromConversationId: message.forwardedFromConversationId || undefined,
+    // Sticker (#4823) — hissé depuis `metadata.sticker` ICI, et chez aucun des
+    // deux producteurs : c'est une famille DÉRIVÉE DE LA LIGNE MESSAGE (cf.
+    // en-tête), et `location` a montré ce que coûte un hoist recopié par
+    // transport. iOS rend la décoration animée depuis ce champ ; sans lui le
+    // destinataire ne voit que le PNG de repli jusqu'au rechargement REST.
+    sticker: stickerFromMetadata(message.metadata) ?? undefined,
     isEncrypted: message.isEncrypted,
     encryptionMode: message.encryptionMode,
     encryptedContent: message.encryptedContent,

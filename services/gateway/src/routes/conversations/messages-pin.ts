@@ -12,6 +12,7 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import {
   applyHistoryFloor,
   historyReaderFromAuthContext,
@@ -449,6 +450,7 @@ export function registerMessagePinRoutes(
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
         const place = sharedPlaceFromMetadata(message.metadata);
+        const sticker = stickerFromMetadata(message.metadata);
         return {
           id: message.id,
           conversationId: message.conversationId,
@@ -506,8 +508,10 @@ export function registerMessagePinRoutes(
           reactionCount: message._count?.reactions ?? 0,
           replyCount: message._count?.replies ?? 0,
           // Lot 1 : hisser metadata.location en champ top-level `location`,
-          // même miroir que la liste complète des messages.
-          ...(place ? { location: place } : {})
+          // même miroir que la liste complète des messages — et `sticker`
+          // (#4823) avec lui.
+          ...(place ? { location: place } : {}),
+          ...(sticker ? { sticker } : {})
         };
       });
 

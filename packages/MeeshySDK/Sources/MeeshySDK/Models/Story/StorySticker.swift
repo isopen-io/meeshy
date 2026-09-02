@@ -66,6 +66,11 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     /// chaîne de rendu ne re-résout (`StickerSlotFiller` reçoit son instant, il
     /// ne le lit jamais).
     public var slots: [String: String]
+    /// **Le mouvement de la décoration** (#4821) — `nil` = immobile. Une
+    /// propriété de la charge, jamais un `kind` neuf (#3956) : web et Android
+    /// l'ignorent et rendent la décoration fixe. Un nom inconnu (publié par une
+    /// version plus récente) se décode en `nil`, jamais en plantage.
+    public var animation: StickerAnimation?
     /// **E3 (#3888) — langue d'origine de l'élément.** Comme sur texte/média/
     /// audio : par défaut la langue DÉCLARÉE au composer (`declaredContentLanguage`),
     /// surchargeable par élément. `nil` sur les brouillons/payloads antérieurs.
@@ -117,7 +122,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, emoji, postMediaId, provider, sourceLanguage, x, y, scale, rotation, zIndex
-        case templateId, slots
+        case templateId, slots, animation
         case baseSize, anchor
         case startTime, duration, fadeIn, fadeOut
     }
@@ -128,6 +133,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
                 provider: String? = nil,
                 templateId: String = "",
                 slots: [String: String] = [:],
+                animation: StickerAnimation? = nil,
                 sourceLanguage: String? = nil,
                 x: Double = 0.5, y: Double = 0.5,
                 scale: Double = 1.0,
@@ -142,6 +148,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         self.id = id; self.emoji = emoji
         self.postMediaId = postMediaId; self.provider = provider
         self.templateId = templateId; self.slots = slots
+        self.animation = animation
         self.sourceLanguage = sourceLanguage
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.zIndex = zIndex
@@ -169,6 +176,8 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         // sur le patron de `postMediaId` juste au-dessus.
         templateId = try c.decodeIfPresent(String.self, forKey: .templateId) ?? ""
         slots = try c.decodeIfPresent([String: String].self, forKey: .slots) ?? [:]
+        animation = try c.decodeIfPresent(String.self, forKey: .animation)
+            .flatMap(StickerAnimation.init(rawValue:))
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
@@ -200,6 +209,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         // octet comme avant ce lot.
         if !templateId.isEmpty { try c.encode(templateId, forKey: .templateId) }
         if !slots.isEmpty { try c.encode(slots, forKey: .slots) }
+        try c.encodeIfPresent(animation?.rawValue, forKey: .animation)
         try c.encodeIfPresent(provider, forKey: .provider)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)

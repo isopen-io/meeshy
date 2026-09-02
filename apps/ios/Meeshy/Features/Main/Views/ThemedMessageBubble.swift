@@ -10,6 +10,7 @@
 //   - `.deleted`         → `BubbleDeletedView`
 //   - `.burned`          → `BubbleBurnedView`
 //   - `.ephemeralExpired`→ `EmptyView`
+//   - `.standard` + `content.sticker` → `BubbleSticker` (Bubble/BubbleSticker.swift, #4823)
 //   - `.standard`        → `BubbleStandardLayout` (Bubble/BubbleStandardLayout.swift)
 //
 // State ownership: this view keeps the @State for sheets, fullscreen
@@ -321,18 +322,111 @@ struct ThemedMessageBubble: View {
             if isEphemeralExpired {
                 EmptyView()
             } else {
-                standardLayout(content: content)
-                    // #4020 — le double tap ouvre la barre de réaction rapide.
-                    // Posé ICI, sur la seule branche que la règle accepte : le
-                    // `switch` au-dessus a déjà écarté système, supprimé et
-                    // brûlé, et `isEphemeralExpired` vient d'écarter le
-                    // quatrième. La règle est tout de même consultée — elle
-                    // reste la SOURCE, l'aiguillage n'en est qu'un chemin.
-                    .modifier(QuickReactionDoubleTap(
-                        isEnabled: QuickReactionGesture.acceptsDoubleTap(kind: content.kind),
-                        onOpen: { onAddReaction?(message.id) }))
+                Group {
+                    // #4823 — un sticker se rend SANS chrome de bulle, comme
+                    // un emoji libre : la feuille `BubbleSticker` remplace la
+                    // bulle standard. Les gestes (double tap ci-dessous, appui
+                    // long du menu — porté par la cellule) et le cycle de vie
+                    // ci-dessous restent ceux de toute bulle standard : c'est
+                    // pour cela qu'ils sont posés sur le `Group`, pas sur
+                    // l'une des deux branches.
+                    if let sticker = content.sticker {
+                        stickerLayout(content: content, sticker: sticker)
+                    } else {
+                        standardLayout(content: content)
+                    }
+                }
+                // #4020 — le double tap ouvre la barre de réaction rapide.
+                // Posé ICI, sur la seule branche que la règle accepte : le
+                // `switch` au-dessus a déjà écarté système, supprimé et
+                // brûlé, et `isEphemeralExpired` vient d'écarter le
+                // quatrième. La règle est tout de même consultée — elle
+                // reste la SOURCE, l'aiguillage n'en est qu'un chemin.
+                .modifier(QuickReactionDoubleTap(
+                    isEnabled: QuickReactionGesture.acceptsDoubleTap(kind: content.kind),
+                    onOpen: { onAddReaction?(message.id) }))
+                // Pas de `.messageEffects` ici : monté à ce niveau, il
+                // s'appliquait au `HStack` de rangée de `BubbleStandardLayout`
+                // — avatar, bulle, réactions et tout l'espace vide jusqu'au
+                // bord de l'écran. Le liseré arc-en-ciel encadrait donc du
+                // vide. Les effets sont désormais posés sur la bulle elle-
+                // même, dans `BubbleStandardLayout` (et sur le sticker, dans
+                // `BubbleSticker`).
+                //
+                // Conséquence assumée : les chemins `.deleted` et `.burned`,
+                // qui ne passent pas par ici, ne portent plus d'effets. Un
+                // tombstone « message supprimé » n'a ni arc-en-ciel ni
+                // confettis.
+                .opacity(isEphemeralExpired ? 0 : 1)
+                .scaleEffect(isEphemeralExpired ? 0.8 : 1)
+                .onAppear {
+                    startEphemeralTimerIfNeeded()
+                    applyBlurRevealDurationFromPrefs()
+                }
+                .onDisappear {
+                    ephemeralController.stop()
+                    blurController.cancel()
+                }
+                .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
+                    if let user = newValue {
+                        selectedProfileUser = nil
+                        onOpenProfile?(user)
+                    }
+                }
             }
         }
+    }
+
+    /// La couleur de la bulle REÇUE — l'accent de l'expéditeur mêlé à
+    /// l'indigo de marque. Une seule définition pour la bulle standard et le
+    /// strip de réactions d'un sticker, qui doit porter le même accent.
+    private var otherBubbleColor: String {
+        DynamicColorGenerator.blendTwo(
+            message.senderColor ?? contactColor,
+            weight1: 0.30,
+            MeeshyColors.brandPrimaryHex,
+            weight2: 0.70
+        )
+    }
+
+    // MARK: - Sticker layout (#4823)
+
+    /// La feuille sticker, à entrées primitives — tout ce qu'elle lit vient de
+    /// `content` ou des rappels déjà résolus par l'hôte. `NetworkMonitor` est
+    /// lu en direct, pas observé : c'est le parent qui fait bouger
+    /// `deliveryStatus` / `updatedAt`, comme pour la bulle standard.
+    @ViewBuilder
+    private func stickerLayout(content: BubbleContent, sticker: BubbleContent.Sticker) -> some View {
+        BubbleSticker(
+            sticker: sticker,
+            messageId: content.messageId,
+            isMe: content.isMe,
+            isDark: isDark,
+            accentHex: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+            timeString: content.meta.timeString,
+            deliveryStatus: message.deliveryStatus,
+            sendStartedAt: message.createdAt,
+            isOnline: NetworkMonitor.shared.isOnline,
+            effects: message.effects,
+            reactions: content.reactions,
+            isLastReceivedMessage: isLastReceivedMessage,
+            isLastInGroup: isLastInGroup,
+            standalone: standalone,
+            onRetry: onRetry == nil ? nil : { onRetry?(message.id) },
+            onShowReadStatus: onShowReadStatus == nil ? nil : { onShowReadStatus?(message.id) },
+            onAddReaction: onAddReaction,
+            onToggleReaction: onToggleReaction,
+            onOpenReactPicker: onOpenReactPicker,
+            onShowReactions: onShowReactions
+        )
+        .equatable()
+        // Identité par MESSAGE, posée par l'HÔTE : l'état de la feuille
+        // (gabarit rasterisé, instant d'apparition) vit sur SON nœud, qu'un
+        // `.id` à l'intérieur de son corps ne toucherait pas. Une cellule
+        // réutilisée qui reçoit un autre sticker repart ainsi d'un état neuf
+        // — un coup unique rejoue pour le message qui vient d'arriver, au
+        // lieu d'hériter de l'horloge du précédent.
+        .id(content.messageId)
     }
 
     // MARK: - Standard layout factory (extracted for branch clarity)
@@ -343,12 +437,7 @@ struct ThemedMessageBubble: View {
             content: content,
             message: message,
             contactColor: contactColor,
-            otherBubbleColor: DynamicColorGenerator.blendTwo(
-                message.senderColor ?? contactColor,
-                weight1: 0.30,
-                MeeshyColors.brandPrimaryHex,
-                weight2: 0.70
-            ),
+            otherBubbleColor: otherBubbleColor,
             isDirect: isDirect,
             isDark: isDark,
             transcription: transcription,
@@ -423,31 +512,8 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        // Pas de `.messageEffects` ici : monté à ce niveau, il s'appliquait au
-        // `HStack` de rangée de `BubbleStandardLayout` — avatar, bulle,
-        // réactions et tout l'espace vide jusqu'au bord de l'écran. Le liseré
-        // arc-en-ciel encadrait donc du vide. Les effets sont désormais posés
-        // sur la bulle elle-même, dans `BubbleStandardLayout`.
-        //
-        // Conséquence assumée : les chemins `.deleted` et `.burned`, qui ne
-        // passent pas par `BubbleStandardLayout`, ne portent plus d'effets. Un
-        // tombstone « message supprimé » n'a ni arc-en-ciel ni confettis.
-        .opacity(isEphemeralExpired ? 0 : 1)
-        .scaleEffect(isEphemeralExpired ? 0.8 : 1)
-        .onAppear {
-            startEphemeralTimerIfNeeded()
-            applyBlurRevealDurationFromPrefs()
-        }
-        .onDisappear {
-            ephemeralController.stop()
-            blurController.cancel()
-        }
-        .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
-            if let user = newValue {
-                selectedProfileUser = nil
-                onOpenProfile?(user)
-            }
-        }
+        // Cycle de vie (éphémère, flou, profil) et effets : voir le `Group`
+        // du `body`, commun à la bulle standard et au sticker.
     }
 
     // MARK: - Lifecycle helpers (delegated to controllers)

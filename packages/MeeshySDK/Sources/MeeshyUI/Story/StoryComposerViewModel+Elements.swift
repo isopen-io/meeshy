@@ -458,6 +458,10 @@ extension StoryComposerViewModel {
         stickers.append(sticker)
         effects.stickerObjects = stickers
         currentEffects = effects
+        // Sélectionné à la pose, comme une décoration (#4824) : la feuille se
+        // referme sur le geste, et l'auteur doit retrouver ce qu'il vient de
+        // poser sous ses poignées, pas le chercher.
+        selectedElementId = sticker.id
         bringToFront(id: sticker.id)
         return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
     }
@@ -487,6 +491,7 @@ extension StoryComposerViewModel {
                                    sourceLanguage: declaredContentLanguage,
                                    x: 0.5 + offset, y: 0.5 + offset)
         sticker.scale = template.posedScale
+        sticker.animation = template.animation
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)

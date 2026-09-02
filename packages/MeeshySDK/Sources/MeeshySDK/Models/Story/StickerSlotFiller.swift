@@ -44,6 +44,11 @@ public enum StickerSlotFiller {
     /// La date telle qu'elle s'affiche, dans la locale de l'auteur.
     public static let dateSlot = "date"
 
+    /// **Les mots écrits par l'auteur** (#4822) — le seul emplacement de nature
+    /// `.prose` du catalogue : un discours, pas une donnée, qui suit donc le
+    /// Prisme (#4721) là où une heure ne part jamais à la traduction.
+    public static let textSlot = "text"
+
     /// Le nom du lieu — ou, à défaut, son adresse (voir `placeSlots(for:)`).
     public static let placeNameSlot = "placeName"
     /// Le détail sous le nom. **Vide** quand le nom a déjà pris l'adresse.

@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
@@ -44,7 +45,33 @@ extension MeeshyComposerHost {
     /// dernier média laisse donc une slide vierge, ce qui est exactement l'état
     /// d'un post sans média.
     func syncPostMediaIntoSlides() {
-        guard selectedFormat == .post else { return }
+        // **Le rail de la scène pose sur TOUS les formats** (#4879).
+        //
+        // Ce guard portait le NOM de la fonction — « en Post, chaque média
+        // ingéré devient SA slide » (#4038) — et il était juste tant que la
+        // seule porte média était la rangée du document, qui n'existe qu'en
+        // Post. La porte du RAIL est arrivée après (#4724), et elle vit sur la
+        // SCÈNE : sur une STORY, ce `return` rendait la branche `.sceneRail`
+        // du placement ci-dessous entièrement MORTE — la photo était ingérée
+        // avec le bon mime, et n'atteignait jamais le canvas.
+        //
+        // Mesuré au simulateur, journal à l'appui : par le rail d'une story,
+        // « ingest photothèque … mime=image/jpeg » puis RIEN ; par la rangée
+        // d'un post, le même « ingest » suivi de « placement: porte=documentRow ».
+        //
+        // > **Un guard qui reprend le nom de sa fonction vieillit avec lui.**
+        // > « Post » décrivait la seule porte du jour ; la fonction est devenue
+        // > le site unique du placement, et le guard a continué d'exclure les
+        // > formats où la porte NEUVE vit.
+        //
+        // La condition élargie est PRÉCISE plutôt que retirée : elle demande
+        // s'il reste un média du RAIL à placer. Retirer le guard ferait poser
+        // des slides à des médias arrivés autrement sur une story — un
+        // changement de comportement que rien ici ne mesure.
+        let posePourLaScene = documentContentMedia.contains {
+            mediaRoleByURL[$0.sourceURL] == nil && railPosedMediaURLs.contains($0.sourceURL)
+        }
+        guard selectedFormat == .post || posePourLaScene else { return }
 
         // **Le SON ne fait pas de slide (#4052), et depuis #4657 il ne fait pas
         // non plus de BANDE-SON tout seul.**
@@ -90,6 +117,14 @@ extension MeeshyComposerHost {
             let role = ComposerMediaPlacement.role(door: porte,
                                                    currentSlideHasBackground: dejaUnFond)
             mediaRoleByURL[media.sourceURL] = role
+            // **Le placement se DIT** (#4879). Il se décide UNE fois par média,
+            // et son verdict ne se rejoue jamais : sans cette ligne, un canvas
+            // resté noir n'est attribuable à rien — porte, rôle, slide cible et
+            // format sont les quatre termes qui, ensemble, expliquent où le
+            // média est parti.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "placement: \(media.sourceURL.lastPathComponent, privacy: .public) porte=\(String(describing: porte), privacy: .public) role=\(String(describing: role), privacy: .public) slide=\(viewModel.currentSlide.id, privacy: .public) fond=\(dejaUnFond, privacy: .public) format=\(String(describing: selectedFormat), privacy: .public)"
+            )
 
             switch role {
             case .foreground:
@@ -802,8 +837,54 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
+    /// **LE site unique où une porte d'ingestion écrit dans
+    /// `documentLocalMedia` — et il marque le rail AVANT d'écrire** (#4879).
+    ///
+    /// ## Le défaut qu'il ferme
+    ///
+    /// Une photo ajoutée par le rail de la scène n'y arrivait jamais. Elle était
+    /// pourtant bien ingérée — la surface Post la montrait — et apparaissait
+    /// après un aller-retour de format. Reproduit deux fois au simulateur.
+    ///
+    /// `syncPostMediaIntoSlides` est branchée sur `documentLocalMedia` et lit
+    /// `railPosedMediaURLs` pour choisir la porte du média. Les quatre sites
+    /// d'ingestion ÉCRIVAIENT d'abord et marquaient ensuite : au moment où
+    /// l'observateur tournait, l'ensemble était encore vide. Le média était donc
+    /// classé « rangée du document » — une slide à lui — au lieu d'être posé sur
+    /// la scène courante.
+    ///
+    /// Le verdict est DÉFINITIF : la boucle ne considère que les médias sans
+    /// rôle (`mediaRoleByURL[url] == nil`). Un rôle mal attribué ne se rejoue
+    /// jamais, et c'est pourquoi le symptôme survivait à tout rafraîchissement.
+    ///
+    /// > **Un drapeau consommé APRÈS l'observateur qui le lit ne vaut rien** —
+    /// > et il échoue du côté silencieux : ni erreur, ni journal, un média
+    /// > correctement ingéré rangé au mauvais endroit.
+    ///
+    /// ## Deux propriétés, et la seconde n'est pas cosmétique
+    ///
+    /// **Un seul écrivain** : tant que quatre sites écrivaient, l'ordre était une
+    /// discipline ; il est désormais une propriété, et un cinquième site ne peut
+    /// plus le rejouer.
+    ///
+    /// **Une seule notification** : les boucles appelaient `append` par item,
+    /// donc rejouaient la dérivation autant de fois qu'il y avait de fichiers,
+    /// chaque fois sur un état différent — la place d'un média dépendait de son
+    /// RANG dans la sélection.
+    ///
+    /// `medias` vide ⇒ rien, pas même la consommation du drapeau : une
+    /// ingestion qui n'a rien produit ne doit pas déclarer que le rail a servi.
+    func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
+        guard !medias.isEmpty else { return }
+        consumeRailPosing(medias.map(\.url))
+        documentLocalMedia.append(contentsOf: medias)
+    }
+
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
-        var posees: [URL] = []
+        // Les médias sont ACCUMULÉS puis remis en une fois à
+        // `ingestIntoDocument` : écrire dans la boucle rejouait la dérivation à
+        // chaque item, sur un état différent (#4879).
+        var medias: [ComposerDocumentMedia] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let declaredType = item.supportedContentTypes.first
@@ -813,14 +894,20 @@ extension MeeshyComposerHost {
             guard (try? data.write(to: url)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
+            // TOUT en aval — `ComposerIngestRouter` en tire la famille, et une
+            // famille `.document` fait qu'un média n'atteint jamais la scène,
+            // sans qu'aucune ligne ne le signale.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "ingest photothèque: \(url.lastPathComponent, privacy: .public) type=\(declaredType?.identifier ?? "nil", privacy: .public) mime=\(mime, privacy: .public) durée=\(duration ?? -1, privacy: .public)"
+            )
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(url)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 
@@ -893,16 +980,14 @@ extension MeeshyComposerHost {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
-            consumeRailPosing([url])
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg")])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: "video/quicktime",
                 durationMs: duration
-            ))
-            consumeRailPosing([url])
+            )])
         }
         HapticFeedback.light()
     }
@@ -940,7 +1025,9 @@ extension MeeshyComposerHost {
             await ingestSoundFiles(urls)
             return
         }
-        var posees: [URL] = []
+        // Même accumulation que la photothèque (#4879) : marquer le rail avant
+        // d'écrire, et n'écrire qu'une fois.
+        var medias: [ComposerDocumentMedia] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -950,14 +1037,13 @@ extension MeeshyComposerHost {
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: destination,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(destination)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 

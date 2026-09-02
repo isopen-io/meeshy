@@ -130,7 +130,8 @@ public enum StoryRenderer {
                               backdropProvider: BackdropProvider? = nil,
                               mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale,
-                              suppressDrawingOverlay: Bool = false) -> CALayer {
+                              suppressDrawingOverlay: Bool = false,
+                              reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -288,6 +289,27 @@ public enum StoryRenderer {
             if mode == .play, !(item is StoryMediaObject),
                let resolved = resolvedNonMediaOpacity(item: item, at: time.seconds) {
                 layer.opacity = Float(resolved)
+            }
+
+            // #4821 — la POSE d'une décoration animée : une fonction PURE du
+            // temps depuis son apparition, réappliquée à chaque tick par la
+            // même post-passe que les fondus — donc identique au lecteur (60 Hz)
+            // et dans l'export (30 fps), que `layer.render(in:)` ne saurait pas
+            // animer autrement. Hors signature du cache, comme le fondu : la
+            // transformation ET l'opacité sont reposées en ABSOLU, jamais
+            // multipliées en place, sinon une couche réutilisée cumulerait.
+            //
+            // `reduceMotion` : le lecteur perd le mouvement, pas la décoration.
+            // L'export le reçoit à `false` — un fichier ne dépend pas du
+            // réglage d'accessibilité de l'appareil qui l'a fabriqué.
+            if mode == .play, !reduceMotion,
+               let sticker = item as? StorySticker,
+               let animation = sticker.animation,
+               let stickerLayer = layer as? StoryStickerLayer {
+                let pose = animation.pose(at: time.seconds - (sticker.startTime ?? 0))
+                stickerLayer.applyAnimationPose(pose, baseRotationDegrees: sticker.rotation)
+                let base = resolvedNonMediaOpacity(item: sticker, at: time.seconds) ?? 1.0
+                layer.opacity = Float(base * pose.opacity)
             }
 
             // A cached layer might still be attached to the previous frame's
@@ -498,7 +520,7 @@ public enum StoryRenderer {
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
             layer.configure(with: sticker, geometry: geometry, mode: mode,
-                            renderScale: contentsScale)
+                            renderScale: contentsScale, imageCache: imageCache, resolver: resolver)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.

@@ -58,6 +58,12 @@ function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
 }
 
+function isStringMap(v: unknown): v is Record<string, string> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
+    && Object.keys(v as Record<string, unknown>).length > 0;
+}
+
 function isPivot(v: unknown): v is { x: number; y: number } {
   return typeof v === 'object' && v !== null
     && typeof (v as { x?: unknown }).x === 'number'
@@ -204,15 +210,22 @@ export function convertV1ToV3(
     // le build ne connaît pas ce `templateId`, qui verra un glyphe plutôt qu'un
     // trou. Mais un repli conservé SANS la chose dont il est le repli n'est
     // plus un repli — c'est le contenu.
+    //
+    // Deux correctifs parallèles (#4741 sur dev, #4819 sur la branche stickers)
+    // ont recopié ces clés le même jour ; la fusion garde la forme la plus
+    // STRICTE : `slots` n'est transporté que si toutes ses valeurs sont des
+    // chaînes (`isStringMap`) — un emplacement numérique ne rendrait rien et
+    // ferait mentir le type `[String: String]` du client. `animation` et
+    // `duration` (#4821) voyagent au même titre.
     o.payload = {
       emoji: st.emoji,
       ...(str(st.templateId) ? { templateId: st.templateId } : {}),
-      ...(st.slots && typeof st.slots === 'object' && !Array.isArray(st.slots)
-        ? { slots: st.slots }
-        : {}),
+      ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
+      ...(str(st.animation) ? { animation: st.animation } : {}),
       ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
       ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
+      ...(typeof st.duration === 'number' ? { duration: st.duration } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
       ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
       ...(typeof st.fadeOut === 'number' ? { fadeOut: st.fadeOut } : {}),

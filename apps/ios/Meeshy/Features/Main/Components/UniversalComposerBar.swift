@@ -187,6 +187,12 @@ struct UniversalComposerBar: View {
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
 
+    /// Tuile « Sticker » du carrousel (#4823) : l'hôte présente la palette de
+    /// constructions (`StickerPickerView`) et ENVOIE ce qu'elle rend comme un
+    /// message à part entière. Câblée par la conversation seule ; `nil` = pas
+    /// de tuile (loi 4 : une porte sans effet n'est pas rendue).
+    var onRequestStickerPicker: (() -> Void)? = nil
+
     /// Called when the user taps a thumbnail in the inline recent-media strip
     /// (shown beneath the attachment carousel). When non-nil, the strip is
     /// rendered; the host ingests the resolved photo/video like a camera capture.

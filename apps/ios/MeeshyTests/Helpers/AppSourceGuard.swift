@@ -131,6 +131,21 @@ enum AppSourceGuard {
         try unit(composerHostPath, alsoIncluding: composerHostCompanions)
     }
 
+    /// L'unité de l'écran CONVERSATION : la vue, ses extensions, et l'état du
+    /// composer sorti du fichier le 2026-09-02 (`ConversationComposerState`,
+    /// #4823 — extraire d'abord, ajouter ensuite). Il ne porte pas le nom du
+    /// type hôte, donc le glob `ConversationView+*.swift` ne le voit pas ; sans
+    /// cette adresse, la garde du brouillon d'édition lisait une unité qui ne
+    /// contenait plus son ancre (leçon 347).
+    static let conversationViewPath = "Meeshy/Features/Main/Views/ConversationView.swift"
+    static let conversationViewCompanions = [
+        "Meeshy/Features/Main/Views/ConversationComposerState.swift"
+    ]
+
+    static func conversationViewSource() throws -> String {
+        try unit(conversationViewPath, alsoIncluding: conversationViewCompanions)
+    }
+
     /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles
     /// pures qui en sont sortis au #4103 (`ComposerSurfaceRules`,
     /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
