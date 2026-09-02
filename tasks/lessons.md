@@ -25699,3 +25699,117 @@ et n'a **aucun moyen de savoir qu'il a raté une cible**, puisqu'il n'y avait ri
 Suivi : #4931. Et la note de méthode : mon propre repli — viser les pixels d'une
 capture — est ce qui a coûté les dix tentatives. Un utilitaire qui tape par
 LIBELLÉ, en lisant l'arbre, les aurait toutes évitées.
+
+## Leçon 472 — Une feature qu'AUCUNE DONNÉE n'exerce ne se vérifie pas au simulateur
+
+**Le fait (2026-09-03, #4926).** Le Prisme audio des readers était corrigé,
+compilé, couvert par 53 témoins. La règle du dépôt exige une vérification au
+simulateur avant fermeture. Elle était **impossible** :
+
+| source | posts | médias audio |
+|---|---|---|
+| `GET /posts/feed?limit=100` | 20 | **0** |
+| `GET /posts/feed/reels?limit=50` | 50 | **0** |
+
+Zéro transcription, zéro piste traduite. Le chemin corrigé n'avait aucune donnée
+pour être emprunté.
+
+**Le piège n'est pas de ne pas pouvoir vérifier — c'est de croire qu'on a
+vérifié.** Ouvrir l'app, voir le fil s'afficher, ne rien casser : tous les
+signes d'une vérification réussie sont là, et le chemin corrigé n'a pas été
+touché une seule fois. C'est le pire des verts, parce qu'il est indiscernable du
+vrai.
+
+> **Avant de vérifier une feature à l'écran, mesurer si la DONNÉE qui l'exerce
+> existe.** Une requête API sur le compte de test coûte trente secondes et
+> tranche. Sans elle, « vérifié au simulateur » ne veut rien dire — on a vérifié
+> que l'écran s'ouvre.
+
+**Trois conséquences, à déclarer plutôt qu'à laisser implicites :**
+
+1. La vérification à l'écran reste DUE, et elle exige de **fabriquer** la donnée
+   (publier, attendre le pipeline). C'est un travail de recette à part entière,
+   pas un tap de plus.
+2. La **dimension 10** (utilité — *l'a-t-on mesuré ?*) n'est pas mûre : ce lot
+   livre une PARITÉ, pas une feature dont l'usage est mesuré. Le dire est plus
+   honnête que de fermer sur les témoins seuls.
+3. **Une mesure de fil est PERSONNALISÉE.** « 0 audio sur 70 posts atteignables
+   par le compte de démo » ne dit PAS « aucun post audio n'existe ». Le sur-lire
+   fabriquerait une conclusion sur la base à partir d'une vue.
+
+Voisines : la 468 (les rouges qui ne sont pas des tests rouges), et le motif
+inverse — un vert qui inclut une suite NON EXÉCUTÉE est indiscernable d'un vert
+complet ; se le prouver coûte un `grep` sur `Test Case '-[Suite` (7 cas démarrés,
+7 passés).
+
+## Leçon 473 — Un symptôme « main actor-isolated » a DEUX causes, et l'annotation est un INSTRUMENT DE MESURE avant d'être un correctif
+
+**Le fait (2026-09-03, #4925).** Un décodeur d'image animée, écrit `nonisolated`
+dans l'intention, ne compilait pas depuis ses témoins :
+
+```
+error: call to main actor-isolated static method 'decode(_:maxPixelSize:)'
+       in a synchronous nonisolated context
+```
+
+Quatorze erreurs, **toutes** désignant les APPELS depuis les témoins. Aucune ne
+désignait la cause. Le geste réflexe — annoter la classe de test `@MainActor` —
+aurait fait compiler l'ensemble **en laissant le décodeur sur le thread
+principal** : trente images décodées pendant un défilement, la dimension 4 en
+échec, et un vert qui scelle le défaut.
+
+**Les deux causes ne se distinguent pas au message :**
+
+| cause | le bon geste |
+|---|---|
+| l'isolation par défaut du paquet (`defaultIsolation(MainActor)`) | annoter `nonisolated` — c'est juste |
+| **une seule ligne non `Sendable` qui contamine le type** (ici une `static let [FormatKeys]` de `CFString`) | annoter ne suffit PAS ; il faut rendre la ligne Sendable |
+
+**Le discriminant, et il est mécanique** : poser `nonisolated` sur le type et
+LIRE ce que ça révèle. Si une erreur apparaît *à l'intérieur* du type —
+`static property 'formats' is not concurrency-safe` —, la cause est la ligne. Si
+tout compile, c'était le paquet.
+
+> **L'annotation n'était pas le correctif, elle était la SONDE.** Elle a déplacé
+> l'erreur de l'appelant vers la cause. Le réflexe « annoter jusqu'à ce que ça
+> compile » et le geste juste commencent par le même caractère ; ce qui les
+> sépare est de relire l'erreur suivante au lieu de la faire taire.
+
+Retour d'une session voisine, qui resserre la règle : sur ses trois cas
+identiques du jour, **deux fois annoter était le bon geste** — la cause était
+vraiment le paquet. Une règle « ne jamais annoter » l'aurait envoyée chercher
+deux fois une table inexistante. C'est bien la SONDE qui tranche, pas une
+préférence a priori.
+
+## Leçon 474 — Une règle JUSTE enfermée dans un corps de vue est inapplicable ailleurs, et personne ne le signale
+
+**Le fait (2026-09-03, #4926).** La langue d'origine d'un AUDIO n'est pas celle
+de son porteur : `FeedPost.originalLanguage` est la langue du TEXTE, et rien
+n'oblige un vocal espagnol à voyager sous une légende française. Faire concourir
+le porteur au rang du Prisme **prive le lecteur de sa traduction**.
+
+Cette règle **existait, exacte, testée par l'usage** — dans
+`ReelPageView.metaOriginalLanguage` :
+
+```swift
+if let audioMedia { return audioMedia.transcription?.language ?? reel.originalLanguage }
+```
+
+Écrite dans un corps de vue. Les **quatre autres surfaces** qui jouent un audio
+ne pouvaient pas l'appliquer, même en le voulant : il n'y avait rien à appeler.
+
+**Ce cas n'a aucun site où rougir.** Le réel est correct — ses témoins passent.
+Les quatre autres sont incorrectes — mais elles n'appellent aucune règle, donc
+aucune garde ne peut constater qu'elles s'en écartent. Une revue qui lit le réel
+conclut « la règle est appliquée » ; une revue qui lit une carte de post ne voit
+pas qu'il manque quelque chose.
+
+> **La question à poser à une bonne règle n'est pas « est-elle juste ? » mais
+> « est-elle ATTEIGNABLE depuis ailleurs ? »** Une règle correcte dans un corps
+> de vue est, du point de vue du reste du dépôt, une règle qui n'existe pas.
+
+Le témoin qui l'attrape n'interroge pas la justesse : il énumère les SURFACES où
+la règle s'applique et exige de chacune qu'elle appelle la règle NOMMÉE —
+c'est-à-dire qu'il transforme « appliquer » en quelque chose de vérifiable.
+Corollaire de la 261 : une garde qui nomme UN fichier prouve que ce fichier
+applique la règle, jamais que ce sont les seuls fichiers où elle s'applique.
