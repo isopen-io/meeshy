@@ -1,4 +1,4 @@
-import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
+import { transcriptTranslationTexts, transcriptTranslationTracks } from '@meeshy/shared/types/attachment-audio';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 import {
   buildTranslationRecord,
@@ -6,7 +6,13 @@ import {
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
 
+import { citations, citationsDeLaPage, type Citation, type MentionsRetenues } from './citations';
+import { pisteSuitLaLangue, type GenreDePiece } from './formes';
+import { chaine, estProtege, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
+
+export type { Citation, GenreDeCitation, SorteDePublication } from './citations';
+export type { GenreDePiece } from './formes';
 
 /**
  * LE FIL D'UNE CONVERSATION — et la seule surface de la v3 où le PRISME
@@ -66,13 +72,22 @@ export const entetesDeCreance = (creance: Creance): Readonly<Record<string, stri
     ? { authorization: `Bearer ${creance.jeton}` }
     : { 'x-session-token': creance.jeton };
 
-export type GenreDePiece = 'image' | 'audio' | 'video' | 'fichier';
-
 export type PieceJointe = {
   readonly id: string;
   readonly genre: GenreDePiece;
   readonly nom: string;
   readonly url: string;
+  /**
+   * LA PISTE À JOUER — élue par la langue du TEXTE SERVI, jamais par une
+   * seconde descente (CLAUDE.md § Prisme, cycle 128) : le lecteur ENTEND ce
+   * qu'il LIT. C'est le fichier d'origine quand le TTS n'a produit aucune piste
+   * dans cette langue — une entrée sans `url` concourt pour le texte et pas
+   * pour le son (`transcriptTranslationTracks`).
+   *
+   * `url` reste ce qui se TÉLÉCHARGE : le fichier que l'auteur a envoyé, avec
+   * son nom et son poids. Deux adresses parce que deux gestes.
+   */
+  readonly piste: string;
   /** Le poids ANNONCÉ avant tout téléchargement — `null` quand la passerelle ne le sert pas. */
   readonly octets: number | null;
   readonly dureeMs: number | null;
@@ -80,6 +95,13 @@ export type PieceJointe = {
   readonly hauteur: number | null;
   /** La transcription d'un vocal, SERVIE dans la langue du lecteur quand elle existe. */
   readonly transcription: string | null;
+  /**
+   * La transcription telle qu'elle a été FAITE — ce que « Voir l'original »
+   * déplie sous un vocal traduit. Sans elle, un message dont le vocal est le
+   * seul contenu servait une traduction que rien n'annonçait et dont on ne
+   * pouvait pas revenir (cycle 122 : « qui AFFICHE ce qu'il élit »).
+   */
+  readonly transcriptionOriginale: string | null;
   readonly langueDeTranscription: string | null;
   readonly langueServie: string | null;
 };
@@ -115,6 +137,8 @@ export type Message = {
   readonly edite: boolean;
   readonly supprime: boolean;
   readonly pieces: readonly PieceJointe[];
+  /** Ce que le message CITE — provenance, réponse, publication (`lib/api/citations.ts`). */
+  readonly citations: readonly Citation[];
   readonly reactions: readonly Reaction[];
   readonly accuse: Accuse;
 };
@@ -179,24 +203,17 @@ const REPLI_DE_LANGUE = 'fr';
  * La v3 ne sait pas encore consommer une vue unique ; tant qu'elle ne sait pas,
  * elle n'en montre rien.
  */
-const PLACEHOLDER_PROTEGE = 'Message protégé — ouvrez-le depuis l’application.';
+export const MENTION_PROTEGEE = 'Message protégé — ouvrez-le depuis l’application.';
 
-const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
-  typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur)
-    ? (valeur as Readonly<Record<string, unknown>>)
-    : null;
+/**
+ * La mention d'une parole RETIRÉE. Elle vit ici, avec sa jumelle, parce que
+ * DEUX surfaces la servent : la bulle (`FIL.supprime`, qui la lit) et l'aperçu
+ * d'une citation dont la cible a été supprimée. Un message supprimé ne se cite
+ * pas — et l'écrire deux fois aurait fait diverger les deux phrases.
+ */
+export const MENTION_SUPPRIMEE = 'Ce message a été supprimé';
 
-const chaine = (valeur: unknown): string | null =>
-  typeof valeur === 'string' && valeur !== '' ? valeur : null;
-
-const nombre = (valeur: unknown): number | null =>
-  typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : null;
-
-/** Une date servie sous sa forme ISO, ou telle que `JSON.stringify` l'a rendue depuis un `Date`. */
-const instant = (valeur: unknown): string | null => {
-  const brut = chaine(valeur);
-  return brut !== null && !Number.isNaN(Date.parse(brut)) ? brut : null;
-};
+export const MENTIONS_RETENUES: MentionsRetenues = { protege: MENTION_PROTEGEE, supprime: MENTION_SUPPRIMEE };
 
 const demande = (
   url: string,
@@ -221,14 +238,6 @@ export const languesDuLecteur = (lecteur: Prisme, localeAppareil?: string): read
   const ordonnees = resolveUserLanguagesOrdered(lecteur, { deviceLocale: localeAppareil });
   return ordonnees.length === 0 ? [REPLI_DE_LANGUE] : ordonnees;
 };
-
-/**
- * La protection se lit sur le MESSAGE, et les trois champs sont indépendants :
- * un message peut être à vue unique sans être flouté, et expirer sans être ni
- * l'un ni l'autre.
- */
-const estProtege = (brut: Readonly<Record<string, unknown>>): boolean =>
-  brut.isViewOnce === true || brut.isBlurred === true || chaine(brut.expiresAt) !== null;
 
 const GENRE_PAR_MIME: readonly (readonly [string, GenreDePiece])[] = [
   ['image/', 'image'],
@@ -272,17 +281,32 @@ const piece = (
     originalLanguage: langueDeTranscription,
     preferredLanguages: langues,
   });
+  const genre: GenreDePiece = genreDePiece(chaine(brut.mimeType));
+  // UNE descente, deux projections : le TEXTE que `traduite` élit, et la PISTE
+  // que sa langue désigne dans la carte jumelle. Descendre le prisme une
+  // seconde fois pour le son servirait « la réunion est déplacée » au-dessus
+  // d'une piste espagnole (leçon 284).
+  //
+  // Et SEUL un vocal change de piste. `transcriptTranslationTracks` normalise
+  // le format d'une piste en `audio/*` (`attachment-audio.ts`, `normalizeTrackMimeType`) :
+  // rien dans la carte ne dit qu'une piste traduite serait une VIDÉO. La servir
+  // à un `<video>` remplacerait l'image par du son — pire que l'original, parce
+  // que ça a l'air d'une vidéo cassée plutôt que d'une traduction absente. Le
+  // Prisme d'une vidéo passe donc par ses SOUS-TITRES, qui descendent, eux.
+  const piste = traduite === null || !pisteSuitLaLangue(genre) ? null : transcriptTranslationTracks(brut.translations)[traduite.language];
 
   return {
     id,
-    genre: genreDePiece(chaine(brut.mimeType)),
+    genre,
     nom: chaine(brut.originalName) ?? chaine(brut.fileName) ?? 'Pièce jointe',
     url,
+    piste: piste?.url === undefined ? url : urlDePiece(piste.url, origine),
     octets: nombre(brut.fileSize),
     dureeMs: nombre(brut.duration),
     largeur: nombre(brut.width),
     hauteur: nombre(brut.height),
     transcription: traduite?.text ?? chaine(transcription?.text),
+    transcriptionOriginale: chaine(transcription?.text),
     langueDeTranscription,
     langueServie: traduite?.language ?? null,
   };
@@ -344,7 +368,7 @@ export const message = (
   const protege = estProtege(brut);
   const supprime = instant(brut.deletedAt) !== null;
   const traductions = protege ? {} : buildTranslationRecord(brut.translations);
-  const texteOriginal = protege ? PLACEHOLDER_PROTEGE : (chaine(brut.content) ?? '');
+  const texteOriginal = protege ? MENTION_PROTEGEE : (chaine(brut.content) ?? '');
 
   const servie = protege
     ? null
@@ -375,9 +399,44 @@ export const message = (
     edite: brut.isEdited === true,
     supprime,
     pieces: protege || supprime ? [] : pieces(brut.attachments, langues, origine),
+    citations: supprime ? [] : citations({ brut, moi, protege, mentions: MENTIONS_RETENUES }),
     reactions: reactions(brut.reactionSummary),
     accuse: accuse(brut),
   };
+};
+
+/**
+ * LA TRANCHE, ET CE QU'ELLE SE CITE À ELLE-MÊME. `message()` lit un message
+ * SEUL : il ne peut pas savoir que la cible de sa citation est deux lignes plus
+ * haut, avec sa traduction déjà servie. `citationsDeLaPage` le sait, et c'est
+ * lui qui referme les deux textes d'un même message (cycle 122) ET les deux
+ * rendus d'un message cité protégé (REST sans drapeaux, socket avec).
+ */
+/**
+ * CE QUE LA BULLE ANNONCE DU PRISME — la pastille `.langue` et son « Voir
+ * l'original ». Elle regarde le TEXTE d'abord, puis ce que le message PORTE.
+ *
+ * Sur un message dont le VOCAL est le seul contenu, `langueServie` vaut `null`
+ * — il n'y a pas de texte à traduire — et toute l'interface du Prisme
+ * disparaissait avec lui : aucune pastille, aucun retour à l'original, alors
+ * que la transcription servie ÉTAIT une traduction. C'est le cycle 122 dans sa
+ * forme la plus courte : la descente est juste, sa valeur n'atteint pas le
+ * lecteur. La cible le dessine d'ailleurs — la vidéo sans texte de
+ * `cible/rich.png` porte bien sa pastille de langue.
+ */
+export type AnnonceDuPrisme = { readonly origine: string; readonly servie: string };
+
+export const annonceDeLaPiece = (piece: PieceJointe): AnnonceDuPrisme | null =>
+  piece.langueServie === null || piece.langueDeTranscription === null
+    ? null
+    : { origine: piece.langueDeTranscription, servie: piece.langueServie };
+
+export const annonceDuPrisme = (message: Message): AnnonceDuPrisme | null => {
+  if (message.supprime || message.protege) return null;
+  if (message.langueServie !== null && message.langueOriginale !== null) {
+    return { origine: message.langueOriginale, servie: message.langueServie };
+  }
+  return message.pieces.reduce<AnnonceDuPrisme | null>((trouvee, piece) => trouvee ?? annonceDeLaPiece(piece), null);
 };
 
 export const messages = (
@@ -386,11 +445,14 @@ export const messages = (
   langues: readonly string[],
   origine: string,
 ): readonly Message[] =>
-  (Array.isArray(bruts) ? bruts : [])
-    .map((brut) => objet(brut))
-    .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
-    .map((brut) => message(brut, moi, langues, origine))
-    .filter((m): m is Message => m !== null);
+  citationsDeLaPage({
+    messages: (Array.isArray(bruts) ? bruts : [])
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .map((brut) => message(brut, moi, langues, origine))
+      .filter((m): m is Message => m !== null),
+    mentions: MENTIONS_RETENUES,
+  });
 
 const cleDePresence = (participant: Readonly<Record<string, unknown>>): string | null =>
   chaine(participant.userId) ?? chaine(participant.id);

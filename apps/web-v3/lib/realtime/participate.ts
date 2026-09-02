@@ -448,11 +448,15 @@ const piecesLocales = (clientMessageId: string, fichiers: readonly File[]): read
     genre: GENRE_PAR_TYPE.find(([prefixe]) => fichier.type.startsWith(prefixe))?.[1] ?? 'fichier',
     nom: fichier.name,
     url: '',
+    // Rien à jouer tant que rien n'est parti : la piste d'une pièce locale est
+    // son adresse — vide, comme elle.
+    piste: '',
     octets: fichier.size,
     dureeMs: null,
     largeur: null,
     hauteur: null,
     transcription: null,
+    transcriptionOriginale: null,
     langueDeTranscription: null,
     langueServie: null,
   }));

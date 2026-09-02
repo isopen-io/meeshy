@@ -13,6 +13,7 @@ import {
   routesDuFil,
   SEUIL_DE_TROU,
   type EtatDuFilDeBouchon,
+  type FilAnnexe,
   type PieceDeBouchon,
   type PlaceDeLInvite,
   type PorteDeLHote,
@@ -20,8 +21,10 @@ import {
 import { creanceSelonLaPasserelle, lienParDefaut, routesDuLien, type LienDeBouchon } from './bouchon-lien';
 import {
   CONVERSATION_DU_LECTEUR,
+  CONVERSATION_RICHE,
   INVITE,
   messagesInitiaux,
+  messagesRiches,
   NOM_DU_LIEN,
   PRESENCES_INITIALES,
   REACTIONS_INITIALES,
@@ -70,15 +73,18 @@ export const RACINE_V3 = join(__dirname, '..', '..', '..');
 
 export {
   CONVERSATION_DU_LECTEUR,
+  CONVERSATION_RICHE,
   CREATEUR_DU_LIEN,
   DESCRIPTION_DU_LIEN,
   IDENTIFIANT_DU_LIEN_PARTAGE,
   INVITE,
   LIEN_DU_FIL,
   MEMBRE,
+  messagesRiches,
   NOM_DU_LIEN,
   PAIR_ANGLOPHONE,
   PAIR_HISPANOPHONE,
+  PISTE_TRADUITE,
   PRENOM_DU_LECTEUR,
   PSEUDO_DEJA_PRIS,
   PSEUDO_SUGGERE,
@@ -216,8 +222,22 @@ export const passerelleDeBouchon = async (options?: {
   /** La créance, lue comme `createAuthContext` la lit (`bouchon-lien.ts` › `creanceSelonLaPasserelle`). */
   const creanceDe = (requete: IncomingMessage) => creanceSelonLaPasserelle(requete, placesActives);
 
+  /**
+   * Le SECOND fil — les six formes de `cible/rich.png`, à leur PROPRE adresse
+   * (`/chats/fil-riche`, le jeton que `jetons-de-vues.json` déclare pour la vue
+   * `rich`). Elles vivaient jusqu'ici dans l'instance éphémère d'un seul spec,
+   * donc hors de portée de `compare-rendu.js`, qui interroge cette passerelle.
+   */
+  const filsAnnexes = new Map<string, FilAnnexe>([
+    [
+      CONVERSATION_RICHE.id,
+      { id: CONVERSATION_RICHE.id, titre: CONVERSATION_RICHE.titre, membres: CONVERSATION_RICHE.membres, messages: messagesRiches(CONVERSATION_RICHE.id) },
+    ],
+  ]);
+
   const etatDuFil: EtatDuFilDeBouchon = {
     conversationId,
+    filsAnnexes,
     titre: NOM_DU_LIEN,
     placesActives,
     lien,

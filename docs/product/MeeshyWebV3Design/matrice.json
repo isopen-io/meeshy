@@ -232,7 +232,7 @@
    "titre_issue": "Les médias d'une conversation se parcourent, s'ouvrent, et leur poids est annoncé avant tout téléchargement",
    "lot": "L2",
    "priorite": "P0-role-premier",
-   "route": "/chats/:id/medias",
+   "route": "/chats/:cle/medias",
    "audience": "les-deux",
    "depend_de": [
     "thread"
@@ -246,6 +246,11 @@
     "Complétude",
     "Optimisation mémoire"
    ],
+   "adresses": {
+    "membre": "/chats/:cle/medias",
+    "invite": null,
+    "note": "UNE porte, celle du MEMBRE (directive du porteur 2026-09-01 : « aucun /chat/:lien/… pour lire » — un lien reçu s'ouvre, se rejoint et se lit à UNE adresse). La passerelle SERVIRAIT pourtant la donnée à un invité (GET /conversations/:id/messages est en optionalAuth) : ouvrir la galerie à l'invité demande une SECONDE adresse sous /chat/:lien, donc une décision produit — pas un travail de plomberie. Tant qu'elle n'est pas prise, l'en-tête du fil de l'invité ne rend AUCUN lien (charte règle 7), et `audience: les-deux` décrit la donnée, pas les portes servies."
+   },
    "corps_issue": "**Contexte** — « Très faible consommation de données » se décide ici : une grille de 48 médias qui précharge est le contraire de la mission. Les tuiles de la planche sont inertes.\n\n**Preuve attendue** — Vignettes dimensionnées (`width`/`height` obligatoires, CLS ≤ 0,05), téléchargement à la demande avec poids annoncé, `fileUrl` servi tel quel — jamais reconstruit côté client (une signature `?exp=&sig=` viendra dans la même valeur).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (médias distants), § 8.5, § 10.1 ; `cible/media.png` ; `vues.json#media`."
   },
   {
@@ -715,7 +720,7 @@
    "depend_de": [
     "settings"
    ],
-   "critere_de_fin": "Test : les réglages arbitrés mutent et sont relus du serveur, et modifier « téléchargement automatique » CHANGE le comportement observé sur /chats/:id/medias (assertion CDP : aucun octet de média transféré quand le réglage est à « jamais ») ; tout ce qui n'est pas arbitré rend un état vide DESSINÉ, jamais un écran blanc ; 0 violation axe serious/critical.",
+   "critere_de_fin": "Test : les réglages arbitrés mutent et sont relus du serveur, et modifier « téléchargement automatique » CHANGE le comportement observé sur /chats/:cle/medias (assertion CDP : aucun octet de média transféré quand le réglage est à « jamais ») ; tout ce qui n'est pas arbitré rend un état vide DESSINÉ, jamais un écran blanc ; 0 violation axe serious/critical.",
    "dimensions_visees": [
     "Complétude",
     "Performance",

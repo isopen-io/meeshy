@@ -41,6 +41,13 @@ export const ciblesMesurees = (page: Page): Promise<readonly Cible[]> =>
     (selecteur) =>
       [...document.querySelectorAll(selecteur)]
         .filter((noeud) => noeud.closest('[inert]') === null)
+        // Un nœud VISUELLEMENT MASQUÉ n'est pas une cible : `.hors-ecran` fait
+        // 1 px par construction — le lien d'évitement de chaque écran (règle 6)
+        // et le champ de fichier du composeur, dont la cible réelle est le
+        // `<label class="joindre">` posé à côté de lui. La règle le disait déjà
+        // en toutes lettres au-dessus ; seul le filtre `largeur > 0` la faisait
+        // respecter, et il ne la faisait pas respecter du tout.
+        .filter((noeud) => noeud.closest('.hors-ecran') === null)
         .map((noeud) => {
           const rect = noeud.getBoundingClientRect();
           return {

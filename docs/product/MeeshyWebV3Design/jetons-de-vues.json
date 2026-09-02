@@ -31,9 +31,28 @@
   "(apps/web-v3/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
   "`lien-vivant` / `jeton-expire` séparent déjà les deux vues de `/l/:token`. `thread` est",
   "le fil du MEMBRE (`/chats/:cle`) ; le fil de l'INVITÉ est la vue `rights`, même module.",
-  "Ce qui sépare `vitrine` de `home` (toutes deux `/`) n'est pas un jeton mais une SESSION :",
-  "compare-rendu.js ne sait pas encore la déclarer — voir conception § 12.8."
+  "UN ÉTAT DE SESSION, DÉCLARÉ PAR VUE (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,",
+  "`/chats/:id` — ne rend rien à un visiteur sans créance : elle redirige vers `/login`. Ce n'est",
+  "pas un jeton de route qui la sépare d'une vue publique, c'est une SESSION. Une vue le déclare",
+  "par la clé `@session` (jamais un `:jeton` de la route, donc jamais confondue avec l'un d'eux),",
+  "et `compare-rendu.js` la traduit en cookies posés sur le contexte du navigateur. Le bloc",
+  "`sessions` ci-dessous dit lesquels, et ce sont ceux que la PASSERELLE DE BOUCHON reconnaît :",
+  "`__tests__/conformite-des-vues.test.ts` les oppose aux constantes du dépôt (`COOKIE_DE_JETON`,",
+  "`COOKIE_DE_SESSION`, `JETON_DU_MEMBRE`) et rougit si l'un dérive.",
+  "",
+  "Ce qui sépare `vitrine` de `home` (toutes deux `/`) est cette même session — mais leur",
+  "COLLISION de chemin reste à trancher dans `vues-comparables.mjs` (deux vues, un chemin), et",
+  "ce n'est pas fait : `home` ne déclare donc encore aucune session. Voir conception § 12.8."
  ],
+ "sessions": {
+  "membre": {
+   "pourquoi": "Le lecteur CONNECTÉ tel que la passerelle de bouchon le sert : un jeton de membre, et la session ouverte que la zone v3 exige.",
+   "cookies": {
+    "meeshy_auth": "JWT.sonde",
+    "meeshy_session": "ouverte"
+   }
+  }
+ },
  "jetons": {
   "linkRedirect": {
    "token": "lien-vivant"
@@ -48,7 +67,16 @@
    "lien": "lien-rejoint"
   },
   "thread": {
-   "cle": "equipe-lagos"
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
+  "rich": {
+   "id": "fil-riche",
+   "@session": "membre"
+  },
+  "media": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
   },
   "login": {
    "lien": "lien-vivant"

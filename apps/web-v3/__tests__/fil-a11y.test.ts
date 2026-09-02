@@ -51,7 +51,45 @@ const etat = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   ...attributs,
 });
 
+/**
+ * LES SIX FORMES (issue #4835) sur le même harnais : une image, une vidéo
+ * sous-titrée, un vocal transcrit, un transfert, une réponse et une réponse à
+ * une story — dans UN document, tel que le gestionnaire le sert.
+ */
+const RICHES = [
+  { id: 'r1', content: 'Le tableau final de la revue.', attachments: [{ id: 'a1', fileUrl: '/api/v1/attachments/file/p.jpg', originalName: 'photo.jpg', mimeType: 'image/jpeg', fileSize: 96_000 }] },
+  {
+    id: 'r2',
+    content: '',
+    attachments: [
+      { id: 'a2', fileUrl: '/api/v1/attachments/file/v.mp4', originalName: 'revue.mp4', mimeType: 'video/mp4', fileSize: 3_100_000, duration: 42_000, transcription: { text: 'Hola', language: 'es' }, translations: { fr: { transcription: 'Bonjour' } } },
+    ],
+  },
+  {
+    id: 'r3',
+    content: '',
+    attachments: [
+      { id: 'a3', fileUrl: '/api/v1/attachments/file/a.m4a', originalName: 'vocal.m4a', mimeType: 'audio/mp4', fileSize: 96_000, duration: 21_000, transcription: { text: 'Mo n mú', language: 'yo' }, translations: { fr: { transcription: 'J’apporte les chiffres.', url: '/api/v1/attachments/file/a-fr.m4a' } } },
+    ],
+  },
+  { id: 'r4', content: 'Le glossaire a changé.', forwardedFromId: 'x1', forwardedFromConversation: { id: 'c9', title: 'Diaspora FR-EN' } },
+  { id: 'r5', content: 'Je le mets dans le dossier.', replyToId: 'r1', replyTo: { id: 'r1', content: 'The final review board.', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } },
+  { id: 'r6', content: 'Superbe, c’était où ?', storyReplyToId: 's1', postReplyTo: { id: 's1', type: 'STORY', previewText: 'Trois graphiques', authorId: 'u1', authorName: 'Amina' } },
+].map((brut, rang) =>
+  message(
+    { originalLanguage: 'fr', createdAt: `2026-09-01T12:0${rang}:00.000Z`, senderId: 'u2', sender: { id: 'p2', displayName: 'Ibrahim' }, ...brut },
+    'u1',
+    ['fr'],
+    'https://gate.test',
+  ),
+).filter((m): m is NonNullable<typeof m> => m !== null);
+
 describe('le fil face à axe', () => {
+  it('ne porte aucune violation grave — les six formes de message dans un même fil', async () => {
+    ecris(documentDuFil(etat({ fil: { id: 'c1', titre: 'Types de messages', membres: 4, presence: { participants: [], presents: [] }, messages: RICHES, plusAncien: null } })));
+    expect(await graves()).toEqual([]);
+  });
+
   it('ne porte aucune violation grave — porte du membre, temps réel greffé', async () => {
     ecris(documentDuFil(etat()));
     expect(await graves()).toEqual([]);

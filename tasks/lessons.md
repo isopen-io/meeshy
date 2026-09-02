@@ -25231,3 +25231,355 @@ RIEN.
 > sites est une excuse ; avec les sites, c'est une condition de levée, et le lot
 > qui les ferme n'a plus à deviner s'il renverse une décision. Écrire les deux
 > coûte une phrase et fait gagner une hésitation — ou une erreur.
+
+---
+
+## Leçon 459 (amendement à la 457) — « la suite complète ne tient pas dans la fenêtre » était FAUX : elle se DÉCOUPE
+
+La 457 conclut qu'un run ciblé ne prouve que ce qu'il nomme, et que la parade,
+quand la suite complète ne tient pas dans la fenêtre disponible, est de la faire
+tourner ailleurs (la CI) et d'attendre son verdict.
+
+La prémisse était fausse, et je l'ai portée toute la journée : « la suite SDK
+prend ~31 min et se fait tuer vers 20 en tâche de fond ». C'est vrai des **deux
+cibles ensemble**. Mesuré :
+
+| moitié | témoins | durée |
+|---|---|---|
+| `-only-testing:MeeshyUITests` | **4 044** | **684 s** (11 min) |
+| `-only-testing:MeeshySDKTests` | 680 + XCTest | ~2 min |
+
+Chaque moitié tient LARGEMENT. Le renoncement qui m'a fait me rabattre sur des
+runs ciblés — et laisser passer deux régressions pendant des heures — reposait
+sur une contrainte que je n'avais jamais mesurée séparément.
+
+> **Devant une limite qui force un compromis, mesurer la limite AVANT de
+> l'accepter.** « Ça ne tient pas » est une affirmation sur un tout ; elle ne dit
+> rien de ses parties. Ici, la découpe la plus évidente qui soit — une cible de
+> test — suffisait, et personne (moi compris) n'avait essayé.
+
+Et le corollaire qui rend la 457 encore vraie mais moins fataliste : la CI reste
+le seul endroit qui exécute TOUT, mais elle n'est plus le seul recours. Un lot
+qui touche le SDK peut se vérifier en local, en deux commandes, avant de pousser.
+
+## Leçon 460 — Un correctif MÉCANIQUE à remède prescrit est un aimant à doublons : annoncer AVANT, pas après
+
+`dev` était rouge sur deux cliquets de fichiers générés. Le message d'erreur
+portait lui-même le remède :
+
+    Régénérer avec : cd packages/shared && npm run api-endpoints:generate
+
+Je l'ai lancé, vérifié, poussé, PUIS annoncé. Une autre session avait fait
+exactement la même chose : `4fb503a054` et `6a031381fa`, deux commits distincts,
+**mêmes deux fichiers, mêmes cinq insertions, diff identique à l'octet**.
+
+Aucun dégât — git a reconnu deux changements identiques comme un seul et n'a rien
+dupliqué (contrairement à
+[[feedback_automerge_duplicates_identical_import_no_conflict]], où la même
+insertion à des positions différentes s'était doublée). Mais le travail, lui, a
+été fait deux fois.
+
+> **Plus un correctif est mécanique, plus il est probable que quelqu'un d'autre
+> le fasse en même temps.** Un défaut qui demande du jugement ne sera repris par
+> personne sans se coordonner ; un défaut dont le message d'erreur DICTE la
+> commande sera repris par la première session qui le voit. La règle
+> s'inverse donc : pour un correctif difficile, annoncer après suffit ; pour un
+> correctif évident, **annoncer d'abord**.
+
+Corollaire de forme : dans un dépôt à N sessions, un rouge de fichier GÉNÉRÉ est
+le cas le plus probable de duplication — le remède est prescrit, il est rapide, et
+il ne demande aucune connaissance du lot fautif.
+
+## Leçon 461 — « ça compile chez moi » ne veut pas dire ce que je lui ai fait dire : le fichier n'avait pas été RECOMPILÉ
+
+Devant un `error: the compiler is unable to type-check this expression in
+reasonable time` rouge sur le runner et vert chez une session voisine, j'ai
+diffusé à deux sessions :
+
+> C'est la seule classe d'erreur où « ça compile chez moi » est littéralement
+> vrai et sans valeur, puisque le verdict dépend d'un DÉLAI, donc de la machine.
+
+Bien tournée, reprise telle quelle par les deux — et **fausse**. Mesuré ensuite
+sur un `derivedData` PROPRE : `BUILD_RC=65`, la même erreur, sur ma machine. Ça
+reproduit en local.
+
+Ce que le vert voisin signifiait est plus simple : **un build incrémental ne
+re-vérifie pas les types d'un fichier inchangé.** Son gate n'a pas vu l'erreur
+parce qu'il n'a pas recompilé le fichier.
+
+La règle utile n'est donc pas une exception réservée à cette classe, c'est une
+banalité qui vaut pour TOUTES : *un vert local ne prouve rien sur un fichier qui
+n'a pas été recompilé* — et elle se corrige par un `derivedData` neuf, pas par un
+renoncement.
+
+**Ce que la mesure a donné en prime, et qui vaut le détour** — compiler avec un
+budget nomme le coupable au lieu de le laisser deviner :
+
+```
+OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -warn-long-expression-type-checking=300'
+```
+```
+StickerTemplates+Travel.swift:214:32: warning: expression took 12759ms to
+type-check (limit: 300ms)
+```
+
+Douze secondes et sept cent cinquante-neuf millisecondes pour UNE expression —
+une Bézier dont chaque coordonnée mêlait `CGFloat` et le littéral `2` sur trois
+produits de quatre facteurs. Après hissage et typage des trois poids : plus rien
+au-dessus de 300 ms.
+
+Deux pièges d'outillage rencontrés en le faisant :
+
+1. **`OTHER_SWIFT_FLAGS=…` sans `$(inherited)` REMPLACE les drapeaux du target.**
+   Le build a rendu 150 erreurs d'isolation d'acteur — le modèle de concurrence
+   avait changé sous mes pieds, et j'ai failli lire cette mesure comme un
+   résultat.
+2. **Vérifier que le drapeau se DÉCLENCHE avant de se fier à son silence.** J'ai
+   remis l'original et confirmé le warning à 12 759 ms : sans ça, « aucune
+   expression au-dessus du budget » aurait pu vouloir dire « le drapeau ne fait
+   rien ».
+
+> Je m'étais dit trois fois dans la journée qu'une valeur DÉDUITE n'est pas une
+> valeur LUE. Je l'ai refait quand même, sur une phrase que je trouvais bien
+> tournée — et c'est peut-être cela le vrai signal : **une formule qui sonne
+> juste demande la même mesure qu'une formule qui sonne fausse.** Elle est
+> seulement plus difficile à soupçonner.
+
+## Leçon 462 — Un instrument répond à une question VOISINE de celle qu'on pose, et c'est une SECONDAIRE incompatible qui le trahit
+
+Quatre pièges de mesure en une soirée, sur deux sessions, dans quatre matières
+différentes. La forme est la même, et elle est plus utile que les quatre cas :
+
+| on demande | l'instrument répond | ce qu'il a vraiment dit |
+|---|---|---|
+| « cette clé est-elle perdue ? » | `grep` → 0 | *ce TEXTE n'apparaît pas* — or la clé venait d'une table de tuples, d'un `rest` spread, d'un `payload.str("…")` |
+| « ma vue peint-elle ? » | compteur de pixels → 23 196 « rouges » | *cette TEINTE est présente* — la photo de test était un massif de fleurs magenta |
+| « mon code tourne-t-il ? » | `simctl install` → succès | *le bundle est à jour* — `install` par-dessus ne remplace PAS `Meeshy.debug.dylib` |
+| « mon conteneur fait-il 74 ? » | arbre d'accessibilité → `44` | *cet ÉLÉMENT mesure 44* — c'étaient les ENFANTS, 44 + 30 = 74 |
+
+> **Dans les quatre cas, ce qui trahit n'est jamais la valeur principale** — elle
+> se relit toujours comme une réponse plausible à la question posée. C'est une
+> **secondaire incompatible** qui sauve : la ligne du fichier, la boîte
+> englobante (`y 90→669` pour un bandeau de 74), la date du dylib, la somme des
+> hauteurs enfants.
+
+D'où la parade, qui coûte une ligne : **à côté de la valeur, relever une seconde
+grandeur que la bonne réponse contraint.** Un compte de pixels sans sa boîte
+englobante ne se relit pas ; un zéro de `grep` sans un contre-exemple positif
+non plus ; un `install` sans la date du dylib non plus.
+
+Et le corollaire qui vaut pour une couleur de sonde, mais se généralise :
+**l'instrument doit être ABSENT du milieu mesuré.** Un rouge sur des fleurs
+magenta, un mot-clé qui existe déjà dans le fichier, un marqueur de log commun —
+tous mesurent le milieu au lieu de la chose.
+
+Formulation due à la session voisine, au terme d'un échange où chacun de nous a
+retiré une conclusion : elle « branche 2 confirmée » (sonde jamais exécutée), moi
+« le verdict dépend de la vitesse de la machine » (leçon 461). **Deux
+rétractations valent mieux qu'un accord** : c'est en cherchant à départager nos
+mesures qu'aucune des deux n'a survécu.
+
+## Leçon 463 — Dans un dépôt à N sessions, la vérification PAR COMMIT n'existe pas, et s'en abstenir de pousser ne la crée pas
+
+Mesuré trois fois dans la même soirée. La CI annule le run d'un commit dès qu'un
+suivant arrive, et sur `dev` les commits arrivent de trois sessions :
+
+| commit | verdict obtenu |
+|---|---|
+| `4a379db4` | **rouge** — jamais réparé sous son propre SHA |
+| `36ad4a6c` (mes deux correctifs) | **annulé** |
+| `aeee9a57` | **annulé** ×2 (CI puis SDK Tests) |
+| `12a5efb8` (le correctif qui sortait `dev` du rouge) | iOS vert, **SDK Tests annulé** |
+
+Premier diagnostic, faux à moitié : « six de mes pushes en quatre-vingt-dix
+minutes annulent mes propres runs ». J'ai donc **cessé de pousser** — et le run
+suivant a été annulé par le merge d'une voisine, puis un autre par un troisième
+lot. **La cadence n'est pas la mienne, c'est celle du dépôt.**
+
+> S'abstenir de pousser ne rachète pas un verdict : cela ne fait que déplacer
+> qui l'annule. Le seul commit vérifié de bout en bout est la TÊTE, et seulement
+> jusqu'au push suivant — donc le dernier point de vérification recule sans
+> arrêt vers le passé (mesuré : cinq heures d'écart entre deux `SDK Tests`
+> réellement terminés).
+
+**La parade n'est pas dans la CI, elle est en local**, et la leçon 459 en donne
+le moyen : la suite complète tient en deux commandes de 11 et 2 minutes. Ce qui
+signifie que la CI n'est PAS le gate d'un lot — c'est un filet sur l'arbre. Un
+lot qui touche le SDK se vérifie AVANT de pousser, sans quoi il ne sera peut-être
+jamais vérifié du tout.
+
+Corollaire, et c'est ce qui a laissé mes deux régressions vivre plusieurs
+heures : dans un dépôt à cadence soutenue, **« la CI dira si c'est cassé » est un
+pari sur le fait que personne ne poussera pendant trente minutes.** Ce pari se
+perd la plupart du temps.
+
+---
+
+## Leçon 464 — Un constat consigné LÀ OÙ IL A ÉTÉ PAYÉ ne protège pas ses jumeaux
+
+Formulation d'une session voisine, tirée de #4915 : deux gardes filtrent
+`APIError.serverError` alors qu'`APIClient` compte **23 `throw MeeshyError` et
+zéro `throw APIError`**. Elles ne s'exécutent jamais — une story supprimée
+s'annonce « hors ligne », un participant parti donne « Fiche indisponible ».
+
+Le dépôt le SAVAIT : `StoryViewerView:1290` porte le constat, mesuré, depuis un
+lot antérieur. Il est écrit à l'endroit où le défaut a été payé, et il n'a
+protégé aucune des deux gardes qui reproduisent la même erreur ailleurs. Pire,
+elle l'a découvert **en copiant** l'une d'elles pour sa propre règle : elle
+serait née morte, et son témoin l'aurait déclarée juste — un test qui fabrique
+lui-même un `APIError` passe au vert sans rien prouver du terrain.
+
+> **Un commentaire protège la ligne qu'il touche, jamais la famille à laquelle
+> elle appartient.** Il n'a ni portée, ni mécanisme, ni moyen de rougir. Ce qui
+> protège une famille est une GARDE exécutable — un témoin qui balaie tous les
+> sites, ou un type qui rend l'erreur impossible.
+
+Trois fois la même forme dans la même journée, sur trois matières :
+
+| le constat consigné | ce qu'il n'a pas protégé |
+|---|---|
+| `StoryViewerView:1290` — « le client ne jette jamais d'`APIError` » | les deux gardes de 404 qui filtrent `APIError` (#4915) |
+| le doc-comment de `storyEffectsV3.ts` — « ce convertisseur RECOMPOSE, toute clé ajoutée s'y perd » | les quatre morsures suivantes sur ce même fichier (#4832, #4840, #4905) |
+| ma fiche mémoire sur les mesures au simulateur, piège n°1 — « `simctl install` ne remplace pas le dylib » | la sonde d'une voisine, qui n'a jamais tourné |
+
+Dans les trois cas le texte était JUSTE, lisible, et au bon endroit. Aucun n'a
+rien arrêté. Le seul qui ait fini par tenir est celui qu'on a remplacé par un
+mécanisme : le convertisseur qui RÉPAND ne peut plus perdre de clé (#4905), là
+où son commentaire n'avait fait que raconter quatre fois la même perte.
+
+**Le test à s'appliquer en écrivant un constat** : *est-ce que j'écris ceci
+parce que je ne peux pas le rendre exécutable, ou parce que je n'ai pas cherché
+comment ?* La première réponse est légitime et fréquente ; la seconde est un
+mécanisme qu'on s'épargne.
+## Leçon 465 — Une table qui n'est pas EXPORTÉE n'est la table de personne : la seconde surface la réécrit, et le même message a deux formes selon son chemin d'arrivée
+
+**Le fait (2026-09-02, revue croisée de l'écran `rich`, #4835).** Le critère de
+fin demandait « UN composant dérivant du TYPE du message, aucune branche
+dupliquée, AUCUN SECOND RÉSOLVEUR ». `FORME_PAR_GENRE` — la table qui dit, par
+genre de pièce jointe, quel glyphe et quel lecteur — était déclarée `const` NON
+exportée dans `app/connecte/fil-lignes.ts` : elle n'était la table que du rendu
+SERVI. Quatre autres sites réécrivaient la même règle en comparaisons littérales
+de genre — le peintre du temps réel (`piece.genre !== 'audio'`, quatre
+endroits), `lib/api/fil.ts` (« quel genre a une piste traduite »), `lib/poids.ts`
+(« quel genre a une durée »). Donner un lecteur à un genre neuf changeait la
+ligne SERVIE sans changer la ligne PEINTE : le même message avait deux formes
+selon qu'il arrivait par le document ou par le socket, et il fallait recharger
+pour voir son lecteur.
+
+> **Une table non exportée n'a pas une source, elle en a autant que de
+> surfaces.** Le témoin qui l'attrape n'interroge pas la table mais ses DEUX
+> rendus : *pour chaque entrée de la table, la ligne servie et la ligne peinte
+> montent-elles le même jeu d'éléments ?* Écrit sur un seul genre, il reste vert
+> — c'est la leçon 261 appliquée à une énumération : le témoin se pose sur ce que
+> la table ÉNUMÈRE, pas sur le cas qu'on avait sous les yeux.
+
+Quatre voisines du même lot, toutes de la forme « le résolveur est juste, sa
+valeur n'atteint pas le lecteur » (cycle 122) :
+
+1. **L'aperçu d'une réponse servait l'ORIGINAL** pendant que la bulle citée,
+   deux lignes plus haut, affichait sa traduction — deux textes pour un même
+   message, sur le même écran. Rien ne manquait au document : `replyToId` pointe,
+   dans le cas nominal, un message de la MÊME tranche, dont les traductions sont
+   servies. La traduction n'était pas CHERCHÉE. **Un aperçu de citation se lit
+   dans la PAGE avant de se lire dans la charge.**
+2. **La garde de protection d'un message cité était MORTE sur REST et VIVANTE
+   sur le socket** : le `select` de `replyTo` ne demande aucun des drapeaux, le
+   `include` du socket les fait tous voyager. Une réponse à un message à vue
+   unique arrivait avec sa mention et affichait le texte EN CLAIR après un F5 —
+   et le témoin qui prétendait la gager donnait une charge de forme SOCKET à une
+   règle qui garde le chemin REST (leçon 261 encore). **Quand la cible est dans
+   la page, c'est la BULLE qui juge : les deux chemins deviennent identiques sans
+   rien attendre du serveur.**
+3. **Une pastille « Sous-titres fr » PROMETTAIT une piste que le `<video>` ne
+   porte pas** — la passerelle n'expose aucun WebVTT. Le Prisme ANNONCÉ sans
+   être APPLIQUÉ (cycle 123), et le témoin n'assertait que le TEXTE du badge : il
+   ne pouvait pas voir qu'il mentait. **Un témoin d'annonce se pose sur l'EFFET
+   (la présence d'un `<track>`), jamais sur le libellé.**
+4. **Un vocal traduit n'annonçait RIEN** : la pastille de langue et « Voir
+   l'original » étaient conditionnées au TEXTE du message, `null` sur un message
+   dont le vocal est le seul contenu. Toute l'interface du Prisme disparaissait
+   là où la traduction était la seule chose à annoncer.
+
+Et une cinquième, de forme opposée — **le module qui repeint CONTREDISAIT le
+document** : l'état relu (`bullesDuDocument`) ne reconstruit pas les pièces
+(`pieces: []`), si bien que le premier `audio:transcription-ready` d'un vocal
+DÉJÀ SERVI tombait dans la branche d'adoption, estampillait l'empreinte neuve et
+rendait sans rien peindre — la transcription n'apparaissait jamais et le lecteur
+continuait d'entendre la piste originale. **Un peintre ne retire que sur une
+PREUVE : quand son état ne porte pas ce que le document porte, il n'a rien à
+dire, et se taire est la bonne réponse.** Sites : `apps/web-v3/lib/api/formes.ts`
+(la table, exportée), `lib/api/citations.ts` › `citationsDeLaPage`,
+`lib/api/fil.ts` › `annonceDuPrisme`, `lib/realtime/fil-peinture.ts` ›
+`remplisLesPieces` / `piecesConnues`.
+
+## Leçon 466 — Un critère de fin qui nomme un gate que le dépôt ne sait pas produire n'est ni tenu ni réfutable — et le mauvais obstacle envoie le correctif au mauvais endroit
+
+**Le fait (2026-09-02, même revue).** Le critère de fin de #4835 exigeait « diff
+par région contre `cible/rich.png` ≤ 8 %, IoU ≥ 0,92, 100 % des icônes rendues,
+quatre colonnes de thème ». Deux choses, toutes deux à dire à voix haute :
+
+1. **Le gate n'existe pas.** `e2e/visual/v3-visual.spec.ts`, que le § 9.6 nomme
+   comme producteur de ces quatre chiffres, n'est pas dans le dépôt ;
+   `compare-rendu.js`, l'outil réellement disponible, rend un écart STRUCTUREL
+   (profil d'encre, seuil 0,15) et un `pixels_indicatif` — pas les mêmes mesures,
+   pas le même seuil. TOUS les écrans livrés l'ont été sans lui.
+2. **L'obstacle invoqué était le mauvais.** Le rapport disait « `rich` n'est pas
+   sélectionnable : elle partage sa route avec `thread` ». Faux deux fois :
+   `vues.json` la déclare sur `/chats/:id`, distincte du `/chats/:cle` de
+   `thread`, et `selectionComparable` retenait déjà les deux sans un refus. Le
+   blocage réel était (a) l'absence d'ÉTAT DE SESSION pour `compare-rendu.js`,
+   commun à TOUTE la famille du membre et déjà documenté (§ 12.8), et (b)
+   l'absence de conversation adressable derrière le jeton dans la passerelle
+   PARTAGÉE — la donnée existait, raccordée à l'instance éphémère d'un seul spec.
+
+> **Nommer le mauvais obstacle coûte plus qu'un silence : il envoie le correctif
+> au mauvais endroit et fait croire qu'aucun travail n'était possible.** Avant
+> d'écrire « impossible », lancer la sélection : `selectionComparable` répond en
+> une commande, sans serveur. Et quand un gate est injouable, la question n'est
+> pas « comment l'éviter » mais **« qu'est-ce qui, précisément, l'empêche — et
+> est-ce le même empêchement pour ses voisins ? »** : ici il l'était, et le lever
+> a débloqué `thread`, `join`, `rights` et `rich` d'un seul geste.
+
+Deux formes du même piège dans le même lot : `compare-rendu.js` lancé contre un
+`next start` NU (sans passerelle) rendait « Le service ne répond pas » et
+mesurait l'écran de panne contre la cible d'un fil — `structure=0,54` sur un
+code conforme ; et le runner qui monte la chaîne appelait `spawnSync`, ce qui
+BLOQUAIT la boucle d'événements du processus qui HÉBERGE la passerelle de
+bouchon, produisant exactement la même panne. **Un chiffre rendu par un harnais
+qui ne sert pas la page mesure le harnais.** Sites :
+`docs/product/MeeshyWebV3Design/jetons-de-vues.json` (bloc `sessions`),
+`apps/web-v3/scripts/lib/index-des-vues.mjs` › `sessionsInconnues`,
+`apps/web-v3/scripts/conformite-des-vues.ts`, issue #4910.
+
+---
+
+## Leçon 467 — Une déduction est d'autant plus tenace qu'un TÉMOIN VISIBLE semble la confirmer
+
+Formulation d'une session voisine, sur sa propre erreur. Elle avait affirmé que
+le viewer story « pilote » son index de scène. Mesuré, cinq sites élisent la
+scène 0 et aucun `@State` n'existe dans le dépôt.
+
+**Sa raison n'était pas la paresse** : le viewer affiche une barre de progression
+à SEGMENTS, qui bouge. Elle en a conclu qu'elle parcourait les scènes. Elle
+parcourt les **stories du groupe** — deux notions distinctes qui produisent
+exactement la même apparence à l'écran.
+
+> **« Qu'est-ce qui bouge à l'écran ? » ne remplace jamais « quelle valeur est
+> passée à ce paramètre ? »** Un mouvement visible est une preuve pour la
+> question qu'il répond, et un piège pour toutes les autres. Une déduction
+> qu'aucun signe ne soutient se soupçonne ; une déduction qu'un signe VRAI
+> semble confirmer ne se soupçonne plus.
+
+C'est la forme la plus coûteuse de la leçon 462 (un instrument répond à une
+question voisine) : ici l'instrument est l'ÉCRAN, et il ne ment pas — c'est
+l'inférence qui saute d'une notion à sa voisine, sous couvert d'une observation
+juste.
+
+Le contrôle qui l'attrape porte sur le PARAMÈTRE, jamais sur l'effet :
+rechercher `@State` ou `$sceneIndex` plutôt que regarder ce qui s'anime.
+
+**Corollaire de balayage, tiré de ma propre erreur dans le même échange :
+chercher la FORME rate les autres formes du même fait.** Mon relevé cherchait
+`.constant(0)` et comptait trois sites ; deux de plus passaient un littéral à un
+appel direct — dont le DÉCODEUR. Cinq au total. La question était « qui élit une
+scène ? » ; j'avais cherché « qui passe un binding constant ? ».
