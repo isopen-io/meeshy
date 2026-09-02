@@ -10,7 +10,7 @@ export const meta = {
     { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'opus' },
     { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code', model: 'sonnet' },
     { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte', model: 'opus' },
-    { title: 'Revue', detail: 'sonnet prend en defaut la surface, fable attaque la conception', model: 'opus' },
+    { title: 'Revue', detail: 'sonnet prend en defaut la surface, opus attaque la conception', model: 'opus' },
     { title: 'Gates', detail: 'ordre, tsc, lint, tests, build + budget, conformite visuelle, axe — corriger, jamais contourner', model: 'sonnet' },
     { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'opus' },
     { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'opus' },
@@ -71,7 +71,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
                                critere_de_fin, dimensions visees, corps d'issue.
 5. ${D}/cible/<vue_id>.png     la capture CIBLE de chaque ecran — regarde-la (outil Read).
 6. ${REPO}/CLAUDE.md           TDD non negociable, TypeScript strict sans 'any', immuabilite,
-                               budget 800-1100 lignes par fichier, UNE source de verite,
+                               budget 1000-1200 lignes par fichier, UNE source de verite,
                                Instant App Principles, Prisme Linguistique, treize dimensions.
 7. ${REPO}/tasks/lessons.md    les 40 dernieres lecons (tail -400) — le depot a deja paye ces erreurs.
 8. Le code EXISTANT de ${V3} : app/route.ts, app/enveloppe/*, app/connecte/*, app/vitrine/*,
@@ -176,7 +176,7 @@ REGLES DE LA V3, non negociables :
 
 INTERDITS :
 - inventer un chiffre (poids, version, mesure) : ecris « a mesurer » ou mesure-le ;
-- ajouter a un fichier deja hors budget (800-1100 lignes) : on extrait d'abord ;
+- ajouter a un fichier deja hors budget (1000-1200 lignes, plafond DUR 1200) : on extrait d'abord ;
 - ecrire une JUMELLE (seconde source de verite pour une donnee qui en a une) ;
 - toucher a l'ordre a la main : \`node ${D}/ordre-des-ecrans.js\` le recalcule ;
 - desactiver un test, baisser un seuil, poser un ignore pour passer un gate ;
