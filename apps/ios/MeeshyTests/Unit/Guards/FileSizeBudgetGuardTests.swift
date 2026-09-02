@@ -182,7 +182,21 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // n'expliquent que 63 des 432, le reste venant de découpes voisines livrées
     // entre-temps. Soustraire aurait laissé 369 lignes de mou — de quoi
     // accueillir en silence l'ajout que ce cliquet existe pour refuser.
-    private static let legacyLineCeiling = 71_266
+    //
+    // 2026-09-02 — 71 266 → 71 145 (−121). Cinq fichiers de la dette avaient GROSSI en
+    // amont sans que rien ne rougisse à leur commit : `StoryViewerView+Canvas.swift`
+    // (+79, à 2 716), `PostDetailView.swift` (+36), `ConversationView.swift`
+    // (+27), `FeedView.swift` (+7) et `MeeshyApp.swift` (+4) — 71 443 mesurés,
+    // 177 au-dessus du cran. Le plafond ne MONTE jamais : la dette se paie par
+    // une découpe, par responsabilité. `StoryComposerBarView` — l'unique
+    // composer du lecteur de story, son staging de pièces jointes, sa capture
+    // vocale et sa soumission — quitte `StoryViewerView+Canvas.swift` pour
+    // `StoryViewerView+CanvasComposerBar.swift` (318 lignes, sous le budget) ;
+    // l'hôte retombe à 2 418 et RESTE en dette. Le nombre est REMESURÉ sur les
+    // 34 noms avec la méthode de `lineCount(of:)`, jamais soustrait — les 298
+    // lignes déplacées expliquent 298 des 71 443, et le reste du cumul est
+    // celui du jour, pas celui d'un commentaire.
+    private static let legacyLineCeiling = 71_145
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
