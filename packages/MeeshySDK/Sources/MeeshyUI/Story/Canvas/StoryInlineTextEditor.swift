@@ -21,6 +21,14 @@ public final class StoryInlineTextEditor: UITextView {
         super.init(frame: .zero, textContainer: nil)
         backgroundColor = .clear
         isScrollEnabled = false
+        // Un `UITextView` est un `UIScrollView`, qui rogne à ses bounds. Le
+        // champ colle à ses glyphes (`textContainerInset = .zero`) : une lueur
+        // ou une ombre (#4870) déborderait et serait COUPÉE pendant la frappe,
+        // puis « sauterait » à sa pleine étendue quand la calque reprend la
+        // main. Tant que le champ ne défile pas il n'a rien à rogner ; dès
+        // qu'il défile, `sizeToFitTextContent` remet le rognage (les lignes
+        // sorties doivent rester cachées).
+        clipsToBounds = false
         isOpaque = false
         textContainerInset = .zero
         textContainer.lineFragmentPadding = 0
@@ -135,6 +143,8 @@ public final class StoryInlineTextEditor: UITextView {
         let clamped = min(natural, max(maxHeight, 1))
         let shouldScroll = natural > clamped + 0.5
         if isScrollEnabled != shouldScroll { isScrollEnabled = shouldScroll }
+        // Rogner SEULEMENT quand on défile — voir `init`.
+        if clipsToBounds != shouldScroll { clipsToBounds = shouldScroll }
 
         let next = CGSize(width: width, height: clamped)
         if next != bounds.size {

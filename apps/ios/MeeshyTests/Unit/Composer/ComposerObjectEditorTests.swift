@@ -244,7 +244,7 @@ final class ComposerObjectEditorTests: XCTestCase {
     ///
     /// Le cadre est justifié SUR LA SCÈNE : là il désigne, parmi plusieurs
     /// objets, celui que le doigt saisit. Sur cet écran l'objet EST le sujet —
-    /// le titre le nomme, les neuf sections le règlent, il n'y a rien dont le
+    /// le titre le nomme, les dix sections le règlent, il n'y a rien dont le
     /// distinguer. Un signe qui n'apprend rien occupe la place de ce qui
     /// apprend (loi 8, appliquée à un ornement plutôt qu'à un panneau).
     ///

@@ -340,13 +340,22 @@ public final class StoryTextLayer: CATextLayer {
                                        rasterizationScale: renderScale)
     }
 
-    /// Un effet rencontre-t-il une boîte peinte par `self` (fond solide sur
-    /// `backgroundColor`, liseré sur `border`) ? Alors les glyphes doivent
-    /// migrer en sous-calque pour que l'ombre soit la leur — voir
-    /// `applyTextEffect`.
+    /// Un effet rencontre-t-il quelque chose que `self` PEINT en plus des
+    /// glyphes — un fond solide sur `backgroundColor`, un liseré sur `border` ?
+    /// Alors les glyphes doivent migrer en sous-calque pour que l'ombre soit la
+    /// leur — voir `applyTextEffect`.
+    ///
+    /// La question est « qu'est-ce que `self` peint ? », PAS « y a-t-il une
+    /// boîte ? » : `hasFrameBox` est faux dès que la forme est « Aucun », mais
+    /// `applyBackgroundStyle(.solid)` pose le fond sur `backgroundColor` sans
+    /// regarder la forme — fond solide + forme « Aucun » + effet ombrait la
+    /// boîte (revue adverse du lot, 2026-09-02). Le verre et les formes
+    /// path-based installent toujours leur sous-calque : ce prédicat ne
+    /// tranche que les cas où `self` peint lui-même.
     private var effectNeedsGlyphSublayer: Bool {
         guard let textObject, textObject.hasTextEffect else { return false }
         return textObject.hasFrameBox
+            || textObject.resolvedBackgroundStyle != StoryTextBackgroundStyle.none
     }
 
     /// Rend les glyphes invisibles (couleur de premier plan transparente) tout

@@ -11,9 +11,12 @@ import MeeshySDK
 /// les primitives Apple, une fois, pour qu'aucun des trois ne refasse la
 /// conversion em → points ni le choix de couleur.
 ///
-/// `nonisolated` : `NSShadow` se construit hors main actor (le composite
-/// tourne dans `UIGraphicsImageRenderer` sur une file de fond) ; seules les
-/// mutations de `CALayer` sont `@MainActor`.
+/// `nonisolated` : projection PURE, sans état main-actor, appelable depuis
+/// n'importe quel contexte — ce qui laisse la porte ouverte à un appelant hors
+/// main actor sans que ce type ait à changer. Aujourd'hui ses trois appelants
+/// tournent tous sur le main actor (`StorySlideRenderer` compris : il est
+/// MainActor-isolé par le défaut du package, cf. `StoryThumbHashEnricher`).
+/// Seules les mutations de `CALayer` sont `@MainActor`.
 public nonisolated enum StoryTextEffectRendering {
 
     /// Couleur de l'ombre : celle du texte pour la lueur, noir sinon, à

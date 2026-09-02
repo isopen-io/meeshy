@@ -84,7 +84,7 @@ final class ComposerObjectEditorDisclosureTests: XCTestCase {
         let outils = Set(TextEditTool.all.map { ComposerObjectEditorSection.tool($0) })
         XCTAssertEqual(outils.count, TextEditTool.all.count)
         XCTAssertEqual(toutes.count, TextEditTool.all.count + 2,
-                       "Neuf sections : les sept outils, la fenêtre, le plan.")
+                       "Les outils de `TextEditTool.all`, la fenêtre, le plan — jamais un compte écrit à la main.")
     }
 
     // MARK: - Le câblage

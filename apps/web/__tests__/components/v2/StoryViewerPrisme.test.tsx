@@ -177,4 +177,19 @@ describe('StoryViewer (legacy) — l\'axe EFFET d\'un overlay de texte (#4870)',
     expect(shadow).not.toContain('currentColor');
     expect(shadow).toContain('1px 4px');
   });
+
+  /// La légende RACINE (format v1 sans overlay) suit la même règle : servie en
+  /// v3 par la passerelle, la même story ne brillait déjà plus.
+  it('ne fait plus briller la légende racine d\'une story « neon » v1', () => {
+    render(
+      <StoryViewer
+        stories={[baseStory({ content: 'Hello', storyEffects: { textStyle: 'neon', textColor: '#ffffff' } })]}
+        userLanguage="de"
+        onClose={jest.fn()}
+      />,
+    );
+    const shadow = screen.getByText('Hello').parentElement?.style.textShadow ?? '';
+    expect(shadow).not.toContain('currentColor');
+    expect(shadow).toContain('1px 4px');
+  });
 });

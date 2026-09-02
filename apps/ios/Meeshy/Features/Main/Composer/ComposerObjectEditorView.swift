@@ -189,7 +189,7 @@ struct ComposerObjectEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     styleSection(binding)
-                    // Les six autres outils, dans l'ordre que la rangée du SDK
+                    // Les autres outils, dans l'ordre que la rangée du SDK
                     // a fixé — le même ordre que les bulles du rail, pour que
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in

@@ -995,10 +995,11 @@ function StoryViewer({
     }
   })();
 
-  const textShadow =
-    effects?.textStyle === 'neon'
-      ? `0 0 10px currentColor, 0 0 20px currentColor`
-      : '0 1px 4px rgba(0,0,0,0.5)';
+  // La légende RACINE du chemin legacy ne brille plus sur « neon » (#4870) :
+  // la lueur vit sur l'axe EFFET, que ce format v1 ne porte pas. Servie en
+  // v3 par la passerelle (`convertV1ToV3` ne synthétise que `textStyle`), la
+  // même story ne brillait déjà plus — un seul rendu pour une seule story.
+  const textShadow = FLAT_TEXT_SHADOW;
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">

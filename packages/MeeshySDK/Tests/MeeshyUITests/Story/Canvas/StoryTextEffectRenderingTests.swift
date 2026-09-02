@@ -122,6 +122,22 @@ final class StoryTextEffectRenderingTests: XCTestCase {
         XCTAssertGreaterThan(glyphs.shadowOffset.height, 0)
     }
 
+    /// **Fond solide + forme « Aucun »** : `hasFrameBox` est faux, mais le fond
+    /// est quand même peint sur `backgroundColor` de la calque — l'ombre doit
+    /// encore migrer avec les glyphes, sinon c'est la boîte qui brille (revue
+    /// adverse du lot, 2026-09-02). La question est « qu'est-ce que `self`
+    /// peint ? », pas « y a-t-il une boîte ? ».
+    func test_solidBackgroundWithoutFrameShape_stillCarriesTheShadowOnTheGlyphs() throws {
+        let layer = StoryTextLayer()
+        layer.configure(with: text(effect: "glow",
+                                   backgroundStyle: .solid(hex: "000000"),
+                                   frameShape: "none"),
+                        geometry: geometry, mode: .edit)
+        XCTAssertEqual(layer.shadowOpacity, 0, "le fond solide ne porte aucune ombre")
+        let glyphs = try XCTUnwrap(glyphSublayers(of: layer).first)
+        XCTAssertEqual(glyphs.shadowOpacity, 1)
+    }
+
     /// Une calque REconfigurée sans effet ne garde pas l'ombre d'avant —
     /// `configure` est idempotent.
     func test_reconfiguringWithoutEffect_clearsTheShadow() {
