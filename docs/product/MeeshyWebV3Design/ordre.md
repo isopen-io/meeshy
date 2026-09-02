@@ -19,7 +19,7 @@
 | 9 | `storyFail` | P0-role-premier | L3 | `/stories/:id` | anonyme | `story` |
 | 10 | `rights` | P0-role-premier | L2 | `/chat/:lien` | anonyme | `join` |
 | 11 | `thread` | P0-role-premier | L2 | `/chats/:cle` | les-deux | `join` |
-| 12 | `media` | P0-role-premier | L2 | `/chats/:id/medias` | les-deux | `thread` |
+| 12 | `media` | P0-role-premier | L2 | `/chats/:cle/medias` | les-deux | `thread` |
 | 13 | `rich` | P0-role-premier | L2 | `/chats/:id` | les-deux | `thread` |
 | 14 | `login` | P1-role-secondaire | L4 | `/login?returnUrl=/chat/:lien` | anonyme | — |
 | 15 | `vitrine` | P1-role-secondaire | L4 | `/` | anonyme | — |

@@ -1,12 +1,13 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import { annonceDeLaPiece, annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
+import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
 import { FORME_PAR_GENRE, formeDePiece } from '@/lib/api/formes';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, libelleDuJour } from '@/lib/temps';
 
+import { blocDeTranscription, langAttribut } from './transcrit';
 import { quand } from './vue';
 
 /**
@@ -56,9 +57,6 @@ const avatar = (message: Message): string =>
   message.anonyme
     ? `<span class="avatar fantome" aria-hidden="true">${svgDuSprite('ph-ghost')}</span>`
     : `<span class="avatar ${teinteDeLAvatar(message.auteur)}" aria-hidden="true">${echappe(initiales(message.auteur))}</span>`;
-
-const langAttribut = (langue: string | null, langueDuDocument: string): string =>
-  langue !== null && langue !== langueDuDocument ? ` lang="${echappe(langue)}"` : '';
 
 /**
  * LES SIX FORMES D'UNE BULLE, DEUX AXES, DEUX TABLES (issue #4835).
@@ -148,38 +146,6 @@ const lecteurDePiece = ({ balise, source, nom, meta }: { readonly balise: 'audio
   `<${balise} controls preload="none" src="${echappe(source)}"></${balise}>` +
   '</details>';
 
-/**
- * CE QU'UN TRANSCRIT ANNONCE — et pourquoi ce n'est plus « Sous-titres fr ».
- *
- * La pastille de sous-titres PROMETTAIT une piste que le `<video>` ne porte
- * pas : la passerelle n'expose aucun WebVTT, et fabriquer des minutages depuis
- * un texte plein serait inventer (régime 3). Un tap sur « lire » donnait donc
- * la vidéo espagnole SANS sous-titres, sous un badge qui en promettait en
- * français — le Prisme ANNONCÉ sans être APPLIQUÉ (cycle 123).
- *
- * Ce que l'écran sert VRAIMENT, il le dit : la transcription est traduite, elle
- * se lit juste dessous, et l'original est à un geste. La phrase vient de la
- * planche (« Transcrit du yoruba · lire en français »), au CODE près — charte
- * règle 23.
- */
-const transcritDePiece = (piece: PieceJointe, langueDuDocument: string): string => {
-  if (piece.transcription === null) return '';
-  const annonce = annonceDeLaPiece(piece);
-  const servie = piece.langueServie ?? piece.langueDeTranscription;
-  const original =
-    annonce === null || piece.transcriptionOriginale === null
-      ? ''
-      : '<details class="transcrit-original">' +
-        `<summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary>` +
-        `<p${langAttribut(annonce.origine, langueDuDocument)}>${echappe(piece.transcriptionOriginale)}</p></details>`;
-  return (
-    `<p class="transcription"${langAttribut(servie, langueDuDocument)}>` +
-    `<span class="hors-ecran">${echappe(FIL.transcription)} </span><span class="texte-transcrit">${echappe(piece.transcription)}</span></p>` +
-    (annonce === null ? '' : `<p class="transcrit">${echappe(FIL.transcrit(annonce.origine, annonce.servie))}</p>`) +
-    original
-  );
-};
-
 const piece = (piece: PieceJointe, langueDuDocument: string): string => {
   const forme = formeDePiece(piece.genre);
   const meta = metaDePiece(piece);
@@ -188,7 +154,7 @@ const piece = (piece: PieceJointe, langueDuDocument: string): string => {
       ? afficheDePiece(piece.url, piece.nom, meta)
       : lecteurDePiece({ balise: forme.lecteur, source: piece.piste, nom: piece.nom, meta });
 
-  return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${transcritDePiece(piece, langueDuDocument)}</li>`;
+  return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${blocDeTranscription(piece, langueDuDocument)}</li>`;
 };
 
 /**
@@ -222,10 +188,12 @@ const gabaritDePiece = (): string =>
  * sa langue quand la passerelle la sert.
  *
  * AUCUNE n'est un CONTRÔLE. La planche fait mener la vignette d'une story à
- * `/stories/:id` et celle d'un média à `/chats/:id/medias` — deux routes que la
- * v3 ne sert pas encore : la charte règle 7 tranche (« un `<a href>` vers une
- * route SERVIE — tant que sa destination n'existe pas, il n'est pas rendu »),
- * et rien d'inerte n'est offert au doigt.
+ * `/stories/:id`, une route que la v3 ne sert pas : la charte règle 7 tranche
+ * (« un `<a href>` vers une route SERVIE — tant que sa destination n'existe
+ * pas, il n'est pas rendu »), et rien d'inerte n'est offert au doigt. Les trois
+ * genres de citation — transfert, réponse, story — n'en désignent d'ailleurs
+ * aucune autre : la galerie des médias (`/chats/:cle/medias`, désormais servie)
+ * s'atteint depuis l'EN-TÊTE du fil, pas depuis une citation.
  */
 const GLYPHE_PAR_CITATION: Readonly<Record<GenreDeCitation, string>> = {
   transfert: 'ph-arrow-bend-up-right',

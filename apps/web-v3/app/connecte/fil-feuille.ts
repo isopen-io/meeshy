@@ -88,6 +88,8 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-tete{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--color-bg);border-bottom:var(--stroke-hair) solid var(--color-border-strong)}
 .fil-tete .retour{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
 .fil-tete .retour svg{width:var(--glyph);height:var(--glyph)}
+.fil-tete .medias{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
+.fil-tete .medias svg{width:var(--glyph);height:var(--glyph)}
 .fil-tete .titre{flex:1;min-width:0}
 .fil-tete h1{margin:0;font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fil-tete .sous{margin:0;font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

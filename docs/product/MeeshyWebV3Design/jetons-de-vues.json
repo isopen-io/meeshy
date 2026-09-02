@@ -74,6 +74,10 @@
    "id": "fil-riche",
    "@session": "membre"
   },
+  "media": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
   "login": {
    "lien": "lien-vivant"
   },

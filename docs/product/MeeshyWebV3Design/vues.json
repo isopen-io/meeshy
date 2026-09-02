@@ -104,7 +104,7 @@
   {
    "id": "media",
    "label": "Médias partagés",
-   "route": "/chats/:id/medias",
+   "route": "/chats/:cle/medias",
    "group": "MEMBRE — PRINCIPAL",
    "title": "Médias partagés",
    "subtitle": "Équipe Lagos · 48 éléments",
