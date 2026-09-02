@@ -2472,6 +2472,20 @@ flowchart TD
   <span class="mono">payload</span>, permissif par contrat. <b>Le dix-neuvième style ne coûtera donc
   ni champ, ni version, ni migration</b> — c'est la promesse de la dimension 12 (« la complexité se
   paie dans le code ») rendue mesurable sur un cas précis.</div>
+
+  <div class="callout"><b>Un style est une POLICE, et rien d'autre ; ce qui brille est un second
+  axe</b> (#4850, #4870 — 2026-09-02). La mesure a tranché : les dix-huit cas résolvent tous vers
+  une famille, une graisse ou un design, et aucun n'applique d'effet — « néon » est du système
+  semibold arrondi. Sept des dix-huit sont des polices <em>déguisées</em> en effets, et c'est ce
+  mélange de vocabulaire que l'auteur voyait dans la grille. La section s'appelle donc
+  <b>POLICE</b>, et l'<b>EFFET</b> — <span class="mono">lueur · ombre · relief</span> — est une
+  section à part, juste après, portée par la clé <span class="mono">textEffect</span> du
+  <span class="mono">payload</span> (absente ⇒ aucun). Une seule table, en fraction de la taille
+  de police, recopiée sur les trois clients (<span class="mono">StoryTextEffect</span> Swift ·
+  <span class="mono">story-text-effect.ts</span> · <span class="mono">StoryTextEffect.kt</span>).
+  <b>La lueur ne vit que sur cet axe</b> : web et Android faisaient briller « néon » pendant
+  qu'iOS — où la story est composée — ne le faisait pas ; un effet caché derrière un nom de
+  police, différent selon le client, était exactement ce que l'axe vient fermer.</div>
   <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
     <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">système .black</p></div>
     <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold + glow</p></div>

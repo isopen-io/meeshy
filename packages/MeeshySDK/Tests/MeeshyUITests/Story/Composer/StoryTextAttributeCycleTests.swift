@@ -298,4 +298,42 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         XCTAssertEqual(StoryTextAttributeCycle.indicator(.language, of: obj),
                        .code("PT"))
     }
+
+    // MARK: - Effet (#4870)
+
+    /// Le cycle visite les quatre valeurs et reboucle sur « aucun » : un effet
+    /// doit pouvoir se RETIRER d'un tap, pas seulement se changer.
+    func test_effect_visitsEveryStepThenWrapsAround() {
+        let seen = trace(.effect, from: text(), taps: 4) { $0.textEffect }
+        XCTAssertEqual(seen, ["glow", "shadow", "relief", nil])
+    }
+
+    /// « Aucun » s'écrit `nil`, jamais `"none"` : un texte sans effet garde le
+    /// JSON qu'il avait, et un blob publié ne change pas de forme.
+    func test_effect_returningToNone_writesNil() {
+        var obj = text()
+        obj.textEffect = "relief"
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertNil(obj.textEffect)
+        XCTAssertEqual(obj.parsedTextEffect, StoryTextEffect.none)
+    }
+
+    /// Une valeur inconnue (client plus récent) repart du début plutôt que de
+    /// bloquer la rotation.
+    func test_effect_fromAnUnknownValue_restartsTheCycle() {
+        var obj = text()
+        obj.textEffect = "effect-from-the-future"
+        StoryTextAttributeCycle.advance(.effect, on: &obj)
+        XCTAssertEqual(obj.textEffect, "glow")
+    }
+
+    /// La bulle rend « Aa » AVEC l'effet courant — pas un pictogramme figé.
+    func test_indicator_forEffect_showsTheCurrentEffect() {
+        var obj = text()
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.effect, of: obj),
+                       .effectGlyph("Aa", effect: StoryTextEffect.none))
+        obj.textEffect = "shadow"
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.effect, of: obj),
+                       .effectGlyph("Aa", effect: .shadow))
+    }
 }

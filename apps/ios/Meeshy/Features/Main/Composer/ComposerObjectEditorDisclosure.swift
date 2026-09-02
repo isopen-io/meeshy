@@ -34,10 +34,11 @@ import MeeshyUI
 /// se mesure sur les 72 paires, et qu'un témoin de vue n'en éprouverait qu'un
 /// chemin. Écrite dans un `body`, la même logique serait hors de portée.
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
-    /// Les sept outils du SDK. Le cas porte `TextEditTool` plutôt que de
-    /// recopier sept cas : un huitième outil ajouté au SDK entre ici sans
-    /// qu'une ligne change — c'est la même raison qui fait lire
-    /// `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la main.
+    /// Les outils du SDK — sept alors, huit depuis l'EFFET (#4870), et le
+    /// huitième est entré ici sans qu'une ligne change : le cas porte
+    /// `TextEditTool` plutôt que de recopier ses cas, pour la même raison qui
+    /// fait lire `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la
+    /// main.
     case tool(TextEditTool)
     /// D'où à où l'objet vit dans la slide.
     case timing

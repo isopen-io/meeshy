@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, canvasV3SceneDurationsMs, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
+import { FLAT_TEXT_SHADOW, textEffectShadow, type StoryTextEffect } from '@/lib/story-text-effect';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
@@ -51,6 +52,8 @@ export interface StoryTextObjectData {
   translations?: Record<string, string>;
   sourceLanguage?: string;
   textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
+  /// L'axe EFFET (#4870) — lueur, ombre, relief — posé par-dessus la police.
+  textEffect?: StoryTextEffect;
   textColor?: string;
   /// Legacy css-px size (old web payloads). Rendered as raw `px`.
   textSize?: number;
@@ -262,12 +265,6 @@ function textObjectClass(style?: StoryTextObjectData['textStyle']): string {
     default:
       return '';
   }
-}
-
-function textObjectShadow(style?: StoryTextObjectData['textStyle']): string {
-  return style === 'neon'
-    ? '0 0 10px currentColor, 0 0 20px currentColor'
-    : '0 1px 4px rgba(0,0,0,0.5)';
 }
 
 function parseBackground(bg?: string): React.CSSProperties {
@@ -1186,7 +1183,9 @@ function StoryViewer({
                 transform: `translate(-50%, -50%) scale(${kScale}) rotate(${t.rotation}deg)`,
                 fontSize,
                 color: t.textColor ? (t.textColor.startsWith('#') ? t.textColor : `#${t.textColor}`) : '#ffffff',
-                textShadow: textObjectShadow(t.textStyle),
+                // La lueur ne vient plus de « neon » (#4870) : l'effet est un
+                // axe à part, lu par le même helper que la scène v3.
+                textShadow: textEffectShadow(t.textEffect) ?? FLAT_TEXT_SHADOW,
                 textAlign: (t.textAlign as 'left' | 'right' | 'center' | undefined) ?? 'center',
                 background: t.textBg
                   ? (t.textBg.startsWith('#') ? t.textBg : `#${t.textBg}`)

@@ -106,7 +106,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -899,13 +898,15 @@ private fun TextElementLayer(
             StoryTextDirection.LTR -> TextDirection.Ltr
             StoryTextDirection.RTL -> TextDirection.Rtl
         }
-        val baseStyle = (
-            if (typography.glow) {
-                LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
-            } else {
-                LocalTextStyle.current
-            }
-            ).copy(textDirection = textDirection)
+        // The EFFECT of the preset (#4870) — the same table as the viewer and the two
+        // other clients, projected at the canvas font size. The "neon" preset of this
+        // composer carries the glow until it gets its own effect control; it is also
+        // what `toTextObject` publishes, so what the author sees is what leaves.
+        val canvasFontSizePx = with(LocalDensity.current) { canvasFontSize.toPx() }
+        val baseStyle = LocalTextStyle.current.copy(
+            shadow = element.style.presetEffect().composeShadow(canvasFontSizePx, textColor),
+            textDirection = textDirection,
+        )
         Box(
             modifier = Modifier
                 .storyTextBacking(element.background)

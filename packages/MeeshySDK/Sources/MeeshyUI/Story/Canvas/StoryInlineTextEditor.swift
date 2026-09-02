@@ -76,6 +76,13 @@ public final class StoryInlineTextEditor: UITextView {
             attrs[.strokeColor] = borderColor
             attrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
         }
+        // L'EFFET (lueur / ombre / relief, #4870) est un attribut de glyphe
+        // lui aussi — `NSShadow`, que TextKit rend en temps réel comme le
+        // contour. Même site de conversion que le canvas et le composite.
+        if let shadow = StoryTextEffectRendering.nsShadow(
+            for: textObject, fontSize: geometry.render(designFontSize), textColor: color) {
+            attrs[.shadow] = shadow
+        }
         typingAttributes = attrs
         if textStorage.length > 0 {
             textStorage.setAttributes(

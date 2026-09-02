@@ -150,3 +150,31 @@ describe('StoryViewer (legacy) — le Prisme descend sur TOUT le contenu de la s
     expect(screen.queryByText('Hola')).toBeNull();
   });
 });
+
+/// L'axe EFFET (#4870) sur le chemin LEGACY — le même helper que la scène v3.
+/// « neon » ne brille plus par lui-même : la lueur est une valeur de
+/// `textEffect`, et un texte sans effet garde son voile de lisibilité.
+describe('StoryViewer (legacy) — l\'axe EFFET d\'un overlay de texte (#4870)', () => {
+  const shadowOf = (overrides: Partial<StoryTextObjectData>): string => {
+    const { unmount } = render(
+      <StoryViewer
+        stories={[baseStory({ storyEffects: { textObjects: [textObject({ content: 'Hello', ...overrides })] } })]}
+        userLanguage="de"
+        onClose={jest.fn()}
+      />,
+    );
+    const shadow = screen.getByText('Hello').style.textShadow;
+    unmount();
+    return shadow;
+  };
+
+  it('rend la lueur d\'un overlay portant textEffect: glow', () => {
+    expect(shadowOf({ textEffect: 'glow' })).toContain('currentColor');
+  });
+
+  it('ne fait plus briller « neon » par lui-même — un style est une police', () => {
+    const shadow = shadowOf({ textStyle: 'neon' });
+    expect(shadow).not.toContain('currentColor');
+    expect(shadow).toContain('1px 4px');
+  });
+});

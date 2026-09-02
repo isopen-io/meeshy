@@ -276,15 +276,37 @@ final class ComposerObjectEditorTests: XCTestCase {
     ///
     /// Sept des dix-huit sont donc des polices DÉGUISÉES en effets, et c'est ce
     /// mélange de vocabulaire — pas le mélange d'axes — que l'auteur voyait.
-    /// Les vrais effets ont déjà leurs sections : FOND, CADRE, CONTOUR.
     ///
-    /// Ce témoin tombera le jour où un style appliquera un effet : ce sera le
-    /// moment de rouvrir la question des deux axes, pas avant.
+    /// **L'axe EFFET est né à part le même jour (#4870)** — un champ
+    /// `textEffect`, jamais un regroupement des dix-huit. Ce témoin garde donc
+    /// que POLICE reste POLICE ; le suivant, que l'EFFET a SA section.
     func test_laSectionDesPolices_neSAppellePlusSTYLE() throws {
         let code = try source("ComposerObjectEditorView.swift")
         XCTAssertTrue(code.contains("defaultValue: \"POLICE\""),
                       "STYLE nommait un axe que la section ne porte pas (#4850).")
         XCTAssertFalse(code.contains("defaultValue: \"STYLE\""))
+    }
+
+    /// **#4870 — l'EFFET a sa section, et elle vient juste après POLICE.**
+    ///
+    /// > « Soit tu proposes des style Effet + Police soit tu proposes Police et
+    /// > une autre section Effet ! » — directive porteur, 2026-09-02.
+    ///
+    /// La mesure de #4850 a tranché pour la seconde forme, et pour une raison
+    /// que la directive ne pouvait pas voir : l'axe n'existait PAS. `neon`
+    /// brillait sur web et Android et pas sur iOS — un effet caché derrière un
+    /// nom de police. Il est désormais un CHAMP (`textEffect`), et sa section
+    /// s'obtient sans qu'une ligne de cet écran change : les sections viennent
+    /// de `TextEditTool.all`, et l'outil y est second — c'est la question que
+    /// l'auteur se posait devant la grille des polices.
+    func test_lEffet_aSaSection_justeApresLaPolice() throws {
+        let code = try source("ComposerObjectEditorView.swift")
+        XCTAssertTrue(code.contains("defaultValue: \"EFFET\""),
+                      "La section EFFET doit avoir son mot (#4870).")
+        XCTAssertEqual(TextEditTool.all.first, .style)
+        XCTAssertEqual(TextEditTool.all.dropFirst().first, .effect,
+                       "L'EFFET se règle juste après la POLICE — les deux questions "
+                       + "que la grille des dix-huit mélangeait, dans l'ordre où l'auteur les pose.")
     }
 
     /// Le style prend la forme du spécimen `2e` — le vrai texte, sur son vrai

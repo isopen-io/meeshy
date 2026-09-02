@@ -2,6 +2,7 @@ import type { Post, PostAuthor } from '@meeshy/shared/types/post';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { parseTextEffect } from '@/lib/story-text-effect';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
@@ -98,6 +99,7 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
       fontSizeDesign: typeof r.fontSize === 'number' ? r.fontSize : undefined,
       textAlign: typeof r.textAlign === 'string' ? r.textAlign : undefined,
       textBg: typeof r.textBg === 'string' ? r.textBg : undefined,
+      textEffect: parseTextEffect(r.textEffect),
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
     });
   }

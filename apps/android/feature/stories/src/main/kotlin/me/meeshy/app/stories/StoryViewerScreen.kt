@@ -44,6 +44,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -1003,6 +1004,9 @@ private fun StoryTextObjectLayer(
                 textAlign = textAlign,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = with(density) { fontSizePx.toSp() },
+                // The EFFECT axis (#4870) — the same table as the composer preview
+                // and the two other clients, at the glyphs' real pixel size.
+                style = LocalTextStyle.current.copy(shadow = animated.effect.composeShadow(fontSizePx, color)),
             )
         }
     }
