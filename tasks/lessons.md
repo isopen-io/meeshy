@@ -24268,7 +24268,7 @@ hors de cette protection, en silence.
 lecteur qui monte une `ScrollView` figure dans `hasScrollableReaderSurface` ».
 Ouvert en suivi de #4831 → #4837.
 
-## Leçon 434 — Un contrôle qui répond à un endroit et pas à un autre n'est jamais INERTE : c'est une géométrie qui MENT
+## Leçon 436 — Un contrôle qui répond à un endroit et pas à un autre n'est jamais INERTE : c'est une géométrie qui MENT
 
 **Le fait (2026-09-02).** Les en-têtes de section de l'éditeur d'objet
 rapportaient une frame de `370 × 21` à l'arbre d'accessibilité — donc « une
@@ -24297,7 +24297,7 @@ mesure sur la zone TOUCHABLE, jamais sur la frame rapportée — c'est la leçon
 (« le MOT qu'on peut toucher est l'angle mort de la règle des 44 pt ») vue par
 l'outil de mesure au lieu du doigt.
 
-## Leçon 435 — Dans un worktree partagé, l'INDEX est partagé aussi
+## Leçon 437 — Dans un worktree partagé, l'INDEX est partagé aussi
 
 **Le fait (2026-09-02).** Deux sessions devaient toucher le même
 `Localizable.xcstrings` — l'une pour deux clés neuves, l'autre pour sept valeurs.
