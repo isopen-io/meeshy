@@ -18,7 +18,10 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StrokeSmoothing
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
@@ -42,6 +45,9 @@ private fun newTextElementId(): String = UUID.randomUUID().toString()
 
 /** Mints a fresh, collision-free sticker id (same impure-edge rationale). */
 private fun newStickerId(): String = UUID.randomUUID().toString()
+
+/** Mints a fresh, collision-free drawn-stroke id (same impure-edge rationale). */
+private fun newStrokeId(): String = UUID.randomUUID().toString()
 
 /** Normalised canvas offset given to a duplicated element so the copy is visibly
  * clear of its source rather than hidden directly behind it. */
@@ -95,6 +101,10 @@ data class StoryComposerUiState(
     val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
+    val isDrawingActive: Boolean = false,
+    val drawingBoard: StoryDrawingBoard = StoryDrawingBoard(),
+    val drawColorHex: String = StoryDrawingPalette.DEFAULT_COLOR,
+    val drawWidthDesign: Double = StoryDrawingPalette.DEFAULT_WIDTH,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
@@ -109,7 +119,7 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers || deck.hasDrawing) &&
             deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
             deck.isWithinMediaLimit() &&
             deck.isWithinTextElementLimit() &&
@@ -141,6 +151,10 @@ data class StoryComposerUiState(
     /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
     val selectedSlideStickers: List<StoryStickerElement>
         get() = deck.selectedSlide.stickers
+
+    /** The freehand strokes drawn on the **selected** slide, in draw order, for rendering. */
+    val selectedSlideStrokes: List<StoryDrawingStroke>
+        get() = deck.selectedSlide.strokes
 
     /**
      * The sticker currently selected for manipulation — the [selectedStickerId]
@@ -737,6 +751,77 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(deck = it.deck.transformSticker(id, scaleBy, rotateByDeg)) }
     }
 
+    /**
+     * Enters the drawing tool: closes the tools band and clears any text/sticker
+     * selection so the canvas' full surface is free for the capture layer, which
+     * intercepts every touch while active. The Contenu drawer's "Draw" tile binds here.
+     */
+    fun onEnterDrawingMode() {
+        _state.update {
+            it.copy(
+                isDrawingActive = true,
+                band = ComposerBandState.Hidden,
+                selectedTextElementId = null,
+                selectedStickerId = null,
+                elementMenuId = null,
+            )
+        }
+    }
+
+    /** Leaves the drawing tool — the canvas resumes routing touches to pan/zoom and elements. */
+    fun onExitDrawingMode() {
+        _state.update { if (!it.isDrawingActive) it else it.copy(isDrawingActive = false) }
+    }
+
+    /** Sets the pen colour the next stroke is drawn with (the colour swatch picker). */
+    fun onDrawColorSelected(colorHex: String) {
+        _state.update { it.copy(drawColorHex = colorHex) }
+    }
+
+    /** Sets the pen thickness (design-pixels) the next stroke is drawn with. */
+    fun onDrawWidthSelected(widthDesign: Double) {
+        _state.update { it.copy(drawWidthDesign = widthDesign) }
+    }
+
+    /**
+     * Commits a freshly captured freehand stroke — [points] already converted to the
+     * canonical design space by [StoryDrawingCanvasSpace]. A stroke of fewer than two
+     * points (a tap, not a drag) carries nothing to render and is dropped rather than
+     * committed as a zero-length mark. Colour and width are the pen's current picker
+     * selection; the composer only ever authors [me.meeshy.sdk.model.StrokeTool.PEN]
+     * strokes with `CURVE` smoothing (a real pressure driver rides on every point, so
+     * `captureVersion = 1` — the variable-width render).
+     */
+    fun onStrokeCaptured(points: List<StoryDrawingStrokePoint>) {
+        if (points.size < 2) return
+        val current = _state.value
+        val stroke = StoryDrawingStroke(
+            id = newStrokeId(),
+            points = points,
+            colorHex = current.drawColorHex,
+            width = current.drawWidthDesign,
+            smoothing = StrokeSmoothing.CURVE,
+            createdAt = Instant.now().epochSecond.toDouble(),
+            captureVersion = 1,
+        )
+        applyDrawingBoard { it.commit(stroke) }
+    }
+
+    /** Undoes the most recently drawn stroke on the selected slide (inert with nothing to undo). */
+    fun onDrawUndo() = applyDrawingBoard { it.undo() }
+
+    /**
+     * Applies a [StoryDrawingBoard] mutation and mirrors its resulting strokes onto the
+     * **selected** slide, keeping the board the single source of the committed strokes
+     * (undo/redo/selection) while the deck only ever reflects its output.
+     */
+    private inline fun applyDrawingBoard(transform: (StoryDrawingBoard) -> StoryDrawingBoard) {
+        _state.update {
+            val board = transform(it.drawingBoard)
+            it.copy(drawingBoard = board, deck = it.deck.setSelectedStrokes(board.strokes)).mirrorDraftToSelection()
+        }
+    }
+
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }
@@ -894,7 +979,12 @@ class StoryComposerViewModel @Inject constructor(
      * mirror of the selected slide — the single invariant the screen relies on.
      */
     private inline fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
-        _state.update { it.copy(deck = transform(it.deck)).mirrorDraftToSelection() }
+        _state.update {
+            val deck = transform(it.deck)
+            val mirrored = it.copy(deck = deck).mirrorDraftToSelection()
+            if (deck.selectedId == it.deck.selectedId) mirrored
+            else mirrored.copy(drawingBoard = StoryDrawingBoard(strokes = deck.selectedSlide.strokes))
+        }
     }
 
     /**
@@ -912,6 +1002,7 @@ class StoryComposerViewModel @Inject constructor(
             draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
             selectedTextElementId = if (stillSelected) elementId else null,
             selectedStickerId = if (stickerStillSelected) stickerId else null,
+            drawingBoard = drawingBoard.resyncedTo(deck.selectedSlide.strokes),
         )
     }
 
@@ -1070,6 +1161,7 @@ class StoryComposerViewModel @Inject constructor(
                 mediaIds = slide.mediaIds,
                 textElements = slide.elements,
                 stickers = slide.stickers,
+                strokes = slide.strokes,
                 filter = slide.filter,
                 filterIntensity = slide.filterIntensity,
                 durationSecondsPin = slide.durationSecondsPin,

@@ -35,6 +35,7 @@ class ComposerBandStateTest {
         assertThat(ComposerContentTile.TEXT.category).isEqualTo(BandCategory.CONTENU)
         assertThat(ComposerContentTile.MEDIA.category).isEqualTo(BandCategory.CONTENU)
         assertThat(ComposerContentTile.STICKER.category).isEqualTo(BandCategory.CONTENU)
+        assertThat(ComposerContentTile.DRAW.category).isEqualTo(BandCategory.CONTENU)
     }
 
     // --- activeCategory / isVisible -----------------------------------------
@@ -98,11 +99,12 @@ class ComposerBandStateTest {
     // --- ComposerBand.contentTiles ------------------------------------------
 
     @Test
-    fun `the contenu band lists the text, media and sticker tiles in order`() {
+    fun `the contenu band lists the text, media, sticker and draw tiles in order`() {
         assertThat(ComposerBand.contentTiles).containsExactly(
             ComposerContentTile.TEXT,
             ComposerContentTile.MEDIA,
             ComposerContentTile.STICKER,
+            ComposerContentTile.DRAW,
         ).inOrder()
     }
 }

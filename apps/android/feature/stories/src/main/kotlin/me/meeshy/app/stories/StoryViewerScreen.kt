@@ -466,6 +466,20 @@ fun StoryViewerScreen(
             }
         }
 
+        // The author's freehand drawing, read-only — a stroke-only slide is publishable
+        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
+        // the reader (and the author, re-viewing their own story) would see a bare background.
+        if (slide != null && slide.strokes.isNotEmpty()) {
+            StoryDrawingLayer(
+                strokes = slide.strokes,
+                isCapturing = false,
+                activeColorHex = "#FFFFFF",
+                activeWidthDesign = 0.0,
+                onStrokeCaptured = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         slide?.backgroundAudioUrl?.let { url ->
             key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = slide.backgroundLoop) }
         }

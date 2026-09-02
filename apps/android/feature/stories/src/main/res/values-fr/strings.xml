@@ -65,6 +65,9 @@
     <string name="stories_composer_timing_duration">Durée d\'affichage du texte</string>
     <string name="stories_composer_bg_glass">Verre</string>
     <string name="stories_composer_add_sticker">Sticker</string>
+    <string name="stories_composer_draw">Dessiner</string>
+    <string name="stories_composer_draw_undo">Annuler le trait</string>
+    <string name="stories_composer_draw_done">Terminer le dessin</string>
     <string name="stories_composer_remove_sticker">Supprimer le sticker</string>
     <string name="stories_composer_sticker_search">Rechercher un emoji…</string>
     <string name="stories_composer_sticker_no_results">Aucun sticker trouvé</string>

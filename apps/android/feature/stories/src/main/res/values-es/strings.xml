@@ -65,6 +65,9 @@
     <string name="stories_composer_timing_duration">Duración visible del texto</string>
     <string name="stories_composer_bg_glass">Cristal</string>
     <string name="stories_composer_add_sticker">Sticker</string>
+    <string name="stories_composer_draw">Draw</string>
+    <string name="stories_composer_draw_undo">Undo stroke</string>
+    <string name="stories_composer_draw_done">Done drawing</string>
     <string name="stories_composer_remove_sticker">Eliminar sticker</string>
     <string name="stories_composer_sticker_search">Buscar emoji…</string>
     <string name="stories_composer_sticker_no_results">No se encontraron stickers</string>
