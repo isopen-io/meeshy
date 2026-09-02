@@ -876,7 +876,13 @@ fun MeeshyApp(
                 )
             }
             composable(Routes.NOTIFICATIONS) {
-                NotificationsScreen()
+                NotificationsScreen(
+                    onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                    onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+                    onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
+                    onOpenStory = { navController.navigate(Routes.story(it)) },
+                    onOpenProfile = { navController.navigate(Routes.profile(it)) },
+                )
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
