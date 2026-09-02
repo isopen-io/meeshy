@@ -205,6 +205,9 @@ public struct StickerPickerView: View {
         case .answer: templateTab(family: .answer)
         case .food: templateTab(family: .food)
         case .sport: templateTab(family: .sport)
+        case .travel: templateTab(family: .travel)
+        case .work: templateTab(family: .work)
+        case .music: templateTab(family: .music)
         case .time:    templateTab(family: .time)
         case .weather: templateTab(family: .weather)
         case .place:   placeTab
@@ -248,6 +251,12 @@ public struct StickerPickerView: View {
             return String(localized: "sticker.tab.food", defaultValue: "Gourmand", bundle: .module)
         case .sport:
             return String(localized: "sticker.tab.sport", defaultValue: "Sport", bundle: .module)
+        case .travel:
+            return String(localized: "sticker.tab.travel", defaultValue: "Voyage", bundle: .module)
+        case .work:
+            return String(localized: "sticker.tab.work", defaultValue: "Travail", bundle: .module)
+        case .music:
+            return String(localized: "sticker.tab.music", defaultValue: "Musique", bundle: .module)
         case .place:
             return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
         case .library:

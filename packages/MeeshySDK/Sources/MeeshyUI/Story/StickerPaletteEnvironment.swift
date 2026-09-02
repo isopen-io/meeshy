@@ -98,6 +98,10 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     /// Le troisième lot (#4820) : ce qu'on mange, ce qu'on court.
     case food
     case sport
+    /// Le quatrième lot (#4820) : partir, la journée, ce qu'on écoute.
+    case travel
+    case work
+    case music
     case time
     case weather
     case place
@@ -111,6 +115,7 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     public static let canonicalOrder: [StickerPaletteTab] = [
         .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction, .party,
         .availability, .cheer, .answer, .nature, .food, .sport,
+        .travel, .work, .music,
         .time, .weather, .place, .library,
     ]
 
@@ -132,6 +137,9 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .answer: return .answer
         case .food: return .food
         case .sport: return .sport
+        case .travel: return .travel
+        case .work: return .work
+        case .music: return .music
         case .time:         return .time
         case .weather:      return .weather
         case .place:   return .location
@@ -158,6 +166,9 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .answer: return "questionmark.bubble"
         case .food: return "fork.knife"
         case .sport: return "figure.run"
+        case .travel: return "airplane"
+        case .work: return "briefcase"
+        case .music: return "music.note"
         case .time:    return "clock"
         case .weather: return "cloud.sun"
         case .place:   return "mappin.and.ellipse"
@@ -181,7 +192,7 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
             case .place:   return hasNearbyPlaces
             case .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction,
                  .party, .availability, .nature, .cheer, .answer, .food, .sport,
-                 .time, .weather:
+                 .travel, .work, .music, .time, .weather:
                 return true
             }
         }

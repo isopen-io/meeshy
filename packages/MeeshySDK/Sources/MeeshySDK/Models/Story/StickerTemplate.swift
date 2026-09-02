@@ -105,6 +105,13 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     /// état, un café est une invitation.
     case food
     case sport
+    /// Le quatrième lot (#4820), qui porte le catalogue à 200 — partir, la
+    /// journée de travail, ce qu'on écoute. TRAVAIL dit ce sur QUOI on
+    /// travaille, là où DISPONIBILITÉ dit l'état de la personne ; MUSIQUE ne
+    /// porte aucun titre, un titre écrit relevant de la famille TEXTE.
+    case travel
+    case work
+    case music
 }
 
 // MARK: - Sticker Template Slot

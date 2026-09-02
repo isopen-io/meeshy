@@ -47,7 +47,8 @@ final class StickerTemplateRendererTests: XCTestCase {
         case .text:
             return [StickerSlotFiller.textSlot: "Bon anniversaire"]
         case .joy, .surprise, .mood, .greeting, .reaction, .party, .availability,
-             .nature, .cheer, .answer, .food, .sport:
+             .nature, .cheer, .answer, .food, .sport,
+             .travel, .work, .music:
             return [:]
         }
     }
