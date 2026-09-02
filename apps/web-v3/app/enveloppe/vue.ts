@@ -67,6 +67,14 @@ export type ParametresDuDocument = {
   readonly feuille: string;
   readonly corps: string;
   readonly retour: boolean;
+  /**
+   * `index, follow` par défaut — les pages du SITE s'indexent. Un écran qui vit
+   * à l'adresse d'un CONTENU (l'invitation et l'indisponible de `/stories/:id`)
+   * pose `noindex, nofollow` : le § 5.4 le demande pour toute la famille des
+   * stories, et l'écrire ici plutôt que dans un second squelette garde une
+   * seule tête de document.
+   */
+  readonly robots?: string;
 };
 
 export type ParametresDeTete = {
@@ -112,10 +120,11 @@ export const documentDuSite = ({
   feuille,
   corps,
   retour,
+  robots,
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
-  teteDuDocument({ titre, description, feuille }) +
+  teteDuDocument({ titre, description, feuille, robots }) +
   '<body>' +
   '<div class="enveloppe">' +
   enTete(retour) +
