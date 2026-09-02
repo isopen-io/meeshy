@@ -50,3 +50,22 @@ export const seLit = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].le
 
 /** La piste JOUÉE suit la langue du texte servi — un vocal, et lui seul. */
 export const pisteSuitLaLangue = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].lecteur === 'audio';
+
+/**
+ * DE QUEL GENRE EST UN FICHIER — la MÊME table, interrogée par son type MIME.
+ *
+ * La règle vivait en `const` privée dans `lib/api/fil.ts`, où elle n'avait
+ * qu'un lecteur ; le média d'une story en est le second
+ * (`lib/api/publication.ts` : un `PostMedia` porte le même `mimeType` qu'une
+ * pièce jointe). La recopier aurait fait deux façons de décider qu'un
+ * `audio/mp4` se lit — exactement la jumelle que la leçon 453 a déjà payée sur
+ * cette table, et le § 3.1 (B) fait remonter une règle dès sa SECONDE surface.
+ */
+const GENRE_PAR_PREFIXE: readonly (readonly [string, GenreDePiece])[] = [
+  ['image/', 'image'],
+  ['audio/', 'audio'],
+  ['video/', 'video'],
+];
+
+export const genreDeMime = (mime: string | null): GenreDePiece =>
+  GENRE_PAR_PREFIXE.find(([prefixe]) => mime?.startsWith(prefixe))?.[1] ?? 'fichier';

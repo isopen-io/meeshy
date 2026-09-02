@@ -7,7 +7,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 
 import { citations, citationsDeLaPage, type Citation, type MentionsRetenues } from './citations';
-import { pisteSuitLaLangue, type GenreDePiece } from './formes';
+import { genreDeMime, pisteSuitLaLangue, type GenreDePiece } from './formes';
 import { chaine, estProtege, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
 
@@ -239,15 +239,6 @@ export const languesDuLecteur = (lecteur: Prisme, localeAppareil?: string): read
   return ordonnees.length === 0 ? [REPLI_DE_LANGUE] : ordonnees;
 };
 
-const GENRE_PAR_MIME: readonly (readonly [string, GenreDePiece])[] = [
-  ['image/', 'image'],
-  ['audio/', 'audio'],
-  ['video/', 'video'],
-];
-
-const genreDePiece = (mime: string | null): GenreDePiece =>
-  GENRE_PAR_MIME.find(([prefixe]) => mime?.startsWith(prefixe))?.[1] ?? 'fichier';
-
 const CHEMIN_DES_FICHIERS = '/api/v1/attachments/file/';
 
 /**
@@ -281,7 +272,7 @@ const piece = (
     originalLanguage: langueDeTranscription,
     preferredLanguages: langues,
   });
-  const genre: GenreDePiece = genreDePiece(chaine(brut.mimeType));
+  const genre: GenreDePiece = genreDeMime(chaine(brut.mimeType));
   // UNE descente, deux projections : le TEXTE que `traduite` élit, et la PISTE
   // que sa langue désigne dans la carte jumelle. Descendre le prisme une
   // seconde fois pour le son servirait « la réunion est déplacée » au-dessus

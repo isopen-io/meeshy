@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
+import { FEUILLE_DE_LA_STORY } from '@/app/(public)/stories/[id]/story-feuille';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
@@ -53,6 +54,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/fil-feuille.ts', source: FEUILLE_DU_FIL },
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
   { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
+  { nom: 'app/(public)/stories/[id]/story-feuille.ts', source: FEUILLE_DE_LA_STORY },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -115,6 +117,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/fil-feuille.ts',
       'app/(public)/chat/[lien]/choix-feuille.ts',
       'app/connecte/medias-feuille.ts',
+      'app/(public)/stories/[id]/story-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -202,6 +205,7 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'fil', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
+    { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
@@ -398,6 +402,14 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // cliquable que dans le fil.
     '.puces.filtres .puce[aria-current]',
     '.lecteurs .transcrit-original summary',
+    // La story (`cible/story.png`) : le cliquable — la puce des langues, qui
+    // ouvre la liste des textes servis —, l'action primaire de l'écran (l'envoi
+    // d'une réponse) et le cœur PRESSÉ, qui prend l'accent pour la même raison
+    // que l'accusé et la réaction qui est la mienne. Le nom de l'auteur, l'heure,
+    // le texte de la story et les barres du haut restent sur l'encre.
+    '.langues summary',
+    '.story-repondre .envoyer',
+    '.story-repondre .aimer[aria-pressed=true]',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {
