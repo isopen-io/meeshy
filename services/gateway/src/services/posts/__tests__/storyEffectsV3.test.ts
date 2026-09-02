@@ -163,6 +163,70 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(lieu?.payload).not.toHaveProperty('fadeOut');
   });
 
+  // ─────────────────────────────────────────────────────────────────────
+  // #4905 — les quatre branches RÉPANDENT. Ces témoins n'interrogent pas des
+  // CLÉS, ils interrogent le MÉCANISME : c'est le point de l'issue. Un témoin
+  // par clé serait le troisième inventaire à tenir à jour, et c'est
+  // précisément l'inventaire qu'on vient de supprimer.
+  // ─────────────────────────────────────────────────────────────────────
+
+  const FAMILLES = [
+    ['mediaObjects', 'media', { id: 'm1', postMediaId: 'pm1', aspectRatio: 1.5 }],
+    ['stickerObjects', 'sticker', { id: 's1', emoji: '🔥' }],
+    ['locationObjects', 'place', { id: 'l1', place: { latitude: 1, longitude: 2 } }],
+    ['audioPlayerObjects', 'audio', { id: 'a1', postMediaId: 'pm2' }],
+    ['textObjects', 'text', { id: 't1', text: 'salut' }],
+  ] as const;
+
+  type Doc = { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+  const charge = (famille: string, objet: Record<string, unknown>, kind: string) => {
+    const doc = convertV1ToV3({ [famille]: [objet] }) as Doc;
+    return doc.scenes[0].objects.find((o) => o.kind === kind)?.payload;
+  };
+
+  it.each(FAMILLES)(
+    'transporte une clé INCONNUE de la famille %s — la clé qu\'un lot ajoutera demain',
+    (famille, kind, base) => {
+      const payload = charge(famille, { ...base, champInventeDemain: 'valeur' }, kind);
+      expect(payload?.champInventeDemain).toBe('valeur');
+    }
+  );
+
+  // Le risque que le `rest` introduit, et le seul : un champ d'ENVELOPPE qui
+  // passerait dans la charge s'y trouverait EN DOUBLE — une fois logé par
+  // `baseObject`, une fois recopié. Ce témoin est la contrepartie du précédent.
+  it.each(FAMILLES)(
+    'ne recopie AUCUN champ d\'enveloppe dans la charge de %s',
+    (famille, kind, base) => {
+      const payload = charge(famille, {
+        ...base, x: 0.3, y: 0.7, scale: 1.4, rotation: 12, zIndex: 9,
+        startTime: 2, endTime: 6, sourceLanguage: 'fr',
+        keyframes: [{ time: 1, opacity: 0.5 }],
+      }, kind);
+      for (const enveloppe of ['id', 'x', 'y', 'scale', 'rotation', 'zIndex',
+                               'startTime', 'endTime', 'keyframes', 'sourceLanguage']) {
+        expect(payload).not.toHaveProperty(enveloppe);
+      }
+    }
+  );
+
+  // Les champs à RÈGLE gagnent APRÈS le `rest` — sans quoi le refactor
+  // reviendrait en silence sur trois arbitrages déjà rendus.
+  it('le `rest` ne relève pas le filtre STRICT de slots', () => {
+    const payload = charge('stickerObjects', { id: 's1', emoji: '🕐', slots: { hour: 14 } }, 'sticker');
+    expect(payload).not.toHaveProperty('slots');
+  });
+
+  it('le `rest` ne fait pas réapparaître un volume audio à 1', () => {
+    const payload = charge('audioPlayerObjects', { id: 'a1', volume: 1 }, 'audio');
+    expect(payload).not.toHaveProperty('volume');
+  });
+
+  it('une pastille sans lieu garde sa clé `place` à null, jamais absente', () => {
+    const payload = charge('locationObjects', { id: 'l1' }, 'place');
+    expect(payload).toHaveProperty('place', null);
+  });
+
   it('n\'invente aucune clé sur un sticker emoji seul', () => {
     const doc = convertV1ToV3({
       stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],
