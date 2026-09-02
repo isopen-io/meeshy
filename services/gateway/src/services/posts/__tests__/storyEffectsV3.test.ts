@@ -115,6 +115,54 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(lieu?.payload).not.toHaveProperty('styleId');
   });
 
+  // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE, sur la branche que
+  // #4832 venait de réparer. `baseObject` portait déjà `timing.start` ; les
+  // trois clés de charge manquaient, et cette branche était la seule des
+  // quatre familles à n'en émettre aucune.
+  it('transporte la fenêtre temporelle d\'une pastille de lieu', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        {
+          id: 'l1', x: 0.5, y: 0.8,
+          place: { latitude: 20.2, longitude: 1.01, name: 'Tessalit' },
+          startTime: 2, duration: 4, fadeIn: 0.25, fadeOut: 0.5,
+        },
+      ],
+    }) as {
+      scenes: {
+        objects: {
+          kind: string;
+          timing?: { start?: number };
+          payload: Record<string, unknown>;
+        }[];
+      }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.timing?.start).toBe(2);
+    expect(lieu?.payload.duration).toBe(4);
+    expect(lieu?.payload.fadeIn).toBe(0.25);
+    expect(lieu?.payload.fadeOut).toBe(0.5);
+  });
+
+  // Une pastille SANS fenêtre se réencode octet pour octet : le convertisseur
+  // n'invente pas un début à zéro, sinon toute story déjà publiée verrait ses
+  // lieux acquérir une fenêtre qu'aucun auteur n'a posée.
+  it('n\'invente aucune clé de fenêtre pour une pastille sans temps', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        { id: 'l1', place: { latitude: 20.2, longitude: 1.01 } },
+      ],
+    }) as {
+      scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.payload).not.toHaveProperty('duration');
+    expect(lieu?.payload).not.toHaveProperty('fadeIn');
+    expect(lieu?.payload).not.toHaveProperty('fadeOut');
+  });
+
   it('n\'invente aucune clé sur un sticker emoji seul', () => {
     const doc = convertV1ToV3({
       stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],

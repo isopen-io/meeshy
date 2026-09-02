@@ -263,9 +263,23 @@ export function convertV1ToV3(
     // et toute clé ajoutée en amont s'y perd en silence. Le témoin qui
     // l'attraperait vraiment est un témoin d'EXHAUSTIVITÉ (#4833) — celui par
     // clé ne parle que des clés auxquelles on a déjà pensé.
+    // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE TEMPORELLE, cette
+    // fois. `baseObject` porte déjà `timing.start` / `timing.end` pour toute
+    // famille ; les trois clés de charge, elles, se recopient branche par
+    // branche, et celle-ci était la SEULE des quatre à n'en émettre aucune
+    // (média, sticker et audio les ont toutes les trois). Le lieu partage sa
+    // famille temporelle avec le sticker — `TimelineClipKind.place`.
+    //
+    // Défensif à ce jour : aucun producteur v1 ne pose encore de fenêtre sur un
+    // lieu (iOS publie en v3 nativement, web et Android n'ont pas de timeline).
+    // Ce qui se répare ici est l'INVENTAIRE — la forme même que ce commentaire
+    // dénonce depuis #4832, et qui a mordu quatre fois sur cette branche.
     o.payload = {
       place: L.place ?? null,
       ...(str(L.styleId) ? { styleId: L.styleId } : {}),
+      ...(typeof L.duration === 'number' ? { duration: L.duration } : {}),
+      ...(typeof L.fadeIn === 'number' ? { fadeIn: L.fadeIn } : {}),
+      ...(typeof L.fadeOut === 'number' ? { fadeOut: L.fadeOut } : {}),
     };
     objects.push(o);
   }

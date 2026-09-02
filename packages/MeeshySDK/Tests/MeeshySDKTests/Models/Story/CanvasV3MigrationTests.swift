@@ -374,6 +374,87 @@ struct CanvasV3MigrationTests {
         #expect(back.locationObjects.first?.styleId == nil)
     }
 
+    // MARK: - La FENÊTRE TEMPORELLE d'une pastille de lieu voyage (#4840)
+
+    /// **Même piège, QUATRIÈME morsure — sur l'ENVELOPPE, pas sur la charge.**
+    ///
+    /// #4832 a réparé `styleId` cinq lignes plus bas dans cette même branche, en
+    /// posant la question « qu'est-ce qui part À CÔTÉ de ce que je viens de
+    /// corriger ? » — mais à la CHARGE seule. L'enveloppe attendait juste
+    /// au-dessus : `timing: timingV3(start: nil, …)`, le `nil` écrit en dur.
+    ///
+    /// Le lot #4591 avait pourtant donné les quatre champs au modèle, et
+    /// diagnostiqué qu'on lisait `timing: optional()` comme « cette famille n'a
+    /// pas de temps ». Il a ensuite lu la même option comme la preuve que le
+    /// champ VOYAGE :
+    ///
+    /// > `optional()` ne dit ni qu'une famille n'a pas de temps, ni qu'un
+    /// > producteur en émet. Il ne dit RIEN du producteur — il faut aller le lire.
+    @Test func aTimedPlace_carriesItsStartOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4)]
+        let objet = try #require(object(CanvasV3(migrating: effects), "pl-1"))
+        #expect(objet.timing?.start == 2)
+    }
+
+    /// `duration` / `fadeIn` / `fadeOut` voyagent dans la CHARGE, exactement
+    /// comme sur le sticker — que `TimelineClipKind` déclare de la même
+    /// famille temporelle que le lieu (« startTime / duration / fadeIn /
+    /// fadeOut, pas de keyframes »).
+    @Test func aTimedPlace_carriesItsWindowInThePayload() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4,
+                                              fadeIn: 0.25, fadeOut: 0.5)]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["duration"] == .number(4))
+        #expect(payload["fadeIn"] == .number(0.25))
+        #expect(payload["fadeOut"] == .number(0.5))
+    }
+
+    /// Et la fenêtre doit REVENIR : l'aller sans le retour laisse le fil juste
+    /// et l'auteur volé. Ce retour gouverne aussi la reprise d'un BROUILLON —
+    /// `StoryEffects.encode(to:)` passe toujours par le pont v3, donc une
+    /// fenêtre posée puis sauvegardée serait perdue au rechargement.
+    @Test func aTimedPlace_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4,
+                                              fadeIn: 0.25, fadeOut: 0.5)]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.startTime == 2)
+        #expect(lieu.duration == 4)
+        #expect(lieu.fadeIn == 0.25)
+        #expect(lieu.fadeOut == 0.5)
+        #expect(lieu.place.name == "Tessalit")
+    }
+
+    /// Une pastille SANS fenêtre — toute pastille posée avant ce lot — n'émet
+    /// aucune des quatre clés et se réencode octet pour octet. Sa barre reste
+    /// le FANTÔME que `Plan2DLayout.bar(...)` rend déjà pour
+    /// `start == nil && duration == nil` : rien ne fabrique un début à zéro.
+    @Test func aPlaceWithoutAWindow_emitsNoTimingKey() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace()]
+        let objet = try #require(object(CanvasV3(migrating: effects), "pl-1"))
+        #expect(objet.timing?.start == nil)
+        #expect(objet.payload["duration"] == nil)
+        #expect(objet.payload["fadeIn"] == nil)
+        #expect(objet.payload["fadeOut"] == nil)
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.startTime == nil)
+        #expect(lieu.duration == nil)
+    }
+
+    private func timedPlace(start: Double? = nil, duration: Double? = nil,
+                            fadeIn: Double? = nil, fadeOut: Double? = nil) -> StoryLocationObject {
+        StoryLocationObject(id: "pl-1",
+                            place: SharedPlace(latitude: 20.20, longitude: 1.01,
+                                               name: "Tessalit"),
+                            startTime: start, duration: duration,
+                            fadeIn: fadeIn, fadeOut: fadeOut)
+    }
+
     // MARK: - O3 (jamais de cadre vide) et prédicat de version
 
     @Test func emptyRuntime_emitsNoScene() throws {
