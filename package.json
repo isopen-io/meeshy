@@ -68,6 +68,9 @@
         "@tensorflow/tfjs-node",
         "@xenova/transformers"
       ]
+    },
+    "overrides": {
+      "browserslist": "4.28.8"
     }
   },
   "overrides": {
@@ -86,6 +89,7 @@
     "serialize-javascript": "7.0.3",
     "uuid": "11.1.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "browserslist": "4.28.8"
   }
 }

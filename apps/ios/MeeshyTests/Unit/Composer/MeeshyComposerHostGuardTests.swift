@@ -626,6 +626,19 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// écrivain sans mémoire oublierait le choix à la fermeture (loi 10) ; une
     /// liste de niveaux recopiée divergerait de celle du SDK ; un `ONLY` sans
     /// sélecteur nominatif partirait vide, et le gateway le rejetterait.
+    ///
+    /// **Re-ancrée le 2026-09-02** : la pastille n'est plus un `Menu` depuis
+    /// #4636 (directive porteur 2026-08-31 — « au lieu du menu contextuel, une
+    /// feuille comme en `2l` »). Elle est un `Button` qui ouvre la feuille par
+    /// `presentedPortal = .audience`, et c'est la FEUILLE qui reçoit l'offre
+    /// (`offered: offeredAudiences`). Les deux assertions qui exigeaient le
+    /// menu et l'offre DANS la pastille contredisaient la garde qui fait foi,
+    /// `ComposerAudienceAndHashtagTests.test_laPastilleDAudience_ouvreLaFeuille_etNonUnMenu`
+    /// (et `test_laFeuille_sertLesTypesDeLApplication` pour l'offre). Elles sont
+    /// retournées, pas retirées : la pastille reste un CONTRÔLE — le témoin
+    /// `Label` d'avant le lot 4.9 rougirait toujours ici — et l'offre reste
+    /// lue une fois, chez la feuille. Ce que le lot 4.9 gardait (l'écrivain, la
+    /// mémoire, le sélecteur nominatif, l'absence de liste recopiée) est intact.
     func test_lAudienceDuSocle_estUnVraiSelecteur_etEcritSaMemoire() throws {
         guard let bloc = declarationBody(startingAt: "var audienceChip", in: try hostCode()) else {
             return XCTFail("L'audience du socle doit être une propriété nommée `audienceChip` — la garde s'ancre dessus")
@@ -633,16 +646,20 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let corps = compact(bloc)
 
         XCTAssertTrue(
+            corps.contains("Button{") && corps.contains("presentedPortal=.audience"),
+            "L'audience du socle est un BOUTON qui ouvre la feuille `2l` (#4636) — ni le `Label` témoin "
+                + "d'avant le lot 4.9, ni un contrôle qui n'ouvrirait rien."
+        )
+        XCTAssertFalse(
             corps.contains("Menu{"),
-            "L'audience du socle est un MENU qui se replie en capsule — la forme de la rangée haute de "
-                + "l'atelier. Le ruban de six chips du mood mangerait la largeur du socle et repousserait la "
-                + "flèche hors de l'écran."
+            "Le menu contextuel est revenu dans la pastille : #4636 l'a remplacé par la feuille, qui seule "
+                + "montre les CONSÉQUENCES d'un choix (voir `ComposerAudienceAndHashtagTests`)."
         )
         XCTAssertTrue(
-            corps.contains("offeredAudiences"),
-            "Les niveaux viennent de l'OFFRE (`ComposerAudienceOffer`), jamais de `composerSelectableCases` "
-                + "en bloc : sous une republication, deux des six niveaux sont des contrôles sans effet — le "
-                + "serveur y remplace la liste nominative par celle de la source."
+            compact(try hostCode()).contains("offered:offeredAudiences"),
+            "Les niveaux viennent de l'OFFRE (`ComposerAudienceOffer`) et sont remis à la FEUILLE, jamais "
+                + "de `composerSelectableCases` en bloc : sous une republication, deux des six niveaux sont "
+                + "des contrôles sans effet — le serveur y remplace la liste nominative par celle de la source."
         )
         XCTAssertFalse(
             corps.contains("PostVisibility.composerSelectableCases"),
@@ -1167,9 +1184,22 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "… avec ses personnes nommées : un mode sans sa liste publierait vers un ensemble que "
                 + "personne n'a choisi."
         )
+        // **Re-ancrée le 2026-09-02** sur l'aiguillage du #4700 (a7136904,
+        // directive porteur 2026-09-01) : la story est ROUTÉE sur `.document`
+        // mais ne part pas par le brouillon — `ComposerDocumentDraft` ne porte
+        // aucune slide, et l'y faire passer publierait une story VIDE. Sous le
+        // document et le mood, la flèche presse donc `publishStoryScene()` pour
+        // la story, `publishDocument()` pour tout le reste. La forme complète
+        // est exigée, pas ses deux appels séparément : un `else` qui
+        // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
+            branche.contains("case.document,.mood:ifselectedFormat==.story{publishStoryScene()}else{publishDocument()}"),
+            "… et sous les deux autres surfaces, UN chemin par format : la story par le canal de la "
+                + "scène (#4700), le document et le mood par le brouillon."
+        )
+        XCTAssertFalse(
             branche.contains("case.document,.mood:publishDocument()"),
-            "… et les deux autres surfaces gardent leur chemin de brouillon."
+            "L'ancien aiguillage ferait passer une story par `ComposerDocumentDraft`, qui n'a pas de slides."
         )
     }
 
@@ -2367,18 +2397,75 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Garde NÉGATIVE : elle rougit à la RÉINTRODUCTION de l'un de ces appels
     /// dans le host, pas à la disparition d'un fichier —
     /// `test_theGuardsReadANonEmptySource` en répond.
+    ///
+    /// **Re-ancrée le 2026-09-02** : depuis #4700 (a7136904, directive porteur
+    /// 2026-09-01), l'atelier n'est plus monté là où l'auteur choisit son
+    /// format, et une story part par le canal de la SCÈNE pressé PAR LE MEUBLE
+    /// — `publishStoryScene()` appelle `onPublishAllInBackground`, la fermeture
+    /// que le site de montage a fournie. Interdire le littéral revenait à
+    /// interdire ce que la directive ordonne. Ce que la doctrine interdit n'a
+    /// pas changé : UN chemin par format, et le meuble TRANSMET sans jamais
+    /// publier. La garde distingue donc désormais **relayer par la fermeture
+    /// injectée** (autorisé, à UN site, sur le modèle de vue que l'atelier
+    /// lisait déjà) d'**appeler un service** (interdit partout) :
+    /// - les services, files et endpoints restent bannis de toute l'unité ;
+    /// - `onPublishAllInBackground(` n'a qu'UN appel, et il vit dans
+    ///   `publishStoryScene` — un second serait le second chemin ;
+    /// - ce relais lit ses unités sur `viewModel.*` — le meuble ne recalcule
+    ///   ni ne reconstitue le paquet que `publishAllSlides` rabattait ;
+    /// - la story n'y est pressée que sous `selectedFormat == .story`, ce que
+    ///   `test_laFlecheDuSocle_estUnBouton_gateEtBranche` lit sur l'aiguillage.
     func test_host_opensNoSecondPublicationPath() throws {
         let code = try hostCode()
-        for forbidden in ["onPublishAllInBackground(",
-                         "publishStoryInBackground(",
+        for forbidden in ["publishStoryInBackground(",
                          "updateStoryInBackground(",
                          "PostService",
                          "StoryPublishService"] {
             XCTAssertFalse(
                 code.contains(forbidden),
-                "Le host appelle « \(forbidden) » : c'est un SECOND chemin de publication. Le seul publieur est la barre du SDK."
+                "Le host appelle « \(forbidden) » : c'est un SECOND chemin de publication. Le meuble transmet, il ne publie pas."
             )
         }
+
+        let compacte = compact(code)
+        XCTAssertEqual(
+            occurrences(of: "onPublishAllInBackground(", in: compacte), 1,
+            "La fermeture de la scène se presse à UN site — `publishStoryScene` — ou pas du tout. "
+                + "Un second appel est un second chemin d'envoi, quel que soit le nom qu'il porte."
+        )
+        guard let relais = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+            return XCTFail("`publishStoryScene` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+        }
+        let corps = compact(relais)
+        XCTAssertTrue(
+            corps.contains("onPublishAllInBackground("),
+            "L'unique appel de la fermeture doit vivre dans `publishStoryScene`, pas ailleurs dans l'unité."
+        )
+        for interdit in ["StatusService", "PostService", "StoryPublishService", "APIClient",
+                         "OutboxFlusher", "TusUploadManager", "ComposerDocumentSendRouting",
+                         "StoryComposerView", "publishAllSlides", "handoffSlides"] {
+            XCTAssertFalse(
+                corps.contains(interdit),
+                "Le relais de la story touche « \(interdit) » : relayer une fermeture injectée est permis, "
+                    + "appeler un service ou reconstituer le paquet de l'atelier ne l'est pas."
+            )
+        }
+        for lu in ["viewModel.slides", "viewModel.slideImages", "viewModel.loadedImages",
+                   "viewModel.loadedVideoURLs", "viewModel.loadedAudioURLs", "viewModel.draftId"] {
+            XCTAssertTrue(
+                corps.contains(lu),
+                "Le relais doit lire « \(lu) » sur le MÊME modèle de vue que l'atelier : une unité "
+                    + "recalculée ici serait un second assemblage de la story."
+            )
+        }
+        XCTAssertTrue(
+            corps.contains("composerVisibility.rawValue") && corps.contains("composerVisibilityUserIds"),
+            "La story part sous l'audience choisie AU SOCLE, avec ses personnes nommées."
+        )
+        XCTAssertTrue(
+            corps.contains("ifaccepted{onDismiss()}"),
+            "La sortie n'est acquise que sur une ACCEPTATION — comme `publishDocument`."
+        )
     }
 
     /// Le gate du réel était écrit DEUX fois en dur (`compositionQualifiesAsReel: false`,

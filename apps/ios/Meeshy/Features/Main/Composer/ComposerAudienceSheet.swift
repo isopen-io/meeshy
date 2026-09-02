@@ -111,7 +111,7 @@ struct ComposerAudienceSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: candidate.icon)
-                    .font(.system(size: 15))
+                    .font(MeeshyFont.relative(15))
                     .frame(width: 22)
                     .foregroundStyle(.white.opacity(0.65))
                 VStack(alignment: .leading, spacing: 2) {
@@ -129,8 +129,8 @@ struct ComposerAudienceSheet: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(tint)
                 } else if candidate.requiresUserSelection {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.35))
                 } else {
                     Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1.5)
@@ -192,7 +192,7 @@ struct ComposerAudienceSheet: View {
                 Spacer(minLength: 0)
                 if reach.warns {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundStyle(MeeshyColors.warning)
                 }
             }
@@ -230,7 +230,7 @@ struct ComposerAudienceSheet: View {
                             .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundStyle(MeeshyColors.hashtagColor(isDark: true))
                         Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(MeeshyFont.relative(9, weight: .bold))
                             .foregroundStyle(.white.opacity(0.5))
                     }
                     .padding(.horizontal, 11)

@@ -85,7 +85,12 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
-import type { SocketIOMessage, SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type {
+  SocketIOMessage,
+  SocketIOResponse,
+  MessageSendData,
+  MessageSendWithAttachmentsData,
+} from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from '../messageNewPayload';
 import { buildMessageEditedCore } from '../messageEditedPayload';
@@ -268,16 +273,10 @@ export class MessageHandler {
    */
   async handleMessageSend(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      messageType?: string;
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Le contrat de fil PARTAGÉ, pas une transcription locale : une forme
+    // recopiée ici retenait chaque champ ajouté au contrat (`sticker`, #4823)
+    // sans qu'aucun témoin rougisse — la validation réelle est Zod, ci-dessous.
+    data: MessageSendData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -436,9 +435,11 @@ export class MessageHandler {
         isViewOnce: validated.isViewOnce,
         maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
-        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
-        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        // Lieu partagé et sticker (#4823) — champs dédiés transmis tels quels ;
+        // validés et écrits dans `metadata.location` / `metadata.sticker` par
+        // `MessageProcessor.saveMessage`.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'ÉMETTEUR — parité avec POST /messages, qui
         // les honore depuis toujours. Sans cette propagation, la résolution
         // retombe sur l'extraction des `@` du CONTENU : un repli suffisant tant
@@ -519,16 +520,8 @@ export class MessageHandler {
    */
   async handleMessageSendWithAttachments(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      attachmentIds: readonly string[];
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Même contrat partagé que `handleMessageSend` — même raison.
+    data: MessageSendWithAttachmentsData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -674,8 +667,10 @@ export class MessageHandler {
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
-        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        // Lieu partagé et sticker — même contrat que handleMessageSend ci-dessus.
+        // Ce chemin est le NOMINAL du sticker : PNG rendu joint + descripteur.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'émetteur — même contrat que handleMessageSend.
         // Ce path porte TOUT l'audio : la légende d'un média y est souvent le
         // seul texte, et c'est là qu'un `@` a le plus de chances de manquer.

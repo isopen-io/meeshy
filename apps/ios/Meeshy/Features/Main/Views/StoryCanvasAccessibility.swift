@@ -3,8 +3,8 @@ import MeeshySDK
 
 /// Compose l'annonce VoiceOver du canvas de lecture.
 ///
-/// Le canvas est rendu en `CALayer` : ni le texte, ni les stickers, ni le média
-/// ne sont visibles d'UIAccessibility, et `.accessibilityElement(children:
+/// Le canvas est rendu en `CALayer` : ni le texte, ni les stickers (dits depuis
+/// #4825), ni le média ne sont visibles d'UIAccessibility, et `.accessibilityElement(children:
 /// .ignore)` scelle l'affaire. Le label était donc une constante — « Story en
 /// cours de lecture » — qui décrivait le CONTENANT sans jamais dire le
 /// CONTENU. Un utilisateur non-voyant savait qu'une story jouait et rien
@@ -22,12 +22,16 @@ import MeeshySDK
 /// aucun état partagé, seulement ses arguments.
 nonisolated enum StoryCanvasAccessibility {
 
+    /// - Parameter stickerDescriptions: ce que chaque sticker DIT, déjà
+    ///   composé par `StoryStickerAccessibility.description(for:)` (MeeshyUI,
+    ///   MainActor) — cette fonction reste pure et hors acteur (#4825).
     static func label(index: Int,
                       total: Int,
                       authorName: String?,
                       textObjects: [StoryTextObject],
                       preferredLanguages: [String],
-                      voiceTranscript: String?) -> String {
+                      voiceTranscript: String?,
+                      stickerDescriptions: [String] = []) -> String {
         var segments: [String] = []
 
         segments.append(String(
@@ -50,6 +54,13 @@ nonisolated enum StoryCanvasAccessibility {
             .filter { !$0.isEmpty }
         if !texts.isEmpty {
             segments.append(texts.joined(separator: ". "))
+        }
+
+        // Les stickers APRÈS les textes : ils commentent, ils ne portent pas
+        // le message — et dans l'ordre où l'auteur les a posés.
+        let stickers = stickerDescriptions.map(\.trimmed).filter { !$0.isEmpty }
+        if !stickers.isEmpty {
+            segments.append(stickers.joined(separator: ". "))
         }
 
         if let voiceTranscript, !voiceTranscript.trimmed.isEmpty {

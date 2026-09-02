@@ -181,6 +181,11 @@ final class StoryPhotoSaveService: ObservableObject {
                 languages: languages,
                 watermark: watermark,
                 intro: introContent,
+                // Images des stickers (#4852) : un `StorySticker` ne porte que le
+                // `postMediaId` de son média, et seul ce site tient la slide ET
+                // `story.media` — sans l'index, Photos recevait 🖼️.
+                stickerImageSources: StoryExporter.stickerImageSources(
+                    for: slide.effects.stickerObjects, media: story.media),
                 onProgress: { [weak self] fraction in
                     guard let self, self.isCurrent(generation, for: storyId) else { return }
                     self.jobs[storyId] = StorySaveProgressMapper.bake(fraction)

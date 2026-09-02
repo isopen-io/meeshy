@@ -188,4 +188,24 @@ extension StickerTemplateRenderer {
                                                 in: CGRect(origin: .zero, size: l.taille))
         }
     }
+
+    // MARK: - Le registre de la famille HEURE
+
+    static let timeDrawers: [StickerTemplateDrawer] = [
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.timeDigital,
+            name: { String(localized: "sticker.template.time.digital", defaultValue: "Heure numérique", bundle: .module) },
+            measure: { s, m in Self.digitalSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.digitalImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.timeAnalog,
+            name: { String(localized: "sticker.template.time.analog", defaultValue: "Cadran", bundle: .module) },
+            measure: { _, m in Self.analogSize(metrics: m) },
+            draw: { s, m, échelle in Self.analogImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.timeRibbon,
+            name: { String(localized: "sticker.template.time.ribbon", defaultValue: "Ruban", bundle: .module) },
+            measure: { s, m in Self.ribbonSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.ribbonImage(slots: s, metrics: m, screenScale: échelle) }),
+    ]
 }

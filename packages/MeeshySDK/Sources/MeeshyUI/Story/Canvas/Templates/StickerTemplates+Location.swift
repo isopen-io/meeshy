@@ -217,4 +217,42 @@ extension StickerTemplateRenderer {
                             y: (l.taille.height - l.tailleNom.height) / 2))
         }
     }
+
+    // MARK: - Le registre de la famille LIEU
+
+    /// Les six pastilles de lieu, dans l'ordre de la palette. Le nom est une
+    /// clé LITTÉRALE par gabarit : une clé construite serait invisible au
+    /// catalogue de chaînes, donc jamais traduite.
+    static let locationDrawers: [StickerTemplateDrawer] = [
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationPill,
+            name: { String(localized: "sticker.template.location.pill", defaultValue: "Pastille", bundle: .module) },
+            measure: { s, m in Self.pillSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.pillImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationPostcard,
+            name: { String(localized: "sticker.template.location.postcard", defaultValue: "Carte postale", bundle: .module) },
+            measure: { s, m in Self.postcardSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.postcardImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationTicket,
+            name: { String(localized: "sticker.template.location.ticket", defaultValue: "Étiquette", bundle: .module) },
+            measure: { s, m in Self.ticketSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.ticketImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationStamp,
+            name: { String(localized: "sticker.template.location.stamp", defaultValue: "Timbre", bundle: .module) },
+            measure: { s, m in Self.stampSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.stampImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationCompass,
+            name: { String(localized: "sticker.template.location.compass", defaultValue: "Boussole", bundle: .module) },
+            measure: { s, m in Self.compassSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.compassImage(slots: s, metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.locationMarquee,
+            name: { String(localized: "sticker.template.location.marquee", defaultValue: "Enseigne", bundle: .module) },
+            measure: { s, m in Self.marqueeSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.marqueeImage(slots: s, metrics: m, screenScale: échelle) }),
+    ]
 }

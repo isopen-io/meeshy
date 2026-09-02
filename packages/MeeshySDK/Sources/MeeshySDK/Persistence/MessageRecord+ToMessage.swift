@@ -67,6 +67,13 @@ extension MessageRecord {
             return decoder.decodeOrLog(SharedPlace.self, from: data, field: "locationJson", id: localId)
         }
 
+        // Un sticker relu du cache mais non rendable vaut absence — la règle
+        // vit dans `MessageSticker.ifRenderable`, elle n'est pas réécrite ici.
+        let uiSticker = stickerJson.flatMap { json -> MessageSticker? in
+            guard let data = json.data(using: .utf8) else { return nil }
+            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifRenderable
+        }
+
         var effects = MessageEffects.none
         if effectFlags > 0 {
             effects.flags = MessageEffectFlags(rawValue: effectFlags)
@@ -147,7 +154,8 @@ extension MessageRecord {
             cachedTimeString: cachedTimeString,
             callSummary: uiCallSummary,
             joinNotice: uiJoinNotice,
-            location: uiLocation
+            location: uiLocation,
+            sticker: uiSticker
         )
     }
 }
