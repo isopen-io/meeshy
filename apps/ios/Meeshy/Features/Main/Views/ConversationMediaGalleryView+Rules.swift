@@ -180,10 +180,28 @@ enum CaptionExpansionSpace {
         !captionExpanded
     }
 
-    /// Rayon du flou appliqué à une scène de story pendant que sa légende est
-    /// dépliée. Zéro au repos — un flou permanent ferait payer à toute lecture
-    /// le coût d'un geste que personne n'a fait.
-    nonisolated static func storySceneBlurRadius(captionExpanded: Bool) -> CGFloat {
-        captionExpanded ? 14 : 0
+    /// Opacité de la scène d'une story pendant que sa légende est dépliée.
+    ///
+    /// **Ce n'est PAS un flou qu'on ajoute** (correction porteur 2026-09-02) :
+    ///
+    /// > « le flou c'est pas un voile qui apparaît mais le contenu qui disparaît
+    /// > un peu pour laisser le thumbnail naturel du background si on a un média
+    /// > sur la scène, sinon on laisse la couleur de fond simplement »
+    ///
+    /// Le lecteur monte DÉJÀ, sous la scène, un fond dérivé du ThumbHash de la
+    /// slide — flou, à la bonne couleur, et gratuit puisqu'il est là pour le
+    /// démarrage à froid (« Layer 1.5 »). Effacer la scène le révèle. Sans média,
+    /// c'est la couleur de fond de la story qui remonte, sans rien de plus.
+    ///
+    /// > Un voile AJOUTE une couche que personne n'a demandée ; effacer en
+    /// > RÉVÈLE une qui était déjà juste. La seconde coûte moins cher à la
+    /// > machine et ment moins à l'œil — le fond qu'on découvre est vraiment
+    /// > celui de cette story, pas un gris générique.
+    ///
+    /// Se COMPOSE avec l'opacité de transition du canvas (`contentOpacity`) par
+    /// multiplication : les deux disent la même chose — « combien de cette scène
+    /// voit-on ? » — et se cumulent au lieu de se remplacer.
+    nonisolated static func storySceneOpacity(captionExpanded: Bool) -> Double {
+        captionExpanded ? 0.28 : 1
     }
 }
