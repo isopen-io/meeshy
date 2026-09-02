@@ -1,4 +1,4 @@
-import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
+import { transcriptTranslationTexts, transcriptTranslationTracks } from '@meeshy/shared/types/attachment-audio';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 import {
   buildTranslationRecord,
@@ -6,7 +6,11 @@ import {
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
 
+import { citations, type Citation } from './citations';
+import { chaine, estProtege, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
+
+export type { Citation, GenreDeCitation, SorteDePublication } from './citations';
 
 /**
  * LE FIL D'UNE CONVERSATION — et la seule surface de la v3 où le PRISME
@@ -73,6 +77,17 @@ export type PieceJointe = {
   readonly genre: GenreDePiece;
   readonly nom: string;
   readonly url: string;
+  /**
+   * LA PISTE À JOUER — élue par la langue du TEXTE SERVI, jamais par une
+   * seconde descente (CLAUDE.md § Prisme, cycle 128) : le lecteur ENTEND ce
+   * qu'il LIT. C'est le fichier d'origine quand le TTS n'a produit aucune piste
+   * dans cette langue — une entrée sans `url` concourt pour le texte et pas
+   * pour le son (`transcriptTranslationTracks`).
+   *
+   * `url` reste ce qui se TÉLÉCHARGE : le fichier que l'auteur a envoyé, avec
+   * son nom et son poids. Deux adresses parce que deux gestes.
+   */
+  readonly piste: string;
   /** Le poids ANNONCÉ avant tout téléchargement — `null` quand la passerelle ne le sert pas. */
   readonly octets: number | null;
   readonly dureeMs: number | null;
@@ -115,6 +130,8 @@ export type Message = {
   readonly edite: boolean;
   readonly supprime: boolean;
   readonly pieces: readonly PieceJointe[];
+  /** Ce que le message CITE — provenance, réponse, publication (`lib/api/citations.ts`). */
+  readonly citations: readonly Citation[];
   readonly reactions: readonly Reaction[];
   readonly accuse: Accuse;
 };
@@ -179,24 +196,7 @@ const REPLI_DE_LANGUE = 'fr';
  * La v3 ne sait pas encore consommer une vue unique ; tant qu'elle ne sait pas,
  * elle n'en montre rien.
  */
-const PLACEHOLDER_PROTEGE = 'Message protégé — ouvrez-le depuis l’application.';
-
-const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
-  typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur)
-    ? (valeur as Readonly<Record<string, unknown>>)
-    : null;
-
-const chaine = (valeur: unknown): string | null =>
-  typeof valeur === 'string' && valeur !== '' ? valeur : null;
-
-const nombre = (valeur: unknown): number | null =>
-  typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : null;
-
-/** Une date servie sous sa forme ISO, ou telle que `JSON.stringify` l'a rendue depuis un `Date`. */
-const instant = (valeur: unknown): string | null => {
-  const brut = chaine(valeur);
-  return brut !== null && !Number.isNaN(Date.parse(brut)) ? brut : null;
-};
+export const MENTION_PROTEGEE = 'Message protégé — ouvrez-le depuis l’application.';
 
 const demande = (
   url: string,
@@ -221,14 +221,6 @@ export const languesDuLecteur = (lecteur: Prisme, localeAppareil?: string): read
   const ordonnees = resolveUserLanguagesOrdered(lecteur, { deviceLocale: localeAppareil });
   return ordonnees.length === 0 ? [REPLI_DE_LANGUE] : ordonnees;
 };
-
-/**
- * La protection se lit sur le MESSAGE, et les trois champs sont indépendants :
- * un message peut être à vue unique sans être flouté, et expirer sans être ni
- * l'un ni l'autre.
- */
-const estProtege = (brut: Readonly<Record<string, unknown>>): boolean =>
-  brut.isViewOnce === true || brut.isBlurred === true || chaine(brut.expiresAt) !== null;
 
 const GENRE_PAR_MIME: readonly (readonly [string, GenreDePiece])[] = [
   ['image/', 'image'],
@@ -272,12 +264,26 @@ const piece = (
     originalLanguage: langueDeTranscription,
     preferredLanguages: langues,
   });
+  const genre = genreDePiece(chaine(brut.mimeType));
+  // UNE descente, deux projections : le TEXTE que `traduite` élit, et la PISTE
+  // que sa langue désigne dans la carte jumelle. Descendre le prisme une
+  // seconde fois pour le son servirait « la réunion est déplacée » au-dessus
+  // d'une piste espagnole (leçon 284).
+  //
+  // Et SEUL un vocal change de piste. `transcriptTranslationTracks` normalise
+  // le format d'une piste en `audio/*` (`attachment-audio.ts`, `normalizeTrackMimeType`) :
+  // rien dans la carte ne dit qu'une piste traduite serait une VIDÉO. La servir
+  // à un `<video>` remplacerait l'image par du son — pire que l'original, parce
+  // que ça a l'air d'une vidéo cassée plutôt que d'une traduction absente. Le
+  // Prisme d'une vidéo passe donc par ses SOUS-TITRES, qui descendent, eux.
+  const piste = traduite === null || genre !== 'audio' ? null : transcriptTranslationTracks(brut.translations)[traduite.language];
 
   return {
     id,
-    genre: genreDePiece(chaine(brut.mimeType)),
+    genre,
     nom: chaine(brut.originalName) ?? chaine(brut.fileName) ?? 'Pièce jointe',
     url,
+    piste: piste?.url === undefined ? url : urlDePiece(piste.url, origine),
     octets: nombre(brut.fileSize),
     dureeMs: nombre(brut.duration),
     largeur: nombre(brut.width),
@@ -344,7 +350,7 @@ export const message = (
   const protege = estProtege(brut);
   const supprime = instant(brut.deletedAt) !== null;
   const traductions = protege ? {} : buildTranslationRecord(brut.translations);
-  const texteOriginal = protege ? PLACEHOLDER_PROTEGE : (chaine(brut.content) ?? '');
+  const texteOriginal = protege ? MENTION_PROTEGEE : (chaine(brut.content) ?? '');
 
   const servie = protege
     ? null
@@ -375,6 +381,7 @@ export const message = (
     edite: brut.isEdited === true,
     supprime,
     pieces: protege || supprime ? [] : pieces(brut.attachments, langues, origine),
+    citations: supprime ? [] : citations({ brut, moi, protege, placeholder: MENTION_PROTEGEE }),
     reactions: reactions(brut.reactionSummary),
     accuse: accuse(brut),
   };

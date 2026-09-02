@@ -342,3 +342,112 @@ describe('la présence dans l’en-tête', () => {
     expect(fente.hidden).toBe(true);
   });
 });
+
+/**
+ * LES SIX FORMES, PEINTES (issue #4835). Le module ne compose aucune balise :
+ * il clone le gabarit et remplit les fentes. Le témoin de fond est le même que
+ * pour le reste du fil — une bulle RICHE peinte en direct et une bulle riche
+ * SERVIE portent le même balisage, les mêmes classes et le même libellé,
+ * parce qu'ils viennent des mêmes modules (`fil-lignes.ts`, `lib/contenu/fil.ts`).
+ */
+describe('une bulle riche qui arrive', () => {
+  const PIECE_AUDIO = {
+    id: 'a1',
+    fileUrl: '/api/v1/attachments/file/2026/vocal.m4a',
+    originalName: 'vocal.m4a',
+    mimeType: 'audio/mp4',
+    fileSize: 96_000,
+    duration: 21_000,
+    transcription: { text: 'Mo n mú àwọn nọ́mbà', language: 'yo' },
+    translations: { fr: { transcription: 'J’apporte les chiffres de mars.', url: '/api/v1/attachments/file/2026/vocal-fr.m4a' } },
+  };
+
+  const peinsUne = (attributs: Record<string, unknown>) => {
+    const { p } = monte();
+    const etat = insere({ bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, arrivee(attributs));
+    peins(p, etat, 0);
+    return { p, ligne: p.liste.querySelector<HTMLElement>('li[data-id="m2"]')! };
+  };
+
+  it('peint un vocal : l’affiche annonce durée et poids, le lecteur joue la PISTE de la langue servie', () => {
+    const { ligne } = peinsUne({ content: '', translations: [], attachments: [PIECE_AUDIO] });
+    const affiche = ligne.querySelector<HTMLAnchorElement>('a.media')!;
+    expect(affiche.dataset.genre).toBe('audio');
+    expect(affiche.href).toBe('https://gate.test/api/v1/attachments/file/2026/vocal.m4a');
+    expect(ligne.querySelector('.poids')?.textContent).toBe('0:21 · 94 Ko');
+    const lecteur = ligne.querySelector<HTMLAudioElement>('audio')!;
+    expect(lecteur.hidden).toBe(false);
+    expect(lecteur.getAttribute('src')).toBe('https://gate.test/api/v1/attachments/file/2026/vocal-fr.m4a');
+    expect(ligne.querySelector('.transcription')?.textContent).toContain('J’apporte les chiffres de mars.');
+    expect(ligne.querySelector<HTMLElement>('.sous-titres')?.hidden).toBe(true);
+  });
+
+  it('peint une vidéo : ses sous-titres disent la langue servie', () => {
+    const { ligne } = peinsUne({
+      content: '',
+      translations: [],
+      attachments: [{ ...PIECE_AUDIO, id: 'a2', mimeType: 'video/mp4', originalName: 'revue.mp4', translations: { fr: { transcription: 'Bonjour' } } }],
+    });
+    expect(ligne.querySelector<HTMLAnchorElement>('a.media')?.dataset.genre).toBe('video');
+    expect(ligne.querySelector<HTMLElement>('.sous-titres')?.hidden).toBe(false);
+    expect(ligne.querySelector('.sous-titres')?.textContent).toBe(FIL.sousTitres('fr'));
+    expect(ligne.querySelector<HTMLVideoElement>('video')?.hidden).toBe(false);
+  });
+
+  it.each([
+    [{ forwardedFromId: 'x1', forwardedFromConversation: { id: 'c9', title: 'Diaspora FR-EN' } }, 'transfert', 'Transféré depuis Diaspora FR-EN'],
+    [{ replyToId: 'm1', replyTo: { id: 'm1', content: 'Le tableau final', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } }, 'reponse', 'En réponse à Ibrahim'],
+    [
+      { storyReplyToId: 's1', postReplyTo: { id: 's1', type: 'STORY', previewText: 'Trois graphiques', authorId: 'u1', authorName: 'Amina' } },
+      'story',
+      'A répondu à votre story',
+    ],
+  ])('peint la citation %#, du genre %s, avec son libellé', (charge, genre, libelle) => {
+    const { ligne } = peinsUne(charge);
+    const citation = ligne.querySelector<HTMLElement>('ul.citations li.citation')!;
+    expect(ligne.querySelector<HTMLElement>('ul.citations')?.hidden).toBe(false);
+    expect(citation.dataset.genre).toBe(genre);
+    expect(citation.querySelector('.quoi')?.textContent).toBe(libelle);
+  });
+
+  it('pose lang= sur l’aperçu d’un message cité écrit dans une autre langue', () => {
+    const { ligne } = peinsUne({ replyToId: 'm1', replyTo: { id: 'm1', content: 'Le tableau final', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } });
+    const apercu = ligne.querySelector<HTMLElement>('.citation .apercu')!;
+    expect(apercu.textContent).toBe('Le tableau final');
+    expect(apercu.getAttribute('lang')).toBe('en');
+  });
+
+  /**
+   * Le module RELIT le document servi pour son état initial, et n'en
+   * reconstruit ni les pièces ni les citations : repeindre cet état ne doit
+   * effacer NI l'une NI l'autre. C'est la même adoption que pour les pièces —
+   * `data-cite` distingue une citation servie du gabarit, dont la cible est vide.
+   */
+  it('n’efface pas les citations qu’une ligne SERVIE porte quand le module repeint son état', () => {
+    const cite = message(
+      {
+        id: 'm9',
+        content: 'Je le mets dans le dossier de mars.',
+        originalLanguage: 'fr',
+        createdAt: '2026-09-01T12:10:00.000Z',
+        senderId: 'u2',
+        sender: { id: 'p2', displayName: 'Ibrahim' },
+        replyToId: 'm1',
+        replyTo: { id: 'm1', content: 'Le tableau final', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } },
+      },
+      'u1',
+      LANGUES,
+      ORIGINE,
+    )!;
+    const etat = etatServi();
+    document.open();
+    document.write(documentDuFil({ ...etat, fil: { ...etat.fil, messages: [...etat.fil.messages, cite] } }));
+    document.close();
+    const p = peintre(document.querySelector<HTMLElement>('main')!)!;
+    expect(p.liste.querySelectorAll('li[data-id="m9"] .citation')).toHaveLength(1);
+
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, 0);
+    expect(p.liste.querySelectorAll('li[data-id="m9"] .citation')).toHaveLength(1);
+    expect(p.liste.querySelector('li[data-id="m9"] .citation .quoi')?.textContent).toBe('En réponse à Ibrahim');
+  });
+});

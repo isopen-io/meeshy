@@ -1,6 +1,6 @@
-import type { Accuse, PieceJointe, Reaction } from '@/lib/api/fil';
+import type { Accuse, Citation, PieceJointe, Reaction } from '@/lib/api/fil';
 import { initiales, TEINTES, teinteDeLAvatar } from '@/lib/avatar';
-import { FIL } from '@/lib/contenu/fil';
+import { FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, heureLocale, libelleDuJour } from '@/lib/temps';
 
@@ -121,7 +121,7 @@ const remplisLAvatar = (ligne: HTMLElement, bulle: Bulle): void => {
 const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], gabarit: HTMLTemplateElement): void => {
   const liste = ligne.querySelector<HTMLUListElement>('ul.pieces');
   if (liste === null || pieces.length === 0) return;
-  const empreinte = pieces.map((piece) => `${piece.id}:${piece.url}:${piece.transcription ?? ''}`).join('|');
+  const empreinte = pieces.map((piece) => `${piece.id}:${piece.url}:${piece.piste}:${piece.transcription ?? ''}:${piece.langueServie ?? ''}`).join('|');
   if (liste.dataset.empreinte === empreinte) return;
   if (liste.dataset.empreinte === undefined && liste.querySelector('li[data-piece]:not([data-piece=""])') !== null) {
     liste.dataset.empreinte = empreinte;
@@ -133,7 +133,7 @@ const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], ga
   pieces.forEach((piece) => {
     const noeud = clone<HTMLLIElement>(gabarit, 'ul.pieces > li') ?? document.createElement('li');
     noeud.dataset.piece = piece.id;
-    const lien = noeud.querySelector<HTMLAnchorElement>('a.fichier');
+    const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
     if (lien !== null) {
       if (piece.url === '') lien.removeAttribute('href');
       else lien.href = piece.url;
@@ -145,14 +145,19 @@ const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], ga
     montre(noeud, '.poids', meta !== '');
     const audio = noeud.querySelector<HTMLAudioElement>('audio');
     const video = noeud.querySelector<HTMLVideoElement>('video');
+    // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
+    // (cycle 128) —, jamais l'adresse de téléchargement.
     if (audio !== null) {
-      audio.hidden = piece.genre !== 'audio' || piece.url === '';
-      if (piece.genre === 'audio' && piece.url !== '') audio.src = piece.url;
+      audio.hidden = piece.genre !== 'audio' || piece.piste === '';
+      if (piece.genre === 'audio' && piece.piste !== '') audio.src = piece.piste;
     }
     if (video !== null) {
-      video.hidden = piece.genre !== 'video' || piece.url === '';
-      if (piece.genre === 'video' && piece.url !== '') video.src = piece.url;
+      video.hidden = piece.genre !== 'video' || piece.piste === '';
+      if (piece.genre === 'video' && piece.piste !== '') video.src = piece.piste;
     }
+    const langueDesSousTitres = piece.genre === 'video' && piece.transcription !== null ? (piece.langueServie ?? piece.langueDeTranscription) : null;
+    texte(noeud, '.sous-titres', langueDesSousTitres === null ? '' : FIL.sousTitres(langueDesSousTitres));
+    montre(noeud, '.sous-titres', langueDesSousTitres !== null);
     texte(noeud, '.texte-transcrit', piece.transcription ?? '');
     montre(noeud, '.transcription', piece.transcription !== null);
     const transcription = noeud.querySelector<HTMLElement>('.transcription');
@@ -160,6 +165,46 @@ const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], ga
     liste.append(noeud);
   });
   liste.hidden = false;
+};
+
+/**
+ * LES CITATIONS PEINTES — le même balisage que la ligne servie, cloné du
+ * gabarit : le module remplit `.quoi` (le libellé, composé par le SITE UNIQUE
+ * `libelleDeCitation`) et `.apercu` (avec sa langue), et `data-genre` élit le
+ * glyphe dans la feuille. Aucune balise n'est composée ici.
+ *
+ * Une ligne SERVIE porte déjà ses citations, que l'état relu du document ne
+ * reconstruit pas (`bullesDuDocument`) : au premier passage, on les ADOPTE
+ * plutôt que de les effacer. `data-cite` distingue une citation servie du
+ * gabarit, dont la cible est vide — le même discriminant que `data-piece`.
+ */
+const empreinteDesCitations = (citations: readonly Citation[]): string =>
+  citations.map((c) => `${c.genre}:${c.cible}:${c.source ?? ''}:${c.apercu}:${c.langue ?? ''}`).join('|');
+
+const remplisLesCitations = (ligne: HTMLElement, citations: readonly Citation[], gabarit: HTMLTemplateElement, langueDuDocument: string): void => {
+  const liste = ligne.querySelector<HTMLUListElement>('ul.citations');
+  if (liste === null) return;
+  const empreinte = empreinteDesCitations(citations);
+  if (liste.dataset.empreinte === empreinte) return;
+  if (liste.dataset.empreinte === undefined && liste.querySelector('li.citation:not([data-cite=""])') !== null) {
+    liste.dataset.empreinte = empreinte;
+    return;
+  }
+  liste.dataset.empreinte = empreinte;
+
+  liste.replaceChildren(
+    ...citations.map((citation) => {
+      const noeud = clone<HTMLLIElement>(gabarit, 'ul.citations > li.citation') ?? document.createElement('li');
+      noeud.dataset.genre = citation.genre;
+      noeud.dataset.cite = citation.cible;
+      texte(noeud, '.quoi', libelleDeCitation(citation));
+      texte(noeud, '.apercu', citation.apercu);
+      montre(noeud, '.apercu', citation.apercu !== '');
+      poseLang(noeud.querySelector<HTMLElement>('.apercu'), citation.langue, langueDuDocument);
+      return noeud;
+    }),
+  );
+  liste.hidden = citations.length === 0;
 };
 
 const empreinteDesReactions = (reactions: readonly Reaction[]): string =>
@@ -286,8 +331,14 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
   }
 
   const pieces = ligne.querySelector<HTMLElement>('ul.pieces');
-  if (bulle.supprime && pieces !== null) pieces.hidden = true;
-  else remplisLesPieces(ligne, bulle.pieces, p.gabarit);
+  const citations = ligne.querySelector<HTMLElement>('ul.citations');
+  if (bulle.supprime) {
+    if (pieces !== null) pieces.hidden = true;
+    if (citations !== null) citations.hidden = true;
+  } else {
+    remplisLesPieces(ligne, bulle.pieces, p.gabarit);
+    remplisLesCitations(ligne, bulle.citations, p.gabarit, p.langueDuDocument);
+  }
   if (bulle.supprime) {
     const reactions = ligne.querySelector<HTMLElement>('ul.reactions');
     if (reactions !== null) reactions.hidden = true;
@@ -476,6 +527,7 @@ export const bullesDuDocument = (p: Peintre): readonly Bulle[] =>
       edite: ligne.querySelector('.modifie') !== null && !ligne.querySelector<HTMLElement>('.modifie')!.hidden,
       supprime: ligne.classList.contains('supprime'),
       pieces: [],
+      citations: [],
       reactions: [...ligne.querySelectorAll<HTMLElement>('ul.reactions li')].map((item) => ({
         emoji: item.dataset.emoji ?? '',
         nombre: Number(item.querySelector('.nombre')?.textContent ?? '0') || 0,

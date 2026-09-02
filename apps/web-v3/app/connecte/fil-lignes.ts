@@ -1,8 +1,8 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import type { Message, PieceJointe } from '@/lib/api/fil';
+import type { Citation, GenreDeCitation, Message, PieceJointe } from '@/lib/api/fil';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
-import { EMOJIS_DE_LA_PALETTE, FIL } from '@/lib/contenu/fil';
+import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, libelleDuJour } from '@/lib/temps';
 
@@ -59,59 +59,138 @@ const avatar = (message: Message): string =>
 const langAttribut = (langue: string | null, langueDuDocument: string): string =>
   langue !== null && langue !== langueDuDocument ? ` lang="${echappe(langue)}"` : '';
 
-const GLYPHE_PAR_GENRE: Readonly<Record<PieceJointe['genre'], string>> = {
-  image: 'ph-image',
-  audio: 'ph-microphone',
-  video: 'ph-video-camera',
-  fichier: 'ph-file',
+/**
+ * LES SIX FORMES D'UNE BULLE, DEUX AXES, DEUX TABLES (issue #4835).
+ *
+ * Un message se lit dans sa forme propre parce que sa forme DÉRIVE de son
+ * type — jamais parce qu'une branche a été écrite pour elle. Deux axes, parce
+ * qu'un message peut porter les deux à la fois : ce qu'il PORTE (une pièce
+ * jointe : image, vidéo, audio, fichier) et ce qu'il CITE (une provenance, une
+ * réponse, une publication). Chaque axe a UNE table (`FORME_PAR_GENRE`,
+ * `GLYPHE_PAR_CITATION`) et UNE fonction de rendu (`piece`, `citation`) ; il
+ * n'existe aucun `if` par forme, donc aucun endroit où deux formes puissent
+ * diverger au premier correctif. Le glyphe est élu par `data-genre` dans la
+ * FEUILLE, exactement comme l'accusé élit sa coche : le module qui repeint
+ * change un attribut, il ne redessine rien.
+ */
+const FORME_PAR_GENRE: Readonly<Record<PieceJointe['genre'], { readonly glyphe: string; readonly lecteur: 'audio' | 'video' | null; readonly sousTitres: boolean }>> = {
+  image: { glyphe: 'ph-image', lecteur: null, sousTitres: false },
+  video: { glyphe: 'ph-video-camera', lecteur: 'video', sousTitres: true },
+  audio: { glyphe: 'ph-microphone', lecteur: 'audio', sousTitres: false },
+  fichier: { glyphe: 'ph-file', lecteur: null, sousTitres: false },
 };
 
 /**
- * Une pièce jointe se rend selon son TYPE, et RIEN ne se télécharge avant un
- * geste : l'image est un lien vers le fichier avec son poids, le vocal un
- * lecteur en `preload="none"` avec sa transcription servie dans la langue du
- * lecteur, le fichier un lien avec son poids. Un `<img>` inline ferait partir
- * chaque photo du fil sur une 3G rurale sans qu'on l'ait demandée. L'adresse est
- * ABSOLUE, sur l'origine publique de la passerelle (`lib/api/fil.ts`,
- * `urlDePiece`) : un chemin relatif se résoudrait contre le document, où la
- * passerelle n'est pas.
+ * TOUS les glyphes d'une table sont rendus, et `data-genre` en élit UN dans la
+ * feuille. C'est ce qui permet au module de participation de changer un
+ * attribut plutôt que de redessiner un tracé — la même mécanique que l'accusé
+ * et ses deux coches.
+ */
+const glyphes = (table: Readonly<Record<string, string>>): string =>
+  Object.entries(table)
+    .map(([genre, nom]) => `<span class="glyphe" data-genre="${genre}" aria-hidden="true">${svgDuSprite(nom)}</span>`)
+    .join('');
+
+const GLYPHE_PAR_GENRE: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(FORME_PAR_GENRE).map(([genre, forme]) => [genre, forme.glyphe]),
+);
+
+/**
+ * Une pièce jointe s'ANNONCE avant de partir : son genre, son nom, sa durée et
+ * son poids, sur une affiche que RIEN ne télécharge. La cible dessine
+ * exactement cela — un cadre au glyphe de son genre, `0:42 · 3,1 Mo` en
+ * dessous — et c'est aussi ce qu'une 3G rurale demande : un `<img>` inline
+ * ferait partir chaque photo du fil sans qu'on l'ait demandée. Le geste, lui,
+ * mène au fichier (`<a href download>`, une destination que la passerelle SERT).
+ *
+ * Un vocal et une vidéo portent EN PLUS leur lecteur natif, en `preload="none"`
+ * — donc zéro octet avant la première pression sur « lire », et la commande
+ * accessible que le navigateur donne gratuitement. Sa source est la PISTE
+ * (`piece.piste`), celle que la langue du texte servi a élue : on entend ce
+ * qu'on lit (cycle 128).
+ *
+ * L'adresse est ABSOLUE, sur l'origine publique de la passerelle
+ * (`lib/api/fil.ts`, `urlDePiece`) : un chemin relatif se résoudrait contre le
+ * document, où la passerelle n'est pas.
  */
 const piece = (piece: PieceJointe, langueDuDocument: string): string => {
+  const forme = FORME_PAR_GENRE[piece.genre];
   const meta = metaDePiece(piece);
-  const lien =
-    `<a class="fichier" data-genre="${piece.genre}" href="${echappe(piece.url)}" download>` +
-    `<span class="glyphe" data-genre="${piece.genre}" aria-hidden="true">${svgDuSprite(GLYPHE_PAR_GENRE[piece.genre])}</span>` +
+  const langueDesSousTitres = forme.sousTitres && piece.transcription !== null ? (piece.langueServie ?? piece.langueDeTranscription) : null;
+  const affiche =
+    `<a class="media" data-genre="${piece.genre}" href="${echappe(piece.url)}" download>` +
+    `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
+    '<span class="etiquette">' +
     `<span class="nom-de-piece">${echappe(piece.nom)}</span>` +
     `<span class="poids"${meta === '' ? ' hidden' : ''}>${echappe(meta)}</span>` +
-    '</a>';
+    `<span class="sous-titres"${langueDesSousTitres === null ? ' hidden' : ''}>${langueDesSousTitres === null ? '' : echappe(FIL.sousTitres(langueDesSousTitres))}</span>` +
+    '</span></a>';
   const lecteur =
-    piece.genre === 'audio'
-      ? `<audio controls preload="none" src="${echappe(piece.url)}"></audio>`
-      : piece.genre === 'video'
-        ? `<video controls preload="none" src="${echappe(piece.url)}"></video>`
-        : '';
+    forme.lecteur === null
+      ? ''
+      : `<${forme.lecteur} controls preload="none" src="${echappe(piece.piste)}"></${forme.lecteur}>`;
   const transcription =
     piece.transcription === null
       ? ''
       : `<p class="transcription"${langAttribut(piece.langueServie ?? piece.langueDeTranscription, langueDuDocument)}>` +
         `<span class="hors-ecran">${echappe(FIL.transcription)} </span>${echappe(piece.transcription)}</p>`;
 
-  return `<li data-piece="${echappe(piece.id)}">${lien}${lecteur}${transcription}</li>`;
+  return `<li data-piece="${echappe(piece.id)}">${affiche}${lecteur}${transcription}</li>`;
 };
 
-/** Le gabarit d'une pièce : les QUATRE glyphes, dont `data-genre` élit un ; le lecteur audio et vidéo, cachés. */
+/** Le gabarit d'une pièce : les QUATRE glyphes, dont `data-genre` élit un ; les deux lecteurs, cachés. */
 const gabaritDePiece = (): string =>
   '<li data-piece="">' +
-  '<a class="fichier" data-genre="fichier" href="" download>' +
-  (Object.keys(GLYPHE_PAR_GENRE) as readonly PieceJointe['genre'][])
-    .map((genre) => `<span class="glyphe" data-genre="${genre}" aria-hidden="true">${svgDuSprite(GLYPHE_PAR_GENRE[genre])}</span>`)
-    .join('') +
-  '<span class="nom-de-piece"></span><span class="poids" hidden></span>' +
+  '<a class="media" data-genre="fichier" href="" download>' +
+  `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
+  '<span class="etiquette"><span class="nom-de-piece"></span><span class="poids" hidden></span><span class="sous-titres" hidden></span></span>' +
   '</a>' +
   '<audio controls preload="none" hidden></audio>' +
   '<video controls preload="none" hidden></video>' +
   `<p class="transcription" hidden><span class="hors-ecran">${echappe(FIL.transcription)} </span><span class="texte-transcrit"></span></p>` +
   '</li>';
+
+/**
+ * LES CITATIONS — le second axe. La forme est la même pour les trois genres :
+ * une vignette au glyphe du genre, le libellé que `libelleDeCitation` compose
+ * (site unique, partagé avec le module), et l'aperçu de ce qui est cité, avec
+ * sa langue quand la passerelle la sert.
+ *
+ * AUCUNE n'est un CONTRÔLE. La planche fait mener la vignette d'une story à
+ * `/stories/:id` et celle d'un média à `/chats/:id/medias` — deux routes que la
+ * v3 ne sert pas encore : la charte règle 7 tranche (« un `<a href>` vers une
+ * route SERVIE — tant que sa destination n'existe pas, il n'est pas rendu »),
+ * et rien d'inerte n'est offert au doigt.
+ */
+const GLYPHE_PAR_CITATION: Readonly<Record<GenreDeCitation, string>> = {
+  transfert: 'ph-arrow-bend-up-right',
+  reponse: 'ph-chat-teardrop-text',
+  story: 'ph-sparkle',
+};
+
+const citation = (citation: Citation, langueDuDocument: string): string =>
+  `<li class="citation" data-genre="${citation.genre}" data-cite="${echappe(citation.cible)}">` +
+  `<span class="vignette">${glyphes(GLYPHE_PAR_CITATION)}</span>` +
+  '<span class="dit">' +
+  `<span class="quoi">${echappe(libelleDeCitation(citation))}</span>` +
+  (citation.apercu === ''
+    ? '<span class="apercu" hidden></span>'
+    : `<span class="apercu"${langAttribut(citation.langue, langueDuDocument)}>${echappe(citation.apercu)}</span>`) +
+  '</span></li>';
+
+const citationsHtml = (message: Message, langueDuDocument: string): string =>
+  message.citations.length === 0
+    ? ''
+    : `<ul class="citations" aria-label="${echappe(FIL.citations)}">${message.citations.map((c) => citation(c, langueDuDocument)).join('')}</ul>`;
+
+/** Le gabarit d'une citation : les TROIS glyphes, dont `data-genre` élit un. */
+const gabaritDeCitation = (): string =>
+  '<ul class="citations" aria-label="' +
+  echappe(FIL.citations) +
+  '" hidden><li class="citation" data-genre="reponse" data-cite="">' +
+  `<span class="vignette">${glyphes(GLYPHE_PAR_CITATION)}</span>` +
+  '<span class="dit"><span class="quoi"></span><span class="apercu"></span></span>' +
+  '</li></ul>';
 
 const pieces = (message: Message, langueDuDocument: string): string =>
   message.pieces.length === 0
@@ -263,8 +342,12 @@ export const ligne = ({
     `<span class="nom">${echappe(message.deMoi ? FIL.vous : message.auteur)}</span>` +
     (message.anonyme ? `<span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span>` : '') +
     '</p>' +
-    texte(message, langueDuDocument) +
+    // L'ORDRE de la cible : ce que le message CITE, puis ce qu'il PORTE, puis
+    // ce qu'il DIT. Une photo suivie de sa légende, jamais une légende suivie
+    // de sa photo — et une citation au-dessus de la réponse qu'elle motive.
+    citationsHtml(message, langueDuDocument) +
     pieces(message, langueDuDocument) +
+    texte(message, langueDuDocument) +
     original(message, langueDuDocument) +
     '<p class="meta">' +
     pastille(message) +
@@ -336,8 +419,9 @@ export const gabaritDeLigne = (adresse: string): string =>
   `<span class="avatar fantome" aria-hidden="true" hidden>${svgDuSprite('ph-ghost')}</span>` +
   '<div class="corps">' +
   `<p class="qui"><span class="nom"></span><span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span></p>` +
-  '<p class="texte"></p>' +
+  gabaritDeCitation() +
   `<ul class="pieces" hidden>${gabaritDePiece()}</ul>` +
+  '<p class="texte"></p>' +
   `<details class="original"><summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary><p></p></details>` +
   '<p class="meta">' +
   `<span class="langue" title="${echappe(FIL.traduitDepuis)}">${svgDuSprite('ph-translate')}<span class="code"></span></span>` +

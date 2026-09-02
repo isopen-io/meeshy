@@ -116,6 +116,7 @@ export const bulleOptimiste = ({
   edite: false,
   supprime: false,
   pieces: [],
+  citations: [],
   reactions: [],
   accuse: 'envoye',
   envoi: horsLigne ? 'hors-ligne' : 'en-attente',
@@ -258,7 +259,7 @@ export const edite = (
 export const retire = (etat: EtatDuFil, messageId: string): EtatDuFil => ({
   ...etat,
   bulles: etat.bulles.map((bulle) =>
-    bulle.id === messageId ? { ...bulle, supprime: true, texte: '', pieces: [], reactions: [] } : bulle,
+    bulle.id === messageId ? { ...bulle, supprime: true, texte: '', pieces: [], citations: [], reactions: [] } : bulle,
   ),
 });
 

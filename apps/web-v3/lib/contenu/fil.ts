@@ -1,3 +1,5 @@
+import type { Citation } from '@/lib/api/citations';
+
 /**
  * LA COPIE DU FIL — ce que l'écran DIT, hors de ce qu'il compose. Une phrase
  * qui vit ici se relit d'un coup ; une phrase enfouie dans un gabarit se
@@ -56,6 +58,20 @@ export const FIL = {
   hier: 'Hier',
   piece: 'Pièce jointe',
   transcription: 'Transcription',
+  /** Ce que la vidéo annonce quand une transcription est servie — le CODE de la langue, comme la pastille `.langue` (charte règle 23 : jamais un drapeau). */
+  sousTitres: (langue: string): string => `Sous-titres ${langue}`,
+  citations: 'Ce que ce message cite',
+  reponseA: (qui: string): string => `En réponse à ${qui}`,
+  reponseAUnMessage: 'En réponse à un message',
+  transfertDepuis: (source: string): string => `Transféré depuis ${source}`,
+  transfert: 'Message transféré',
+  reponseALaPublication: (quoi: string): string => `A répondu à ${quoi}`,
+  /** Les deux formes d'une publication citée : la MIENNE, et celle d'un autre — jamais une contraction à deviner. */
+  publication: {
+    mienne: { humeur: 'votre humeur', story: 'votre story', reel: 'votre reel', publication: 'votre publication' },
+    autre: { humeur: 'une humeur', story: 'une story', reel: 'un reel', publication: 'une publication' },
+  },
+  deQui: (qui: string): string => ` de ${qui}`,
   telecharger: 'Télécharger',
   ecrire: 'Écrire un message',
   ecrireEn: (langue: string): string => `Écrire en ${langue}…`,
@@ -74,6 +90,28 @@ export const FIL = {
   choisirUneReaction: 'Choisir une réaction',
   fermer: 'Fermer',
 } as const;
+
+/**
+ * LE LIBELLÉ D'UNE CITATION — une table, deux lecteurs : le serveur qui rend la
+ * ligne (`app/connecte/fil-lignes.ts`) et le module qui la peint en direct
+ * (`lib/realtime/fil-peinture.ts`). Écrit deux fois, « Transféré depuis » et
+ * « A répondu à votre story » auraient divergé au premier correctif — c'est la
+ * jumelle que la charte interdit, et c'est ce que `LIBELLES` avait déjà coûté
+ * une fois au fil.
+ */
+export const libelleDeCitation = (citation: Citation): string => {
+  if (citation.genre === 'transfert') {
+    return citation.source === null ? FIL.transfert : FIL.transfertDepuis(citation.source);
+  }
+  if (citation.genre === 'reponse') {
+    return citation.source === null ? FIL.reponseAUnMessage : FIL.reponseA(citation.source);
+  }
+  const sorte = citation.sorte ?? 'publication';
+  const quoi = citation.pourMoi
+    ? FIL.publication.mienne[sorte]
+    : FIL.publication.autre[sorte] + (citation.source === null ? '' : FIL.deQui(citation.source));
+  return FIL.reponseALaPublication(quoi);
+};
 
 /** Les six réactions offertes par la palette — celles que les trois clients proposent en premier. */
 export const EMOJIS_DE_LA_PALETTE = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;

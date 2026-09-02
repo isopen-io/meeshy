@@ -374,7 +374,7 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.ligne .accuse', // l'accusé de mes messages, comme le compte de non-lus
     '.langue', // la pastille de langue
     '.original summary', // le cliquable — « Voir l'original »
-    '.pieces .fichier', // le cliquable — une pièce jointe
+    '.pieces .media', // le cliquable — une pièce jointe, sur son affiche
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
