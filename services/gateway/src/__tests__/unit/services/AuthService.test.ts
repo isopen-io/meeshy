@@ -713,31 +713,12 @@ describe('AuthService', () => {
       expect(mockPrisma.participant.create).not.toHaveBeenCalled();
     });
 
-    it('should use default languages if not provided', async () => {
-      const noLanguageData: RegisterData = {
-        username: 'nolang',
-        password: 'SecurePass123!',
-        firstName: 'No',
-        lastName: 'Lang',
-        email: 'nolang@example.com'
-      };
-
-      const createdUser = { ...mockUser, ...noLanguageData, id: 'no-lang-id' };
-
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
-      mockPrisma.user.create.mockResolvedValue(createdUser);
-      mockPrisma.conversation.findFirst.mockResolvedValue(null);
-
-      await authService.register(noLanguageData);
-
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        })
-      });
-    });
+    // `should use default languages if not provided` vivait ici et gelait un
+    // DÉFAUT (`regionalLanguage: 'fr'` sur une inscription qui ne l'avait jamais
+    // demandé), sous un nom qui ne pouvait rien mesurer : sans aucune préférence,
+    // le repli et la règle juste écrivent le même rang 1 (leçon 261). Les langues
+    // écrites par l'inscription sont désormais mesurées, cas séparants compris,
+    // par `auth-registration-prism-ranks.test.ts` (#4682).
 
     it('should handle database error gracefully', async () => {
       mockPrisma.user.findFirst.mockRejectedValue(new Error('Database error'));

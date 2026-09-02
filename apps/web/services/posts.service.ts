@@ -10,6 +10,7 @@ import type {
   PostView,
 } from '@meeshy/shared/types/post';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
+import type { PublicationTarget } from '@meeshy/shared/utils/forward-to-publication';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -361,7 +362,14 @@ export const postsService = {
    */
   async publishAttachment(data: {
     readonly attachmentId: string;
-    readonly target?: 'POST' | 'REEL' | 'STORY';
+    /**
+     * #4809 — sous-ensemble volontaire de `PostType` : `PublicationTarget`
+     * (`@meeshy/shared/utils/forward-to-publication`) EST la règle partagée que
+     * le commentaire ci-dessus nomme — miroir exact de la gateway
+     * (`PublishAttachmentSchema.target`, `routes/posts/types.ts`). STATUS en
+     * est exclu : un statut ne se déduit jamais d'une pièce jointe existante.
+     */
+    readonly target?: PublicationTarget;
     readonly content?: string;
     readonly visibility?: PostVisibility;
     readonly capturedInApp?: boolean;

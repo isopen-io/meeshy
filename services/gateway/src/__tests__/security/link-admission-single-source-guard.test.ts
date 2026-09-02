@@ -21,23 +21,30 @@
  * Deux exemplaires SANCTIONNÉS : la loi (`admitLinkEntry`) et sa réclamation
  * ATOMIQUE (`claimLinkUse`, critère de fin #3 — même comparaison, au moment
  * de l'ÉCRITURE plutôt que de la lecture, c'est le point même de
- * l'atomicité). Deux exemplaires GELÉS, chacun répondant à une question
- * AUTRE que « peut-on ENTRER » :
+ * l'atomicité). UN exemplaire GELÉ, répondant à une question AUTRE que
+ * « peut-on ENTRER » :
  *
  *   - `routes/anonymous.ts` (`GET /anonymous/link/:identifier`) — aperçu
  *     PUBLIC avant jointure ; il ANNONCE un statut (410 sur la page
  *     d'invitation), il n'admet personne. `POST /anonymous/join/:linkId`,
  *     dans le MÊME fichier, ne compare plus rien lui-même : il délègue à
  *     `performLinkJoin` → `admitLinkEntry`.
- *   - `routes/conversations/messages-list.ts` (`GET …/messages`, déplacé
- *     depuis `messages.ts` par le découpage #4284 — même site, même raison)
- *     — pas une porte d'ENTRÉE mais le PLANCHER de lecture d'un participant
- *     DÉJÀ admis, documenté en place (« Le lien de partage répond ici à DEUX
- *     questions distinctes sur la même ligne »).
  *
- * Geler documente que ces deux sites sont VUS, pas qu'ils sont exemptés sans
- * raison — la raison est écrite ci-dessus et sur place. Un troisième site qui
- * apparaîtrait sans y être ajouté EXPLICITEMENT fait tomber ce test.
+ * ─── #4827 : `routes/conversations/messages-list.ts` SORT de la liste ────────
+ *
+ * Ce quatrième site (`GET …/messages`) y a figuré, gelé, parce qu'il était VU.
+ * Être vu n'est pas être justifié : sa raison écrite — « pas une porte
+ * d'ENTRÉE mais le PLANCHER de lecture d'un participant DÉJÀ admis » — dit
+ * exactement pourquoi il ne devait PAS comparer ce compteur. `currentUses`
+ * compte des ADMISSIONS (son unique incrément est `claimLinkUse`) ; le relire
+ * après l'entrée refusait le fil au DERNIER admis, celui dont l'admission
+ * venait de remplir le lien. La comparaison est RETIRÉE (#4827) et le site
+ * quitte `ALLOWED` : la garde est désormais ACTIVE sur lui — la remettre le
+ * fait rougir au premier test.
+ *
+ * Geler documente qu'un site est VU, pas qu'il est exempté sans raison — la
+ * raison est écrite ci-dessus et sur place. Un site de plus qui apparaîtrait
+ * sans y être ajouté EXPLICITEMENT fait tomber ce test.
  *
  * @jest-environment node
  */
@@ -63,9 +70,7 @@ const ALLOWED = new Set([
   'services/conversations/linkAdmission.ts', // admitLinkEntry — LA loi
   'routes/conversations/link-admission.ts', // claimLinkUse — sa réclamation atomique (critère 3)
   'routes/anonymous.ts', // GET /anonymous/link/:identifier — aperçu public, n'admet personne
-  // #4284 a découpé conversations/messages.ts en fichiers frères ; ce site
-  // (plancher de lecture d'un participant déjà admis) vit désormais ici.
-  'routes/conversations/messages-list.ts',
+  // `routes/conversations/messages-list.ts` a été RETIRÉ par #4827 — cf. doc-tête.
 ]);
 
 function listTsFiles(dir: string): string[] {
@@ -102,9 +107,9 @@ describe('Une seule loi d\'admission de lien — #4167', () => {
 
   // Garde de PÉRIMÈTRE (patron `unbounded-findmany-guard.test.ts`) : une
   // garde négative qui ne trouve soudain plus RIEN a pu perdre son terrain de
-  // balayage, pas gagner en propreté. Ce test positif prouve que les QUATRE
+  // balayage, pas gagner en propreté. Ce test positif prouve que les TROIS
   // sites attendus sont bien vus.
-  it('le balayage voit bien les quatre sites attendus — preuve qu\'il ne s\'est pas vidé', () => {
+  it('le balayage voit bien les trois sites attendus — preuve qu\'il ne s\'est pas vidé', () => {
     expect(new Set(matchingFiles())).toEqual(ALLOWED);
   });
 
