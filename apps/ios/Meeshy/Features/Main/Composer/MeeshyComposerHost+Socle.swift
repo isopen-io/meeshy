@@ -372,10 +372,23 @@ extension MeeshyComposerHost {
             // > Router une surface et router sa PUBLICATION sont deux gestes.
             // > Le premier se voit à l'écran ; le second ne se voit qu'à
             // > l'arrivée, sur un contenu qu'on ne peut plus rattraper.
-            if selectedFormat == .story {
-                publishStoryScene()
-            } else {
-                publishDocument()
+            //
+            // **Le routage est une RÈGLE depuis #4869**, plus une liste de
+            // formats. La condition ne nommait que la story, et le réel —
+            // routé sur `.document` par le MÊME lot (#4751) — tombait sur le
+            // refus de `DocumentComposerDoor` : un réel composé depuis le Feed
+            // ne partait jamais, flèche peinte et sans effet.
+            //
+            // Le réel n'a PAS reçu le canal de la scène pour autant, et c'est
+            // la mesure qui l'a décidé : ce canal publie un post PAR SLIDE, si
+            // bien qu'un réel de deux photos y produisait deux posts au lieu
+            // d'un. La phrase ci-dessus avertissait de ce piège exact — « le
+            // second ne se voit qu'à l'arrivée, sur un contenu qu'on ne peut
+            // plus rattraper ». Il s'est refermé au simulateur, pas au gate.
+            switch ComposerPublishChannel.channel(for: selectedFormat) {
+            case .scene:       publishStoryScene()
+            case .document:    publishDocument()
+            case .unsupported: refuseUnsupportedFormat()
             }
         }
     }
@@ -409,6 +422,20 @@ extension MeeshyComposerHost {
         )
         isPublishingDocument = false
         if accepted { onDismiss() }
+    }
+
+    /// **Le refus d'un format qu'aucun canal ne sait porter** (#4869).
+    ///
+    /// Il DIT, là où la flèche ne faisait rien : un réel composé depuis le Feed
+    /// atteignait `DocumentComposerDoor`, qui le refuse à juste titre — son
+    /// brouillon ne porte pas de slides — et l'auteur n'en voyait rien.
+    ///
+    /// La sortie est NOMMÉE plutôt que repliée dans un `default` muet : c'est
+    /// elle qui rend le trou visible dans le code comme à l'écran, et elle
+    /// disparaîtra avec le canal du réel, pas avant.
+    func refuseUnsupportedFormat() {
+        HapticFeedback.error()
+        FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishFormatUnsupported)
     }
 
     var publishButton: some View {
@@ -532,6 +559,13 @@ extension MeeshyComposerHost {
             //
             // La règle est appelée, jamais réécrite ici : c'est elle qui sait
             // que la slide SEMÉE au montage ne compte pas comme de la matière.
+            //
+            // **Ce terme reste nommé sur la STORY** (#4869), et c'est délibéré :
+            // il arme la flèche de ce que la SCÈNE porte, et seule la story
+            // publie par ce canal. L'élargir au réel armerait une flèche dont
+            // le canal refuse ensuite — un contrôle qui promet, exactement ce
+            // que ce lot retire ailleurs. Il s'élargira le jour où le réel aura
+            // son canal, dans le même lot.
             hasMedia: !documentLocalMedia.isEmpty
                 || (selectedFormat == .story
                     && ComposerStoryCanvas.hasMatter(

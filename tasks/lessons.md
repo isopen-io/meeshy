@@ -24519,6 +24519,125 @@ prouvait rien** — je lui avais donné un fichier où j'avais déjà appliqué 
 correction. Un outil ne se valide pas sur un cas qu'on a préparé pour lui. Même
 famille que le témoin qui doit TOMBER avant le correctif.
 
+## Leçon 441 — Un correctif VERT au gate peut publier du contenu FAUX : le simulateur n'est pas une formalité de fin, c'est la seule mesure qui voit l'ARRIVÉE
+
+**Le fait (2026-09-02).** Un Réel composé depuis le Feed ne partait jamais — la
+porte du document le refuse (à juste titre : son brouillon ne porte pas de
+slides), et seule la story avait été routée autour de ce refus. Le correctif
+tenait en deux lignes : donner au réel le canal de la scène, comme la story.
+
+**Gate vert. 383 témoins. Et au simulateur, un réel de deux photos a produit
+DEUX POSTS au lieu d'un** — ce canal publie un post *par slide*, sémantique
+juste pour une story dont chaque unité EST une publication, fausse pour un réel
+qui est UNE publication à plusieurs médias.
+
+> **Le silence d'avant était un défaut ; publier deux posts au lieu d'un en est
+> un PIRE, et d'une autre NATURE.** Un refus se rejoue ; un contenu publié ne se
+> rattrape pas. Un correctif qui transforme « rien ne se passe » en « quelque
+> chose de faux se passe » est une régression, même quand il ferme l'issue.
+
+**La formulation qui nomme la nature** (session voisine, même jour) :
+
+> Ce qui compte n'est pas la probabilité de se tromper mais **QUI RATTRAPE
+> L'ERREUR**. Un geste qui n'aboutit pas se re-tente ; un geste qui aboutit trop
+> demande une suppression.
+
+Réversible contre irréversible — et c'est le MÊME discriminant que le fail-safe
+de `StoryDerivedContent` le matin même (« une garde qui hésite tombe du côté où
+l'on ne perd rien ») et que l'asymétrie de la leçon 440. Trois cas en une
+journée, sur trois couches. Ce n'est plus une leçon d'incident, c'est une règle
+de conception : **devant deux façons de se tromper, choisir celle que
+l'utilisateur peut défaire.**
+
+**Ce qui rend le cas exemplaire** : le commentaire du site avertissait
+exactement de ce piège — « router une surface et router sa PUBLICATION sont deux
+gestes ; le premier se voit à l'écran, le second ne se voit qu'à l'ARRIVÉE, sur
+un contenu qu'on ne peut plus rattraper » — et je l'ai lu, cité dans l'issue, et
+suivi à moitié. **Lire l'avertissement ne dispense pas de faire la mesure qu'il
+prescrit.**
+
+La bonne réponse n'était donc pas le canal approchant mais un canal `unsupported`
+ÉCRIT, avec sa mesure en doc-comment et son témoin. *Un trou nommé vaut mieux
+qu'un trou comblé de travers* — et il disparaîtra avec le vrai canal, pas avant.
+
+## Leçon 442 — Un REFUS peut être parfaitement écrit et se lever DERRIÈRE l'écran
+
+Suite immédiate de la 441, trouvée en vérifiant son correctif. Le refus explicite
+que je venais d'ajouter n'apparaissait pas : le composer est un
+`fullScreenCover`, et l'hôte des toasts était un `.overlay` de la vue RACINE —
+donc dessous. **Tout toast levé depuis le composer était invisible** : la
+publication ratée, le micro refusé, l'envoi hors-ligne.
+
+Et le doc-comment du refus de la porte décrivait mot pour mot le symptôme que
+cette absence produit :
+
+> « Un refus qui se DIT. Rendre `false` sans rien dire laisserait l'auteur devant
+> une flèche qui semble ne rien faire — et il la presserait encore. »
+
+Le bon geste était fait, à la bonne place, avec la bonne raison écrite. La couche
+d'AFFICHAGE le rendait sans effet.
+
+> **La question « qui AFFICHE ce que je viens de produire ? » ne vaut pas que
+> pour un contenu — elle vaut pour un REFUS, une ERREUR, un ÉTAT.** C'est la
+> forme du cycle 122 du Prisme (« un correctif dont la valeur n'atteint aucun
+> lecteur n'a corrigé personne ») portée d'une traduction à un message d'échec.
+
+Corollaire de forme, mesuré dans le même lot : l'overlay était déjà écrit DEUX
+fois — racine iPhone et racine iPad — et les deux avaient déjà divergé (l'un
+porte le rappel de tap et l'identifiant d'accessibilité, l'autre non). Le
+troisième exemplaire n'a pas été écrit : c'est un modificateur, et la racine le
+consomme.
+
+**Deux précisions dues à la session voisine, qui a repris la mesure le jour
+même et trouvé SIX toasts dans le lecteur de story, dont QUATRE refus :**
+
+- **le modificateur va sur le point de MONTAGE, pas sur la vue qui lève le
+  toast** — sinon on le pose autant de fois qu'il y a de sites d'appel. Le
+  conteneur du lecteur couvre à lui seul la trail, une conversation et une
+  notification ;
+- **le témoin garde les DEUX moitiés du lien** : que l'hôte est monté, ET que la
+  surface lève encore des toasts. Un témoin qui n'assert que la présence du
+  modificateur protège une ligne devenue inutile sans savoir pourquoi.
+
+## Leçon 443 — La direction dans laquelle on autorise une erreur se choisit sur son COÛT DE RÉPARATION, jamais sur sa probabilité
+
+**Trois cas indépendants, en une journée, sur trois couches différentes.** Chacun
+posait la même question — « de quel côté doit-on se tromper ? » — et chacun l'a
+tranchée sans jamais estimer une fréquence :
+
+| cas | erreur A | erreur B | qui répare A | qui répare B |
+|---|---|---|---|---|
+| fail-safe de `StoryDerivedContent` | un doublon s'affiche | la légende d'un auteur est TUE | l'œil du lecteur | **personne** |
+| réglage d'un balayage (§ 440) | un membre reste privé | un membre est ouvert pour rien | le compilateur | **personne** |
+| routage de publication (§ 441) | rien ne se passe | un post en trop est publié | l'utilisateur re-tente | **une suppression** |
+
+Dans les trois, l'erreur A a un réparateur — gratuit, immédiat, souvent
+automatique — et l'erreur B n'en a pas. On penche vers A. **Et c'est indépendant
+de laquelle est la plus probable.**
+
+> C'est ce qui rend la règle utilisable AU MOMENT DE LA CONCEPTION : on n'a pas
+> besoin d'estimer une fréquence, seulement de répondre à **« si je me trompe de
+> ce côté, qui s'en aperçoit, et à quel prix ? »**.
+
+Elle explique aussi pourquoi les formulations plus étroites tenaient chacune sur
+un cas et pas sur les trois : « fail-closed » parle de sécurité, « réversible /
+irréversible » parle du temps, « ne rien perdre » parle du contenu. Le coût de
+réparation les subsume — il porte sur l'AGENT qui répare, et cet agent peut être
+un compilateur, un œil, un utilisateur, ou personne.
+
+**Le corollaire, qui est la partie actionnable** :
+
+> Quand AUCUNE des deux erreurs n'a de réparateur, il ne faut pas choisir — il
+> faut **créer le réparateur**.
+
+Un balayage qu'on règle en citant l'extrait fautif fabrique le vérificateur
+humain qui manquait ; une garde qu'on double d'un témoin sur la valeur SERVIE
+fabrique le vérificateur automatique. Choisir un côté sans réparateur, c'est
+parier ; en poser un, c'est concevoir.
+
+*Formulée avec une session voisine le 2026-09-02 : elle tenait deux points, la
+§ 441 a fourni le troisième — et sans trois points on n'aurait vu qu'une
+coïncidence.*
 ### AMENDEMENT du même jour — le vérificateur des faux positifs existe, et ce n'est pas un outil
 
 Cette leçon affirmait qu'« il n'existe aucun vérificateur des faux positifs ».

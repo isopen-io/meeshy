@@ -1041,6 +1041,19 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Erreur lors de la publication", bundle: .main)
     }
 
+    /// **Un format qu'aucun canal ne sait porter** (#4869).
+    ///
+    /// Distincte de `publishError`, et c'est le point : « erreur lors de la
+    /// publication » envoie réessayer, quand rien de ce que l'auteur peut faire
+    /// ne changera l'issue. Une phrase qui nomme la CAUSE lui évite le second
+    /// tap — c'est la même règle que les refus de l'éventail (#4858), un cran
+    /// plus loin dans le geste.
+    static var publishFormatUnsupported: String {
+        String(localized: "composer.publish.format.unsupported",
+               defaultValue: "Ce format ne peut pas encore être publié d'ici",
+               bundle: .main)
+    }
+
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`
     /// existe, elle est traduite dans les sept langues du catalogue, et c'est
     /// déjà le vocabulaire d'attache du composer (`UniversalComposerBar`).
