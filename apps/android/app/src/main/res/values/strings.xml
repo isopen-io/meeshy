@@ -6,13 +6,12 @@
     <string name="brand_signature_credit">Services CEO</string>
 
     <!-- Navigation tabs -->
-    <string name="tab_messages">Messages</string>
     <string name="tab_feed">Feed</string>
     <string name="tab_calls">Calls</string>
-    <string name="tab_activity">Activity</string>
     <string name="tab_profile">Profile</string>
-    <string name="menu_new_conversation">New</string>
-    <string name="menu_reels">Reels</string>
+    <string name="menu_my_links">My links</string>
+    <string name="menu_notifications">Notifications</string>
+    <string name="menu_discover">Discover</string>
     <string name="menu_contacts">Contacts</string>
     <string name="menu_settings">Settings</string>
 
@@ -62,6 +61,9 @@
     <string name="call_incoming_audio">Incoming call</string>
     <string name="call_incoming_video">Incoming video call</string>
     <string name="a11y_floating_menu">Navigation menu</string>
+    <string name="a11y_floating_menu_unread">Menu, %1$d notifications pending</string>
+    <string name="a11y_state_open">Open</string>
+    <string name="a11y_edit_profile">Edit profile</string>
 
     <!-- Home-screen widget: unread count -->
     <string name="widget_unread_count_title">Unread messages</string>

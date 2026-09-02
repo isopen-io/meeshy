@@ -62,6 +62,19 @@ const restrictedImportPatterns = forbiddenModules.map(({ root, message }) => ({
   message,
 }));
 
+// Le temps réel de PARTICIPATION (§ 3.2 corollaire 1, § 12.4) n'entre dans un
+// document que par `await import()` d'une adresse hachée, APRÈS le premier
+// pixel — jamais par un import statique, qui ferait entrer le socket dans le
+// chunk d'un écran et rendrait le chemin sans JavaScript dépendant de lui.
+// `app/` compose des documents ; `participate` n'y a aucune place. Et
+// `socket.io-client` n'a qu'UN importateur : le module lui-même, dynamiquement.
+const PARTICIPATION_DYNAMIQUE =
+  "Le module de participation (lib/realtime/participate.ts) se charge par `await import()` d'une adresse servie (`lib/actifs-rt.ts`), après le premier pixel — jamais par un import statique (§ 12.4).";
+const restrictedParticipationPatterns = [
+  { group: ['**/realtime/participate', '**/realtime/participate.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['socket.io-client', 'socket.io-client/**'], message: PARTICIPATION_DYNAMIQUE },
+];
+
 // Les sept événements du cycle de vie (§ 6.2) n'ont qu'UN point d'écoute :
 // `lib/realtime/lifecycle.ts`. Un écran qui les attache lui-même se
 // réécrit une machine à états — et c'est ainsi qu'un `visibilitychange`
@@ -149,7 +162,8 @@ const restrictedLifecycleSyntax = [
 const zoneDuCycleDeVie = ['app/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}'];
 
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
+  // `.rt/` est la SORTIE de `scripts/build-participate.mjs` (le module compilé), pas une source.
+  { ignores: ['.next/**', '.rt/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   // `no-restricted-syntax` porte UN nom : le dernier bloc qui s'applique à un
   // fichier remplace les précédents, il ne s'y ajoute pas. Les adieux sont donc
@@ -159,7 +173,7 @@ const config = [
     plugins: { zone: frontiereDeZone },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-restricted-imports': ['error', { patterns: restrictedImportPatterns }],
+      'no-restricted-imports': ['error', { patterns: [...restrictedImportPatterns, ...restrictedParticipationPatterns] }],
       'no-restricted-syntax': ['error', ...syntaxeDesAdieux],
       [REGLE_ECRITE_POUR_UNE_ZONE_UNIQUE]: 'off',
       // Les deux règles de zone ne s'arment QUE si le périmètre a pu être lu. Sans lui, elles

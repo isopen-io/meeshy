@@ -67,7 +67,7 @@ const cadreMobile = {
 };
 
 /** Les suites qui mesurent une PAGE servie par le `webServer` ci-dessus. */
-const SUITES_DE_PAGE = ['**/v3-a11y.spec.ts', '**/v3-lifecycle.spec.ts'];
+const SUITES_DE_PAGE = ['**/v3-a11y.spec.ts', '**/v3-lifecycle.spec.ts', '**/v3-cibles.spec.ts', '**/v3-fil-a11y.spec.ts'];
 
 export default defineConfig({
   testDir: './e2e',

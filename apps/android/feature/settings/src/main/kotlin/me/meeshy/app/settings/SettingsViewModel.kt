@@ -149,6 +149,31 @@ class SettingsViewModel @Inject constructor(
         updateNotifications { it.copy(newMessageEnabled = enabled) }
     }
 
+    /**
+     * Toggles the message-content preview shown in the lock-screen push and the in-app banner
+     * (`NotificationBannerHost`, `feature/notifications`, enforces it — replacing the body with
+     * a generic label, mirroring the gateway's own `showPreview:false` substitution for the push
+     * payload). Sender identity is a separate toggle ([setShowSenderName]).
+     */
+    fun setShowPreview(enabled: Boolean) {
+        updateNotifications { it.copy(showPreview = enabled) }
+    }
+
+    /** Toggles the sender's name shown on a notification (independent of [setShowPreview]). */
+    fun setShowSenderName(enabled: Boolean) {
+        updateNotifications { it.copy(showSenderName = enabled) }
+    }
+
+    /** Toggles grouping multiple notifications from the same conversation into one thread. */
+    fun setGroupNotifications(enabled: Boolean) {
+        updateNotifications { it.copy(groupNotifications = enabled) }
+    }
+
+    /** Toggles the app icon's unread badge count. */
+    fun setNotificationBadgeEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(notificationBadgeEnabled = enabled) }
+    }
+
     /** Toggles the Do-Not-Disturb (quiet-hours) schedule on/off. */
     fun setDndEnabled(enabled: Boolean) {
         updateNotifications { it.copy(dndEnabled = enabled) }

@@ -74,8 +74,8 @@ class WebRtcCallCoordinatorTest {
         coordinator = WebRtcCallCoordinator(engine, signals, context)
     }
 
-    private fun CoroutineScope.startAsCaller() = coordinator.startOutgoing(
-        this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = false,
+    private fun CoroutineScope.startAsCaller(isVideo: Boolean = false) = coordinator.startOutgoing(
+        this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = isVideo,
         onMediaConnected = { connectedCount += 1 },
         onMediaStalled = { stalledCount += 1 },
     )
@@ -315,4 +315,118 @@ class WebRtcCallCoordinatorTest {
             coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-legacy" }) }
             coordinator.end()
         }
+
+    // MARK: - Speaker routing (#4798)
+    //
+    // The unit-test JVM's `android.jar` stub reports `Build.VERSION.SDK_INT == 0`
+    // (no Robolectric here), so `CallAudioRoute.actionFor` always resolves to the
+    // legacy `SetSpeakerphoneOn` branch — exactly the branch these tests assert on.
+    // The API-31+ branch selection itself is covered exhaustively, as a pure
+    // function, by CallAudioRouteTest.
+
+    @Test
+    fun `an outgoing audio call defaults to the earpiece`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        coordinator.end()
+    }
+
+    @Test
+    fun `an outgoing video call defaults to the loudspeaker`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
+
+    @Test
+    fun `starting a call routes audio into communication mode`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller()
+
+        verify(exactly = 1) { audioManager.mode = AudioManager.MODE_IN_COMMUNICATION }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending a call restores the normal audio mode`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        coordinator.end()
+
+        verify(exactly = 1) { audioManager.mode = AudioManager.MODE_NORMAL }
+    }
+
+    @Test
+    fun `ending without ever routing call audio leaves the audio state untouched`() =
+        runTest(UnconfinedTestDispatcher()) {
+            coordinator.end()
+
+            verify(exactly = 0) { audioManager.mode = any() }
+            verify(exactly = 0) { audioManager.isSpeakerphoneOn = any() }
+        }
+
+    @Test
+    fun `toggling the speaker on routes to the loudspeaker`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = false)
+
+        coordinator.setSpeakerEnabled(true)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
+
+    @Test
+    fun `toggling the speaker off routes back to the earpiece`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+
+        coordinator.setSpeakerEnabled(false)
+
+        verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        coordinator.end()
+    }
+
+    @Test
+    fun `ending a call started on the loudspeaker also clears the speaker route`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCaller(isVideo = true)
+
+            coordinator.end()
+
+            // Undoes the video-call default (isSpeakerphoneOn = true at start) —
+            // without this, the route survives the call and leaks onto whatever
+            // audio plays next (e.g. a voice message coming out of the loudspeaker
+            // while the phone is held to the ear).
+            verify(exactly = 1) { audioManager.isSpeakerphoneOn = false }
+        }
+
+    @Test
+    fun `an explicit speakerOn intent overrides the isVideo default on startIncoming`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // An audio call (isVideo = false) would default to the earpiece, but the
+            // caller (CallViewModel.accept) already knows the user tapped the
+            // speaker button while the join ACK was in flight — that intent must win.
+            coordinator.startIncoming(
+                this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = false,
+                onMediaConnected = {}, onMediaStalled = {}, speakerOn = true,
+            )
+
+            verify(exactly = 1) { audioManager.isSpeakerphoneOn = true }
+            verify(exactly = 0) { audioManager.isSpeakerphoneOn = false }
+            coordinator.end()
+        }
+
+    @Test
+    fun `the speaker preference is re-applied fresh on the next call`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCaller(isVideo = true)
+        coordinator.setSpeakerEnabled(false)
+        coordinator.end()
+
+        startAsCaller(isVideo = true)
+
+        // Twice total across both calls: the fresh video-default for call 2 must
+        // still fire even though the previous call's explicit toggle left it off.
+        verify(exactly = 2) { audioManager.isSpeakerphoneOn = true }
+        coordinator.end()
+    }
 }

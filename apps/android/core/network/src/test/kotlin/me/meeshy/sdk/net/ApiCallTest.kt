@@ -8,6 +8,7 @@ import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
+import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
 
@@ -55,6 +56,84 @@ class ApiCallTest {
         val result = rawApiCall<String> { throw SerializationException("bad json") }
         val failure = result as NetworkResult.Failure
         assertThat(failure.error.code).isEqualTo("PARSE")
+    }
+
+    // --- HttpException: the gateway's own `code`/`error` from the error body must
+    // win over the synthetic "HTTP_$status" — two endpoints can answer the SAME
+    // status for different reasons (e.g. /me/account/deletion's 409 ALREADY_PENDING
+    // vs. 409 NO_EMAIL), and only the body-carried code tells them apart. ---
+
+    private fun httpExceptionWithBody(status: Int, body: String?): HttpException {
+        val responseBody = body?.toResponseBody("application/json".toMediaTypeOrNull())
+        val response = if (responseBody != null) {
+            Response.error<Unit>(status, responseBody)
+        } else {
+            Response.error<Unit>(status, "".toResponseBody(null))
+        }
+        return HttpException(response)
+    }
+
+    @Test
+    fun httpException_bodyCodeWinsOverTheSyntheticStatusCode() = runTest {
+        val exception = httpExceptionWithBody(
+            409,
+            """{"success":false,"code":"NO_EMAIL","error":"Add an email before deleting."}""",
+        )
+
+        val result = apiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NO_EMAIL")
+        assertThat(failure.error.message).isEqualTo("Add an email before deleting.")
+        assertThat(failure.error.httpStatus).isEqualTo(409)
+    }
+
+    @Test
+    fun httpException_malformedBody_fallsBackToTheSyntheticStatusCode() = runTest {
+        val exception = httpExceptionWithBody(500, "not json at all")
+
+        val result = apiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("HTTP_500")
+        assertThat(failure.error.httpStatus).isEqualTo(500)
+    }
+
+    @Test
+    fun httpException_absentBody_fallsBackToTheSyntheticStatusCode() = runTest {
+        val exception = httpExceptionWithBody(401, null)
+
+        val result = apiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("HTTP_401")
+        assertThat(failure.error.httpStatus).isEqualTo(401)
+    }
+
+    @Test
+    fun pagedApiCall_httpException_bodyCodeWinsOverTheSyntheticStatusCode() = runTest {
+        val exception = httpExceptionWithBody(
+            409,
+            """{"success":false,"code":"NO_EMAIL","error":"Add an email before deleting."}""",
+        )
+
+        val result = pagedApiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NO_EMAIL")
+    }
+
+    @Test
+    fun rawApiCall_httpException_bodyCodeWinsOverTheSyntheticStatusCode() = runTest {
+        val exception = httpExceptionWithBody(
+            409,
+            """{"success":false,"code":"NO_EMAIL","error":"Add an email before deleting."}""",
+        )
+
+        val result = rawApiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("NO_EMAIL")
     }
 
     @Test

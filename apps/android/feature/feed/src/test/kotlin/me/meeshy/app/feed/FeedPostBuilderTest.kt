@@ -33,6 +33,7 @@ class FeedPostBuilderTest {
         viewCount: Int? = null,
         impressionCount: Int? = null,
         location: SharedPlace? = null,
+        distanceMeters: Double? = null,
     ) = ApiPost(
         id = "p1",
         content = content,
@@ -50,6 +51,7 @@ class FeedPostBuilderTest {
         viewCount = viewCount,
         impressionCount = impressionCount,
         location = location,
+        distanceMeters = distanceMeters,
     )
 
     @Test
@@ -336,5 +338,19 @@ class FeedPostBuilderTest {
         assertThat(FeedPostBuilder.build(post(), Prefs(), null, currentUserId = null).isAuthor).isFalse()
         val noAuthor = post(author = null)
         assertThat(FeedPostBuilder.build(noAuthor, Prefs(), null, currentUserId = "u1").isAuthor).isFalse()
+    }
+
+    // --- Nearby distance (only carried by GET /social/posts?scope=nearby) ---
+
+    @Test
+    fun build_distanceMetersPassesThroughUnchangedWhenThePostCarriesOne() {
+        val result = FeedPostBuilder.build(post(distanceMeters = 250.0), Prefs(), null)
+        assertThat(result.distanceMeters).isEqualTo(250.0)
+    }
+
+    @Test
+    fun build_distanceMetersDefaultsToNullWhenThePostCarriesNone() {
+        val result = FeedPostBuilder.build(post(), Prefs(), null)
+        assertThat(result.distanceMeters).isNull()
     }
 }

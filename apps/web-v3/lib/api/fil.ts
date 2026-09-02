@@ -1,10 +1,12 @@
+import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
+import { DELAI_DE_REPONSE_MS } from './passerelle';
 import {
   buildTranslationRecord,
   resolvePrismTranslation,
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
 
-import { baseDeLaPasserelle } from './links';
+import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
 
 /**
  * LE FIL D'UNE CONVERSATION — et la seule surface de la v3 où le PRISME
@@ -17,42 +19,157 @@ import { baseDeLaPasserelle } from './links';
  * `{ language, content }[]`, le résolveur attend une carte — et l'adaptateur
  * lui-même est partagé (`buildTranslationRecord`, remonté dans
  * `@meeshy/shared`). Ni l'ordre, ni la règle « la langue d'origine concourt à
- * son RANG », ni la normalisation ne sont recopiés.
+ * son RANG », ni la normalisation ne sont recopiés. La transcription d'un vocal
+ * descend le MÊME prisme, depuis la carte que `transcriptTranslationTexts`
+ * (`packages/shared/types/attachment-audio.ts`) est seul à dépouiller.
+ *
+ * DEUX PORTES, UNE CRÉANCE. Le membre présente son jeton en `Authorization:
+ * Bearer`, l'invité sa session en `X-Session-Token` — les deux formes que
+ * `createUnifiedAuthMiddleware` lit (`services/gateway/src/middleware/auth.ts:
+ * 705-708`), et les deux routes de ce module les acceptent toutes deux
+ * (`optionalAuth` = `{ requireAuth: false, allowAnonymous: true }`,
+ * `routes/conversations/index.ts:26-29`). Le fil de l'invité et le fil du
+ * membre sont donc LUS par la même fonction : c'est ce qui rend « deux portes,
+ * une seule vue » vrai jusque dans la donnée.
  *
  * `resolveUserLanguagesOrdered` ne porte PAS le repli `'fr'` — il rend une liste
  * vide quand rien n'est configuré. On l'ajoute, comme le fait `apps/web`, pour
  * rester en phase avec `resolveUserLanguage` (rang 5) et avec le repli
  * `["fr"]` d'Android.
+ *
+ * L'ADRESSE D'UNE PIÈCE JOINTE SE RÉSOUT ICI, ET NULLE PART AILLEURS. La
+ * passerelle sert `fileUrl` en chemin RELATIF (`UploadProcessor.getAttachmentPath`
+ * ⇒ `/api/v1/attachments/file/<chemin>`) : posé tel quel dans un `href`, il se
+ * résout contre l'ORIGINE DU DOCUMENT — `meeshy.me`, où l'hôte du frontend ne
+ * route pas `/api` — et le lien est un contrôle inerte. `urlDePiece` le résout
+ * contre l'origine PUBLIQUE de la passerelle, celle que le navigateur suit
+ * (le legacy fait de même : `apps/web/utils/attachment-url.ts`). Les lecteurs
+ * de `message()` DISENT cette origine : le serveur passe
+ * `baseDeLaPasserellePublique()`, le module de participation l'origine que le
+ * document lui a donnée.
  */
 
 export type Recuperateur = (url: string, options: RequestInit) => Promise<Response>;
 
+/**
+ * Ce que le lecteur PRÉSENTE à la passerelle. Le jeton d'un membre et la
+ * session d'un invité ne voyagent pas dans le même en-tête, et le module de
+ * participation présente les mêmes deux formes au socket
+ * (`AuthHandler.handleTokenAuthentication`, `auth.token` / `auth.sessionToken`).
+ */
+export type Creance =
+  | { readonly genre: 'membre'; readonly jeton: string }
+  | { readonly genre: 'invite'; readonly jeton: string };
+
+export const entetesDeCreance = (creance: Creance): Readonly<Record<string, string>> =>
+  creance.genre === 'membre'
+    ? { authorization: `Bearer ${creance.jeton}` }
+    : { 'x-session-token': creance.jeton };
+
+export type GenreDePiece = 'image' | 'audio' | 'video' | 'fichier';
+
+export type PieceJointe = {
+  readonly id: string;
+  readonly genre: GenreDePiece;
+  readonly nom: string;
+  readonly url: string;
+  /** Le poids ANNONCÉ avant tout téléchargement — `null` quand la passerelle ne le sert pas. */
+  readonly octets: number | null;
+  readonly dureeMs: number | null;
+  readonly largeur: number | null;
+  readonly hauteur: number | null;
+  /** La transcription d'un vocal, SERVIE dans la langue du lecteur quand elle existe. */
+  readonly transcription: string | null;
+  readonly langueDeTranscription: string | null;
+  readonly langueServie: string | null;
+};
+
+export type Reaction = {
+  readonly emoji: string;
+  readonly nombre: number;
+  /** La pastille est la MIENNE — appris d'un événement ou de mon geste ; la liste REST ne le sert pas (#4177). */
+  readonly mienne: boolean;
+};
+
+export type Accuse = 'envoye' | 'recu' | 'lu';
+
 export type Message = {
   readonly id: string;
+  readonly clientMessageId: string | null;
   readonly auteur: string;
+  readonly auteurId: string | null;
+  readonly anonyme: boolean;
   readonly deMoi: boolean;
+  readonly systeme: boolean;
   readonly texte: string;
+  /** Le texte d'ORIGINE, tel que l'auteur l'a écrit — ce que « Voir l'original » déplie. */
+  readonly texteOriginal: string;
   /** La langue SERVIE quand ce n'est pas l'originale — `null` sinon. */
   readonly langueServie: string | null;
   readonly langueOriginale: string | null;
+  /** La carte des traductions servies, gardée pour qu'une traduction ARRIVANT en direct redescende le prisme. */
+  readonly traductions: Readonly<Record<string, string>>;
   readonly ecritA: string | null;
   /** Un contenu que la protection interdit d'afficher : le texte est absent. */
   readonly protege: boolean;
+  readonly edite: boolean;
+  readonly supprime: boolean;
+  readonly pieces: readonly PieceJointe[];
+  readonly reactions: readonly Reaction[];
+  readonly accuse: Accuse;
 };
 
+/**
+ * LA PRÉSENCE SERVIE — deux listes de CLÉS, telles que `user:status` les
+ * nomme : le `User.id` d'un inscrit, le `Participant.id` d'un anonyme
+ * (`core-detail.ts:232`, `presenceChecker.isOnline(m.userId ?? m.id)`).
+ * `participants` dit QUI le document a nommés — les seuls dont une transition
+ * reçue peut changer le compte ; `presents` dit qui la passerelle SERT en ligne
+ * (directive 2026-08-25 : rien hors amitié acceptée) — jamais un chiffre
+ * fabriqué. Le compte « N en ligne » est la longueur de la seconde.
+ */
+export type Presence = {
+  readonly participants: readonly string[];
+  readonly presents: readonly string[];
+};
+
+export const AUCUNE_PRESENCE: Presence = { participants: [], presents: [] };
+
 export type Fil = {
+  /** L'identifiant de BASE de la conversation — celui des rooms et du `scope` de `/sync`. */
+  readonly id: string;
   readonly titre: string;
   readonly membres: number;
+  readonly presence: Presence;
   readonly messages: readonly Message[];
+  /** Le curseur `before` de la page plus ancienne, `null` quand le fil est lu en entier. */
+  readonly plusAncien: string | null;
 };
 
 export type Issue =
   | { readonly genre: 'fil'; readonly fil: Fil }
   | { readonly genre: 'introuvable' }
+  /** Le jeton vaut, la place existe, et c'est le LIEN qui ferme la lecture — `SHARE_LINK_EXPIRED`, `SHARE_LINK_MAX_USES`. */
+  | { readonly genre: 'lien-clos'; readonly code: string }
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'panne' };
 
-const DELAI_MS = 6000;
+const DELAI_MS = DELAI_DE_REPONSE_MS;
+
+/**
+ * LE PLAFOND D'UN MESSAGE — `MESSAGE_LIMITS.MAX_MESSAGE_LENGTH`
+ * (`services/gateway/src/config/message-limits.ts:13`), la valeur que la
+ * passerelle sert sans réglage d'environnement, appliquée par
+ * `SendMessageBodySchema` (`routes/conversations/messages-send.ts:41-48`) sur
+ * la route et par `validateMessageLength` (`MessageHandler.ts:362-370`) sur
+ * le socket. La v3 ne l'importe pas — la frontière de paquet ne se traverse
+ * pas — mais `__tests__/limite-du-message.test.ts` relit le fichier de la
+ * passerelle et rougit si la valeur y change. Le composeur l'ANNONCE
+ * (`maxlength`, compteur) et un refus qui le franchirait quand même — une
+ * passerelle réglée plus bas — rend le texte au champ, jamais une bulle en
+ * échec (`lib/realtime/participate.ts`).
+ */
+export const LONGUEUR_MAX_DU_MESSAGE = 4000;
 const REPLI_DE_LANGUE = 'fr';
 
 /**
@@ -72,15 +189,24 @@ const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
 const chaine = (valeur: unknown): string | null =>
   typeof valeur === 'string' && valeur !== '' ? valeur : null;
 
+const nombre = (valeur: unknown): number | null =>
+  typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : null;
+
+/** Une date servie sous sa forme ISO, ou telle que `JSON.stringify` l'a rendue depuis un `Date`. */
+const instant = (valeur: unknown): string | null => {
+  const brut = chaine(valeur);
+  return brut !== null && !Number.isNaN(Date.parse(brut)) ? brut : null;
+};
+
 const demande = (
   url: string,
-  jeton: string,
+  creance: Creance,
   recuperer: Recuperateur | undefined,
   options: RequestInit = {},
 ): Promise<Response | null> =>
   (recuperer ?? ((u, o) => fetch(u, o)))(url, {
     ...options,
-    headers: { accept: 'application/json', authorization: `Bearer ${jeton}`, ...options.headers },
+    headers: { accept: 'application/json', ...entetesDeCreance(creance), ...options.headers },
     cache: 'no-store',
     signal: AbortSignal.timeout(DELAI_MS),
   }).catch(() => null);
@@ -104,10 +230,111 @@ export const languesDuLecteur = (lecteur: Prisme, localeAppareil?: string): read
 const estProtege = (brut: Readonly<Record<string, unknown>>): boolean =>
   brut.isViewOnce === true || brut.isBlurred === true || chaine(brut.expiresAt) !== null;
 
+const GENRE_PAR_MIME: readonly (readonly [string, GenreDePiece])[] = [
+  ['image/', 'image'],
+  ['audio/', 'audio'],
+  ['video/', 'video'],
+];
+
+const genreDePiece = (mime: string | null): GenreDePiece =>
+  GENRE_PAR_MIME.find(([prefixe]) => mime?.startsWith(prefixe))?.[1] ?? 'fichier';
+
+const CHEMIN_DES_FICHIERS = '/api/v1/attachments/file/';
+
+/**
+ * `fileUrl` tel que la passerelle le sert, résolu sur SON origine publique :
+ * une adresse absolue reste telle quelle (forme héritée qui fonctionne), un
+ * chemin absolu prend l'origine, une CLÉ de stockage (`2025/12/<id>/f.pdf`,
+ * la seule forme en base depuis #4324) prend la route des fichiers — les trois
+ * formes que le legacy reconnaît (`buildAttachmentUrl`).
+ */
+export const urlDePiece = (fileUrl: string, origine: string): string => {
+  if (/^https?:\/\//.test(fileUrl)) return fileUrl;
+  const base = origine.replace(/\/+$/, '');
+  if (fileUrl.startsWith('/')) return `${base}${fileUrl}`;
+  return `${base}${CHEMIN_DES_FICHIERS}${encodeURIComponent(fileUrl)}`;
+};
+
+const piece = (
+  brut: Readonly<Record<string, unknown>>,
+  langues: readonly string[],
+  origine: string,
+): PieceJointe | null => {
+  const id = chaine(brut.id);
+  const servie = chaine(brut.fileUrl);
+  if (id === null || servie === null) return null;
+  const url = urlDePiece(servie, origine);
+
+  const transcription = objet(brut.transcription);
+  const langueDeTranscription = chaine(transcription?.language);
+  const traduite = resolvePrismTranslation({
+    translations: transcriptTranslationTexts(brut.translations),
+    originalLanguage: langueDeTranscription,
+    preferredLanguages: langues,
+  });
+
+  return {
+    id,
+    genre: genreDePiece(chaine(brut.mimeType)),
+    nom: chaine(brut.originalName) ?? chaine(brut.fileName) ?? 'Pièce jointe',
+    url,
+    octets: nombre(brut.fileSize),
+    dureeMs: nombre(brut.duration),
+    largeur: nombre(brut.width),
+    hauteur: nombre(brut.height),
+    transcription: traduite?.text ?? chaine(transcription?.text),
+    langueDeTranscription,
+    langueServie: traduite?.language ?? null,
+  };
+};
+
+const pieces = (brut: unknown, langues: readonly string[], origine: string): readonly PieceJointe[] =>
+  (Array.isArray(brut) ? brut : [])
+    .map((candidat) => objet(candidat))
+    .filter((candidat): candidat is Readonly<Record<string, unknown>> => candidat !== null)
+    .map((candidat) => piece(candidat, langues, origine))
+    .filter((candidat): candidat is PieceJointe => candidat !== null);
+
+/** `reactionSummary` est une carte `emoji → compte` (`ReactionService.getEmojiAggregation`). */
+export const reactions = (brut: unknown): readonly Reaction[] => {
+  const carte = objet(brut);
+  if (carte === null) return [];
+  return Object.entries(carte)
+    .map(([emoji, compte]) => ({ emoji, nombre: nombre(compte) ?? 0, mienne: false }))
+    .filter((reaction) => reaction.nombre > 0);
+};
+
+/**
+ * L'ACCUSÉ, lu sur les compteurs que la liste sert — calculés, jamais lus de la
+ * ligne (`messages-list-query.ts:533-552`). `readByAllAt` est la preuve que
+ * tous ont lu ; en deçà, un seul destinataire servi vaut « reçu ».
+ */
+const accuse = (brut: Readonly<Record<string, unknown>>): Accuse => {
+  if (instant(brut.readByAllAt) !== null || (nombre(brut.readCount) ?? 0) > 0) return 'lu';
+  if (instant(brut.deliveredToAllAt) !== null || (nombre(brut.deliveredCount) ?? 0) > 0) return 'recu';
+  return 'envoye';
+};
+
+/**
+ * Un message, tel qu'il arrive de la liste REST OU du fil `message:new` : les
+ * deux charges portent les mêmes noms pour ce que ce module lit
+ * (`messages-list-query.ts:487-600`, `messageNewPayload.ts:126-176`).
+ *
+ * `moi` est l'identité que le lecteur COMPARE : le `User.id` d'un membre, le
+ * `Participant.id` d'un invité — la passerelle sert `senderId` sous la première
+ * forme pour un auteur inscrit et sous la seconde pour un auteur anonyme, et
+ * garde le brut sous `senderParticipantId` ; les deux sont regardés.
+ *
+ * `origine` est l'origine PUBLIQUE de la passerelle, sur laquelle les pièces
+ * jointes se résolvent (`urlDePiece`) : l'appelant la DIT, parce que ce module
+ * est lu par le serveur ET par le module de participation, et qu'un seul des
+ * deux peut la lire dans l'environnement.
+ */
 export const message = (
   brut: Readonly<Record<string, unknown>>,
   moi: string | null,
   langues: readonly string[],
+  origine: string,
 ): Message | null => {
   const id = chaine(brut.id);
   if (id === null) return null;
@@ -115,49 +342,119 @@ export const message = (
   const expediteur = objet(brut.sender);
   const langueOriginale = chaine(brut.originalLanguage);
   const protege = estProtege(brut);
+  const supprime = instant(brut.deletedAt) !== null;
+  const traductions = protege ? {} : buildTranslationRecord(brut.translations);
+  const texteOriginal = protege ? PLACEHOLDER_PROTEGE : (chaine(brut.content) ?? '');
 
   const servie = protege
     ? null
     : resolvePrismTranslation({
-        translations: buildTranslationRecord(brut.translations),
+        translations: traductions,
         originalLanguage: langueOriginale,
         preferredLanguages: langues,
       });
 
+  const auteurId = chaine(brut.senderId) ?? chaine(expediteur?.id);
+  const auteurParticipant = chaine(brut.senderParticipantId);
+
   return {
     id,
+    clientMessageId: chaine(brut.clientMessageId),
     auteur: chaine(expediteur?.displayName) ?? chaine(expediteur?.username) ?? 'Quelqu’un',
-    deMoi: moi !== null && chaine(brut.senderId) === moi,
-    texte: protege ? PLACEHOLDER_PROTEGE : (servie?.text ?? chaine(brut.content) ?? ''),
+    auteurId,
+    anonyme: chaine(expediteur?.type) === 'anonymous',
+    deMoi: moi !== null && (auteurId === moi || auteurParticipant === moi),
+    systeme: chaine(brut.messageType) === 'system',
+    texte: supprime ? '' : (servie?.text ?? texteOriginal),
+    texteOriginal,
     langueServie: servie?.language ?? null,
     langueOriginale,
-    ecritA: chaine(brut.createdAt),
+    traductions,
+    ecritA: instant(brut.createdAt),
     protege,
+    edite: brut.isEdited === true,
+    supprime,
+    pieces: protege || supprime ? [] : pieces(brut.attachments, langues, origine),
+    reactions: reactions(brut.reactionSummary),
+    accuse: accuse(brut),
   };
+};
+
+export const messages = (
+  bruts: unknown,
+  moi: string | null,
+  langues: readonly string[],
+  origine: string,
+): readonly Message[] =>
+  (Array.isArray(bruts) ? bruts : [])
+    .map((brut) => objet(brut))
+    .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+    .map((brut) => message(brut, moi, langues, origine))
+    .filter((m): m is Message => m !== null);
+
+const cleDePresence = (participant: Readonly<Record<string, unknown>>): string | null =>
+  chaine(participant.userId) ?? chaine(participant.id);
+
+/** Les participants SERVIS par `GET /conversations/:id` (`core-detail.ts:231-236`, `isOnline` gardé par la visibilité de présence), réduits à leurs clés. */
+const presenceServie = (participants: unknown): Presence => {
+  const lignes = (Array.isArray(participants) ? participants : [])
+    .map((participant) => objet(participant))
+    .filter((participant): participant is Readonly<Record<string, unknown>> => participant !== null)
+    .map((participant) => ({ cle: cleDePresence(participant), enLigne: participant.isOnline === true }))
+    .filter((participant): participant is { readonly cle: string; readonly enLigne: boolean } => participant.cle !== null);
+  return {
+    participants: lignes.map((ligne) => ligne.cle),
+    presents: lignes.filter((ligne) => ligne.enLigne).map((ligne) => ligne.cle),
+  };
+};
+
+/**
+ * Un 403 que la liste émet AU NOM DU LIEN du participant — `SHARE_LINK_EXPIRED`
+ * quand il est échu, `SHARE_LINK_MAX_USES` quand `currentUses >= maxUses`, le
+ * DERNIER admis compris (`routes/conversations/messages-list.ts:270-278`, gagé
+ * par `messages-routes.test.ts:854-885`). Le jeton vaut, la place existe : ce
+ * n'est ni une session expirée ni un fil introuvable, c'est l'état G du
+ * § 6.3 vu depuis la liste. Le code voyage dans `code` (`sendForbidden(reply,
+ * message, { code })`, `utils/response.ts:140-146`).
+ */
+const codeDeRefusDuLien = async (reponse: Response): Promise<string | null> => {
+  if (reponse.status !== 403) return null;
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  const code = chaine(enveloppe?.code) ?? chaine(enveloppe?.error);
+  return code !== null && code.startsWith('SHARE_LINK_') ? code : null;
 };
 
 export const fil = async ({
   cle,
-  jeton,
+  creance,
   moi,
   langues,
   limite = 40,
+  avant,
   base,
+  origine,
   recuperer,
 }: {
   readonly cle: string;
-  readonly jeton: string;
+  readonly creance: Creance;
   readonly moi: string | null;
   readonly langues: readonly string[];
   readonly limite?: number;
+  /** L'identifiant du message le plus ancien déjà lu — la page servie s'arrête AVANT lui. */
+  readonly avant?: string | null;
+  /** L'adresse que le SERVEUR appelle — interne au réseau du conteneur. */
   readonly base?: string;
+  /** L'origine que le NAVIGATEUR suit pour une pièce jointe — publique. */
+  readonly origine?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Issue> => {
   const racine = `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(cle)}`;
+  const originePublique = origine ?? baseDeLaPasserellePublique();
+  const curseur = avant === undefined || avant === null ? '' : `&before=${encodeURIComponent(avant)}`;
 
   const [detail, liste] = await Promise.all([
-    demande(racine, jeton, recuperer),
-    demande(`${racine}/messages?limit=${limite}`, jeton, recuperer),
+    demande(racine, creance, recuperer),
+    demande(`${racine}/messages?limit=${limite}${curseur}`, creance, recuperer),
   ]);
 
   if (detail === null || liste === null) return { genre: 'panne' };
@@ -178,6 +475,8 @@ export const fil = async ({
   //         identifiants — c'est le patron `resolveConsumptionTarget` du § 5.1,
   //         déjà appliqué aux jetons de lien.
   if (detail.status === 401 || liste.status === 401) return { genre: 'session-expiree' };
+  const refusDuLien = (await codeDeRefusDuLien(detail)) ?? (await codeDeRefusDuLien(liste));
+  if (refusDuLien !== null) return { genre: 'lien-clos', code: refusDuLien };
   if ([detail.status, liste.status].some((statut) => statut === 403 || statut === 404)) {
     return { genre: 'introuvable' };
   }
@@ -190,56 +489,218 @@ export const fil = async ({
     return { genre: 'panne' };
   }
 
-  const messages = enveloppeListe.data
-    .map((brut) => objet(brut))
-    .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
-    .map((brut) => message(brut, moi, langues))
-    .filter((m): m is Message => m !== null);
+  const pagination = objet(enveloppeListe.cursorPagination);
+  const id = chaine(conversation.id);
+  if (id === null) return { genre: 'panne' };
 
   return {
     genre: 'fil',
     fil: {
+      id,
       titre: chaine(conversation.title) ?? chaine(conversation.identifier) ?? 'Conversation',
-      membres: typeof conversation.memberCount === 'number' ? conversation.memberCount : 0,
+      membres: nombre(conversation.memberCount) ?? 0,
+      presence: presenceServie(conversation.participants),
       // La passerelle sert du plus RÉCENT au plus ancien ; un fil se lit dans
       // l'autre sens.
-      messages: [...messages].reverse(),
+      messages: [...messages(enveloppeListe.data, moi, langues, originePublique)].reverse(),
+      plusAncien: pagination?.hasMore === true ? chaine(pagination.nextCursor) : null,
     },
   };
 };
 
-export type Envoi = { readonly genre: 'envoye' } | { readonly genre: 'refus'; readonly message: string };
+export type Envoi =
+  | { readonly genre: 'envoye'; readonly id: string | null }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
 
 const REFUS_ENVOI = 'Le message n’a pas pu être envoyé. Réessayez.';
 
 export const envoie = async ({
   cle,
-  jeton,
+  creance,
   texte,
+  clientMessageId,
+  langue,
+  pieces: identifiantsDePieces,
   base,
   recuperer,
 }: {
   readonly cle: string;
-  readonly jeton: string;
+  readonly creance: Creance;
   readonly texte: string;
+  /** `cid_<uuid v4>` — la clé d'idempotence que `message:new` renvoie à l'expéditeur seul. */
+  readonly clientMessageId?: string;
+  readonly langue?: string;
+  /** Les `attachmentIds` d'un téléversement préalable (`messages-send.ts:155`). */
+  readonly pieces?: readonly string[];
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Envoi> => {
   const reponse = await demande(
     `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(cle)}/messages`,
-    jeton,
+    creance,
     recuperer,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: texte }),
+      body: JSON.stringify({
+        content: texte,
+        ...(clientMessageId === undefined ? {} : { clientMessageId }),
+        ...(langue === undefined ? {} : { originalLanguage: langue }),
+        ...(identifiantsDePieces === undefined || identifiantsDePieces.length === 0 ? {} : { attachmentIds: identifiantsDePieces }),
+      }),
     },
   );
 
-  if (reponse === null) return { genre: 'refus', message: REFUS_ENVOI };
+  if (reponse === null) return { genre: 'refus', message: REFUS_ENVOI, statut: null };
 
   const enveloppe = objet(await reponse.json().catch(() => null));
-  if (enveloppe?.success === true) return { genre: 'envoye' };
+  if (enveloppe?.success === true) return { genre: 'envoye', id: chaine(objet(enveloppe.data)?.id) };
 
-  return { genre: 'refus', message: chaine(objet(enveloppe?.error)?.message) ?? REFUS_ENVOI };
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_ENVOI,
+    statut: reponse.status,
+  };
 };
+
+export type Televersement =
+  | { readonly genre: 'televerse'; readonly identifiants: readonly string[] }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_TELEVERSEMENT = 'La pièce jointe n’a pas pu être envoyée.';
+
+/**
+ * `POST /api/v1/attachments/upload` (`routes/attachments/upload.ts:55`,
+ * `authOptional` — membre ET invité, `:287-311` : un invité est jugé sur
+ * `allowAnonymousFiles` / `allowAnonymousImages` et sur les OCTETS du fichier) :
+ * multipart, un champ par fichier, `{ success, data: { attachments: [{ id, … }] } }`.
+ * Ce module ne sait rien du poids admis : c'est la passerelle qui refuse, et
+ * son refus est SERVI au lecteur — jamais avalé.
+ */
+export const televerse = async ({
+  creance,
+  fichiers,
+  base,
+  recuperer,
+}: {
+  readonly creance: Creance;
+  readonly fichiers: readonly File[];
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Televersement> => {
+  const corps = new FormData();
+  fichiers.forEach((fichier) => corps.append('files', fichier, fichier.name));
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}/api/v1/attachments/upload`, creance, recuperer, {
+    method: 'POST',
+    body: corps,
+  });
+  if (reponse === null) return { genre: 'refus', message: REFUS_TELEVERSEMENT, statut: null };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  const pieces = objet(enveloppe?.data)?.attachments;
+  const identifiants = (Array.isArray(pieces) ? pieces : [])
+    .map((candidat) => chaine(objet(candidat)?.id))
+    .filter((id): id is string => id !== null);
+  if (enveloppe?.success === true && identifiants.length > 0) return { genre: 'televerse', identifiants };
+
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_TELEVERSEMENT,
+    statut: reponse.status,
+  };
+};
+
+export type ReactionPosee =
+  | {
+      readonly genre: 'fait';
+      /** `POST /reactions` a rendu 200 — la pastille était DÉJÀ la mienne (`unchanged`) — plutôt que 201. */
+      readonly dejaLa: boolean;
+    }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_REACTION = 'La réaction n’a pas pu être enregistrée.';
+
+/**
+ * `POST /api/v1/reactions` `{ messageId, emoji }` (`routes/reactions.ts:78`,
+ * `requiredAuth` avec `allowAnonymous: true` — « les anonymes peuvent aussi
+ * réagir ») et `DELETE /api/v1/reactions/:messageId/:emoji` (`:290`) — les deux
+ * portes REST par lesquelles le formulaire d'une pastille bascule un emoji
+ * sans JavaScript ; le module de participation, lui, émet `reaction:add` /
+ * `reaction:remove` sur le socket (`ReactionHandler.ts`).
+ */
+export const reagis = async ({
+  creance,
+  messageId,
+  emoji,
+  retirer,
+  base,
+  recuperer,
+}: {
+  readonly creance: Creance;
+  readonly messageId: string;
+  readonly emoji: string;
+  readonly retirer: boolean;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<ReactionPosee> => {
+  const racine = `${base ?? baseDeLaPasserelle()}/api/v1/reactions`;
+  const reponse = retirer
+    ? await demande(`${racine}/${encodeURIComponent(messageId)}/${encodeURIComponent(emoji)}`, creance, recuperer, { method: 'DELETE' })
+    : await demande(racine, creance, recuperer, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageId, emoji }),
+      });
+  if (reponse === null) return { genre: 'refus', message: REFUS_REACTION, statut: null };
+  // Retirer une réaction déjà absente est un 200 IDEMPOTENT pour la passerelle
+  // (`routes/reactions.ts:379-386`, « the caller's desired end-state is
+  // achieved ») — un état atteint pour le lecteur : la pastille n'est plus la
+  // sienne. Une passerelle plus ancienne rendait 404 ; il dit la même chose.
+  if (reponse.ok || (retirer && reponse.status === 404)) return { genre: 'fait', dejaLa: !retirer && reponse.status === 200 };
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_REACTION,
+    statut: reponse.status,
+  };
+};
+
+/**
+ * `POST /api/v1/conversations/:id/receipts` `{ type: 'read', messageIds }`
+ * (`routes/conversations/receipts.ts:946`, `requireAuth` + `allowAnonymous` :
+ * « un invité de lien est un participant de plein droit […] le serveur COMPTE
+ * ses non-lus ») — la porte par laquelle le fil DIT ce qui a été affiché. Les
+ * messages du lecteur lui-même sont écartés par la passerelle (« un accusé de
+ * soi à soi n'apprend rien ») ; on ne les rapporte pas. Un lot vide n'est pas
+ * envoyé : `messageIds: []` signifierait « rien n'a été affiché ».
+ */
+export const accuseLecture = async ({
+  cle,
+  creance,
+  messageIds,
+  base,
+  recuperer,
+}: {
+  readonly cle: string;
+  readonly creance: Creance;
+  readonly messageIds: readonly string[];
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<boolean> => {
+  if (messageIds.length === 0) return false;
+  const reponse = await demande(
+    `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(cle)}/receipts`,
+    creance,
+    recuperer,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'read', messageIds }),
+    },
+  );
+  return reponse !== null && reponse.ok;
+};
+
+/** Les identifiants à ACCUSER : ce qui est affiché et n'est pas de moi. */
+export const aAccuser = (lus: readonly Message[]): readonly string[] =>
+  lus.filter((m) => !m.deMoi && !m.systeme).map((m) => m.id);

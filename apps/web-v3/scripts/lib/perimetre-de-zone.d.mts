@@ -6,6 +6,19 @@ export declare const PREFIXE_DE_ZONE: string;
 
 export declare const ZONE_DACTIFS: string;
 
+export declare const ZONE_DU_TEMPS_REEL: string;
+
+export type ReecritureDeZone = {
+  readonly source: string;
+  readonly destination: string;
+};
+
+export declare const REECRITURES_DE_ZONE: readonly ReecritureDeZone[];
+
+export declare const routeDeReecriture: (motif: string) => string;
+
+export declare const cheminsServisParReecriture: (routesServies: readonly string[]) => readonly string[];
+
 export type CheminReclame = {
   readonly matcher: 'Path' | 'PathPrefix';
   readonly valeur: string;

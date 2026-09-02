@@ -32,6 +32,10 @@ public sealed interface CoalesceDecision {
  *   block (or unblock) keeps only the latest (idempotent terminal state);
  * - a pin/unpin toggle of the same message cancels itself, and a repeated
  *   pin (or unpin) keeps only the latest (same idempotent-terminal rule);
+ * - a like/unlike toggle of the same post cancels itself, and a repeated
+ *   like (or unlike) keeps only the latest (same idempotent-terminal rule);
+ * - a bookmark/unbookmark toggle of the same post cancels itself, and a repeated
+ *   bookmark (or unbookmark) keeps only the latest (same idempotent-terminal rule);
  * - a repeated friend request to the same receiver keeps only the latest
  *   (only one request can exist — idempotent send, latest greeting wins);
  * - a repeated profile edit (same user id) keeps only the latest snapshot
@@ -67,6 +71,12 @@ public object OutboxCoalescer {
             OutboxKind.UNBLOCK_USER -> terminalToggle(incoming, sameTarget, OutboxKind.BLOCK_USER, OutboxKind.UNBLOCK_USER)
             OutboxKind.PIN_MESSAGE -> terminalToggle(incoming, sameTarget, OutboxKind.UNPIN_MESSAGE, OutboxKind.PIN_MESSAGE)
             OutboxKind.UNPIN_MESSAGE -> terminalToggle(incoming, sameTarget, OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE)
+            OutboxKind.LIKE_POST -> terminalToggle(incoming, sameTarget, OutboxKind.UNLIKE_POST, OutboxKind.LIKE_POST)
+            OutboxKind.UNLIKE_POST -> terminalToggle(incoming, sameTarget, OutboxKind.LIKE_POST, OutboxKind.UNLIKE_POST)
+            OutboxKind.BOOKMARK_POST ->
+                terminalToggle(incoming, sameTarget, OutboxKind.UNBOOKMARK_POST, OutboxKind.BOOKMARK_POST)
+            OutboxKind.UNBOOKMARK_POST ->
+                terminalToggle(incoming, sameTarget, OutboxKind.BOOKMARK_POST, OutboxKind.UNBOOKMARK_POST)
             OutboxKind.SEND_FRIEND_REQUEST ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)

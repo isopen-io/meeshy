@@ -6,5 +6,17 @@
     <string name="reels_like">J\'aime</string>
     <string name="reels_comments">Commentaires</string>
     <string name="reels_repost">Reposter</string>
+    <string name="reels_bookmark">Enregistrer</string>
+    <string name="reels_unbookmark">Retirer l\'enregistrement</string>
     <string name="reels_share">Partager</string>
+    <string name="reels_comments_title">Commentaires</string>
+    <string name="reels_comments_count">%1$d commentaires</string>
+    <string name="reels_comments_empty_title">Aucun commentaire</string>
+    <string name="reels_comments_empty_subtitle">Soyez le premier à commenter.</string>
+    <string name="reels_comments_loading">Chargement des commentaires…</string>
+    <string name="reels_comments_error">Impossible de charger les commentaires</string>
+    <string name="reels_comments_input_hint">Ajouter un commentaire…</string>
+    <string name="reels_comments_send">Envoyer</string>
+    <string name="reels_comments_failed">Échec — appuyez pour réessayer</string>
+    <string name="reels_comments_view_post">Voir le post</string>
 </resources>
