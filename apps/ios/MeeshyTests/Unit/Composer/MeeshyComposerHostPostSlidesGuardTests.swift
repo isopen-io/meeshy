@@ -42,9 +42,27 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// au lieu de la poser sur la scène courante.
     func test_sync_isGatedOnThePostProfile() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("funcsyncPostMediaIntoSlides(){guardselectedFormat==.postelse{return}"),
-            "`syncPostMediaIntoSlides` doit sortir immédiatement hors du profil Post — une slide par "
-                + "média est la sémantique du POST, pas celle de Story ni de Réel (modèle § 3).")
+        // **Le gate s'est ÉLARGI le 2026-09-02** (#4879), et cette garde le suit.
+        //
+        // Il lisait `guardselectedFormat==.postelse{return}` : une slide par
+        // média est bien la sémantique du POST (modèle § 3), et sortir hors de
+        // ce profil était juste — tant que le seul chemin d'entrée était la
+        // rangée du document.
+        //
+        // La porte MÉDIA du rail en est un second, et elle POSE sur la scène
+        // courante quel que soit le format. Sous l'ancien gate, une photo posée
+        // par le rail en Story n'atteignait jamais la slide : le canvas restait
+        // noir, et rien ne le disait.
+        //
+        // > Un gate nommé d'après UN chemin d'entrée se périme au second. Ce
+        // > qu'il garde est la sémantique « une slide par média », pas le
+        // > format qui, seul, la produisait hier.
+        XCTAssertTrue(compacted.contains("guardselectedFormat==.post||posePourLaSceneelse{return}"),
+            "`syncPostMediaIntoSlides` sort hors du profil Post — SAUF pour ce que le rail vient de "
+                + "poser sur la scène : une photo posée en Story doit atteindre sa slide (#4879).")
+        XCTAssertTrue(compacted.contains("letposePourLaScene=documentContentMedia.contains{"),
+            "… et la condition se DÉRIVE de ce qui a été posé, jamais d'un drapeau que le site "
+                + "d'appel aurait à tenir à jour.")
     }
 
     /// La première slide est RÉEMPLOYÉE : un composer neuf naît avec une slide
