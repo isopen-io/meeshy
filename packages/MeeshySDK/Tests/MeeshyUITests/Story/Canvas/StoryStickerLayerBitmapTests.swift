@@ -40,6 +40,14 @@ final class StoryStickerLayerBitmapTests: XCTestCase {
             }
         }
 
+        /// Le nombre de chargements suspendus sous cette adresse — le témoin
+        /// l'attend AVANT de résoudre : depuis le fil principal, `finish` est
+        /// enfilé sur l'acteur avant que la tâche de la couche n'ait pu y
+        /// suspendre, et un `finish` sans continuation ne résout rien.
+        func pendingCount(_ urlString: String) -> Int {
+            pending[urlString]?.count ?? 0
+        }
+
         func finish(_ urlString: String, with image: UIImage?) {
             guard var queue = pending[urlString], !queue.isEmpty else { return }
             let continuation = queue.removeFirst()
@@ -197,6 +205,7 @@ final class StoryStickerLayerBitmapTests: XCTestCase {
         let task = layer._currentImageLoadTaskForTesting()
         XCTAssertNotNil(task, "un sticker publié va chercher son bitmap")
 
+        while await stub.pendingCount(url) == 0 { await Task.yield() }
         await stub.finish(url, with: publié)
         _ = await task?.value
         XCTAssertTrue(paints(layer, publié))

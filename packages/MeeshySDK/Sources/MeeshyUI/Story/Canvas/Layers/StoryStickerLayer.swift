@@ -187,10 +187,13 @@ public final class StoryStickerLayer: CALayer {
                                     resolver: (@Sendable (String) -> URL?)?) {
         let hasPublishedAsset = !sticker.postMediaId.isEmpty
         let asynchronousReader: ImageCacheReader? = imageCache is ComposerImageCacheReader ? nil : imageCache
-        guard hasPublishedAsset || asynchronousReader != nil else { return }
+        let resolvedURL: URL? = hasPublishedAsset ? resolver?(sticker.postMediaId) : nil
+        // Un sticker qui n'adresse rien — ni lecteur asynchrone, ni adresse
+        // résolue — ne lance aucune tâche : une cover ou un export sans
+        // résolveur en créerait une par couche pour la voir sortir aussitôt.
+        guard asynchronousReader != nil || resolvedURL != nil else { return }
 
         let keys = Self.bitmapCacheKeys(for: sticker)
-        let resolvedURL: URL? = hasPublishedAsset ? resolver?(sticker.postMediaId) : nil
         let loader = imageLoader
         currentLoadTask = Task { @MainActor in
             // Une configuration qui a supplanté celle-ci a déjà annulé la tâche :
