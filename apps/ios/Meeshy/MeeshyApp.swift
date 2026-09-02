@@ -157,22 +157,12 @@ struct MeeshyApp: App {
                 )) {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
-                .overlay(alignment: .top) {
-                    if let toast = toastManager.currentToast {
-                        FeedbackToastView(toast: toast)
-                            .transition(.feedbackToastReveal)
-                            .padding(.top, MeeshySpacing.xxl)
-                            .onTapGesture {
-                                if let action = toastManager.onTapAction {
-                                    action()
-                                }
-                                toastManager.dismiss()
-                            }
-                            .accessibilityIdentifier(MeeshyA11yID.toastContainer)
-                            .zIndex(999)
-                    }
-                }
-                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
+                // **L'hôte des toasts est un modificateur depuis #4872.** Il
+                // vivait ici, et ici SEULEMENT : un `fullScreenCover` — le
+                // composer — le couvrait, donc tout toast levé de là-haut était
+                // invisible. La forme n'a pas changé ; sa PLACE peut désormais
+                // se répéter sans se recopier.
+                .feedbackToastOverlay()
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }

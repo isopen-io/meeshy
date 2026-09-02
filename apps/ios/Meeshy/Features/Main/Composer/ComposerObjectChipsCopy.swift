@@ -108,6 +108,13 @@ nonisolated enum ComposerObjectChipsCopy {
     static var kindText: String { String(localized: "composer.chip.kind.text", defaultValue: "TEXTE", bundle: .main) }
     static var kindMedia: String { String(localized: "composer.chip.kind.media", defaultValue: "MÉDIA", bundle: .main) }
     static var kindSticker: String { String(localized: "composer.chip.kind.sticker", defaultValue: "STICKER", bundle: .main) }
+    /// **Les deux mots qui manquaient au catalogue** (#4559, servis le
+    /// 2026-09-02). Leur absence était la RAISON écrite pour laquelle un son et
+    /// un lieu sélectionnés n'avaient aucun badge — le canvas ne disait pas ce
+    /// que l'auteur venait de toucher. Ils sont posés en sept langues, comme
+    /// leurs trois voisins, et le cliquet de complétude les couvre désormais.
+    static var kindAudio: String { String(localized: "composer.chip.kind.audio", defaultValue: "SON", bundle: .main) }
+    static var kindLocation: String { String(localized: "composer.chip.kind.location", defaultValue: "LIEU", bundle: .main) }
 
     static var planeForeground: String { String(localized: "composer.chip.plan.foreground", defaultValue: "PLAN FG", bundle: .main) }
     static var planeBackground: String { String(localized: "composer.chip.plan.background", defaultValue: "PLAN BG", bundle: .main) }

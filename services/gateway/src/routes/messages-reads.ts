@@ -8,6 +8,7 @@ import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentFullSelect } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
+import { hoistStickerOnto } from '../services/stickers/messageSticker';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, loadReaderHistoryFloor, historyReaderFromAuthContext, type HistoryFloorJoin } from '../services/historyFloor';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { validatePagination } from '../utils/pagination';
@@ -361,7 +362,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // hoistLocationOnto hisse metadata.location en champ top-level `location`
       // — Lot 1 : ce message est affiché en entier, sans hoist la position
       // resterait invisible même si elle a bien été validée à l'écriture.
-      return sendSuccess(reply, hoistLocationOnto({
+      // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
+      return sendSuccess(reply, hoistStickerOnto(hoistLocationOnto({
         ...message,
         sender: gatedSender,
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
@@ -405,7 +407,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           readCount: summary?.readCount ?? 0,
           recipientCount: summary?.totalMembers ?? 0
         }
-      } as unknown as Record<string, unknown>));
+      } as unknown as Record<string, unknown>)));
 
     } catch (error) {
       logger.error('Error fetching message', error as Error);

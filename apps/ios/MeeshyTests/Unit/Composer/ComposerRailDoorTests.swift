@@ -923,7 +923,7 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// > voulait. Un test qui part de l'ÉTAT traverse la traduction ; un test
     /// > qui part de la VALEUR la présuppose.
     func test_unDocumentAvecUneScene_sertLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: true, editsScene: true)
+        let vue = ComposerMountedView.mounted(surface: .document, hasScene: true)
         XCTAssertEqual(vue, .scene, "La scène incrustée est un document QUI A une scène.")
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: vue),
                       "C'est l'écran où poser un sticker, avancer un objet et changer le fond "
@@ -933,7 +933,7 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// Et le document NU ne le sert toujours pas — le contrepoids du témoin
     /// précédent, sans lequel « tout servir » le rendrait vert.
     func test_unDocumentSansScene_neSertPasLHistorique() {
-        let vue = ComposerMountedView.mounted(surface: .document, hasScene: false, editsScene: false)
+        let vue = ComposerMountedView.mounted(surface: .document, hasScene: false)
         XCTAssertEqual(vue, .document)
         XCTAssertFalse(ComposerHistoryService.servesHistory(on: vue))
     }
@@ -1502,10 +1502,18 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     /// **Poser un texte OUVRE son éditeur, dans le même geste.** Une coquille
     /// posée sans éditeur est invisible et ne se remplit jamais — un contrôle
     /// sans effet.
+    ///
+    /// Ancre RELOCALISÉE le 2026-09-02 : depuis #4634, l'ouverture passe par le
+    /// site unique `openObjectEditor(_:)` — « LA façon d'éditer un texte, une
+    /// seule, quelle que soit la porte » — qui appelle `enterTextEditingMode`
+    /// avec l'identifiant reçu. La garde suit l'appel jusqu'à ce site plutôt
+    /// que d'exiger le littéral d'avant, qui n'existe plus nulle part.
     func test_laPorteTexte_poseEtOuvreLEditeur() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("ifletobjet=viewModel.addText(){"))
-        XCTAssertTrue(source.contains("viewModel.enterTextEditingMode(textId:objet.id)"))
+        XCTAssertTrue(source.contains("ifletobjet=viewModel.addText(){openObjectEditor(objet.id)}"),
+                      "Poser puis ouvrir, dans le même geste, par le site unique d'édition.")
+        XCTAssertTrue(source.contains("viewModel.enterTextEditingMode(textId:id)"),
+                      "`openObjectEditor` doit bien entrer en édition sur l'objet reçu.")
     }
 
     /// **L'édition se fait EN LIGNE, sur la scène.** Sans ces trois relais, le

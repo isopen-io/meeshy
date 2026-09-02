@@ -640,304 +640,6 @@ enum StoryGestureDecisions {
     }
 }
 
-// MARK: - Story Composer Bar
-
-/// **UNIQUE composer** du story viewer (réutilisé en mode story-reply ET
-/// en mode comment-reply). Extrait de `StoryViewerView.storyComposerBar`
-/// pour que le wiring `UniversalComposerBar` soit son propre type-metadata
-/// unit.
-///
-/// Spec user 2026-05-28 : « Il faut avoir qu'une seule zone de saisie de
-/// commentaire ». L'overlay commentaires affiche uniquement la LISTE +
-/// actions reply/like ; le composer reste celui-ci, toujours présent en bas
-/// de l'écran. Quand l'utilisateur tape « Répondre » sur un commentaire,
-/// `replyingToStoryComment` est set → une banner « Réponse à X » apparaît
-/// au-dessus de la rangée de saisie de CE composer (pas dans un second
-/// composer).
-struct StoryComposerBarView: View {
-    let accentColor: String
-    let storyId: String?
-
-    @Binding var composerLanguage: String
-    @Binding var commentEffects: MessageEffects
-    @Binding var commentBlurEnabled: Bool
-    @Binding var isComposerEngaged: Bool
-    @Binding var showTextEmojiPicker: Bool
-    @Binding var hasComposerContent: Bool
-    @Binding var emojiToInject: String
-    @Binding var composerFocusTrigger: Bool
-    @Binding var storyDrafts: [String: StoryDraft]
-    @Binding var replyingToStoryComment: FeedComment?
-
-    /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
-    /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
-    /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
-    /// `place` non-nil = un lieu a été choisi via le picker et voyage jusqu'à
-    /// l'envoi, exactement comme n'importe quel autre message/commentaire.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
-
-    // Comment attachments + real voice capture (parity with feed/reels composer).
-    @State private var commentAttachments: [ComposerAttachment] = []
-    @State private var showCommentPhotoPicker: Bool = false
-    @State private var commentPhotoItems: [PhotosPickerItem] = []
-    @State private var showCommentFilePicker: Bool = false
-    @State private var showCommentLocationPicker: Bool = false
-    @State private var pendingPlace: SharedPlace? = nil
-    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
-    /// (au curseur quand le champ a le focus, sinon à la fin via `emojiToInject`).
-    @State private var composerIsFocused: Bool = false
-    @StateObject private var audioRecorder = AudioRecorderManager()
-
-    /// Accent RÉSOLU du composer : celui du commentaire auquel on répond,
-    /// sinon celui de la story.
-    private var composerAccent: String {
-        replyingToStoryComment?.authorColor ?? accentColor
-    }
-
-    /// Second arrêt du dégradé servi au composer. Dérivé de `composerAccent`
-    /// par la formule de palette du SDK (`secondary = shiftHue(primary, +30°)`) :
-    /// sans lui, le composer retombe sur son défaut de marque et le bouton
-    /// d'envoi rend un dégradé hybride accent → indigo.
-    private var composerSecondaryColor: String {
-        DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
-    }
-
-    var body: some View {
-        UniversalComposerBar(
-            style: .dark,
-            mode: .comment,
-            onIngest: { ingests in handleComposerIngest(ingests) },
-            accentColor: composerAccent,
-            secondaryColor: composerSecondaryColor,
-            forceShowAttachment: true,
-            forceShowVoice: true,
-            selectedLanguage: composerLanguage,
-            onLanguageChange: { composerLanguage = $0 },
-            onFocusChange: { focused in
-                composerIsFocused = focused
-                if focused {
-                    isComposerEngaged = true
-                    // Keyboard opening → dismiss emoji panel
-                    if showTextEmojiPicker {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showTextEmojiPicker = false
-                        }
-                    }
-                } else {
-                    // Only disengage if emoji panel isn't showing
-                    if !showTextEmojiPicker {
-                        isComposerEngaged = false
-                    }
-                }
-            },
-            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
-            onLocationRequest: { showCommentLocationPicker = true },
-            replyBanner: replyingToStoryComment.map { reply in
-                AnyView(
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(hex: reply.authorColor))
-                            .frame(width: 3, height: 30)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(MeeshyFont.relative(9, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(MeeshyFont.relative(11, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                            }
-                            Text(reply.displayContent)
-                                .font(MeeshyFont.relative(11))
-                                .foregroundColor(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.12)))
-                        }
-                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(hex: reply.authorColor).opacity(0.18))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(hex: reply.authorColor).opacity(0.35))
-                            .frame(height: 0.5),
-                        alignment: .bottom
-                    )
-                )
-            },
-            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
-                ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
-                    commentAttachments.removeAll { $0.id == id }
-                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
-            onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
-            onStopRecordingToAttachment: { stopRecordingToAttachment() },
-            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
-            onCancelRecording: { audioRecorder.cancelRecording() },
-            externalIsRecording: audioRecorder.isRecording,
-            externalRecordingDuration: audioRecorder.duration,
-            externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
-            onPhotoLibrary: { showCommentPhotoPicker = true },
-            onFilePicker: { showCommentFilePicker = true },
-            onShowAttachments: {
-                // Attachment carousel opening → dismiss the emoji panel so the
-                // two bottom surfaces never stack.
-                if showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showTextEmojiPicker = false
-                    }
-                }
-            },
-            onRequestTextEmoji: {
-                isComposerEngaged = true
-                // Dismiss keyboard first, then show emoji panel
-                UIApplication.shared.sendAction(
-                    #selector(UIResponder.resignFirstResponder),
-                    to: nil, from: nil, for: nil
-                )
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showTextEmojiPicker = true
-                    }
-                }
-            },
-            injectedEmoji: $emojiToInject,
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects,
-            storyId: storyId,
-            onSaveDraft: { storyId, text, attachments in
-                if text.isEmpty && attachments.isEmpty {
-                    storyDrafts.removeValue(forKey: storyId)
-                } else {
-                    storyDrafts[storyId] = StoryDraft(text: text, attachments: attachments)
-                }
-            },
-            getDraft: { storyId in
-                guard let draft = storyDrafts[storyId] else { return nil }
-                return (text: draft.text, attachments: draft.attachments)
-            },
-            onAnyInteraction: {
-                // No-op: shouldPauseTimer handles all pause logic based on UI state
-            },
-            focusTrigger: $composerFocusTrigger,
-            onRecordingChange: { recording in
-                isComposerEngaged = recording
-            },
-            onHasContentChange: { hasContent in
-                hasComposerContent = hasContent
-            }
-        )
-        .photosPicker(
-            isPresented: $showCommentPhotoPicker,
-            selection: $commentPhotoItems,
-            maxSelectionCount: 1,
-            matching: .any(of: [.images, .videos])
-        )
-        .fileImporter(
-            isPresented: $showCommentFilePicker,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result {
-                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
-            }
-        }
-        .sheet(isPresented: $showCommentLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { place in
-                pendingPlace = place
-                showCommentLocationPicker = false
-            }
-        }
-        .adaptiveOnChange(of: commentPhotoItems) { _, items in
-            Task {
-                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
-                await MainActor.run { commentPhotoItems = [] }
-            }
-        }
-    }
-
-    /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
-    /// est une interaction utilisateur : il engage le composer
-    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
-    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
-    /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
-    /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
-    /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
-    /// fichiers routés vers le staging commentaire existant (spec 2026-07-30).
-    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
-        isComposerEngaged = true
-        if let block = CommentComposerIngestion.mergedText(from: ingests) {
-            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
-                emojiToInject = block
-            }
-        }
-        CommentComposerIngestion.stageFiles(
-            CommentComposerIngestion.files(from: ingests),
-            accentColor: accentColor
-        ) { staged in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                commentAttachments.append(contentsOf: staged)
-            }
-        }
-    }
-
-    /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
-    /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
-    /// Une réponse à une story part comme un message : elle porte donc le lieu
-    /// choisi exactement comme n'importe quel autre message (une story est un
-    /// post de type STORY côté gateway — même route `/posts/:id/comments`).
-    private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
-        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments.removeAll()
-        let place = pendingPlace
-        pendingPlace = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || media != nil || place != nil else { return }
-        let effects = commentEffects
-        let blur = commentBlurEnabled
-        commentEffects = .none
-        commentBlurEnabled = false
-        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-        let effectFlags = flags > 0 ? Int(flags) : nil
-        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME parent
-        // racine (sinon la réponse-de-réponse atterrissait dans un bucket jamais rendu
-        // → commentaire invisible). L'auteur ciblé est notifié via la @mention injectée
-        // à l'ouverture de la réponse (cf. makeStoryCommentRow).
-        let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
-        replyingToStoryComment = nil
-        sendComment(trimmed, effectFlags, parentId, media, place)
-    }
-
-    @discardableResult
-    private func stopRecordingToAttachment() -> Bool {
-        guard audioRecorder.duration > 0.5 else {
-            audioRecorder.cancelRecording()
-            return false
-        }
-        let duration = audioRecorder.duration
-        guard let url = audioRecorder.stopRecording() else { return false }
-        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
-        return true
-    }
-}
-
 // MARK: - Story Card
 
 /// Cache à 1 entrée du `StorySlide` renderable de la slide courante.
@@ -1148,6 +850,12 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
+    /// **Le token de retour en tête du corpus** (#4831).
+    ///
+    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// suspend l'horloge de lecture et appartient donc au parent — remonter une
+    /// fenêtre de défilement ne regarde personne d'autre que cette carte.
+    @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
 
     /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
@@ -1205,7 +913,7 @@ struct StoryCardView: View {
     /// dessous des layer des controles de la story »).
     let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
-    private var topInset: CGFloat {
+    var topInset: CGFloat { // internal for cross-file extension access
         max(geometry.safeAreaInsets.top, 59)
     }
 
@@ -1221,12 +929,32 @@ struct StoryCardView: View {
     /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
-    private var currentStoryDescription: String? {
-        guard let story = currentStory,
-              let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
-              !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return resolved
+    ///
+    /// **Et il ne rend une légende que s'il y en a une** (#4502). Le `content`
+    /// d'une story a DEUX natures pour un seul nom : la légende de l'auteur, ou
+    /// l'index de recherche que la passerelle fabrique en concaténant les
+    /// objets texte d'une story qui n'en a pas. Rendu tel quel, cet index
+    /// affichait le texte du canvas une SECONDE fois, en légende, juste
+    /// dessous.
+    ///
+    /// La décision est prise sur l'ORIGINAL et le RÉSOLU est rendu — décider
+    /// sur le résolu ramènerait le doublon pour les seuls lecteurs d'une autre
+    /// langue, la passerelle composant aussi l'index dans chaque langue. Toute
+    /// la règle, son fail-safe compris, vit dans `StoryDerivedContent` (SDK) :
+    /// ce corps ne fait plus que lui poser la question.
+    var currentStoryDescription: String? { // internal for cross-file extension access
+        guard let story = currentStory else { return nil }
+        return StoryDerivedContent.caption(
+            original: story.content,
+            resolved: story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
+            // `\.text` est la BONNE clé : le décodeur du SDK normalise déjà
+            // l'alias legacy `content` vers `text` (`StoryTextObject.init(from:)`,
+            // « prefer new key, fall back to legacy »). Lire la mauvaise aurait
+            // vidé la comparaison — donc rendu « vraie légende » et laissé le
+            // doublon intact, sans que rien ne rougisse. Mesuré avant de poser
+            // cette ligne, sur demande de la session qui a écrit la règle.
+            overlayTexts: story.storyEffects?.textObjects.map(\.text) ?? []
+        )
     }
 
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
@@ -1241,7 +969,7 @@ struct StoryCardView: View {
     /// la forme à la composition (« l'import de l'image de fond impose le cadre et
     /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
     /// par défaut. Fallback portrait pour toutes les stories antérieures.
-    private var readerCanvasRatio: CGFloat {
+    var readerCanvasRatio: CGFloat { // internal for cross-file extension access
         CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
     }
 
@@ -1566,8 +1294,8 @@ struct StoryCardView: View {
                         authorName: currentGroup?.username,
                         textObjects: story.storyEffects?.textObjects ?? [],
                         preferredLanguages: resolvedViewerLanguageChain,
-                        voiceTranscript: currentVoiceCaption
-                    ))
+                        voiceTranscript: currentVoiceCaption,
+                        stickerDescriptions: (story.storyEffects?.stickerObjects ?? []).map { StoryStickerAccessibility.description(for: $0) }))
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.next",
                         defaultValue: "Story suivante"
@@ -1600,7 +1328,14 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
-                    .opacity(contentOpacity)
+                    // Déplier la légende EFFACE la scène pour laisser remonter
+                    // le fond ThumbHash déjà monté sous elle (Layer 1.5) — ou,
+                    // sans média, la couleur de fond de la story. Multiplié
+                    // avec `contentOpacity` : les deux répondent à « combien de
+                    // cette scène voit-on ? » et se cumulent.
+                    .opacity(contentOpacity
+                             * CaptionExpansionSpace.storySceneOpacity(captionExpanded: isCaptionExpanded))
+                    .animation(.easeInOut(duration: 0.22), value: isCaptionExpanded)
                     .offset(x: openingSlideFraction * canvasFitSize.width,
                             y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -1624,6 +1359,23 @@ struct StoryCardView: View {
                     // Coupée en plein écran (carte = plein bord, pas d'ombre).
                     .shadow(color: .black.opacity(canvasIsExpanded ? 0 : 0.4),
                             radius: 20, y: 8)
+                    // **Déplier la légende FLOUTE la scène** (directive porteur
+                    // 2026-09-02) : « pour les story pas besoin de cacher quoi
+                    // que ce soit, quand on déplie, on floute juste la story et
+                    // on affiche le texte déplié ».
+                    //
+                    // La story n'a rien à sacrifier — pas de carte d'auteur en
+                    // bas, pas de pellicule : sa scène OCCUPE déjà tout. Elle
+                    // recule donc au lieu de céder la place, et le texte passe
+                    // devant. C'est l'inverse de la galerie plein écran, où
+                    // c'est l'auteur qui s'efface (`ConversationMediaGalleryView`)
+                    // — deux réponses à la même question, « où trouver la
+                    // place ? », parce que les deux surfaces n'ont pas le même
+                    // voisinage.
+                    //
+                    // Le flou est posé APRÈS l'ombre et le cadrage : il porte
+                    // sur la carte telle qu'elle est rendue, coins compris, et
+                    // ne déborde donc pas de son clip.
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1694,79 +1446,11 @@ struct StoryCardView: View {
                 }
             }
 
-            // === Voice caption overlay (transcription voix) ===
-            if let transcription = currentVoiceCaption {
-                VStack {
-                    Spacer()
-                    Text(transcription)
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black.opacity(0.55))
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, topInset + 130)
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            voiceCaptionLayer
 
-            // === Description overlay (B2, #3925 — la légende de la story) ===
-            //
-            // La face LECTURE de la section description repliable du composer :
-            // le contenu partagé du composer unifié (`slide.content`), résolu par
-            // le Prisme, s'affiche par-dessus le canvas composé — comme la légende
-            // d'un réel. Gaté sur `currentVoiceCaption == nil` : la transcription
-            // vocale (exploration à la demande, menu « … ») prend le bas de la
-            // scène quand elle est active — les deux ne se chevauchent jamais.
-            //
-            // **Elle était INERTE.** `Text` brut dans un cartouche noir opaque,
-            // `lineLimit(4)`, et `allowsHitTesting(false)` sur tout le bloc :
-            // rien ne pouvait la déplier, et le cartouche masquait la
-            // composition qu'il commente. `MediaCaptionOverlay` (SDK) tient
-            // désormais la règle — dix MOTS, de l'ombre plutôt qu'une boîte, et
-            // le plein écran ancré au coin bas-gauche quand on déplie (#4474).
-            if currentVoiceCaption == nil, let description = currentStoryDescription {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    // 20 pt — le retrait des couches voisines de ce canvas (la
-                    // transcription vocale juste au-dessus le pose aussi). Il
-                    // était en dur dans la couche ; il est désormais DIT ici,
-                    // pour que le lecteur de réel puisse aligner la sienne sur
-                    // sa propre colonne (directive porteur 2026-09-01).
-                    MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
-                                        horizontalInset: 20,
-                                        onToggle: onCaptionExpansionToggled)
-                }
-                .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
-                .transition(.opacity)
-            }
+            captionLayer(geometry: geometry)
 
-            // === Background audio badge ===
-            //
-            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
-            // FOND (directive user 2026-07-30) : depuis que le header affiche la
-            // note musicale suivie de l'onde animée, ce chip répétait la même
-            // information au milieu de l'image. Les chips du canvas restent
-            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
-            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
-            //
-            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
-            // morceau et crédite son auteur — une attribution que le header, qui
-            // ne dit que la présence, ne porte pas.
-            if let audio = currentStory?.backgroundAudio {
-                VStack {
-                    Spacer()
-                    backgroundAudioBadge(audio: audio)
-                        .padding(.bottom, topInset + 165)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .allowsHitTesting(false)
-            }
+            backgroundAudioLayer
 
             // === Translation indicator (Prisme Linguistique — discret) ===
             // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
@@ -2080,6 +1764,24 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
+            // **Le rail passe AU-DESSUS du corpus déplié** (#4831).
+            //
+            // La légende est montée en `zIndex(60)` pour recevoir son tap (elle
+            // vivait sous la couche de gestes, #4762) ; le rail, déclaré plus
+            // bas mais sans `zIndex`, se retrouvait DESSOUS. Or le corpus
+            // déplié est une `ScrollView` en `frame(maxWidth: .infinity)` :
+            // elle prend les touchers sur toute la colonne, y compris la bande
+            // du rail — dont le texte s'écarte pourtant soigneusement
+            // (`expandedTrailingInset`). Mesuré au simulateur : Send, Vues,
+            // Partager, Enregistrer et Traductions restaient PARFAITEMENT
+            // VISIBLES et ne répondaient plus.
+            //
+            // > Écarter un TEXTE d'un voisin ne lui rend pas ses touchers. La
+            // > vue qui les prend n'est pas celle qu'on voit : c'est son
+            // > conteneur, et lui n'a pas de retrait. Un contrôle visible et
+            // > inerte est pire qu'un contrôle caché — rien n'indique pourquoi
+            // > il ne répond pas.
+            .zIndex(70)
 
             // === Layer 9: Reaction flight (tuile agrandie → cœur, ≤ 1 s) ===
             if let flight = reactionFlight {
@@ -2471,30 +2173,6 @@ struct StoryCardView: View {
 
     // MARK: - Background Audio Badge
 
-    private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(11, weight: .semibold))
-            Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if let uploader = audio.uploaderName {
-                Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
-                    .opacity(0.7)
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
-    }
 
     // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
     // retiré du canvas (directive user 2026-07-30) : le header du reader porte

@@ -274,6 +274,16 @@ public extension CanvasV3 {
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
             if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
+            // **Le gabarit qui DÉCORE la pastille** (#4717) doit voyager (#4832).
+            // Omis quand `nil` — toute pastille publiée avant ce lot se réencode
+            // alors octet pour octet, et son repli reste celui que
+            // `StoryLocationLayer` applique déjà.
+            //
+            // Ce champ est le FRÈRE de `templateId` sur un sticker, avec une
+            // relation différente : un sticker EST son gabarit, un lieu en est
+            // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
+            // délibérés — ne pas les unifier.
+            if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
@@ -426,10 +436,33 @@ public extension CanvasV3 {
         // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
         // disparaît chez un lecteur qui ne rend que l'emoji.
         var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        // **Le GABARIT voyage, pas seulement son repli** (#4741).
+        //
+        // `wireEmoji` ci-dessus rend, pour un sticker à gabarit, l'emoji de
+        // REPLI du catalogue. Le fil portait donc soigneusement le repli d'une
+        // décoration qu'il ne portait pas : une pastille de lieu publiée
+        // revenait « 📍 », un cadre de cœurs « 💕 ». Le composer dessinait, le
+        // lecteur rendait un glyphe.
+        //
+        // > Un repli conservé sans la chose dont il est le repli n'est plus un
+        // > repli : c'est le contenu.
+        //
+        // Le repli RESTE émis — il sert le lecteur dont le build ne connaît pas
+        // ce `templateId` (une décoration plus récente que lui), qui verra un
+        // glyphe plutôt qu'un trou.
+        if let templateId = nonEmpty(sticker.templateId) {
+            payload["templateId"] = .string(templateId)
+            if !sticker.slots.isEmpty {
+                payload["slots"] = .object(sticker.slots.mapValues { CanvasJSONValue.string($0) })
+            }
+        }
         if let postMediaId = nonEmpty(sticker.postMediaId) {
             payload["postMediaId"] = .string(postMediaId)
         }
         if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
+        // **Le mouvement voyage avec la décoration** (#4821) — une propriété de
+        // la charge, jamais un kind ; web et Android l'ignorent.
+        if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -733,13 +766,18 @@ public extension StoryEffects {
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
         let postMediaId = object.payload.string("postMediaId") ?? ""
+        let templateId = object.payload.string("templateId") ?? ""
         guard let emoji = stickerEmoji(object.payload.string("emoji"),
-                                       hasImage: !postMediaId.isEmpty) else { return nil }
+                                       hasImage: !postMediaId.isEmpty,
+                                       templateId: templateId) else { return nil }
         return StorySticker(
             id: object.id,
             emoji: emoji,
             postMediaId: postMediaId,
             provider: object.payload.string("provider"),
+            templateId: templateId,
+            slots: object.payload.stringMap("slots") ?? [:],
+            animation: object.payload.string("animation").flatMap(StickerAnimation.init(rawValue:)),
             sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
@@ -754,9 +792,18 @@ public extension StoryEffects {
 
     /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
     /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
-    private static func stickerEmoji(_ wire: String?, hasImage: Bool) -> String? {
-        guard hasImage else { return wire }
-        return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji
+    ///
+    /// Un sticker GABARIT sans repli reçoit celui que son gabarit déclare — ou
+    /// le repli générique si ce binaire ne le connaît pas (#4819, #4741) — `nil` ⇒ l'objet est REJETÉ, et
+    /// une décoration jetée pour un repli manquant serait perdue au lieu d'être
+    /// dégradée.
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool, templateId: String) -> String? {
+        if let repli = nonEmpty(wire) { return repli }
+        if !templateId.isEmpty {
+            return StickerTemplateCatalog.fallbackEmoji(forTemplateID: templateId)
+                ?? StorySticker.imageFallbackEmoji
+        }
+        return hasImage ? StorySticker.imageFallbackEmoji : wire
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {
@@ -768,7 +815,8 @@ public extension StoryEffects {
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
-            sourceLanguage: object.locale)
+            sourceLanguage: object.locale,
+            styleId: nonEmpty(object.payload.string("styleId")))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {

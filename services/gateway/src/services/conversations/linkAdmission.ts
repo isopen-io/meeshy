@@ -25,6 +25,26 @@
  * qu'un appelant fait APRÈS avoir reçu un verdict `granted`. Les mélanger ici
  * ferait de cette loi une loi de FORMULAIRE plutôt qu'une loi d'ACCÈS.
  *
+ * ─── `maxUses` BORNE L'ADMISSION, JAMAIS LA LECTURE (#4827) ──────────────────
+ *
+ * `currentUses` compte des ADMISSIONS et le prouve par son unique incrément —
+ * `claimLinkUse` (`routes/conversations/link-admission.ts`) : une « use » EST
+ * une entrée. Le seuil de la séquence ci-dessous, et le `WHERE` atomique qui le
+ * revérifie au moment d'écrire, sont donc les DEUX seuls sites du dépôt où ce
+ * compteur a le droit de décider d'un accès.
+ *
+ * `GET /conversations/:id/messages` le relisait sur la ligne du lien du
+ * PARTICIPANT, APRÈS l'admission (403 `SHARE_LINK_MAX_USES`). Le N-ième admis —
+ * celui dont l'entrée vient précisément de porter `currentUses` à `maxUses` —
+ * recevait son 201, son cookie, ses droits, et un fil illisible ; un lien
+ * `maxUses:1` était donc inutilisable par son unique invité. Cette relecture
+ * est RETIRÉE : elle faisait d'un compteur d'entrées une garde de PERMISSION,
+ * deux notions qu'aucune ligne ne relie. Les états du LIEN (`isActive`,
+ * `expiresAt`, conversation close) restent, eux, opposables à la lecture.
+ *
+ * Un vrai plafond de LECTURE (« N personnes peuvent LIRE ») serait un champ
+ * DISTINCT, refusé à l'APERÇU avant la jonction — jamais ce compteur-ci.
+ *
  * ─── LA DÉCISION DU 2026-08-29 SUR `allowedCountries` / `allowedIpRanges` ────
  *
  * `trustProxy` est posé depuis #4137 (`server.ts`) : `request.ip` reflète

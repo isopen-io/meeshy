@@ -46,11 +46,13 @@ jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
   ensureUniqueShareLinkIdentifier: jest.fn<any>().mockResolvedValue('mshy_unique'),
 }));
 
+const mockSendForbidden = jest.fn<any>((reply: any) => reply);
+
 jest.mock('../../../utils/response', () => ({
   sendSuccess: jest.fn<any>((reply: any) => reply),
   sendBadRequest: jest.fn<any>((reply: any) => reply),
   sendUnauthorized: jest.fn<any>((reply: any) => reply),
-  sendForbidden: jest.fn<any>((reply: any) => reply),
+  sendForbidden: (...args: any[]) => mockSendForbidden(...args),
   sendNotFound: jest.fn<any>((reply: any) => reply),
   sendConflict: jest.fn<any>((reply: any) => reply),
   sendInternalError: jest.fn<any>((reply: any) => reply),
@@ -96,11 +98,16 @@ const ACTOR_ID = '507f1f77bcf86cd799439022';
 const TARGET_ID = '507f1f77bcf86cd799439033';
 const ACTOR_ROW_ID = '507f1f77bcf86cd799439077';
 
-const actorRow = {
-  id: ACTOR_ROW_ID, userId: ACTOR_ID, conversationId: CONV_ID, role: 'admin',
-  isActive: true, bannedAt: null, joinedAt: new Date('2026-01-01'),
-  permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canViewHistory: true },
-};
+/** Le rang de l'appelant est un PARAMÈTRE : c'est lui que la parité de rang interroge. */
+function ligneAppelant(role: string) {
+  return {
+    id: ACTOR_ROW_ID, userId: ACTOR_ID, conversationId: CONV_ID, role,
+    isActive: true, bannedAt: null, joinedAt: new Date('2026-01-01'),
+    permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canViewHistory: true },
+  };
+}
+
+const actorRow = ligneAppelant('admin');
 
 const targetUser = {
   id: TARGET_ID, username: 'target', displayName: 'Target', avatar: null, systemLanguage: 'fr',
@@ -117,7 +124,8 @@ function rowsMatching(rows: any[], where: any) {
   });
 }
 
-function buildPrisma() {
+function buildPrisma(actorRole: string = 'admin') {
+  const actorRow = ligneAppelant(actorRole);
   return {
     conversation: {
       findUnique: jest.fn<any>(async (args: any) => ({
@@ -190,9 +198,17 @@ const actorContext = {
   registeredUser: { id: ACTOR_ID, role: 'USER' },
 };
 
-/** Fait entrer le MÊME utilisateur dans la MÊME conversation, par la porte demandée. */
-async function admitThrough(porte: 'invite' | 'participants') {
-  const prisma = buildPrisma();
+/**
+ * Tente l'admission du MÊME utilisateur dans la MÊME conversation, par la
+ * porte et avec le rang demandés — et rend l'OBSERVABLE qui décide : la ligne
+ * a-t-elle été écrite ?
+ *
+ * C'est le `create` qu'on regarde, jamais la réponse : les deux portes
+ * refusent avant d'écrire, et une réponse mockée ne distingue pas un refus
+ * d'un succès.
+ */
+async function tenterAdmission(porte: 'invite' | 'participants', actorRole: string) {
+  const prisma = buildPrisma(actorRole);
   const fastify = createMockFastify(prisma);
   registerSharingRoutes(fastify, prisma, noop, noop);
   registerParticipantsRoutes(fastify, prisma, noop, noop);
@@ -207,7 +223,14 @@ async function admitThrough(porte: 'invite' | 'participants') {
     createMockReply()
   );
 
-  expect(prisma.participant.create).toHaveBeenCalled();
+  return { prisma, ecrit: prisma.participant.create.mock.calls.length > 0 };
+}
+
+/** Fait entrer le MÊME utilisateur dans la MÊME conversation, par la porte demandée. */
+async function admitThrough(porte: 'invite' | 'participants') {
+  const { prisma, ecrit } = await tenterAdmission(porte, 'admin');
+
+  expect(ecrit).toBe(true);
   return prisma.participant.create.mock.calls[0][0].data.permissions;
 }
 
@@ -252,5 +275,60 @@ describe('#4174 — les deux portes d\'ajout écrivent la MÊME table de droits'
 describe('#4174 — le site unique ne peut pas être muté par un appelant', () => {
   it('NEW_MEMBER_PERMISSIONS est gelé — les deux portes l\'étalent dans un `data` Prisma', () => {
     expect(Object.isFrozen(NEW_MEMBER_PERMISSIONS)).toBe(true);
+  });
+});
+
+/**
+ * #4557 — **les deux portes exigent le MÊME rang.**
+ *
+ * `POST …/invite` exigeait ADMIN, `POST …/participants` exige MODERATOR — pour
+ * un geste dont ce fichier vient d'établir, table de droits à l'appui, qu'il
+ * produit la MÊME ligne. La divergence était donc une incohérence pure
+ * (dimension 6), jamais une protection : un modérateur à qui `invite` refusait
+ * quelqu'un l'ajoutait par l'autre porte, dans la seconde, avec les mêmes
+ * droits et un éventail de diffusion PLUS complet.
+ *
+ * **Aucune des deux portes ne crée d'invitation EN ATTENTE** — la question
+ * qu'il fallait poser avant d'unifier, et à laquelle la lecture ligne à ligne
+ * répond : les deux écrivent une ligne `Participant` immédiatement ACTIVE,
+ * `role: 'member'`, `permissions: NEW_MEMBER_PERMISSIONS`, par le même
+ * `resolveConversationEntry`. « Inviter » nomme ici un ajout direct. Un rang
+ * plus haut sur l'une des deux ne retenait rien.
+ *
+ * **L'unification se fait vers le BAS, et c'est le seul sens non régressif.**
+ * Monter `participants` à ADMIN retirerait aux modérateurs une capacité VIVANTE
+ * — les trois clients passent par cette porte — pour fermer une porte que
+ * personne n'appelle. Descendre `invite` à MODERATOR ne crée aucun pouvoir :
+ * il n'ouvre pas un chemin, il cesse d'en fermer un que l'autre laissait
+ * ouvert. Le plancher LUI-MÊME (un modérateur peut-il ajouter ?) reste ce
+ * qu'il était : le changer serait une décision produit, pas une mise en
+ * cohérence.
+ *
+ * Comme pour les droits ci-dessus, **le témoin COMPARE** : posé sur une seule
+ * porte, il ne pourrait pas rougir si les deux redivergeaient.
+ */
+describe('#4557 — les deux portes d\'ajout exigent le MÊME rang', () => {
+  it('un modérateur passe par les DEUX portes, ou par aucune — jamais par une seule', async () => {
+    const parInvite = await tenterAdmission('invite', 'moderator');
+    const parParticipants = await tenterAdmission('participants', 'moderator');
+
+    expect(parInvite.ecrit).toBe(parParticipants.ecrit);
+  });
+
+  it('et le rang retenu est MODERATOR — les deux portes admettent', async () => {
+    // Sans ce second témoin, les deux portes pourraient converger vers ADMIN
+    // (donc retirer une capacité vivante aux modérateurs) sans que le premier
+    // ne tombe : il n'assertit qu'une ÉGALITÉ.
+    expect((await tenterAdmission('invite', 'moderator')).ecrit).toBe(true);
+    expect((await tenterAdmission('participants', 'moderator')).ecrit).toBe(true);
+  });
+
+  it('un membre simple reste refusé par les deux — le plancher descend, il ne disparaît pas', async () => {
+    const parInvite = await tenterAdmission('invite', 'member');
+    const parParticipants = await tenterAdmission('participants', 'member');
+
+    expect(parInvite.ecrit).toBe(false);
+    expect(parParticipants.ecrit).toBe(false);
+    expect(mockSendForbidden).toHaveBeenCalled();
   });
 });

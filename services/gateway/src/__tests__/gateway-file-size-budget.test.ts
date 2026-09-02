@@ -77,7 +77,7 @@ import { overBudget, walk } from './helpers/file-size-sweep';
 
 const SRC_DIR = join(__dirname, '..');
 
-/** Le plafond demandé par le porteur, plus strict que la directive (1100). */
+/** Le plafond demandé par le porteur, plus strict que la directive (1200 depuis le 2026-09-02). */
 const MAX_LINES = 1000;
 
 /**

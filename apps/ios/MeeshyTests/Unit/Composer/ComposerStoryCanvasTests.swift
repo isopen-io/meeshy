@@ -140,6 +140,16 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// > « Enlever les éléments de la rangée canonique car destinés pour les
     /// > posts (seule entité qui peut avoir un texte spécifiquement pour
     /// > contenu). »
+    ///
+    /// **Remis en cause le 2026-09-02, puis RÉTABLI le même jour**, sur retour
+    /// porteur. J'avais servi ici les cinq outils qui posent un objet de scène,
+    /// parce que je venais de retirer les rails qui les portaient. Le porteur a
+    /// corrigé la cause plutôt que le symptôme : les rails sont restaurés, et
+    /// cette rangée redevient étrangère à la story.
+    ///
+    /// > Quand un correctif ne se justifie que par un lot précédent du même
+    /// > auteur, c'est ce lot qu'il faut relire, pas le correctif qu'il faut
+    /// > écrire.
     func test_laRangéeCanonique_neSeSertPasSousUneSTORY() {
         XCTAssertTrue(ComposerDocumentTool.servedRow(for: .story).isEmpty)
     }

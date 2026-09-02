@@ -255,6 +255,11 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// Ce qui distingue la story n'est pas d'avoir un canvas — c'est que
     /// chacun de ses canvas est une unité d'histoire à publier, pas un média de
     /// la publication.
+    ///
+    /// **Remis en cause le 2026-09-02, RÉTABLI le même jour** (retour porteur) :
+    /// j'y avais servi les outils qui posent un objet de scène, pour réparer un
+    /// défaut que je venais de créer en retirant les rails. Les rails sont
+    /// restaurés — la story se compose par eux et par la rangée contextuelle.
     static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
         format == .story ? [] : servedRow
     }
@@ -1034,6 +1039,19 @@ nonisolated enum ComposerDocumentCopy {
     static var publishError: String {
         String(localized: "feed.post.publish.error",
                defaultValue: "Erreur lors de la publication", bundle: .main)
+    }
+
+    /// **Un format qu'aucun canal ne sait porter** (#4869).
+    ///
+    /// Distincte de `publishError`, et c'est le point : « erreur lors de la
+    /// publication » envoie réessayer, quand rien de ce que l'auteur peut faire
+    /// ne changera l'issue. Une phrase qui nomme la CAUSE lui évite le second
+    /// tap — c'est la même règle que les refus de l'éventail (#4858), un cran
+    /// plus loin dans le geste.
+    static var publishFormatUnsupported: String {
+        String(localized: "composer.publish.format.unsupported",
+               defaultValue: "Ce format ne peut pas encore être publié d'ici",
+               bundle: .main)
     }
 
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`

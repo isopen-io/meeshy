@@ -34,6 +34,8 @@
  *     lecture est bornée et l'expiration se lit comme une indisponibilité.
  */
 
+import type { PostType } from '@meeshy/shared/types/post';
+
 import { apercuServi } from './invite';
 import { baseDeLaPasserelle } from './passerelle';
 
@@ -58,12 +60,16 @@ export type Recuperateur = (url: string, options?: RequestInit) => Promise<Respo
  * Les types de cible que la v3 sait ouvrir, plus `INCONNU` — parce que la
  * passerelle sert une chaîne libre et qu'un type qu'on ne connaît pas doit se
  * NOMMER plutôt que de se faire passer pour un autre.
+ *
+ * #4809 — `PostType` (`@meeshy/shared/types/post`) porte les quatre valeurs de
+ * contenu ; `CONVERSATION` / `PROFILE` / `EXTERNAL` n'ont pas d'équivalent
+ * amont (un lien peut aussi cibler une conversation, un profil, une URL
+ * externe). `'INCONNU'` est un repli du DÉCODEUR local (`typeDeCible`
+ * plus bas) : la passerelle ne l'émet jamais — ce n'est pas une valeur de
+ * PROTOCOLE, donc elle reste ici et ne monte pas dans `packages/shared`.
  */
 export type TypeDeCible =
-  | 'POST'
-  | 'REEL'
-  | 'STORY'
-  | 'STATUS'
+  | PostType
   | 'CONVERSATION'
   | 'PROFILE'
   | 'EXTERNAL'
@@ -188,15 +194,24 @@ export const CAUSES_DE_CLOTURE: readonly CauseDeCloture[] = [
   'indeterminee',
 ];
 
-const TYPES: readonly TypeDeCible[] = [
-  'POST',
-  'REEL',
-  'STORY',
-  'STATUS',
-  'CONVERSATION',
-  'PROFILE',
-  'EXTERNAL',
-];
+/**
+ * Témoin de dérive (#4809) : `satisfies Record<…, true>` exige TOUTES les
+ * valeurs reconnues de `TypeDeCible` (donc tout `PostType` amont) — un membre
+ * ajouté à la source sans entrée ici fait échouer la compilation À CETTE
+ * LIGNE. `'INCONNU'` en est exclu : ce n'est jamais une valeur SERVIE par la
+ * passerelle, seulement le repli du décodeur `typeDeCible` ci-dessous.
+ */
+const TYPES_RECONNUS = {
+  POST: true,
+  REEL: true,
+  STORY: true,
+  STATUS: true,
+  CONVERSATION: true,
+  PROFILE: true,
+  EXTERNAL: true,
+} as const satisfies Record<Exclude<TypeDeCible, 'INCONNU'>, true>;
+
+const TYPES = Object.keys(TYPES_RECONNUS) as readonly Exclude<TypeDeCible, 'INCONNU'>[];
 
 const texte = (valeur: unknown): string | null =>
   typeof valeur === 'string' && valeur.trim() !== '' ? valeur : null;

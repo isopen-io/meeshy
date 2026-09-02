@@ -85,13 +85,13 @@ jest.mock('../../../middleware/auth', () => ({
     return mockParticipantAuthMiddleware;
   },
 }));
-// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
-// et interroge le double Prisma de ce fichier : un mock de module complet le
-// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+// Seule la DÉCISION d'accès est doublée, sous ses DEUX formes depuis #4792 (noyau à
+// trois états + projection booléenne, `helpers/acces-conversation-double`). Le module
+// est PROLONGÉ : `resolveCallerParticipant` reste RÉEL sur le double Prisma du fichier.
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 jest.mock('../../../utils/response', () => ({
   sendSuccess: (...args: any[]) => mockSendSuccess(...args),
   sendBadRequest: (...args: any[]) => mockSendBadRequest(...args),
@@ -868,21 +868,21 @@ describe('GET /conversations/:id/messages', () => {
     );
   });
 
-  it('shareLink with max-uses exceeded → 403 SHARE_LINK_MAX_USES', async () => {
+  // #4827 — `maxUses` borne l'ADMISSION, jamais la LECTURE. `maxUses:1, currentUses:1` = le lien personnel
+  // JUSTE après son unique invité ; les compteurs restent dans la charge pour que ce témoin TOMBE si la garde revenait.
+  it('un participant admis par un lien PLEIN lit toujours le fil (#4827)', async () => {
     prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt: new Date(), shareLinkId: 'link-1' });
     prisma.conversationShareLink.findFirst.mockResolvedValue({
       allowViewHistory: true,
       expiresAt: null,
-      maxUses: 5,
-      currentUses: 5,
+      maxUses: 1,
+      currentUses: 1,
     });
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.count.mockResolvedValue(0);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('usage limit'),
-      expect.objectContaining({ code: 'SHARE_LINK_MAX_USES' }),
-    );
+    expect({ success: reply._body.success, code: reply._body.code, data: reply._body.data }).toEqual({ success: true, code: undefined, data: [] });
   });
 
   it('shareLink without view history → historyStartDate set to joinedAt', async () => {

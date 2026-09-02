@@ -7,6 +7,15 @@ Ce fichier est le contrat complet ; le prompt `/loop` s'y réfère au lieu de le
 
 ## Les huit lois
 
+> **Ces huit-ci sont les règles de la BOUCLE, numérotées indépendamment des DOUZE
+> lois de la planche** (`docs/product/planche-meeshy-composer.md` § « Les douze
+> lois »). Les deux numérotations se croisent — « loi 4 » vaut ici *budget de
+> lignes* et là-bas *rien à l'écran sans raison* — et le code du composer cite
+> « loi N » près de deux cents fois **en visant toujours la planche**. Donc :
+> dans cette page, une citation nue renvoie à la planche ; une règle de cette
+> liste se cite « **règle N ci-dessus** ».
+
+
 **1. PRÉSERVER ET COMPLÉTER, jamais supprimer.** La maquette est une **cible**, pas une liste
 d'autorisations. Ce que l'app porte en plus du document **se conserve**. Un élément absent de la
 maquette n'est pas un élément à retirer — c'est un élément que la maquette n'a pas dessiné.
@@ -48,7 +57,7 @@ contenu pour appliquer des options »* — et **à maintenir pour TOUS** les con
 celui-là. Un contrôle dont l'objet n'existe pas ENCORE est absent, et il paraît à l'instant où son
 objet apparaît.
 
-C'est la **jumelle temporelle de la loi 4** : la loi 4 juge la CAPACITÉ (un contrôle sans effet est
+C'est la **jumelle temporelle de la loi 4 de la PLANCHE** : celle-ci juge la CAPACITÉ (un contrôle sans effet est
 absent), celle-ci juge le MOMENT. Les deux se répondent, et aucune ne remplace l'autre.
 
 Deux exceptions, **nommées** — une exception implicite est une infraction :
@@ -95,7 +104,7 @@ mène. Six tours, précédés des découpes.
 
 | Tour | Ce qu'il pose | Vues | Issues |
 |---|---|---|---|
-| **t0** | Les découpes hors budget (loi 4) — préalable à toute addition | — | #4102 #4103 #4104 #4105 |
+| **t0** | Les découpes hors budget (règle 4 ci-dessus) — préalable à toute addition | — | #4102 #4103 #4104 #4105 |
 | **t1** | **Le tronc** — sans lui rien n'est atteignable | `1a` → `1b` → `1c` → `1f` | #4071 #4062 #4064 · #4072 #4061 #4070 #4065 · #4073 #4063 · #4076 |
 | **t2** | Les branches d'édition, toutes ouvertes depuis `1c` | `1d` `1e` `1g` `2d` `2e` `3b` `3c` | #4074 #4075 #4077 #4082 #4083 #4092 #4093 |
 | **t3** | Les autres entrées vers le tronc | `3a` `2a` `2b` `2c` `4b` `4c` | #4091 #4079 #4080 #4081 #4099 #4100 |
@@ -227,7 +236,7 @@ ce qui diffère et ce qui dépasse. Rappel de la loi 1 : « dépasse » ≠ « �
 ### 6 — Implémenter
 
 Réutiliser ou factoriser l'existant du composer (36 fichiers sous `Features/Main/Composer`) plutôt
-que réécrire. Si le fichier visé dépasse 1 100 lignes, **le découper d'abord** (loi 4).
+que réécrire. Si le fichier visé dépasse 1 100 lignes, **le découper d'abord** (règle 4 ci-dessus).
 TDD quand le comportement est testable ; le gate iOS est non négociable.
 
 ### 7 — Vérifier

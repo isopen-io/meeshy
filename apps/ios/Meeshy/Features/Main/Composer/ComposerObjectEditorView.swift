@@ -53,6 +53,16 @@ struct ComposerObjectEditorView: View {
     /// divergeraient au premier tap.
     let onSelectObject: (String) -> Void
 
+    /// **Ce qui est DÉPLIÉ, une section à la fois** (#4842). L'état est LOCAL
+    /// à l'écran, et jamais celui que le ViewModel porte pour la rangée
+    /// d'outils : c'est ce dernier qui rendait la zone basse d'une édition de
+    /// texte vide tant qu'aucune bulle n'avait été tapée, et ce lot ne le
+    /// ramène pas. (Son identifiant n'est pas cité ici : une garde de source
+    /// l'interdit dans ce fichier, et un doc-comment qui le nomme la fait
+    /// rougir aussi sûrement qu'un appel — mesuré.)
+    @State private var openedSection: ComposerObjectEditorSection? =
+        ComposerObjectEditorDisclosure.initiallyOpened
+
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
 
@@ -110,8 +120,28 @@ struct ComposerObjectEditorView: View {
     // MARK: - La scène, en grand
 
     /// L'objet reste SÉLECTIONNÉ tout du long : c'est la doctrine de `1c` — « un
-    /// seul objet à la fois », et le cadre qui l'encadre est ce qui rend le
-    /// réglage lisible pendant qu'on le change.
+    /// seul objet à la fois ».
+    ///
+    /// **Mais il n'est plus ENCADRÉ** (#4850, directive porteur 2026-09-02) :
+    ///
+    /// > « En plein ecran pourquoi mettre un cadre violet autour du texte, je
+    /// > trouve inutile... »
+    ///
+    /// Cette ligne portait la justification inverse — « le cadre qui l'encadre
+    /// est ce qui rend le réglage lisible pendant qu'on le change ». Elle était
+    /// vraie SUR LA SCÈNE, où le cadre désigne, parmi plusieurs objets, celui
+    /// que le doigt saisit. Ici l'objet EST le sujet de l'écran : le titre le
+    /// nomme, les neuf sections le règlent, il n'y a rien dont le distinguer.
+    /// Un signe qui n'apprend rien occupe la place de ce qui apprend.
+    ///
+    /// La justification est révoquée ICI plutôt qu'effacée : un commentaire qui
+    /// explique pourquoi le code fait quelque chose se relit comme une raison
+    /// de ne pas y toucher, et celui-ci décrivait une décision annulée.
+    ///
+    /// Mesuré avant de retirer : `selectedItemId` ne gouverne QUE le marqueur
+    /// (`StoryCanvasRepresentable` → `setSelectionMarker`). Il ne décide ni de
+    /// ce qui répond au doigt, ni de ce qui s'édite en ligne — le passer à
+    /// `nil` n'enlève donc aucun geste.
     private var scene: some View {
         EmbeddedSceneCanvas(
             slide: Binding(
@@ -141,7 +171,8 @@ struct ComposerObjectEditorView: View {
             // refermerait tout pendant qu'on règle un style. La sortie a son
             // geste : « Terminé », qui appelle `closeObjectEditor`.
             onInlineTextEditEnded: { _ in },
-            selectedItemId: objectId
+            // `nil` — voir le doc-comment : pas de cadre en plein écran (#4850).
+            selectedItemId: nil
         )
         .frame(maxWidth: .infinity)
         .layoutPriority(1)
@@ -161,7 +192,7 @@ struct ComposerObjectEditorView: View {
                     // a fixé — le même ordre que les bulles du rail, pour que
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
-                        section(ComposerObjectEditorCopy.tool(tool)) {
+                        section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
                             TextEditToolOptions(tool: tool, textObject: binding)
                         }
                     }
@@ -180,7 +211,7 @@ struct ComposerObjectEditorView: View {
     /// réel, avec le vrai texte de la scène.
     @ViewBuilder
     private func styleSection(_ binding: Binding<StoryTextObject>) -> some View {
-        section(ComposerObjectEditorCopy.tool(.style)) {
+        section(ComposerObjectEditorCopy.tool(.style), .tool(.style)) {
             TextStyleSpecimenBand(
                 text: binding.wrappedValue.text,
                 selection: binding.wrappedValue.parsedTextStyle,
@@ -200,7 +231,7 @@ struct ComposerObjectEditorView: View {
     /// la conversion, et surtout le `nil` de « permanent », qu'une paire de
     /// glissières nues perdrait au premier réglage.
     private var timingSection: some View {
-        section(ComposerObjectEditorCopy.timing) {
+        section(ComposerObjectEditorCopy.timing, .timing) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
                     .font(MeeshyFont.relative(12, weight: .medium))
@@ -268,7 +299,7 @@ struct ComposerObjectEditorView: View {
     /// simplifiée ici perdrait les poignées de bord, le verrou des fonds et le
     /// signal de blocage du scroll, que l'atelier a déjà.
     private var planSection: some View {
-        section(ComposerObjectEditorCopy.plan) {
+        section(ComposerObjectEditorCopy.plan, .plan) {
             GeometryReader { geo in
                 Plan2DView(
                     tracks: Plan2DLayout.tracks(from: viewModel.currentEffects,
@@ -326,15 +357,54 @@ struct ComposerObjectEditorView: View {
 
     // MARK: - Le gabarit d'une section
 
+    /// **Une section, son titre, et l'état de son dépliage** (#4842).
+    ///
+    /// `DisclosureGroup` plutôt qu'un chevron maison, pour une raison qui n'est
+    /// pas la commodité : il ANNONCE « développé »/« replié » à VoiceOver, dans
+    /// les sept langues, sans qu'aucune clé de catalogue soit écrite. Un
+    /// chevron dessiné à la main ne dit rien à personne.
+    ///
+    /// Le `set` du binding IGNORE la valeur que SwiftUI lui passe et demande à
+    /// la règle. Ce n'est pas une négligence : `opened(after:from:)` rend le
+    /// même verdict (taper l'ouverte ferme, taper une autre bascule) ET tient
+    /// la promesse qui compte — jamais deux ouvertes. Laisser la vue écrire
+    /// `openedSection = tapped` aurait remis la loi hors de portée des témoins.
     private func section<Content: View>(_ titre: String,
+                                        _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Le corps est ÉVALUÉ ici : `DisclosureGroup` garde son contenu en
+        // fermeture échappante, et un `content()` non échappant ne peut pas y
+        // entrer. La valeur, elle, voyage.
+        let corps = content()
+        return DisclosureGroup(isExpanded: Binding(
+            get: { ComposerObjectEditorDisclosure.isOpen(id, opened: openedSection) },
+            set: { _ in
+                openedSection = ComposerObjectEditorDisclosure.opened(after: id,
+                                                                      from: openedSection)
+            }
+        )) {
+            corps
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            // **44 pt sur toute la RANGÉE, et une forme qui les remplit.**
+            // Mesuré au doigt : un label réduit à son `Text` rapportait bien
+            // une frame de 370 × 21 à l'arbre d'accessibilité — donc « une
+            // cible pleine largeur » à qui la LIT — mais ne répondait qu'aux
+            // GLYPHES. Un tap au milieu de la rangée, entre le mot et le
+            // chevron, ne déclenchait rien. Deux défauts d'un coup : 21 pt sous
+            // le plancher HIG, et une cible dont l'arbre ment sur l'étendue.
+            //
+            // `contentShape` est ce qui fait de la frame la cible ; sans lui,
+            // l'agrandir ne fait qu'agrandir le vide.
             Text(titre)
                 .font(MeeshyFont.relative(9.5, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.5))
-            content()
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
+        .tint(.white.opacity(0.55))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -387,8 +457,16 @@ nonisolated enum ComposerObjectEditorCopy {
         String(localized: "composer.object.editor.timing", defaultValue: "APPARITION", bundle: .main)
     }
 
+    /// **« TIMELINE », pas « PLAN 2D »** (directive porteur 2026-09-02).
+    ///
+    /// La CLÉ garde son nom : elle désigne le composant monté
+    /// (`Plan2DView` du SDK), et renommer une clé de catalogue casserait les
+    /// sept traductions déjà posées sans rien apporter. Ce qui change est le
+    /// MOT que l'auteur lit — et il rejoint le vocabulaire que le reste de
+    /// l'app emploie déjà pour la même chose (`story.tool.timeline`), au lieu
+    /// d'un terme de géométrie que cette section était seule à porter.
     static var plan: String {
-        String(localized: "composer.object.editor.plan", defaultValue: "PLAN 2D", bundle: .main)
+        String(localized: "composer.object.editor.plan", defaultValue: "TIMELINE", bundle: .main)
     }
 
     static var start: String {
@@ -426,8 +504,24 @@ nonisolated enum ComposerObjectEditorCopy {
     /// de 44 pt ; un titre de section a besoin d'un mot.
     static func tool(_ tool: TextEditTool) -> String {
         switch tool {
+        // **POLICE, pas STYLE** (#4850). La mesure a tranché contre les deux
+        // formes que la directive proposait : `StoryTextStyle` est un sélecteur
+        // de POLICE et rien d'autre — les dix-huit cas résolvent tous vers une
+        // famille, une graisse ou un design (`storyFont(for:size:)`,
+        // `StoryTextFontResolver.baseFont`), aucun n'applique d'effet.
+        //
+        // « Neon » ne brille pas : c'est du système semibold arrondi. « Tag » ne
+        // bombe pas : c'est MarkerFelt. « Affiche » est Avenir Next Condensed.
+        // Sept des dix-huit sont des polices DÉGUISÉES en effets, et c'est ce
+        // mélange de VOCABULAIRE — pas un mélange d'axes — que l'auteur voyait.
+        //
+        // Les vrais effets ont déjà leurs sections, trois lignes plus bas :
+        // FOND, CADRE, CONTOUR. Ouvrir un axe « Effet » aujourd'hui créerait une
+        // section vide ; le jour où un style appliquera un effet, le témoin
+        // `test_laSectionDesPolices_neSAppellePlusSTYLE` tombera et rouvrira la
+        // question.
         case .style:
-            return String(localized: "composer.object.tool.style", defaultValue: "STYLE", bundle: .main)
+            return String(localized: "composer.object.tool.style", defaultValue: "POLICE", bundle: .main)
         case .color:
             return String(localized: "composer.object.tool.color", defaultValue: "COULEUR", bundle: .main)
         case .align:

@@ -24,7 +24,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { loadConversationTombstones } from './utils/delta-tombstones';
-import { sendForbidden, sendInternalError } from '../../utils/response';
+import { sendUnauthorized, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
@@ -76,10 +76,17 @@ export function registerConversationListRoute(
           updatedSince: { type: 'string', description: 'ISO8601 timestamp — return only conversations updated after this time' }
         }
       },
+      // `403` a été RETIRÉ de cette liste avec le correctif ci-dessous : plus
+      // aucun refus de cette route ne le sert. Sa garde `optionalAuth` est
+      // construite `{ requireAuth: false, allowAnonymous: true }`
+      // (`routes/conversations/index.ts:26`), régime sous lequel les DEUX
+      // branches de refus de `createUnifiedAuthMiddleware` sont mortes — celle
+      // du 401 est gardée par `options.requireAuth`, celle du 403 par
+      // `!options.allowAnonymous`. Le déclarer encore décrirait un corps que
+      // rien n'émet.
       response: {
         200: conversationListResponseSchema,
         401: errorResponseSchema,
-        403: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -88,9 +95,44 @@ export function registerConversationListRoute(
     try {
       const authRequest = request as UnifiedAuthRequest;
 
-      // Vérifier que l'utilisateur est authentifié
+      /**
+       * PAS DE SESSION ⇒ 401, JAMAIS 403 (#4789, la forme de #4760 sur la route
+       * la plus appelée du produit).
+       *
+       * Ce refus disait « Authentication required » au statut d'un refus de
+       * DROIT. Les deux situations ne sont pas la même : « je ne sais pas qui tu
+       * es » (401) contre « je sais qui tu es et ce n'est pas pour toi » (403).
+       * Seul le second est ce que servent les dix-huit « Unauthorized access to
+       * this conversation » de la surface `conversations/` (mesuré) — ils
+       * refusent un NON-MEMBRE et restent 403 à juste titre.
+       *
+       * CE QUE LE 403 COÛTAIT, MESURÉ CLIENT PAR CLIENT.
+       * `APIClient.mapUnauthorized` (`packages/MeeshySDK/.../APIClient.swift`)
+       * est le site UNIQUE qui décide qu'une réponse veut dire « ta session est
+       * morte », et il n'est atteint que par la branche 401 : un membre dont le
+       * jeton expirait en ouvrant sa liste de conversations recevait 403, que
+       * `APIClient.swift:785` traduit en `MeeshyError.forbidden` — « NOT an
+       * auth/session problem » — sans jamais appeler
+       * `AuthManager.handleUnauthorized()`. Aucun rafraîchissement, aucune
+       * reconnexion proposée. `apps/web` rafraîchit sur 401. Android est NEUTRE
+       * (`AuthExpiryInterceptor.EXPIRY_CODES = {401, 403}` contient déjà 401 —
+       * il JUSTIFIE d'ailleurs son 403 en citant la phrase de CE site, ce qui
+       * fait de ce commentaire-là un suivi). `apps/web-v3` portait une ligne
+       * `status === 403` écrite POUR ce défaut (`lib/api/compte.ts`) ; elle
+       * disparaît avec lui.
+       *
+       * `UNAUTHORIZED` n'est pas inventé : `ErrorCode.UNAUTHORIZED`
+       * (`packages/shared/types/errors.ts`) le déclare et `ErrorStatusMap` le
+       * mappe sur 401.
+       *
+       * LA GARDE NE REFUSE RIEN, C'EST BIEN ICI QUE ÇA SE TRANCHE :
+       * `optionalAuth` est `{ requireAuth: false, allowAnonymous: true }`. Un
+       * jeton absent, expiré ou révoqué arrive donc jusqu'ici avec un
+       * `authContext` non authentifié — c'est le cas NOMINAL d'un retour après
+       * quelques jours, pas un incident.
+       */
       if (!authRequest.authContext.isAuthenticated) {
-        return sendForbidden(reply, 'Authentication required to access conversations');
+        return sendUnauthorized(reply, 'Authentication required to access conversations', { code: 'UNAUTHORIZED' });
       }
 
       const userId = authRequest.authContext.userId;

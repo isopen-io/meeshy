@@ -282,6 +282,98 @@ struct CanvasV3MigrationTests {
         #expect(object(CanvasV3(migrating: effects), "st8")?.payload["anchorPoint"] == .string("topLeft"))
     }
 
+    // MARK: - Le GABARIT d'une décoration doit voyager (#4741)
+
+    /// **Une décoration posée dans le composer doit revenir décoration.**
+    ///
+    /// Le lot #4741 a introduit les stickers à GABARIT — pastille de lieu,
+    /// cadre de cœurs, ruban d'heure — dessinés en code plutôt que rendus comme
+    /// un glyphe. Le modèle les porte (`templateId`, `slots`), les trois moteurs
+    /// de rendu les dessinent… et le fil v3 ne les transportait pas.
+    ///
+    /// L'ironie est dans le commentaire de l'encodeur : « `wireEmoji`, jamais
+    /// `emoji` : un sticker image parti sans repli disparaît ». Il sérialisait
+    /// donc soigneusement le REPLI d'un gabarit qu'il ne sérialisait pas — et
+    /// une pastille de lieu revenait « 📍 », un cadre de cœurs « 💕 ».
+    ///
+    /// > Un repli conservé sans la chose dont il est le repli n'est plus un
+    /// > repli : c'est le contenu.
+    @Test func aTemplateSticker_carriesItsTemplateOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "locationStamp",
+                                               slots: ["title": "Tessalit", "subtitle": "Mali"],
+                                               zIndex: 3)]
+        let payload = try #require(object(CanvasV3(migrating: effects), "st-tpl")?.payload)
+        #expect(payload["templateId"] == .string("locationStamp"))
+    }
+
+    /// Et il doit REVENIR gabarit — l'aller sans le retour laisserait le fil
+    /// juste et le lecteur faux.
+    @Test func aTemplateSticker_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "loveHeartFrame",
+                                               slots: ["caption": "nous deux"],
+                                               zIndex: 3)]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let sticker = try #require(back.stickerObjects?.first)
+        #expect(sticker.templateId == "loveHeartFrame")
+        #expect(sticker.slots["caption"] == "nous deux")
+        #expect(sticker.kind == StoryStickerKind.template)
+    }
+
+    // MARK: - Le GABARIT d'une PASTILLE DE LIEU doit voyager aussi (#4832)
+
+    /// **Même piège, TROISIÈME morsure — sur le frère du champ ci-dessus.**
+    ///
+    /// Le lot #4717 a donné un gabarit à la pastille de lieu : `styleId` nomme
+    /// le gabarit qui la DÉCORE (timbre, boussole, enseigne…). Le composer
+    /// l'offre, le rendu l'honore — et l'aller v1→v3 ne l'émettait pas, trente
+    /// lignes au-dessus du sticker qu'on venait de réparer.
+    ///
+    /// **Le témoin s'écrit sur un gabarit AUTRE que `location.pill`.** Ce
+    /// dernier est le repli d'un `styleId` absent : sur lui, la règle juste et
+    /// le champ perdu rendent le même verdict, et le témoin ne peut pas tomber.
+    @Test func aStyledPlace_carriesItsTemplateOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"),
+                                                       styleId: "location.stamp")]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["styleId"] == .string("location.stamp"))
+    }
+
+    /// Et il doit REVENIR gabarit : l'aller sans le retour laisse le fil juste
+    /// et le lecteur faux. Ce retour gouverne aussi la reprise d'un BROUILLON —
+    /// `StoryEffects.encode(to:)` passe toujours par le pont v3.
+    @Test func aStyledPlace_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"),
+                                                       styleId: "location.compass")]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.styleId == "location.compass")
+        #expect(lieu.place.name == "Tessalit")
+    }
+
+    /// Une pastille SANS gabarit — toute pastille publiée avant #4717 — n'émet
+    /// aucune clé : elle se réencode octet pour octet, et son repli reste celui
+    /// que `StoryLocationLayer` applique déjà.
+    @Test func aPlaceWithoutStyle_emitsNoStyleKey() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"))]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["styleId"] == nil)
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        #expect(back.locationObjects.first?.styleId == nil)
+    }
+
     // MARK: - O3 (jamais de cadre vide) et prédicat de version
 
     @Test func emptyRuntime_emitsNoScene() throws {

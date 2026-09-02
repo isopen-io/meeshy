@@ -28,7 +28,17 @@ import XCTest
 final class FileSizeBudgetGuardTests: XCTestCase {
 
     /// Le budget de la directive. Un fichier neuf n'a aucune raison de le dépasser.
-    private static let budget = 1100
+    /// Relevé à 1200 le 2026-09-02 (directive porteur : « relâcher un peu la
+    /// consigne de 1100 ; 1000-1200 est acceptable »). Le plafond DUR est 1200 ;
+    /// 1000 reste le seuil au-delà duquel un découpage se justifie sans se
+    /// discuter, mais il ne se mesure pas ici — un cliquet n'a qu'un seuil.
+    ///
+    /// **Ce relèvement n'a rien effacé.** Trois fichiers sont repassés sous le
+    /// budget par ce seul fait (`MyStoriesView` 1158, `ConversationMediaViews`
+    /// 1120, `ComposerMoodSurface` 1109) : ils sortent de la liste ci-dessous, et
+    /// `legacyLineCeiling` baisse EXACTEMENT de ce qu'ils pesaient — jamais du
+    /// cumul du jour, qui scellerait les lignes que la règle 3 vient de refuser.
+    private static let budget = 1200
 
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
@@ -39,13 +49,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "CallView.swift",
-        "ComposerMoodSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
         "ConversationViewModel.swift",
@@ -57,7 +65,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
-        "MyStoriesView.swift",
         "OnboardingStepViews.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
@@ -182,7 +189,31 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // n'expliquent que 63 des 432, le reste venant de découpes voisines livrées
     // entre-temps. Soustraire aurait laissé 369 lignes de mou — de quoi
     // accueillir en silence l'ajout que ce cliquet existe pour refuser.
-    private static let legacyLineCeiling = 71_266
+    /// Baissé de 3 387 le 2026-09-02 — la somme EXACTE des trois fichiers sortis
+    /// de la liste au relèvement du budget, mesurée à leur taille du jour.
+    ///
+    /// **Il reste 165 lignes de dette IMPAYÉE, et c'est voulu.** Elles ont été
+    /// attribuées, fichier par fichier, en comparant au commit qui a posé le
+    /// plafond précédent (`0912db893d`) : `PostDetailView` +93,
+    /// `StoryViewerView+Canvas` +45, `MessageListViewController` +17,
+    /// `StoryViewerView` +10. Les quatre RESTENT dans la dette, donc le
+    /// relèvement du budget ne les absout pas : la règle 3 demeure rouge tant que
+    /// ces 165 lignes ne sont pas extraites (#4841). Un plafond qui se lève pour
+    /// couvrir une croissance qu'il vient de refuser cesse d'être un cliquet.
+    ///
+    /// 2026-09-02 (fusion de la branche stickers, #4823) — 67 879 → 67 385 (−494).
+    /// Les 165 lignes impayées ci-dessus le sont : `StoryComposerBarView` a
+    /// quitté `StoryViewerView+Canvas.swift` (298 lignes), le saut vers un
+    /// message hors fenêtre a quitté `ConversationViewModel.swift` (152) et
+    /// l'état du composer `ConversationView.swift` (70) — trois découpes par
+    /// responsabilité faites AVANT d'ajouter aux hôtes, qui restent en dette.
+    /// Le nombre est REMESURÉ sur les 31 noms avec la méthode de
+    /// `lineCount(of:)` sur l'arbre fusionné, jamais soustrait.
+    ///
+    /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
+    /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
+    /// les 31 noms de l'arbre fusionné, jamais soustrait.
+    private static let legacyLineCeiling = 67_091
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

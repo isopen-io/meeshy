@@ -104,6 +104,12 @@ struct DocumentComposerDoor: View {
 
     var body: some View {
         composerHost
+            // **Le composer porte son propre hôte de toasts** (#4872). Il est
+            // présenté en `fullScreenCover`, donc il COUVRE celui de la racine :
+            // sans cette ligne, chacun de ses refus — publication impossible,
+            // micro refusé, format sans canal — se levait derrière l'écran et
+            // l'auteur voyait une flèche qui semble ne rien faire.
+            .feedbackToastOverlay()
             .fullScreenCover(item: $previewAssets) { assets in
                 apercu(assets)
             }
@@ -162,9 +168,18 @@ struct DocumentComposerDoor: View {
             // réordonnancement, et une garde le tient désormais pour le jour où
             // un paramètre s'insérera au milieu de cet `init`.
             moodSeed: nil,
-            // Ni média : `ComposerDocumentDraft` n'a NI `mediaIds`, NI fichier,
-            // NI lieu — semer ici poserait un canvas que cette porte ne monte
-            // jamais, et dont le publieur ne saurait rien faire.
+            // Ni média — mais pas pour la raison qui était écrite ici.
+            // `ComposerDocumentDraft` PORTE `localMedia: [ComposerDocumentMedia]`
+            // et `location` (`ComposerDocumentRules.swift`) ; ce qu'il n'a pas,
+            // c'est une SCÈNE et l'identité d'une publication existante.
+            // Semer ici poserait donc un canvas que cette porte ne monte jamais,
+            // et dont le publieur ne saurait rien faire — la conclusion tient,
+            // sa justification était fausse.
+            //
+            // Elle avait déjà coûté : une session voisine a diagnostiqué le
+            // trou de modèle de `.mediaSeeded` en RECOPIANT ce commentaire au
+            // lieu de lire le type, et a conclu qu'un média semé exigeait un
+            // champ neuf. Il n'en exige aucun.
             mediaSeed: nil,
             // **L'œil du socle atterrit ICI (#4047).** Il fut un no-op tant
             // que la surface document n'avait rien à montrer ; depuis #4038

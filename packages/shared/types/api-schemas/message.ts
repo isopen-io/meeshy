@@ -10,6 +10,7 @@
  */
 
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from './message-attachment.js';
+import { MESSAGE_STICKER_ANIMATIONS } from '../message-sticker.js';
 import { userMinimalSchema } from './user.js';
 
 // =============================================================================
@@ -80,6 +81,28 @@ export const anonymousSenderSchema = {
     lastName: { type: 'string', description: 'Anonymous last name' },
     language: { type: 'string', description: 'Preferred language' },
     isMeeshyer: { type: 'boolean', description: 'Is a registered Meeshy user' }
+  }
+} as const;
+
+/**
+ * Forme de RÉPONSE du sticker hissé depuis `metadata.sticker` (#4823).
+ *
+ * Source unique pour la même raison que `sharedPlaceResponseSchema` :
+ * fast-json-stringify TRONQUE en silence tout champ qu'un schéma de réponse ne
+ * déclare pas. Un `slots` déclaré sans `additionalProperties` sortirait `{}`
+ * — le gabarit s'afficherait sans ses textes, sans qu'aucun témoin rougisse.
+ * Toute réponse hissant `sticker` doit épandre CE schéma, en ne surchargeant
+ * que `description`.
+ */
+export const messageStickerResponseSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Sticker (gabarit + slots + animation, ou emoji) — hissé depuis metadata.sticker, validé serveur ; null si absent',
+  properties: {
+    templateId: { type: 'string' },
+    slots: { type: 'object', additionalProperties: { type: 'string' } },
+    animation: { type: 'string', enum: [...MESSAGE_STICKER_ANIMATIONS] },
+    emoji: { type: 'string' }
   }
 } as const;
 
@@ -158,6 +181,10 @@ export const messageSchema = {
     location: {
       ...sharedPlaceResponseSchema,
       description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.'
+    },
+    sticker: {
+      ...messageStickerResponseSchema,
+      description: 'Sticker du message — hissé depuis metadata.sticker. Validé serveur (parseMessageSticker) ; null si le message n’en porte aucun.'
     },
     replyTo: {
       type: 'object',
@@ -281,6 +308,10 @@ export const messageSchema = {
         location: {
           ...sharedPlaceResponseSchema,
           description: 'Lieu du message TRANSFÉRÉ (Lot 2) — hissé de son propre metadata.location, jamais celui du porteur'
+        },
+        sticker: {
+          ...messageStickerResponseSchema,
+          description: 'Sticker du message TRANSFÉRÉ — hissé de son propre metadata.sticker, jamais celui du porteur'
         }
       }
     },
@@ -438,6 +469,10 @@ export const messageMinimalSchema = {
     location: {
       ...sharedPlaceResponseSchema,
       description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent'
+    },
+    sticker: {
+      ...messageStickerResponseSchema,
+      description: 'Sticker (aperçu de conversation) — validé serveur, null si absent'
     },
     // Sender info (required for ConversationList.tsx getSenderName())
     sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },

@@ -326,12 +326,7 @@ extension MeeshyComposerHost {
                 ? AnyView(formatChip) : nil,
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
-            // **Le `‹` de `1c` REVIENT à `1b`, il ne ferme pas** (#4513).
-            // La cible dessine un chevron ici et une croix sur la scène
-            // incrustée : deux glyphes différents pour deux gestes différents.
-            // `onDismiss` fermerait le composer entier — l'auteur perdrait sa
-            // composition pour avoir voulu sortir de l'inspecteur.
-            onClose: { editsScene = false },
+            onClose: onDismiss,
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onSelectMedia: { media in
                 guard let slideId = slideIdByMediaURL[media.url],
@@ -616,16 +611,7 @@ extension MeeshyComposerHost {
             // n'en montrait aucune.
             showsScene: sceneIsPresent,
             sceneAspectRatio: viewModel.currentCanvasRatio,
-            // **LE geste d'entrée dans l'éditeur** (#4513). Sur la scène
-            // INCRUSTÉE (`1b`), taper un objet ouvre `1c` — c'est le seul
-            // chemin, et il est nommé ici plutôt que dérivé de la sélection :
-            // `selectedSceneItemKind` se pose aussi programmatiquement (poser
-            // un texte, taper un fond), et l'auteur se retrouverait alors dans
-            // un écran qu'il n'a pas demandé.
-            onSceneItemTapped: { _, kind in
-                selectedSceneItemKind = kind
-                editsScene = true
-            },
+            onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
             // **#4035 — taper la scène quand son FOND est un média le
             // SÉLECTIONNE.** Sans cette ligne l'inspecteur était INATTEIGNABLE
             // sur l'écran document, et le câblage complet ne le disait pas :
@@ -1047,6 +1033,12 @@ extension MeeshyComposerHost {
             // 2026-08-30 : depuis l'entrée Post, l'éventail n'offrait que Post
             // et Story — la bascule vers Réel et Mood semblait ne pas exister.
             candidateFormats: ComposerFormat.allComposable,
+            // **La cause du refus, pas seulement le refus** (#4858). Les MÊMES
+            // deux faits que `moodGate` juge — un média ingéré, une scène — de
+            // sorte que la phrase servie ne peut pas contredire le verdict qui
+            // l'a produite. Les lire ici plutôt que de les recalculer dans
+            // l'éventail est ce qui garde les deux d'accord.
+            carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
             selection: formatSelection
         )
         .font(.footnote.weight(.semibold))

@@ -182,11 +182,11 @@ nonisolated enum ComposerObjectChips {
         case .text(let o):    return chips(for: o, locale: locale, openableBands: openableBands)
         case .media(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
         case .sticker(let o): return chips(for: o, locale: locale, openableBands: openableBands)
-        case .location, .audio:
-            // Ni l'un ni l'autre n'a d'inspecteur : le lieu ne porte que son
-            // nom, et le son n'a pas encore de forme sur la scène (#4579). Ce
-            // `return []` est le MÊME comportement qu'avant — la différence est
-            // qu'il est désormais ÉCRIT au lieu d'être un défaut de cascade.
+        case .audio(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
+        case .location:
+            // Le lieu ne porte que son nom, et il est déjà dit par l'en-tête de
+            // la scène (#4034) : un jeton le répéterait sans rien offrir à
+            // régler. Ce `return []` est ÉCRIT, jamais un défaut de cascade.
             return []
         }
     }
@@ -219,25 +219,42 @@ nonisolated enum ComposerObjectChips {
         // Le PLAN et le RANG viennent de la somme, qui les résout pour les cinq
         // familles — y compris l'asymétrie du `zIndex` optionnel de l'audio.
         // Seul le MOT reste à décider ici : c'est du vocabulaire produit.
-        guard let mot = badgeKind(objet.kind) else { return nil }
-        return badge(kind: mot, isBackground: objet.isBackground,
+        // **Plus de `guard let` ici** : `badgeKind` est TOTAL depuis que les
+        // cinq familles ont leur mot. Le seul `nil` qui subsiste est celui du
+        // dessus — l'id qui ne désigne plus rien, un objet supprimé pendant que
+        // la sélection le tenait encore. Un état NOMINAL, pas une lacune.
+        return badge(kind: badgeKind(objet.kind), isBackground: objet.isBackground,
                      zIndex: objet.zIndex, locale: locale)
     }
 
-    /// **Le mot d'un kind — `nil` ⇒ pas de badge.**
+    /// **Le mot d'un kind — TOTAL, plus aucun `nil`.**
     ///
-    /// Le lieu et le son n'en ont pas, et ce n'est pas un oubli : leur mot
-    /// n'existe pas au catalogue (#4559 en tient les dix-neuf), et en inventer
-    /// un ici le mettrait hors de portée du cliquet de localisation.
+    /// **Les CINQ familles ont leur mot depuis le 2026-09-02.**
     ///
-    /// Le `switch` exhaustif remplace le `return nil` implicite de l'ancienne
-    /// cascade : même comportement, décision ÉCRITE.
-    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String? {
+    /// Le lieu et le son rendaient `nil`, et la raison écrite était vraie : leur
+    /// mot n'existait pas au catalogue, et en inventer un ici l'aurait mis hors
+    /// de portée du cliquet de localisation. Les deux clés sont désormais
+    /// posées en sept langues (`composer.chip.kind.audio` / `.location`), donc
+    /// la raison est levée et l'absence n'a plus de fondement.
+    ///
+    /// > Une absence JUSTIFIÉE par un manque réparable est une dette, pas une
+    /// > décision. Celle-ci se lisait comme une décision parce qu'elle était
+    /// > bien écrite — et le seul moyen de la distinguer était de relire ce
+    /// > qu'elle invoquait, puis d'aller voir si c'était encore vrai.
+    ///
+    /// Ce que le badge coûtait de ne pas exister : un son sélectionné affichait
+    /// ses jetons sans que le canvas dise ce qui était sélectionné. L'auteur
+    /// réglait une taille sans savoir la taille de QUOI.
+    ///
+    /// Le rendu est désormais TOTAL — plus aucun `nil`, donc plus aucune
+    /// famille silencieuse.
+    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String {
         switch kind {
-        case .text:    return ComposerObjectChipsCopy.kindText
-        case .media:   return ComposerObjectChipsCopy.kindMedia
-        case .sticker: return ComposerObjectChipsCopy.kindSticker
-        case .location, .audio: return nil
+        case .text:     return ComposerObjectChipsCopy.kindText
+        case .media:    return ComposerObjectChipsCopy.kindMedia
+        case .sticker:  return ComposerObjectChipsCopy.kindSticker
+        case .audio:    return ComposerObjectChipsCopy.kindAudio
+        case .location: return ComposerObjectChipsCopy.kindLocation
         }
     }
 
@@ -314,6 +331,57 @@ nonisolated enum ComposerObjectChips {
         }
         if let fenetre = window(start: media.startTime,
                                 duration: media.duration, locale: locale) {
+            jetons.append(Chip(id: "window", label: fenetre,
+                               destination: porte(.timeline, parmi: openableBands)))
+        }
+        return jetons
+    }
+
+    /// **Les jetons d'une CHIP DE SON** (#4579, retour porteur 2026-09-02 :
+    /// « l'affichage des détails des outils qui manquent »).
+    ///
+    /// Le son rendait `[]`, sous un commentaire devenu faux : « le son n'a pas
+    /// encore de forme sur la scène ». Il en a une depuis `fab725c1d5` —
+    /// `AudioForegroundChip`, déplaçable et redimensionnable — et depuis
+    /// `7311d42c60` elle a même un RANG manipulable. Un objet qu'on peut poser,
+    /// déplacer, redimensionner et ranger en profondeur, mais dont la sélection
+    /// n'affiche AUCUN réglage, est le seul de la scène dans ce cas.
+    ///
+    /// > Un commentaire qui justifie une absence par un état du monde se périme
+    /// > quand cet état change — et il continue d'expliquer, avec assurance, une
+    /// > décision que plus rien ne fonde. C'est le contraire d'une garde : il
+    /// > protège l'absence au lieu de la signaler.
+    ///
+    /// Quatre jetons, et pas un de plus que ce que l'objet PORTE :
+    /// - la TAILLE, comme tout objet de scène — elle ne manque jamais ;
+    /// - la ROTATION quand elle a été touchée ;
+    /// - le VOLUME, seulement s'il s'écarte du nominal (même règle que la
+    ///   vidéo : « SON 100 % » sur une piste jamais réglée enseigne moins que
+    ///   rien) ;
+    /// - la FENÊTRE de lecture, qui mène à la timeline.
+    ///
+    /// Un son de FOND n'est pas concerné : il n'a pas de chip sur la scène,
+    /// donc pas de sélection, donc jamais de rangée. C'est `isBackground` qui
+    /// l'en écarte à la source — et le vérifier ici serait une seconde écriture
+    /// de la même règle.
+    static func chips(for audio: StoryAudioPlayerObject,
+                      locale: Locale = .current,
+                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+        var jetons: [Chip] = [sizeChip(scale: audio.scale ?? 1, locale: locale)]
+        if let rotation = rotationChip(audio.rotation ?? 0, locale: locale) {
+            jetons.append(rotation)
+        }
+        if abs(Double(audio.volume) - 1) > 0.001 {
+            jetons.append(Chip(id: "volume",
+                               label: ComposerObjectChipsCopy.sound(
+                                LocalizedNumber.percent(Int((Double(audio.volume) * 100).rounded()),
+                                                        locale: locale))))
+        }
+        // `startTime`/`duration` sont des `Float?` sur cette famille seule —
+        // la conversion est ÉCRITE plutôt que laissée à l'inférence, qui
+        // n'existe pas ici : `window` prend des `Double?`.
+        if let fenetre = window(start: audio.startTime.map(Double.init),
+                                duration: audio.duration.map(Double.init), locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre,
                                destination: porte(.timeline, parmi: openableBands)))
         }

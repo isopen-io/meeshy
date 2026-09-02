@@ -14,6 +14,7 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   applyHistoryFloor,
@@ -32,7 +33,11 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import {
+  refuserAccesConversation,
+  verdictAccesConversation,
+  type MessagesDeRefusDAcces
+} from './utils/access-control';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
@@ -52,6 +57,22 @@ import {
   enrichForwardedMessagesForList,
   enrichPostReplyMessagesForList
 } from './messages-list-query';
+
+/**
+ * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
+ *
+ * `nonMembre` garde MOT POUR MOT la phrase que la route servait déjà — un
+ * refus d'AUTORISATION, correct en 403. Ce qui change est qu'une session
+ * ABSENTE ou MORTE ne le reçoit plus : elle n'a jamais été un refus de droit,
+ * et cette route est montée en `optionalAuth` (`{ requireAuth: false,
+ * allowAnonymous: true }`, `routes/conversations/index.ts`), une garde qui ne
+ * refuse RIEN — c'est donc bien ici que ça se tranche, et le cas nominal d'un
+ * retour après quelques jours arrivait jusque là.
+ */
+const REFUS_DE_LECTURE: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to read this conversation',
+  nonMembre: 'Unauthorized access to this conversation'
+};
 
 /**
  * Enregistre la route de liste paginée des messages d'une conversation.
@@ -205,11 +226,11 @@ export function registerMessagesListRoute(
 
       // Vérifier les permissions d'accès
       t0 = performance.now();
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
       timings.canAccessConversation = performance.now() - t0;
 
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_LECTURE);
       }
 
       // Resolve the current user's participantId in this conversation
@@ -227,8 +248,8 @@ export function registerMessagesListRoute(
       // masqué, soit dans la liste, soit dans un compteur qui promet une page
       // de plus.
       // Le `.catch` n'est pas redondant avec le try/catch interne du module :
-      // entre cette ligne et son `await` il y a des `return` (lien de partage
-      // expiré, quota atteint) après lesquels cette promesse n'est plus
+      // entre cette ligne et son `await` il y a un `return` (lien de partage
+      // échu) après lequel cette promesse n'est plus
       // attendue. « Le callee avale ses erreurs » est une propriété du
       // collaborateur, pas une garantie du site d'appel — cf. `tasks/lessons.md`
       // § Leçon 230.
@@ -257,26 +278,33 @@ export function registerMessagesListRoute(
         : currentParticipant?.id;
 
       // Le lien de partage répond ici à DEUX questions distinctes sur la même
-      // ligne : la PORTE (lien expiré, quota atteint → 403) et le PLANCHER de
-      // lecture. Elles restent séparées — la décision de réponse appartient à
-      // la route, le plancher est rendu par `historyFloorFor`, qui l'énonce
-      // aussi pour `/sync` (forme ensembliste) et pour la galerie de médias.
+      // ligne : la PORTE (lien échu → 403) et le PLANCHER de lecture. Elles
+      // restent séparées — la décision de réponse appartient à la route, le
+      // plancher est rendu par `historyFloorFor`, qui l'énonce aussi pour
+      // `/sync` (forme ensembliste) et pour la galerie de médias.
       // Un seul aller-retour : le module ne charge rien, cette route lit déjà
-      // la ligne pour les colonnes de la porte.
+      // la ligne pour la colonne de la porte.
+      //
+      // #4827 — `maxUses` N'EST PLUS une de ces colonnes. `currentUses` compte
+      // des ADMISSIONS et le prouve par son unique incrément (`claimLinkUse`,
+      // `routes/conversations/link-admission.ts`) : une « use » EST une entrée.
+      // Le relire ICI faisait d'un compteur d'entrées une garde de PERMISSION
+      // — deux notions qu'aucune ligne ne relie — et refusait le fil au DERNIER
+      // admis, dont c'est justement l'admission qui vient de remplir le lien :
+      // un lien `maxUses:1` était illisible par son unique invité. La borne
+      // reste ENTIÈRE côté admission (`services/conversations/linkAdmission.ts`
+      // puis le `WHERE` atomique de `claimLinkUse`). Les deux compteurs sortent
+      // aussi de la PROJECTION : une colonne qu'on ne sert plus et qui ne
+      // décide plus n'a pas à rester à portée de main d'une relecture.
       const participant = isAnonymousUser ? anonymousParticipant : currentParticipant;
       const shareLink = participant?.shareLinkId
         ? await prisma.conversationShareLink.findFirst({
             where: { id: participant.shareLinkId },
-            select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
+            select: { allowViewHistory: true, expiresAt: true }
           })
         : null;
-      if (shareLink) {
-        if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
-          return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
-        }
-        if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-          return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
-        }
+      if (shareLink?.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+        return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
       }
       // Le plancher vaut pour TOUT participant, lien ou non : un membre ajouté
       // après coup, un inscrit dans le salon global, un octroi par date d'un
@@ -593,6 +621,10 @@ export function registerMessagesListRoute(
       for (const m of mappedMessages) {
         const place = sharedPlaceFromMetadata(m.metadata);
         if (place) m.location = place;
+        // Sticker (#4823) — même hoist, même raison : iOS rend la décoration
+        // animée depuis `sticker`, le PNG joint n'est que le repli.
+        const sticker = stickerFromMetadata(m.metadata);
+        if (sticker) m.sticker = sticker;
       }
 
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
