@@ -1253,7 +1253,28 @@ struct RootView: View {
                     .targetingStory(postId: postId,
                                     inGroup: storyViewModel.storyGroups[groupIdx].id))
             } else {
-                router.push(.postDetail(postId))
+                // **Absent du TRAY ne veut pas dire absent.** `groupIndex`
+                // interroge un cache local ; un lien reçu de quelqu'un d'autre
+                // — le cas NOMINAL du partage — désigne presque toujours une
+                // story que ce cache ignore. Conclure « indisponible » de ce
+                // silence, c'est répondre à la question « l'ai-je déjà ? »
+                // quand celle posée est « existe-t-elle ? » (#4903).
+                //
+                // `ensureStoryLoaded` sait déjà répondre à la seconde : il est
+                // cache-first, ne va au réseau que si nécessaire, et écarte les
+                // stories mortes pour qu'un lien périmé n'insère pas de groupe
+                // fantôme. Le détail du post reste le repli — pour une story
+                // réellement expirée ou supprimée, il dit la bonne chose.
+                Task { @MainActor in
+                    if await storyViewModel.ensureStoryLoaded(postId: postId),
+                       let loadedIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                        storyViewerCoordinator.present(
+                            .targetingStory(postId: postId,
+                                            inGroup: storyViewModel.storyGroups[loadedIdx].id))
+                    } else {
+                        router.push(.postDetail(postId))
+                    }
+                }
             }
 
         case .userProfile(let username):
