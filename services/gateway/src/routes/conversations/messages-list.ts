@@ -247,8 +247,8 @@ export function registerMessagesListRoute(
       // masqué, soit dans la liste, soit dans un compteur qui promet une page
       // de plus.
       // Le `.catch` n'est pas redondant avec le try/catch interne du module :
-      // entre cette ligne et son `await` il y a des `return` (lien de partage
-      // expiré, quota atteint) après lesquels cette promesse n'est plus
+      // entre cette ligne et son `await` il y a un `return` (lien de partage
+      // échu) après lequel cette promesse n'est plus
       // attendue. « Le callee avale ses erreurs » est une propriété du
       // collaborateur, pas une garantie du site d'appel — cf. `tasks/lessons.md`
       // § Leçon 230.
@@ -277,26 +277,33 @@ export function registerMessagesListRoute(
         : currentParticipant?.id;
 
       // Le lien de partage répond ici à DEUX questions distinctes sur la même
-      // ligne : la PORTE (lien expiré, quota atteint → 403) et le PLANCHER de
-      // lecture. Elles restent séparées — la décision de réponse appartient à
-      // la route, le plancher est rendu par `historyFloorFor`, qui l'énonce
-      // aussi pour `/sync` (forme ensembliste) et pour la galerie de médias.
+      // ligne : la PORTE (lien échu → 403) et le PLANCHER de lecture. Elles
+      // restent séparées — la décision de réponse appartient à la route, le
+      // plancher est rendu par `historyFloorFor`, qui l'énonce aussi pour
+      // `/sync` (forme ensembliste) et pour la galerie de médias.
       // Un seul aller-retour : le module ne charge rien, cette route lit déjà
-      // la ligne pour les colonnes de la porte.
+      // la ligne pour la colonne de la porte.
+      //
+      // #4827 — `maxUses` N'EST PLUS une de ces colonnes. `currentUses` compte
+      // des ADMISSIONS et le prouve par son unique incrément (`claimLinkUse`,
+      // `routes/conversations/link-admission.ts`) : une « use » EST une entrée.
+      // Le relire ICI faisait d'un compteur d'entrées une garde de PERMISSION
+      // — deux notions qu'aucune ligne ne relie — et refusait le fil au DERNIER
+      // admis, dont c'est justement l'admission qui vient de remplir le lien :
+      // un lien `maxUses:1` était illisible par son unique invité. La borne
+      // reste ENTIÈRE côté admission (`services/conversations/linkAdmission.ts`
+      // puis le `WHERE` atomique de `claimLinkUse`). Les deux compteurs sortent
+      // aussi de la PROJECTION : une colonne qu'on ne sert plus et qui ne
+      // décide plus n'a pas à rester à portée de main d'une relecture.
       const participant = isAnonymousUser ? anonymousParticipant : currentParticipant;
       const shareLink = participant?.shareLinkId
         ? await prisma.conversationShareLink.findFirst({
             where: { id: participant.shareLinkId },
-            select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
+            select: { allowViewHistory: true, expiresAt: true }
           })
         : null;
-      if (shareLink) {
-        if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
-          return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
-        }
-        if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-          return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
-        }
+      if (shareLink?.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+        return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
       }
       // Le plancher vaut pour TOUT participant, lien ou non : un membre ajouté
       // après coup, un inscrit dans le salon global, un octroi par date d'un
