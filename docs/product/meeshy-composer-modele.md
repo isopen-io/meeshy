@@ -51,6 +51,34 @@ La somme à cinq cas est donc **complète pour ce qui est objet**. Le chiffre à
 citer dépend de la question : *sept* kinds au contrat, *cinq* familles d'objets,
 *six* kinds ayant un producteur.
 
+#### Ce que la directive « à gauche en Story » ne dit PAS (2026-09-02)
+
+Le porteur a fait passer **lieu · hashtag · mention · corpus de texte** au rail
+GAUCHE en profil **S**, « afin de fixer chaque position à chaque story » (#4893).
+Le rail gauche étant celui de ce qu'on POSE sur la scène, la question suit toute
+seule : ces quatre-là deviennent-ils des objets de scène ?
+
+**Deux le sont déjà** (`text`, `place`). Pour les deux autres, le contrat a
+répondu, et il a répondu DIFFÉREMMENT — c'est l'asymétrie qu'il faut connaître
+avant d'ouvrir le sujet :
+
+| | statut au contrat | ce que coûterait « objet posable » |
+|---|---|---|
+| `mention` | **ACTIF** (`ACTIVE_KINDS`) — le fil l'accepte déjà | cas Swift + producteur + lecteur + charge. **Contrat inchangé** |
+| `hashtag` | **RÉSERVÉ** (`RESERVED_KINDS`, « nomenclature connue, REFUSÉS en v1 ») | idem **+ déplacer la clé de `RESERVED` vers `ACTIVE`** — une décision de contrat |
+
+> **Une place dans un rail n'est pas une promesse de positionnement.** Livrer la
+> place (le rail les montre, leur porte ouvre le sélecteur de la publication) est
+> conforme au modèle tel qu'il est ; livrer la pastille posable demande d'abord
+> de renverser une décision ÉCRITE — `CanvasV3Migration` dit d'une mention
+> qu'elle est « une MÉTADONNÉE, pas un objet ». Tant que cette phrase est là,
+> elle gagne.
+
+Le filet existe déjà si la décision tombe un jour : un client dont le build
+ignore un kind ne casse pas — `case .reserved(let raw)` le conserve à
+l'aller-retour et l'inscrit dans `unpaintableKinds`, donc le lecteur SAIT qu'il
+peint une scène amputée. C'est le producteur qui manquerait, jamais le filet.
+
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
 Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
@@ -339,6 +367,68 @@ La barre haute porte, dans cet ordre : **✕** (fermer) · le **type de publicat
 (sélecteur) · le **rail des slides** (vignettes + ajouter) · **⋯** (le reste).
 Le rail des slides monte dans la barre haute : c'est là qu'on navigue entre les slides,
 pas au milieu du document.
+
+## 6 bis. Où la structure d'une publication est VRAIMENT connue (mesure 2026-09-02)
+
+La question « la structure d'une publication est-elle connue sur toutes les
+couches ? » a une réponse mesurable, et elle se sépare en deux.
+
+**L'ENVELOPPE est connue partout, et bien.** `id`, `kind`, `anchor`, `plane`,
+`z`, `transform`, `timing`, `locale` sont déclarés au contrat
+(`packages/shared/types/canvas-v3.ts`), typés, validés par Zod, et les cinq
+couches les traitent génériquement — le convertisseur passerelle les remplit
+dans un `baseObject` unique, quel que soit le kind.
+
+**La CHARGE ne l'est nulle part, et c'est délibéré** :
+
+```ts
+payload: z.record(z.string(), z.unknown())
+```
+
+Le contrat déclare donc que la charge d'un objet est **opaque**. Chaque couche
+en tient alors son propre inventaire privé, et ces inventaires divergent en
+silence — rien ne peut les comparer, puisque le contrat ne dit rien.
+
+### Ce que cette opacité coûte, en chiffres
+
+| mesure | valeur |
+|---|---|
+| champs des cinq modèles d'objet | **123** |
+| champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **65** (53 %) |
+| champs jamais exercés — donc jamais comparés | **58** (47 %) |
+| clés que le pont Swift émet et que la passerelle ne recompose pas | **14** (#4905) |
+| pertes silencieuses corrigées en deux jours | **8** |
+
+**Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
+coïncidence : c'est le mécanisme. Un champ que le golden n'exerce pas n'est
+comparé par rien.
+
+### La forme qui immunise, et elle existe déjà dans le dépôt
+
+Sur les cinq branches du convertisseur passerelle, **une seule RÉPAND**
+(`textObjects` : `o.payload = rest` après destructuration de l'enveloppe) ; les
+quatre autres RECOMPOSENT clé par clé. Les huit morsures sont toutes tombées sur
+une branche qui recompose. La branche qui répand porte les 36 champs de
+`StoryTextObject` — dont cinq ajoutés cette semaine — sans que personne n'ait eu
+à y penser.
+
+> **Un inventaire humain se maintient à la main ; un `rest` se maintient tout
+> seul.** Devant une charge opaque par contrat, la seule discipline qui tient à
+> l'échelle est de ne pas énumérer.
+
+Trois façons de fermer le trou, non exclusives, par coût croissant :
+1. **répandre** au lieu de recomposer (#4905) — supprime quatre inventaires ;
+2. **compléter le blob v1 partagé** pour que le golden exerce les 123 champs —
+   utile après (1), pour les clés dérivées que le `rest` ne couvre pas ;
+3. **typer la charge par kind au contrat** — le seul remède qui rendrait la
+   structure connue *par déclaration* plutôt que par convention. C'est une
+   décision de contrat, pas un correctif : elle ferme la porte à l'extensibilité
+   permissive qui permet aujourd'hui à un client plus récent d'ajouter une clé
+   qu'un client plus ancien ignore sans casser.
+
+Tant que (3) n'est pas tranchée, **la charge reste une convention, jamais un
+contrat** — et tout lot qui y ajoute une clé doit la porter à la main sur chaque
+couche qui recompose.
 
 ## 7. Correspondance avec ce qui existe
 

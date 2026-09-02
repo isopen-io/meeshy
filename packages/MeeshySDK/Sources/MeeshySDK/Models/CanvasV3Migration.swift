@@ -318,7 +318,25 @@ public extension CanvasV3 {
                                                        x: Double(audio.x), y: Double(audio.y)),
                                     plane: .content,
                                     z: effects.wireZ(audio.id, audio.zIndex, fallback),
-                                    transform: TransformV3(),
+                                    // **La puce de son se PINCE et se TOURNE** —
+                                    // `updateScale` / `updateRotation`
+                                    // (`StoryCanvasUIView+Manipulation.swift`) les
+                                    // écrivent pour les CINQ familles, audio compris.
+                                    // Un `TransformV3()` par défaut jetait les deux :
+                                    // chaque lecteur voyait la puce à l'échelle 1,
+                                    // sans angle. Trouvé par le témoin d'exhaustivité
+                                    // (#4833) à son premier tour, sur la seule famille
+                                    // que personne n'avait regardée.
+                                    // `TransformV3` ne sait pas dire « absent » :
+                                    // le défaut du décodeur EST la valeur neutre
+                                    // des deux côtés, donc `nil` s'émet en 1 / 0 et
+                                    // se relit en `nil`. Une puce jamais pincée se
+                                    // réencode ainsi octet pour octet, et un auteur
+                                    // qui pose exactement 1,0 obtient `nil` — les
+                                    // deux rendent le même pixel.
+                                    transform: TransformV3(scale: audio.scale ?? 1,
+                                                           rotation: audio.rotation ?? 0,
+                                                           opacity: 1),
                                     timing: timingV3(start: audio.startTime.map(exactDouble),
                                                      end: effects.wireTimingEnd?[audio.id],
                                                      keyframes: audio.keyframes),
@@ -509,6 +527,19 @@ public extension CanvasV3 {
         }
         if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
+        // **La forme d'onde d'une note vocale** — ~80 échantillons figés à la
+        // composition (`StoryModels.swift`), que `StoryAudioPlayerView` peint
+        // barre par barre. Sans eux, son `guard !samples.isEmpty else { return }`
+        // ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
+        // vocale posée sur la scène. Quatre-vingts nombres pour ne pas servir un
+        // trou — le calcul n'a pas besoin d'être long.
+        //
+        // Omis quand le tableau est vide : une piste EMPRUNTÉE n'en porte pas
+        // (`StoryAudioIdentity.showsWaveform` ne peint que l'enregistrement), et
+        // son objet se réencode alors octet pour octet.
+        if !audio.waveformSamples.isEmpty {
+            payload["waveformSamples"] = .array(audio.waveformSamples.map { .number(exactDouble($0)) })
+        }
         if let isBackground = audio.isBackground { payload["isBackground"] = .bool(isBackground) }
         if let loop = audio.loop { payload["loop"] = .bool(loop) }
         if let duration = audio.duration { payload["duration"] = .number(exactDouble(duration)) }
@@ -845,6 +876,8 @@ public extension StoryEffects {
             placement: object.payload.string("placement") ?? "overlay",
             x: CGFloat(position.x), y: CGFloat(position.y),
             volume: object.payload.double("volume").map { Float($0) } ?? 1,
+            waveformSamples: object.payload.array("waveformSamples")?
+                .compactMap { if case .number(let v) = $0 { return Float(v) } else { return nil } } ?? [],
             isBackground: object.payload.bool("isBackground"),
             backgroundAudioVariants: decodeWireArray(StoryAudioVariant.self,
                                                      from: object.payload.array("variants")),
@@ -860,6 +893,8 @@ public extension StoryEffects {
             soundId: object.payload.string("soundId"),
             soundAuthorUsername: object.payload.string("soundAuthorUsername"))
         audio.zIndex = object.z
+        audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
+        audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation
         audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         audio.sourceStart = object.payload.double("sourceStart")
         audio.sourceEnd = object.payload.double("sourceEnd")

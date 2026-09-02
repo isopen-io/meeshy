@@ -147,8 +147,14 @@ nonisolated enum ComposerSceneFloatingRail {
     /// > chose ne se fait contredire par rien : les deux compilent, et le
     /// > doc-comment de la règle continue d'énoncer une classification juste que
     /// > le produit n'applique pas.
-    static func sideRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
-        served.filter { $0.level.appearsOnCanvas }
+    /// **Le format est un paramètre, pas un détail** (#4893) : depuis la
+    /// directive du 2026-09-02, lieu, hashtag, mention et corpus de texte ne
+    /// sont du niveau OBJET qu'en Story. Prendre le niveau sans dire pour quel
+    /// format rendrait une répartition figée — celle d'avant la bascule — sans
+    /// qu'aucun appelant ne rougisse.
+    static func sideRow(from served: [ComposerRailDoor],
+                        format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { $0.level(for: format).appearsOnCanvas }
     }
 
     /// **La LIGNE CANONIQUE — ce qui appartient à l'envoi ou à la slide.**
@@ -160,8 +166,9 @@ nonisolated enum ComposerSceneFloatingRail {
     /// Les deux rangées forment une PARTITION du jeu servi — c'est la
     /// négation du même prédicat, donc aucune porte ne peut se perdre ni
     /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
-    static func lowRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
-        served.filter { !$0.level.appearsOnCanvas }
+    static func lowRow(from served: [ComposerRailDoor],
+                       format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { !$0.level(for: format).appearsOnCanvas }
     }
 }
 

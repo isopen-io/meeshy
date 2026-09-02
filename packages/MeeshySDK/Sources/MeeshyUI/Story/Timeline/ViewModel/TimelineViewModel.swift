@@ -377,6 +377,12 @@ public final class TimelineViewModel: ObservableObject {
         for s in project.stickerObjects {
             addEdges(id: s.id, start: Float(s.startTime ?? 0), duration: Float(s.duration ?? 0))
         }
+        // Le doc-comment promet « les bords de chaque AUTRE objet du canvas » —
+        // il en manquait un (#4840). Même mécanique que le résolveur de clip
+        // actif : sans fenêtre atteignable, l'absence ne se voyait pas.
+        for l in project.locationObjects {
+            addEdges(id: l.id, start: Float(l.startTime ?? 0), duration: Float(l.duration ?? 0))
+        }
         return candidates
     }
 

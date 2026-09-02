@@ -41,6 +41,12 @@ struct ComposerSceneSurface: View {
     let localMedia: [ComposerDocumentMedia]
     let selectedMediaURL: URL?
     let selectableMediaURLs: Set<URL>
+    /// **Le format COURANT, parce que la géographie des rails en dépend**
+    /// (#4893). Lieu, hashtag, mention et corpus de texte ne se posent sur la
+    /// scène qu'en Story ; ailleurs ils qualifient la publication et vivent en
+    /// bas. La surface ne décide de rien — elle ne peut simplement pas
+    /// interroger `ComposerSceneFloatingRail` sans dire pour quoi elle compose.
+    let format: ComposerFormat
     let formatFan: AnyView?
     let overflowMenu: AnyView?
     let onClose: () -> Void
@@ -309,7 +315,7 @@ struct ComposerSceneSurface: View {
     /// change de sens selon l'état n'apprend rien.
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = ComposerSceneFloatingRail.sideRow(from: servies)
+        let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
             ComposerLeadingRail(mode: .doors(portes),
@@ -347,7 +353,7 @@ struct ComposerSceneSurface: View {
             )
         }
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = ComposerSceneFloatingRail.lowRow(from: servies)
+        let portes = ComposerSceneFloatingRail.lowRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
             // L'ordre des arguments suit l'ordre de DÉCLARATION — lu, jamais
