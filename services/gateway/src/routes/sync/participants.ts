@@ -11,6 +11,7 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 
 /**
  * Collection `participants` de `/sync` (issue #4171, critère 1) — le ROSTER
@@ -74,6 +75,103 @@ export const syncParticipantSelect = Prisma.validator<Prisma.ParticipantSelect>(
 });
 
 type SyncParticipantRow = Prisma.ParticipantGetPayload<{ select: typeof syncParticipantSelect }>;
+
+/**
+ * Ce que `?fields=participants.…` peut nommer (#4173) — et pourquoi cette liste
+ * ne peut PAS être relevée sur le `select`.
+ *
+ * La ligne servie par cette collection est FABRIQUÉE
+ * (`serializeConversationParticipant`) : ses clés ne sont pas les colonnes de
+ * `Participant`. `username` vient de `user.username` avec repli sur
+ * `displayName` ; `role` est le rôle PLATEFORME (`user.role`) quand
+ * `conversationRole` est le rang dans la conversation (`Participant.role`) — la
+ * fabrique existe précisément parce que confondre les deux avait servi
+ * `member` là où le contrat promet `USER`. Le vocabulaire est donc celui du
+ * FIL, et le plan ci-dessous traduit chaque clé en colonnes.
+ */
+export const SYNC_PARTICIPANT_SERVED_FIELDS = [
+  'id',
+  'participantId',
+  'conversationId',
+  'userId',
+  'type',
+  'username',
+  'firstName',
+  'lastName',
+  'displayName',
+  'avatar',
+  'role',
+  'conversationRole',
+  'joinedAt',
+  'isOnline',
+  'lastActiveAt',
+  'systemLanguage',
+  'regionalLanguage',
+  'customDestinationLanguage',
+  'autoTranslateEnabled',
+  'isActive',
+  'createdAt',
+  'updatedAt',
+  'isAnonymous',
+  'canSendMessages',
+  'canSendFiles',
+  'canSendImages',
+  'permissions',
+] as const;
+
+/**
+ * Le coût en colonnes de chaque clé servie.
+ *
+ * Trois familles s'y lisent, et la troisième est celle qui justifie la carte :
+ *
+ * - les clés qui portent le nom de leur colonne (`type`, `displayName`,
+ *   `avatar`, `isActive`, `lastActiveAt`…) sont absentes de la carte — elles se
+ *   produisent elles-mêmes ;
+ * - les clés qui viennent de la JOINTURE `user` la nomment, et la nommer une
+ *   fois suffit : demander `username` et `systemLanguage` ensemble n'ouvre la
+ *   relation qu'une fois, n'en demander aucune ne l'ouvre pas ;
+ * - `autoTranslateEnabled` ne coûte AUCUNE colonne — la fabrique l'écrit en
+ *   dur. Le tableau vide est ce qui le déclare, plutôt que de laisser croire à
+ *   une colonne qui n'existe pas.
+ *
+ * `isOnline` / `lastActiveAt` sont bien PROJETABLES : leur omission ne peut que
+ * MASQUER (la fabrique sert `false` / `null` sans colonne), jamais révéler. La
+ * loi de présence, elle, reste hors de portée du paramètre — elle s'exécute
+ * inconditionnellement plus bas.
+ */
+export const syncParticipantPlan: ColumnPlan<typeof syncParticipantSelect> = {
+  full: syncParticipantSelect,
+  // `id` + `joinedAt` portent le keyset (`joinedAt` est la SEULE horloge de
+  // `Participant`) ; `conversationId` route la ligne ; `userId` est la CIBLE que
+  // la loi de présence interroge — une garde ne dépend pas d'un paramètre
+  // d'appelant.
+  pinned: ['id', 'conversationId', 'userId', 'joinedAt'],
+  columns: {
+    participantId: ['id'],
+    username: ['user', 'displayName'],
+    firstName: ['user', 'displayName'],
+    lastName: ['user'],
+    avatar: ['avatar', 'user'],
+    role: ['user'],
+    conversationRole: ['role'],
+    systemLanguage: ['user', 'language'],
+    regionalLanguage: ['user', 'language'],
+    customDestinationLanguage: ['user', 'language'],
+    createdAt: ['user', 'joinedAt'],
+    updatedAt: ['user', 'joinedAt'],
+    isAnonymous: ['type'],
+    canSendMessages: ['permissions'],
+    canSendFiles: ['permissions'],
+    canSendImages: ['permissions'],
+    permissions: ['user'],
+    autoTranslateEnabled: [],
+  },
+};
+
+/** `id` et `conversationId` — sans le second, une ligne de roster ne dit pas de
+ *  quelle conversation elle parle, et un roster multi-conversations devient
+ *  illisible. */
+const SYNC_PARTICIPANT_SERVED_PINNED = ['id', 'conversationId'] as const;
 
 /**
  * `conversationParticipantSchema` (déclare exactement ce que
@@ -150,8 +248,11 @@ export async function syncParticipants(opts: {
   cap: number;
   scope?: string;
   cursor?: SyncCursor;
+  /** `?fields=participants.…` déjà analysé — `null` ⇒ le profil par défaut. */
+  fields?: FieldSet;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, authContext, sinceDate, cap, scope, cursor } = opts;
+  const fields = opts.fields ?? null;
 
   const membership = await resolveSyncMembership({ prisma, identity, scope });
   if (membership.conversationIds.length === 0) {
@@ -185,7 +286,7 @@ export async function syncParticipants(opts: {
           }
         : { joinedAt: { gt: sinceDate } }),
     },
-    select: syncParticipantSelect,
+    select: selectForFields(syncParticipantPlan, fields),
     orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
@@ -212,7 +313,13 @@ export async function syncParticipants(opts: {
     const served = serializeConversationParticipant(row, {
       presence: presenceFor(viewer, visibilityByUserId, row.userId),
     });
-    return { ...served, conversationId: row.conversationId };
+    // La restriction s'applique APRÈS la fabrique — c'est elle qui produit les
+    // clés du fil, et la projection porte sur ces clés-là, pas sur les colonnes.
+    return restrictFields(
+      { ...served, conversationId: row.conversationId },
+      fields,
+      SYNC_PARTICIPANT_SERVED_PINNED,
+    );
   };
 
   // `joinedAt` étant la SEULE horloge de ligne, tout ce qui a joint après

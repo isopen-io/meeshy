@@ -13,6 +13,7 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 
 /**
  * Collection `messages` de `/sync` — extrait tel quel de `routes/sync.ts`
@@ -108,6 +109,53 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
 type SyncMessage = Prisma.MessageGetPayload<{ select: typeof syncMessageSelect }>;
 
 /**
+ * Ce que `?fields=messages.…` peut nommer (#4173).
+ *
+ * Le vocabulaire est FERMÉ et se lit MÉCANIQUEMENT depuis `syncMessageSelect` :
+ * une clé ajoutée au select devient demandable le même jour, et aucune clé
+ * demandable ne peut désigner une colonne que le select ne déclare pas — c'est
+ * ce que `selectForFields` garantit en PROJETANT le littéral plutôt qu'en
+ * recomposant un `select` neuf.
+ */
+export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as readonly string[];
+
+/**
+ * Les colonnes ÉPINGLÉES de `messages`, et ce que chacune tient.
+ *
+ * Aucune n'est là pour le confort du client : ce sont les quatre colonnes dont
+ * la MÉCANIQUE de la page dépend, et qu'un `?fields=` ne peut donc pas retirer
+ * sans casser le rattrapage lui-même.
+ *
+ * - `id` + `updatedAt` — la position keyset `(updatedAt, id)` d'où repart le
+ *   curseur. Sans elles, `nextCursor` désignerait une position que la page n'a
+ *   pas ; le rattrapage ne progresserait plus.
+ * - `createdAt` — le partage `added` / `modified`, décidé ligne à ligne par
+ *   comparaison au watermark. Une ligne sans elle tomberait toujours du même
+ *   côté.
+ * - `conversationId` — le masquage PERSONNEL (`clear-history`,
+ *   `delete-for-me`) se résout par conversation. Une garde qui dépendrait d'un
+ *   paramètre d'appelant n'en serait plus une : l'omettre lèverait le masquage.
+ */
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt'] as const;
+
+export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
+  full: syncMessageSelect,
+  pinned: [...SYNC_MESSAGE_PINNED],
+};
+
+/**
+ * Ce qui survit à la projection dans la ligne SERVIE.
+ *
+ * `id` et `conversationId` seulement — deux clés de ROUTAGE, sans lesquelles le
+ * client ne sait ni quelle bulle il écrit ni dans quel fil. Les deux horloges
+ * épinglées au `select` n'y figurent pas : elles servent la MÉCANIQUE de la
+ * page (keyset, partage added/modified), pas le client, et les servir sans
+ * qu'il les demande serait rendre la projection décorative sur les deux champs
+ * les plus fréquents d'une ligne de rattrapage.
+ */
+const SYNC_MESSAGE_SERVED_PINNED = ['id', 'conversationId'] as const;
+
+/**
  * Ce que la ligne Prisma devient sur le fil.
  *
  * Deux champs du `select` ne portent PAS, en base, la forme que les clients
@@ -133,18 +181,32 @@ function serializeSyncMessage(
   message: SyncMessage,
   readerParticipantId: string | undefined,
 ): Record<string, unknown> {
+  // `translations` et `attachments` sont des colonnes PROJETABLES depuis
+  // #4173 : une projection qui ne les nomme pas les laisse absentes de la
+  // ligne. Les deux transformations ne s'appliquent donc qu'à ce qui est là —
+  // et un champ absent reste ABSENT de la charge, jamais reconstruit en tableau
+  // vide, qui affirmerait « ce message n'a ni traduction ni pièce jointe ».
+  const brut = message as Partial<SyncMessage>;
   return {
     ...message,
-    translations: transformTranslationsToArray(
-      message.id,
-      message.translations as unknown as Record<string, MessageTranslationJSON> | null,
-    ),
-    attachments: message.attachments.map((attachment) =>
-      serializeAttachmentForSocket(
-        attachment as unknown as Record<string, unknown>,
-        readerParticipantId,
-      ),
-    ),
+    ...(brut.translations === undefined
+      ? {}
+      : {
+          translations: transformTranslationsToArray(
+            message.id,
+            brut.translations as unknown as Record<string, MessageTranslationJSON> | null,
+          ),
+        }),
+    ...(brut.attachments === undefined
+      ? {}
+      : {
+          attachments: brut.attachments.map((attachment) =>
+            serializeAttachmentForSocket(
+              attachment as unknown as Record<string, unknown>,
+              readerParticipantId,
+            ),
+          ),
+        }),
   };
 }
 
@@ -291,8 +353,11 @@ export async function syncMessages(opts: {
   cap: number;
   scope?: string;
   cursor?: SyncCursor;
+  /** `?fields=messages.…` déjà analysé — `null` ⇒ le profil par défaut, RENDABLE. */
+  fields?: FieldSet;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
+  const fields = opts.fields ?? null;
 
   // Appartenance + plancher d'historique : § `routes/sync/membership.ts`. Les
   // deux cas d'absence de couverture (aucune conversation du tout ; toutes
@@ -327,7 +392,7 @@ export async function syncMessages(opts: {
           }
         : { updatedAt: { gt: sinceDate } }),
     },
-    select: syncMessageSelect,
+    select: selectForFields(syncMessagePlan, fields),
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
@@ -360,8 +425,17 @@ export async function syncMessages(opts: {
   const readerParticipantIdByConversation = new Map(
     memberships.map((m) => [m.conversationId, m.id] as const),
   );
+  // La restriction s'applique APRÈS la sérialisation, et sur la MÊME liste qui
+  // a gouverné le `select` : le `select` décide de ce qu'on LIT, celle-ci de ce
+  // qu'on SERT. Les deux passes sont nécessaires — une colonne épinglée est lue
+  // sans être forcément demandée, et seule cette seconde passe l'empêche
+  // d'élargir la réponse au-delà de ce que l'appelant a nommé.
   const serialize = (m: SyncMessage): Record<string, unknown> =>
-    serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId));
+    restrictFields(
+      serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+      fields,
+      SYNC_MESSAGE_SERVED_PINNED,
+    );
 
   // added = créé après `since` ; modified = pré-existant mais modifié.
   const added = visible.filter((m) => m.createdAt > sinceDate).map(serialize);
