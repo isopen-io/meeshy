@@ -138,7 +138,7 @@ const afficheDePiece = (url: string, nom: string, meta: string): string =>
   '</a>';
 
 const lecteurDePiece = ({ balise, source, nom, meta }: { readonly balise: 'audio' | 'video'; readonly source: string; readonly nom: string; readonly meta: string }): string =>
-  '<details class="media lecteur">' +
+  '<details class="lecteur">' +
   '<summary>' +
   `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
   `<span class="hors-ecran">${echappe(FIL.lire(nom, meta))}</span>` +
@@ -200,7 +200,7 @@ const piece = (piece: PieceJointe, langueDuDocument: string): string => {
 const gabaritDePiece = (): string =>
   '<li data-piece="" data-genre="fichier">' +
   afficheDePiece('', '', '') +
-  '<details class="media lecteur"><summary>' +
+  '<details class="lecteur"><summary>' +
   `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
   '<span class="hors-ecran"></span>' +
   '<span class="rail" aria-hidden="true"></span>' +
@@ -497,7 +497,7 @@ export const gabaritDeLigne = (adresse: string): string =>
   '<p class="texte"></p>' +
   `<details class="original"><summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary><p></p></details>` +
   '<p class="meta">' +
-  `<span class="langue" title="${echappe(FIL.traduitDepuis)}">${svgDuSprite('ph-translate')}<span class="code"></span></span>` +
+  `<span class="langue" title="${echappe(FIL.traduitDepuis)}" hidden>${svgDuSprite('ph-translate')}<span class="code"></span></span>` +
   `<span class="modifie">${echappe(FIL.modifie)}</span>` +
   `<span class="attente">${svgDuSprite('ph-clock')}<span class="etat-envoi">${echappe(FIL.enAttente)}</span></span>` +
   `<span class="echec">${svgDuSprite('ph-warning-circle')}<span class="raison">${echappe(FIL.echec)}</span>` +

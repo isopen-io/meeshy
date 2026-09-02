@@ -123,8 +123,8 @@
  },
  "participate": {
   "quoi": "Le poids du module de participation (lib/realtime/participate.ts compilé par bun build, servi sous /__v3/rt/participate.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js). Tous deux arrivent APRÈS le premier pixel de /chats/:cle et /chat/:lien (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page.",
-  "participate_brut_octets": 79767,
-  "participate_gzip_9_octets": 23294,
+  "participate_brut_octets": 86860,
+  "participate_gzip_9_octets": 25632,
   "socket_io_client_brut_octets": 40435,
   "socket_io_client_gzip_9_octets": 12849,
   "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",

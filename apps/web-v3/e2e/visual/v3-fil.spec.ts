@@ -460,11 +460,14 @@ test.describe('en direct', () => {
     passerelle.socket.emets(CONVERSATION_DU_LECTEUR.id, 'message:new', vocal);
 
     const ligne = page.locator('li[data-id="m801"]');
-    const lien = ligne.locator('a.media[data-genre="audio"]');
-    await expect(lien).toBeVisible();
-    await expect(lien).toHaveAttribute('href', new RegExp(`^${passerelle.base}/api/v1/attachments/file/`));
+    // UN bloc par pièce, choisi par le genre : un vocal EST un lecteur, jamais
+    // une affiche de téléchargement suivie d'un lecteur natif (`cible/rich.png`).
+    const bloc = ligne.locator('ul.pieces > li[data-genre="audio"] details.lecteur');
+    await expect(bloc).toBeVisible();
+    expect(await ligne.locator('a.media').count()).toBe(0);
     await expect(ligne.locator('.pieces .poids')).toHaveText(`0:12 · ${octets.length} o`);
     await expect(ligne.locator('audio')).toHaveAttribute('preload', 'none');
+    await expect(ligne.locator('audio')).toHaveAttribute('src', new RegExp(`^${passerelle.base}/api/v1/attachments/file/`));
     await expect(ligne.locator('.transcription')).toBeHidden();
     // Rien n'a été téléchargé : le fichier n'a pas été demandé.
     expect(passerelle.journal.filter((a) => a.chemin.includes('/attachments/file/'))).toEqual([]);

@@ -565,6 +565,52 @@ describe('le premier audio:*-ready d’un vocal SERVI', () => {
     expect(p.liste.querySelectorAll('li[data-id="v1"] ul.pieces > li')).toHaveLength(1);
     expect(p.liste.querySelector<HTMLElement>('li[data-id="v1"] ul.pieces')?.hidden).toBe(false);
   });
+
+  /**
+   * MAIS ELLE SE RETIRE QUAND L'ÉTAT PORTE LA PREUVE. « Ne pas contredire le
+   * document » n'est pas « ne jamais retirer » : sur une ligne SANS pièce, ou
+   * sur une bulle dont l'état porte ses pièces, l'absence d'annonce est une
+   * information — et la pastille tombe.
+   */
+  it('retire la pastille d’une bulle sans traduction dont l’état porte tout', () => {
+    const p = monteLeVocal();
+    const sansPrisme = message(
+      { ...VOCAL(null), id: 'v2', content: 'Bonjour', originalLanguage: 'fr', createdAt: '2026-09-01T12:04:00.000Z' },
+      'u1',
+      LANGUES,
+      ORIGINE,
+    )!;
+    peins(p, insere({ bulles: [], frappeurs: [], presents: [] }, { ...sansPrisme, envoi: 'servi', raison: null }), 0);
+    expect(p.liste.querySelector<HTMLElement>('li[data-id="v2"] .meta .langue')?.hidden).toBe(true);
+  });
+
+  /**
+   * ET N'EFFACE PAS NON PLUS CE QUE LES PIÈCES ANNONCENT. `bullesDuDocument`
+   * pose `pieces: []` : une pastille dont la source est un VOCAL traduit n'est
+   * connue que du document. Le module la MONTRE quand l'état la porte, il ne la
+   * RETIRE que sur une preuve — une parole retirée.
+   */
+  it('garde la pastille qu’un vocal traduit a fait SERVIR, au premier repeint', () => {
+    const etat = etatServi();
+    const servi = message(
+      VOCAL({
+        transcription: { text: 'Mo n mú àwọn nọ́mbà', language: 'yo' },
+        translations: { fr: { transcription: 'J’apporte les chiffres de mars.' } },
+      }),
+      'u1',
+      LANGUES,
+      ORIGINE,
+    )!;
+    document.open();
+    document.write(documentDuFil({ ...etat, fil: { ...etat.fil, messages: [servi] } }));
+    document.close();
+    const p = peintre(document.querySelector<HTMLElement>('main')!)!;
+    expect(p.liste.querySelector('li[data-id="v1"] .meta .langue .code')?.textContent).toBe('yo');
+
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, 0);
+    expect(p.liste.querySelector<HTMLElement>('li[data-id="v1"] .meta .langue')?.hidden).toBe(false);
+    expect(p.liste.querySelector('li[data-id="v1"] .meta .langue .code')?.textContent).toBe('yo');
+  });
 });
 
 /**

@@ -169,28 +169,32 @@ const retireSauf = (racine: ParentNode, selecteur: string, garde: boolean): void
 
 const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocument: string): void => {
   const forme = formeDePiece(piece.genre);
+  const meta = metaDePiece(piece);
   noeud.dataset.piece = piece.id;
   noeud.dataset.genre = piece.genre;
 
   // Le bloc que le genre ne demande pas SORT du clone : une pièce peinte et une
   // pièce servie portent alors le même balisage, au nœud près.
   noeud.querySelector(forme.lecteur === null ? 'details.lecteur' : 'a.media')?.remove();
-  noeud.querySelector(forme.lecteur === 'audio' ? 'video' : 'audio')?.remove();
+  // Le média natif que la table ne NOMME pas sort avec lui : la balise vient de
+  // `forme.lecteur`, jamais d'une comparaison de genre écrite ici.
+  noeud.querySelectorAll('audio, video').forEach((media) => {
+    if (media.tagName.toLowerCase() !== forme.lecteur) media.remove();
+  });
 
   const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
   if (lien !== null) {
     if (piece.url === '') lien.removeAttribute('href');
     else lien.href = piece.url;
-    lien.setAttribute('aria-label', FIL.telecharger(piece.nom, metaDePiece(piece)));
+    lien.setAttribute('aria-label', FIL.telecharger(piece.nom, meta));
   }
   // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
   // (cycle 128) —, jamais l'adresse de téléchargement.
   const media = noeud.querySelector<HTMLMediaElement>('audio, video');
   if (media !== null && piece.piste !== '') media.src = piece.piste;
-  texte(noeud, 'details.lecteur > summary > .hors-ecran', FIL.lire(piece.nom, metaDePiece(piece)));
+  texte(noeud, 'details.lecteur > summary > .hors-ecran', FIL.lire(piece.nom, meta));
 
   texte(noeud, '.nom-de-piece', piece.nom);
-  const meta = metaDePiece(piece);
   texte(noeud, '.poids', meta);
   montre(noeud, '.poids', meta !== '');
 
@@ -375,9 +379,20 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
   // La pastille annonce ce qui a été RÉSOLU — le texte d'abord, puis ce que le
   // message PORTE : sur un vocal sans texte, elle disparaissait avec le texte
   // absent (`lib/api/fil.ts`, `annonceDuPrisme`).
+  // LA PASTILLE DIT CE QUI A ÉTÉ RÉSOLU — le texte d'abord, puis ce que le
+  // message PORTE (`annonceDuPrisme`) : sur un vocal sans texte, elle
+  // disparaissait avec le texte absent.
+  //
+  // Et elle ne CONTREDIT pas le document quand l'état n'en sait pas assez :
+  // `bullesDuDocument` ne reconstruit PAS les pièces (`pieces: []`), donc une
+  // pastille dont la source est un vocal traduit serait effacée au premier
+  // repeint. On ne décide donc que lorsque les pièces sont CONNUES de l'état —
+  // soit qu'il les porte, soit que la ligne n'en ait aucune.
   const annonce = bulle.supprime ? null : annonceDuPrisme(bulle);
+  const piecesConnues =
+    bulle.pieces.length > 0 || ligne.querySelector('ul.pieces > li[data-piece]:not([data-piece=""])') === null;
   const pastille = ligne.querySelector<HTMLElement>('.meta .langue') ?? (annonce === null ? null : poseAuDebut(ligne, '.meta', clone<HTMLElement>(p.gabarit, '.meta .langue')));
-  if (pastille !== null) {
+  if (pastille !== null && (annonce !== null || piecesConnues)) {
     pastille.hidden = annonce === null;
     if (annonce !== null) texte(pastille, '.code', annonce.origine);
   }

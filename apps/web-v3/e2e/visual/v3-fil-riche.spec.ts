@@ -112,10 +112,11 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
           .map((selecteur) => selecteur),
       })),
     );
+    // Le DOM va du plus récent au plus ancien (`column-reverse`, feuille du fil).
     expect(blocs).toEqual([
-      { genre: 'image', vus: ['a.media'] },
-      { genre: 'video', vus: ['details.lecteur'] },
       { genre: 'audio', vus: ['details.lecteur'] },
+      { genre: 'video', vus: ['details.lecteur'] },
+      { genre: 'image', vus: ['a.media'] },
     ]);
 
     // UN glyphe élu par porteur : les autres sont dans le DOM (c'est ce qui
@@ -192,6 +193,29 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
     await expect(page.locator('.fil-tete h1')).toHaveText(CONVERSATION_RICHE.titre);
     expect(await page.locator('ul.pieces > li, li.citation').count()).toBe(6);
     await expect(page.locator('li[data-id="r3"] .transcrit')).toHaveText('Transcrit du yo · lire en fr');
+    await contexte.close();
+  });
+
+  /**
+   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PAS LA CONVERSATION. `download` est
+   * IGNORÉ hors origine — et la passerelle EST une autre origine que le
+   * document —, si bien que le clic NAVIGUAIT l'onglet vers le fichier brut :
+   * fil, position de lecture et socket perdus, et rien ne l'annonçait. Le
+   * témoin porte sur l'EFFET du geste, pas sur un attribut.
+   */
+  test('ouvre une pièce jointe SANS quitter le fil, et nomme le geste', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+    const avant = page.url();
+
+    const affiche = page.locator('li[data-id="r1"] a.media');
+    await expect(affiche).toHaveAttribute('aria-label', /Télécharger tableau\.jpg · 420 Ko/);
+    expect(await affiche.getAttribute('download')).toBeNull();
+
+    const [ouvert] = await Promise.all([contexte.waitForEvent('page'), affiche.click()]);
+    await ouvert.waitForLoadState('domcontentloaded').catch(() => undefined);
+    expect(page.url()).toBe(avant);
+    expect(ouvert.url()).toContain('/api/v1/attachments/file/');
     await contexte.close();
   });
 

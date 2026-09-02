@@ -190,7 +190,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .pieces>li[data-genre=image] .vignette{aspect-ratio:4/3;background:var(--color-bg-sunken)}
 .pieces>li[data-genre=image] .vignette svg{width:var(--glyph-large);height:var(--glyph-large)}
 .pieces>li[data-genre=image] .nom-de-piece{display:none}
-.lecteur{position:relative}
+.lecteur{position:relative;display:block}
 .lecteur>summary{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);list-style:none;cursor:pointer}
 .lecteur>summary::-webkit-details-marker{display:none}
 .lecteur[open]>summary{display:none}

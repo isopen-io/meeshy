@@ -319,7 +319,7 @@ describe('le document servi — six formes, un balisage', () => {
     expect(servi).toContain('<li data-piece="a5" data-genre="video">');
     expect(servi).toContain('<li data-piece="a6" data-genre="audio">');
 
-    const blocs = [...servi.matchAll(/<li data-piece="[^"]+" data-genre="(\w+)">(<a class="media"|<details class="media lecteur">)/g)].map(
+    const blocs = [...servi.matchAll(/<li data-piece="[^"]+" data-genre="(\w+)">(<a class="media"|<details class="lecteur">)/g)].map(
       ([, genre, bloc]) => [genre, bloc?.startsWith('<a') === true ? 'affiche' : 'lecteur'],
     );
     // La liste est SERVIE du plus récent au plus ancien (`lignes`, feuille en
@@ -330,7 +330,7 @@ describe('le document servi — six formes, un balisage', () => {
       ['image', 'affiche'],
     ]);
     // Une pièce, un bloc : autant d'ouvertures que de pièces, jamais deux par pièce.
-    expect(servi.split('<a class="media"').length - 1 + (servi.split('<details class="media lecteur">').length - 1)).toBe(3);
+    expect(servi.split('<a class="media"').length - 1 + (servi.split('<details class="lecteur">').length - 1)).toBe(3);
   });
 
   it('rend les trois genres de citation par le MÊME élément, distingué par `data-genre`', () => {
