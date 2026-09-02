@@ -888,6 +888,23 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
         'sunset du 2027-02-26 — des notifications deja livrees portent des adresses de cette forme.',
     },
   },
+
+  // #4150 — les SIX portes de telemetrie de lecture deleguent a
+  // `POST /api/v1/social/events` et annoncent leur sursis. Elles sont ici parce
+  // que leur retrait EXIGE ce compteur, et pour une raison qui leur est propre :
+  // le critere 10 le subordonne a un releve du client Kotlin, qu'aucun audit n'a
+  // fait. Un zero LISIBLE par adresse est ce qui rendra ce releve concluant —
+  // un zero dans `(unrouted)` ne prouverait rien, la table l'ecrit plus haut.
+  //
+  // L'adresse CIBLE, `POST /api/v1/social/events`, n'est PAS surveillee : son
+  // compteur ne peut pas tomber a zero, et le surveiller serait le faux zero
+  // inverse que la note de `GET /me/preferences` decrit deja.
+  { method: 'POST', route: apiPath('/posts/:postId/view'), issue: 4150 },
+  { method: 'POST', route: apiPath('/posts/:postId/impression'), issue: 4150 },
+  { method: 'POST', route: apiPath('/posts/impressions/batch'), issue: 4150 },
+  { method: 'POST', route: apiPath('/posts/engagement/batch'), issue: 4150 },
+  { method: 'POST', route: apiPath('/posts/:postId/downloads'), issue: 4150 },
+  { method: 'POST', route: apiPath('/posts/:postId/anonymous-view'), issue: 4150 },
 ]);
 
 /**

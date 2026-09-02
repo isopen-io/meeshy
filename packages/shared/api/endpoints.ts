@@ -454,6 +454,7 @@ export const API_ENDPOINTS = {
     sessionEstablish: '/api/v1/signal/session/establish',
   },
   social: {
+    events: '/api/v1/social/events',
     posts: '/api/v1/social/posts',
   },
   socketio: {
@@ -932,6 +933,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/signal/keys',
   '/api/v1/signal/keys/:userId',
   '/api/v1/signal/session/establish',
+  '/api/v1/social/events',
   '/api/v1/social/posts',
   '/api/v1/socketio/disconnect-user',
   '/api/v1/socketio/stats',
@@ -1381,6 +1383,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/signal/keys': ['POST'],
   '/api/v1/signal/keys/:userId': ['GET'],
   '/api/v1/signal/session/establish': ['POST'],
+  '/api/v1/social/events': ['POST'],
   '/api/v1/social/posts': ['GET'],
   '/api/v1/socketio/disconnect-user': ['POST'],
   '/api/v1/socketio/stats': ['GET'],
