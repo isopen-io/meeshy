@@ -442,7 +442,8 @@ struct PostDetailView: View {
     // type-checker stays within budget — inlining the threaded-comment
     // ForEach made `body` exceed the reasonable type-check time.
     @ViewBuilder
-    private func postDetailContent(_ post: FeedPost) -> some View {
+    private func postDetailContent(_ post: FeedPost,
+                                   scrollProxy: ScrollViewProxy) -> some View {
         // ZONE 1: Text
         textZone(post)
 
@@ -507,7 +508,7 @@ struct PostDetailView: View {
         }
 
         // Actions bar
-        actionsBar(post, renderedItem: renderedItem)
+        actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
 
         // Separator + Comments (ZONE 3)
         Rectangle()
@@ -723,7 +724,7 @@ struct PostDetailView: View {
                                 Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                                 LazyVStack(spacing: 0) {
-                                    postDetailContent(post)
+                                    postDetailContent(post, scrollProxy: scrollProxy)
                                 }
                                 .padding(.bottom, 80)
                             }
@@ -1738,7 +1739,9 @@ struct PostDetailView: View {
     // MARK: - Actions Bar
 
     @ViewBuilder
-    private func actionsBar(_ post: FeedPost, renderedItem: StoryItem) -> some View {
+    private func actionsBar(_ post: FeedPost,
+                            renderedItem: StoryItem,
+                            scrollProxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             // Heart button — socket-driven (joins post room on appear, leaves on disappear)
             Button {
@@ -1784,6 +1787,53 @@ EngagementGlyph(
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
             .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
+
+            Spacer()
+
+            // **Commentaires — le deuxieme item de la cible `2h`** (#4086).
+            //
+            // La rangee du detail n'en portait que trois (coeur, repost,
+            // signet) la ou la carte du fil en porte cinq et la cible quatre.
+            // Le lecteur qui cherchait le nombre de commentaires devait
+            // defiler dans un cas et pas dans l'autre — meme publication, deux
+            // rangees.
+            //
+            // Il AGIT : le tap amene a la section, deja ancree
+            // `.id("commentsSection")` et deja visee par
+            // `attemptScrollToTargetComment`. Un item de comptage sans effet
+            // aurait fait mentir la rangee entiere (loi 4) — les trois autres
+            // agissent.
+            Button {
+                HapticFeedback.light()
+                withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
+            } label: {
+                HStack(spacing: 5) {
+                    let n = displayPost?.commentCount ?? 0
+                    EngagementGlyph(
+                        outline: "bubble.right",
+                        filled: "bubble.right.fill",
+                        participated: false,
+                        accentHex: accentColor,
+                        activeTint: Color(hex: accentColor),
+                        inactiveTint: n > 0 ? Color(hex: accentColor) : theme.textSecondary,
+                        filledWhenInactive: n > 0,
+                        size: 18
+                    )
+                    if n > 0 {
+                        Text("\(n)")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(Color(hex: accentColor))
+                            .contentTransition(.numericText())
+                    }
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(localized: "a11y.post.comments",
+                                       defaultValue: "Commentaires", bundle: .main))
+            .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
+            .accessibilityHint(String(localized: "a11y.post.comments.hint",
+                                      defaultValue: "Aller aux commentaires", bundle: .main))
 
             Spacer()
 
