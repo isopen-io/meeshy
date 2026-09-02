@@ -95,6 +95,11 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case reaction
     case party
     case availability
+    /// Le second lot de thèmes (#4820, vers les 200) — la nature et les
+    /// animaux, l'encouragement, les réponses d'un mot.
+    case nature
+    case cheer
+    case answer
 }
 
 // MARK: - Sticker Template Slot

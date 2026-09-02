@@ -50,6 +50,7 @@ public enum StickerTemplateCatalog {
         + love + loveExtra
         + weather + text
         + joy + surprise + mood + greeting + reaction + party + availability
+        + nature + cheer + answer
 
     public static let location: [StickerTemplate] = [
         StickerTemplate(id: ID.locationPill,
