@@ -163,7 +163,7 @@ struct AudioCarouselView: View {
             // intermediate track.
             pendingPlayTask?.cancel()
             pendingPlayTask = Task {
-                try? await Task.sleep(nanoseconds: 220_000_000)
+                try? await Task.sleep(for: .milliseconds(220))
                 guard !Task.isCancelled, currentPageID == newID else { return }
                 onPlayAudio?(newID)
             }

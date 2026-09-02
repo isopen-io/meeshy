@@ -384,7 +384,7 @@ public final class NotificationCoordinator: ObservableObject {
     private func scheduleSync() {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled, let self else { return }
             await self.syncNow()
         }

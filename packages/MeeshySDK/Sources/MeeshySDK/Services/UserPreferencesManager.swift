@@ -192,7 +192,7 @@ public final class UserPreferencesManager: ObservableObject {
     ///    audio, génération TTS, profil vocal).
     /// Idempotent : un timestamp déjà posé n'est jamais réécrit.
     public func grantVoiceAutoTranslationConsent(now: Date = Date()) {
-        let iso = ISO8601DateFormatter().string(from: now)
+        let iso = now.formatted(.iso8601.time(includingFractionalSeconds: true))
         updateApplication { app in
             if app.dataProcessingConsentAt == nil { app.dataProcessingConsentAt = iso }
             if app.voiceDataConsentAt == nil { app.voiceDataConsentAt = iso }
