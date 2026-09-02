@@ -56,6 +56,8 @@ data class FeedPostPresentation(
     val isAuthor: Boolean,
     /** The post's shared place, or null when none — mirror of iOS `post.location`. */
     val location: FeedLocationPresentation? = null,
+    /** Distance in meters from the viewer — only present on the Nearby feed. */
+    val distanceMeters: Double? = null,
 )
 
 object FeedPostBuilder {
@@ -130,6 +132,7 @@ object FeedPostBuilder {
             impressionCount = post.impressionCount ?: 0,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
+            distanceMeters = post.distanceMeters,
         )
     }
 

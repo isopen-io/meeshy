@@ -458,8 +458,17 @@ const SIGNAUX_SUR_PLAN = [
 ];
 
 // Une encre POSÉE sur une couleur de la table, pas sur un plan.
+//
+// L'ÉTAT COMPTE AUTANT QUE LE REPOS. `--color-on-primary` ne se lisait ici que
+// sur `--color-primary` — le bouton principal AU REPOS. La charte (règle 4)
+// lui donne pourtant un SURVOL peint `--color-primary-strong`, sur lequel la
+// MÊME encre se lit : en sombre, 4,37:1, sous les 4,5:1 dus à du texte. Le gate
+// rendait vert par OMISSION, sur la plus grosse cible de l'écran, dans un état
+// que la charte impose. Une paire ne se déclare donc pas par jeton mais par
+// SITUATION DE LECTURE : partout où cette encre se pose, repos ET survol.
 const ENCRES_SUR_FOND = [
   ['--color-on-primary', '--color-primary'],
+  ['--color-on-primary', '--color-primary-strong'],
   ['--color-on-status', '--color-success'],
   ['--color-on-status', '--color-warning'],
   ['--color-on-status', '--color-danger'],
@@ -469,6 +478,35 @@ const ENCRES_SUR_FOND = [
   ['--color-on-avatar', '--color-avatar-4'],
 ];
 
+// Les QUATRE VOILES de la charte (§ 12.5 règles 11, 14 et 17) — des plans à
+// part entière dès qu'un bandeau ou une tuile s'y pose, mais PAS des plans de
+// l'échelle d'élévation : les ajouter à `PLANS` ferait mesurer un ordre de
+// luminance entre un fond de page et un fond d'alerte, ce qui ne veut rien
+// dire. Ils sont donc une famille distincte, avec leurs propres paires.
+//
+// Ils sont écrits `color-mix(…)` dans la table : c'est `resout` qui les
+// CALCULE (lib/couleur.mjs). Tant qu'il ne le savait pas, ce contrôle rendait
+// « paire non résolue » sur chacun — une infraction permanente pour un fond
+// parfaitement lisible.
+const VOILES = [
+  '--color-tint-primary',
+  '--color-tint-success',
+  '--color-tint-warning',
+  '--color-tint-danger',
+];
+
+// Ce qui se LIT sur un voile : le texte du bandeau, jamais la couleur d'état.
+const ENCRES_SUR_VOILE = ['--color-text', '--color-text-muted', '--color-text-subtle'];
+
+// La couleur d'état porte SEULE son information sur son propre voile — c'est le
+// filet gauche du bandeau (règle 17) et le glyphe qui l'accompagne : 3:1.
+const SIGNAUX_SUR_LEUR_VOILE = [
+  ['--color-primary', '--color-tint-primary'],
+  ['--color-success', '--color-tint-success'],
+  ['--color-warning', '--color-tint-warning'],
+  ['--color-danger', '--color-tint-danger'],
+];
+
 const TEXTE = 4.5;
 const SIGNAL = 3;
 
@@ -476,7 +514,60 @@ const paires = () => [
   ...ENCRES_SUR_PLAN.flatMap((encre) => PLANS.map((plan) => [encre, plan, TEXTE])),
   ...SIGNAUX_SUR_PLAN.flatMap((signal) => PLANS.map((plan) => [signal, plan, SIGNAL])),
   ...ENCRES_SUR_FOND.map(([encre, fond]) => [encre, fond, TEXTE]),
+  ...ENCRES_SUR_VOILE.flatMap((encre) => VOILES.map((voile) => [encre, voile, TEXTE])),
+  ...SIGNAUX_SUR_LEUR_VOILE.map(([signal, voile]) => [signal, voile, SIGNAL]),
+  // L'anneau de focus et son contre-anneau se détourent l'un l'autre : sans 3:1
+  // entre les deux, le double anneau de la règle 15 n'en fait qu'un.
+  ['--color-focus', '--color-focus-contra', SIGNAL],
 ];
+
+// --- l'anneau de focus, une DISJONCTION et non une paire ---------------------
+//
+// POURQUOI LA RÈGLE 15 POSE DEUX ANNEAUX. Aucune couleur unique ne tient 3:1
+// (WCAG 1.4.11) contre TOUS les fonds sur lesquels un élément focusable se pose.
+// L'encre du schéma, qui les domine tous, rend 2,58:1 en sombre et 2,94:1 en
+// clair sur `--color-primary` — c'est-à-dire sur le BOUTON PRINCIPAL, la cible
+// que la charte rend la plus grosse. Un anneau peint à l'accent y serait pire
+// encore : 1,43:1. Le second anneau existe pour porter le contraste là où le
+// premier le perd.
+//
+// CE QUE LE COUPLE DOIT DONC TENIR, ET CE QU'UNE PAIRE NE SAIT PAS DIRE. Le
+// contrat n'est pas « chacun des deux tient 3:1 partout » — aucun couple ne le
+// tiendrait, et l'exiger interdirait la règle 15 elle-même. C'est « pour CHAQUE
+// fond, AU MOINS UN des deux tient 3:1 ». `paires()` conjugue ; elle ne sait pas
+// disjoindre. La paire `focus / focus-contra` qui y figure reste nécessaire —
+// deux anneaux indiscernables l'un de l'autre n'en font qu'un — mais elle ne
+// suffit pas : elle ne regarde AUCUN fond.
+//
+// Les fonds : les quatre plans, l'accent, et les quatre voiles.
+const FONDS_DU_FOCUS = [...PLANS, '--color-primary', ...VOILES];
+
+/**
+ * La loi, sur une table SERVIE — pure, donc gageable sur une table fabriquée.
+ * Un couple dont les deux membres s'évanouissent sur un même fond y apparaît ;
+ * un couple dont l'un porte ce que l'autre perd n'y apparaît pas.
+ */
+export const focusInvisiblesDans = (table) => {
+  const [anneau, contre] = ['--color-focus', '--color-focus-contra'].map((jeton) =>
+    resout(table, jeton),
+  );
+  return FONDS_DU_FOCUS.flatMap((fond) => {
+    const valeur = resout(table, fond);
+    if (anneau === null || contre === null || valeur === null) {
+      return [{ fond, meilleur: null }];
+    }
+    const meilleur = arrondi(Math.max(contraste(anneau, valeur), contraste(contre, valeur)));
+    return meilleur >= SIGNAL ? [] : [{ fond, meilleur }];
+  });
+};
+
+export const focusInvisibles = (racineJetons) =>
+  SCHEMAS.flatMap((schema) =>
+    focusInvisiblesDans(tableDe(racineJetons, schema)).map((entree) => ({
+      schema: schema.nom,
+      ...entree,
+    })),
+  );
 
 export const contrastesInsuffisants = (racineJetons) =>
   SCHEMAS.flatMap((schema) => {
@@ -591,6 +682,7 @@ export const audit = ({ racineV3, racineJetons }) => {
     orphelins: jetonsOrphelins(racineJetons),
     contrastes: contrastesInsuffisants(racineJetons),
     ordres: plansDesordonnes(racineJetons),
+    focus: focusInvisibles(racineJetons),
     suivis: suivisDeLOS(feuillesDepuis(racineJetons, 'tokens.css')),
   };
 };
@@ -609,6 +701,7 @@ export const formateAudit = (rapport) => {
     rapport.orphelins.length +
     rapport.contrastes.length +
     rapport.ordres.length +
+    rapport.focus.length +
     rapport.suivis.length;
   return [
     ...bloc(
@@ -657,6 +750,13 @@ export const formateAudit = (rapport) => {
       (e) => `  ${e.schema}  ${e.plan} n'est pas plus clair que ${e.dessous}`,
     ),
     ...bloc(
+      "Fonds sur lesquels AUCUN des deux anneaux de focus ne se voit :",
+      'la règle 15 pose un anneau ET son contre-anneau ; pour chaque fond, au moins un des deux ' +
+        'doit tenir 3:1 (WCAG 1.4.11) — corriger le COUPLE, pas le fond.',
+      rapport.focus,
+      (e) => `  ${e.schema}  sur ${e.fond}, le meilleur des deux anneaux = ${e.meilleur ?? 'non résolu'} (< ${SIGNAL})`,
+    ),
+    ...bloc(
       "Propriétés servies qui changent avec le schéma de l'OS :",
       'prefers-color-scheme ne gouverne QUE la valeur par défaut de la CLASSE, jamais une valeur servie.',
       rapport.suivis,
@@ -679,6 +779,7 @@ export const verdict = (rapport) =>
   rapport.orphelins.length +
   rapport.contrastes.length +
   rapport.ordres.length +
+  rapport.focus.length +
   rapport.suivis.length ===
   0
     ? 0

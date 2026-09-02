@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -42,6 +43,7 @@ data class StoryComposerDraft(
     val mediaIds: List<String> = emptyList(),
     val textElements: List<StoryTextElement> = emptyList(),
     val stickers: List<StoryStickerElement> = emptyList(),
+    val strokes: List<StoryDrawingStroke> = emptyList(),
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
@@ -73,6 +75,9 @@ data class StoryComposerDraft(
     /** True once at least one on-canvas sticker carries a publishable emoji. */
     val hasStickers: Boolean get() = publishableStickers.isNotEmpty()
 
+    /** True once at least one freehand stroke has been drawn on the canvas. */
+    val hasDrawing: Boolean get() = strokes.isNotEmpty()
+
     /** Within the per-story media cap ([MAX_MEDIA]) — parity with iOS's ≤10 rule. */
     val isWithinMediaLimit: Boolean get() = mediaIds.size <= MAX_MEDIA
 
@@ -88,7 +93,7 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers) &&
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers || hasDrawing) &&
             isWithinLimit && isWithinMediaLimit
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
@@ -136,7 +141,7 @@ data class StoryComposerDraft(
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
         val stickerObjects = publishableStickers.map { it.toSticker() }
         val mediaObjects = listOfNotNull(backgroundMedia?.toMediaObject())
-        val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() &&
+        val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() && strokes.isEmpty() &&
             filter == null && durationSecondsPin == null && background == null && mediaObjects.isEmpty()
         if (hasNothing) return null
         return StoryEffects(
@@ -144,6 +149,7 @@ data class StoryComposerDraft(
             textObjects = textObjects,
             stickerObjects = stickerObjects.takeIf { it.isNotEmpty() },
             mediaObjects = mediaObjects.takeIf { it.isNotEmpty() },
+            drawingStrokes = strokes.takeIf { it.isNotEmpty() },
             filter = filter?.wireValue(),
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
             timelineDuration = durationSecondsPin,

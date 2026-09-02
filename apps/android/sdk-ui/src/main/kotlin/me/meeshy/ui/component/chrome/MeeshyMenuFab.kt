@@ -3,13 +3,16 @@ package me.meeshy.ui.component.chrome
 import androidx.compose.animation.core.EaseOutBack
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,7 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -45,6 +50,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import me.meeshy.sdk.model.chrome.MenuAnchorBounds
 import me.meeshy.sdk.model.chrome.menuPopupOffset
+import me.meeshy.sdk.model.chrome.unreadBadgeLabel
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -80,8 +86,21 @@ public data class RadialMenuItem(
  * SDK-pure : [items] porte des icones/couleurs/actions opaques ; l'etat est HISSE
  * ([expanded]/[onExpandedChange]) pour que le premier tap du conteneur ouvre le
  * menu d'un coup, comme sur iOS.
+ *
+ * Le [Popup] deploye est `focusable = true` : Compose lui retire alors
+ * `FLAG_NOT_TOUCH_MODAL`, donc sa fenetre intercepte TOUT toucher de l'ecran, meme
+ * hors de son propre contenu (c'est ce qui rend `dismissOnClickOutside` possible).
+ * Consequence : tant que le menu est deploye, un second tap sur l'ancre elle-meme
+ * (rendue par [collapsedContent] dans la fenetre applicative NORMALE, en dessous)
+ * n'atteint jamais son `combinedClickable` — la fenetre du Popup l'avale avant.
+ * [onAnchorTapWhileExpanded] existe pour CE geste precis : un second Popup, non
+ * modal, pose APRES le premier (donc au-dessus dans la pile de fenetres) et
+ * exactement dimensionne/positionne sur l'ancre mesuree, re-intercepte le tap a
+ * cet endroit precis et le route vers l'appelant — sans toucher au premier Popup,
+ * dont le comportement (deploiement, dismiss-outside) reste inchange.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 public fun MeeshyMenuFab(
     items: List<RadialMenuItem>,
     expanded: Boolean,
@@ -90,7 +109,8 @@ public fun MeeshyMenuFab(
     growRightward: Boolean,
     modifier: Modifier = Modifier,
     fabIcon: ImageVector = Icons.Filled.Add,
-    collapsedContent: (@Composable () -> Unit)? = null,
+    collapsedContent: (@Composable (expanded: Boolean) -> Unit)? = null,
+    onAnchorTapWhileExpanded: (() -> Unit)? = null,
 ) {
     val fabRotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
@@ -99,20 +119,23 @@ public fun MeeshyMenuFab(
     )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (expanded || collapsedContent == null) {
+        if (collapsedContent != null) {
+            collapsedContent(expanded)
+        } else {
             FloatingGradientFab(
                 onClick = { onExpandedChange(!expanded) },
                 icon = fabIcon,
                 contentDescription = null,
                 modifier = Modifier.graphicsLayer { rotationZ = fabRotation },
             )
-        } else {
-            collapsedContent()
         }
 
         if (expanded) {
             val spacingPx = with(LocalDensity.current) { MeeshySpacing.md.roundToPx() }
-            val positionProvider = remember(spacingPx) { MenuFabPositionProvider(spacingPx) }
+            var lastAnchorBounds by remember { mutableStateOf<IntRect?>(null) }
+            val positionProvider = remember(spacingPx) {
+                MenuFabPositionProvider(spacingPx) { bounds -> lastAnchorBounds = bounds }
+            }
             Popup(
                 popupPositionProvider = positionProvider,
                 onDismissRequest = { onExpandedChange(false) },
@@ -128,6 +151,39 @@ public fun MeeshyMenuFab(
                     },
                 )
             }
+
+            if (collapsedContent != null) {
+                lastAnchorBounds?.let { bounds ->
+                    val density = LocalDensity.current
+                    Popup(
+                        popupPositionProvider = remember(bounds) {
+                            FixedOffsetPositionProvider(bounds.left, bounds.top)
+                        },
+                        onDismissRequest = { onExpandedChange(false) },
+                        properties = PopupProperties(focusable = false, dismissOnClickOutside = false),
+                    ) {
+                        Box(
+                            modifier = with(density) {
+                                Modifier.size(
+                                    width = (bounds.right - bounds.left).toDp(),
+                                    height = (bounds.bottom - bounds.top).toDp(),
+                                )
+                            }.combinedClickable(
+                                onClick = {
+                                    onExpandedChange(false)
+                                    onAnchorTapWhileExpanded?.invoke()
+                                },
+                                onLongClick = {
+                                    onExpandedChange(false)
+                                    onAnchorTapWhileExpanded?.invoke()
+                                },
+                            ),
+                        ) {
+                            collapsedContent(true)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -137,13 +193,17 @@ public fun MeeshyMenuFab(
  * dans [menuPopupOffset] (core:model), testee en JVM pur — ici on ne fait que
  * traduire les types Compose.
  */
-private class MenuFabPositionProvider(private val spacingPx: Int) : PopupPositionProvider {
+private class MenuFabPositionProvider(
+    private val spacingPx: Int,
+    private val onAnchorMeasured: (IntRect) -> Unit,
+) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize,
     ): IntOffset {
+        onAnchorMeasured(anchorBounds)
         val offset = menuPopupOffset(
             anchor = MenuAnchorBounds(
                 left = anchorBounds.left,
@@ -159,6 +219,20 @@ private class MenuFabPositionProvider(private val spacingPx: Int) : PopupPositio
         )
         return IntOffset(offset.xPx, offset.yPx)
     }
+}
+
+/**
+ * Position FIXE, en pixels fenetre — utilisee par le Popup non modal qui reprend
+ * le tap sur l'ancre pendant que le menu est deploye : l'ancre est deja mesuree
+ * (par [MenuFabPositionProvider] ci-dessus), aucune geometrie a recalculer ici.
+ */
+private class FixedOffsetPositionProvider(private val xPx: Int, private val yPx: Int) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset = IntOffset(xPx, yPx)
 }
 
 @Composable
@@ -223,8 +297,12 @@ private fun MenuItemRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptic = LocalHapticFeedback.current
     Row(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (iconLeading) {
@@ -272,15 +350,17 @@ private fun MenuItemIcon(item: RadialMenuItem) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(18.dp)
+                    .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                     .clip(CircleShape)
-                    .background(MeeshyPalette.ErrorStrong),
+                    .background(MeeshyPalette.ErrorStrong)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (item.badgeCount > 9) "9+" else item.badgeCount.toString(),
+                    text = unreadBadgeLabel(item.badgeCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MeeshyPalette.White,
+                    maxLines = 1,
                 )
             }
         }

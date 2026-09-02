@@ -6,7 +6,7 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, canvasV3SceneDurationsMs, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, canvasV3SceneDurationsMs, isCanvasV3OrNewer, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { FLAT_TEXT_SHADOW, textEffectShadow, type StoryTextEffect } from '@/lib/story-text-effect';
 import { Avatar } from './Avatar';
@@ -966,9 +966,7 @@ function StoryViewer({
   }
 
   const effects = story.storyEffects;
-  // Constat 12 — `v >= 3`, jamais `v === 3` : un futur `v:4` (servi TEL QUEL
-  // par le gateway à un client caps-3) reste lu en v3, jamais vide sur le repli.
-  const isCanvasV3 = typeof effects?.v === 'number' && effects.v >= 3;
+  const isCanvasV3 = isCanvasV3OrNewer(effects);
   /// L'annonce du fond (B3.3-6) n'existe que pour un blob v3 — `sound` n'a
   /// pas de logement dans la forme legacy locale de `storyEffects`.
   const backgroundSound = isCanvasV3 ? effects?.sound : undefined;

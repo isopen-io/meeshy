@@ -26,6 +26,47 @@
 
 <div style="flex:1;min-height:0;overflow-y:auto;position:relative">
 
+<!-- LA VITRINE — `/` pour un visiteur (directive 2026-09-01). Contenu du legacy repris mot pour
+     mot (apps/web-v3/app/vitrine/contenu.ts) ; forme de la charte « clarté rurale » : héros à
+     gros CTA (56 / 52 px), atouts en cartes, mission, appel final, pied. Aucune image, aucune
+     police web, aucun script : le HTML porte sa feuille et ses glyphes. -->
+<sc-if value="{{ isVitrine }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 18px 28px;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;align-items:center;gap:10px;padding:2px 0 0"><span style="width:32px;height:32px;border-radius:12px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center"><i class="ph ph-chat-circle" style="font-size:20px;line-height:1"></i></span><span style="font:700 20px var(--font-body);color:var(--color-text)">Meeshy</span></div>
+<div style="display:flex;flex-direction:column;gap:16px;padding:20px 16px 24px;border-radius:16px;background:rgba(129,140,248,.12)">
+<span style="align-self:flex-start;height:32px;padding:0 12px;border-radius:9999px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);font:600 12px var(--font-body);display:inline-flex;align-items:center;gap:6px"><i class="ph ph-translate" style="font-size:14px;line-height:1"></i>Traduction en temps réel</span>
+<div style="font:700 34px/1.15 var(--font-body);color:var(--color-text);letter-spacing:-.01em">Communiquez sans <em style="font-style:normal;color:var(--meeshy-p)">barrières linguistiques</em></div>
+<p style="margin:0;font:400 17px/1.6 var(--font-body);color:var(--color-neutral-400)">Meeshy traduit vos conversations en temps réel, vous permettant de discuter avec n’importe qui, dans n’importe quelle langue.</p>
+<div onClick="{{ goSignup }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 17px var(--font-body);cursor:pointer">Créer son compte maintenant</div>
+<div onClick="{{ goLogin }}" style="height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;font:600 16px var(--font-body);cursor:pointer">Se connecter</div>
+</div>
+<div>
+<div style="font:700 24px/1.25 var(--font-body);color:var(--color-text)">Fonctionnalités puissantes</div>
+<p style="margin:6px 0 16px;font:400 15px/1.55 var(--font-body);color:var(--color-neutral-400)">Tout ce dont vous avez besoin pour communiquer sans frontières</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ atouts }}" as="a" hint-placeholder-count="3">
+<div style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:16px;padding:16px;display:flex;gap:14px;align-items:flex-start"><span style="width:40px;height:40px;border-radius:12px;background:rgba(129,140,248,.14);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph {{ a.icon }}" style="font-size:22px;line-height:1"></i></span><div style="min-width:0"><div style="font:600 16px var(--font-body);color:var(--color-text)">{{ a.title }}</div><div style="margin-top:4px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-500)">{{ a.body }}</div></div></div>
+</sc-for>
+</div>
+</div>
+<div style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:16px;padding:20px 16px">
+<div style="font:700 23px/1.25 var(--font-body);color:var(--color-text)">Notre mission</div>
+<p style="margin:10px 0 0;font:400 15px/1.6 var(--font-body);color:var(--color-neutral-400)">Connecter le monde, une traduction à la fois. Notre plateforme permet aux gens des quatre coins du monde de communiquer librement, en abattant les murs qui nous séparent et en construisant des ponts de compréhension.</p>
+<p style="margin:12px 0 0;font:600 15px var(--font-body);color:var(--color-text)">Un monde, plusieurs langues, une conversation</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;text-align:center">
+<div style="font:700 24px/1.25 var(--font-body);color:var(--color-text)">Prêt à commencer ?</div>
+<p style="margin:0;font:400 15px/1.55 var(--font-body);color:var(--color-neutral-400)">Rejoignez des milliers d’utilisateurs qui communiquent déjà sans barrières</p>
+<div onClick="{{ goSignup }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 17px var(--font-body);cursor:pointer">Créer un compte gratuit</div>
+</div>
+<div style="border-top:1px solid var(--color-neutral-900);padding-top:20px;display:flex;flex-direction:column;gap:10px;font:400 13px/1.6 var(--font-body);color:var(--color-neutral-600)">
+<div style="font:600 14px var(--font-body);color:var(--color-neutral-400)">Un monde, plusieurs langues, une conversation</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--meeshy-p);font:500 14px/44px var(--font-body)"><span>À propos</span><span>Contact</span><span>Partenaires</span><span>Conditions</span><span>Confidentialité</span></div>
+<div>© Meeshy — tous droits réservés</div>
+</div>
+</div>
+</sc-if>
+
 <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 18px 120px;display:flex;flex-direction:column;gap:22px">
 <div onClick="{{ goSearch }}" style="height:46px;border-radius:14px;background:var(--color-surface);border:1px solid var(--color-neutral-900);display:flex;align-items:center;gap:10px;padding:0 14px;font:400 15.5px var(--font-body);color:var(--color-neutral-600);cursor:pointer"><i class="ph ph-magnifying-glass" style="font-size:18px;line-height:1"></i>Rechercher partout</div>
@@ -41,11 +82,11 @@
 <div>
 <div style="font:600 11.5px var(--font-body);color:var(--color-neutral-600);letter-spacing:.08em;margin-bottom:10px">MES LIENS</div>
 <div onClick="{{ goLinks }}" style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:18px;padding:14px;display:flex;align-items:center;gap:13px;cursor:pointer"><div style="width:42px;height:42px;border-radius:12px;background:rgba(129,140,248,.14);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph ph-link-simple" style="font-size:20px;line-height:1"></i></div><div style="flex:1;min-width:0"><div style="font:600 15px var(--font-body);color:var(--color-text)">meeshy.me/chats/lagos-q1</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">12 vues · 4 ont rejoint</div></div></div>
-<div onClick="{{ openCreateLink }}" style="margin-top:10px;height:54px;border-radius:18px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:9px;font:600 15px var(--font-body);cursor:pointer"><i class="ph ph-plus" style="font-size:18px;line-height:1"></i>Nouveau lien de partage</div>
+<div onClick="{{ openCreateLink }}" style="margin-top:10px;height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-plus" style="font-size:20px;line-height:1"></i>Nouveau lien de partage</div>
 </div>
 <div>
 <div style="font:600 11.5px var(--font-body);color:var(--color-neutral-600);letter-spacing:.08em;margin-bottom:10px">COMMUNAUTÉS</div>
-<div style="border:1px dashed var(--color-neutral-900);border-radius:18px;padding:18px;text-align:center"><p style="margin:0 0 12px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-400)">Vous n'êtes dans aucune communauté.</p><div onClick="{{ goCommunities }}" style="height:50px;border-radius:16px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 15px var(--font-body);cursor:pointer"><i class="ph ph-users-three" style="font-size:18px;line-height:1"></i>Créer une communauté</div></div>
+<div style="border:1px dashed var(--color-neutral-900);border-radius:18px;padding:18px;text-align:center"><p style="margin:0 0 12px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-400)">Vous n'êtes dans aucune communauté.</p><div onClick="{{ goCommunities }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-users-three" style="font-size:20px;line-height:1"></i>Créer une communauté</div></div>
 </div>
 </div>
 </sc-if>
@@ -53,11 +94,11 @@
 <sc-if value="{{ isChats }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 18px 120px;display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;gap:10px">
-<div onClick="{{ openCreateLink }}" style="flex:1;height:50px;border-radius:16px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:8px;font:600 14.5px var(--font-body);cursor:pointer"><i class="ph ph-link-simple" style="font-size:18px;line-height:1"></i>Créer un lien</div>
-<div onClick="{{ openCreateConv }}" style="flex:1;height:50px;border-radius:16px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:8px;font:600 14.5px var(--font-body);cursor:pointer"><i class="ph ph-chat-circle-dots" style="font-size:18px;line-height:1"></i>Conversation</div>
+<div onClick="{{ openCreateLink }}" style="flex:1;height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:8px;font:600 15px var(--font-body);cursor:pointer"><i class="ph ph-link-simple" style="font-size:20px;line-height:1"></i>Créer un lien</div>
+<div onClick="{{ openCreateConv }}" style="flex:1;height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:8px;font:600 15px var(--font-body);cursor:pointer"><i class="ph ph-chat-circle-dots" style="font-size:20px;line-height:1"></i>Conversation</div>
 </div>
-<div onClick="{{ openThread }}" style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:22px;padding:18px;position:relative;cursor:pointer">
-<div onClick="{{ cycleMode }}" style="position:absolute;top:-11px;left:18px;height:22px;padding:0 11px;border-radius:9999px;background:var(--color-bg);border:1px solid var(--meeshy-p);color:var(--meeshy-p);font:600 11px var(--font-body);display:flex;align-items:center;gap:6px">{{ modeBadge }}<i class="ph ph-caret-down" style="font-size:11px;line-height:1"></i></div>
+<div onClick="{{ openThread }}" style="margin-top:10px;background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:22px;padding:18px;position:relative;cursor:pointer">
+<div onClick="{{ openLang }}" style="position:absolute;top:-14px;left:18px;height:28px;padding:0 11px;border-radius:9999px;background:var(--color-bg);border:1px solid var(--meeshy-p);color:var(--meeshy-p);font:600 11px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>AUTO · {{ langueAffichee }}<i class="ph ph-caret-down" style="font-size:11px;line-height:1"></i></div>
 <div style="display:flex;gap:13px;align-items:center;margin-top:4px"><div style="width:50px;height:50px;border-radius:9999px;background:#6366F1;color:#fff;display:flex;align-items:center;justify-content:center;font:600 18px var(--font-body);flex:none">ÉL</div><div style="flex:1;min-width:0"><div style="font:600 17px var(--font-body);color:var(--color-text)">Équipe Lagos</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">4 participants · fr ↔ en ↔ yo</div></div><span style="min-width:24px;height:24px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);font:600 12.5px var(--font-body);display:flex;align-items:center;justify-content:center;padding:0 7px">3</span></div>
 <div style="margin-top:12px;font:400 16px/1.5 var(--font-body);color:var(--color-text)">On se cale à 15 h pour la revue ?</div>
 </div>
@@ -65,18 +106,29 @@
 <sc-for list="{{ chats }}" as="c" hint-placeholder-count="3">
 <div onClick="{{ c.open }}" style="display:flex;gap:13px;padding:13px 2px;align-items:center;cursor:pointer;border-bottom:1px solid var(--color-neutral-900)">
 <div style="width:46px;height:46px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font:600 16px var(--font-body);flex:none;color:var(--color-bg);background:{{ c.color }}">{{ c.initials }}</div>
-<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</span><span style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ c.time }}</span></div><div style="margin-top:2px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.preview }}</div></div>
+<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</span><span style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ c.time }}</span></div><div style="margin-top:2px;display:flex;align-items:center;gap:6px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;white-space:nowrap"><span style="flex:none;font:600 11px var(--font-body);letter-spacing:.06em;color:var(--meeshy-p);border:1px solid var(--color-neutral-800);border-radius:6px;padding:0 5px">{{ c.lang }}</span><span style="overflow:hidden;text-overflow:ellipsis">{{ c.preview }}</span></div></div>
 </div>
 </sc-for>
 </div>
 </div>
 </sc-if>
 
-<sc-if value="{{ isThread }}" hint-placeholder-val="{{ true }}">
+<!-- Le fil — servi à DEUX adresses par le MÊME module de vue : `/chats/:cle` (membre) et
+     `/chat/:lien` (invité). `rights` est l'ÉTAT du fil juste après la jonction : le bandeau des
+     droits obtenus, replié d'un tap (<details>), au-dessus des messages. -->
+<sc-if value="{{ isThreadLike }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:12px">
+<sc-if value="{{ isRights }}" hint-placeholder-val="{{ true }}">
+<div style="border-radius:16px;background:var(--color-surface);border-left:4px solid #34D399;border-top:1px solid var(--color-neutral-900);border-right:1px solid var(--color-neutral-900);border-bottom:1px solid var(--color-neutral-900);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+<div onClick="{{ openThread }}" style="display:flex;align-items:center;gap:11px;min-height:44px;cursor:pointer"><i class="ph ph-check-circle" style="font-size:24px;line-height:1;color:#34D399;flex:none"></i><div style="flex:1;min-width:0"><div style="font:600 15px var(--font-body);color:var(--color-text)">Bienvenue Tolu — vous êtes entré en anonyme</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">Voilà ce que ce lien vous ouvre dans Équipe Lagos</div></div><i class="ph ph-caret-down" style="font-size:16px;line-height:1;color:var(--color-neutral-500)"></i></div>
+<sc-for list="{{ rights }}" as="r" hint-placeholder-count="4">
+<div style="display:flex;gap:12px;padding:8px 0 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:{{ r.color }};flex:none;margin-top:2px"></i><div><div style="font:600 14px var(--font-body);color:{{ r.tone }}">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
+</sc-for>
+</div>
+</sc-if>
 <div style="align-self:center;display:flex;gap:8px">
-<div onClick="{{ cycleMode }}" style="height:28px;padding:0 12px;border-radius:9999px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);font:600 11.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer">{{ modeBadge }}<i class="ph ph-caret-down" style="font-size:11px;line-height:1"></i></div>
-<div onClick="{{ goRich }}" style="height:28px;padding:0 12px;border-radius:9999px;border:1px solid var(--color-neutral-800);color:var(--color-neutral-400);font:600 11.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-stack" style="font-size:13px;line-height:1"></i>Messages riches</div>
+<div onClick="{{ openLang }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-translate" style="font-size:16px;line-height:1"></i>AUTO · {{ langueAffichee }}<i class="ph ph-caret-down" style="font-size:12px;line-height:1"></i></div>
+<div onClick="{{ goMedia }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--color-neutral-800);color:var(--color-neutral-400);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-image" style="font-size:16px;line-height:1"></i>Médias</div>
 </div>
 <sc-for list="{{ messages }}" as="m" hint-placeholder-count="5">
 <div style="display:flex;gap:11px;opacity:{{ m.opacity }}">
@@ -206,47 +258,45 @@
 </div>
 </sc-if>
 
+<!-- `/chat/:lien` — ÉTAT CHOIX (directive 2026-09-01). Le CADRE du fil est rendu FLOUTÉ
+     et INERTE (en-tête au nom du lien, zone de messages VIDE — rien de la conversation ne
+     part avant le choix —, composeur inactif) ; par-dessus, une MODALE rendue par le
+     serveur (<dialog open>) : « vous venez en anonyme, ou avec votre compte ? ». -->
 <sc-if value="{{ isJoin }}" hint-placeholder-val="{{ true }}">
-<div style="padding:8px 22px 30px;display:flex;flex-direction:column;gap:16px">
-<div style="display:flex;align-items:center;gap:10px;color:var(--meeshy-p)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font:700 20px var(--font-body);color:var(--color-text)">Meeshy</span></div>
-<div><div style="font:400 15px var(--font-body);color:var(--color-neutral-400)">Vous êtes invité à</div><div style="margin-top:4px;font:700 30px/1.15 var(--font-body);color:var(--color-text)">Équipe Lagos</div></div>
-<div style="display:flex;align-items:center;gap:11px"><div style="width:40px;height:40px;border-radius:9999px;background:#10B981;color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 15px var(--font-body)">IB</div><div><div style="font:600 15px var(--font-body);color:var(--color-text)">Ibrahim Bello</div><div style="font:400 13px var(--font-body);color:var(--color-neutral-600)">vous a envoyé ce lien</div></div></div>
-<div style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:18px;padding:16px;font:400 15px/1.55 var(--font-body);color:var(--color-text)">« On prépare la revue de mars. Écris dans ta langue, tout est traduit. »</div>
-<div style="border-radius:18px;background:var(--color-surface);border:1px solid var(--color-neutral-900);overflow:hidden">
-<div onClick="{{ toggleRights }}" style="display:flex;align-items:center;gap:11px;padding:14px 16px;cursor:pointer">
-<i class="ph ph-key" style="font-size:19px;line-height:1;color:var(--meeshy-p);flex:none"></i>
-<div style="flex:1;min-width:0"><div style="font:600 14.5px var(--font-body);color:var(--color-text)">Ce que ce lien vous ouvre</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">4 droits · à lire avant d'entrer</div></div>
+<div style="position:absolute;inset:0;filter:blur(8px);pointer-events:none;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:12px;padding:2px 16px 12px;flex:none"><span style="color:var(--meeshy-p);display:flex;padding:4px"><i class="ph ph-caret-left" style="font-size:26px;line-height:1"></i></span><div style="flex:1;min-width:0"><div style="font:700 22px var(--font-body);color:var(--color-text)">Équipe Lagos</div><div style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">4 participants · fr ↔ en ↔ yo</div></div></div>
+<div style="flex:1;display:flex;align-items:center;justify-content:center;font:400 15px var(--font-body);color:var(--color-neutral-600)">Les messages apparaîtront ici</div>
+<div style="padding:10px 16px 26px;border-top:1px solid var(--color-neutral-900);display:flex;align-items:center;gap:10px;flex:none"><div style="width:44px;height:44px;border-radius:9999px;border:2px solid var(--color-neutral-800);color:var(--color-neutral-700);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph ph-paperclip" style="font-size:22px;line-height:1"></i></div><div style="flex:1;height:52px;border-radius:9999px;background:var(--color-surface);border:1px solid var(--color-neutral-900);display:flex;align-items:center;padding:0 18px;font:400 15.5px var(--font-body);color:var(--color-neutral-700)">Choisissez comment entrer</div><div style="width:52px;height:52px;border-radius:9999px;background:var(--color-neutral-800);color:var(--color-neutral-600);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph ph-arrow-up" style="font-size:21px;line-height:1"></i></div></div>
+</div>
+<div style="position:absolute;inset:0;background:rgba(0,0,0,.6)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:92%;overflow-y:auto;background:var(--color-surface);border-top:1px solid var(--color-neutral-800);border-radius:26px 26px 0 0;padding:12px 20px 28px;display:flex;flex-direction:column;gap:12px">
+<div style="width:40px;height:4px;border-radius:9999px;background:var(--color-neutral-800);margin:0 auto 4px"></div>
+<div style="display:flex;align-items:center;gap:11px"><div style="width:32px;height:32px;border-radius:9999px;background:#10B981;color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 13px var(--font-body);flex:none">IB</div><div style="font:400 14px var(--font-body);color:var(--color-neutral-400)"><b style="color:var(--color-text)">Ibrahim Bello</b> vous invite dans</div></div>
+<div style="font:700 26px/1.15 var(--font-body);color:var(--color-text)">Équipe Lagos</div>
+<div style="font:400 15px/1.5 var(--font-body);color:var(--color-neutral-400)">« On prépare la revue de mars. Écris dans ta langue, tout est traduit. »</div>
+<div style="border-radius:16px;background:var(--color-bg);border:1px solid var(--color-neutral-900);overflow:hidden">
+<div onClick="{{ toggleRights }}" style="display:flex;align-items:center;gap:11px;min-height:44px;padding:8px 14px;cursor:pointer">
+<i class="ph ph-key" style="font-size:24px;line-height:1;color:var(--meeshy-p);flex:none"></i>
+<div style="flex:1;min-width:0"><div style="font:600 15px var(--font-body);color:var(--color-text)">Ce que ce lien vous ouvre</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">4 droits · à lire avant d'entrer</div></div>
 <i class="ph {{ rightsCaret }}" style="font-size:16px;line-height:1;color:var(--color-neutral-500)"></i>
 </div>
 <sc-if value="{{ rightsOpen }}" hint-placeholder-val="{{ true }}">
-<div style="padding:0 16px 6px">
+<div style="padding:0 14px 6px">
 <sc-for list="{{ rights }}" as="r" hint-placeholder-count="4">
-<div style="display:flex;gap:12px;padding:11px 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:{{ r.color }};flex:none;margin-top:2px"></i><div><div style="font:600 14px var(--font-body);color:{{ r.tone }}">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
+<div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:{{ r.color }};flex:none;margin-top:2px"></i><div><div style="font:600 14px var(--font-body);color:{{ r.tone }}">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
 </sc-for>
 </div>
 </sc-if>
 </div>
-<div><div style="font:600 12.5px var(--font-body);color:var(--color-neutral-400);margin-bottom:7px">Votre pseudo</div><div style="height:56px;border-radius:16px;background:var(--color-surface);border:1px solid var(--color-neutral-900);display:flex;align-items:center;padding:0 18px;font:400 16px var(--font-body);color:var(--color-text)">Tolu</div></div>
-<div><div style="font:600 12.5px var(--font-body);color:var(--color-neutral-400);margin-bottom:7px">Langue parlée</div><div style="height:56px;border-radius:16px;background:var(--color-surface);border:1px solid var(--color-neutral-900);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font:400 16px var(--font-body);color:var(--color-text)"><span>🇫🇷 Français</span><i class="ph ph-caret-down" style="font-size:15px;line-height:1;color:var(--color-neutral-500)"></i></div></div>
-<div onClick="{{ goRights }}" style="height:60px;border-radius:20px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 17px var(--font-body);cursor:pointer">Rejoindre anonymement</div>
-<div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:1px;background:var(--color-neutral-900)"></div><span style="font:500 12px var(--font-body);color:var(--color-neutral-600)">ou garder votre identité</span><div style="flex:1;height:1px;background:var(--color-neutral-900)"></div></div>
 <div style="display:flex;gap:10px">
-<div onClick="{{ goLogin }}" style="flex:1;height:54px;border-radius:18px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;font:600 14.5px var(--font-body);cursor:pointer">Se connecter</div>
-<div onClick="{{ goSignup }}" style="flex:1;height:54px;border-radius:18px;border:1px solid var(--color-neutral-800);color:var(--color-text);display:flex;align-items:center;justify-content:center;font:600 14.5px var(--font-body);cursor:pointer">Créer un compte</div>
+<div style="flex:1;min-width:0"><div style="font:600 12.5px var(--font-body);color:var(--color-neutral-400);margin-bottom:6px">Votre pseudo</div><div style="height:56px;border-radius:16px;background:var(--color-bg);border:2px solid var(--color-neutral-800);display:flex;align-items:center;padding:0 16px;font:400 16px var(--font-body);color:var(--color-text)">Tolu</div></div>
+<div style="flex:1;min-width:0"><div style="font:600 12.5px var(--font-body);color:var(--color-neutral-400);margin-bottom:6px">Langue</div><div style="height:56px;border-radius:16px;background:var(--color-bg);border:2px solid var(--color-neutral-800);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font:400 16px var(--font-body);color:var(--color-text)"><span>Français</span><i class="ph ph-caret-down" style="font-size:15px;line-height:1;color:var(--color-neutral-500)"></i></div></div>
 </div>
+<div onClick="{{ goRights }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 17px var(--font-body);cursor:pointer"><i class="ph ph-ghost" style="font-size:22px;line-height:1"></i>Continuer en anonyme</div>
+<div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:1px;background:var(--color-neutral-900)"></div><span style="font:500 12px var(--font-body);color:var(--color-neutral-600)">ou garder votre identité</span><div style="flex:1;height:1px;background:var(--color-neutral-900)"></div></div>
+<div onClick="{{ goLogin }}" style="height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;font:600 16px var(--font-body);cursor:pointer">Se connecter</div>
+<div onClick="{{ goSignup }}" style="min-height:44px;display:flex;align-items:center;justify-content:center;font:600 15px var(--font-body);color:var(--meeshy-p);cursor:pointer">Créer un compte</div>
 <p style="margin:0;text-align:center;font:400 12px/1.5 var(--font-body);color:var(--color-neutral-600)">Le lien est gardé de côté : vous reviendrez ici automatiquement après connexion.</p>
-</div>
-</sc-if>
-
-<sc-if value="{{ isRights }}" hint-placeholder-val="{{ true }}">
-<div style="padding:8px 22px 30px;display:flex;flex-direction:column;gap:14px">
-<div style="width:60px;height:60px;border-radius:9999px;background:var(--color-neutral-900);color:var(--color-neutral-400);display:flex;align-items:center;justify-content:center"><i class="ph ph-ghost" style="font-size:30px;line-height:1"></i></div>
-<div style="font:700 28px/1.2 var(--font-body);color:var(--color-text)">Bienvenue Tolu !</div>
-<p style="margin:0;font:400 15.5px/1.5 var(--font-body);color:var(--color-neutral-400)">Voilà ce que ce lien vous ouvre dans Équipe Lagos.</p>
-<sc-for list="{{ rights }}" as="r" hint-placeholder-count="4">
-<div style="display:flex;gap:13px;padding:11px 0;border-bottom:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:21px;line-height:1;color:{{ r.color }};flex:none"></i><div><div style="font:600 15.5px var(--font-body);color:{{ r.tone }}">{{ r.title }}</div><div style="margin-top:2px;font:400 13.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
-</sc-for>
-<div onClick="{{ openThread }}" style="margin-top:8px;height:60px;border-radius:20px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 17px var(--font-body);cursor:pointer">Entrer dans la conversation</div>
 </div>
 </sc-if>
 
@@ -486,9 +536,11 @@
 </div>
 </sc-if>
 
+<!-- Actions flottantes (charte règle 6) : droite 56 px primaire, gauche 52 px contour ;
+     pas de barre d'onglets ; aucune ombre — chacune est un <a href> vers une route SERVIE. -->
 <sc-if value="{{ showFabs }}" hint-placeholder-val="{{ true }}">
-<div onClick="{{ tapFeeds }}" style="position:absolute;left:18px;bottom:30px;width:62px;height:62px;border-radius:9999px;background:var(--color-surface);border:1px solid var(--color-neutral-900);box-shadow:0 6px 20px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;color:var(--meeshy-p);cursor:pointer" style-hover="border-color:var(--meeshy-p)"><i class="ph ph-squares-four" style="font-size:26px;line-height:1"></i></div>
-<div onClick="{{ toggleMember }}" style="position:absolute;right:18px;bottom:30px;width:62px;height:62px;border-radius:9999px;background:var(--meeshy-p);box-shadow:0 10px 26px rgba(129,140,248,.35);display:flex;align-items:center;justify-content:center;color:var(--color-bg);cursor:pointer"><i class="ph {{ memberIcon }}" style="font-size:28px;line-height:1"></i></div>
+<div onClick="{{ tapFeeds }}" style="position:absolute;left:18px;bottom:30px;width:52px;height:52px;border-radius:9999px;background:var(--color-surface);border:2px solid var(--color-neutral-800);display:flex;align-items:center;justify-content:center;color:var(--meeshy-p);cursor:pointer" style-hover="border-color:var(--meeshy-p)"><i class="ph ph-squares-four" style="font-size:24px;line-height:1"></i></div>
+<div onClick="{{ toggleMember }}" style="position:absolute;right:18px;bottom:30px;width:56px;height:56px;border-radius:9999px;background:var(--meeshy-p);display:flex;align-items:center;justify-content:center;color:var(--color-bg);cursor:pointer"><i class="ph {{ memberIcon }}" style="font-size:26px;line-height:1"></i></div>
 </sc-if>
 
 <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ true }}">
@@ -548,9 +600,9 @@
 <script type="text/x-dc" data-dc-script>
 const P = '#818CF8', BG = '#161826';
 const CHATS = [
-  { id: 'marta', initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', preview: 'Gracias, te mando el archivo', time: 'hier' },
-  { id: 'demo', initials: 'SD', color: '#75798c', name: 'Salon démo', preview: 'Tolu a rejoint la conversation', time: 'hier' },
-  { id: 'support', initials: 'SP', color: '#10B981', name: 'Support produit', preview: 'Appel audio manqué', time: 'lun.' },
+  { id: 'marta', initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', lang: 'ES', preview: 'Merci, je t’envoie le fichier', time: 'hier' },
+  { id: 'demo', initials: 'SD', color: '#75798c', name: 'Salon démo', lang: 'EN', preview: 'Tolu a rejoint la conversation', time: 'hier' },
+  { id: 'support', initials: 'SP', color: '#10B981', name: 'Support produit', lang: 'FR', preview: 'Appel audio manqué', time: 'lun.' },
 ];
 const FORMATS = [
   { id: 'post', label: 'Post', icon: 'ph-article' },
@@ -706,9 +758,10 @@ const LISTS = {
 };
 
 const SCREENS = {
-  home: { title: 'Bonjour Amina', subtitle: "Accueil connecté · meeshy.me/", route: '/' },
+  vitrine: { title: 'Vitrine', subtitle: 'Avant connexion · meeshy.me/', route: '/' },
+  home: { title: 'Bonjour Amina', subtitle: "Tableau de bord · meeshy.me/", route: '/' },
   chats: { title: 'Chats', subtitle: 'Liste des conversations', route: '/chats' },
-  thread: { title: 'Équipe Lagos', subtitle: '4 en ligne', route: '/chats/:identifiant' },
+  thread: { title: 'Équipe Lagos', subtitle: '4 en ligne', route: '/chats/:cle' },
   feed: { title: 'Fil', subtitle: 'Postes et réels', route: '/feed' },
   reels: { title: 'Réels', subtitle: 'Plein écran', route: '/feed/reels' },
   composer: { title: 'Composer', subtitle: 'Post, réel, story, humeur', route: '/composer' },
@@ -722,8 +775,8 @@ const SCREENS = {
   links: { title: 'Mes liens', subtitle: '2 actifs', route: '/links' },
   calls: { title: 'Appels', subtitle: 'Historique', route: '/calls' },
   search: { title: 'Recherche', subtitle: 'Partout', route: '/search' },
-  join: { title: 'Rejoindre', subtitle: 'Lien de partage', route: '/chats/:lien' },
-  rights: { title: 'Droits du lien', subtitle: 'Avant d’entrer', route: '/chats/:lien' },
+  join: { title: 'Rejoindre', subtitle: 'État CHOIX · anonyme ou compte ?', route: '/chat/:lien' },
+  rights: { title: 'Droits du lien', subtitle: 'État INVITÉ · juste après la jonction', route: '/chat/:lien' },
   rich: { title: 'Types de messages', subtitle: 'Image, vidéo, audio, transfert, réponse, story', route: '/chats/:id' },
   story: { title: 'Story', subtitle: 'Lecture plein écran', route: '/stories/:id' },
   storyCreate: { title: 'Nouvelle story', subtitle: 'Capture, texte, langue', route: '/stories/new' },
@@ -732,13 +785,14 @@ const SCREENS = {
   linkExpired: { title: 'Lien expiré', subtitle: 'Accès refusé', route: '/l/:token' },
   callAudio: { title: 'Appel audio', subtitle: 'En cours', route: '/calls/:id' },
   callVideo: { title: 'Appel vidéo', subtitle: 'En cours', route: '/calls/:id?video' },
-  login: { title: 'Se connecter', subtitle: 'Lien gardé de côté', route: '/login?next=/l/:token' },
-  signup: { title: 'Créer un compte', subtitle: 'Lien gardé de côté', route: '/signup?next=/l/:token' },
+  login: { title: 'Se connecter', subtitle: 'Lien gardé de côté', route: '/login?returnUrl=/chat/:lien' },
+  signup: { title: 'Créer un compte', subtitle: 'Lien gardé de côté', route: '/signup?returnUrl=/chat/:lien' },
   profileEdit: { title: 'Modifier le profil', subtitle: 'Bannière, avatar, bio, téléphone', route: '/settings/profile/edit' },
   password: { title: 'Mot de passe', subtitle: 'Réinitialisation', route: '/settings/security/password' },
 };
 
 const MAP = [
+  { title: 'SITE', keys: [['vitrine', 'ph-globe-hemisphere-west']] },
   { title: 'ENTRÉE PUBLIQUE', keys: [['linkRedirect', 'ph-arrows-clockwise'], ['join', 'ph-link-simple'], ['rights', 'ph-ghost'], ['login', 'ph-sign-in'], ['signup', 'ph-user-plus'], ['linkExpired', 'ph-warning-circle']] },
   { title: 'MEMBRE — PRINCIPAL', keys: [['home', 'ph-house'], ['chats', 'ph-chats-circle'], ['thread', 'ph-chat-circle-dots'], ['rich', 'ph-stack'], ['media', 'ph-image'], ['search', 'ph-magnifying-glass']] },
   { title: 'APPELS', keys: [['callAudio', 'ph-phone'], ['callVideo', 'ph-video-camera'], ['calls', 'ph-clock-counter-clockwise']] },
@@ -747,6 +801,7 @@ const MAP = [
 ];
 
 const EXITS = {
+  vitrine: [['signup', 'Créer son compte', 'bouton du héros'], ['login', 'Se connecter', 'bouton du héros'], ['signup', 'Créer un compte gratuit', 'appel final'], ['join', 'Lien reçu', 'hors site · /chat/:lien']],
   home: [['chats', 'Chats', 'Tout voir'], ['links', 'Mes liens', 'carte'], ['communities', 'Communautés', 'créer'], ['search', 'Recherche', 'champ'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
   chats: [['thread', 'Conversation', 'carte de focus'], ['join', 'Créer un lien', 'en-tête'], ['thread', 'Nouvelle conversation', 'en-tête'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
   thread: [['chats', 'Retour', 'chevron'], ['rich', 'Messages riches', 'défilement'], ['media', 'Médias', 'pièce jointe'], ['callAudio', 'Rappeler', 'bulle d’appel'], ['callVideo', 'Appel vidéo', 'en-tête'], ['contacts', 'Profil', 'nom de l’auteur']],
@@ -762,16 +817,16 @@ const EXITS = {
   links: [['join', 'Aperçu du lien', 'rangée']],
   calls: [['thread', 'Conversation', 'rangée']],
   search: [['chats', 'Conversations', 'rangée'], ['contacts', 'Personnes', 'rangée'], ['media', 'Médias', 'rangée']],
-  join: [['rights', 'Rejoindre anonymement', 'bouton'], ['login', 'Se connecter', 'bouton'], ['signup', 'Créer un compte', 'bouton'], ['linkExpired', 'Lien expiré', 'cas d’échec']],
-  rights: [['thread', 'Conversation', 'Entrer']],
+  join: [['rights', 'Continuer en anonyme', 'formulaire de la modale · même adresse'], ['login', 'Se connecter', 'bouton · ?returnUrl=/chat/:lien'], ['signup', 'Créer un compte', 'bouton · ?returnUrl=/chat/:lien'], ['linkExpired', 'Lien expiré', 'cas d’échec']],
+  rights: [['thread', 'Le fil', 'même adresse, bandeau replié']],
   rich: [['thread', 'Retour au fil', 'chevron'], ['media', 'Média', 'vignette'], ['callVideo', 'Appel vidéo', 'lecture'], ['story', 'Story citée', 'vignette']],
   story: [['comments', 'Répondre', 'champ'], ['feed', 'Fermer', 'croix'], ['storyFail', 'Story expirée', 'cas d’échec']],
   storyCreate: [['story', 'Publier', 'bouton'], ['feed', 'Retour', 'chevron']],
   storyFail: [['feed', 'Retour au fil', 'bouton'], ['storyCreate', 'Créer une story', 'bouton']],
-  linkRedirect: [['join', 'Aperçu du lien', 'automatique'], ['linkExpired', 'Lien expiré', 'automatique']],
-  linkExpired: [['login', 'Se connecter', 'bouton'], ['home', 'Accueil', 'bouton']],
-  login: [['rights', 'Reprendre le lien', 'après connexion'], ['signup', 'Créer un compte', 'lien'], ['password', 'Mot de passe oublié', 'lien']],
-  signup: [['rights', 'Reprendre le lien', 'après création'], ['login', 'Se connecter', 'lien']],
+  linkRedirect: [['join', 'État CHOIX', '302 vers /chat/:lien, un seul saut'], ['linkExpired', 'Lien expiré', 'automatique']],
+  linkExpired: [['login', 'Se connecter', 'bouton'], ['vitrine', 'Accueil', 'bouton']],
+  login: [['thread', 'Reprendre le lien', 'après connexion · jonction puis 302 vers /chats/:cle'], ['signup', 'Créer un compte', 'lien'], ['password', 'Mot de passe oublié', 'lien']],
+  signup: [['thread', 'Reprendre le lien', 'après création · jonction puis 302 vers /chats/:cle'], ['login', 'Se connecter', 'lien']],
   callAudio: [['callVideo', 'Passer en vidéo', 'bouton'], ['thread', 'Raccrocher', 'bouton']],
   callVideo: [['callAudio', 'Couper la vidéo', 'bouton'], ['thread', 'Raccrocher', 'bouton']],
   profileEdit: [['password', 'Mot de passe', 'rangée'], ['profile', 'Retour au profil', 'chevron']],
@@ -780,7 +835,7 @@ const EXITS = {
 };
 
 class Component extends DCLogic {
-  state = { screen: 'home', stack: [], sheet: null, mode: 'focal', detailKey: null, format: 'post', mood: '☕', rightsOpen: true, commentSrc: 'post' };
+  state = { screen: 'home', stack: [], sheet: null, mode: 'focal', detailKey: null, format: 'post', mood: '☕', rightsOpen: false, commentSrc: 'post' };
 
   go = (screen) => this.setState((s) => ({ screen, sheet: null, stack: [...s.stack, s.screen] }));
   goDetail = (key) => this.setState((s) => ({ screen: 'detail', detailKey: key, sheet: null, stack: [...s.stack, s.screen] }));
@@ -814,9 +869,13 @@ class Component extends DCLogic {
     const detail = isDetail ? DETAILS[s.detailKey] : null;
     const list = LISTS[screen];
     const meta = SCREENS[screen] || { title: detail ? detail.title : '', subtitle: 'Paramètres', route: '/settings/' + s.detailKey };
-    const title = list ? list.title : meta.title;
-    const subtitle = list ? list.subtitle : meta.subtitle;
+    // `rights` est un ÉTAT du fil (directive 2026-09-01) : le cadre porte le nom
+    // de la conversation, pas le libellé du navigateur.
+    const isRightsState = screen === 'rights';
+    const title = list ? list.title : isRightsState ? SCREENS.thread.title : meta.title;
+    const subtitle = list ? list.subtitle : isRightsState ? 'Entré comme Tolu · anonyme' : meta.subtitle;
 
+    const isVitrine = screen === 'vitrine';
     const isThread = screen === 'thread';
     const isComposer = screen === 'composer';
     const isReels = screen === 'reels';
@@ -1010,14 +1069,16 @@ class Component extends DCLogic {
       subtitle,
       canBack: s.stack.length > 0,
       back: this.back,
-      showNav: !isReels && !isJoin && !isRights && !isStory && !isCall,
+      showNav: !isVitrine && !isReels && !isJoin && !isStory && !isCall,
       hasHeaderAction: !!(list && list.action),
       headerActionLabel: list && list.action ? list.action : '',
       headerAction: () => this.go(screen === 'notifs' ? 'notifPrefs' : screen === 'links' ? 'join' : 'chats'),
 
+      isVitrine,
       isHome: screen === 'home',
       isChats: screen === 'chats',
       isThread,
+      isThreadLike: isThread || isRights,
       isFeed: screen === 'feed',
       isReels,
       isComposer,
@@ -1079,6 +1140,18 @@ class Component extends DCLogic {
       goCallVideo: () => this.go('callVideo'),
       goLogin: () => this.go('login'),
       goSignup: () => this.go('signup'),
+      goJoin: () => this.go('join'),
+      atouts: [
+        { icon: 'ph-translate', title: 'Traduction en temps réel', body: 'Vos messages sont traduits instantanément pendant que vous tapez' },
+        { icon: 'ph-globe-hemisphere-west', title: 'Support multi-langues', body: 'Supportant plus de 100 langues du monde entier' },
+        { icon: 'ph-lock', title: 'Privé et sécurisé', body: 'Vos conversations sont chiffrées de bout en bout' },
+        { icon: 'ph-users-three', title: 'Chats de groupe', body: 'Discutez avec plusieurs personnes dans différentes langues' },
+        { icon: 'ph-sparkle', title: 'Détection automatique', body: 'Détecte automatiquement la langue de vos messages' },
+        { icon: 'ph-squares-four', title: 'Interface moderne', body: 'Design élégant et intuitif pour une meilleure expérience' },
+        { icon: 'ph-chat-circle-dots', title: 'Traduction universelle', body: 'Communiquez avec n’importe qui, n’importe où dans le monde' },
+        { icon: 'ph-users', title: 'Salles de classe multilingues', body: 'Parfait pour l’éducation internationale et les équipes distribuées' },
+        { icon: 'ph-address-book', title: 'Collègues internationaux', body: 'Collaborez efficacement avec des équipes du monde entier' },
+      ],
       goPassword: () => this.go('password'),
       isJoin,
       isRights,
@@ -1094,6 +1167,7 @@ class Component extends DCLogic {
         { initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', preview: 'Gracias, te mando el archivo', open: () => this.go('thread') },
       ],
       chats: CHATS.map((c) => ({ ...c, open: () => this.go('thread') })),
+      langueAffichee: 'Français',
       messages,
       posts: [
         { initials: 'IB', color: '#10B981', name: 'Ibrahim', time: '2 h', text: 'La revue de mars est prête. Trois graphiques, deux surprises.', likes: '128', comments: '12', reposts: '4' },
@@ -1114,8 +1188,8 @@ class Component extends DCLogic {
       modeBadge: s.mode === 'focal' ? 'AUTO · Focal' : 'Script',
       cycleMode: () => this.setState((st) => ({ mode: st.mode === 'focal' ? 'script' : 'focal' })),
 
-      showComposerBar: isThread || screen === 'rich',
-      showFabs: !isThread && !isComposer && !isJoin && !isRights && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
+      showComposerBar: isThread || isRights || screen === 'rich',
+      showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
       memberIcon: s.sheet === 'member' ? 'ph-x' : 'ph-user-circle',
       tapFeeds: () => this.go('feed'),
       toggleMember: () => this.setState((st) => ({ sheet: st.sheet === 'member' ? null : 'member' })),

@@ -231,6 +231,11 @@ final class OutboxUploadContextGuardTests: XCTestCase {
             sansContexte,
             [
                 "ConversationView+AttachmentHandlers.swift:sendMessageWithAttachments",
+                // **Le sticker de conversation (#4823, 2026-09-02)** : le PNG rendu
+                // d'un sticker est une pièce jointe de MESSAGE ordinaire — c'est
+                // le repli que lisent le web et Android — donc il téléverse SANS
+                // contexte, exactement comme une photo envoyée en conversation.
+                "ConversationView+Sticker.swift:uploadAndSendSticker",
                 // **Le découpage du 2026-08-31 (`ec6591a296`) a déplacé ces deux
                 // sites** de `OutboxDispatcher.swift` vers son extension
                 // `+Messages.swift`. L'inventaire nommait l'ANCIEN fichier et la

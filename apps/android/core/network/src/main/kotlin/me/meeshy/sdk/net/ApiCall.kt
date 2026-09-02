@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net
 
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.decodeFromString
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import retrofit2.HttpException
@@ -9,6 +10,26 @@ import java.io.IOException
 
 /** [apiCall]'s payload plus the envelope's `pagination` block, which [apiCall] discards. */
 data class PagedResult<T>(val data: T, val pagination: Pagination?)
+
+/**
+ * Turns a Retrofit [HttpException] into an [ApiError] carrying the GATEWAY'S OWN
+ * `code`/`error` when its body decodes as an [ApiResponse] envelope, instead of only
+ * the synthetic `"HTTP_$status"` — otherwise two endpoints answering the same status
+ * for different reasons (e.g. `/me/account/deletion`'s `409 ALREADY_PENDING` vs.
+ * `409 NO_EMAIL`) are indistinguishable to every caller that discriminates on
+ * [ApiError.code]. Best-effort: an absent/malformed body falls back to the prior
+ * synthetic shape unchanged, so a caller that only ever checked [ApiError.httpStatus]
+ * sees no behavioural change.
+ */
+private fun apiErrorFromHttpException(e: HttpException): ApiError {
+    val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+    val envelope = body?.let { runCatching { MeeshyApi.json.decodeFromString<ApiResponse<Unit>>(it) }.getOrNull() }
+    return ApiError(
+        message = envelope?.error ?: envelope?.message ?: e.message(),
+        code = envelope?.code ?: "HTTP_${e.code()}",
+        httpStatus = e.code(),
+    )
+}
 
 /**
  * Run an API call returning the standard [ApiResponse] envelope and fold it into a
@@ -29,9 +50,7 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
             )
         }
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
@@ -62,9 +81,7 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
             )
         }
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
@@ -155,9 +172,7 @@ suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
     try {
         NetworkResult.Success(block())
     } catch (e: HttpException) {
-        NetworkResult.Failure(
-            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
-        )
+        NetworkResult.Failure(apiErrorFromHttpException(e))
     } catch (e: IOException) {
         NetworkResult.Failure(
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),

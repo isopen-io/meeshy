@@ -24,6 +24,7 @@ import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLo
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
 import { withMentions } from '../../services/posts/postReferences';
+import { servePublishedPost, hoistLocation } from './publication';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { registerBookmarkRoutes } from './bookmarks';
 import { registerImpressionRoutes } from './impressions';
@@ -914,11 +915,16 @@ export function registerInteractionRoutes(
       // deux effets qui voyagent AVEC la republication, et eux seuls.
       const isFreshRepost = outcome.status === 'applied';
 
-      // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
-      // y compris sur un repost qui n'en porte aucune — une clé absente et une
-      // liste vide ne se décodent pas pareil.
-      const payload = withMentions(repost, wireReaderFromRequest(request as UnifiedAuthRequest));
-      const broadcastPayload = withMentions(repost, WIRE_BROADCAST);
+      // Composition UNIQUE des portes de publication (#4151) : même
+      // aplatissement des mentions (la clé exposée est `mentions`, même vide)
+      // ET même hoist du lieu, que ce chemin ne posait pas — un repost servait
+      // `metadata.location` sans `location`, ni `repostOf.location`.
+      const payload = servePublishedPost({
+        post: repost as unknown as Record<string, unknown>,
+        references: undefined,
+        request,
+      });
+      const broadcastPayload = withMentions(hoistLocation(repost as unknown as Record<string, unknown>), WIRE_BROADCAST);
 
       // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
       // hétérogène, chaque client négocie sa forme au premier fetch REST.

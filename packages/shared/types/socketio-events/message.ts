@@ -8,6 +8,7 @@
 
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
+import type { MessageSticker } from '../message-sticker.js';
 
 /**
  * Données pour l'événement de suppression de message
@@ -220,6 +221,11 @@ export interface MessageSendData {
    */
   readonly location?: unknown;
   /**
+   * Sticker — champ dédié, même contrat que `location` : la forme est validée
+   * côté passerelle (`services/stickers/messageSticker.ts`), jamais ici.
+   */
+  readonly sticker?: unknown;
+  /**
    * Les mentionnés que l'ÉMETTEUR nomme, plutôt que ceux que la passerelle
    * déduit du texte.
    *
@@ -275,6 +281,8 @@ export interface MessageSendWithAttachmentsData {
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
   readonly location?: unknown;
+  /** Même contrat que `MessageSendData.sticker` ci-dessus. */
+  readonly sticker?: unknown;
   /** Même contrat que `MessageSendData.mentionedUserIds` ci-dessus. */
   readonly mentionedUserIds?: readonly string[];
   readonly encryptedContent?: string;
@@ -401,6 +409,7 @@ export interface SocketIOMessage {
 
   /** Hissés depuis `metadata` par les producteurs, pour être lisibles en direct. */
   readonly location?: unknown;
+  readonly sticker?: MessageSticker;
   readonly trackingLinks?: readonly unknown[];
 
   /**

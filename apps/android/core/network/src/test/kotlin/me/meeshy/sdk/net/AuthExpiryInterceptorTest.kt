@@ -85,6 +85,17 @@ class AuthExpiryInterceptorTest {
         assertEquals(0, expired)
     }
 
+    // Un mot de passe refuse sur la suppression de compte rend 401 INVALID_PASSWORD :
+    // ce n'est pas non plus une session expiree, sinon l'ecran de suppression
+    // renverrait l'utilisateur sur l'ecran de connexion au lieu d'afficher l'erreur.
+    @Test
+    fun `a 401 on account deletion is not an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/me/account/deletion"))
+        assertEquals(0, expired)
+    }
+
     // La reponse doit traverser l'intercepteur intacte : l'appelant a toujours
     // besoin de son code pour composer son propre message.
     @Test

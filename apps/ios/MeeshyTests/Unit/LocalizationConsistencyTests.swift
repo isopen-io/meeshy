@@ -406,7 +406,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 5
+        // 2026-09-02 — deux de ses appels (`story.viewer.replyTo`,
+        // `story.viewer.reply.cancel`) ont MIGRÉ avec `StoryComposerBarView`
+        // vers son propre fichier (dette de taille). Épinglé dès la découpe,
+        // sinon les deux cliquets ci-dessous cesseraient de les voir — la
+        // dérive silencieuse que #4425 décrit pour `StoryViewModel`.
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",  // 6

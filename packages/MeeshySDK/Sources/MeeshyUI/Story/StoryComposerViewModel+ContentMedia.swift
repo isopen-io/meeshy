@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import os
 import MeeshySDK
 
 // MARK: - Le MÉDIA du composer, porté dans la scène (B1, #3924)
@@ -183,11 +184,26 @@ public extension StoryComposerViewModel {
     /// posent bien sur la slide courante, ne changent pas d'un caractère.
     func applyContentMedia(_ items: [ComposerContentMedia], intoSlideId targetSlideId: String? = nil) {
         let slideId = targetSlideId ?? currentSlide.id
+        // **Chaque refus se DIT** (#4879). Cette fonction portait quatre
+        // `continue` muets — décodage impossible, copie ratée, insertion
+        // refusée — sur le chemin par lequel TOUT média rejoint une scène. Un
+        // média correctement ingéré pouvait donc disparaître entre la
+        // photothèque et le canvas sans laisser une ligne.
+        //
+        // > Quand aucune des deux erreurs n'a de réparateur, il ne faut pas
+        // > choisir — il faut CRÉER le réparateur. Ici il coûte quatre lignes,
+        // > et il est le seul moyen d'attribuer un canvas resté noir.
+        let journal = os.Logger(subsystem: "me.meeshy.app", category: "media")
         for item in items where !carriedContentSources.contains(item.sourceURL) {
             let objectId = UUID().uuidString
             switch item.kind {
             case .image:
-                guard let image = UIImage(contentsOfFile: item.sourceURL.path) else { continue }
+                guard let image = UIImage(contentsOfFile: item.sourceURL.path) else {
+                    journal.error(
+                        "applyContentMedia: image NON DÉCODABLE, ignorée — \(item.sourceURL.lastPathComponent, privacy: .public) mime=\(item.mimeType ?? "nil", privacy: .public)"
+                    )
+                    continue
+                }
                 let ext = ComposerContentMediaFile.fileExtension(
                     sourceURL: item.sourceURL,
                     declaredMimeType: item.mimeType,
@@ -196,22 +212,40 @@ public extension StoryComposerViewModel {
                 let destination = FileManager.default.temporaryDirectory
                     .appendingPathComponent("\(objectId).\(ext)")
                 try? FileManager.default.removeItem(at: destination)
-                guard (try? FileManager.default.copyItem(at: item.sourceURL, to: destination)) != nil,
-                      insertForegroundImage(
-                        image, fileURL: destination,
-                        intoSlideId: slideId, objectId: objectId) != nil
-                else { continue }
+                guard (try? FileManager.default.copyItem(at: item.sourceURL, to: destination)) != nil else {
+                    journal.error(
+                        "applyContentMedia: COPIE ratée, image ignorée — \(item.sourceURL.lastPathComponent, privacy: .public)"
+                    )
+                    continue
+                }
+                guard insertForegroundImage(image, fileURL: destination,
+                                            intoSlideId: slideId, objectId: objectId) != nil else {
+                    journal.error(
+                        "applyContentMedia: INSERTION refusée pour l'image — slide=\(slideId, privacy: .public)"
+                    )
+                    continue
+                }
                 carriedContentSources.insert(item.sourceURL)
 
             case .video:
                 guard let copied = StoryComposerSeedFile.copyForComposer(
                         source: item.sourceURL, objectId: objectId,
-                        declaredMimeType: item.mimeType) else { continue }
+                        declaredMimeType: item.mimeType) else {
+                    journal.error(
+                        "applyContentMedia: COPIE ratée, vidéo ignorée — \(item.sourceURL.lastPathComponent, privacy: .public)"
+                    )
+                    continue
+                }
                 let duration = item.durationMs.map { Float($0) / 1000 }
                 guard insertForegroundVideo(
                         url: copied, thumbnail: nil, aspectRatio: nil,
                         duration: duration, intoSlideId: slideId, objectId: objectId) != nil
-                else { continue }
+                else {
+                    journal.error(
+                        "applyContentMedia: INSERTION refusée pour la vidéo — slide=\(slideId, privacy: .public)"
+                    )
+                    continue
+                }
                 carriedContentSources.insert(item.sourceURL)
 
             case .audio:

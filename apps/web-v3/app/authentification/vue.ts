@@ -69,7 +69,7 @@ const corpsDeLEcran = ({ ecran, erreur, valeurs, retour }: Etat): string =>
   `<form method="post" action="${echappe(ecran.action)}">` +
   (retour === null ? '' : `<input type="hidden" name="returnUrl" value="${echappe(retour)}"/>`) +
   ecran.champs.map((declaration) => champ(declaration, valeurs[declaration.nom] ?? '')).join('') +
-  `<button class="cta principal" type="submit">${echappe(ecran.bouton)}</button>` +
+  `<button class="action primaire" type="submit">${echappe(ecran.bouton)}</button>` +
   '</form>' +
   '<div class="apres">' +
   bascule(ecran.bascule) +

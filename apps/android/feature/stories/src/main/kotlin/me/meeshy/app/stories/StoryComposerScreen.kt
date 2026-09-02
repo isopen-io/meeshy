@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BorderColor
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -143,6 +144,8 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.StoryBackgroundPalette
 import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.StoryDrawingStroke
+import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.ui.theme.hexColor
@@ -266,6 +269,11 @@ fun StoryComposerScreen(
                 elementMenu = state.elementContextMenu,
                 stickers = state.selectedSlideStickers,
                 selectedStickerId = state.selectedStickerId,
+                strokes = state.selectedSlideStrokes,
+                isDrawingActive = state.isDrawingActive,
+                drawColorHex = state.drawColorHex,
+                drawWidthDesign = state.drawWidthDesign,
+                onStrokeCaptured = viewModel::onStrokeCaptured,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementLongPress = viewModel::onOpenElementMenu,
@@ -308,38 +316,50 @@ fun StoryComposerScreen(
                 },
             )
 
-            OutlinedTextField(
-                value = state.editorText,
-                onValueChange = viewModel::onTextChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = if (state.isEditingTextElement) {
-                    { Text(stringResource(R.string.stories_composer_add_text)) }
-                } else {
-                    { Text(stringResource(R.string.stories_composer_text_caption)) }
-                },
-                placeholder = {
-                    Text(
-                        stringResource(
-                            if (state.isEditingTextElement) {
-                                R.string.stories_composer_text_placeholder
-                            } else {
-                                R.string.stories_composer_placeholder
-                            },
-                        ),
-                    )
-                },
-                isError = !state.draft.isWithinLimit,
-                supportingText = {
-                    Text(
-                        text = state.errorMessage
-                            ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End,
-                    )
-                },
-            )
+            if (state.isDrawingActive) {
+                StoryDrawingToolbar(
+                    activeColorHex = state.drawColorHex,
+                    activeWidthDesign = state.drawWidthDesign,
+                    canUndo = state.drawingBoard.canUndo,
+                    onColorSelected = viewModel::onDrawColorSelected,
+                    onWidthSelected = viewModel::onDrawWidthSelected,
+                    onUndo = viewModel::onDrawUndo,
+                    onDone = viewModel::onExitDrawingMode,
+                )
+            } else {
+                OutlinedTextField(
+                    value = state.editorText,
+                    onValueChange = viewModel::onTextChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = if (state.isEditingTextElement) {
+                        { Text(stringResource(R.string.stories_composer_add_text)) }
+                    } else {
+                        { Text(stringResource(R.string.stories_composer_text_caption)) }
+                    },
+                    placeholder = {
+                        Text(
+                            stringResource(
+                                if (state.isEditingTextElement) {
+                                    R.string.stories_composer_text_placeholder
+                                } else {
+                                    R.string.stories_composer_placeholder
+                                },
+                            ),
+                        )
+                    },
+                    isError = !state.draft.isWithinLimit,
+                    supportingText = {
+                        Text(
+                            text = state.errorMessage
+                                ?: stringResource(R.string.stories_composer_remaining, state.draft.charactersRemaining),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
+                )
+            }
 
-            if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
+            if (!state.isDrawingActive && (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty())) {
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
                     pending = state.selectedSlidePending,
@@ -352,37 +372,40 @@ fun StoryComposerScreen(
                 )
             }
 
-            ComposerControlsLayer(
-                band = state.band,
-                visibility = state.draft.visibility,
-                selectedFilter = state.selectedSlideFilter,
-                filterIntensity = state.selectedSlideFilterIntensity,
-                slideDurationSeconds = state.selectedSlideDurationSeconds,
-                selectedBackground = state.selectedSlideBackground,
-                canAddText = state.deck.selectedCanAddTextElement,
-                canAddSticker = state.deck.selectedCanAddSticker,
-                isUploadingMedia = state.isUploadingMedia,
-                isMediaFull = state.draft.isMediaFull,
-                mediaCount = state.draft.mediaIds.size,
-                hasMedia = state.draft.hasMedia,
-                onFabTap = viewModel::onBandFabTap,
-                onDismiss = viewModel::onBandDismiss,
-                onSwapCategory = viewModel::onBandSwapCategory,
-                onAddText = viewModel::onAddTextElement,
-                onAddSticker = { showStickerPicker = true },
-                onPickMedia = {
-                    when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
-                        StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
-                        StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
-                        StoryMediaPickMode.None -> Unit
-                    }
-                },
-                onSelectVisibility = viewModel::onVisibilityChange,
-                onSelectFilter = viewModel::onSelectFilter,
-                onFilterIntensityChange = viewModel::onFilterIntensityChange,
-                onSlideDurationChange = viewModel::onSlideDurationChange,
-                onSelectBackground = viewModel::onSlideBackgroundChange,
-            )
+            if (!state.isDrawingActive) {
+                ComposerControlsLayer(
+                    band = state.band,
+                    visibility = state.draft.visibility,
+                    selectedFilter = state.selectedSlideFilter,
+                    filterIntensity = state.selectedSlideFilterIntensity,
+                    slideDurationSeconds = state.selectedSlideDurationSeconds,
+                    selectedBackground = state.selectedSlideBackground,
+                    canAddText = state.deck.selectedCanAddTextElement,
+                    canAddSticker = state.deck.selectedCanAddSticker,
+                    isUploadingMedia = state.isUploadingMedia,
+                    isMediaFull = state.draft.isMediaFull,
+                    mediaCount = state.draft.mediaIds.size,
+                    hasMedia = state.draft.hasMedia,
+                    onFabTap = viewModel::onBandFabTap,
+                    onDismiss = viewModel::onBandDismiss,
+                    onSwapCategory = viewModel::onBandSwapCategory,
+                    onAddText = viewModel::onAddTextElement,
+                    onAddSticker = { showStickerPicker = true },
+                    onPickMedia = {
+                        when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                            StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                            StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                            StoryMediaPickMode.None -> Unit
+                        }
+                    },
+                    onEnterDrawing = viewModel::onEnterDrawingMode,
+                    onSelectVisibility = viewModel::onVisibilityChange,
+                    onSelectFilter = viewModel::onSelectFilter,
+                    onFilterIntensityChange = viewModel::onFilterIntensityChange,
+                    onSlideDurationChange = viewModel::onSlideDurationChange,
+                    onSelectBackground = viewModel::onSlideBackgroundChange,
+                )
+            }
         }
     }
 }
@@ -417,6 +440,7 @@ private fun ComposerControlsLayer(
     onAddText: () -> Unit,
     onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
+    onEnterDrawing: () -> Unit,
     onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
@@ -457,6 +481,7 @@ private fun ComposerControlsLayer(
                         onAddText = onAddText,
                         onAddSticker = onAddSticker,
                         onPickMedia = onPickMedia,
+                        onEnterDrawing = onEnterDrawing,
                     )
                     BandCategory.EFFETS -> Column(
                         modifier = Modifier.padding(12.dp),
@@ -533,6 +558,7 @@ private fun ContentTilesRow(
     onAddText: () -> Unit,
     onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
+    onEnterDrawing: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -571,6 +597,13 @@ private fun ContentTilesRow(
                     label = stringResource(R.string.stories_composer_add_sticker),
                     enabled = canAddSticker,
                     onClick = onAddSticker,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.DRAW -> BandTile(
+                    icon = { Icon(Icons.Filled.Brush, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_draw),
+                    enabled = true,
+                    onClick = onEnterDrawing,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -619,6 +652,11 @@ private fun StoryCanvasSurface(
     elementMenu: StoryElementContextMenu?,
     stickers: List<StoryStickerElement>,
     selectedStickerId: String?,
+    strokes: List<StoryDrawingStroke>,
+    isDrawingActive: Boolean,
+    drawColorHex: String,
+    drawWidthDesign: Double,
+    onStrokeCaptured: (List<StoryDrawingStrokePoint>) -> Unit,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementLongPress: (String) -> Unit,
@@ -671,12 +709,22 @@ private fun StoryCanvasSurface(
                     canvasHeightPx = it.height.toFloat()
                 }
                 .semantics { contentDescription = canvasLabel }
-                .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
-                    }
-                },
+                .then(
+                    // While the drawing tool is capturing, the canvas' own tap-to-deselect and
+                    // pinch/pan gestures step aside entirely — StoryDrawingLayer below owns every
+                    // touch, so a stroke never fights the background transform for the same drag.
+                    if (isDrawingActive) {
+                        Modifier
+                    } else {
+                        Modifier
+                            .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
+                                }
+                            }
+                    },
+                ),
         ) {
             if (backgroundModel != null) {
                 AsyncImage(
@@ -787,6 +835,17 @@ private fun StoryCanvasSurface(
                     onRemove = { onStickerRemove(sticker.id) },
                 )
             }
+            // Topmost: paints every committed stroke, and — only while isDrawingActive —
+            // also captures the drag that draws the next one, blocking the pan/zoom/tap
+            // gestures underneath so a stroke never fights the background transform.
+            StoryDrawingLayer(
+                strokes = strokes,
+                isCapturing = isDrawingActive,
+                activeColorHex = drawColorHex,
+                activeWidthDesign = drawWidthDesign,
+                onStrokeCaptured = onStrokeCaptured,
+                modifier = Modifier.fillMaxSize(),
+            )
             if (selectedElement != null) {
                 val placement = StoryToolbarPlacement.resolve(
                     elementCenterYpx = selectedElement.y * canvasHeightPx,

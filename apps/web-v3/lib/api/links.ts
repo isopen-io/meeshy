@@ -34,6 +34,11 @@
  *     lecture est bornée et l'expiration se lit comme une indisponibilité.
  */
 
+import type { PostType } from '@meeshy/shared/types/post';
+
+import { apercuServi } from './invite';
+import { baseDeLaPasserelle } from './passerelle';
+
 const PREFIXE = '/api/v1';
 
 const CHEMIN_RESOLUTION = (jeton: string): string =>
@@ -55,12 +60,16 @@ export type Recuperateur = (url: string, options?: RequestInit) => Promise<Respo
  * Les types de cible que la v3 sait ouvrir, plus `INCONNU` — parce que la
  * passerelle sert une chaîne libre et qu'un type qu'on ne connaît pas doit se
  * NOMMER plutôt que de se faire passer pour un autre.
+ *
+ * #4809 — `PostType` (`@meeshy/shared/types/post`) porte les quatre valeurs de
+ * contenu ; `CONVERSATION` / `PROFILE` / `EXTERNAL` n'ont pas d'équivalent
+ * amont (un lien peut aussi cibler une conversation, un profil, une URL
+ * externe). `'INCONNU'` est un repli du DÉCODEUR local (`typeDeCible`
+ * plus bas) : la passerelle ne l'émet jamais — ce n'est pas une valeur de
+ * PROTOCOLE, donc elle reste ici et ne monte pas dans `packages/shared`.
  */
 export type TypeDeCible =
-  | 'POST'
-  | 'REEL'
-  | 'STORY'
-  | 'STATUS'
+  | PostType
   | 'CONVERSATION'
   | 'PROFILE'
   | 'EXTERNAL'
@@ -185,15 +194,24 @@ export const CAUSES_DE_CLOTURE: readonly CauseDeCloture[] = [
   'indeterminee',
 ];
 
-const TYPES: readonly TypeDeCible[] = [
-  'POST',
-  'REEL',
-  'STORY',
-  'STATUS',
-  'CONVERSATION',
-  'PROFILE',
-  'EXTERNAL',
-];
+/**
+ * Témoin de dérive (#4809) : `satisfies Record<…, true>` exige TOUTES les
+ * valeurs reconnues de `TypeDeCible` (donc tout `PostType` amont) — un membre
+ * ajouté à la source sans entrée ici fait échouer la compilation À CETTE
+ * LIGNE. `'INCONNU'` en est exclu : ce n'est jamais une valeur SERVIE par la
+ * passerelle, seulement le repli du décodeur `typeDeCible` ci-dessous.
+ */
+const TYPES_RECONNUS = {
+  POST: true,
+  REEL: true,
+  STORY: true,
+  STATUS: true,
+  CONVERSATION: true,
+  PROFILE: true,
+  EXTERNAL: true,
+} as const satisfies Record<Exclude<TypeDeCible, 'INCONNU'>, true>;
+
+const TYPES = Object.keys(TYPES_RECONNUS) as readonly Exclude<TypeDeCible, 'INCONNU'>[];
 
 const texte = (valeur: unknown): string | null =>
   typeof valeur === 'string' && valeur.trim() !== '' ? valeur : null;
@@ -227,15 +245,12 @@ const instant = (valeur: unknown): number | null => {
 const INTROUVABLE: Cloture = { etat: 'clos', genre: null, echeance: null };
 
 /**
- * La base de la passerelle. Lue à CHAQUE appel, jamais au chargement du
- * module : `next build` évalue les modules serveur, et une base figée à la
- * construction serait celle de l'image, pas celle du déploiement.
+ * Les deux origines de la passerelle vivent dans `lib/api/passerelle.ts` —
+ * le site le plus bas de la pile, que `lib/api/invite.ts` lit aussi. Elles
+ * sont ré-exportées ici pour que les importateurs de ce module n'aient rien à
+ * apprendre.
  */
-export const baseDeLaPasserelle = (): string =>
-  (process.env.MEESHY_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-    /\/+$/,
-    '',
-  );
+export { baseDeLaPasserelle, baseDeLaPasserellePublique } from './passerelle';
 
 const lis = async (reponse: Response): Promise<object | null> => {
   try {
@@ -357,21 +372,13 @@ export const apercuDuLien = async ({
 
   if (reponse === null || !reponse.ok) return null;
 
-  const corps = await lis(reponse);
-  const donnee = corps === null ? null : objet(champ(corps, 'data'));
-  if (donnee === null) return null;
-
-  const conversation = objet(champ(donnee, 'conversation'));
-  const nom =
-    texte(champ(donnee, 'name')) ?? (conversation === null ? null : texte(champ(conversation, 'title')));
-  if (nom === null) return null;
-
-  return {
-    nom,
-    description:
-      texte(champ(donnee, 'description')) ??
-      (conversation === null ? null : texte(champ(conversation, 'description'))),
-  };
+  // UN seul lecteur de la charge de `GET /anonymous/link/:identifier` dans la
+  // v3 : celui de la porte de l'invité. Ici on n'en garde que ce qu'une carte
+  // d'aperçu montre — le nom et la description —, et un aperçu qui ne porte
+  // pas encore de `linkId` (version plus ancienne, réponse tronquée) sert
+  // quand même son nom : une carte n'a pas besoin de nommer une place.
+  const servi = apercuServi(champ((await lis(reponse)) ?? {}, 'data'));
+  return servi === null ? null : { nom: servi.nom, description: servi.description };
 };
 
 /**

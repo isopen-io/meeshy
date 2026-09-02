@@ -22,4 +22,5 @@
     <string name="notification_banner_media_photo">📷 Photo</string>
     <string name="notification_banner_media_video">🎥 Vidéo</string>
     <string name="notification_banner_media_audio">🎵 Audio</string>
+    <string name="notification_banner_preview_hidden">Nouvelle notification</string>
 </resources>

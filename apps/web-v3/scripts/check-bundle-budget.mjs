@@ -200,7 +200,46 @@ export const mesuresDepuisLignes = (lignes) =>
     ]),
   );
 
-export const composeRapport = ({ entrees, groupes, routes, tailleGzip, mesuresEnregistrees }) => {
+// LES MODULES QU'AUCUN CHUNK EXPÉDIÉ N'A LE DROIT DE PORTER — critère de fin de
+// l'écran `home` : « CallManager absent du layout connecté (assertion sur
+// app-build-manifest.json) ».
+//
+// Un composant P2 ne gouverne pas un gate P1. `CallManager` est une pile WebRTC
+// (1350 lignes dans `apps/web`) : montée dans le layout connecté, elle serait
+// payée par CHAQUE écran de la zone, tableau de bord compris — un écran qui
+// n'appelle personne. Elle se monte à la réception d'un `call:incoming`, en
+// import dynamique, ou pas du tout.
+//
+// La question se pose au MANIFESTE et non à un `grep` d'imports : un module
+// entre aussi par un barrel, une réexportation ou une dépendance transitive,
+// sans qu'aucun fichier de `app/` ne le nomme. Ce qui n'est dans aucun chunk
+// expédié n'est monté nulle part.
+//
+// La comparaison porte sur un SEGMENT ENTIER du chemin de chunk, jamais sur une
+// sous-chaîne : `calls_CallManagerHooks_tsx.js` est un AUTRE module, et un gate
+// qui rougirait dessus se ferait désarmer au premier faux positif.
+export const MODULES_INTERDITS = ['CallManager'];
+
+const segmentsDuChunk = (chunk) => chunk.split(/[^A-Za-z0-9]+/).filter((segment) => segment !== '');
+
+export const modulesExpedies = (entrees, interdits) =>
+  entrees.flatMap((entree) =>
+    [...new Set(entree.chunks)].flatMap((chunk) => {
+      const segments = new Set(segmentsDuChunk(chunk));
+      return interdits
+        .filter((module) => segments.has(module))
+        .map((module) => `${entree.route} expédie ${module} : ${chunk}`);
+    }),
+  );
+
+export const composeRapport = ({
+  entrees,
+  groupes,
+  routes,
+  tailleGzip,
+  mesuresEnregistrees,
+  interdits = MODULES_INTERDITS,
+}) => {
   const natures = entrees.map((e) => ({ ...e, nature: natureDeRoute(e.route) }));
   const pages = natures.filter((e) => e.nature === 'page');
   const classees = pages.map((p) => ({ ...p, ...groupeDe(p.route, groupes) }));
@@ -219,6 +258,9 @@ export const composeRapport = ({ entrees, groupes, routes, tailleGzip, mesuresEn
     ...natures
       .filter((e) => e.nature === 'inconnue')
       .map((e) => `${e.route} : entrée de manifeste de nature inconnue — ni page, ni gestionnaire, ni annexe`),
+    ...modulesExpedies(entrees, interdits).map(
+      (fait) => `${fait} — module interdit d'expédition (critère de fin de l'écran « home »)`,
+    ),
   ];
 
   const lignes = groupes

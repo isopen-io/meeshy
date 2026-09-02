@@ -205,8 +205,22 @@ extension BubbleContent {
         // reste donc en place pour elles (filtre `nonMedia` ci-dessous).
         self.location = message.location
 
+        // --- Sticker (#4823) ---
+        // Un message-sticker arrive avec `content == ""`, UNE pièce jointe
+        // image (le PNG rendu, repli des lecteurs qui ne dessinent pas le
+        // gabarit) et `message.sticker`. Le PNG est rattaché au sticker et
+        // RETIRÉ de la grille visuelle : sans cette exclusion, la bulle
+        // rendrait le sticker natif ET, dessous, son propre repli en photo.
+        // Un sticker non rendable vaut absent (`ifRenderable`) et laisse la
+        // pièce jointe à la grille — mieux vaut la photo qu'un vide.
+        let sticker = Self.resolveSticker(message.sticker, attachments: message.attachments)
+        self.sticker = sticker
+        let stickerPictureId = sticker?.picture?.attachmentId
+
         // --- Attachments ---
-        let visual = message.attachments.filter { $0.type == .image || $0.type == .video }
+        let visual = message.attachments.filter {
+            ($0.type == .image || $0.type == .video) && $0.id != stickerPictureId
+        }
         let audio = message.attachments.filter { $0.type == .audio }
         // Exclusivité du rendu de lieu : quand `message.location` est présent,
         // une éventuelle pièce jointe `.location` (doublon hérité du cache)
@@ -281,6 +295,37 @@ extension BubbleContent {
     }
 
     // MARK: - Pure helpers (testables)
+
+    /// Le sticker que la bulle dessine, avec le PNG qui l'accompagne — `nil`
+    /// quand le message n'en porte pas, ou en porte un NON rendable (ni
+    /// gabarit ni emoji : rien à peindre, `MessageSticker.ifRenderable`).
+    ///
+    /// Le PNG est la PREMIÈRE pièce jointe image : le composer n'en envoie
+    /// qu'une, et un lecteur qui en verrait deux n'aurait aucun moyen de dire
+    /// laquelle est le repli. La projection en `Picture` est faite ICI, une
+    /// fois, pour que la feuille ne relise jamais `MeeshyMessageAttachment`.
+    static func resolveSticker(
+        _ sticker: MessageSticker?,
+        attachments: [MeeshyMessageAttachment]
+    ) -> Sticker? {
+        guard let sticker = sticker?.ifRenderable else { return nil }
+        let picture = attachments.first(where: { $0.type == .image }).map {
+            Sticker.Picture(
+                attachmentId: $0.id,
+                fileUrl: $0.fileUrl,
+                thumbnailUrl: $0.thumbnailUrl,
+                thumbHash: $0.thumbHash,
+                thumbnailColor: $0.thumbnailColor
+            )
+        }
+        return Sticker(
+            templateId: sticker.templateId,
+            slots: sticker.slots,
+            animation: sticker.animation,
+            emoji: sticker.emoji,
+            picture: picture
+        )
+    }
 
     static func resolveEffectiveContent(
         message: Message,

@@ -6,6 +6,28 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
+import { routesDuCompte } from './bouchon-compte';
+import {
+  placeDeLInvite,
+  porteDeLHote,
+  routesDuFil,
+  SEUIL_DE_TROU,
+  type EtatDuFilDeBouchon,
+  type PieceDeBouchon,
+  type PlaceDeLInvite,
+  type PorteDeLHote,
+} from './bouchon-fil';
+import { creanceSelonLaPasserelle, lienParDefaut, routesDuLien, type LienDeBouchon } from './bouchon-lien';
+import {
+  CONVERSATION_DU_LECTEUR,
+  INVITE,
+  messagesInitiaux,
+  NOM_DU_LIEN,
+  PRESENCES_INITIALES,
+  REACTIONS_INITIALES,
+  type MessageServi,
+} from './bouchon-monde';
+import { bouchonSocket, magasinDeReactions, type BouchonSocket, type Emission, type MagasinDeReactions } from './bouchon-socket';
 
 /**
  * Les deux serveurs que mesure la suite réseau — et la raison pour laquelle
@@ -22,6 +44,17 @@ import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-
  * Elle tourne dans le processus du test, donc son horloge est celle des
  * événements CDP : c'est ce qui rend comparable « la 302 est partie » et « le
  * clic est arrivé ».
+ *
+ * CE FICHIER MONTE, IL NE SERT PAS. Les routes vivent par famille, chacune
+ * nommant l'émetteur qu'elle copie : le fil (`bouchon-fil.ts`), le lien
+ * (`bouchon-lien.ts`), le compte (`bouchon-compte.ts`), le socket
+ * (`bouchon-socket.ts`) ; le monde qu'elles servent (`bouchon-monde.ts`) est
+ * ré-exporté ici pour que les specs gardent une seule porte d'entrée. L'état
+ * — places, lien, messages, réactions, pièces, présences — est construit UNE
+ * fois ici et passé PAR RÉFÉRENCE aux quatre familles : un spec qui règle
+ * `passerelle.lien.actif = false` fait répondre l'aperçu, la jonction, le
+ * battement ET la liste, comme la ligne `ConversationShareLink` le fait en
+ * production (leçon 422).
  */
 
 /**
@@ -35,34 +68,38 @@ import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-
  */
 export const RACINE_V3 = join(__dirname, '..', '..', '..');
 
+export {
+  CONVERSATION_DU_LECTEUR,
+  CREATEUR_DU_LIEN,
+  DESCRIPTION_DU_LIEN,
+  IDENTIFIANT_DU_LIEN_PARTAGE,
+  INVITE,
+  LIEN_DU_FIL,
+  MEMBRE,
+  NOM_DU_LIEN,
+  PAIR_ANGLOPHONE,
+  PAIR_HISPANOPHONE,
+  PRENOM_DU_LECTEUR,
+  PSEUDO_DEJA_PRIS,
+  PSEUDO_SUGGERE,
+  type MessageServi,
+} from './bouchon-monde';
+export { lienParDefaut, type LienDeBouchon } from './bouchon-lien';
+
 export type AppelRecu = {
   readonly methode: string;
   readonly chemin: string;
   readonly a: number;
   readonly corps: string;
+  /** Le statut RENDU — ce qu'un critère de fin veut lire (« 201 observé ») ; `null` tant que la réponse n'est pas partie. */
+  readonly statut: number | null;
 };
 
-export type PasserelleDeBouchon = {
-  readonly base: string;
-  readonly journal: readonly AppelRecu[];
-  readonly oublie: () => void;
-  readonly ferme: () => Promise<void>;
-};
-
-export const NOM_DU_LIEN = 'Équipe Lagos';
-export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
-/** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */
-export const CREATEUR_DU_LIEN = 'ibrahim-le-createur';
-
-const json = (reponse: ServerResponse, corps: unknown): void => {
-  reponse.writeHead(200, { 'content-type': 'application/json' });
-  reponse.end(JSON.stringify(corps));
-};
-
-const corpsDe = async (requete: IncomingMessage): Promise<string> => {
+/** Le corps, en OCTETS : un téléversement multipart ne se relit pas en texte. */
+const corpsDe = async (requete: IncomingMessage): Promise<Buffer> => {
   const morceaux: Buffer[] = [];
   for await (const morceau of requete) morceaux.push(Buffer.from(morceau));
-  return Buffer.concat(morceaux).toString('utf8');
+  return Buffer.concat(morceaux);
 };
 
 const portLibre = async (): Promise<number> =>
@@ -77,33 +114,68 @@ const portLibre = async (): Promise<number> =>
 const ecoute = (serveur: Server, port: number): Promise<void> =>
   new Promise((resoud) => serveur.listen(port, '127.0.0.1', () => resoud()));
 
-/**
- * La passerelle de bouchon : trois routes, celles que `/l/:token` connaît.
- * `cibleActive` permet à un test de fermer le lien sans changer de serveur.
- */
-/**
- * TROIS CHAÎNES, PARCE QUE LA PRODUCTION EN PRODUIT TROIS — et une seule d'entre
- * elles bouge les deux portes.
- *
- * Un jeton `/l/:token` est soit un `ConversationShareLink` (invitation), soit un
- * `TrackingLink` (story, réel, post, humeur, lien externe : tout le § P0). Ce
- * sont deux modèles disjoints, et `GET /anonymous/link/:identifier` n'en connaît
- * qu'un : il rend 404 sur un jeton de tracking, TOUJOURS. Un bouchon qui
- * refuserait « des deux côtés » pour tout jeton raconterait donc une chaîne que
- * la production ne produit jamais — et c'est exactement ce qui a laissé passer
- * un écran servant « Indéterminé » à la moitié du produit.
- *
- *   • `refusParJeton` — une INVITATION close : `resolve` la dit `isActive:false`
- *     et l'aperçu NOMME le refus par un 410. Les deux portes parlent.
- *   • `trackingFermeParJeton` — un lien de TRACKING clos : `resolve` le dit
- *     `isActive:false` avec son `expiresAt` (la valeur du dictionnaire), et
- *     l'aperçu rend 404. Une seule porte parle, et c'est la seule qui répond aux
- *     deux familles.
- *   • `inconnus` — un jeton que la passerelle ne trouve pas : les deux portes
- *     rendent 404, et rien ne doit être NOMMÉ (§ 5.1, oracle d'énumération).
- */
-const jetonDuChemin = (chemin: string): string =>
-  decodeURIComponent(chemin.split('?')[0]?.split('/').filter(Boolean).pop() ?? '');
+export type PasserelleDeBouchon = {
+  readonly base: string;
+  readonly journal: readonly AppelRecu[];
+  readonly oublie: () => void;
+  readonly ferme: () => Promise<void>;
+  /** Le socket, monté sur le même serveur — et sa porte de test. */
+  readonly socket: BouchonSocket;
+  /** Les sessions invitées dont la place est ACTIVE : en retirer une, c'est `isActive:false` en base (état F). */
+  readonly placesActives: Set<string>;
+  /**
+   * Les sessions que le serveur a RÉVOQUÉES (`revokeShareLinkGuests`) : la ligne existe,
+   * `isActive:false` — le middleware rend 410 `GUEST_ACCESS_REVOKED` sur toute porte
+   * `authOptional`, là où un jeton inventé retombe en visiteur (`middleware/auth.ts:561`, `:758-772`).
+   */
+  readonly sessionsRevoquees: Set<string>;
+  /**
+   * Le lien de partage, ÉTAT MUTABLE que les specs règlent : `actif: false` fait répondre
+   * 410 au battement et à la liste (état G), `LINK_INACTIVE` à l'aperçu et `LINK_EXPIRED` à
+   * la jonction ; chaque champ produit le refus que la passerelle produirait.
+   */
+  readonly lien: LienDeBouchon;
+  /**
+   * La place de l'invité en TROIS couches (`bouchon-fil.ts` › `PlaceDeLInvite`) : les `allow*`
+   * du lien (`place.lien`, ce que l'hôte règle sur le lien), l'instantané du join que le
+   * battement rend, le delta de l'hôte. Un spec règle le LIEN (`reinitialise({ … })`) — jamais
+   * une réponse (leçon 422).
+   */
+  readonly place: PlaceDeLInvite;
+  /** L'hôte, qui change les droits d'un invité après le join — `PATCH …/participants/:id/rights`, et son événement. */
+  readonly hote: PorteDeLHote;
+  /** L'invité que la place désigne ; `nom` est le pseudo POSTÉ à la jonction, comme `displayName` en base. */
+  readonly invite: { readonly id: string; nom: string };
+  /**
+   * Le curseur GLOBAL du compte du membre (`sequenceService.currentSeq`) — ce
+   * que `/sync` compare au `seq` annoncé (`routes/sync/index.ts:274-279`).
+   * `creuseUnTrou` l'avance au-delà de `GAP_THRESHOLD` : le prochain `/sync`
+   * d'un MEMBRE qui annonce son `seq` rend `hasGap` — jamais celui d'un invité,
+   * dont le curseur vaut 0 par la loi du serveur (§ 7).
+   */
+  readonly sync: { curseur: number };
+  readonly creuseUnTrou: () => void;
+  /** Les réactions, l'état ABSOLU partagé par la route et par le socket. */
+  readonly reactions: MagasinDeReactions;
+  /** Les pièces téléversées, par identifiant — servies par `GET /attachments/file/*`. */
+  readonly pieces: ReadonlyMap<string, PieceDeBouchon>;
+  /**
+   * Une pièce DÉPOSÉE par un autre — ce qu'un `POST /attachments/upload` d'un
+   * pair aurait laissé —, servie par `GET /attachments/file/*` ; ce que
+   * `attachmentServi` en rend s'attache à un message.
+   */
+  readonly deposeUnePiece: (piece: { readonly nom: string; readonly type: string; readonly octets: Buffer; readonly dureeMs?: number }) => PieceDeBouchon;
+  /**
+   * La présence des pairs, telle que `connectedUsers` la tient — projetée par
+   * la fiche de conversation (`isOnline`, gardée par la visibilité), par
+   * `presence:snapshot` et par `user:status` (`bouchon-socket.ts`). Un spec la
+   * remet d'aplomb par `reinitialise`.
+   */
+  readonly presences: Map<string, boolean> & { readonly reinitialise: () => void };
+  /** Un message qui ARRIVE pendant que le lecteur n'est pas là — servi par la liste ET par `/sync`, jamais par le socket. */
+  readonly ajouteUnMessage: (message: MessageServi) => void;
+  readonly messages: () => readonly MessageServi[];
+};
 
 export const passerelleDeBouchon = async (options?: {
   readonly actif?: boolean;
@@ -111,93 +183,131 @@ export const passerelleDeBouchon = async (options?: {
   /** Jeton de tracking clos → son `expiresAt` ISO, ou `null` s'il n'en a pas. */
   readonly trackingFermeParJeton?: Readonly<Record<string, string | null>>;
   readonly inconnus?: readonly string[];
+  /**
+   * Le lecteur connecté n'a NI conversation NI lien — l'état vide du tableau de
+   * bord, celui qu'un compte neuf voit en premier et qu'un bouchon toujours
+   * garni ne fait jamais visiter.
+   */
+  readonly lecteurSansRien?: boolean;
 }): Promise<PasserelleDeBouchon> => {
   const journal: AppelRecu[] = [];
-  const actif = options?.actif ?? true;
-  const refus = options?.refusParJeton ?? {};
-  const tracking = options?.trackingFermeParJeton ?? {};
-  const inconnus = options?.inconnus ?? [];
-  const introuvable = (reponse: ServerResponse): void => {
-    reponse.writeHead(404, { 'content-type': 'application/json' });
-    reponse.end(JSON.stringify({ success: false, error: 'NOT_FOUND' }));
+  const conversationId = CONVERSATION_DU_LECTEUR.id;
+  const placesActives = new Set<string>([INVITE.session]);
+  const sessionsRevoquees = new Set<string>();
+  const lien = lienParDefaut();
+  const place = placeDeLInvite();
+  const invite = { id: INVITE.id, nom: INVITE.nom, session: INVITE.session, place };
+  const sync = { curseur: 0 };
+  const reactions = magasinDeReactions(REACTIONS_INITIALES);
+  const pieces = new Map<string, PieceDeBouchon>();
+  const presences = Object.assign(new Map<string, boolean>(PRESENCES_INITIALES), {
+    reinitialise: (): void => {
+      presences.clear();
+      PRESENCES_INITIALES.forEach(([userId, isOnline]) => presences.set(userId, isOnline));
+    },
+  });
+  const messages: MessageServi[] = messagesInitiaux(conversationId);
+  const ajouteUnMessage = (message: MessageServi): void => {
+    messages.push(message);
   };
+  let compteur = 100;
+  const identifiants = { suivant: () => `m${(compteur += 1)}` };
+
+  /** La créance, lue comme `createAuthContext` la lit (`bouchon-lien.ts` › `creanceSelonLaPasserelle`). */
+  const creanceDe = (requete: IncomingMessage) => creanceSelonLaPasserelle(requete, placesActives);
+
+  const etatDuFil: EtatDuFilDeBouchon = {
+    conversationId,
+    titre: NOM_DU_LIEN,
+    placesActives,
+    lien,
+    sync,
+    reactions,
+    pieces,
+    identifiants,
+    invite,
+    messages: () => messages,
+    ajouteUnMessage,
+    presences,
+    membres: CONVERSATION_DU_LECTEUR.membres,
+    socket: () => bouchon,
+    creanceDe,
+  };
+  const duFil = routesDuFil(etatDuFil);
+  const duLien = routesDuLien({
+    conversationId,
+    lien,
+    placesActives,
+    sessionsRevoquees,
+    invite,
+    messages: () => messages,
+    creanceDe,
+    jetons: {
+      actif: options?.actif ?? true,
+      refusParJeton: options?.refusParJeton ?? {},
+      trackingFermeParJeton: options?.trackingFermeParJeton ?? {},
+      inconnus: options?.inconnus ?? [],
+    },
+  });
+  const duCompte = routesDuCompte({ creanceDe, lecteurSansRien: options?.lecteurSansRien ?? false });
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
-    journal.push({
-      methode: requete.method ?? 'GET',
-      chemin,
-      a: Date.now(),
-      corps: requete.method === 'POST' ? await corpsDe(requete) : '',
-    });
-
-    if (chemin.includes('/resolve')) {
-      const jeton = jetonDuChemin(chemin.replace('/resolve', ''));
-      if (inconnus.includes(jeton)) {
-        introuvable(reponse);
-        return;
-      }
-
-      const echeance = tracking[jeton];
-      if (echeance !== undefined) {
-        json(reponse, {
-          success: true,
-          data: {
-            kind: 'tracking',
-            targetType: 'STORY',
-            targetId: 'story-interne',
-            originalUrl: null,
-            isActive: false,
-            expiresAt: echeance,
-          },
-        });
-        return;
-      }
-
-      json(reponse, {
-        success: true,
-        data: {
-          kind: 'conversation',
-          targetType: 'CONVERSATION',
-          targetId: 'conv-interne',
-          originalUrl: null,
-          isActive: refus[jeton] === undefined && actif,
-          expiresAt: null,
-        },
+    /**
+     * CORS, comme `server.ts:404-410` de la passerelle : `@fastify/cors` avec
+     * `credentials: true`, l'origine RÉFLÉCHIE quand `config/cors-origins.ts`
+     * l'admet, les méthodes de `config/cors-methods.ts`, et les en-têtes
+     * demandés par le préflight réfléchis (le défaut de `@fastify/cors`) —
+     * `x-session-token` et `authorization` compris. Le module de participation
+     * parle à la passerelle depuis une AUTRE origine que le document ; sans ces
+     * en-têtes, chaque `fetch` du navigateur est bloqué et le bouchon raconte
+     * une chaîne que la production ne produit pas (mesuré : `/sync`, `refresh`
+     * et le repli REST rendus « -1 », d'où cinq cas du § 6.5 rouges à tort).
+     */
+    const origine = requete.headers.origin;
+    if (typeof origine === 'string') {
+      reponse.setHeader('access-control-allow-origin', origine);
+      reponse.setHeader('access-control-allow-credentials', 'true');
+      reponse.setHeader('vary', 'Origin');
+    }
+    if (requete.method === 'OPTIONS') {
+      reponse.writeHead(204, {
+        'access-control-allow-methods': 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        'access-control-allow-headers': String(requete.headers['access-control-request-headers'] ?? 'content-type'),
+        'access-control-max-age': '600',
       });
+      reponse.end();
       return;
     }
+    const octets = requete.method === 'POST' || requete.method === 'PATCH' ? await corpsDe(requete) : Buffer.alloc(0);
+    const appel: { -readonly [K in keyof AppelRecu]: AppelRecu[K] } = { methode: requete.method ?? 'GET', chemin, a: Date.now(), corps: octets.toString('utf8'), statut: null };
+    journal.push(appel);
+    const ecrisLEnTete = reponse.writeHead.bind(reponse);
+    reponse.writeHead = ((statut: number, ...reste: unknown[]) => {
+      appel.statut = statut;
+      return (ecrisLEnTete as (...args: unknown[]) => ServerResponse)(statut, ...reste);
+    }) as typeof reponse.writeHead;
+    const url = new URL(chemin, 'http://bouchon');
+    const json = (corps: unknown, statut = 200): void => {
+      reponse.writeHead(statut, { 'content-type': 'application/json' });
+      reponse.end(JSON.stringify(corps));
+    };
+    const erreur = (statut: number, code: string, message: string, extra: Record<string, unknown> = {}): void => {
+      reponse.writeHead(statut, { 'content-type': 'application/json' });
+      reponse.end(JSON.stringify({ success: false, error: code, message, ...extra }));
+    };
 
-    if (chemin.includes('/anonymous/link/')) {
-      const jeton = jetonDuChemin(chemin);
-      // La porte que la production n'ouvre QUE pour une invitation.
-      if (inconnus.includes(jeton) || tracking[jeton] !== undefined) {
-        introuvable(reponse);
-        return;
-      }
+    // L'ORDRE est celui des chemins les plus PRÉCIS d'abord : le fil (`/conversations/:id…`) avant
+    // le compte (`/conversations` nu), le lien (`/links/:key/members`, `/links/:identifier`) avant
+    // le compte (`/links` nu) — comme Fastify les distingue par leur route, pas par un préfixe.
+    if (await duFil({ requete, reponse, url, corps: octets, json, erreur })) return;
+    if (await duLien({ requete, url, corps: octets, json, erreur })) return;
+    if (duCompte({ requete, url, json })) return;
 
-      const code = refus[jeton];
-      if (code !== undefined) {
-        reponse.writeHead(410, { 'content-type': 'application/json' });
-        reponse.end(JSON.stringify({ success: false, error: code, message: 'refus' }));
-        return;
-      }
-
-      json(reponse, {
-        success: true,
-        data: {
-          linkId: 'mshy_lagos',
-          name: NOM_DU_LIEN,
-          description: DESCRIPTION_DU_LIEN,
-          creator: { id: 'u1', username: CREATEUR_DU_LIEN, email: `${CREATEUR_DU_LIEN}@example.com` },
-          conversation: { id: 'c1', title: NOM_DU_LIEN, description: DESCRIPTION_DU_LIEN },
-        },
-      });
-      return;
-    }
-
-    json(reponse, { success: true, data: { clickId: 'clic-1' } });
+    json({ success: true, data: { clickId: 'clic-1' } });
   });
+
+  const bouchon = bouchonSocket({ serveur, placesActives, identifiants, reactions, presences });
 
   const port = await portLibre();
   await ecoute(serveur, port);
@@ -207,8 +317,42 @@ export const passerelleDeBouchon = async (options?: {
     journal,
     oublie: () => {
       journal.length = 0;
+      (bouchon.recus as Emission[]).splice(0, bouchon.recus.length);
     },
-    ferme: () => new Promise((resoud) => serveur.close(() => resoud())),
+    ferme: async () => {
+      await bouchon.ferme();
+      await new Promise<void>((resoud) => serveur.close(() => resoud()));
+    },
+    socket: bouchon,
+    placesActives,
+    sessionsRevoquees,
+    place,
+    hote: porteDeLHote(etatDuFil),
+    invite,
+    lien,
+    sync,
+    creuseUnTrou: () => {
+      sync.curseur += SEUIL_DE_TROU + 1;
+    },
+    reactions,
+    pieces,
+    deposeUnePiece: ({ nom, type, octets, dureeMs }) => {
+      const id = `a${identifiants.suivant().slice(1)}`;
+      const piece: PieceDeBouchon = {
+        id,
+        fileUrl: `/api/v1/attachments/file/${id}/${encodeURIComponent(nom)}`,
+        originalName: nom,
+        mimeType: type,
+        fileSize: octets.length,
+        octets,
+        duration: dureeMs ?? null,
+      };
+      pieces.set(id, piece);
+      return piece;
+    },
+    presences,
+    ajouteUnMessage,
+    messages: () => messages,
   };
 };
 
@@ -251,6 +395,9 @@ export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
       env: {
         ...process.env,
         MEESHY_GATEWAY_URL: passerelle,
+        // Le module de participation parle à la passerelle depuis le NAVIGATEUR :
+        // ici le bouchon est joignable à la même adresse des deux côtés.
+        NEXT_PUBLIC_API_URL: passerelle,
         // L'URL canonique que les OG annoncent : derrière Traefik l'en-tête
         // `Host` interne n'est pas l'origine publique, et une carte d'aperçu
         // est mise en cache PAR URL (§ 5.4).

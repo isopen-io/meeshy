@@ -125,6 +125,8 @@ data class ApiPost(
     val mentionedUsers: List<MentionedUser>? = null,
     val viaUsername: String? = null,
     val location: SharedPlace? = null,
+    /** Distance in meters from the viewer — only carried by `GET /social/posts?scope=nearby`. */
+    val distanceMeters: Double? = null,
 )
 
 /**

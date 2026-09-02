@@ -9,6 +9,7 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import {
   applyHistoryFloor,
   historyReaderFromAuthContext,
@@ -275,7 +276,8 @@ export function registerMessageSearchRoute(
         const sender = msg.sender;
         // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
-        return hoistLocationOnto({
+        // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
+        return hoistStickerOnto(hoistLocationOnto({
           ...msg,
           // #4177 — même résolution que `GET .../messages` : `msg.senderId`
           // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
@@ -299,7 +301,7 @@ export function registerMessageSearchRoute(
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined
-        });
+        }));
       });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`

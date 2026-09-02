@@ -17,7 +17,8 @@ final class StickerPaletteTests: XCTestCase {
     /// Ils sont toujours là.
     func test_threeTabs_neverDependOnAProvider() {
         let nu = StickerPaletteTab.offered(hasLibrary: false, hasNearbyPlaces: false)
-        XCTAssertEqual(nu, [.emoji, .love, .time])
+        XCTAssertEqual(nu, StickerPaletteTab.canonicalOrder.filter { $0 != .place && $0 != .library })
+        XCTAssertTrue(nu.contains(.emoji) && nu.contains(.text) && nu.contains(.love) && nu.contains(.time))
     }
 
     /// **Un outil non servi est ABSENT, jamais grisé.** Un onglet « Mes
@@ -46,12 +47,21 @@ final class StickerPaletteTests: XCTestCase {
     func test_offeredTabs_keepTheCanonicalOrder() {
         let tous = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: true)
         XCTAssertEqual(tous, StickerPaletteTab.canonicalOrder)
-        XCTAssertEqual(tous, [.emoji, .love, .time, .place, .library])
+        XCTAssertEqual(tous.first, .emoji, "l'emoji ouvre la marche")
+        XCTAssertEqual(tous.last, .library, "« Mes stickers » ferme la marche")
+        XCTAssertEqual(Set(tous), Set(StickerPaletteTab.allCases), "chaque onglet est servi quand tout est injecté")
     }
 
     func test_eachTab_mapsToTheRightTemplateFamily() {
         XCTAssertEqual(StickerPaletteTab.love.templateFamily, .love)
         XCTAssertEqual(StickerPaletteTab.time.templateFamily, .time)
+        XCTAssertEqual(StickerPaletteTab.weather.templateFamily, .weather)
+        XCTAssertEqual(StickerPaletteTab.text.templateFamily, .text)
+        // Chaque famille du catalogue a son onglet, et un seul.
+        for famille in StickerTemplateFamily.allCases {
+            XCTAssertEqual(StickerPaletteTab.allCases.filter { $0.templateFamily == famille }.count, 1,
+                           "\(famille.rawValue) — une famille, un onglet")
+        }
         XCTAssertEqual(StickerPaletteTab.place.templateFamily, .location)
         XCTAssertNil(StickerPaletteTab.emoji.templateFamily)
         XCTAssertNil(StickerPaletteTab.library.templateFamily)

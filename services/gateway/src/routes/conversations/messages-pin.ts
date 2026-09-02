@@ -12,6 +12,7 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import {
   applyHistoryFloor,
   historyReaderFromAuthContext,
@@ -19,6 +20,7 @@ import {
 } from '../../services/historyFloor';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
@@ -272,6 +274,31 @@ export function registerMessagePinRoutes(
   // LIST PINNED MESSAGES
   // ============================================================================
 
+  /**
+   * `GET /conversations/:id/pinned-messages` — ce que cette LISTE sert, et
+   * pourquoi (#4392, critère 3 : « pour que le prochain lot n'ait pas à
+   * reposer la question »).
+   *
+   * GARDÉ, avec son lecteur nommé :
+   *   - `content` / `originalLanguage` / `translations` (le Prisme du MESSAGE,
+   *     sérialisé par `transformTranslationsToArray`) : lus par
+   *     `apps/web/components/conversations/PinnedMessageBanner.tsx`, qui les
+   *     passe à `resolveLastMessagePreview` pour rendre l'aperçu dans la
+   *     langue du lecteur. Les retirer rendrait la bannière à la langue de
+   *     l'expéditeur — c'est la règle 3 du Prisme.
+   *   - `sender` : même fichier, `senderLabel`.
+   *   - `metadata` puis `location` / `sticker` hissés : une épingle est une
+   *     bulle complète (Lot 1, #4823).
+   *
+   * RETIRÉ, à zéro lecteur mesuré sur les QUATRE surfaces : le Prisme de la
+   * PIÈCE JOINTE (`transcription`, `translations`) et l'enveloppe de
+   * chiffrement, qui voyageaient dans la relation nue — voir le `select` de
+   * `attachments` ci-dessous.
+   *
+   * PAS TRANCHÉ ICI (critère 2, décision produit) : servir la pièce jointe
+   * COMPLÈTE sur demande (`?include=attachments`) le jour où un client
+   * rendrait la bulle épinglée entière plutôt que d'y naviguer.
+   */
   fastify.get<{
     Params: { id: string };
     Querystring: { limit?: string; offset?: string };
@@ -411,7 +438,28 @@ export function registerMessagePinRoutes(
               }
             }
           },
-          attachments: true,
+          // #4392 — la relation était demandée NUE (`attachments: true`) : toute
+          // colonne du modèle partait, et `messageSchema` la sert par
+          // `messageAttachmentSchema` (le schéma COMPLET). La liste des
+          // épingles poussait donc, par épingle, la transcription mot-à-mot
+          // d'un vocal, la carte de TOUTES ses traductions et l'enveloppe de
+          // chiffrement — 51 clés mesurées.
+          //
+          // Le comptage des lecteurs (critère 1 de l'issue) rend zéro sur les
+          // quatre surfaces : `PinnedMessageBanner.tsx` est le seul appelant du
+          // dépôt et son type `PinnedMessage` ne déclare pas `attachments` ;
+          // iOS déclare `ConversationsEndpoint.byIdPinnedMessages` sans jamais
+          // l'appeler (`ConversationInfoSheet.pinnedMessages` filtre les
+          // messages DÉJÀ chargés) ; Android n'a pas d'endpoint du tout
+          // (`PinnedMessagesList.of(messages)` dérive de la liste locale).
+          //
+          // D'où l'APERÇU canonique : la bannière annonce l'épingle et
+          // NAVIGUE vers le message, dont `GET .../messages` sert le média
+          // complet (`attachmentMediaSelect`). C'est mot pour mot le contrat
+          // que `attachmentForwardPreviewSelect` documente — « the user taps
+          // through to the full message for playback » — et une forme NOMMÉE,
+          // jamais une copie locale qui dériverait (`attachmentIncludes.ts`).
+          attachments: { select: attachmentForwardPreviewSelect },
           _count: { select: { reactions: true, replies: true } }
         }
       });
@@ -449,6 +497,7 @@ export function registerMessagePinRoutes(
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
         const place = sharedPlaceFromMetadata(message.metadata);
+        const sticker = stickerFromMetadata(message.metadata);
         return {
           id: message.id,
           conversationId: message.conversationId,
@@ -506,8 +555,10 @@ export function registerMessagePinRoutes(
           reactionCount: message._count?.reactions ?? 0,
           replyCount: message._count?.replies ?? 0,
           // Lot 1 : hisser metadata.location en champ top-level `location`,
-          // même miroir que la liste complète des messages.
-          ...(place ? { location: place } : {})
+          // même miroir que la liste complète des messages — et `sticker`
+          // (#4823) avec lui.
+          ...(place ? { location: place } : {}),
+          ...(sticker ? { sticker } : {})
         };
       });
 

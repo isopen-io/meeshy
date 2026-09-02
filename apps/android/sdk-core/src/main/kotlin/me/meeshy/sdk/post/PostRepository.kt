@@ -37,6 +37,10 @@ import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,6 +59,7 @@ typealias BookmarkPage = PostPage
 class PostRepository @Inject constructor(
     private val postApi: PostApi,
     private val translationApi: TranslationApi,
+    private val outboxRepository: OutboxRepository,
     private val clock: CacheClock = SystemCacheClock,
 ) {
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
@@ -67,6 +72,16 @@ class PostRepository @Inject constructor(
 
     /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
     val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
+
+    /**
+     * A synchronous read of whatever the feed's in-memory cache currently holds — the
+     * Reels surface's cold-start seed (ARCHITECTURE.md §4, cache-first). Opening Reels
+     * from the Feed can render the video posts the Feed already loaded INSTANTLY, no
+     * spinner, while the real affinity thread loads in the background. `null` when the
+     * feed has never synced (a true cold start with nothing cached).
+     */
+    val feedCacheSnapshot: List<ApiPost>?
+        get() = _feedCache.value
 
     /**
      * Cache-first feed stream (ARCHITECTURE.md §4). An in-memory L1 cache serves
@@ -101,22 +116,50 @@ class PostRepository @Inject constructor(
     suspend fun refresh() = revalidateFeed()
 
     /**
-     * Optimistic like toggle (ARCHITECTURE.md §4). The viewer's own like state
-     * (`isLikedByMe`) flips instantly with the count; the network confirms after
-     * and the cache rolls back on failure. Returns true when the mutation was
-     * accepted by the gateway.
+     * Optimistic, durable like toggle (ARCHITECTURE.md §4-5). The viewer's own like
+     * state (`isLikedByMe`) flips instantly with the count; the mutation is then
+     * handed to the outbox rather than sent directly, so it survives an offline tap
+     * — [OutboxFlushWorker] replays it FIFO on the shared [OutboxLanes.SOCIAL] lane
+     * on the next reconnect, coalescing a like/unlike burst on the same post down to
+     * one delivery ([OutboxCoalescer]'s terminal-toggle rule). The cache is rolled
+     * back only on a **definitive** failure — [rollbackLike], called by the worker
+     * once the row is `EXHAUSTED` — never merely because the device is offline right
+     * now. Returns `false` only when the post is not in the cache to begin with.
      */
     suspend fun toggleLike(postId: String): Boolean {
         val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val wasLiked = target.isLikedByMe == true
         applyLike(postId, liked = !wasLiked, likeCount = adjustedCount(target.likeCount, wasLiked))
 
-        val result = if (wasLiked) apiCall { postApi.unlike(postId) } else apiCall { postApi.like(postId) }
-        if (result is NetworkResult.Failure) {
-            applyLike(postId, liked = wasLiked, likeCount = target.likeCount)
-            return false
-        }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (wasLiked) OutboxKind.UNLIKE_POST else OutboxKind.LIKE_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
         return true
+    }
+
+    /**
+     * Reverts an optimistic like flip after its outbox row was permanently
+     * exhausted ([OutboxFlushWorker]'s `onExhausted`) — the post analogue of
+     * `BlockCache.setBlocked`'s hard-exhausted rollback. [liked] is the value to
+     * revert TO (the state before the mutation was enqueued); the count is
+     * recomputed as the exact inverse of the delta [toggleLike]'s [applyLike]
+     * applied, via the same [adjustedCount] law. A no-op once the post has left
+     * the feed cache, **or once the cache no longer carries the optimistic value
+     * this rollback was meant to undo** — a realtime reconciliation
+     * (`revalidateFeed`, `post:liked`) between the tap and the `EXHAUSTED` verdict
+     * already replaced the optimistic count with the server's own, and applying
+     * the delta a second time would double-count or flip a like the server
+     * actually accepted.
+     */
+    fun rollbackLike(postId: String, liked: Boolean) {
+        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
+        if ((target.isLikedByMe == true) != !liked) return
+        applyLike(postId, liked = liked, likeCount = adjustedCount(target.likeCount, wasSet = !liked))
     }
 
     private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
@@ -129,12 +172,15 @@ class PostRepository @Inject constructor(
     }
 
     /**
-     * Optimistic bookmark toggle (ARCHITECTURE.md §4), the bookmark analogue of
-     * [toggleLike]. The viewer's own `isBookmarkedByMe` flips instantly with the
-     * count; the network confirms after and the cache rolls back on failure. The
+     * Optimistic, durable bookmark toggle (ARCHITECTURE.md §4-5), the bookmark
+     * analogue of [toggleLike]: the viewer's own `isBookmarkedByMe` flips instantly
+     * with the count, and the mutation is handed to the outbox for durable FIFO
+     * replay on [OutboxLanes.SOCIAL] rather than sent directly — offline taps
+     * survive, and a toggle burst on the same post coalesces to one delivery. The
      * gateway later broadcasts `post:bookmarked` (a personal event) with the
-     * authoritative absolute count, which the feed reconciles. Returns true when the
-     * mutation was accepted by the gateway.
+     * authoritative absolute count, which the feed reconciles. The cache is rolled
+     * back only on a definitive failure, via [rollbackBookmark]. Returns `false`
+     * only when the post is not in the cache to begin with.
      */
     suspend fun toggleBookmark(postId: String): Boolean {
         val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
@@ -145,16 +191,34 @@ class PostRepository @Inject constructor(
             bookmarkCount = adjustedCount(target.bookmarkCount, wasBookmarked),
         )
 
-        val result = if (wasBookmarked) {
-            apiCall { postApi.removeBookmark(postId) }
-        } else {
-            apiCall { postApi.bookmark(postId) }
-        }
-        if (result is NetworkResult.Failure) {
-            applyBookmark(postId, bookmarked = wasBookmarked, bookmarkCount = target.bookmarkCount)
-            return false
-        }
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = if (wasBookmarked) OutboxKind.UNBOOKMARK_POST else OutboxKind.BOOKMARK_POST,
+                lane = OutboxLanes.SOCIAL,
+                targetId = postId,
+                payload = "",
+            ),
+        )
         return true
+    }
+
+    /**
+     * Reverts an optimistic bookmark flip after its outbox row was permanently
+     * exhausted — the bookmark analogue of [rollbackLike], including its
+     * idempotency guard: a no-op once the post has left the feed cache, or once
+     * the cache no longer carries the optimistic value this rollback was meant
+     * to undo (a `post:bookmarked` reconciliation already landed the server's own
+     * state). [bookmarked] is the value to revert TO; the count is recomputed as
+     * the inverse of the delta [toggleBookmark]'s [applyBookmark] applied.
+     */
+    fun rollbackBookmark(postId: String, bookmarked: Boolean) {
+        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return
+        if ((target.isBookmarkedByMe == true) != !bookmarked) return
+        applyBookmark(
+            postId,
+            bookmarked = bookmarked,
+            bookmarkCount = adjustedCount(target.bookmarkCount, wasSet = !bookmarked),
+        )
     }
 
     private fun applyBookmark(postId: String, bookmarked: Boolean, bookmarkCount: Int?) {
@@ -217,21 +281,30 @@ class PostRepository @Inject constructor(
         const val FEED_PAGE_SIZE = 30
         const val BOOKMARKS_PAGE_SIZE = 20
         const val USER_POSTS_PAGE_SIZE = 20
+        const val NEARBY_PAGE_SIZE = 20
+        const val REELS_PAGE_SIZE = 10
     }
 
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getFeed(cursor, limit) }
 
     /**
-     * Vertical reel thread (`GET /posts/feed/reels`). [seed] is a reel touched in
-     * the Feed to anchor the affinity thread; null returns the default reel feed.
+     * A single cursor page of the vertical reel thread (`GET /posts/feed/reels`),
+     * carrying the `nextCursor`/`hasMore` watermark. The Reels screen owns cursor
+     * accumulation itself (there is no repository-level reel cache, unlike
+     * [feedStream]), so it needs the watermark to drive its own infinite scroll —
+     * the reel-thread sibling of [getBookmarksPage]/[getUserPostsPage], sharing the
+     * same [foldPostPage] law. [seed] anchors the thread on a reel touched in the
+     * Feed, and MUST be repeated on every subsequent page (not just the first) so
+     * the gateway keeps excluding it from candidates — see
+     * `ReelsViewModel.currentSeed`, carried across every call.
      */
-    suspend fun getReels(
+    suspend fun getReelsPage(
         seed: String? = null,
         cursor: String? = null,
-        limit: Int = 20,
-    ): NetworkResult<List<ApiPost>> =
-        apiCall { postApi.getReels(seed, cursor, limit) }
+        limit: Int = REELS_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getReels(seed, cursor, limit) })
 
     suspend fun create(
         content: String? = null,
@@ -278,15 +351,31 @@ class PostRepository @Inject constructor(
     suspend fun getPost(postId: String): NetworkResult<ApiPost> =
         apiCall { postApi.getPost(postId) }
 
+    /**
+     * **Non-durable.** Hits the network directly with no outbox row — unlike
+     * [toggleLike], an offline call is simply lost (no replay on reconnect, no
+     * rollback UI). Reels (`ReelsViewModel`) and `BookmarksViewModel` call this
+     * today because their list state is not addressable through [_feedCache], the
+     * only cache [toggleLike]/[rollbackLike] know how to mutate — a tracked gap,
+     * not the default choice for a new like/unlike call site. Prefer [toggleLike].
+     */
     suspend fun like(postId: String): NetworkResult<Unit> =
         apiCall { postApi.like(postId) }
 
+    /** Non-durable unlike — see [like]'s KDoc. Prefer [toggleLike]. */
     suspend fun unlike(postId: String): NetworkResult<Unit> =
         apiCall { postApi.unlike(postId) }
 
+    /**
+     * **Non-durable.** Hits the network directly with no outbox row — unlike
+     * [toggleBookmark], an offline call is simply lost. Same tracked gap as
+     * [like]: Reels and `BookmarksViewModel` call this because their list state
+     * sits outside [_feedCache]. Prefer [toggleBookmark].
+     */
     suspend fun bookmark(postId: String): NetworkResult<Unit> =
         apiCall { postApi.bookmark(postId) }
 
+    /** Non-durable un-bookmark — see [bookmark]'s KDoc. Prefer [toggleBookmark]. */
     suspend fun removeBookmark(postId: String): NetworkResult<Unit> =
         apiCall { postApi.removeBookmark(postId) }
 
@@ -320,6 +409,22 @@ class PostRepository @Inject constructor(
         limit: Int = USER_POSTS_PAGE_SIZE,
     ): NetworkResult<PostPage> =
         foldPostPage(rawApiCall { postApi.getUserPosts(userId, cursor, limit) })
+
+    /**
+     * A single cursor page of posts near ([lat], [lng]) within [radiusKm]
+     * (`GET /social/posts?scope=nearby`), carrying the `nextCursor`/`hasMore` watermark
+     * the same way [getBookmarksPage]/[getUserPostsPage] do. The Nearby screen owns the
+     * accumulation — there is no repository-level cache for this scope, since it is
+     * keyed by a coordinate rather than the signed-in user.
+     */
+    suspend fun getNearbyPage(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        cursor: String? = null,
+        limit: Int = NEARBY_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getNearby(lat = lat, lng = lng, radiusKm = radiusKm, cursor = cursor, limit = limit) })
 
     /**
      * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]

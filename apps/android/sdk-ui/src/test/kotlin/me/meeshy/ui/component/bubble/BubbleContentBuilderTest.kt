@@ -834,6 +834,7 @@ class BubbleContentBuilderTest {
         val file = content.files.single()
         assertThat(file.name).isEqualTo("rapport.pdf")
         assertThat(file.sizeBytes).isEqualTo(2048)
+        assertThat(file.url).isEqualTo("https://gate.meeshy.me/files/stored-1234.pdf")
         assertThat(content.images).isEmpty()
     }
 

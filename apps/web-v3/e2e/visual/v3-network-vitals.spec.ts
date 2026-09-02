@@ -110,10 +110,10 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
      * La chaîne se remonte jusqu'à SA RACINE, jamais d'un seul cran.
      *
      * Ce test mesure le saut DU LIEN : une requête, une 302, et elle atterrit
-     * sur `/chats/:token`. Ce que la DESTINATION fait ensuite ne le regarde
-     * pas — et elle fait quelque chose : `/chats/:cle` renvoie un lecteur sans
-     * session vers `/login?returnUrl=…`, comportement voulu, couvert par ses
-     * propres témoins (`__tests__/fil.test.ts`).
+     * sur `/chat/:token` — la porte de l'INVITÉ, qui répond 200 en état CHOIX
+     * à un lecteur sans session (conception § 12.3). Un seul saut : c'est ce
+     * que la directive du porteur du 2026-09-01 (#4522) exige, et ce que le
+     * complément du tour a livré dans `destination.ts`.
      *
      * `finale.request().redirectedFrom()` remontait d'UN cran. Il rendait le
      * lien tant que `/chats/:cle` n'existait pas — c'est-à-dire tant que la
@@ -124,12 +124,9 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
      * navigation, et il reste réfutable : un lien qui ferait DEUX sauts à lui
      * seul poserait `/chats/:token` ailleurs qu'en `chaine[1]`.
      *
-     * L'ATTERRISSAGE, LUI, EST APPELÉ À CHANGER — et c'est écrit ici pour que
-     * le rouge du jour-là se lise comme une attente, jamais comme une panne :
-     * la directive du porteur du 2026-09-01 (#4522) route un lien partagé vers
-     * `/chat/:lien` au SINGULIER, sans redirection, précisément parce que
-     * `/chats/:cle` est le fil CONNECTÉ et renvoie vers `/login`. Le jour où
-     * `destination.ts` suivra, c'est la ligne `chaine[1]` qui bouge, seule.
+     * L'ATTERRISSAGE A CHANGÉ une fois — de `/chats/:token` (le fil CONNECTÉ,
+     * qui renvoyait l'anonyme vers `/login` en un SECOND saut, leçon 419) à
+     * `/chat/:lien` au SINGULIER — et seule la ligne `chaine[1]` a bougé.
      */
     const chaine: Request[] = [];
     for (let requete = finale?.request() ?? null; requete !== null; requete = requete.redirectedFrom())
@@ -139,7 +136,7 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
     expect(chaine[0]?.url()).toBe(lienDe());
     expect(chaine[0]?.redirectedFrom()).toBeNull();
     expect((await chaine[0]?.response())?.status()).toBe(302);
-    expect(chaine[1]?.url()).toBe(`${v3.base}/chats/${JETON}`);
+    expect(chaine[1]?.url()).toBe(`${v3.base}/chat/${JETON}`);
 
     await contexte.close();
   });
@@ -164,7 +161,7 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
     cdp.on('Network.requestWillBeSent', (e) => {
       // La 302 DU LIEN, reconnue à l'adresse qui l'a produite : `redirectResponse`
       // est la réponse du cran PRÉCÉDENT de la chaîne. Sans ce filtre, la 302 que
-      // `/chats/:cle` sert à un lecteur sans session entrait dans le compte, et
+      // la destination servirait à un lecteur sans session entrerait dans le compte, et
       // l'ordre — le fait mesuré ici — se lisait sur une horloge qui n'est pas
       // celle du lien.
       if (e.redirectResponse?.status === 302 && e.redirectResponse.url.includes(`/l/${JETON_ORDRE}`))

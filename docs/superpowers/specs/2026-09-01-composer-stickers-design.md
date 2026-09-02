@@ -296,3 +296,61 @@ gouvernent les lots suivants :
 
 Directive porteur du 2026-09-01, en suite du #4579 (2026-08-31). Briques SDK
 vérifiées au dépôt à cette date.
+
+---
+
+## 15. Suite du 2026-09-02 — deux cents décorations, animées, à mots
+
+> Directive porteur du 2026-09-02 : « compléter les stickers, une bonne dizaine
+> par catégorie, en itérant groupe par groupe — amour, temps, stupeur, joie,
+> position, disponibilité… ; en faire des animés ; faciliter la création de
+> sticker avec du texte écrit ; iOS d'abord, sur la base de l'existant ; à 200,
+> on s'arrête. » Pilotage : #4819 à #4825, milestone #77.
+
+### D5 — Le dessin est un REGISTRE, plus un `switch`
+
+Le renderer portait deux `switch` sur l'id (mesure, dessin) et la palette un
+troisième (nom). À douze gabarits c'était lisible ; à cent vingt, trois listes à
+tenir d'accord à la main. `StickerTemplateDrawer` (id, nom localisé, mesure,
+dessin) est déclaré UNE fois par gabarit, dans le fichier de sa famille, et
+`StickerTemplateRenderer.registry` les agrège. Le catalogue (`MeeshySDK`, pur)
+reste la source de ce qui EXISTE ; le registre dit comment ça se DESSINE ; un
+témoin d'inventaire exige l'égalité des deux ensembles d'ids.
+
+### D6 — Une animation est une fonction PURE du temps
+
+Le lecteur rebâtit l'arbre de couches à chaque tick, l'export le rasterise par
+`layer.render(in:)` — qui ignore le moteur de Core Animation. Une `CAAnimation`
+bougerait au lecteur et resterait figée dans le MP4. `StickerAnimation.pose(at:)`
+rend une pose bornée (échelle, rotation, décalage, opacité), identité à `t = 0`,
+et `StoryRenderer` la repose à chaque tick dans la post-passe des fondus — hors
+signature du cache, en absolu. Reduce Motion retire le mouvement au lecteur ;
+l'export ne dépend pas du réglage de l'appareil. `StorySticker.animation` est une
+propriété de la charge (#3956) : absente = immobile, inconnue = immobile.
+
+### D7 — Une famille est un THÈME, et sa légende se dessine dans la langue du LECTEUR
+
+Douze familles (`StickerTemplateFamily`) : lieu, heure, amour, météo, texte, joie,
+stupeur, humeur, salutations, réactions, fête, disponibilité. Aucune n'est une
+nature de scène (D3 tient). Les décorations à mot fixe — « Occupé », « Bonjour »,
+« WOW » — n'ont AUCUN emplacement : l'id porte le sens, et le dessinateur écrit
+`String(localized:)` au rendu, donc dans la langue de qui regarde. C'est le
+Prisme pour rien, sans traduction et sans aller-retour.
+
+### D8 — Les MOTS de l'auteur sont la seule PROSE du catalogue
+
+La famille Texte (#4822) porte l'unique emplacement de nature `.prose` (`text`),
+dans dix cadres. La palette met un champ en tête et redessine les vignettes à la
+frappe ; sans mots, la grille montre l'exemple et ne pose rien. La descente du
+Prisme sur cette prose (`slotTranslations`) reste #4721.
+
+### Ce que l'audit a trouvé en chemin
+
+- `templateId`/`slots` ne partaient jamais au fil v3 (#4819 — corrigé en parallèle
+  par le porteur, `aac20c65`) ; le convertisseur v1→v3 de la passerelle les
+  perdait aussi.
+- L'atelier posait un emoji à 1,0 là où le composer posait à 2,2, et la vignette
+  de slide ignorait `baseSize` (#4824).
+- VoiceOver ne disait que les textes d'une scène, jamais ses stickers (#4825).
+- Aucun message de conversation ne peut porter un sticker (#4823) ; le collage
+  n'accepte qu'une image fixe (#3956). Suites.

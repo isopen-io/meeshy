@@ -97,6 +97,7 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
+    onOpenSaved: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenTwoFactor: () -> Unit = {},
@@ -253,6 +254,31 @@ fun SettingsScreen(
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setVibrationEnabled,
                 )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_preview),
+                    checked = notifications.showPreview,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowPreview,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_sender_name),
+                    checked = notifications.showSenderName,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowSenderName,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_group_notifications),
+                    checked = notifications.groupNotifications,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setGroupNotifications,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_badge_enabled),
+                    checked = notifications.notificationBadgeEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setNotificationBadgeEnabled,
+                )
                 DndScheduleRows(
                     notifications = notifications,
                     onSetEnabled = viewModel::setDndEnabled,
@@ -277,6 +303,11 @@ fun SettingsScreen(
                     label = stringResource(R.string.settings_starred_messages),
                     detail = null,
                     onClick = onOpenStarred,
+                )
+                SettingsRow(
+                    label = stringResource(R.string.settings_saved_posts),
+                    detail = null,
+                    onClick = onOpenSaved,
                 )
                 SettingsRow(
                     label = stringResource(R.string.settings_share_links),

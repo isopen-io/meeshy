@@ -2,9 +2,11 @@ package me.meeshy.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import me.meeshy.core.database.dao.BlockedUserDao
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.FriendDao
+import me.meeshy.core.database.dao.FriendRequestDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
@@ -14,9 +16,11 @@ import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
+import me.meeshy.core.database.entity.BlockedUserEntity
 import me.meeshy.core.database.entity.CallHistoryEntity
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.core.database.entity.FriendEntity
+import me.meeshy.core.database.entity.FriendRequestEntity
 import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
@@ -48,8 +52,10 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         ProfileStatsCacheEntity::class,
         StatusBarCacheEntity::class,
         TusUploadCheckpointEntity::class,
+        FriendRequestEntity::class,
+        BlockedUserEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -65,4 +71,6 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun profileStatsCacheDao(): ProfileStatsCacheDao
     public abstract fun statusBarCacheDao(): StatusBarCacheDao
     public abstract fun tusUploadCheckpointDao(): TusUploadCheckpointDao
+    public abstract fun friendRequestDao(): FriendRequestDao
+    public abstract fun blockedUserDao(): BlockedUserDao
 }

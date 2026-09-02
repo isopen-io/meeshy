@@ -24519,6 +24519,196 @@ prouvait rien** — je lui avais donné un fichier où j'avais déjà appliqué 
 correction. Un outil ne se valide pas sur un cas qu'on a préparé pour lui. Même
 famille que le témoin qui doit TOMBER avant le correctif.
 
+## Leçon 441 — Un correctif VERT au gate peut publier du contenu FAUX : le simulateur n'est pas une formalité de fin, c'est la seule mesure qui voit l'ARRIVÉE
+
+**Le fait (2026-09-02).** Un Réel composé depuis le Feed ne partait jamais — la
+porte du document le refuse (à juste titre : son brouillon ne porte pas de
+slides), et seule la story avait été routée autour de ce refus. Le correctif
+tenait en deux lignes : donner au réel le canal de la scène, comme la story.
+
+**Gate vert. 383 témoins. Et au simulateur, un réel de deux photos a produit
+DEUX POSTS au lieu d'un** — ce canal publie un post *par slide*, sémantique
+juste pour une story dont chaque unité EST une publication, fausse pour un réel
+qui est UNE publication à plusieurs médias.
+
+> **Le silence d'avant était un défaut ; publier deux posts au lieu d'un en est
+> un PIRE, et d'une autre NATURE.** Un refus se rejoue ; un contenu publié ne se
+> rattrape pas. Un correctif qui transforme « rien ne se passe » en « quelque
+> chose de faux se passe » est une régression, même quand il ferme l'issue.
+
+**La formulation qui nomme la nature** (session voisine, même jour) :
+
+> Ce qui compte n'est pas la probabilité de se tromper mais **QUI RATTRAPE
+> L'ERREUR**. Un geste qui n'aboutit pas se re-tente ; un geste qui aboutit trop
+> demande une suppression.
+
+Réversible contre irréversible — et c'est le MÊME discriminant que le fail-safe
+de `StoryDerivedContent` le matin même (« une garde qui hésite tombe du côté où
+l'on ne perd rien ») et que l'asymétrie de la leçon 440. Trois cas en une
+journée, sur trois couches. Ce n'est plus une leçon d'incident, c'est une règle
+de conception : **devant deux façons de se tromper, choisir celle que
+l'utilisateur peut défaire.**
+
+**Ce qui rend le cas exemplaire** : le commentaire du site avertissait
+exactement de ce piège — « router une surface et router sa PUBLICATION sont deux
+gestes ; le premier se voit à l'écran, le second ne se voit qu'à l'ARRIVÉE, sur
+un contenu qu'on ne peut plus rattraper » — et je l'ai lu, cité dans l'issue, et
+suivi à moitié. **Lire l'avertissement ne dispense pas de faire la mesure qu'il
+prescrit.**
+
+La bonne réponse n'était donc pas le canal approchant mais un canal `unsupported`
+ÉCRIT, avec sa mesure en doc-comment et son témoin. *Un trou nommé vaut mieux
+qu'un trou comblé de travers* — et il disparaîtra avec le vrai canal, pas avant.
+
+## Leçon 442 — Un REFUS peut être parfaitement écrit et se lever DERRIÈRE l'écran
+
+Suite immédiate de la 441, trouvée en vérifiant son correctif. Le refus explicite
+que je venais d'ajouter n'apparaissait pas : le composer est un
+`fullScreenCover`, et l'hôte des toasts était un `.overlay` de la vue RACINE —
+donc dessous. **Tout toast levé depuis le composer était invisible** : la
+publication ratée, le micro refusé, l'envoi hors-ligne.
+
+Et le doc-comment du refus de la porte décrivait mot pour mot le symptôme que
+cette absence produit :
+
+> « Un refus qui se DIT. Rendre `false` sans rien dire laisserait l'auteur devant
+> une flèche qui semble ne rien faire — et il la presserait encore. »
+
+Le bon geste était fait, à la bonne place, avec la bonne raison écrite. La couche
+d'AFFICHAGE le rendait sans effet.
+
+> **La question « qui AFFICHE ce que je viens de produire ? » ne vaut pas que
+> pour un contenu — elle vaut pour un REFUS, une ERREUR, un ÉTAT.** C'est la
+> forme du cycle 122 du Prisme (« un correctif dont la valeur n'atteint aucun
+> lecteur n'a corrigé personne ») portée d'une traduction à un message d'échec.
+
+Corollaire de forme, mesuré dans le même lot : l'overlay était déjà écrit DEUX
+fois — racine iPhone et racine iPad — et les deux avaient déjà divergé (l'un
+porte le rappel de tap et l'identifiant d'accessibilité, l'autre non). Le
+troisième exemplaire n'a pas été écrit : c'est un modificateur, et la racine le
+consomme.
+
+**Deux précisions dues à la session voisine, qui a repris la mesure le jour
+même et trouvé SIX toasts dans le lecteur de story, dont QUATRE refus :**
+
+- **le modificateur va sur le point de MONTAGE, pas sur la vue qui lève le
+  toast** — sinon on le pose autant de fois qu'il y a de sites d'appel. Le
+  conteneur du lecteur couvre à lui seul la trail, une conversation et une
+  notification ;
+- **le témoin garde les DEUX moitiés du lien** : que l'hôte est monté, ET que la
+  surface lève encore des toasts. Un témoin qui n'assert que la présence du
+  modificateur protège une ligne devenue inutile sans savoir pourquoi.
+
+## Leçon 443 — La direction dans laquelle on autorise une erreur se choisit sur son COÛT DE RÉPARATION, jamais sur sa probabilité
+
+**Trois cas indépendants, en une journée, sur trois couches différentes.** Chacun
+posait la même question — « de quel côté doit-on se tromper ? » — et chacun l'a
+tranchée sans jamais estimer une fréquence :
+
+| cas | erreur A | erreur B | qui répare A | qui répare B |
+|---|---|---|---|---|
+| fail-safe de `StoryDerivedContent` | un doublon s'affiche | la légende d'un auteur est TUE | l'œil du lecteur | **personne** |
+| réglage d'un balayage (§ 440) | un membre reste privé | un membre est ouvert pour rien | le compilateur | **personne** |
+| routage de publication (§ 441) | rien ne se passe | un post en trop est publié | l'utilisateur re-tente | **une suppression** |
+
+Dans les trois, l'erreur A a un réparateur — gratuit, immédiat, souvent
+automatique — et l'erreur B n'en a pas. On penche vers A. **Et c'est indépendant
+de laquelle est la plus probable.**
+
+> C'est ce qui rend la règle utilisable AU MOMENT DE LA CONCEPTION : on n'a pas
+> besoin d'estimer une fréquence, seulement de répondre à **« si je me trompe de
+> ce côté, qui s'en aperçoit, et à quel prix ? »**.
+
+Elle explique aussi pourquoi les formulations plus étroites tenaient chacune sur
+un cas et pas sur les trois : « fail-closed » parle de sécurité, « réversible /
+irréversible » parle du temps, « ne rien perdre » parle du contenu. Le coût de
+réparation les subsume — il porte sur l'AGENT qui répare, et cet agent peut être
+un compilateur, un œil, un utilisateur, ou personne.
+
+**Le corollaire, qui est la partie actionnable** :
+
+> Quand AUCUNE des deux erreurs n'a de réparateur, il ne faut pas choisir — il
+> faut **créer le réparateur**.
+
+Un balayage qu'on règle en citant l'extrait fautif fabrique le vérificateur
+humain qui manquait ; une garde qu'on double d'un témoin sur la valeur SERVIE
+fabrique le vérificateur automatique. Choisir un côté sans réparateur, c'est
+parier ; en poser un, c'est concevoir.
+
+*Formulée avec une session voisine le 2026-09-02 : elle tenait deux points, la
+§ 441 a fourni le troisième — et sans trois points on n'aurait vu qu'une
+coïncidence.*
+
+## Leçon 444 — Un GUARD qui reprend le NOM de sa fonction vieillit avec lui, et sa branche neuve meurt en silence
+
+**Le fait (2026-09-02, #4879).** Une photo posée par le rail de la scène
+n'atteignait jamais une story. Cause, une ligne :
+
+```swift
+func syncPostMediaIntoSlides() {
+    guard selectedFormat == .post else { return }
+```
+
+Le guard était JUSTE au jour de son écriture (#4038, « en Post, chaque média
+ingéré devient SA slide ») : la seule porte média était alors la rangée du
+document, qui n'existe qu'en Post. La porte du RAIL est arrivée après (#4724),
+avec sa branche `.sceneRail` DANS cette fonction — et le rail vit sur la SCÈNE,
+c'est-à-dire sur les stories et les réels. **La branche neuve était du code mort
+exactement là où sa porte existe.**
+
+> **Un guard qui reprend le nom de sa fonction ne se relit pas.** « Post » dans
+> `syncPostMediaIntoSlides` a l'air d'une tautologie, pas d'une décision ; on le
+> lit comme une redite du nom et on passe. C'est le même angle mort que le
+> commentaire qui justifie ce qu'il décrit (§ 442) — le texte et le code
+> s'accordent, donc rien n'appelle la question.
+
+**La question qui l'attrape**, et elle se pose au moment où l'on AJOUTE : *ma
+branche neuve vit-elle dans une fonction dont l'entrée l'exclut ?* Le grep utile
+n'est pas « qui appelle cette fonction » mais **« que refuse sa première
+ligne »**.
+
+**Corollaire de correctif** : la condition s'ÉLARGIT, elle ne se retire pas. La
+retirer ferait poser des slides à des médias arrivés autrement sur une story —
+un changement que rien ne mesurait. `guard selectedFormat == .post || <il reste
+un média du rail à placer>` dit exactement ce qu'on a établi, et rien de plus
+(§ 441).
+
+## Leçon 445 — `log show` FILTRE le niveau info : trois passes perdues à conclure « le code ne tourne pas » sur un journal tronqué
+
+**Le fait.** Pour trancher #4879 j'ai instrumenté le chemin média — ingestion,
+placement, quatre refus silencieux. Puis :
+
+```
+xcrun simctl spawn <sim> log show --last 2m --predicate 'process == "Meeshy"'
+→ AUCUNE de mes lignes
+```
+
+J'en ai conclu, trois fois de suite, que le code ne s'exécutait pas — et j'ai
+construit trois hypothèses sur ce vide. Les lignes existaient, s'exécutaient, et
+étaient **filtrées** : `log show` n'inclut ni `info` ni `debug` sans `--info` /
+`--debug`. Les seules qui passaient étaient les `.error` d'un voisin, ce qui
+rendait le journal *crédible* — il n'avait pas l'air vide, il avait l'air
+complet.
+
+```
+xcrun simctl spawn <sim> log show --info --last 5m --predicate '…'
+→ ingest photothèque … mime=image/jpeg     ← elle était là depuis le début
+```
+
+> **Un journal filtré ne se distingue pas d'un journal vide** — et un voisin qui
+> loggue en `.error` fait croire que le filtre n'existe pas. Avant de conclure
+> « ce code ne tourne pas » depuis un journal, vérifier qu'on lit le NIVEAU
+> auquel on a écrit.
+
+Deux corollaires du même lot :
+
+- **`strings` sur l'exécutable de l'app ne prouve rien** : le code d'une app
+  iOS en debug vit dans `Meeshy.debug.dylib`, pas dans le binaire. Et une
+  chaîne de `os.Logger` interpolée n'y apparaît qu'en fragments — chercher un
+  sous-mot (`applyContentMedia`), jamais la phrase entière avec ses accents.
+- **Écrire au bon niveau.** Un log qui sert à DIAGNOSTIQUER un chemin muet a
+  intérêt à être `.error`, ou à être lu avec `--info` — sinon le réparateur
+  qu'on vient de créer (§ 443) est lui-même invisible.
 ### AMENDEMENT du même jour — le vérificateur des faux positifs existe, et ce n'est pas un outil
 
 Cette leçon affirmait qu'« il n'existe aucun vérificateur des faux positifs ».
@@ -24549,3 +24739,290 @@ Cela vaut pour les trois formes que ce dépôt écrit le plus : « N sites font 
 résultat vide), « ces deux choses divergent » (citer les deux côtés, élément par
 élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
 gratuit qu'on ait de ce côté-là de l'asymétrie.
+
+## Leçon 446 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
+
+**Le fait (2026-09-02).** Ma consigne permanente de boucle le dit à chaque
+réveil, en gras : « **Tu ne fermes JAMAIS une issue** — la session d'intégration
+ferme, sur mesure rejouée. » J'ai fermé quatre issues dans la même heure, sans
+appeler une seule fois une API de fermeture.
+
+Le mot-clé `Closes #n` dans un message de commit suffit. `dev` étant la branche
+PAR DÉFAUT du dépôt, GitHub ferme l'issue à la seconde où la poussée atterrit.
+Mesuré, issue par issue, dans le journal d'événements :
+
+```
+#4585  10:28:03  closed  commit_id=cd46251f7f
+#4682  10:38:23  closed  commit_id=7716dee4bd
+#4688  10:20:09  closed  commit_id=918c6f31ca
+#4860  10:20:08  closed  commit_id=98419744bc
+```
+
+**La cause n'est pas une inattention : c'est un conflit entre deux règles
+ÉCRITES du même projet.**
+
+| règle | forme | ce qui l'applique |
+|---|---|---|
+| `CLAUDE.md` § pilotage — « l'issue **fermée** par le commit qui la livre (`Closes #n`) » | une CONVENTION | GitHub, mécaniquement, à chaque poussée |
+| la consigne de la boucle — « tu ne fermes JAMAIS une issue » | une INTERDICTION | rien |
+
+Suivre les deux à la lettre EXÉCUTE la première et viole la seconde. Et la
+violation ne laisse aucune trace lisible : l'issue se ferme proprement, avec un
+lien vers le bon commit, exactement comme si quelqu'un l'avait décidé.
+
+> **Une interdiction n'a pas de moteur.** Une convention qu'un outil exécute en
+> a un. Quand les deux se contredisent, ce n'est pas la plus récente ni la plus
+> impérative qui l'emporte — c'est celle qui a un mécanisme derrière elle, et
+> l'autre est enfreinte SANS RAPPORT D'ERREUR.
+
+C'est ce qui rend cette famille chère : je me croyais conforme parce que je
+n'avais jamais posé sciemment un geste de fermeture. Le contrôle que j'appliquais
+portait sur mes APPELS ; la règle portait sur un EFFET.
+
+### La question à se poser
+
+Devant toute règle de la forme « ne fais jamais X », demander : **quel autre
+geste de mon travail PRODUIT X sans le nommer ?** Ici : un mot dans un message
+de commit. Ailleurs, la même forme se retrouve partout — un `git push` qui
+déclenche un déploiement, un fichier renommé qui casse un import dynamique, une
+dépendance ajoutée qui embarque un postinstall, un label posé qui déclenche un
+workflow. Le geste interdit est rarement celui qu'on s'interdit ; c'est celui
+qu'on fait sans savoir qu'il l'est.
+
+### Ce que j'ai fait, et ce que je n'ai PAS fait
+
+`Closes` est remplacé par `Avance #n` dans mes messages de commit — le lien vers
+l'issue reste, la fermeture disparaît.
+
+**Je n'ai PAS rouvert les quatre.** Rouvrir est un changement d'état au même
+titre que fermer : la consigne m'interdit l'un, elle ne m'autorise pas l'autre
+en compensation. Et le point de contrôle que ma fermeture a sauté — l'intégration
+qui rejoue la mesure — appartient au porteur, pas à moi. Elles sont taguées
+`to-integrate`, chaque relais porte les commandes de rejeu, et le fait est dit en
+tête de chacun.
+
+> **Réparer une infraction par son symétrique est une seconde infraction.** La
+> réparation juste est de rendre l'état LISIBLE à qui a le droit de le changer.
+
+Voisines : § 433 (ce qui s'énumère se périme, ce qui se dérive tient) — même
+asymétrie entre ce qu'on déclare et ce qui s'exécute ; § 440 (un outil de
+détection se règle contre l'erreur qui n'a pas de vérificateur) — ici
+l'interdiction ÉTAIT l'erreur sans vérificateur.
+
+## Leçon 447 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+
+**Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
+ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
+avait été FORKÉE de `dev`, fusionnait `origin/dev` à chaque étape, et que le
+porteur voulait `dev`. Il l'a dit à mi-course (« merge dans dev pas dans
+main ! »). Coût avant la correction : Trivy comparait les alertes à la
+dernière analyse de `main` (plus ancienne que `dev`, donc des alertes
+« nouvelles » qui n'en étaient pas), le corps de la PR annonçait « demande
+porteur : merger sur main », et le point de contrôle horaire portait « base
+main » dans son propre prompt — trois artefacts à corriger pour une
+donnée.
+
+> **La base d'une PR se lit à l'endroit d'où la branche est PARTIE**, et à
+> ce que le porteur a dit — jamais au défaut du dépôt. Une branche qui
+> fusionne `dev` à chaque tour a déjà répondu à la question. Et la base
+> n'est pas qu'un champ de la PR : tout ce qui la NOMME (corps, routine de
+> contrôle, commentaire d'issue) est à changer dans le même mouvement, sinon
+> l'un des trois continue de dire l'ancienne.
+
+Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
+base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
+n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
+
+## Leçon 448 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+
+**Ce qui s'est passé.** Deux fois dans la même session, un lot vert
+localement a rougi la CI quarante minutes plus tard sur un cliquet de
+taille que personne n'avait relu avant d'écrire :
+
+1. `FileSizeBudgetGuardTests` (iOS, `apps/ios/Meeshy`) : le cumul des
+   fichiers de la dette héritée dépassait déjà son plafond sur `dev`
+   (#4841 — 177 lignes) ; tout ajout à un hôte en dette aggravait un rouge
+   préexistant, invisible parce que la suite iOS ne tourne sur une PR que
+   si le sujet du commit le demande (« run test »).
+2. `gateway-test-file-size-budget.test.ts` (#4531, SUITES du gateway) :
+   `message-new-producer-parity.test.ts` était gelé à **1 000 lignes
+   exactement** dans `DETTE_HERITEE`. Un agent y a ajouté un témoin de
+   quinze lignes — le bon témoin, au bon endroit — et la règle 3 (« le
+   cumul hors budget ne remonte pas ») a rougi.
+
+> **Avant d'écrire dans un fichier, mesurer ce fichier contre le cliquet de
+> SA cible** — il y en a au moins trois dans ce dépôt (prod iOS, prod
+> gateway #4426, suites gateway #4531), chacun avec sa liste gelée et sa
+> convention de comptage. Un fichier de la liste dont la taille du jour
+> ÉGALE le nombre gelé n'a aucune marge : la seule façon d'y ajouter est
+> d'en SORTIR une responsabilité d'abord, dans le même commit.
+
+Et quand une fusion de `dev` arrive, **relancer les cliquets localement
+sur l'arbre fusionné** : `dev` peut être rouge par décision (#4841 laissait
+165 lignes impayées, à dessein), et la fusion importe ce rouge. Ici les
+découpes de la branche l'ont payé — mais seulement parce que la mesure a
+été REFAITE sur l'arbre fusionné, pas déduite des deux plafonds.
+
+Le motif commun aux deux morsures : la garde vivait dans une suite que
+l'agent qui écrivait n'a pas lue, parce qu'elle ne nomme pas le fichier
+qu'il modifiait — elle nomme une LISTE où il figure. Chercher « qui me
+mesure ? » (grep du nom de fichier dans les tests) avant « où j'ajoute ? ».
+## Leçon 449 — Un bouchon qui ne rejoue pas la COURSE du serveur rend vert un client qui la perd
+
+Trois des seize défauts de la revue croisée du fil temps réel (#4524) avaient la
+même forme : le témoin était vert contre `e2e/visual/lib/*` et faux contre la
+passerelle, parce que le bouchon avait copié la RÉPONSE de la route sans copier
+sa LOI.
+
+| ce que le bouchon faisait | ce que la passerelle fait | ce qui passait vert |
+|---|---|---|
+| posait l'identité du socket SYNCHRONEMENT dans `connection` | `handleTokenAuthentication(socket)` lancé SANS être attendu (`MeeshySocketIOManager.ts:1740`) — un `conversation:join` émis sur `connect` reçoit `not_authenticated` (`ConversationHandler.ts:129-134`) | un module qui rejoignait la room sur `connect` et n'y entrait jamais |
+| `hasGap: sync.trou`, inconditionnel | `hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD` (`routes/sync/index.ts:279`), et `checkpointSeq = 0` pour une session anonyme (`:274-278`) | un client qui n'envoyait jamais `seq`, et un cas de recette qui promettait à l'INVITÉ un séparateur que la passerelle ne sait pas lui servir |
+| servait `POST /anonymous/refresh` comme une route vivante | `depreciee({ depuis: '2026-08-30', successeur: '/guest-sessions/me' })` (`anonymous.ts:341`) | un battement de bail bâti sur un alias condamné au Sunset |
+
+> **Un bouchon copie une LOI, pas une réponse.** La question à poser à chaque
+> route ou événement bouchonné : « à quelle condition la passerelle répond-elle
+> AUTRE chose ? » — l'asynchronie, la garde sur un paramètre absent, la
+> dépréciation. Si le bouchon ne peut pas produire cette autre réponse, le
+> témoin ne peut pas tomber, et son vert est celui de la vacuité.
+
+Le remède a eu deux faces, et la seconde est la plus facile à oublier : rendre
+au bouchon la course (un `setTimeout` avant `authenticated`, `hasGap` calculé
+par la formule du serveur, l'alias déprécié gardé mais JAMAIS attendu par un
+spec), PUIS faire tomber le témoin AVANT le correctif — c'est le seul moment où
+l'on sait que le bouchon voit vraiment.
+
+Corollaire de recette : **une capacité que la passerelle n'expose pas à un
+lecteur ne s'affiche pas (régime 3), même si la conception l'énonce pour
+lui.** Le cas D du § 6.5 promettait `hasGap` à l'invité ; la loi du serveur dit
+qu'un `Participant.id` n'a pas de curseur. Le cas est resté — il gage l'ordre
+d'envoi et le rattrapage —, le séparateur est gagé côté membre, et la
+conception le DIT au lieu de le laisser croire.
+
+## Leçon 450 — Un critère écrit dans le vocabulaire d'un adaptateur est vert par vacuité sur la porte qu'il gate
+
+**Le fait (2026-09-02, livraison de `join`, #4522).** Le critère de fin de
+l'écran, le § 6.3.A de la conception et la charte (règle 20) nommaient « les
+sept refus » : `403 REQUIRES_ACCOUNT`, `429 MAX_CONCURRENT_USERS`, `410
+LINK_MAX_USES`… Les témoins jest et la passerelle de bouchon les rejouaient
+fidèlement, et tout était vert. Or la porte que la v3 appelle — `POST
+/links/:key/members`, la seule que le § 12.3 retienne — émet SIX codes
+d'admission (`linkAdmission.ts:112-118`), et **`REQUIRES_ACCOUNT` comme
+`MAX_CONCURRENT_USERS` ne sont émis par AUCUNE route du gateway** : `grep`
+sur `services/gateway/src` ne les trouve que dans des commentaires. La liste
+décrivait l'adaptateur `POST /anonymous/join/:linkId` d'AVANT #4167, dont
+`410 LINK_MAX_USES` et `429 MAX_CONCURRENT_USERS` ont fusionné en `409
+LINK_EXHAUSTED` (`routes/anonymous.ts:238-239`).
+
+Ce que ça cassait vraiment n'était pas cosmétique : `refusGardeLeFormulaire`
+tranchait sur le STATUT (« 409 ⇒ le pseudo est pris, on ressaisit »), donc
+un vrai `409 LINK_EXHAUSTED` aurait peint « ce lien a atteint son nombre
+d'entrées » comme une erreur de PSEUDO, formulaire ouvert, et le visiteur
+aurait ressaisi en boucle un lien plein.
+
+> **Une liste de codes dans un critère porte deux affirmations : « voilà ce
+> qu'on peint » (vérifiable) et « voilà ce que la porte émet » (jamais
+> vérifiée). La seconde se relit dans l'ÉMETTEUR, pas dans le document — et
+> quand deux portes parlent deux vocabulaires pour le même lien (l'aperçu
+> dit `LINK_MAX_USES`, la jonction `LINK_EXHAUSTED`), c'est le code, jamais le
+> statut, qui dit si l'on ressaisit ou si l'on referme.**
+
+C'est la leçon 422 (« un bouchon copie une LOI, pas une réponse ») portée un
+cran plus haut : ici la loi était copiée juste — le bouchon rejouait ce qu'on
+lui dictait — mais ce qu'on lui dictait venait d'un document, pas du code. Le
+remède a trois faces : le bouchon produit ses refus depuis l'ÉTAT du lien
+(`passerelle.lien`, la séquence d'`admitLinkEntry` dans son ordre) et non
+depuis un code injecté ; la table des phrases ne connaît que des codes qu'une
+route émet (un témoin l'affirme : `REQUIRES_ACCOUNT` absent) ; et le document
+qui portait la liste dit désormais d'où elle venait (§ 6.3.A encadré, § 12.9).
+
+Deux voisines du même lot, de la même forme « la donnée arrive, personne ne la
+consomme » (leçon 421) : l'aperçu servait `requireEmail` / `requireBirthday`
+et la porte refusait 400 sans eux — la modale ne les demandait pas ; et
+`allowedIpRanges` est jugé sur `request.ip`, que la v3 — qui poste depuis son
+SERVEUR, là où le legacy poste depuis le navigateur — présentait comme celle
+du conteneur. La question qui attrape les trois est la même : **pour chaque
+champ que la porte LIT, qui le lui FOURNIT, et depuis quel bord ?**
+
+## Leçon 451 — Un refus qui arrive AVANT la lecture de ce que le lecteur détient tranche à sa place
+
+**Le fait (2026-09-02, revue croisée de `join`, #4522).** `/chat/:lien`
+lisait le cookie de la place APRÈS l'aperçu du lien, parce que c'est l'aperçu
+qui rend la clé canonique (`linkId`) dont le cookie porte le nom. Or l'aperçu
+refuse 410 un lien inactif, échu ou PLEIN (`routes/anonymous.ts:602-613`),
+et un lien plein l'est PAR son dernier admis — dont la place est active, et
+que le battement (qui ne connaît pas `maxUses`) aurait servie. Le refus
+court-circuitait donc la lecture du cookie : le dernier admis recevait son
+201, son cookie, puis la modale du visiteur ; tout invité d'un lien fermé
+pendant sa lecture était renvoyé à « anonyme ou compte ? » au rechargement.
+L'état G du § 6.3, DOCUMENTÉ dans le docblock de la route, était inatteignable
+pour deux de ses trois codes. Le témoin jest le certifiait pourtant vert :
+il réglait l'aperçu à 200 et le battement à 410 `LINK_DEACTIVATED` — une
+combinaison que la passerelle ne produit jamais, puisque les deux routes
+lisent la même ligne (`isActive`, `expiresAt`).
+
+> **Quand une réponse de REFUS ne porte pas la clé qui nommerait ce que le
+> lecteur détient, l'ordre « demander d'abord, lire le cookie ensuite » fait
+> du refus le juge de la place.** La question à poser à tout écran gouverné
+> par « ce que le lecteur DÉTIENT » : à quel appel la route apprend-elle la
+> clé de ce qu'il détient — et cet appel peut-il refuser AVANT de la rendre ?
+> Si oui, il faut une porte qui reconnaisse ce qu'il présente sans juger
+> l'objet (`GET /links/:identifier` : « ce jeton tient-il une place ici ? »),
+> et le bouchon d'un tel écran se règle par l'ÉTAT partagé, jamais par
+> endpoint — c'est la leçon 422 vue du client : un mock par route certifie
+> des chemins que le serveur ne produit pas.
+
+Trois voisines du même lot, de la même famille « la charge a un effet que la
+provenance ne justifie pas » : un `GET` qui JOINT (état MEMBRE) répondait
+aussi à un préchargement du navigateur ; un `POST` sans regard sur `Origin`
+posait une place — et son cookie — dans le navigateur de qui n'avait rien
+soumis ; un second `POST` du même formulaire prenait une seconde place parce
+que le cookie de la première était lu APRÈS le champ `pseudo`. La question
+qui attrape les trois : **avant d'agir, la requête a-t-elle dit d'où elle
+vient (`Sec-Purpose`, `Sec-Fetch-Site`) et ce qu'elle tient déjà (le cookie)
+— et la route les lit-elle AVANT de lire ce qu'elle demande ?** Sites :
+`apps/web-v3/app/provenance.ts`, `app/(public)/chat/[lien]/route.ts` ›
+`situeLInvite` / `rejonction`.
+
+## Leçon 452 — Un document qui dit ce que la passerelle PORTE sans citer l'émetteur fait écrire un bouchon qui le porte — et un témoin vert par vacuité
+
+**Le fait (2026-09-02, revue croisée de `rights`, #4523).** La conception
+(§ 12.3), le critère de fin, trois doc-commentaires et le spec affirmaient
+« les droits sont RELUS à chaque battement — l'hôte a pu les changer ». Le
+bouchon faisait ce que le document disait : son battement servait un objet
+MUTABLE que le spec changeait à la main, et le témoin « un droit retiré se voit
+au battement suivant » était vert. La passerelle, elle, rend au battement
+l'INSTANTANÉ pris au join (`participantConversationPayload`,
+`link-admission.ts:566-575` : `participant.permissions` +
+`shareLink.allowViewHistory`), que `services/participantRights.ts:6-13`
+déclare noir sur blanc ne suivre ni le lien ni le delta posé par l'hôte. Le
+changement de l'hôte voyage par un ÉVÉNEMENT — `participant:rights-updated`,
+poussé sur la room de conversation et, en charge complète, sur la room
+personnelle de l'invité (`participants-writes.ts:403-425`, room rejointe par
+`AuthHandler.ts:381`) — que personne n'écoutait (`grep rights participate.ts`
+: rien). En production : bandeau « Écrire et répondre », composeur ouvert,
+droit retiré.
+
+> **Une affirmation sur ce qu'une route PORTE se relit dans son ÉMETTEUR,
+> jamais dans le document qui la répète — et la question suivante est : « par
+> quel AUTRE canal la passerelle dit-elle ce changement ? ».** Un bouchon
+> écrit d'après le document copie la réponse que le document imagine (leçon
+> 422 en amont : la loi n'était même pas connue) ; un événement que la
+> passerelle pousse et que personne n'écoute est la forme « la donnée
+> arrive, personne ne la consomme » (leçon 421) côté socket.
+
+Trois voisines du même lot, de la forme « le serveur sert quelque chose que
+le document ne sert pas » : un battement 410 (état G) faisait rendre ZÉRO
+message et quatre verdicts REFUSÉS que rien n'avait relus, alors que la liste
+ne lit pas `isActive` et que la reconnaissance NOMME l'occupant
+(`currentUser`) ; un droit rendu après un chargement fermé ne rouvrait rien,
+parce que le serveur ne servait aucun `<form>` à révéler (le symétrique de la
+raison cachée qu'il servait déjà) ; et une page d'historique gardait la
+teinte « neuve » parce que le PEINTRE la posait — peindre n'est pas signaler.
+La question qui attrape les trois : **ce que le document affiche dans cet
+état est-il ce que la passerelle a SERVI — ni plus (un verdict fabriqué), ni
+moins (une liste non demandée, un formulaire non servi) ?** Sites :
+`apps/web-v3/lib/realtime/droits-peinture.ts` › `droitsDuChangement`,
+`app/(public)/chat/[lien]/route.ts` › `occupantDeLaPlace`,
+`app/connecte/fil-vue.ts` › `Composeur.cause`, `e2e/visual/lib/bouchon-fil.ts`
+› `PlaceDeLInvite` / `porteDeLHote`.

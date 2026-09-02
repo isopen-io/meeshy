@@ -17,6 +17,13 @@ import MeeshySDK
 /// Ces gardes verrouillent la SUPERSESSION : l'ancien apparat retiré, le nouveau
 /// comportement en place. Elles remplacent les huit gardes de F1, dont l'objet
 /// (un second sélecteur de format) n'existe plus.
+///
+/// **Le routage a changé deux fois depuis** — la phrase « RÉEL rejoint STORY sur
+/// la SCÈNE » ci-dessus est l'histoire de B3, plus la règle. La STORY a quitté
+/// la scène le 2026-09-01 (#4700, a7136904), le RÉEL l'a suivie le même jour
+/// (#4751, 7d51e2bb) : là où l'auteur CHOISIT son format, tout se compose dans
+/// le meuble. Le témoin 1 affirme le routage ACTUEL ; l'éventail reste le seul
+/// sélecteur, ce que les témoins 2 à 5 gardent inchangés.
 final class ComposerDestinationSelectorTests: XCTestCase {
 
     private static let iosRoot = URL(fileURLWithPath: #filePath)
@@ -32,27 +39,44 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — le RÉEL monte la SCÈNE par le routage (le média prend le canvas) ;
-    // le POST reste au document. **La STORY a quitté cette loi le 2026-09-01.**
+    // 1 — là où l'auteur CHOISIT son format, la STORY, le POST et le RÉEL se
+    // composent au DOCUMENT ; le MOOD monte sa propre surface.
     //
-    // Ce témoin affirmait « RÉEL et STORY montent la scène ». `.scene` monte
-    // l'atelier du SDK — l'autre composer de story — et la directive porteur du
-    // 2026-09-01 l'a retiré du chemin de la story, qui se compose désormais
-    // dans le meuble comme tout le reste (#4700). L'assertion est RETOURNÉE, pas
-    // supprimée : c'est elle qui dira, le jour où quelqu'un rebranchera
-    // l'atelier par mégarde, que la story vient de repartir dans l'autre écran.
-    func test_leReelMonteLaScene_leePostEtLaStoryRestentAuDocument() {
+    // Ce témoin affirmait « RÉEL et STORY montent la scène » (B3), puis « la
+    // story a quitté la scène, le réel la garde » (#4700, 2026-09-01). `.scene`
+    // monte l'atelier du SDK — l'autre composer — et la directive porteur du
+    // 2026-09-01 l'a retiré du chemin de la story (#4700, a7136904), puis du
+    // réel le même jour (#4751, 7d51e2bb : « le RÉEL rejoint le meuble » — sa
+    // timeline vit AUSSI au meuble depuis le #4082, et le garder à part faisait
+    // changer de COMPOSER en changeant de format sur un écran que l'auteur
+    // croit unique). L'assertion du réel est RETOURNÉE le 2026-09-02, comme
+    // celle de la story avant elle, jamais supprimée : c'est elle qui dira, le
+    // jour où quelqu'un rebranchera l'atelier par mégarde, qu'un format vient
+    // de repartir dans l'autre écran. Le mood est ajouté pour que le témoin
+    // couvre les QUATRE formats de `ComposerFormat` — un cas absent d'un témoin
+    // de routage est un cas que personne ne lit.
+    //
+    // Les trois ouvertures qui ARRIVENT avec de la matière (`.resume`,
+    // `.mediaSeeded`, `.videoCameraReady`) gardent la scène pour tous les
+    // formats ; ce n'est pas l'objet de ce témoin —
+    // `ComposerDocumentSurfaceTests.test_surface_leReelNEstJamaisUnDocument_etLaStorySuitSonOuverture`
+    // les nomme une par une.
+    func test_laStoryLePostEtLeReel_seComposentAuDocument_leMoodMonteSaSurface() {
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .story), .document,
             "STORY ne charge plus l'atelier — elle se compose dans le meuble (#4700)."
         )
         XCTAssertEqual(
-            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel), .scene,
-            "RÉEL garde la scène — ses canvas sont ses médias (directive produit, B3)."
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel), .document,
+            "RÉEL ne charge plus l'atelier — il a rejoint le meuble le 2026-09-01 (#4751)."
         )
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .post), .document,
             "POST reste la surface document plate — ses médias forment un carrousel, jamais un canvas."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .status), .mood,
+            "MOOD monte sa propre surface — la grille d'emojis n'est ni un document ni une scène."
         )
     }
 

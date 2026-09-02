@@ -21,6 +21,10 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslateResponse
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxRepository
 import org.junit.Test
 import java.io.IOException
 
@@ -29,9 +33,9 @@ class PostRepositoryTest {
 
     private val api: PostApi = mockk(relaxed = true)
     private val translationApi: TranslationApi = mockk(relaxed = true)
+    private val outbox: OutboxRepository = mockk(relaxed = true)
 
     private fun ok(post: ApiPost) = ApiResponse(success = true, data = listOf(post))
-    private fun okUnit() = ApiResponse(success = true, data = Unit)
 
     private fun page(posts: List<ApiPost>, nextCursor: String?, hasMore: Boolean) =
         ApiResponse(
@@ -47,35 +51,41 @@ class PostRepositoryTest {
 
     private suspend fun seed(post: ApiPost): PostRepository {
         coEvery { api.getFeed(any(), any()) } returns ok(post)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         repo.refresh()
         return repo
     }
 
     @Test
-    fun toggleLike_likesOptimistically_andCallsApi() = runTest {
+    fun toggleLike_likesOptimistically_andEnqueuesADurableLikeMutation() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
-        coEvery { api.like("p1") } returns okUnit()
+        val slot = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(slot)) } returns "cmid-1"
 
         repo.feedStream().test {
             // initial fresh state from the seeded cache
             assertThat((awaitItem() as CacheResult.Fresh).value.post("p1").isLikedByMe).isFalse()
 
-            repo.toggleLike("p1")
+            val accepted = repo.toggleLike("p1")
 
+            assertThat(accepted).isTrue()
             val after = awaitItem()
             val liked = ((after as? CacheResult.Fresh)?.value ?: (after as CacheResult.Stale).value).post("p1")
             assertThat(liked.isLikedByMe).isTrue()
             assertThat(liked.likeCount).isEqualTo(3)
             cancelAndIgnoreRemainingEvents()
         }
-        coVerify(exactly = 1) { api.like("p1") }
+        assertThat(slot.captured.kind).isEqualTo(OutboxKind.LIKE_POST)
+        assertThat(slot.captured.lane).isEqualTo(OutboxLanes.SOCIAL)
+        assertThat(slot.captured.targetId).isEqualTo("p1")
+        coVerify(exactly = 0) { api.like(any()) }
     }
 
     @Test
-    fun toggleLike_unlikesWhenAlreadyLiked() = runTest {
+    fun toggleLike_unlikesWhenAlreadyLiked_andEnqueuesAnUnlikeMutation() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 5, isLikedByMe = true))
-        coEvery { api.unlike("p1") } returns okUnit()
+        val slot = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(slot)) } returns "cmid-1"
 
         repo.toggleLike("p1")
 
@@ -86,20 +96,50 @@ class PostRepositoryTest {
             assertThat(post.likeCount).isEqualTo(4)
             cancelAndIgnoreRemainingEvents()
         }
-        coVerify(exactly = 1) { api.unlike("p1") }
+        assertThat(slot.captured.kind).isEqualTo(OutboxKind.UNLIKE_POST)
+        assertThat(slot.captured.targetId).isEqualTo("p1")
     }
 
     @Test
-    fun toggleLike_rollsBackOnFailure() = runTest {
+    fun toggleLike_doesNotRollBackWhileTheMutationIsStillQueuedOffline() = runTest {
+        // The outbox durably owns delivery now — toggleLike has no synchronous
+        // network round trip left to fail, so the optimistic paint stands
+        // regardless of what the (unstubbed, relaxed) outbox does with the row.
+        // Only a definitive EXHAUSTED failure rolls back, via rollbackLike
+        // (see the dedicated tests below).
         val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
-        coEvery { api.like("p1") } throws IOException("offline")
 
         repo.toggleLike("p1")
 
         repo.feedStream().test {
             val item = awaitItem()
             val post = ((item as? CacheResult.Fresh)?.value ?: (item as CacheResult.Stale).value).post("p1")
-            // rolled back to the pre-toggle values
+            assertThat(post.isLikedByMe).isTrue()
+            assertThat(post.likeCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun toggleLike_returnsFalseForUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
+
+        val accepted = repo.toggleLike("missing")
+
+        assertThat(accepted).isFalse()
+        coVerify(exactly = 0) { outbox.enqueue(any()) }
+    }
+
+    @Test
+    fun rollbackLike_revertsAnExhaustedLikeBackToUnliked() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleLike("p1") // optimistic liked=true, count=3 (LIKE_POST enqueued)
+
+        repo.rollbackLike("p1", liked = false)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
             assertThat(post.isLikedByMe).isFalse()
             assertThat(post.likeCount).isEqualTo(2)
             cancelAndIgnoreRemainingEvents()
@@ -107,28 +147,94 @@ class PostRepositoryTest {
     }
 
     @Test
-    fun toggleBookmark_bookmarksOptimistically_andCallsApi() = runTest {
+    fun rollbackLike_revertsAnExhaustedUnlikeBackToLiked() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 5, isLikedByMe = true))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleLike("p1") // optimistic liked=false, count=4 (UNLIKE_POST enqueued)
+
+        repo.rollbackLike("p1", liked = true)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.isLikedByMe).isTrue()
+            assertThat(post.likeCount).isEqualTo(5)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun rollbackLike_isInertForAnUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
+
+        repo.rollbackLike("missing", liked = true)
+
+        repo.feedStream().test {
+            assertThat(awaitItem().cachedPost("p1").isLikedByMe).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Regression guard: between the optimistic tap and the worker's EXHAUSTED
+     * verdict, a realtime reconciliation (`revalidateFeed`/`post:liked`) can
+     * already have replaced the optimistic count with the server's own. A
+     * rollback that still applies its ±1 delta on top of that server truth
+     * double-counts (or worse, flips a like the server actually accepted) —
+     * `rollbackLike` must be a no-op once the cache no longer carries the
+     * optimistic value it was meant to undo.
+     */
+    @Test
+    fun rollbackLike_isANoOpOnceTheServerHasAlreadyReconciledTheLike() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", likeCount = 2, isLikedByMe = false))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleLike("p1") // optimistic liked=true, count=3 (LIKE_POST enqueued)
+
+        // A pull-to-refresh (or a stale-triggered revalidateFeed) landed between the
+        // tap and the EXHAUSTED verdict, overwriting the cache with the server's own
+        // reconciled truth — the same shape as a real post:liked/refresh race.
+        coEvery { api.getFeed(any(), any()) } returns
+            ok(ApiPost(id = "p1", content = "hi", likeCount = 5, isLikedByMe = false))
+        repo.refresh()
+
+        repo.rollbackLike("p1", liked = false)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.isLikedByMe).isFalse()
+            assertThat(post.likeCount).isEqualTo(5)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun toggleBookmark_bookmarksOptimistically_andEnqueuesADurableBookmarkMutation() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
-        coEvery { api.bookmark("p1") } returns okUnit()
+        val slot = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(slot)) } returns "cmid-1"
 
         repo.feedStream().test {
             assertThat((awaitItem() as CacheResult.Fresh).value.post("p1").isBookmarkedByMe).isFalse()
 
-            repo.toggleBookmark("p1")
+            val accepted = repo.toggleBookmark("p1")
 
+            assertThat(accepted).isTrue()
             val after = awaitItem()
             val bookmarked = ((after as? CacheResult.Fresh)?.value ?: (after as CacheResult.Stale).value).post("p1")
             assertThat(bookmarked.isBookmarkedByMe).isTrue()
             assertThat(bookmarked.bookmarkCount).isEqualTo(3)
             cancelAndIgnoreRemainingEvents()
         }
-        coVerify(exactly = 1) { api.bookmark("p1") }
+        assertThat(slot.captured.kind).isEqualTo(OutboxKind.BOOKMARK_POST)
+        assertThat(slot.captured.lane).isEqualTo(OutboxLanes.SOCIAL)
+        assertThat(slot.captured.targetId).isEqualTo("p1")
+        coVerify(exactly = 0) { api.bookmark(any()) }
     }
 
     @Test
-    fun toggleBookmark_removesWhenAlreadyBookmarked() = runTest {
+    fun toggleBookmark_removesWhenAlreadyBookmarked_andEnqueuesAnUnbookmarkMutation() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 5, isBookmarkedByMe = true))
-        coEvery { api.removeBookmark("p1") } returns okUnit()
+        val slot = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(slot)) } returns "cmid-1"
 
         repo.toggleBookmark("p1")
 
@@ -139,22 +245,21 @@ class PostRepositoryTest {
             assertThat(post.bookmarkCount).isEqualTo(4)
             cancelAndIgnoreRemainingEvents()
         }
-        coVerify(exactly = 1) { api.removeBookmark("p1") }
+        assertThat(slot.captured.kind).isEqualTo(OutboxKind.UNBOOKMARK_POST)
+        assertThat(slot.captured.targetId).isEqualTo("p1")
     }
 
     @Test
-    fun toggleBookmark_rollsBackOnFailure() = runTest {
+    fun toggleBookmark_doesNotRollBackWhileTheMutationIsStillQueuedOffline() = runTest {
         val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
-        coEvery { api.bookmark("p1") } throws IOException("offline")
 
-        val accepted = repo.toggleBookmark("p1")
+        repo.toggleBookmark("p1")
 
-        assertThat(accepted).isFalse()
         repo.feedStream().test {
             val item = awaitItem()
             val post = ((item as? CacheResult.Fresh)?.value ?: (item as CacheResult.Stale).value).post("p1")
-            assertThat(post.isBookmarkedByMe).isFalse()
-            assertThat(post.bookmarkCount).isEqualTo(2)
+            assertThat(post.isBookmarkedByMe).isTrue()
+            assertThat(post.bookmarkCount).isEqualTo(3)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -166,14 +271,79 @@ class PostRepositoryTest {
         val accepted = repo.toggleBookmark("missing")
 
         assertThat(accepted).isFalse()
-        coVerify(exactly = 0) { api.bookmark(any()) }
+        coVerify(exactly = 0) { outbox.enqueue(any()) }
+    }
+
+    @Test
+    fun rollbackBookmark_revertsAnExhaustedBookmarkBackToUnbookmarked() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleBookmark("p1") // optimistic bookmarked=true, count=3 (BOOKMARK_POST enqueued)
+
+        repo.rollbackBookmark("p1", bookmarked = false)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.isBookmarkedByMe).isFalse()
+            assertThat(post.bookmarkCount).isEqualTo(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun rollbackBookmark_revertsAnExhaustedUnbookmarkBackToBookmarked() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 5, isBookmarkedByMe = true))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleBookmark("p1") // optimistic bookmarked=false, count=4 (UNBOOKMARK_POST enqueued)
+
+        repo.rollbackBookmark("p1", bookmarked = true)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.isBookmarkedByMe).isTrue()
+            assertThat(post.bookmarkCount).isEqualTo(5)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun rollbackBookmark_isInertForAnUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+
+        repo.rollbackBookmark("missing", bookmarked = true)
+
+        repo.feedStream().test {
+            assertThat(awaitItem().cachedPost("p1").isBookmarkedByMe).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** Bookmark analogue of [rollbackLike_isANoOpOnceTheServerHasAlreadyReconciledTheLike]. */
+    @Test
+    fun rollbackBookmark_isANoOpOnceTheServerHasAlreadyReconciledTheBookmark() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+        coEvery { outbox.enqueue(any()) } returns "cmid-1"
+        repo.toggleBookmark("p1") // optimistic bookmarked=true, count=3 (BOOKMARK_POST enqueued)
+
+        coEvery { api.getFeed(any(), any()) } returns
+            ok(ApiPost(id = "p1", content = "hi", bookmarkCount = 5, isBookmarkedByMe = false))
+        repo.refresh()
+
+        repo.rollbackBookmark("p1", bookmarked = false)
+
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.isBookmarkedByMe).isFalse()
+            assertThat(post.bookmarkCount).isEqualTo(5)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
     fun feedHasMore_reflectsFirstPagePagination() = runTest {
         coEvery { api.getFeed(null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = "c1", hasMore = true)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         repo.refresh()
 
@@ -190,7 +360,7 @@ class PostRepositoryTest {
                 nextCursor = null,
                 hasMore = false,
             )
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         repo.refresh()
 
         val moreRemains = repo.loadMore()
@@ -207,7 +377,7 @@ class PostRepositoryTest {
     fun loadMore_isNoOp_whenNoCursorRemains() = runTest {
         coEvery { api.getFeed(null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         repo.refresh()
 
         assertThat(repo.loadMore()).isFalse()
@@ -219,7 +389,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_returnsPostsWithPaginationWatermark() = runTest {
         coEvery { api.getBookmarks(null, any()) } returns
             page(listOf(ApiPost(id = "b1", content = "a"), ApiPost(id = "b2", content = "b")), "cur2", true)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val result = repo.getBookmarksPage(cursor = null)
 
@@ -233,7 +403,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_forwardsTheCursorToTheApi() = runTest {
         coEvery { api.getBookmarks("cur2", any()) } returns
             page(listOf(ApiPost(id = "b3", content = "c")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val result = repo.getBookmarksPage(cursor = "cur2")
 
@@ -246,7 +416,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
         coEvery { api.getBookmarks(any(), any()) } returns
             ApiResponse(success = false, data = null, error = "nope")
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val result = repo.getBookmarksPage()
 
@@ -256,7 +426,7 @@ class PostRepositoryTest {
     @Test
     fun getBookmarksPage_foldsTransportFailureIntoFailure() = runTest {
         coEvery { api.getBookmarks(any(), any()) } throws IOException("offline")
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         assertThat(repo.getBookmarksPage()).isInstanceOf(NetworkResult.Failure::class.java)
     }
@@ -265,7 +435,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
         coEvery { api.getBookmarks(any(), any()) } returns
             ApiResponse(success = true, data = listOf(ApiPost(id = "b1", content = "a")))
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val data = (repo.getBookmarksPage() as NetworkResult.Success).data
         assertThat(data.hasMore).isFalse()
@@ -276,7 +446,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_returnsPostsWithPaginationWatermark() = runTest {
         coEvery { api.getUserPosts("u1", null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a"), ApiPost(id = "p2", content = "b")), "cur2", true)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val data = (repo.getUserPostsPage("u1", cursor = null) as NetworkResult.Success).data
 
@@ -289,7 +459,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_forwardsUserIdAndCursorToTheApi() = runTest {
         coEvery { api.getUserPosts("u9", "cur2", any()) } returns
             page(listOf(ApiPost(id = "p3", content = "c")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val result = repo.getUserPostsPage("u9", cursor = "cur2")
 
@@ -302,7 +472,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } returns
             ApiResponse(success = false, data = null, error = "forbidden")
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val result = repo.getUserPostsPage("u1")
 
@@ -312,7 +482,7 @@ class PostRepositoryTest {
     @Test
     fun getUserPostsPage_foldsTransportFailureIntoFailure() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } throws IOException("offline")
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         assertThat(repo.getUserPostsPage("u1")).isInstanceOf(NetworkResult.Failure::class.java)
     }
@@ -321,11 +491,86 @@ class PostRepositoryTest {
     fun getUserPostsPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } returns
             ApiResponse(success = true, data = listOf(ApiPost(id = "p1", content = "a")))
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val data = (repo.getUserPostsPage("u1") as NetworkResult.Success).data
         assertThat(data.hasMore).isFalse()
         assertThat(data.nextCursor).isNull()
+    }
+
+    // --- getReelsPage: cursor pagination for the reel thread ---------------
+
+    @Test
+    fun getReelsPage_returnsReelsWithPaginationWatermark() = runTest {
+        coEvery { api.getReels(null, null, any()) } returns
+            page(listOf(ApiPost(id = "r1", content = "a"), ApiPost(id = "r2", content = "b")), "cur2", true)
+        val repo = PostRepository(api, translationApi, outbox)
+
+        val result = repo.getReelsPage()
+
+        val data = (result as NetworkResult.Success).data
+        assertThat(data.posts.map { it.id }).containsExactly("r1", "r2").inOrder()
+        assertThat(data.nextCursor).isEqualTo("cur2")
+        assertThat(data.hasMore).isTrue()
+    }
+
+    @Test
+    fun getReelsPage_forwardsSeedAndCursorToTheApi() = runTest {
+        coEvery { api.getReels("seed-1", "cur2", any()) } returns
+            page(listOf(ApiPost(id = "r3", content = "c")), nextCursor = null, hasMore = false)
+        val repo = PostRepository(api, translationApi, outbox)
+
+        val result = repo.getReelsPage(seed = "seed-1", cursor = "cur2")
+
+        assertThat((result as NetworkResult.Success).data.posts.map { it.id }).containsExactly("r3")
+        assertThat(result.data.hasMore).isFalse()
+        coVerify(exactly = 1) { api.getReels("seed-1", "cur2", any()) }
+    }
+
+    @Test
+    fun getReelsPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
+        coEvery { api.getReels(any(), any(), any()) } returns
+            ApiResponse(success = false, data = null, error = "nope")
+        val repo = PostRepository(api, translationApi, outbox)
+
+        val result = repo.getReelsPage()
+
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("nope")
+    }
+
+    @Test
+    fun getReelsPage_foldsTransportFailureIntoFailure() = runTest {
+        coEvery { api.getReels(any(), any(), any()) } throws IOException("offline")
+        val repo = PostRepository(api, translationApi, outbox)
+
+        assertThat(repo.getReelsPage()).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun getReelsPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
+        coEvery { api.getReels(any(), any(), any()) } returns
+            ApiResponse(success = true, data = listOf(ApiPost(id = "r1", content = "a")))
+        val repo = PostRepository(api, translationApi, outbox)
+
+        val data = (repo.getReelsPage() as NetworkResult.Success).data
+        assertThat(data.hasMore).isFalse()
+        assertThat(data.nextCursor).isNull()
+    }
+
+    // --- feedCacheSnapshot: the Reels cold-start seed -----------------------
+
+    @Test
+    fun feedCacheSnapshot_isNull_beforeAnySync() = runTest {
+        val repo = PostRepository(api, translationApi, outbox)
+
+        assertThat(repo.feedCacheSnapshot).isNull()
+    }
+
+    @Test
+    fun feedCacheSnapshot_reflectsTheSyncedFeed_afterRefresh() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi"))
+
+        assertThat(repo.feedCacheSnapshot?.map { it.id }).containsExactly("p1")
     }
 
     // --- create: location attachment ---------------------------------------
@@ -336,7 +581,7 @@ class PostRepositoryTest {
     fun create_withNoLocation_forwardsANullLocationField() = runTest {
         val slot = slot<CreatePostRequest>()
         coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         repo.create(content = "hi")
 
@@ -354,7 +599,7 @@ class PostRepositoryTest {
         )
         val slot = slot<CreatePostRequest>()
         coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         repo.create(content = "hi", location = place)
 
@@ -579,7 +824,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_translatesTheSourceAndReturnsTheMergedPost() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("Hola")
 
         val merged = repo.translatePost(
@@ -592,7 +837,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         val slot = slot<TranslateRequest>()
         coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
 
@@ -605,7 +850,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_isInertForABlankTarget() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "   ")
 
@@ -615,7 +860,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_isInertWhenThePostHasNoSourceText() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val merged = repo.translatePost(ApiPost(id = "p9", content = "   "), "es")
 
@@ -625,7 +870,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_returnsNullWhenTheTranslatorFails() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } throws IOException("offline")
 
         val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
@@ -635,7 +880,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_returnsNullForABlankTranslation() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("   ")
 
         val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
@@ -645,7 +890,7 @@ class PostRepositoryTest {
 
     @Test
     fun translatePost_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("Hola")
 
         val merged = repo.translatePost(
@@ -665,7 +910,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_translatesTheSourceAndReturnsTheMergedComment() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("Hola")
 
         val merged = repo.translateComment(
@@ -679,7 +924,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         val slot = slot<TranslateRequest>()
         coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
 
@@ -692,7 +937,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_isInertForABlankTarget() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "   ")
 
@@ -702,7 +947,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_isInertWhenTheCommentHasNoSourceText() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
 
         val merged = repo.translateComment(ApiPostComment(id = "c9", content = "   "), "es")
 
@@ -712,7 +957,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_returnsNullWhenTheTranslatorFails() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } throws IOException("offline")
 
         val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
@@ -722,7 +967,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_returnsNullForABlankTranslation() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("   ")
 
         val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
@@ -732,7 +977,7 @@ class PostRepositoryTest {
 
     @Test
     fun translateComment_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
-        val repo = PostRepository(api, translationApi)
+        val repo = PostRepository(api, translationApi, outbox)
         coEvery { translationApi.translate(any()) } returns translated("Hola")
 
         val merged = repo.translateComment(

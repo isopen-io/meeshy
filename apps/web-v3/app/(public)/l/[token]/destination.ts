@@ -10,7 +10,12 @@ import type { CibleDuLien } from '@/lib/api/links';
  *
  * Trois décisions y sont gravées, chacune mesurée :
  *
- *   1. **`CONVERSATION` mène à `/chats/<jeton>`, jamais à `/conversations/<id>`.**
+ *   1. **`CONVERSATION` mène à `/chat/<jeton>` — la porte de l'INVITÉ, en UN
+ *      saut (directive 2026-09-01, conception § 12.3) —, jamais à
+ *      `/conversations/<id>` ni à `/chats/<jeton>`.** `/chats/:cle` est le fil
+ *      du MEMBRE : il renvoie un lecteur sans session vers `/login`, ce qui
+ *      faisait payer un SECOND saut à tout lien reçu (leçon 419).
+ *      `/chat/:lien` répond 200 en état CHOIX à un lecteur sans session.
  *      `TrackingLinkService.resolveTarget` rend le `conversationId`
  *      (`services/gateway/src/services/TrackingLinkService.ts:198`) et la route
  *      qui le sert est fermée aux anonymes : la suivre CASSE le rôle premier.
@@ -72,7 +77,7 @@ export const destinationDe = ({
   readonly token: string;
   readonly cible: CibleDuLien;
 }): string => {
-  if (cible.typeDeCible === 'CONVERSATION') return `/chats/${encodeURIComponent(token)}`;
+  if (cible.typeDeCible === 'CONVERSATION') return `/chat/${encodeURIComponent(token)}`;
   if (cible.typeDeCible === 'EXTERNAL') {
     return urlExterneServable(cible.urlOriginale) ?? cheminDuLienClos(token);
   }
