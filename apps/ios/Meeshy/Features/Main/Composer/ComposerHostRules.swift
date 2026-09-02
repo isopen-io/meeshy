@@ -481,7 +481,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à

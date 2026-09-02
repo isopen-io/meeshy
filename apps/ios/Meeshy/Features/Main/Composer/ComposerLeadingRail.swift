@@ -284,6 +284,12 @@ nonisolated enum ComposerRailCopy {
         case .place:
             return String(localized: "composer.rail.place",
                           defaultValue: "Ajouter un lieu", bundle: .main)
+        case .background:
+            // Le VERBE, pas le nom : « Choisir un fond », comme « Dessiner » et
+            // « Décrire ». « Fond » seul nommerait la CHOSE — c'est le glyphe
+            // qui la dit, et VoiceOver n'a pas le glyphe.
+            return String(localized: "composer.rail.background",
+                          defaultValue: "Choisir un fond", bundle: .main)
         case .drawing:
             return String(localized: "composer.rail.drawing",
                           defaultValue: "Dessiner", bundle: .main)

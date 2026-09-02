@@ -203,9 +203,16 @@ extension MeeshyComposerHost {
     ///
     /// > Une valeur lue à un seul endroit ne peut pas être lue de travers
     /// > ailleurs.
-    var backgroundPaletteIsReachable: Bool {
-        mountedComposerView != .scene
-    }
+    /// **#4919 — la surface de SCÈNE a désormais son propre chemin**, la porte
+    /// `background` du rail gauche. La réponse est donc `true` PARTOUT : la
+    /// rangée d'outils sur le document, la porte sur la scène.
+    ///
+    /// Laisser `false` ici donnerait DEUX contrôles pour un même réglage sur le
+    /// même écran — très exactement le doublon que le paramètre de
+    /// `ComposerOverflowPolicy` existe pour éviter, et que son doc-comment
+    /// nomme. La règle, elle, ne change pas : elle garde ses deux réponses, et
+    /// ses témoins les épinglent. Ce qui change est le FAIT qu'on lui rapporte.
+    var backgroundPaletteIsReachable: Bool { true }
 
     /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la
     /// règle sert — une entrée absente, jamais grisée.
@@ -470,6 +477,17 @@ extension MeeshyComposerHost {
             // classe ce qui part, il ne s'y voit pas.
             HapticFeedback.light()
             presentedPortal = .hashtag
+        case .background:
+            // **#4919 — la porte FOND déplie la bande `.palette`**, celle-là
+            // même que le menu `⋯` ouvrait en dépannage.
+            //
+            // Elle BASCULE, comme le dessin et pour la même raison : la bande
+            // occupe ≈ 170 pt de la zone basse, et une porte qui ne saurait
+            // qu'ouvrir les rendrait à sens unique. C'est le geste exact de
+            // `ComposerOverflowEntry.pickBackground`, déplacé du menu au rail —
+            // le même effet par un chemin qu'on trouve sans le chercher.
+            HapticFeedback.light()
+            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès

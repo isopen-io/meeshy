@@ -129,10 +129,15 @@ final class ComposerRailDoorTests: XCTestCase {
     /// n'est pas libre : la rangée d'outils de la vue `3b` range DESSIN avant
     /// STICKER, avant MENTION, avant LIEU. Le rail garde donc l'ordre relatif
     /// de la maquette, en y intercalant les portes qu'elle ne dessine pas.
+    /// **`background` s'insère avant `drawing` (#4919)**, et le motif est le
+    /// NIVEAU : ce sont les deux seules portes de niveau `.scene`, les poser
+    /// côte à côte fait lire au doigt « ici on règle la scène elle-même, plus
+    /// bas on y pose des choses ». L'issue laisse explicitement l'ordre final à
+    /// la planche ; ce voisinage est ce qui se défend en attendant.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .text, .drawing, .sticker,
-                        .mention, .hashtag, .place],
+                       [.description, .media, .sound, .text, .background, .drawing,
+                        .sticker, .mention, .hashtag, .place],
                        "`.hashtag` se range JUSTE APRÈS `.mention` (#4636) : les deux "
                        + "désignent une entité que le serveur dérive du texte, et la "
                        + "position que les doigts apprennent suit cette parenté.")

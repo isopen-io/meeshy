@@ -155,6 +155,48 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// pas sur la scène, il classe ce qui part.
     case hashtag
 
+    /// **Le FOND de la scène** — ce qu'il y a DERRIÈRE tous les objets (#4919).
+    ///
+    /// > Directive porteur 2026-09-02 : « Il faut un outil de fond dans la liste
+    /// > de gauche dès qu'on a une scène, pour faciliter la configuration de la
+    /// > scène. »
+    ///
+    /// ## Elle RENVERSE une ligne du § 2 d'`apps/ios/CLAUDE.md`, et pour une
+    /// ## meilleure raison que sa date
+    ///
+    /// Ce tableau rangeait « image/vidéo de fond » sur la LIGNE CANONIQUE, avec
+    /// la description, la mention et le lieu. La directive, postérieure, gagne —
+    /// mais elle ne gagne pas seulement par l'ordre chronologique : **la raison
+    /// écrite au § 2 pour ranger le fond en bas était « rien de tout cela n'a de
+    /// place sur la scène ».** C'est vrai d'une mention, d'un lieu, d'un son de
+    /// fond. C'est faux d'un fond visuel — il n'est rien d'autre QUE la scène,
+    /// et c'est le seul de la liste qui occupe 100 % des pixels du canvas.
+    ///
+    /// La ligne était mal classée ; la directive la corrige au lieu de la
+    /// contredire. Le § 2 bascule dans le même commit que cette porte.
+    ///
+    /// ## Niveau `.scene`, comme le DESSIN, et pour la même raison
+    ///
+    /// `.slide` la ferait paraître sur un `status`, qui n'a pas de toile.
+    /// `.object` promettrait à un fond les contrôleurs d'empilement du rail
+    /// *trailing* : or un fond n'est ni sélectionnable, ni déplaçable, ni
+    /// au-dessus de quoi que ce soit. `drawing` avait ouvert ce niveau ; le fond
+    /// est le second à en avoir besoin, ce qui est le meilleur signe qu'il
+    /// n'était pas un cas particulier.
+    ///
+    /// ## Ce qu'elle ouvre, et ce qu'elle NE prend PAS
+    ///
+    /// Elle déplie la bande `.palette` — couleurs et effet d'ouverture — qui
+    /// était jusqu'ici INATTEIGNABLE depuis la surface de scène autrement que
+    /// par le menu `⋯`, en dépannage assumé (`backgroundPaletteIsReachable`).
+    ///
+    /// Elle ne prend PAS le son de fond, et c'est une décision, pas un oubli :
+    /// il reste servi par `.sound` → feuille → placement `.background`, et sa
+    /// trace vit dans le couloir bas depuis #4918. Les réunir demanderait de
+    /// retirer le placement de la feuille de son — un changement de geste sur un
+    /// chemin livré, qui mérite sa propre décision.
+    case background
+
     /// Le niveau du modèle sur lequel la porte agit.
     ///
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
@@ -196,7 +238,11 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         // premier plan, une piste et un sticker sont des objets par nature.
         case .media, .sound, .sticker:
             return .object
-        case .drawing:
+        // Le DESSIN et le FOND visent la scène elle-même — ni la publication,
+        // ni une slide, ni un objet. Le fond ne bascule PAS par format : il EST
+        // la scène, quel que soit le profil, et c'est ce qui le distingue des
+        // quatre outils que #4893 déplace.
+        case .drawing, .background:
             return .scene
         }
     }
@@ -205,7 +251,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -237,6 +283,9 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .place:       return "mappin.and.ellipse"
         // `scribble.variable` plutôt qu'un `pencil` générique : ce n'est pas
         // « éditer », c'est TRACER — et le glyphe DIT le verbe (loi 7).
+        // `paintpalette` en LIGNE — le `.fill` est celui du menu `⋯`, dont
+        // cette porte reprend le geste ; les neuf portes du rail sont en ligne.
+        case .background:  return "paintpalette"
         case .drawing:     return "scribble.variable"
         // `textformat` et non `textbox` : ce qu'on pose est du TEXTE, pas un
         // cadre. La description, elle, porte `text.alignleft` — deux glyphes

@@ -207,9 +207,11 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         // rien à qualifier en bas : le plateau y laisse la place aux
         // contrôleurs de l'outil ouvert, et le socle vit au meuble, plus bas.
         XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: servies, format: .story),
-                       [.media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place],
+                       [.media, .sound, .text, .background, .drawing, .sticker,
+                        .mention, .hashtag, .place],
                        "en Story TOUTES les portes se posent — `.sound` est revenue le "
-                       + "2026-09-01 (#4722), à sa place de `canonicalRail`")
+                       + "2026-09-01 (#4722) et `.background` le 2026-09-02 (#4919), "
+                       + "chacune à sa place de `canonicalRail`")
         XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies, format: .story), [],
                        "rien ne QUALIFIE une story depuis le bas : tout s'y pose.")
     }

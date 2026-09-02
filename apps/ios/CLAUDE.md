@@ -452,21 +452,44 @@ se pose**, et aucune liste écrite à la main ne double cette décision.
 
 | ce que la porte vise | où elle se pose | pourquoi |
 |---|---|---|
-| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
-| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, image/vidéo de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
+| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé, **et le FOND lui-même**) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
+| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
 
-**Le même média n'est pas la même porte selon son PLAN.** Une image de FOND
-appartient à la slide et vit en bas ; une image de PREMIER PLAN devient un
-`MeeshyObject` et vit à gauche. Idem pour le son : un son de fond est un attribut
-de la publication (il porte son crédit au socle), un son POSÉ est un objet
-visible. Ranger les deux sous une seule porte « média » ou « son » est ce qui
-rend la sémantique illisible pour l'auteur.
+**Le même média n'est pas la même porte selon son PLAN.** Une image de PREMIER
+PLAN devient un `MeeshyObject` et vit à gauche ; un FOND se règle par la porte
+`background`, à gauche elle aussi (#4919) — voir la correction ci-dessous. Idem
+pour le son : un son de fond est un attribut de la publication (il porte son
+crédit au socle) et vit en bas, un son POSÉ est un objet visible. Ranger les deux
+sous une seule porte « média » ou « son » est ce qui rend la sémantique illisible
+pour l'auteur.
+
+> **Correction du 2026-09-03 (#4919) : le FOND VISUEL a changé de côté.** Ce
+> tableau le rangeait sur la ligne canonique, avec la description, la mention et
+> le lieu. La directive porteur du 2026-09-02 — « il faut un outil de fond dans
+> la liste de gauche dès qu'on a une scène » — le déplace, et elle a raison pour
+> une meilleure raison que sa date : **la justification écrite ici pour le
+> ranger en bas était « rien de tout cela n'a de place sur la scène ».** C'est
+> vrai d'une mention, d'un lieu, d'un son de fond. C'est faux d'un fond visuel —
+> il n'est rien d'autre QUE la scène, et c'est le seul de la liste qui occupe
+> 100 % des pixels du canvas. La ligne était mal classée ; la directive la
+> corrige au lieu de la contredire.
+>
+> Le **son** de fond, lui, n'a pas bougé : il ne se voit sur aucun pixel, donc il
+> reste hors de la rangée de gauche. Sa TRACE vit dans le couloir bas depuis
+> #4918, et il s'ajoute toujours par la porte `sound` → placement `.background`.
+> Une porte de niveau « ce qui se voit » ne peut pas contenir l'invisible.
 
 ### Le témoin
 
 Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais à une
-liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
+liste recopiée. Une dixième porte ne peut alors pas naître sans dire de quel
 niveau elle est, et son niveau la range tout seul.
+
+**Et le témoin d'un renversement s'écrit sur un format AUTRE que la story**
+(`ComposerBackgroundDoorTests`) : en Story, `.object` et `.scene` vont tous deux
+à gauche, donc un mauvais classement y rend le même verdict que le bon. C'est sur
+un POST que l'ancienne ligne se lisait ; c'est là qu'un retour en arrière se
+voit.
 
 ### 2 bis. Les TROIS zones du plateau, et sur quoi chacune agit (directive porteur 2026-08-31, révision)
 
