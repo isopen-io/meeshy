@@ -80,13 +80,27 @@ env:
 # workflows du dépôt (`release`, `ios-release`, `ios-fastlane-release`,
 # `ios-beta-trigger`, `pilotage-milestone`) portent le même réglage.
 #
-# ⚠️ CE QUI RESTE À VÉRIFIER, ET COMMENT LE VOIR : la sémantique de la file
-# ci-dessus n'a pas pu être confirmée sur `docs.github.com`, bloqué par le
-# proxy de sortie. Si la file s'ACCUMULE au lieu de se remplacer, le symptôme
-# sera visible en une lecture — des runs de `dev` qui démarrent longtemps après
-# leur création (`run_started_at` - `created_at` qui grandit d'un run à
-# l'autre). Le remède est alors le retour à `true`, une ligne, ou la piste (b).
-# Ne pas lire une file d'attente comme une panne : c'est le compromis assumé.
+# VÉRIFIÉ SUR `dev`, une heure après la bascule. Ce bloc portait d'abord une
+# réserve — la sémantique de la file n'avait pas pu être confirmée sur
+# `docs.github.com`, bloqué par le proxy de sortie — et la mesure l'a levée :
+#
+#   • DEUX runs sont allés au bout, 28,9 et 32,8 minutes, pendant que SEPT
+#     poussées arrivaient. Sous l'ancien réglage aucun n'aurait dépassé six
+#     minutes ;
+#   • la file NE s'accumule PAS : `run_started_at == created_at` sur les dix
+#     derniers runs, sans exception. Les annulations surviennent à des âges
+#     courts et IRRÉGULIERS (0,23 · 0,60 · 1,17 · 3,00 · 7,97 min), signature
+#     d'un run qui ATTENDAIT et qu'un arrivant plus récent a évincé — un seul
+#     run en attente à la fois.
+#
+# Le symptôme d'une file qui s'accumulerait reste celui-ci, pour qui aurait à
+# le rechercher un jour : `run_started_at` - `created_at` qui GRANDIT d'un run
+# à l'autre. Il est absent. Ne pas lire une file d'attente comme une panne.
+#
+# Et le premier verdict retrouvé a immédiatement montré ce que la famine
+# coûtait : un seul test tombait sur 22 383 — une collision de numéro de leçon
+# que la branche portait depuis des heures, et que onze runs avaient traversée
+# sans jamais conclure.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
