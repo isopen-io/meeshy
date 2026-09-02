@@ -103,6 +103,7 @@ private fun ObjectV3.asText(at: Pair<Double, Double>): StoryTextObject? {
         backgroundStyle = decodeWire(payload.obj("backgroundStyle")),
         borderColor = payload.str("borderColor"),
         borderWidth = payload.dbl("borderWidth"),
+        textEffect = payload.str("textEffect"),
         translations = payload.strMap("translations"),
         sourceLanguage = locale,
         startTime = timing?.start,

@@ -115,6 +115,54 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(lieu?.payload).not.toHaveProperty('styleId');
   });
 
+  // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE, sur la branche que
+  // #4832 venait de réparer. `baseObject` portait déjà `timing.start` ; les
+  // trois clés de charge manquaient, et cette branche était la seule des
+  // quatre familles à n'en émettre aucune.
+  it('transporte la fenêtre temporelle d\'une pastille de lieu', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        {
+          id: 'l1', x: 0.5, y: 0.8,
+          place: { latitude: 20.2, longitude: 1.01, name: 'Tessalit' },
+          startTime: 2, duration: 4, fadeIn: 0.25, fadeOut: 0.5,
+        },
+      ],
+    }) as {
+      scenes: {
+        objects: {
+          kind: string;
+          timing?: { start?: number };
+          payload: Record<string, unknown>;
+        }[];
+      }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.timing?.start).toBe(2);
+    expect(lieu?.payload.duration).toBe(4);
+    expect(lieu?.payload.fadeIn).toBe(0.25);
+    expect(lieu?.payload.fadeOut).toBe(0.5);
+  });
+
+  // Une pastille SANS fenêtre se réencode octet pour octet : le convertisseur
+  // n'invente pas un début à zéro, sinon toute story déjà publiée verrait ses
+  // lieux acquérir une fenêtre qu'aucun auteur n'a posée.
+  it('n\'invente aucune clé de fenêtre pour une pastille sans temps', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        { id: 'l1', place: { latitude: 20.2, longitude: 1.01 } },
+      ],
+    }) as {
+      scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.payload).not.toHaveProperty('duration');
+    expect(lieu?.payload).not.toHaveProperty('fadeIn');
+    expect(lieu?.payload).not.toHaveProperty('fadeOut');
+  });
+
   it('n\'invente aucune clé sur un sticker emoji seul', () => {
     const doc = convertV1ToV3({
       stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],
@@ -196,6 +244,18 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
   it('audio chip keeps its PostMedia reference', () => {
     const a = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'audio');
     expect(a?.payload.postMediaId).toBe('64b0000000000000000000aa');
+  });
+
+  /// L'axe EFFET (#4870) traverse la conversion par le `...rest` du texte —
+  /// ce témoin épingle qu'aucune énumération de clés ne vienne un jour le
+  /// retenir, comme `postMediaId` l'a été pour le sticker.
+  it('text effect travels into the v3 payload', () => {
+    const doc = convertV1ToV3({
+      background: '#000000',
+      textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'shadow' }],
+    });
+    const t = doc.scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.payload.textEffect).toBe('shadow');
   });
 
   it('text translations survive into the payload (Prisme par objet, C6)', () => {

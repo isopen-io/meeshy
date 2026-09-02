@@ -646,7 +646,7 @@ struct PostDetailView: View {
         // La liste VIDE tranche sans toucher à la pagination : « charger PLUS »
         // n'a de sens qu'après un premier lot. Le chargement initial est
         // automatique, donc une liste vide après lui signifie zéro.
-        if viewModel.hasMoreComments && !viewModel.isLoadingComments && !viewModel.comments.isEmpty {
+        if viewModel.hasMoreComments == true && !viewModel.isLoadingComments && !viewModel.comments.isEmpty {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {

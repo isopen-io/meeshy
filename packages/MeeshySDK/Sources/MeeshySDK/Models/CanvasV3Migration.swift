@@ -284,13 +284,26 @@ public extension CanvasV3 {
             // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
             // délibérés — ne pas les unifier.
             if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
+            // **La FENÊTRE TEMPORELLE voyage** (#4840) — quatrième morsure du
+            // même piège, sur l'ENVELOPPE cette fois. #4832 a réparé `styleId`
+            // trois lignes plus haut en demandant « qu'est-ce qui part À CÔTÉ de
+            // ce que je viens de corriger ? », mais à la CHARGE seule : le
+            // `start: nil` de `timingV3` attendait juste en dessous, écrit en dur.
+            //
+            // Les trois autres clés suivent le sticker à la lettre — c'est la
+            // MÊME famille temporelle (`TimelineClipKind.place`). Omises quand
+            // `nil`, donc toute pastille posée avant ce lot se réencode octet
+            // pour octet et garde le fantôme que `Plan2DLayout.bar(...)` rend.
+            if let duration = location.duration { payload["duration"] = .number(duration) }
+            if let fadeIn = location.fadeIn { payload["fadeIn"] = .number(fadeIn) }
+            if let fadeOut = location.fadeOut { payload["fadeOut"] = .number(fadeOut) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
                                     plane: .fg,
                                     z: effects.wireZ(location.id, location.zIndex, fallback),
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
-                                    timing: timingV3(start: nil,
+                                    timing: timingV3(start: location.startTime,
                                                      end: effects.wireTimingEnd?[location.id],
                                                      keyframes: nil),
                                     locale: nonEmpty(location.sourceLanguage),
@@ -524,6 +537,7 @@ public extension CanvasV3 {
             ("textAlign", text.textAlign), ("textBg", text.textBg),
             ("fontWeight", text.fontWeight), ("frameShape", text.frameShape),
             ("frameBorderColor", text.frameBorderColor), ("borderColor", text.borderColor),
+            ("textEffect", text.textEffect),
             ("name", text.name), ("referenceUserId", text.referenceUserId),
         ]
         for (key, value) in strings {
@@ -718,6 +732,7 @@ public extension StoryEffects {
             frameBorderColor: object.payload.string("frameBorderColor"),
             borderColor: object.payload.string("borderColor"),
             borderWidth: object.payload.double("borderWidth"),
+            textEffect: object.payload.string("textEffect"),
             translations: object.payload.stringMap("translations"),
             sourceLanguage: object.locale,
             startTime: object.timing?.start,
@@ -816,7 +831,11 @@ public extension StoryEffects {
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
             sourceLanguage: object.locale,
-            styleId: nonEmpty(object.payload.string("styleId")))
+            styleId: nonEmpty(object.payload.string("styleId")),
+            startTime: object.timing?.start,
+            duration: object.payload.double("duration"),
+            fadeIn: object.payload.double("fadeIn"),
+            fadeOut: object.payload.double("fadeOut"))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {

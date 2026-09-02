@@ -428,6 +428,7 @@ public final class TimelineViewModel: ObservableObject {
         if project.audioPlayerObjects.contains(where: { $0.id == id }) { return .audio }
         if project.textObjects.contains(where: { $0.id == id }) { return .text }
         if project.stickerObjects.contains(where: { $0.id == id }) { return .sticker }
+        if project.locationObjects.contains(where: { $0.id == id }) { return .place }
         return nil
     }
 
@@ -444,6 +445,7 @@ public final class TimelineViewModel: ObservableObject {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
         if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
         if let s = project.stickerObjects.first(where: { $0.id == id }) { return Float(s.startTime ?? 0) }
+        if let l = project.locationObjects.first(where: { $0.id == id }) { return Float(l.startTime ?? 0) }
         return nil
     }
 
@@ -465,6 +467,11 @@ public final class TimelineViewModel: ObservableObject {
         }
         if let i = project.stickerObjects.firstIndex(where: { $0.id == clipId }) {
             project.stickerObjects[i].startTime = Double(newStartTime)
+            recomputeSlideDuration()
+            return
+        }
+        if let i = project.locationObjects.firstIndex(where: { $0.id == clipId }) {
+            project.locationObjects[i].startTime = Double(newStartTime)
             recomputeSlideDuration()
         }
     }
@@ -661,6 +668,7 @@ public final class TimelineViewModel: ObservableObject {
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
+        if let l = project.locationObjects.first(where: { $0.id == id }) { return l.duration.map { Float($0) } }
         return nil
     }
 

@@ -1,6 +1,7 @@
 import MeeshyUI
 
-/// **Les neuf sections de l'éditeur d'objet, et laquelle est OUVERTE** (#4842).
+/// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
+/// laquelle est OUVERTE** (#4842).
 ///
 /// ## Le défaut
 ///
@@ -24,20 +25,22 @@ import MeeshyUI
 /// n'existait nulle part.
 ///
 /// La distinction tient en un mot : ce dépliage-ci est **LOCAL**. Il n'a pas
-/// d'état vide possible — une section est ouverte au premier rendu, et les neuf
-/// en-têtes restent visibles quoi qu'il arrive. Rien n'est retiré ; seule la
+/// d'état vide possible — une section est ouverte au premier rendu, et tous
+/// les en-têtes restent visibles quoi qu'il arrive. Rien n'est retiré ; seule la
 /// révélation change.
 ///
 /// ## Pourquoi une règle pure pour trois lignes
 ///
 /// Parce que la promesse à tenir — « jamais deux sections ouvertes ensemble » —
-/// se mesure sur les 72 paires, et qu'un témoin de vue n'en éprouverait qu'un
+/// se mesure sur toutes les paires (90 pour dix sections), et qu'un témoin de
+/// vue n'en éprouverait qu'un
 /// chemin. Écrite dans un `body`, la même logique serait hors de portée.
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
-    /// Les sept outils du SDK. Le cas porte `TextEditTool` plutôt que de
-    /// recopier sept cas : un huitième outil ajouté au SDK entre ici sans
-    /// qu'une ligne change — c'est la même raison qui fait lire
-    /// `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la main.
+    /// Les outils du SDK — sept alors, huit depuis l'EFFET (#4870), et le
+    /// huitième est entré ici sans qu'une ligne change : le cas porte
+    /// `TextEditTool` plutôt que de recopier ses cas, pour la même raison qui
+    /// fait lire `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la
+    /// main.
     case tool(TextEditTool)
     /// D'où à où l'objet vit dans la slide.
     case timing
@@ -48,8 +51,8 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
 nonisolated enum ComposerObjectEditorDisclosure {
 
     /// **Jamais tout replié au premier rendu.** Un écran qui naîtrait
-    /// entièrement fermé échangerait un défaut contre son symétrique : neuf
-    /// sections d'un coup deviendrait neuf titres muets, et l'auteur devrait
+    /// entièrement fermé échangerait un défaut contre son symétrique : dix
+    /// sections d'un coup deviendraient dix titres muets, et l'auteur devrait
     /// deviner par où commencer. Le style est le premier geste sur un texte.
     static let initiallyOpened: ComposerObjectEditorSection = .tool(.style)
 

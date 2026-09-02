@@ -311,7 +311,7 @@ CODE » est la **dimension 12** de la roadmap produit, pas une loi du composer.
 | P18 | Entrées externes | partage entrant (share extension) & média reçu (2 gestes) |
 | P19 | Continuité & PiP | un seul temps ; **livré** (formalisation d'un contrat mergé) |
 | P20 | La rupture vécue | écriture stricte v3 armée par drapeau ; **infra mergée**, reste l'armement |
-| P21 | 18 styles de texte | spécimen — **18/18 résolus** (iOS + web) |
+| P21 | 18 styles de texte | spécimen — **18/18 résolus** (iOS + web) · un style est une POLICE ; l'EFFET (lueur · ombre · relief) est un second axe, `textEffect`, rendu par les trois clients (#4870) |
 | P22 | Iconographie | le SF Symbol de chaque contrôle — **~80 % câblé** |
 | P23 | Éditeurs | trim audio · rognage image · cut vidéo (noyaux SDK existants) |
 | P24 | Cas d'usage | carrousels & réels, avec et sans son (matrice de garde) |
