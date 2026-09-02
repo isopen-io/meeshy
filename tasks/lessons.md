@@ -24379,7 +24379,7 @@ Voisines : § 435 (une règle appliquée à une seule de ses dimensions),
 § 433 (ce qui s'énumère se périme — les numéros « 1. / 2. / 3. » des blocs du
 rail, faux dès qu'on déplace un bloc, ont été retirés dans le même lot).
 
-## Leçon 438 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
+## Leçon 439 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
 
 **Le fait (2026-09-02).** Le `content` d'une story est tantôt une légende
 d'auteur, tantôt un index de recherche que la passerelle dérive de la
@@ -24432,7 +24432,7 @@ doublon est laid ; taire la légende d'un auteur est une perte de contenu. *Une
 garde qui hésite tombe du côté où l'on ne perd rien* — formulation d'une
 session voisine, adoptée.
 
-## Leçon 439 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+## Leçon 440 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
 
 **Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
 ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
@@ -24456,7 +24456,7 @@ Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
 base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
 n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
 
-## Leçon 440 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+## Leçon 441 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
 
 **Ce qui s'est passé.** Deux fois dans la même session, un lot vert
 localement a rougi la CI quarante minutes plus tard sur un cliquet de

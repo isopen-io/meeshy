@@ -17,6 +17,7 @@ import {
   repostVisibilityInheritsAudienceList,
 } from '@meeshy/shared/utils/repost-audience';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
+import { buildViewerVisibilityFilter } from './posts/viewerAudience';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
@@ -882,69 +883,14 @@ export class PostService {
     return { recorded: mediaIds.length };
   }
 
-  /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
-  /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches, view
-  /// recording, and the feed apply the SAME audience rules.
+  /// Le filtre de visibilité d'un viewer — la règle vit dans
+  /// `posts/viewerAudience.ts` (sortie le 2026-09-02 : ce fichier avait grossi
+  /// au-dessus de sa dette gelée, cliquet #4426). La méthode reste sur
+  /// l'instance parce que quatre suites la court-circuitent par affectation
+  /// (`svc.buildVisibilityFilter = …`) : c'est la couture des tests, pas une
+  /// règle.
   private async buildVisibilityFilter(viewerUserId?: string) {
-    if (!viewerUserId) {
-      return { visibility: PostVisibility.PUBLIC };
-    }
-    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
-      this.getFriendIdsForViewer(viewerUserId),
-      this.getDirectConversationContactIds(viewerUserId),
-      getCommunityCoMemberIds(this.prisma, viewerUserId),
-    ]);
-    // G5 — filtre canonique unique. Audience = friends ∪ contacts DM, ALIGNÉE sur
-    // `PostFeedService.buildVisibilityFilter` (résout la divergence story-sota §4).
-    // Sans cet alignement, un contact DM (non-ami strict) pouvait VOIR une story
-    // via son feed mais son `POST /view` était rejeté par ce filtre → aucun
-    // `PostView` créé, aucun `story:viewed` émis → l'auteur ne voyait jamais cette
-    // vue (ni en temps réel ni après relance). Cf. `recordView`.
-    const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
-    return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
-  }
-
-  /// Contacts DM (autres membres actifs des conversations directes du viewer).
-  /// Miroir de `PostFeedService.getDirectConversationContactIds` (sans le cache
-  /// Redis : le seul appelant chaud est `recordView`, une fois par vue). Fait
-  /// partie de l'audience FRIENDS/EXCEPT pour matcher exactement le feed.
-  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
-    try {
-      const myMemberships = await this.prisma.participant.findMany({
-        where: { userId, isActive: true, conversation: { type: 'direct' } },
-        select: { conversationId: true },
-      });
-      const conversationIds = myMemberships.map((m) => m.conversationId);
-      if (conversationIds.length === 0) return [];
-
-      const otherMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          userId: { not: userId },
-          isActive: true,
-        },
-        select: { userId: true },
-      });
-      return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
-    } catch {
-      return [];
-    }
-  }
-
-  private async getFriendIdsForViewer(userId: string): Promise<string[]> {
-    try {
-      const friendRequests = await this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [{ senderId: userId }, { receiverId: userId }],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-      return Array.from(new Set(friendRequests.flatMap((fr) => [fr.senderId, fr.receiverId])
-        .filter((id) => id !== userId)));
-    } catch {
-      return [];
-    }
+    return buildViewerVisibilityFilter(this.prisma, viewerUserId);
   }
 
   /**
