@@ -106,7 +106,11 @@ struct StoryViewerView: View {
     var targetCommentId: String? = nil
     var targetParentCommentId: String? = nil
 
-    static let heartEmoji = "\u{2764}\u{FE0F}"
+    /// Projection de `MeeshyQuickReactions.heart` — le détail d'un post et le
+    /// lecteur de réels l'empruntaient à CETTE surface, si bien que leur cœur
+    /// dépendait du fichier du lecteur de story. Le nom reste (les deux
+    /// surfaces le citent), la valeur vient d'ailleurs.
+    static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -1390,7 +1394,11 @@ struct StoryViewerView: View {
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
-    private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
+    /// La liste vit au SDK (`MeeshyQuickReactions.standard`) : elle était
+    /// écrite ici ET dans le composer, avec quatre émojis communs sur six et
+    /// un ordre différent. Le post et le réel la servent désormais aussi —
+    /// une troisième copie aurait divergé de même.
+    private let quickEmojis = MeeshyQuickReactions.standard
 
     // MARK: - Comments Overlay (Instagram-style)
 

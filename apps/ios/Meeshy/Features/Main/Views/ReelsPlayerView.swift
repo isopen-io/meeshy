@@ -503,20 +503,27 @@ enum ReelWatchAttachmentPolicy {
 /// auto-switched to whichever TTS translation the payload listed first
 /// (e.g. English), because the original-language short-circuit didn't exist
 /// and the preferred-language priority order was never honored.
+///
+/// **Ce type n'est plus une loi — c'est une PROJECTION** (#4926). Son corps
+/// réécrivait mot pour mot le parcours de rang d'`AudioTrackLanguageResolver` :
+/// même règle, même exactitude, deux implémentations. Deux lois JUSTES qui
+/// disent la même chose ne rougissent nulle part le jour où l'une évolue, et le
+/// § Prisme du `CLAUDE.md` racine nomme ce motif comme la cause de trois
+/// familles de résolveurs divergentes en trois cycles.
+///
+/// Il reste, parce que son NOM dit ce que le réel demande et que ses témoins
+/// gardent le comportement depuis la surface qui l'emploie. Il ne calcule plus.
 enum ReelAudioLanguageResolver {
     nonisolated static func preferredAudioLanguage(
         original: String?,
         preferredLanguages: [String],
         availableLanguages: [String]
     ) -> String? {
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        let origLang = original?.lowercased()
-        let available = Set(availableLanguages.map { $0.lowercased() })
-        for lang in preferred {
-            if let origLang, origLang == lang { return nil }
-            if available.contains(lang) { return lang }
-        }
-        return nil
+        AudioTrackLanguageResolver.resolve(
+            originalLanguage: original ?? "",
+            preferredLanguages: preferredLanguages,
+            availableLanguages: availableLanguages
+        )
     }
 }
 
@@ -988,6 +995,8 @@ private struct ReelActionRail: View {
     /// présenter la sheet de destination).
     var onSaveMedia: () -> Void
 
+    @State private var showsReactionPalette = false
+
     private var isOwnReel: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == reel.authorId
@@ -1006,6 +1015,26 @@ private struct ReelActionRail: View {
                 action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
+            // **La palette, en SECOND geste** (décision porteur 2026-09-02).
+            // L'appui bref reste ❤️ — le chemin nominal ne gagne pas un geste ;
+            // l'appui long ouvre les six émojis que la story sert déjà, depuis
+            // la même liste (`MeeshyQuickReactions.standard`).
+            .onLongPressGesture {
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showsReactionPalette = true
+                }
+            }
+            .accessibilityAction(named: Text(String(localized: "reactions.more",
+                                                    defaultValue: "Plus de réactions", bundle: .main))) {
+                showsReactionPalette = true
+            }
+            .overlay(alignment: .trailing) {
+                PostReactionPalette(isPresented: $showsReactionPalette) { emoji in
+                    viewModel.react(reel, emoji: emoji)
+                }
+                .offset(x: -52)
+            }
 
             // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
             // sous le nom — plus de compteur de vues public ici.
