@@ -456,6 +456,7 @@ const piecesLocales = (clientMessageId: string, fichiers: readonly File[]): read
     largeur: null,
     hauteur: null,
     transcription: null,
+    transcriptionOriginale: null,
     langueDeTranscription: null,
     langueServie: null,
   }));

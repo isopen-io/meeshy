@@ -2,6 +2,7 @@ import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
 import { message } from '@/lib/api/fil';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { FIL } from '@/lib/contenu/fil';
+import { GENRES_DE_PIECE } from '@/lib/api/formes';
 import { ETAT_VIDE, bulleOptimiste, confirme, depuisLaCharge, insere, presence, reagit, retire, traduit } from '@/lib/realtime/fil-etat';
 import {
   bullesDuDocument,
@@ -369,29 +370,37 @@ describe('une bulle riche qui arrive', () => {
     return { p, ligne: p.liste.querySelector<HTMLElement>('li[data-id="m2"]')! };
   };
 
-  it('peint un vocal : l’affiche annonce durée et poids, le lecteur joue la PISTE de la langue servie', () => {
+  it('peint un vocal : UN bloc, un lecteur qui joue la PISTE de la langue servie', () => {
     const { ligne } = peinsUne({ content: '', translations: [], attachments: [PIECE_AUDIO] });
-    const affiche = ligne.querySelector<HTMLAnchorElement>('a.media')!;
-    expect(affiche.dataset.genre).toBe('audio');
-    expect(affiche.href).toBe('https://gate.test/api/v1/attachments/file/2026/vocal.m4a');
-    expect(ligne.querySelector('.poids')?.textContent).toBe('0:21 · 94 Ko');
-    const lecteur = ligne.querySelector<HTMLAudioElement>('audio')!;
-    expect(lecteur.hidden).toBe(false);
-    expect(lecteur.getAttribute('src')).toBe('https://gate.test/api/v1/attachments/file/2026/vocal-fr.m4a');
-    expect(ligne.querySelector('.transcription')?.textContent).toContain('J’apporte les chiffres de mars.');
-    expect(ligne.querySelector<HTMLElement>('.sous-titres')?.hidden).toBe(true);
+    const item = ligne.querySelector<HTMLLIElement>('ul.pieces > li')!;
+    expect(item.dataset.genre).toBe('audio');
+    // UN bloc : le lecteur. L'affiche de téléchargement a quitté le clone.
+    expect(item.querySelector('a.media')).toBeNull();
+    expect(item.querySelector('video')).toBeNull();
+    expect(item.querySelector('details.lecteur > summary .poids')?.textContent).toBe('0:21 · 94 Ko');
+    expect(item.querySelector<HTMLAudioElement>('audio')?.getAttribute('src')).toBe('https://gate.test/api/v1/attachments/file/2026/vocal-fr.m4a');
+    expect(item.querySelector('.transcription')?.textContent).toContain('J’apporte les chiffres de mars.');
+    // Le transcrit DIT ce qu'il sert, et son original est à un geste.
+    expect(item.querySelector('.transcrit')?.textContent).toBe(FIL.transcrit('yo', 'fr'));
+    expect(item.querySelector<HTMLElement>('details.transcrit-original')?.hidden).toBe(false);
+    expect(item.querySelector('details.transcrit-original p')?.textContent).toBe('Mo n mú àwọn nọ́mbà');
+    expect(ligne.querySelector<HTMLElement>('.meta .langue')?.hidden).toBe(false);
+    expect(ligne.querySelector('.meta .langue .code')?.textContent).toBe('yo');
   });
 
-  it('peint une vidéo : ses sous-titres disent la langue servie', () => {
+  it('peint une vidéo : un lecteur vidéo, et AUCUNE promesse de sous-titres', () => {
     const { ligne } = peinsUne({
       content: '',
       translations: [],
       attachments: [{ ...PIECE_AUDIO, id: 'a2', mimeType: 'video/mp4', originalName: 'revue.mp4', translations: { fr: { transcription: 'Bonjour' } } }],
     });
-    expect(ligne.querySelector<HTMLAnchorElement>('a.media')?.dataset.genre).toBe('video');
-    expect(ligne.querySelector<HTMLElement>('.sous-titres')?.hidden).toBe(false);
-    expect(ligne.querySelector('.sous-titres')?.textContent).toBe(FIL.sousTitres('fr'));
-    expect(ligne.querySelector<HTMLVideoElement>('video')?.hidden).toBe(false);
+    const item = ligne.querySelector<HTMLLIElement>('ul.pieces > li')!;
+    expect(item.dataset.genre).toBe('video');
+    expect(item.querySelector('audio')).toBeNull();
+    expect(item.querySelector<HTMLVideoElement>('video')).not.toBeNull();
+    expect(item.querySelector('.transcrit')?.textContent).toBe(FIL.transcrit('yo', 'fr'));
+    expect(ligne.innerHTML).not.toContain('Sous-titres');
+    expect(item.querySelector('track')).toBeNull();
   });
 
   it.each([
@@ -410,8 +419,22 @@ describe('une bulle riche qui arrive', () => {
     expect(citation.querySelector('.quoi')?.textContent).toBe(libelle);
   });
 
-  it('pose lang= sur l’aperçu d’un message cité écrit dans une autre langue', () => {
-    const { ligne } = peinsUne({ replyToId: 'm1', replyTo: { id: 'm1', content: 'Le tableau final', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } });
+  /**
+   * LA CITATION SUIT SA CIBLE quand la cible est dans le fil : `m1` est déjà
+   * peint en français, l'aperçu qui le cite l'est aussi. Servir ici l'original
+   * anglais ferait DEUX TEXTES pour un même message sur le même écran (cycle
+   * 122) — le défaut que `citationsDeLaPage` referme des deux côtés.
+   */
+  it('cite ce que la bulle CIBLE affiche quand elle est dans le fil', () => {
+    const { ligne } = peinsUne({ replyToId: 'm1', replyTo: { id: 'm1', content: 'Hello', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } });
+    const apercu = ligne.querySelector<HTMLElement>('.citation .apercu')!;
+    expect(apercu.textContent).toBe('Bonjour');
+    expect(apercu.getAttribute('lang')).toBeNull();
+  });
+
+  /** Cible HORS du fil : ce que la passerelle a servi reste ce qui s'affiche, avec sa langue (régime 3). */
+  it('pose lang= sur l’aperçu d’un message cité qui n’est PAS dans le fil', () => {
+    const { ligne } = peinsUne({ replyToId: 'x9', replyTo: { id: 'x9', content: 'Le tableau final', originalLanguage: 'en', sender: { id: 'p2', displayName: 'Ibrahim' } } });
     const apercu = ligne.querySelector<HTMLElement>('.citation .apercu')!;
     expect(apercu.textContent).toBe('Le tableau final');
     expect(apercu.getAttribute('lang')).toBe('en');
@@ -449,5 +472,147 @@ describe('une bulle riche qui arrive', () => {
     peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, 0);
     expect(p.liste.querySelectorAll('li[data-id="m9"] .citation')).toHaveLength(1);
     expect(p.liste.querySelector('li[data-id="m9"] .citation .quoi')?.textContent).toBe('En réponse à Ibrahim');
+  });
+});
+
+/**
+ * **UNE LIGNE SERVIE QUI APPREND SA TRANSCRIPTION** — le chemin le plus
+ * courant, et celui où le défaut vivait.
+ *
+ * `bullesDuDocument` pose `pieces: []` sur TOUTE ligne servie : le premier
+ * `peins` d'un vocal déjà à l'écran passait donc par `remplisLesPieces` avec un
+ * tableau vide, et l'ancienne garde de tête (`|| pieces.length === 0`) sortait
+ * AVANT l'estampille. `data-empreinte` restait indéfini, si bien que le PREMIER
+ * `audio:transcription-ready` tombait dans la branche d'ADOPTION du DOM servi :
+ * elle estampillait l'empreinte NEUVE et rendait sans rien peindre. La
+ * transcription n'apparaissait jamais, et le lecteur continuait d'entendre la
+ * piste ORIGINALE alors que la française était calculée (cycle 128). Seul un
+ * SECOND événement peignait.
+ *
+ * Le témoin d'avant émettait `message:new` AVANT l'événement audio : la ligne y
+ * était PEINTE, jamais servie — écrit sur le seul chemin où le défaut n'existe
+ * pas (leçon 261). Celui-ci part du document.
+ */
+describe('le premier audio:*-ready d’un vocal SERVI', () => {
+  const VOCAL = (transcription: Record<string, unknown> | null) => ({
+    id: 'v1',
+    content: '',
+    originalLanguage: 'yo',
+    createdAt: '2026-09-01T12:02:00.000Z',
+    senderId: 'u2',
+    sender: { id: 'p2', displayName: 'Ibrahim' },
+    attachments: [
+      {
+        id: 'av1',
+        fileUrl: '/api/v1/attachments/file/2026/vocal.m4a',
+        originalName: 'vocal.m4a',
+        mimeType: 'audio/mp4',
+        fileSize: 96_000,
+        duration: 21_000,
+        ...(transcription ?? {}),
+      },
+    ],
+  });
+
+  const monteLeVocal = () => {
+    const etat = etatServi();
+    const servi = message(VOCAL(null), 'u1', LANGUES, ORIGINE)!;
+    document.open();
+    document.write(documentDuFil({ ...etat, fil: { ...etat.fil, messages: [servi] } }));
+    document.close();
+    return peintre(document.querySelector<HTMLElement>('main')!)!;
+  };
+
+  const etatDuVocalTranscrit = (p: ReturnType<typeof peintre> & object) =>
+    insere(
+      { bulles: bullesDuDocument(p), frappeurs: [], presents: [] },
+      depuisLaCharge(
+        VOCAL({
+          transcription: { text: 'Mo n mú àwọn nọ́mbà', language: 'yo' },
+          translations: { fr: { transcription: 'J’apporte les chiffres de mars.', url: '/api/v1/attachments/file/2026/vocal-fr.m4a' } },
+        }),
+        'u1',
+        LANGUES,
+        ORIGINE,
+      )!,
+    );
+
+  it('peint la transcription et la piste servie DÈS le premier événement', () => {
+    const p = monteLeVocal();
+    // Ce que le document sert : un lecteur sur la piste d'ORIGINE, sans transcrit.
+    expect(p.liste.querySelector<HTMLAudioElement>('li[data-id="v1"] audio')?.getAttribute('src')).toBe(
+      'https://gate.test/api/v1/attachments/file/2026/vocal.m4a',
+    );
+    expect(p.liste.querySelector<HTMLElement>('li[data-id="v1"] .transcription')).toBeNull();
+
+    // Le module relit son état initial (`pieces: []`), puis l'événement arrive.
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, 0);
+    peins(p, etatDuVocalTranscrit(p), 0);
+
+    const ligne = p.liste.querySelector<HTMLElement>('li[data-id="v1"]')!;
+    expect(ligne.querySelector('.texte-transcrit')?.textContent).toBe('J’apporte les chiffres de mars.');
+    expect(ligne.querySelector<HTMLElement>('.transcription')?.hidden).toBe(false);
+    expect(ligne.querySelector<HTMLAudioElement>('audio')?.getAttribute('src')).toBe(
+      'https://gate.test/api/v1/attachments/file/2026/vocal-fr.m4a',
+    );
+    expect(ligne.querySelector('.transcrit')?.textContent).toBe(FIL.transcrit('yo', 'fr'));
+    expect(ligne.querySelector<HTMLElement>('.meta .langue')?.hidden).toBe(false);
+  });
+
+  it('n’efface pas les pièces qu’une ligne SERVIE porte quand le module repeint son état', () => {
+    const p = monteLeVocal();
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, 0);
+    expect(p.liste.querySelectorAll('li[data-id="v1"] ul.pieces > li')).toHaveLength(1);
+    expect(p.liste.querySelector<HTMLElement>('li[data-id="v1"] ul.pieces')?.hidden).toBe(false);
+  });
+});
+
+/**
+ * **UNE TABLE, DEUX RENDUS** (défaut de revue croisée, issue #4835). Pour CHAQUE
+ * genre de `FORME_PAR_GENRE`, la ligne SERVIE et la ligne PEINTE montent le
+ * même jeu d'éléments. Écrite en comparaisons littérales de genre dans le
+ * peintre, la règle était une seconde table : donner un lecteur à un genre neuf
+ * changeait la ligne servie sans changer la ligne peinte, et il fallait
+ * recharger pour voir le lecteur apparaître.
+ */
+describe('la forme d’une pièce dérive d’UNE table, servie comme peinte', () => {
+  const MIME: Readonly<Record<string, string>> = {
+    image: 'image/jpeg',
+    video: 'video/mp4',
+    audio: 'audio/mp4',
+    fichier: 'application/pdf',
+  };
+
+  const chargeAvecPiece = (genre: string) => ({
+    id: `g-${genre}`,
+    content: '',
+    originalLanguage: 'fr',
+    createdAt: '2026-09-01T12:03:00.000Z',
+    senderId: 'u2',
+    sender: { id: 'p2', displayName: 'Ibrahim' },
+    attachments: [
+      { id: `a-${genre}`, fileUrl: `/api/v1/attachments/file/2026/f.${genre}`, originalName: `f.${genre}`, mimeType: MIME[genre], fileSize: 96_000, duration: 21_000 },
+    ],
+  });
+
+  const elements = (racine: Element): readonly string[] =>
+    [...racine.querySelectorAll('*')].map((noeud) => `${noeud.tagName.toLowerCase()}.${noeud.className || '—'}`);
+
+  it.each(GENRES_DE_PIECE)('monte le même balisage pour le genre %s', (genre) => {
+    const etat = etatServi();
+    const servi = message(chargeAvecPiece(genre), 'u1', LANGUES, ORIGINE)!;
+
+    document.open();
+    document.write(documentDuFil({ ...etat, fil: { ...etat.fil, messages: [servi] } }));
+    document.close();
+    const p = peintre(document.querySelector<HTMLElement>('main')!)!;
+    const attendu = elements(p.liste.querySelector(`li[data-id="g-${genre}"] ul.pieces > li`)!);
+
+    // La même pièce, PEINTE : le module clone le gabarit et le dépouille.
+    peins(p, insere({ bulles: [], frappeurs: [], presents: [] }, depuisLaCharge({ ...chargeAvecPiece(genre), id: `p-${genre}` }, 'u1', LANGUES, ORIGINE)!), 0);
+    const peinte = elements(p.liste.querySelector(`li[data-id="p-${genre}"] ul.pieces > li`)!);
+
+    expect(peinte).toEqual(attendu);
+    expect(attendu.length).toBeGreaterThan(0);
   });
 });

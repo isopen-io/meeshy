@@ -1,4 +1,5 @@
-import type { Accuse, Citation, PieceJointe, Reaction } from '@/lib/api/fil';
+import { annonceDeLaPiece, annonceDuPrisme, type Accuse, type Citation, type PieceJointe, type Reaction } from '@/lib/api/fil';
+import { formeDePiece } from '@/lib/api/formes';
 import { initiales, TEINTES, teinteDeLAvatar } from '@/lib/avatar';
 import { FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
@@ -106,6 +107,20 @@ const clone = <T extends Element>(gabarit: HTMLTemplateElement | null, selecteur
   return modele === null ? null : (modele.cloneNode(true) as T);
 };
 
+const poseAuDebut = <T extends HTMLElement>(ligne: HTMLElement, hote: string, noeud: T | null): T | null => {
+  const parent = ligne.querySelector<HTMLElement>(hote);
+  if (parent === null || noeud === null) return null;
+  parent.prepend(noeud);
+  return noeud;
+};
+
+const poseApres = <T extends HTMLElement>(ligne: HTMLElement, voisin: string, noeud: T | null): T | null => {
+  const avant = ligne.querySelector<HTMLElement>(voisin);
+  if (avant === null || noeud === null) return null;
+  avant.after(noeud);
+  return noeud;
+};
+
 const remplisLAvatar = (ligne: HTMLElement, bulle: Bulle): void => {
   const initiale = ligne.querySelector<HTMLElement>('.avatar:not(.fantome)');
   const fantome = ligne.querySelector<HTMLElement>('.avatar.fantome');
@@ -118,10 +133,89 @@ const remplisLAvatar = (ligne: HTMLElement, bulle: Bulle): void => {
   TEINTES.forEach((t) => classe(initiale, t, t === teinte));
 };
 
-const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], gabarit: HTMLTemplateElement): void => {
+/**
+ * LES PIÈCES PEINTES — le même balisage que la ligne servie, cloné du gabarit,
+ * puis DÉPOUILLÉ de ce que le genre ne demande pas. Le gabarit porte les deux
+ * blocs (l'affiche et le lecteur) et les deux médias natifs ; ce module en
+ * RETIRE, il n'en compose aucun — `formeDePiece` (`lib/api/formes.ts`) décide,
+ * exactement comme pour la ligne servie. Écrite ici en comparaisons littérales
+ * de genre (`piece.genre !== 'audio'`, `piece.genre === 'video'`…), la règle
+ * était une SECONDE table : donner un lecteur à un genre neuf changeait la
+ * ligne servie sans changer la ligne peinte.
+ *
+ * LA GARDE DE TÊTE NE SORT PLUS SUR UNE LISTE VIDE. `bullesDuDocument` pose
+ * `pieces: []` sur toute ligne SERVIE ; sortir avant l'estampille laissait
+ * `data-empreinte` indéfini, si bien que le PREMIER
+ * `audio:transcription-ready` d'un vocal déjà servi tombait dans la branche
+ * d'ADOPTION — il estampillait l'empreinte NEUVE et rendait sans rien peindre.
+ * La transcription n'apparaissait jamais et le lecteur continuait d'entendre la
+ * piste ORIGINALE, alors que le module avait bien calculé la française
+ * (cycle 128, « on entend ce qu'on lit »). Seul un SECOND événement peignait.
+ * `remplisLesCitations`, juste dessous, était juste : la garde y sort après
+ * l'estampille, et c'est elle qu'on suit.
+ */
+const empreinteDesPieces = (pieces: readonly PieceJointe[]): string =>
+  pieces
+    .map((piece) => `${piece.id}:${piece.url}:${piece.piste}:${piece.transcription ?? ''}:${piece.transcriptionOriginale ?? ''}:${piece.langueServie ?? ''}`)
+    .join('|');
+
+/** Le nœud que la pièce ne demande pas SORT ; celui qu'elle demande perd son `hidden` de gabarit. */
+const retireSauf = (racine: ParentNode, selecteur: string, garde: boolean): void => {
+  const noeud = racine.querySelector<HTMLElement>(selecteur);
+  if (noeud === null) return;
+  if (garde) noeud.hidden = false;
+  else noeud.remove();
+};
+
+const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocument: string): void => {
+  const forme = formeDePiece(piece.genre);
+  noeud.dataset.piece = piece.id;
+  noeud.dataset.genre = piece.genre;
+
+  // Le bloc que le genre ne demande pas SORT du clone : une pièce peinte et une
+  // pièce servie portent alors le même balisage, au nœud près.
+  noeud.querySelector(forme.lecteur === null ? 'details.lecteur' : 'a.media')?.remove();
+  noeud.querySelector(forme.lecteur === 'audio' ? 'video' : 'audio')?.remove();
+
+  const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
+  if (lien !== null) {
+    if (piece.url === '') lien.removeAttribute('href');
+    else lien.href = piece.url;
+    lien.setAttribute('aria-label', FIL.telecharger(piece.nom, metaDePiece(piece)));
+  }
+  // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
+  // (cycle 128) —, jamais l'adresse de téléchargement.
+  const media = noeud.querySelector<HTMLMediaElement>('audio, video');
+  if (media !== null && piece.piste !== '') media.src = piece.piste;
+  texte(noeud, 'details.lecteur > summary > .hors-ecran', FIL.lire(piece.nom, metaDePiece(piece)));
+
+  texte(noeud, '.nom-de-piece', piece.nom);
+  const meta = metaDePiece(piece);
+  texte(noeud, '.poids', meta);
+  montre(noeud, '.poids', meta !== '');
+
+  // Ce que la pièce ne DIT pas sort du clone, comme le bloc qu'elle ne demande
+  // pas : une pièce sans transcription porte alors le même balisage servie que
+  // peinte, au nœud près — c'est ce que le témoin des quatre genres oppose.
+  const annonce = piece.transcription === null ? null : annonceDeLaPiece(piece);
+  const original = annonce !== null && piece.transcriptionOriginale !== null;
+  retireSauf(noeud, '.transcription', piece.transcription !== null);
+  retireSauf(noeud, '.transcrit', annonce !== null);
+  retireSauf(noeud, 'details.transcrit-original', original);
+
+  texte(noeud, '.texte-transcrit', piece.transcription ?? '');
+  poseLang(noeud.querySelector<HTMLElement>('.transcription'), piece.langueServie ?? piece.langueDeTranscription, langueDuDocument);
+  if (annonce !== null) texte(noeud, '.transcrit', FIL.transcrit(annonce.origine, annonce.servie));
+  if (original) {
+    texte(noeud, 'details.transcrit-original p', piece.transcriptionOriginale ?? '');
+    poseLang(noeud.querySelector<HTMLElement>('details.transcrit-original p'), annonce?.origine ?? null, langueDuDocument);
+  }
+};
+
+const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], gabarit: HTMLTemplateElement, langueDuDocument: string): void => {
   const liste = ligne.querySelector<HTMLUListElement>('ul.pieces');
-  if (liste === null || pieces.length === 0) return;
-  const empreinte = pieces.map((piece) => `${piece.id}:${piece.url}:${piece.piste}:${piece.transcription ?? ''}:${piece.langueServie ?? ''}`).join('|');
+  if (liste === null) return;
+  const empreinte = empreinteDesPieces(pieces);
   if (liste.dataset.empreinte === empreinte) return;
   if (liste.dataset.empreinte === undefined && liste.querySelector('li[data-piece]:not([data-piece=""])') !== null) {
     liste.dataset.empreinte = empreinte;
@@ -129,42 +223,14 @@ const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], ga
   }
   liste.dataset.empreinte = empreinte;
 
-  liste.replaceChildren();
-  pieces.forEach((piece) => {
-    const noeud = clone<HTMLLIElement>(gabarit, 'ul.pieces > li') ?? document.createElement('li');
-    noeud.dataset.piece = piece.id;
-    const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
-    if (lien !== null) {
-      if (piece.url === '') lien.removeAttribute('href');
-      else lien.href = piece.url;
-      lien.dataset.genre = piece.genre;
-    }
-    texte(noeud, '.nom-de-piece', piece.nom);
-    const meta = metaDePiece(piece);
-    texte(noeud, '.poids', meta);
-    montre(noeud, '.poids', meta !== '');
-    const audio = noeud.querySelector<HTMLAudioElement>('audio');
-    const video = noeud.querySelector<HTMLVideoElement>('video');
-    // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
-    // (cycle 128) —, jamais l'adresse de téléchargement.
-    if (audio !== null) {
-      audio.hidden = piece.genre !== 'audio' || piece.piste === '';
-      if (piece.genre === 'audio' && piece.piste !== '') audio.src = piece.piste;
-    }
-    if (video !== null) {
-      video.hidden = piece.genre !== 'video' || piece.piste === '';
-      if (piece.genre === 'video' && piece.piste !== '') video.src = piece.piste;
-    }
-    const langueDesSousTitres = piece.genre === 'video' && piece.transcription !== null ? (piece.langueServie ?? piece.langueDeTranscription) : null;
-    texte(noeud, '.sous-titres', langueDesSousTitres === null ? '' : FIL.sousTitres(langueDesSousTitres));
-    montre(noeud, '.sous-titres', langueDesSousTitres !== null);
-    texte(noeud, '.texte-transcrit', piece.transcription ?? '');
-    montre(noeud, '.transcription', piece.transcription !== null);
-    const transcription = noeud.querySelector<HTMLElement>('.transcription');
-    if (transcription !== null) poseLang(transcription, piece.langueServie ?? piece.langueDeTranscription, document.documentElement.lang || 'fr');
-    liste.append(noeud);
-  });
-  liste.hidden = false;
+  liste.replaceChildren(
+    ...pieces.map((piece) => {
+      const noeud = clone<HTMLLIElement>(gabarit, 'ul.pieces > li') ?? document.createElement('li');
+      peinsUnePiece(noeud, piece, langueDuDocument);
+      return noeud;
+    }),
+  );
+  liste.hidden = pieces.length === 0;
 };
 
 /**
@@ -291,22 +357,29 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
     poseLang(corps, bulle.supprime ? null : (bulle.langueServie ?? bulle.langueOriginale), p.langueDuDocument);
   }
 
-  const original = ligne.querySelector<HTMLDetailsElement>('details.original');
+  // Une ligne SERVIE ne porte NI la pastille NI « Voir l'original » tant que
+  // rien n'est traduit — les rendre à vide coûterait un tracé par ligne, sur
+  // une 3G rurale. Quand une traduction ARRIVE, la fente manque donc : le
+  // module la CLONE du gabarit, exactement comme le bouton « Réagir ».
+  const visibleOriginal = bulle.langueServie !== null && !bulle.protege && !bulle.supprime;
+  const original = ligne.querySelector<HTMLDetailsElement>('details.original') ?? (visibleOriginal ? poseApres(ligne, '.texte', clone<HTMLDetailsElement>(p.gabarit, 'details.original')) : null);
   if (original !== null) {
-    const visible = bulle.langueServie !== null && !bulle.protege && !bulle.supprime;
-    original.hidden = !visible;
-    if (visible) {
+    original.hidden = !visibleOriginal;
+    if (visibleOriginal) {
       const paragraphe = original.querySelector<HTMLElement>('p');
       texte(original, 'p', bulle.texteOriginal);
       poseLang(paragraphe, bulle.langueOriginale, p.langueDuDocument);
     }
   }
 
-  const pastille = ligne.querySelector<HTMLElement>('.langue');
+  // La pastille annonce ce qui a été RÉSOLU — le texte d'abord, puis ce que le
+  // message PORTE : sur un vocal sans texte, elle disparaissait avec le texte
+  // absent (`lib/api/fil.ts`, `annonceDuPrisme`).
+  const annonce = bulle.supprime ? null : annonceDuPrisme(bulle);
+  const pastille = ligne.querySelector<HTMLElement>('.meta .langue') ?? (annonce === null ? null : poseAuDebut(ligne, '.meta', clone<HTMLElement>(p.gabarit, '.meta .langue')));
   if (pastille !== null) {
-    const visible = bulle.langueServie !== null && bulle.langueOriginale !== null && !bulle.supprime;
-    pastille.hidden = !visible;
-    if (visible) texte(pastille, '.code', bulle.langueOriginale ?? '');
+    pastille.hidden = annonce === null;
+    if (annonce !== null) texte(pastille, '.code', annonce.origine);
   }
 
   montre(ligne, '.modifie', bulle.edite && !bulle.supprime);
@@ -336,7 +409,7 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
     if (pieces !== null) pieces.hidden = true;
     if (citations !== null) citations.hidden = true;
   } else {
-    remplisLesPieces(ligne, bulle.pieces, p.gabarit);
+    remplisLesPieces(ligne, bulle.pieces, p.gabarit, p.langueDuDocument);
     remplisLesCitations(ligne, bulle.citations, p.gabarit, p.langueDuDocument);
   }
   if (bulle.supprime) {

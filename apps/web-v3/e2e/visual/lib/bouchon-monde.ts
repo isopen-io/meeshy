@@ -26,6 +26,26 @@ export const CONVERSATION_DU_LECTEUR = {
   membres: 12,
   nonLus: 3,
 } as const;
+/**
+ * LE SECOND FIL DU BOUCHON — celui que la vue `rich` adresse.
+ *
+ * `vues.json` déclare `rich` sur `/chats/:id`, une route DISTINCTE du
+ * `/chats/:cle` de `thread` : les deux vues ne sont pas en collision, elles
+ * n'avaient simplement aucune DONNÉE derrière leur jeton. Les six formes
+ * étaient bien construites (`messagesRiches`), mais raccordées à la
+ * conversation UNIQUE que le spec sert dans son instance éphémère — jamais à
+ * une conversation adressable par un identifiant propre dans la passerelle
+ * PARTAGÉE que `compare-rendu.js` interroge.
+ *
+ * Le titre et le sous-titre sont ceux de la cible (`cible/rich.png`, index
+ * `vues.json`) : la conformité se mesure sur ce que l'écran REND.
+ */
+export const CONVERSATION_RICHE = {
+  id: 'fil-riche',
+  titre: 'Types de messages',
+  membres: 4,
+} as const;
+
 export const IDENTIFIANT_DU_LIEN_PARTAGE = 'lagos-q1';
 export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
 /** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */

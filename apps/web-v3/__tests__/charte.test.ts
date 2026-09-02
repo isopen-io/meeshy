@@ -375,6 +375,8 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.langue', // la pastille de langue
     '.original summary', // le cliquable — « Voir l'original »
     '.pieces .media', // le cliquable — une pièce jointe, sur son affiche
+    '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
+    '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce

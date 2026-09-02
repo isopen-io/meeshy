@@ -4,7 +4,7 @@
 
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
 import { MENTION_PROTEGEE, message, type Citation, type Message } from '@/lib/api/fil';
-import { libelleDeCitation } from '@/lib/contenu/fil';
+import { FIL, libelleDeCitation } from '@/lib/contenu/fil';
 
 /**
  * **LES SIX FORMES D'UN MESSAGE — image, vidéo, audio, transfert, réponse,
@@ -307,12 +307,30 @@ describe('le document servi — six formes, un balisage', () => {
   const doc = documentDuFil(FIL_RICHE([image, video, audio, transfert, reponse, story]));
   const servi = doc.replace(/<template[\s\S]*?<\/template>/g, '');
 
-  it('rend les quatre genres de pièce par le MÊME élément, distingué par `data-genre`', () => {
-    expect(servi).toContain('<a class="media" data-genre="image"');
-    expect(servi).toContain('<a class="media" data-genre="video"');
-    expect(servi).toContain('<a class="media" data-genre="audio"');
-    // Un seul élément de pièce dans le balisage servi : autant d'ouvertures que de pièces.
-    expect(servi.split('<a class="media"').length - 1).toBe(3);
+  /**
+   * UN BLOC PAR PIÈCE, et le GENRE le choisit. La cible dessine un cadre pour
+   * l'image, un poster de lecture pour la vidéo, un lecteur compact pour le
+   * vocal — jamais une affiche de téléchargement PUIS un lecteur natif, ce que
+   * le rendu empilait (le même fichier annoncé deux fois, nom de fichier en
+   * texte primaire d'un bloc que `cible/rich.png` ne dessine pas).
+   */
+  it('rend UN bloc par pièce, choisi par le genre, sur un `<li data-genre>`', () => {
+    expect(servi).toContain('<li data-piece="a1" data-genre="image">');
+    expect(servi).toContain('<li data-piece="a5" data-genre="video">');
+    expect(servi).toContain('<li data-piece="a6" data-genre="audio">');
+
+    const blocs = [...servi.matchAll(/<li data-piece="[^"]+" data-genre="(\w+)">(<a class="media"|<details class="media lecteur">)/g)].map(
+      ([, genre, bloc]) => [genre, bloc?.startsWith('<a') === true ? 'affiche' : 'lecteur'],
+    );
+    // La liste est SERVIE du plus récent au plus ancien (`lignes`, feuille en
+    // `column-reverse`) : l'ordre du DOM est l'inverse de l'ordre d'écriture.
+    expect(blocs).toEqual([
+      ['audio', 'lecteur'],
+      ['video', 'lecteur'],
+      ['image', 'affiche'],
+    ]);
+    // Une pièce, un bloc : autant d'ouvertures que de pièces, jamais deux par pièce.
+    expect(servi.split('<a class="media"').length - 1 + (servi.split('<details class="media lecteur">').length - 1)).toBe(3);
   });
 
   it('rend les trois genres de citation par le MÊME élément, distingué par `data-genre`', () => {
@@ -333,8 +351,44 @@ describe('le document servi — six formes, un balisage', () => {
     expect(servi).toContain('src="https://gate.test/api/v1/attachments/file/2026/vocal-fr.m4a"');
   });
 
-  it('dit les sous-titres d’une vidéo dans la langue servie', () => {
-    expect(servi).toContain('Sous-titres fr');
+  /**
+   * LE PRISME EST DIT TEL QU'IL EST SERVI. « Sous-titres fr » PROMETTAIT une
+   * piste que le `<video>` ne porte pas — la passerelle n'expose aucun WebVTT
+   * (régime 3) : un tap sur « lire » donnait la vidéo espagnole SANS
+   * sous-titres, sous un badge qui en promettait en français. Ce que l'écran
+   * sert est la TRANSCRIPTION traduite ; c'est donc elle qu'il annonce.
+   */
+  it('n’annonce aucun sous-titre, et dit ce qu’il sert : le transcrit et sa langue', () => {
+    expect(servi).not.toContain('Sous-titres');
+    expect(servi).not.toContain('<track');
+    expect(servi).toContain(FIL.transcrit('es', 'fr'));
+  });
+
+  /**
+   * UN VOCAL SANS TEXTE ANNONCE SON PRISME. `langueServie` d'un message sans
+   * texte vaut `null` : la pastille et « Voir l'original » disparaissaient avec
+   * lui, et le lecteur ne savait ni qu'il lisait une traduction ni comment
+   * atteindre l'original (cycle 122). La cible dessine pourtant cette pastille
+   * sous la vidéo SANS texte de `cible/rich.png`.
+   */
+  it('annonce le prisme d’un message dont le vocal est le seul contenu', () => {
+    const seul = documentDuFil(FIL_RICHE([audio])).replace(/<template[\s\S]*?<\/template>/g, '');
+    expect(seul).toContain(`<span class="code">yo</span>`);
+    expect(seul).toContain(FIL.transcrit('yo', 'fr'));
+    expect(seul).toContain('<details class="transcrit-original">');
+    expect(seul).toContain('Mo n mú');
+  });
+
+  /**
+   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PLUS LA CONVERSATION. `download` est
+   * IGNORÉ hors origine, et la passerelle EST une autre origine que le
+   * document : le clic NAVIGUAIT l'onglet vers le fichier brut — fil, position
+   * de lecture et socket perdus, sans que rien ne l'annonce.
+   */
+  it('ouvre une pièce dans un onglet, sans `download`, et NOMME le geste', () => {
+    expect(servi).not.toContain('download');
+    expect(servi).toContain('target="_blank" rel="noopener"');
+    expect(servi).toContain(`aria-label="${FIL.telecharger('photo.jpg', '94 Ko')}"`);
   });
 
   it('pose lang= sur une transcription servie dans une langue ≠ celle du document', () => {

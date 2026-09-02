@@ -1,6 +1,7 @@
 import { buildTranslationRecord, resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
-import { message, type Accuse, type Message } from '@/lib/api/fil';
+import { citationsDeLaPage } from '@/lib/api/citations';
+import { message, MENTIONS_RETENUES, type Accuse, type Message } from '@/lib/api/fil';
 
 /**
  * L'ÉTAT D'UN FIL OUVERT, et les transitions que le temps réel lui fait subir
@@ -74,6 +75,18 @@ const instantDe = (bulle: Bulle): number => (bulle.ecritA === null ? 0 : Date.pa
 const triee = (bulles: readonly Bulle[]): readonly Bulle[] =>
   [...bulles].sort((a, b) => instantDe(a) - instantDe(b));
 
+/**
+ * CE QUE LE FIL SE CITE À LUI-MÊME — la même règle que la tranche servie
+ * (`citationsDeLaPage`, `lib/api/citations.ts`), appliquée à l'état vivant.
+ * Sans elle, une réponse ARRIVÉE en direct citerait l'original d'un message
+ * dont la bulle, deux lignes plus haut, affiche sa traduction — et une réponse
+ * à un message protégé n'aurait pas le même aperçu selon qu'elle a été peinte
+ * ou rechargée. Elle repasse à chaque transition qui change un TEXTE, une
+ * PROTECTION ou la composition du fil : la citation suit sa cible.
+ */
+const citantes = (bulles: readonly Bulle[]): readonly Bulle[] =>
+  citationsDeLaPage({ messages: bulles, mentions: MENTIONS_RETENUES });
+
 export const bulleServie = (m: Message): Bulle => ({ ...m, envoi: 'servi', raison: null });
 
 /**
@@ -135,14 +148,14 @@ const memeBulle = (a: Bulle, b: Bulle): boolean =>
  */
 export const insere = (etat: EtatDuFil, bulle: Bulle): EtatDuFil => {
   const existante = etat.bulles.find((candidate) => memeBulle(candidate, bulle));
-  if (existante === undefined) return { ...etat, bulles: triee([...etat.bulles, bulle]) };
+  if (existante === undefined) return { ...etat, bulles: citantes(triee([...etat.bulles, bulle])) };
 
   const fusion: Bulle = {
     ...bulle,
     // Une bulle servie garde SON instant : l'horloge du serveur range le fil.
     ecritA: bulle.envoi === 'servi' ? bulle.ecritA : existante.ecritA,
   };
-  return { ...etat, bulles: triee(etat.bulles.map((candidate) => (candidate === existante ? fusion : candidate))) };
+  return { ...etat, bulles: citantes(triee(etat.bulles.map((candidate) => (candidate === existante ? fusion : candidate)))) };
 };
 
 export const depuisLaCharge = (
@@ -209,7 +222,7 @@ export const traduit = (
   langues: readonly string[],
 ): EtatDuFil => ({
   ...etat,
-  bulles: etat.bulles.map((bulle) => {
+  bulles: citantes(etat.bulles.map((bulle) => {
     if (bulle.id !== messageId || bulle.protege || bulle.supprime) return bulle;
 
     const carte = { ...bulle.traductions, ...buildTranslationRecord(traductions) };
@@ -225,7 +238,7 @@ export const traduit = (
       texte: servie?.text ?? bulle.texteOriginal,
       langueServie: servie?.language ?? null,
     };
-  }),
+  })),
 });
 
 export const edite = (
@@ -240,26 +253,30 @@ export const edite = (
 
   return {
     ...etat,
-    bulles: etat.bulles.map((bulle) =>
-      bulle.id === servi.id
-        ? {
-            ...bulle,
-            texte: servi.texte,
-            texteOriginal: servi.texteOriginal,
-            traductions: servi.traductions,
-            langueServie: servi.langueServie,
-            langueOriginale: servi.langueOriginale,
-            edite: true,
-          }
-        : bulle,
+    bulles: citantes(
+      etat.bulles.map((bulle) =>
+        bulle.id === servi.id
+          ? {
+              ...bulle,
+              texte: servi.texte,
+              texteOriginal: servi.texteOriginal,
+              traductions: servi.traductions,
+              langueServie: servi.langueServie,
+              langueOriginale: servi.langueOriginale,
+              edite: true,
+            }
+          : bulle,
+      ),
     ),
   };
 };
 
 export const retire = (etat: EtatDuFil, messageId: string): EtatDuFil => ({
   ...etat,
-  bulles: etat.bulles.map((bulle) =>
-    bulle.id === messageId ? { ...bulle, supprime: true, texte: '', pieces: [], citations: [], reactions: [] } : bulle,
+  bulles: citantes(
+    etat.bulles.map((bulle) =>
+      bulle.id === messageId ? { ...bulle, supprime: true, texte: '', pieces: [], citations: [], reactions: [] } : bulle,
+    ),
   ),
 });
 

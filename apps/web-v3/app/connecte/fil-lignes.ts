@@ -1,6 +1,7 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import type { Citation, GenreDeCitation, Message, PieceJointe } from '@/lib/api/fil';
+import { annonceDeLaPiece, annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
+import { FORME_PAR_GENRE, formeDePiece } from '@/lib/api/formes';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
@@ -72,13 +73,13 @@ const langAttribut = (langue: string | null, langueDuDocument: string): string =
  * diverger au premier correctif. Le glyphe est élu par `data-genre` dans la
  * FEUILLE, exactement comme l'accusé élit sa coche : le module qui repeint
  * change un attribut, il ne redessine rien.
+ *
+ * `FORME_PAR_GENRE` a QUITTÉ ce fichier (`lib/api/formes.ts`) : déclarée ici en
+ * `const` non exportée, elle n'était la table que du rendu SERVI, pendant que
+ * le peintre du temps réel, `lib/api/fil.ts` et `lib/poids.ts` réécrivaient la
+ * même règle en comparaisons littérales de genre. Le même message avait deux
+ * formes selon qu'il arrivait par le document ou par le socket.
  */
-const FORME_PAR_GENRE: Readonly<Record<PieceJointe['genre'], { readonly glyphe: string; readonly lecteur: 'audio' | 'video' | null; readonly sousTitres: boolean }>> = {
-  image: { glyphe: 'ph-image', lecteur: null, sousTitres: false },
-  video: { glyphe: 'ph-video-camera', lecteur: 'video', sousTitres: true },
-  audio: { glyphe: 'ph-microphone', lecteur: 'audio', sousTitres: false },
-  fichier: { glyphe: 'ph-file', lecteur: null, sousTitres: false },
-};
 
 /**
  * TOUS les glyphes d'une table sont rendus, et `data-genre` en élit UN dans la
@@ -96,58 +97,122 @@ const GLYPHE_PAR_GENRE: Readonly<Record<string, string>> = Object.fromEntries(
 );
 
 /**
- * Une pièce jointe s'ANNONCE avant de partir : son genre, son nom, sa durée et
- * son poids, sur une affiche que RIEN ne télécharge. La cible dessine
- * exactement cela — un cadre au glyphe de son genre, `0:42 · 3,1 Mo` en
- * dessous — et c'est aussi ce qu'une 3G rurale demande : un `<img>` inline
- * ferait partir chaque photo du fil sans qu'on l'ait demandée. Le geste, lui,
- * mène au fichier (`<a href download>`, une destination que la passerelle SERT).
+ * UN BLOC PAR PIÈCE — ce que la cible dessine, et ce que le rendu servi
+ * empilait en DEUX (une affiche de téléchargement, puis un lecteur natif : le
+ * même fichier annoncé deux fois, avec son nom de fichier en texte primaire
+ * d'un bloc que `cible/rich.png` ne dessine pas).
  *
- * Un vocal et une vidéo portent EN PLUS leur lecteur natif, en `preload="none"`
- * — donc zéro octet avant la première pression sur « lire », et la commande
- * accessible que le navigateur donne gratuitement. Sa source est la PISTE
- * (`piece.piste`), celle que la langue du texte servi a élue : on entend ce
- * qu'on lit (cycle 128).
+ * Le genre décide du bloc, et lui seul (`lib/api/formes.ts`) :
+ *
+ *   • `lecteur === null` (image, fichier) ⇒ une AFFICHE : un `<a>` au glyphe de
+ *     son genre. Rien ne se télécharge avant le geste — pas d'`<img>`, donc
+ *     aucune photo du fil ne part sur une 3G rurale sans qu'on l'ait demandée.
+ *     Le lien OUVRE UN ONGLET (`target="_blank" rel="noopener"`) : `download`
+ *     est IGNORÉ hors origine — et la passerelle est une autre origine que le
+ *     document (`gate.meeshy.me` face à `meeshy.me`) —, si bien que toucher une
+ *     pièce jointe NAVIGUAIT l'onglet vers le fichier brut : le fil, la position
+ *     de lecture et le socket étaient perdus, et rien ne l'annonçait. Le geste
+ *     est désormais NOMMÉ dans le nom accessible de la cible.
+ *   • `lecteur !== null` (audio, vidéo) ⇒ un LECTEUR : un `<details>` dont le
+ *     `<summary>` EST l'affiche de lecture (rond `ph-fill-play`, durée et poids
+ *     posés dessus), et dont le contenu est le média natif en `preload="none"`.
+ *     Un `<details>` s'ouvre SANS JavaScript : zéro octet avant la pression,
+ *     et la commande accessible que le navigateur donne gratuitement.
  *
  * L'adresse est ABSOLUE, sur l'origine publique de la passerelle
  * (`lib/api/fil.ts`, `urlDePiece`) : un chemin relatif se résoudrait contre le
- * document, où la passerelle n'est pas.
+ * document, où la passerelle n'est pas. La SOURCE du lecteur est la PISTE
+ * (`piece.piste`), celle que la langue du texte servi a élue : on entend ce
+ * qu'on lit (cycle 128).
  */
-const piece = (piece: PieceJointe, langueDuDocument: string): string => {
-  const forme = FORME_PAR_GENRE[piece.genre];
-  const meta = metaDePiece(piece);
-  const langueDesSousTitres = forme.sousTitres && piece.transcription !== null ? (piece.langueServie ?? piece.langueDeTranscription) : null;
-  const affiche =
-    `<a class="media" data-genre="${piece.genre}" href="${echappe(piece.url)}" download>` +
-    `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
-    '<span class="etiquette">' +
-    `<span class="nom-de-piece">${echappe(piece.nom)}</span>` +
-    `<span class="poids"${meta === '' ? ' hidden' : ''}>${echappe(meta)}</span>` +
-    `<span class="sous-titres"${langueDesSousTitres === null ? ' hidden' : ''}>${langueDesSousTitres === null ? '' : echappe(FIL.sousTitres(langueDesSousTitres))}</span>` +
-    '</span></a>';
-  const lecteur =
-    forme.lecteur === null
-      ? ''
-      : `<${forme.lecteur} controls preload="none" src="${echappe(piece.piste)}"></${forme.lecteur}>`;
-  const transcription =
-    piece.transcription === null
-      ? ''
-      : `<p class="transcription"${langAttribut(piece.langueServie ?? piece.langueDeTranscription, langueDuDocument)}>` +
-        `<span class="hors-ecran">${echappe(FIL.transcription)} </span>${echappe(piece.transcription)}</p>`;
+const etiquetteDePiece = (nom: string, meta: string): string =>
+  '<span class="etiquette">' +
+  `<span class="nom-de-piece">${echappe(nom)}</span>` +
+  `<span class="poids"${meta === '' ? ' hidden' : ''}>${echappe(meta)}</span>` +
+  '</span>';
 
-  return `<li data-piece="${echappe(piece.id)}">${affiche}${lecteur}${transcription}</li>`;
+const afficheDePiece = (url: string, nom: string, meta: string): string =>
+  `<a class="media" href="${echappe(url)}" target="_blank" rel="noopener" aria-label="${echappe(FIL.telecharger(nom, meta))}">` +
+  `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
+  etiquetteDePiece(nom, meta) +
+  '</a>';
+
+const lecteurDePiece = ({ balise, source, nom, meta }: { readonly balise: 'audio' | 'video'; readonly source: string; readonly nom: string; readonly meta: string }): string =>
+  '<details class="media lecteur">' +
+  '<summary>' +
+  `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
+  `<span class="hors-ecran">${echappe(FIL.lire(nom, meta))}</span>` +
+  '<span class="rail" aria-hidden="true"></span>' +
+  etiquetteDePiece(nom, meta) +
+  '</summary>' +
+  `<${balise} controls preload="none" src="${echappe(source)}"></${balise}>` +
+  '</details>';
+
+/**
+ * CE QU'UN TRANSCRIT ANNONCE — et pourquoi ce n'est plus « Sous-titres fr ».
+ *
+ * La pastille de sous-titres PROMETTAIT une piste que le `<video>` ne porte
+ * pas : la passerelle n'expose aucun WebVTT, et fabriquer des minutages depuis
+ * un texte plein serait inventer (régime 3). Un tap sur « lire » donnait donc
+ * la vidéo espagnole SANS sous-titres, sous un badge qui en promettait en
+ * français — le Prisme ANNONCÉ sans être APPLIQUÉ (cycle 123).
+ *
+ * Ce que l'écran sert VRAIMENT, il le dit : la transcription est traduite, elle
+ * se lit juste dessous, et l'original est à un geste. La phrase vient de la
+ * planche (« Transcrit du yoruba · lire en français »), au CODE près — charte
+ * règle 23.
+ */
+const transcritDePiece = (piece: PieceJointe, langueDuDocument: string): string => {
+  if (piece.transcription === null) return '';
+  const annonce = annonceDeLaPiece(piece);
+  const servie = piece.langueServie ?? piece.langueDeTranscription;
+  const original =
+    annonce === null || piece.transcriptionOriginale === null
+      ? ''
+      : '<details class="transcrit-original">' +
+        `<summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary>` +
+        `<p${langAttribut(annonce.origine, langueDuDocument)}>${echappe(piece.transcriptionOriginale)}</p></details>`;
+  return (
+    `<p class="transcription"${langAttribut(servie, langueDuDocument)}>` +
+    `<span class="hors-ecran">${echappe(FIL.transcription)} </span><span class="texte-transcrit">${echappe(piece.transcription)}</span></p>` +
+    (annonce === null ? '' : `<p class="transcrit">${echappe(FIL.transcrit(annonce.origine, annonce.servie))}</p>`) +
+    original
+  );
 };
 
-/** Le gabarit d'une pièce : les QUATRE glyphes, dont `data-genre` élit un ; les deux lecteurs, cachés. */
+const piece = (piece: PieceJointe, langueDuDocument: string): string => {
+  const forme = formeDePiece(piece.genre);
+  const meta = metaDePiece(piece);
+  const bloc =
+    forme.lecteur === null
+      ? afficheDePiece(piece.url, piece.nom, meta)
+      : lecteurDePiece({ balise: forme.lecteur, source: piece.piste, nom: piece.nom, meta });
+
+  return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${transcritDePiece(piece, langueDuDocument)}</li>`;
+};
+
+/**
+ * Le gabarit d'une pièce porte les DEUX blocs — l'affiche et le lecteur — et
+ * les DEUX médias natifs. Le module en RETIRE ceux que le genre ne demande pas
+ * (`fil-peinture.ts`), il n'en compose aucun : une pièce peinte et une pièce
+ * servie sont alors le même balisage, au nœud près.
+ */
 const gabaritDePiece = (): string =>
-  '<li data-piece="">' +
-  '<a class="media" data-genre="fichier" href="" download>' +
-  `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
-  '<span class="etiquette"><span class="nom-de-piece"></span><span class="poids" hidden></span><span class="sous-titres" hidden></span></span>' +
-  '</a>' +
-  '<audio controls preload="none" hidden></audio>' +
-  '<video controls preload="none" hidden></video>' +
+  '<li data-piece="" data-genre="fichier">' +
+  afficheDePiece('', '', '') +
+  '<details class="media lecteur"><summary>' +
+  `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
+  '<span class="hors-ecran"></span>' +
+  '<span class="rail" aria-hidden="true"></span>' +
+  etiquetteDePiece('', '') +
+  '</summary>' +
+  '<audio controls preload="none"></audio>' +
+  '<video controls preload="none"></video>' +
+  '</details>' +
   `<p class="transcription" hidden><span class="hors-ecran">${echappe(FIL.transcription)} </span><span class="texte-transcrit"></span></p>` +
+  '<p class="transcrit" hidden></p>' +
+  '<details class="transcrit-original" hidden>' +
+  `<summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary><p></p></details>` +
   '</li>';
 
 /**
@@ -249,11 +314,19 @@ const accuse = (message: Message): string => (message.deMoi && !message.systeme 
  * La pastille de langue (charte règle 22) : `ph-translate` + le code de la
  * langue d'ORIGINE, rendue SEULEMENT quand une traduction est servie. Sur un
  * message déjà dans la langue du lecteur, elle n'apprendrait rien.
+ *
+ * Ce qu'elle annonce vient d'`annonceDuPrisme` (`lib/api/fil.ts`) — le TEXTE
+ * d'abord, puis ce que le message PORTE : sur un message dont le vocal est le
+ * seul contenu, elle disparaissait avec le texte absent, et le lecteur ne
+ * savait pas qu'il lisait une transcription traduite. La cible la dessine
+ * pourtant sous la vidéo SANS texte de `cible/rich.png`.
  */
-const pastille = (message: Message): string =>
-  message.langueServie !== null && message.langueOriginale !== null
-    ? `<span class="langue" title="${echappe(FIL.traduitDepuis)}">${svgDuSprite('ph-translate')}<span class="code">${echappe(message.langueOriginale)}</span></span>`
-    : '';
+const pastille = (message: Message): string => {
+  const annonce = annonceDuPrisme(message);
+  return annonce === null
+    ? ''
+    : `<span class="langue" title="${echappe(FIL.traduitDepuis)}">${svgDuSprite('ph-translate')}<span class="code">${echappe(annonce.origine)}</span></span>`;
+};
 
 const original = (message: Message, langueDuDocument: string): string =>
   message.langueServie !== null && !message.protege && !message.supprime

@@ -1,4 +1,5 @@
 import type { Citation } from '@/lib/api/citations';
+import { MENTION_SUPPRIMEE } from '@/lib/api/fil';
 
 /**
  * LA COPIE DU FIL — ce que l'écran DIT, hors de ce qu'il compose. Une phrase
@@ -42,7 +43,7 @@ export const FIL = {
   original: 'Voir l’original',
   traduitDepuis: 'Traduit depuis cette langue',
   modifie: 'modifié',
-  supprime: 'Ce message a été supprimé',
+  supprime: MENTION_SUPPRIMEE,
   protege: 'Message protégé',
   accuse: { envoye: 'Envoyé', recu: 'Reçu', lu: 'Lu' },
   enAttente: 'Envoi en cours',
@@ -58,8 +59,25 @@ export const FIL = {
   hier: 'Hier',
   piece: 'Pièce jointe',
   transcription: 'Transcription',
-  /** Ce que la vidéo annonce quand une transcription est servie — le CODE de la langue, comme la pastille `.langue` (charte règle 23 : jamais un drapeau). */
-  sousTitres: (langue: string): string => `Sous-titres ${langue}`,
+  /**
+   * CE QU'UN VOCAL OU UNE VIDÉO ANNONCE quand sa transcription est SERVIE dans
+   * une autre langue que celle où elle a été faite — le CODE des deux langues,
+   * comme la pastille `.langue` (charte règle 23 : jamais un drapeau).
+   *
+   * Elle remplace « Sous-titres fr », qui PROMETTAIT une piste de sous-titres
+   * que le lecteur ne portait pas : la passerelle n'expose aucun WebVTT, et
+   * fabriquer des minutages serait inventer. Le Prisme était ANNONCÉ sans être
+   * APPLIQUÉ (cycle 123) ; il est désormais DIT tel qu'il est servi, et le
+   * transcrit se lit juste dessous.
+   */
+  transcrit: (origine: string, servie: string): string => `Transcrit du ${origine} · lire en ${servie}`,
+  /**
+   * LE GESTE D'UN BLOC DE PIÈCE, avec ce que la pièce annonce — le nom
+   * accessible que la cible porte. La composition vit ICI, avec les deux
+   * phrases : écrite dans la ligne servie ET dans le peintre, elle aurait
+   * divergé au premier séparateur.
+   */
+  lire: (nom: string, meta = ''): string => (meta === '' ? `Lire ${nom}` : `Lire ${nom} · ${meta}`),
   citations: 'Ce que ce message cite',
   reponseA: (qui: string): string => `En réponse à ${qui}`,
   reponseAUnMessage: 'En réponse à un message',
@@ -72,7 +90,8 @@ export const FIL = {
     autre: { humeur: 'une humeur', story: 'une story', reel: 'un reel', publication: 'une publication' },
   },
   deQui: (qui: string): string => ` de ${qui}`,
-  telecharger: 'Télécharger',
+  /** Le geste d'un bloc qui se TÉLÉCHARGE — nommé dans la cible, parce qu'elle ouvre un onglet. */
+  telecharger: (nom: string, meta = ''): string => (meta === '' ? `Télécharger ${nom}` : `Télécharger ${nom} · ${meta}`),
   ecrire: 'Écrire un message',
   ecrireEn: (langue: string): string => `Écrire en ${langue}…`,
   envoyer: 'Envoyer',

@@ -17,6 +17,7 @@ import { ciblesMesurees, ciblesTropPetites, LARGEURS } from './lib/cibles';
 import { COLONNES_DE_THEME, violationsBloquantes } from './lib/verdict-axe';
 import {
   CONVERSATION_DU_LECTEUR,
+  CONVERSATION_RICHE,
   messagesRiches,
   passerelleDeBouchon,
   PISTE_TRADUITE,
@@ -92,26 +93,44 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
     const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
     const page = await ouvreLeFil(contexte);
 
-    await expect(page.locator('li[data-id="r1"] a.media')).toHaveAttribute('data-genre', 'image');
-    await expect(page.locator('li[data-id="r2"] a.media')).toHaveAttribute('data-genre', 'video');
-    await expect(page.locator('li[data-id="r3"] a.media')).toHaveAttribute('data-genre', 'audio');
+    await expect(page.locator('li[data-id="r1"] ul.pieces > li')).toHaveAttribute('data-genre', 'image');
+    await expect(page.locator('li[data-id="r2"] ul.pieces > li')).toHaveAttribute('data-genre', 'video');
+    await expect(page.locator('li[data-id="r3"] ul.pieces > li')).toHaveAttribute('data-genre', 'audio');
     await expect(page.locator('li[data-id="r4"] li.citation')).toHaveAttribute('data-genre', 'transfert');
     await expect(page.locator('li[data-id="r5"] li.citation')).toHaveAttribute('data-genre', 'reponse');
     await expect(page.locator('li[data-id="r6"] li.citation')).toHaveAttribute('data-genre', 'story');
+
+    // UN BLOC par pièce, et le genre le choisit : une affiche pour ce qui se
+    // télécharge, un lecteur pour ce qui se lit. La cible ne dessine JAMAIS une
+    // affiche de téléchargement PUIS un lecteur natif — et seul le navigateur
+    // peut dire lequel des deux a une boîte.
+    const blocs = await page.evaluate(() =>
+      [...document.querySelectorAll('ul.pieces > li')].map((item) => ({
+        genre: (item as HTMLElement).dataset.genre ?? '',
+        vus: ['a.media', 'details.lecteur']
+          .filter((selecteur) => ((item.querySelector(selecteur) as HTMLElement | null)?.getBoundingClientRect().height ?? 0) > 0)
+          .map((selecteur) => selecteur),
+      })),
+    );
+    expect(blocs).toEqual([
+      { genre: 'image', vus: ['a.media'] },
+      { genre: 'video', vus: ['details.lecteur'] },
+      { genre: 'audio', vus: ['details.lecteur'] },
+    ]);
 
     // UN glyphe élu par porteur : les autres sont dans le DOM (c'est ce qui
     // permet au module de changer un attribut plutôt que de redessiner) mais
     // n'ont AUCUNE boîte. La lecture de la feuille ne le prouve pas ; le
     // navigateur, oui.
     const visibles = await page.evaluate(() =>
-      [...document.querySelectorAll('a.media, li.citation')].map((porteur) => ({
+      [...document.querySelectorAll('ul.pieces > li[data-genre=image], ul.pieces > li[data-genre=fichier], li.citation')].map((porteur) => ({
         genre: (porteur as HTMLElement).dataset.genre ?? '',
         elus: [...porteur.querySelectorAll('.glyphe')]
           .filter((glyphe) => (glyphe as HTMLElement).getBoundingClientRect().width > 0)
           .map((glyphe) => (glyphe as HTMLElement).dataset.genre ?? ''),
       })),
     );
-    expect(visibles).toHaveLength(6);
+    expect(visibles).toHaveLength(4);
     visibles.forEach(({ genre, elus }) => expect(elus).toEqual([genre]));
     await contexte.close();
   });
@@ -141,9 +160,38 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
 
     await expect(page.locator('li[data-id="r3"] audio')).toHaveAttribute('src', `${passerelle.base}${PISTE_TRADUITE}`);
     await expect(page.locator('li[data-id="r3"] .transcription')).toContainText('J’apporte les chiffres de mars');
-    await expect(page.locator('li[data-id="r2"] .sous-titres')).toHaveText('Sous-titres fr');
-    // Le texte servi porte SA langue ; l'aperçu d'un message cité écrit dans une autre porte la sienne.
-    await expect(page.locator('li[data-id="r5"] .citation .apercu')).toHaveAttribute('lang', 'en');
+    // Le transcrit DIT ce qu'il sert — il ne PROMET pas des sous-titres que le
+    // `<video>` ne porte pas (la passerelle n'expose aucun WebVTT, régime 3).
+    await expect(page.locator('li[data-id="r2"] .transcrit')).toHaveText('Transcrit du es · lire en fr');
+    expect(await page.locator('track').count()).toBe(0);
+    expect(await page.getByText('Sous-titres').count()).toBe(0);
+    // Un vocal sans texte annonce quand même son Prisme, et son original est à un geste.
+    await expect(page.locator('li[data-id="r3"] .meta .langue .code')).toHaveText('yo');
+    await expect(page.locator('li[data-id="r3"] details.transcrit-original')).toBeVisible();
+    // La citation d'un message QUI EST DANS LA PAGE sert ce que sa bulle affiche,
+    // jamais l'original que la passerelle a servi sous `replyTo` (cycle 122).
+    await expect(page.locator('li[data-id="r5"] .citation .apercu')).toHaveText('Le tableau final de la revue.');
+    await expect(page.locator('li[data-id="r1"] .texte')).toHaveText('Le tableau final de la revue.');
+    await contexte.close();
+  });
+
+  /**
+   * LA VUE `rich` A SON PROPRE JETON, ET DE LA DONNÉE DERRIÈRE.
+   * `vues.json` déclare `rich` sur `/chats/:id`, distincte du `/chats/:cle` de
+   * `thread` : les deux ne sont pas en collision, elles n'avaient simplement
+   * aucune conversation adressable derrière leur jeton dans la passerelle
+   * PARTAGÉE. `jetons-de-vues.json` déclare désormais `{"id": "fil-riche"}`, et
+   * ce témoin prouve que l'adresse rend bien les six formes — sans quoi
+   * `compare-rendu.js` comparerait la cible à un écran qui n'est pas le sien.
+   */
+  test('sert les six formes à l’adresse que la vue `rich` déclare', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(`${v3.base}/chats/${CONVERSATION_RICHE.id}`, { waitUntil: 'load' });
+
+    await expect(page.locator('.fil-tete h1')).toHaveText(CONVERSATION_RICHE.titre);
+    expect(await page.locator('ul.pieces > li, li.citation').count()).toBe(6);
+    await expect(page.locator('li[data-id="r3"] .transcrit')).toHaveText('Transcrit du yo · lire en fr');
     await contexte.close();
   });
 
@@ -180,7 +228,7 @@ test.describe('en direct — une bulle riche qui arrive', () => {
 
     const vocal = page.locator('li[data-id="r301"]');
     await expect(vocal).toBeVisible({ timeout: 10_000 });
-    await expect(vocal.locator('a.media')).toHaveAttribute('data-genre', 'audio');
+    await expect(vocal.locator('ul.pieces > li')).toHaveAttribute('data-genre', 'audio');
     await expect(vocal.locator('.poids')).toHaveText('0:21 · 94 Ko');
     await expect(vocal.locator('audio')).toHaveAttribute('src', `${passerelle.base}${PISTE_TRADUITE}`);
     await expect(vocal.locator('.transcription')).toContainText('J’apporte les chiffres de mars');
@@ -188,7 +236,9 @@ test.describe('en direct — une bulle riche qui arrive', () => {
     const reponse = page.locator('li[data-id="r305"]');
     await expect(reponse.locator('li.citation')).toHaveAttribute('data-genre', 'reponse');
     await expect(reponse.locator('.citation .quoi')).toHaveText('En réponse à Ibrahim');
-    await expect(reponse.locator('.citation .apercu')).toHaveAttribute('lang', 'en');
+    // La cible `r1` est dans le fil : la citation PEINTE sert ce que sa bulle affiche,
+    // exactement comme la citation SERVIE — un seul texte par message.
+    await expect(reponse.locator('.citation .apercu')).toHaveText('Le tableau final de la revue.');
 
     // La bulle PEINTE et la bulle SERVIE du même genre portent le même balisage.
     const memeForme = await page.evaluate(() =>
@@ -249,7 +299,7 @@ test.describe('les quatre colonnes de thème', () => {
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme.classeAttendue}\\b`));
 
       // Les six porteurs sont bien dans le document, quelle que soit la colonne.
-      expect(await page.locator('a.media, li.citation').count()).toBe(6);
+      expect(await page.locator('ul.pieces > li, li.citation').count()).toBe(6);
 
       const rapport = await new AxeBuilder({ page }).include('main').analyze();
       expect(violationsBloquantes(rapport.violations)).toEqual([]);
