@@ -24604,3 +24604,74 @@ parier ; en poser un, c'est concevoir.
 *Formulée avec une session voisine le 2026-09-02 : elle tenait deux points, la
 § 441 a fourni le troisième — et sans trois points on n'aurait vu qu'une
 coïncidence.*
+
+## Leçon 444 — Un GUARD qui reprend le NOM de sa fonction vieillit avec lui, et sa branche neuve meurt en silence
+
+**Le fait (2026-09-02, #4879).** Une photo posée par le rail de la scène
+n'atteignait jamais une story. Cause, une ligne :
+
+```swift
+func syncPostMediaIntoSlides() {
+    guard selectedFormat == .post else { return }
+```
+
+Le guard était JUSTE au jour de son écriture (#4038, « en Post, chaque média
+ingéré devient SA slide ») : la seule porte média était alors la rangée du
+document, qui n'existe qu'en Post. La porte du RAIL est arrivée après (#4724),
+avec sa branche `.sceneRail` DANS cette fonction — et le rail vit sur la SCÈNE,
+c'est-à-dire sur les stories et les réels. **La branche neuve était du code mort
+exactement là où sa porte existe.**
+
+> **Un guard qui reprend le nom de sa fonction ne se relit pas.** « Post » dans
+> `syncPostMediaIntoSlides` a l'air d'une tautologie, pas d'une décision ; on le
+> lit comme une redite du nom et on passe. C'est le même angle mort que le
+> commentaire qui justifie ce qu'il décrit (§ 442) — le texte et le code
+> s'accordent, donc rien n'appelle la question.
+
+**La question qui l'attrape**, et elle se pose au moment où l'on AJOUTE : *ma
+branche neuve vit-elle dans une fonction dont l'entrée l'exclut ?* Le grep utile
+n'est pas « qui appelle cette fonction » mais **« que refuse sa première
+ligne »**.
+
+**Corollaire de correctif** : la condition s'ÉLARGIT, elle ne se retire pas. La
+retirer ferait poser des slides à des médias arrivés autrement sur une story —
+un changement que rien ne mesurait. `guard selectedFormat == .post || <il reste
+un média du rail à placer>` dit exactement ce qu'on a établi, et rien de plus
+(§ 441).
+
+## Leçon 445 — `log show` FILTRE le niveau info : trois passes perdues à conclure « le code ne tourne pas » sur un journal tronqué
+
+**Le fait.** Pour trancher #4879 j'ai instrumenté le chemin média — ingestion,
+placement, quatre refus silencieux. Puis :
+
+```
+xcrun simctl spawn <sim> log show --last 2m --predicate 'process == "Meeshy"'
+→ AUCUNE de mes lignes
+```
+
+J'en ai conclu, trois fois de suite, que le code ne s'exécutait pas — et j'ai
+construit trois hypothèses sur ce vide. Les lignes existaient, s'exécutaient, et
+étaient **filtrées** : `log show` n'inclut ni `info` ni `debug` sans `--info` /
+`--debug`. Les seules qui passaient étaient les `.error` d'un voisin, ce qui
+rendait le journal *crédible* — il n'avait pas l'air vide, il avait l'air
+complet.
+
+```
+xcrun simctl spawn <sim> log show --info --last 5m --predicate '…'
+→ ingest photothèque … mime=image/jpeg     ← elle était là depuis le début
+```
+
+> **Un journal filtré ne se distingue pas d'un journal vide** — et un voisin qui
+> loggue en `.error` fait croire que le filtre n'existe pas. Avant de conclure
+> « ce code ne tourne pas » depuis un journal, vérifier qu'on lit le NIVEAU
+> auquel on a écrit.
+
+Deux corollaires du même lot :
+
+- **`strings` sur l'exécutable de l'app ne prouve rien** : le code d'une app
+  iOS en debug vit dans `Meeshy.debug.dylib`, pas dans le binaire. Et une
+  chaîne de `os.Logger` interpolée n'y apparaît qu'en fragments — chercher un
+  sous-mot (`applyContentMedia`), jamais la phrase entière avec ses accents.
+- **Écrire au bon niveau.** Un log qui sert à DIAGNOSTIQUER un chemin muet a
+  intérêt à être `.error`, ou à être lu avec `--info` — sinon le réparateur
+  qu'on vient de créer (§ 443) est lui-même invisible.
