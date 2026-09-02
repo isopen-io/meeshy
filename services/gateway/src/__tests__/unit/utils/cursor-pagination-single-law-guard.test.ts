@@ -18,7 +18,7 @@
  * | signal | ce qu'il attrape | exemple réel |
  * |---|---|---|
  * | un littéral `base64` / `base64url` | un codec de jeton écrit à la main | `conversations/receipts.ts` — `base64url("offset:<n>")`, **un offset déguisé** |
- * | `new Date(<…>cursor)` | l'horodatage ISO servi en clair comme curseur | `directory/friend-requests-core.ts`, `posts/sounds.ts` |
+ * | `new Date(<…>cursor)` | l'horodatage ISO servi en clair comme curseur | `posts/sounds.ts` (et `directory/friend-requests-core.ts`, ralliée par #4900 — elle porte encore le motif, pour RELIRE les jetons en vol, mais appelle la loi) |
  * | `findIndex` sur la MÊME ligne que `cursor` | un curseur d'identifiant retrouvé en mémoire | `directory/blocks.ts` |
  *
  * Aucun de ces signaux ne suffit seul : il faut AUSSI que le fichier nomme
@@ -116,10 +116,6 @@ function sitesQuiCodentLeurCurseur(): string[] {
  * - `directory/blocks.ts` — curseur sur l'id, retrouvé par `findIndex` sur une
  *   liste rechargée à chaque appel : un identifiant lisible, et un curseur périmé
  *   n'y termine pas la pagination, il repart de la page 1.
- * - `directory/friend-requests-core.ts` — l'horodatage ISO en clair, SANS départage
- *   des ex æquo : `{ createdAt: { lt } }` saute toutes les lignes de la même
- *   milliseconde que la dernière servie. C'est la route CANONIQUE dont
- *   `friends.ts` est l'alias — l'alias est curseurisé par ce lot, elle non.
  * - `posts/sounds.ts` — le cas nommé par #4175 : le curseur pagine les USAGES et
  *   non les publications, donc plusieurs pages peuvent ne rien rendre de neuf, et
  *   le client iOS compense par un compteur `emptyStreak`.
@@ -133,7 +129,6 @@ function sitesQuiCodentLeurCurseur(): string[] {
 const INVENTAIRE_GELE: readonly string[] = [
   'conversations/receipts.ts',
   'directory/blocks.ts',
-  'directory/friend-requests-core.ts',
   'posts/sounds.ts',
   'sync/conversations.ts',
   'sync/cursor.ts',
@@ -200,8 +195,15 @@ describe('#4175 c.5 — aucun codec de curseur ne naît hors de la loi partagée
     expect(sitesQuiCodentLeurCurseur()).toEqual([...INVENTAIRE_GELE]);
   });
 
-  it("ne compte NI `notifications.ts` NI `friends.ts` — les deux premiers ralliés", () => {
-    expect(sitesQuiCodentLeurCurseur()).not.toContain('notifications.ts');
-    expect(sitesQuiCodentLeurCurseur()).not.toContain('friends.ts');
+  it("ne compte AUCUNE des trois routes ralliées", () => {
+    // `notifications.ts` et `friends.ts` (#4175), puis la route CANONIQUE des
+    // demandes d'ami (#4900) — que son alias déprécié `friends.ts` avait
+    // devancée : depuis `5bcbdefee6`, le déprécié départageait ses ex æquo et
+    // servait un jeton opaque quand son successeur ne faisait ni l'un ni
+    // l'autre. Une liste qui RÉTRÉCIT est ce que ce cliquet mesure.
+    const sites = sitesQuiCodentLeurCurseur();
+    expect(sites).not.toContain('notifications.ts');
+    expect(sites).not.toContain('friends.ts');
+    expect(sites).not.toContain('directory/friend-requests-core.ts');
   });
 });

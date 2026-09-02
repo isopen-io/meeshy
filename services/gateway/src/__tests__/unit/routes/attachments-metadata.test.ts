@@ -16,31 +16,20 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string' },
-      type: { type: 'string' },
-      url: { type: 'string' },
-    },
-  },
-  messageAttachmentMinimalSchema: {
-    type: 'object',
-    properties: {
-      id: { type: 'string' },
-      type: { type: 'string' },
-    },
-  },
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-    },
-  },
-}));
+// `@meeshy/shared/types/api-schemas` n'est PAS doublé, et ne doit plus l'être.
+//
+// Ce harnais en substituait un faux `messageAttachmentSchema` (trois clés) et
+// un faux `messageAttachmentMinimalSchema` (deux clés). Le double DÉSARMAIT
+// `fast-json-stringify` — c'est-à-dire exactement la couche où vit le contrat
+// servi par ces trois routes : sous un schéma inventé, aucune des trente
+// assertions ci-dessous ne pouvait attester quoi que ce soit de ce que la
+// route rend RÉELLEMENT (#4887, défaut 4).
+//
+// C'est le patron que `services/gateway/CLAUDE.md` interdit depuis les cycles
+// 91, 93 et 104 : « un double PARTIEL d'un module perd en silence tout ce que
+// le module GAGNE ». Le remède documenté est `jest.requireActual` + surcharge
+// ciblée ; ici aucune surcharge n'est nécessaire — les vrais schémas SONT ce
+// qu'on mesure, donc la couche à traverser.
 
 const mockGetAttachmentWithMetadata = jest.fn<any>();
 const mockGetAttachment = jest.fn<any>();
@@ -220,6 +209,62 @@ describe('GET /attachments/:id/metadata — success', () => {
     expect(res.json().success).toBe(true);
     expect(res.headers['cache-control']).toContain('private');
     expect(res.headers['etag']).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LE HARNAIS EST ARMÉ — et voici ce qui le prouve.
+//
+// Le double supprimé en tête de fichier déclarait `messageAttachmentSchema`
+// avec trois clés inventées (`id`, `type`, `url`) et le minimal avec deux.
+// Sous ce double, une réponse portant `type` et `url` les rendait, et perdait
+// `uploadedBy` / `isAnonymous` ; sous le VRAI schéma c'est l'exact inverse.
+// Les deux témoins ci-dessous distinguent donc les deux harnais dans les DEUX
+// sens : ils ne peuvent pas être verts sur un schéma inventé.
+//
+// C'est le seul genre d'assertion que ce fichier ne pouvait pas porter avant
+// (#4887, défaut 4) — ses trente témoins n'interrogeaient que des codes de
+// statut et `success: true`, deux valeurs qu'aucun schéma ne touche. Un
+// harnais désarmé ne cache pas seulement un bug : il rend indicible la
+// question à laquelle il aurait dû répondre.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /attachments/:id/metadata — contrat SERVI (harnais armé)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetAttachmentWithMetadata.mockResolvedValue({
+      ...MOCK_ATTACHMENT,
+      fileName: 'photo.jpg',
+      originalName: 'Photo.jpg',
+      mimeType: 'image/jpeg',
+      fileSize: 2048,
+      fileUrl: 'https://cdn.example.com/photo.jpg',
+      createdAt: '2026-09-01T10:00:00.000Z',
+    });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert les champs du VRAI `messageAttachmentSchema`, pas ceux du double', async () => {
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    const attachment = res.json().data.attachment;
+
+    // Déclarés par le schéma réel — le double les supprimait.
+    expect(attachment.uploadedBy).toBe(USER_ID);
+    expect(attachment.isAnonymous).toBe(false);
+    expect(attachment.originalName).toBe('Photo.jpg');
+    expect(attachment.fileSize).toBe(2048);
+  });
+
+  it("supprime `type` et `url`, que seul le double déclarait", async () => {
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/metadata` });
+    const attachment = res.json().data.attachment;
+
+    // `fast-json-stringify` retire toute clé qu'aucun schéma ne déclare. Sous
+    // le double, ces deux-là survivaient — le harnais attestait donc d'un
+    // contrat que la route ne sert pas.
+    expect(attachment).not.toHaveProperty('type');
+    expect(attachment).not.toHaveProperty('url');
   });
 });
 
@@ -707,6 +752,49 @@ describe('GET /conversations/:id/attachments — masquage personnel', () => {
     expect(res.statusCode).toBe(200);
     expect((app as any).__prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
     expect((app as any).__prisma.userConversationPreferences.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('GET /conversations/:id/attachments — contrat SERVI (harnais armé)', () => {
+  beforeEach(() => { mockGetConversationAttachments.mockClear(); });
+
+  it('sert les treize clés de la liste, et retient toute colonne lourde', async () => {
+    // Le service ne charge plus `transcription` ni `translations` (#4887,
+    // défaut 3) ; ce témoin garde l'autre moitié de la garantie — même si un
+    // appelant futur en remettait dans la charge, le schéma de la LISTE ne les
+    // déclare pas et le sérialiseur les retirerait. Le contrat servi ne dépend
+    // pas de la discipline du producteur.
+    mockGetConversationAttachments.mockResolvedValue([{
+      id: 'att-1',
+      messageId: 'msg-1',
+      fileName: 'note.m4a',
+      originalName: 'Note vocale.m4a',
+      mimeType: 'audio/mp4',
+      fileSize: 84213,
+      fileUrl: 'https://cdn.example.com/note.m4a',
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      duration: 12480,
+      uploadedBy: USER_ID,
+      createdAt: '2026-09-01T10:00:00.000Z',
+      transcription: { type: 'audio', text: 'La réunion est déplacée.' },
+      translations: { en: { type: 'audio', transcription: 'The meeting moved.' } },
+    }]);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID, conversationId: CONV_ID }) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    const [attachment] = res.json().data.attachments;
+
+    expect(Object.keys(attachment).sort()).toEqual([
+      'createdAt', 'duration', 'fileName', 'fileSize', 'fileUrl', 'height', 'id',
+      'messageId', 'mimeType', 'originalName', 'thumbnailUrl', 'uploadedBy', 'width',
+    ]);
     await app.close();
   });
 });
