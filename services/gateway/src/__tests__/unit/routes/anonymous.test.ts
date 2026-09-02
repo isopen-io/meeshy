@@ -467,6 +467,63 @@ describe('GET /anonymous/link/:identifier', () => {
     expect(stats.spokenLanguages).toEqual(['en', 'fr']);
     expect(stats.languageCount).toBe(2);
   });
+
+  /**
+   * #4522 — L'APERÇU DIT CE QUE LE LIEN OUVRE, pas seulement ce qu'il EXIGE.
+   *
+   * L'écran de jonction affiche, AVANT d'entrer, les quatre droits que le lien
+   * accorde à un invité — c'est le bloc « Ce que ce lien vous ouvre » de la
+   * planche. Ces quatre colonnes existent sur `ConversationShareLink` et
+   * gouvernent déjà les `permissions` du participant créé
+   * (`routes/conversations/link-admission.ts`, `joinAsGuest`) ; l'aperçu, lui,
+   * ne servait QUE les exigences (`requireAccount`, `requireNickname`…).
+   *
+   * Un écran qui affirme « ✓ Écrire et répondre » sans lire la colonne qui le
+   * décide MENT à un lecteur qui découvrira le refus au premier message. Servir
+   * la valeur est ici le « strict nécessaire » : ces quatre booléens décrivent
+   * ce que le porteur du lien s'apprête à accepter — ils ne révèlent ni membre,
+   * ni message, ni identité.
+   */
+  it('sert les quatre droits que le lien accorde à un invité', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: false,
+      allowViewHistory: true,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: false,
+      allowViewHistory: true,
+    });
+  });
+
+  it('demande les quatre droits au select racine — jamais une colonne devinée', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
+    findUnique.mockClear();
+    findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+
+    expect(findUnique.mock.calls[0][0].select).toMatchObject({
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: true,
+      allowViewHistory: true,
+    });
+  });
 });
 
 // ─── GET /anonymous/link/:identifier — select racine explicite (#4166 c1) ────

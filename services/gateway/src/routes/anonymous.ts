@@ -4,6 +4,7 @@ import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../utils/response';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { linkJoinProfileSchema } from '@meeshy/shared/types/link-join';
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
@@ -45,19 +46,14 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = 100;
 
 // Schemas de validation
-const joinAnonymousSchema = z.object({
-  firstName: z.string().min(1, 'Le prenom est requis').max(50),
-  lastName: z.string().min(1, 'Le nom est requis').max(50),
-  username: z.string().optional(),
-  email: z.email().optional().or(z.literal('')),
-  birthday: z.iso.datetime().optional().or(z.literal('')),
-  // Normalise at the write boundary: the participant `language` feeds the
-  // translation-target set (MessageTranslationService), which is keyed lowercase.
-  // Storing 'EN' / 'en-US' verbatim would inject a duplicated, never-matching NLLB
-  // target (Prisme rule #1 miss). `normalizeLanguageForDedup` also strips region subtags.
-  language: z.string().transform((v) => normalizeLanguageForDedup(v)).default('fr'),
-  deviceFingerprint: z.string().optional()
-});
+//
+// #4522 — la forme d'une demande de jonction est désormais PARTAGÉE
+// (`@meeshy/shared/types/link-join`). Elle était écrite ici, donc invisible de
+// tout client : un formulaire web ne pouvait que la recopier — une jumelle qui
+// dérive au premier `max(50)` déplacé — ou ne rien valider avant l'aller-retour.
+// La normalisation de langue à la frontière d'écriture (Prisme, règle 1) voyage
+// AVEC le schéma : elle est dans sa transformation, pas chez son appelant.
+const joinAnonymousSchema = linkJoinProfileSchema;
 
 const refreshSessionSchema = z.object({
   sessionToken: z.string().min(1, 'Session token requis')
@@ -132,7 +128,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
                     isMeeshyer: { type: 'boolean', example: false },
                     canSendMessages: { type: 'boolean' },
                     canSendFiles: { type: 'boolean' },
-                    canSendImages: { type: 'boolean' }
+                    canSendImages: { type: 'boolean' },
+                    // Le droit RÉSOLU de CE participant (surcharge de l'hôte
+                    // comprise), à ne pas confondre avec
+                    // `conversation.allowViewHistory` — la colonne du LIEN, qui
+                    // n'est que le repli quand rien n'est figé.
+                    canViewHistory: { type: 'boolean', description: 'Resolved history right of THIS participant' }
                   }
                 },
                 conversation: {
@@ -303,7 +304,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
                     isMeeshyer: { type: 'boolean', example: false },
                     canSendMessages: { type: 'boolean' },
                     canSendFiles: { type: 'boolean' },
-                    canSendImages: { type: 'boolean' }
+                    canSendImages: { type: 'boolean' },
+                    canViewHistory: { type: 'boolean', description: 'Resolved history right of THIS participant' }
                   }
                 },
                 conversation: {
@@ -473,6 +475,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
                 requireEmail: { type: 'boolean', description: 'Email required' },
                 requireBirthday: { type: 'boolean', description: 'Birthday required' },
                 allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
+                allowAnonymousMessages: { type: 'boolean', description: 'Guests may write in the conversation' },
+                allowAnonymousFiles: { type: 'boolean', description: 'Guests may send files' },
+                allowAnonymousImages: { type: 'boolean', description: 'Guests may send images' },
+                allowViewHistory: { type: 'boolean', description: 'Guests may read messages posted before they joined' },
                 conversation: {
                   type: 'object',
                   properties: {
@@ -560,6 +566,14 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         requireEmail: true,
         requireBirthday: true,
         allowedLanguages: true,
+        // #4522 — ce que le lien OUVRE, à côté de ce qu'il EXIGE. Ces quatre
+        // colonnes gouvernent déjà les `permissions` du participant créé
+        // (`link-admission.ts`, `joinAsGuest`) ; sans elles dans l'aperçu, un
+        // écran de jonction ne peut annoncer les droits qu'en les DEVINANT.
+        allowAnonymousMessages: true,
+        allowAnonymousFiles: true,
+        allowAnonymousImages: true,
+        allowViewHistory: true,
         conversation: {
           select: {
             id: true,
@@ -709,6 +723,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           requireEmail: shareLink.requireEmail,
           requireBirthday: shareLink.requireBirthday,
           allowedLanguages: shareLink.allowedLanguages,
+          allowAnonymousMessages: shareLink.allowAnonymousMessages,
+          allowAnonymousFiles: shareLink.allowAnonymousFiles,
+          allowAnonymousImages: shareLink.allowAnonymousImages,
+          allowViewHistory: shareLink.allowViewHistory,
           conversation: shareLink.conversation,
           creator: shareLink.creator,
           // Nouvelles statistiques
