@@ -284,13 +284,29 @@ public extension CanvasV3 {
             // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
             // délibérés — ne pas les unifier.
             if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
+            // **La FENÊTRE TEMPORELLE voyage** (#4840) — quatrième morsure du
+            // même piège, sur l'ENVELOPPE cette fois. #4832 a réparé `styleId`
+            // trois lignes plus haut en demandant « qu'est-ce qui part À CÔTÉ de
+            // ce que je viens de corriger ? », mais à la CHARGE seule : le
+            // `start: nil` de `timingV3` attendait juste en dessous, écrit en dur.
+            //
+            // Les trois autres clés suivent le sticker à la lettre — c'est la
+            // MÊME famille temporelle (`TimelineClipKind.place`). Omises quand
+            // `nil`, donc toute pastille posée avant ce lot se réencode octet
+            // pour octet, et sa barre reste le FANTÔME que la timeline rend
+            // pour une fenêtre absente (le type qui le dessine vit dans `MeeshyUI` —
+            // le nommer ici ferait fuir le plan dans la cible core, et une garde
+            // le refuse à juste titre).
+            if let duration = location.duration { payload["duration"] = .number(duration) }
+            if let fadeIn = location.fadeIn { payload["fadeIn"] = .number(fadeIn) }
+            if let fadeOut = location.fadeOut { payload["fadeOut"] = .number(fadeOut) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
                                     plane: .fg,
                                     z: effects.wireZ(location.id, location.zIndex, fallback),
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
-                                    timing: timingV3(start: nil,
+                                    timing: timingV3(start: location.startTime,
                                                      end: effects.wireTimingEnd?[location.id],
                                                      keyframes: nil),
                                     locale: nonEmpty(location.sourceLanguage),
@@ -305,7 +321,25 @@ public extension CanvasV3 {
                                                        x: Double(audio.x), y: Double(audio.y)),
                                     plane: .content,
                                     z: effects.wireZ(audio.id, audio.zIndex, fallback),
-                                    transform: TransformV3(),
+                                    // **La puce de son se PINCE et se TOURNE** —
+                                    // `updateScale` / `updateRotation`
+                                    // (`StoryCanvasUIView+Manipulation.swift`) les
+                                    // écrivent pour les CINQ familles, audio compris.
+                                    // Un `TransformV3()` par défaut jetait les deux :
+                                    // chaque lecteur voyait la puce à l'échelle 1,
+                                    // sans angle. Trouvé par le témoin d'exhaustivité
+                                    // (#4833) à son premier tour, sur la seule famille
+                                    // que personne n'avait regardée.
+                                    // `TransformV3` ne sait pas dire « absent » :
+                                    // le défaut du décodeur EST la valeur neutre
+                                    // des deux côtés, donc `nil` s'émet en 1 / 0 et
+                                    // se relit en `nil`. Une puce jamais pincée se
+                                    // réencode ainsi octet pour octet, et un auteur
+                                    // qui pose exactement 1,0 obtient `nil` — les
+                                    // deux rendent le même pixel.
+                                    transform: TransformV3(scale: audio.scale ?? 1,
+                                                           rotation: audio.rotation ?? 0,
+                                                           opacity: 1),
                                     timing: timingV3(start: audio.startTime.map(exactDouble),
                                                      end: effects.wireTimingEnd?[audio.id],
                                                      keyframes: audio.keyframes),
@@ -496,6 +530,19 @@ public extension CanvasV3 {
         }
         if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
+        // **La forme d'onde d'une note vocale** — ~80 échantillons figés à la
+        // composition (`StoryModels.swift`), que `StoryAudioPlayerView` peint
+        // barre par barre. Sans eux, son `guard !samples.isEmpty else { return }`
+        // ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
+        // vocale posée sur la scène. Quatre-vingts nombres pour ne pas servir un
+        // trou — le calcul n'a pas besoin d'être long.
+        //
+        // Omis quand le tableau est vide : une piste EMPRUNTÉE n'en porte pas
+        // (`StoryAudioIdentity.showsWaveform` ne peint que l'enregistrement), et
+        // son objet se réencode alors octet pour octet.
+        if !audio.waveformSamples.isEmpty {
+            payload["waveformSamples"] = .array(audio.waveformSamples.map { .number(exactDouble($0)) })
+        }
         if let isBackground = audio.isBackground { payload["isBackground"] = .bool(isBackground) }
         if let loop = audio.loop { payload["loop"] = .bool(loop) }
         if let duration = audio.duration { payload["duration"] = .number(exactDouble(duration)) }
@@ -524,6 +571,7 @@ public extension CanvasV3 {
             ("textAlign", text.textAlign), ("textBg", text.textBg),
             ("fontWeight", text.fontWeight), ("frameShape", text.frameShape),
             ("frameBorderColor", text.frameBorderColor), ("borderColor", text.borderColor),
+            ("textEffect", text.textEffect),
             ("name", text.name), ("referenceUserId", text.referenceUserId),
         ]
         for (key, value) in strings {
@@ -718,6 +766,7 @@ public extension StoryEffects {
             frameBorderColor: object.payload.string("frameBorderColor"),
             borderColor: object.payload.string("borderColor"),
             borderWidth: object.payload.double("borderWidth"),
+            textEffect: object.payload.string("textEffect"),
             translations: object.payload.stringMap("translations"),
             sourceLanguage: object.locale,
             startTime: object.timing?.start,
@@ -816,7 +865,11 @@ public extension StoryEffects {
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
             sourceLanguage: object.locale,
-            styleId: nonEmpty(object.payload.string("styleId")))
+            styleId: nonEmpty(object.payload.string("styleId")),
+            startTime: object.timing?.start,
+            duration: object.payload.double("duration"),
+            fadeIn: object.payload.double("fadeIn"),
+            fadeOut: object.payload.double("fadeOut"))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {
@@ -826,6 +879,8 @@ public extension StoryEffects {
             placement: object.payload.string("placement") ?? "overlay",
             x: CGFloat(position.x), y: CGFloat(position.y),
             volume: object.payload.double("volume").map { Float($0) } ?? 1,
+            waveformSamples: object.payload.array("waveformSamples")?
+                .compactMap { if case .number(let v) = $0 { return Float(v) } else { return nil } } ?? [],
             isBackground: object.payload.bool("isBackground"),
             backgroundAudioVariants: decodeWireArray(StoryAudioVariant.self,
                                                      from: object.payload.array("variants")),
@@ -841,6 +896,8 @@ public extension StoryEffects {
             soundId: object.payload.string("soundId"),
             soundAuthorUsername: object.payload.string("soundAuthorUsername"))
         audio.zIndex = object.z
+        audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
+        audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation
         audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         audio.sourceStart = object.payload.double("sourceStart")
         audio.sourceEnd = object.payload.double("sourceEnd")

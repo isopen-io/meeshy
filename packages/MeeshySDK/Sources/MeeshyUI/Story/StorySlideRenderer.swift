@@ -270,6 +270,15 @@ public enum StorySlideRenderer {
             attrs[.backgroundColor] = bg
         }
 
+        // L'EFFET (#4870) — même site de conversion que le canvas et l'éditeur
+        // en ligne, projeté sur `NSShadow` à la taille de police COMPOSITE :
+        // sans lui, la cover et le thumbHash montreraient un texte plat là où
+        // la scène brille.
+        if let shadow = StoryTextEffectRendering.nsShadow(
+            for: textObj, fontSize: fontSize, textColor: textColor) {
+            attrs[.shadow] = shadow
+        }
+
         let textWidth = size.width * 0.85
         let centerX = size.width * CGFloat(textObj.x)
         let centerY = size.height * CGFloat(textObj.y)

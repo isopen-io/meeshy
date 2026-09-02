@@ -49,6 +49,18 @@ export const RACINE_ROUTES = join(__dirname, '..', '..', 'routes');
 const CHEMIN_UTILS_DEPRECATION = join(__dirname, '..', '..', 'utils', 'deprecation.ts');
 /** `apiPath` (packages/shared) est la SEULE autre dépendance HORS fichier — pure, sans effet de bord. */
 const CHEMIN_API_PREFIX = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'shared', 'api', 'prefix.ts');
+/**
+ * `socialEventsDeprecation` (#4150) — le sursis PARTAGÉ par les six alias de
+ * télémétrie de lecture. Troisième dépendance pure hors fichier : elle n'importe
+ * que `dateDeRetrait` et `apiPath`, les deux que ce balayage résout déjà.
+ *
+ * Elle vit dans son propre module EXACTEMENT pour être ici : la déclarer dans
+ * `routes/social/events.ts` — qui importe Prisma, Fastify et `PostService` —
+ * la mettrait hors de portée de toute évaluation, et ses six sites tomberaient
+ * dans la colonne `erreur` faute d'être mesurables. Un successeur PARTAGÉ par
+ * six adresses est celui qu'on veut le plus vérifier, pas le moins.
+ */
+const CHEMIN_SOCIAL_DEPRECATION = join(__dirname, '..', '..', 'routes', 'social', 'deprecation.ts');
 
 const REPERTOIRES_IGNORES = new Set(['__tests__', 'node_modules']);
 
@@ -511,15 +523,16 @@ function nomDeclare(corps: string): string | null {
 }
 
 /**
- * Les DEUX importations pures, hors fichier, que ce patron rencontre dans ce
- * dépôt — `dateDeRetrait` (fenêtre de retrait) et `apiPath` (préfixe de
- * version). Toutes deux sans effet de bord, RÉSOLUES pour de vrai plutôt que
- * fabriquées : leur composition FAIT PARTIE de ce qu'un balayage de
- * suivabilité doit vérifier.
+ * Les TROIS importations pures, hors fichier, que ce patron rencontre dans ce
+ * dépôt — `dateDeRetrait` (fenêtre de retrait), `apiPath` (préfixe de version)
+ * et `socialEventsDeprecation` (#4150, le sursis partagé par six alias). Toutes
+ * sans effet de bord, RÉSOLUES pour de vrai plutôt que fabriquées : leur
+ * composition FAIT PARTIE de ce qu'un balayage de suivabilité doit vérifier.
  */
 const IMPORTS_PURS_CONNUS: ReadonlyArray<readonly [string, string]> = [
   ['dateDeRetrait', CHEMIN_UTILS_DEPRECATION],
   ['apiPath', CHEMIN_API_PREFIX],
+  ['socialEventsDeprecation', CHEMIN_SOCIAL_DEPRECATION],
 ];
 
 export function evaluerSuccesseur(site: SiteAppel, source: string): ResultatEvaluation {

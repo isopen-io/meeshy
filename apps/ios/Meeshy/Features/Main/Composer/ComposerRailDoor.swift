@@ -160,12 +160,44 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
     /// pas dit sur quoi elle agit — ce qui est exactement la question qu'on
     /// oublie de se poser en ajoutant un bouton.
-    var level: ComposerRailLevel {
+    /// **Le niveau dépend de DEUX termes : la porte ET le format** (#4893,
+    /// directive porteur 2026-09-02).
+    ///
+    /// > « Il faut placer l'outil géolocalisation, hashtag, corpus de texte et
+    /// > mention à GAUCHE lorsqu'on est en mode Story afin de fixer chaque
+    /// > position à chaque story, et on laisse en bas pour chaque Réel et
+    /// > Post. »
+    ///
+    /// La raison est dans la directive : **en Story ces quatre outils POSENT
+    /// quelque chose de positionnable** — « fixer chaque position à chaque
+    /// story ». Un lieu, un hashtag, une mention et un corpus de texte y sont
+    /// des objets qu'on place, qu'on agrandit et qu'on tourne, donc du niveau
+    /// OBJET, donc le rail gauche. Hors Story, les mêmes outils QUALIFIENT ce
+    /// qui part — ils ne se posent nulle part — donc la rangée canonique.
+    ///
+    /// > C'est le MÊME outil qui change de niveau, pas deux outils homonymes.
+    /// > Le glyphe, le libellé et la feuille qu'il ouvre ne changent pas ; ce
+    /// > qui change est ce que le format permet d'en faire.
+    ///
+    /// Le `switch` reste EXHAUSTIF sur la porte : une dixième porte ne compile
+    /// pas tant qu'elle n'a pas dit sur quoi elle agit — et, désormais, si
+    /// cela dépend du format.
+    func level(for format: ComposerFormat) -> ComposerRailLevel {
         switch self {
-        case .description:                    return .slide
-        case .mention, .place, .hashtag:      return .publication
-        case .media, .sound, .sticker, .text: return .object
-        case .drawing:                        return .scene
+        case .description:
+            return .slide
+        // Les quatre outils que la directive DÉPLACE. Le prédicat porte sur le
+        // format et non sur une liste de formats « autres » : ajouter un
+        // cinquième format le rangera du bon côté sans qu'on y pense, et c'est
+        // le sens de la règle — seule la Story pose.
+        case .mention, .place, .hashtag, .text:
+            return format == .story ? .object : .publication
+        // La MATIÈRE se pose toujours, quel que soit le format : une image de
+        // premier plan, une piste et un sticker sont des objets par nature.
+        case .media, .sound, .sticker:
+            return .object
+        case .drawing:
+            return .scene
         }
     }
 
@@ -242,13 +274,33 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         let sceneExists = format != .status
         return canonicalRail.filter { porte in
             guard served.contains(porte) else { return false }
+            guard !removedFromFormat(format).contains(porte) else { return false }
             guard !sceneExists else { return true }
             // Sans toile, ce qui APPARAÎT sur elle n'a rien à poser : la même
             // question qui range la porte à gauche décide aussi qu'elle ne
             // survit pas à un format sans scène. Une seule règle, deux effets.
-            guard !porte.level.appearsOnCanvas else { return false }
+            guard !porte.level(for: format).appearsOnCanvas else { return false }
             return !removedFromStatus.contains(porte)
         }
+    }
+
+    /// **Ce que le format retire du rail, en plus de ce que la toile décide.**
+    ///
+    /// En STORY, le paragraphe n'a pas de place — non parce qu'une story se
+    /// passerait de texte, mais parce qu'elle n'a pas de LÉGENDE distincte à
+    /// écrire : `ComposerRailDoor.description` le dit depuis #4045, « en S/R
+    /// cette description EST le contenu de la publication ». Une porte qui
+    /// promettrait d'ajouter une légende à côté du contenu ouvrirait un second
+    /// champ pour un seul texte.
+    ///
+    /// > « À la place de paragraphe c'est donc le corpus de texte qu'on doit
+    /// > afficher en mode story » — directive porteur 2026-09-02.
+    ///
+    /// Le corpus (`.text`) prend donc la place, et il y est POSABLE : c'est la
+    /// même bascule que `level(for:)`, vue depuis la présence plutôt que
+    /// depuis le niveau.
+    private static func removedFromFormat(_ format: ComposerFormat) -> Set<ComposerRailDoor> {
+        format == .story ? [.description] : []
     }
 
     /// **Ce que le profil MOOD retire EN PLUS, et pour une autre raison.**
@@ -268,5 +320,18 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// effet de bord doit vérifier ce que cet effet de bord PROTÉGEAIT.** Une
     /// protection non déclarée ne se signale pas quand on la retire — elle
     /// n'était écrite nulle part.
-    private static let removedFromStatus: Set<ComposerRailDoor> = [.place]
+    ///
+    /// **`.text` y entre au #4893, et c'est la leçon ci-dessus rejouée sur une
+    /// autre porte.** Le corpus de texte était tenu hors du Mood par ACCIDENT :
+    /// il était `.object`, donc écarté par la règle de la toile. La bascule par
+    /// format le rend `.publication` hors Story — la protection tombe, et le
+    /// Mood se retrouverait avec DEUX champs de texte, le sien
+    /// (`ComposerMoodSurface.text`) et une porte qui en ouvre un second.
+    ///
+    /// > La règle est écrite deux paragraphes plus haut, elle a coûté une
+    /// > régression à `.place`, et elle vient d'être payée une seconde fois par
+    /// > le lot qui la cite. **Une protection non déclarée ne se signale pas
+    /// > quand on la retire** — seul `test_laPorteTexte_disparaitDunStatus` l'a
+    /// > vue.
+    private static let removedFromStatus: Set<ComposerRailDoor> = [.place, .text]
 }

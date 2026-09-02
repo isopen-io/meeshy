@@ -174,16 +174,34 @@ export function convertV1ToV3(
       typeof m.isMuted === 'boolean' ? m.isMuted
       : typeof m.muted === 'boolean' ? m.muted
       : volume !== undefined ? volume <= 0 : undefined;
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // Passent désormais sans qu'on y pense : `fadeIn`, `fadeOut`, `sourceStart`,
+    // `sourceEnd`, `intrinsicDuration`, `thumbHash`, `name`, `placement`,
+    // `mutedVolumeMemento`, `isDuckingDisabled` — dix clés que le pont Swift
+    // émettait et que cette branche jetait.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      isMuted: _im, muted: _mt, volume: _vo, anchor: _an,
+      postMediaId: _pm, mediaURL: _mu, mediaType: _my,
+      ...rest
+    } = m;
     o.payload = {
+      ...rest,
       postMediaId: m.postMediaId ?? null,
       ...(str(m.mediaURL) ? { mediaURL: m.mediaURL } : {}),
       ...(str(m.mediaType) ? { mediaType: m.mediaType } : {}),
       ...(volume !== undefined ? { volume } : {}),
       ...(muted !== undefined ? { muted } : {}),
-      ...(typeof m.loop === 'boolean' ? { loop: m.loop } : {}),
-      ...(typeof m.isBackground === 'boolean' ? { isBackground: m.isBackground } : {}),
-      ...(typeof m.duration === 'number' ? { duration: m.duration } : {}),
-      ...(typeof m.aspectRatio === 'number' ? { aspectRatio: m.aspectRatio } : {}),
       ...(isPivot(m.anchor) ? { anchor: m.anchor } : {}),
     };
     objects.push(o);
@@ -217,18 +235,28 @@ export function convertV1ToV3(
     // chaînes (`isStringMap`) — un emplacement numérique ne rendrait rien et
     // ferait mentir le type `[String: String]` du client. `animation` et
     // `duration` (#4821) voyagent au même titre.
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // `slots` est le seul champ à règle ici, et il le RESTE : la fusion de
+    // #4741 et #4819 a gardé la forme la plus STRICTE, et le laisser passer par
+    // le `rest` reviendrait sur cet arbitrage.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      slots: _sl,
+      ...rest
+    } = st;
     o.payload = {
-      emoji: st.emoji,
-      ...(str(st.templateId) ? { templateId: st.templateId } : {}),
+      ...rest,
       ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
-      ...(str(st.animation) ? { animation: st.animation } : {}),
-      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
-      ...(str(st.provider) ? { provider: st.provider } : {}),
-      ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
-      ...(typeof st.duration === 'number' ? { duration: st.duration } : {}),
-      ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
-      ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
-      ...(typeof st.fadeOut === 'number' ? { fadeOut: st.fadeOut } : {}),
     };
     objects.push(o);
   }
@@ -263,30 +291,79 @@ export function convertV1ToV3(
     // et toute clé ajoutée en amont s'y perd en silence. Le témoin qui
     // l'attraperait vraiment est un témoin d'EXHAUSTIVITÉ (#4833) — celui par
     // clé ne parle que des clés auxquelles on a déjà pensé.
+    // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE TEMPORELLE, cette
+    // fois. `baseObject` porte déjà `timing.start` / `timing.end` pour toute
+    // famille ; les trois clés de charge, elles, se recopient branche par
+    // branche, et celle-ci était la SEULE des quatre à n'en émettre aucune
+    // (média, sticker et audio les ont toutes les trois). Le lieu partage sa
+    // famille temporelle avec le sticker — `TimelineClipKind.place`.
+    //
+    // Défensif à ce jour : aucun producteur v1 ne pose encore de fenêtre sur un
+    // lieu (iOS publie en v3 nativement, web et Android n'ont pas de timeline).
+    // Ce qui se répare ici est l'INVENTAIRE — la forme même que ce commentaire
+    // dénonce depuis #4832, et qui a mordu quatre fois sur cette branche.
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu. Un inventaire humain se
+    // maintient à la main ; un `rest` se maintient tout seul.
+    //
+    // Ne sortent du `rest` que deux catégories, et il faut les distinguer :
+    //   - les champs d'ENVELOPPE, que `baseObject` a déjà logés ailleurs — les
+    //     laisser passer les mettrait EN DOUBLE, dans l'enveloppe et la charge ;
+    //   - les champs à RÈGLE, dont la valeur ne se recopie pas telle quelle.
+    //     Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
+    //
+    // `place` est forcé à `null` quand il manque : le `rest` l'OMETTRAIT, et le
+    // golden gelé porte la clé. Et `anchor` — le pivot nommé — passe désormais,
+    // onzième clé récupérée.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      place: _pl,
+      ...rest
+    } = L;
     o.payload = {
+      ...rest,
       place: L.place ?? null,
-      ...(str(L.styleId) ? { styleId: L.styleId } : {}),
     };
     objects.push(o);
   }
   for (const a of asArray(blob.audioPlayerObjects)) {
     const o = baseObject(a, 'audio', 'content', z++);
+    // **RÉPAND, puis corrige** (#4905) — la forme de la branche `textObjects`,
+    // seule des cinq à n'avoir JAMAIS rien perdu.
+    //
+    // Trois champs sont forcés à `null` quand ils manquent : le `rest` les
+    // OMETTRAIT, et le golden gelé porte les clés. Deux portent une règle. Le
+    // reste passe — dont `mutedVolumeMemento`, `sourceStart` et `sourceEnd`,
+    // trois clés que le pont Swift émettait et que cette branche jetait.
+    //
+    // `backgroundAudioVariants` sort du `rest` DÉLIBÉRÉMENT : le pont Swift
+    // nomme cette donnée `variants` dans la charge, et la laisser passer sous
+    // son nom v1 créerait un SECOND nom pour une seule chose — exactement ce
+    // qu'un lot de cohérence ne doit pas faire. Que la passerelle ne porte pas
+    // les variantes du tout est un manque distinct, à mesurer à part.
+    const {
+      id: _i, x: _x, y: _y, scale: _s, rotation: _r, opacity: _op, zIndex: _z,
+      startTime: _st, endTime: _e, keyframes: _k, sourceLanguage: _l,
+      postMediaId: _pm, mediaURL: _mu, placement: _pl,
+      volume: _vo, waveformSamples: _wf, backgroundAudioVariants: _bv,
+      ...rest
+    } = a;
     o.payload = {
+      ...rest,
       postMediaId: str(a.postMediaId) ?? null,
       mediaURL: a.mediaURL ?? null,
       placement: a.placement ?? null,
-      ...(str(a.soundId) ? { soundId: a.soundId } : {}),
-      ...(str(a.soundAuthorUsername) ? { soundAuthorUsername: a.soundAuthorUsername } : {}),
-      ...(str(a.name) ? { name: a.name } : {}),
       // `volume` est un champ VIVANT (F10) mais son défaut de décodage vaut 1
       // des deux côtés : l'omettre le restitue, l'émettre à 1 ferait diverger
       // le golden gelé de son propre convertisseur.
       ...(typeof a.volume === 'number' && a.volume !== 1 ? { volume: a.volume } : {}),
-      ...(typeof a.isBackground === 'boolean' ? { isBackground: a.isBackground } : {}),
-      ...(typeof a.loop === 'boolean' ? { loop: a.loop } : {}),
-      ...(typeof a.duration === 'number' ? { duration: a.duration } : {}),
-      ...(typeof a.fadeIn === 'number' ? { fadeIn: a.fadeIn } : {}),
-      ...(typeof a.fadeOut === 'number' ? { fadeOut: a.fadeOut } : {}),
+      // La FORME D'ONDE d'une note vocale (~80 nombres) : sans elle, le
+      // `guard !samples.isEmpty` du lecteur ne dessine RIEN — une bande vide
+      // sous la puce. Parité avec le pont Swift, qui l'emet depuis le meme lot.
+      ...(Array.isArray(a.waveformSamples) && a.waveformSamples.length > 0
+        ? { waveformSamples: a.waveformSamples }
+        : {}),
     };
     objects.push(o);
   }

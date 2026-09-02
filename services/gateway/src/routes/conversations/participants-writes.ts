@@ -22,6 +22,7 @@ import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { appliquerDroitsDeParticipant } from './participant-rights-core';
+import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
@@ -107,6 +108,17 @@ export function registerParticipantWriteRoutes(
   prisma: PrismaClient,
   requiredAuth: any
 ) {
+  /**
+   * L'adresse UNIQUE où un participant se change — `PATCH
+   * …/participants/:participantKey` (#4176). Elle vit dans son propre fichier
+   * (`participant-patch.ts`) et s'enregistre ICI plutôt que depuis la coquille
+   * `participants.ts` : celle-ci COMPOSE, elle n'implémente pas, et la route
+   * fusionnée est une route d'ÉCRITURE de participant comme les deux
+   * ci-dessous. L'ordre d'enregistrement n'entre dans aucune décision — Fastify
+   * apparie par arbre radix, et les quatre alias portent un segment de plus.
+   */
+  registerParticipantPatchRoute(fastify, prisma, requiredAuth);
+
   /**
    * Les droits d'un visiteur sans compte, pilotés par l'hôte.
    *

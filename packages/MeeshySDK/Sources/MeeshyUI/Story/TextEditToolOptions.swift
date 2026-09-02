@@ -28,6 +28,18 @@ enum TextEditLabels {
         }
     }
 
+    /// Le nom d'un effet (#4870). « Aucun » reprend la clé du cadre : c'est
+    /// le même mot, et une deuxième clé pour le même mot divergerait à la
+    /// première retouche de traduction.
+    static func title(for effect: StoryTextEffect) -> String {
+        switch effect {
+        case .none:   return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
+        case .glow:   return String(localized: "story.textEdit.effect.glow", defaultValue: "Lueur", bundle: .module)
+        case .shadow: return String(localized: "story.textEdit.effect.shadow", defaultValue: "Ombre", bundle: .module)
+        case .relief: return String(localized: "story.textEdit.effect.relief", defaultValue: "Relief", bundle: .module)
+        }
+    }
+
     static func title(for shape: StoryTextFrameShape) -> String {
         switch shape {
         case .none:      return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
@@ -73,6 +85,7 @@ public struct TextEditToolOptions: View {
         Group {
             switch tool {
             case .style:      styleOptions
+            case .effect:     effectOptions
             case .color:      colorOptions
             case .align:      alignOptions
             case .background: backgroundOptions
@@ -176,6 +189,59 @@ public struct TextEditToolOptions: View {
                 }
             }
         }
+    }
+
+    // MARK: - Effet (#4870)
+
+    /// **Chaque vignette rend « Aa » AVEC son effet, dans la police courante**
+    /// (loi 6 — une vignette montre la donnée en visuel). Le nom en dessous
+    /// est ce que VoiceOver lit ; l'œil, lui, compare quatre lueurs et ombres
+    /// sur le même glyphe, comme la grille des polices compare dix-huit faces
+    /// sur le même « Aa ».
+    private var effectOptions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextEffect.allCases, id: \.self) { effect in
+                    effectChip(effect)
+                }
+            }
+            .padding(4)   // marge pour la lueur, qui déborde de la vignette
+        }
+    }
+
+    /// 48 pt de haut, comme les vignettes du spécimen des polices — et non les
+    /// 38 pt des pastilles historiques, sous le plancher des 44 pt (dimension 5).
+    private func effectChip(_ effect: StoryTextEffect) -> some View {
+        let isSel = textObject.parsedTextEffect == effect
+        let ink: Color = isSel ? .white : .primary
+        return Button {
+            // « Aucun » s'écrit `nil` : un texte sans effet garde le JSON
+            // qu'il avait — même règle que `StoryTextAttributeCycle`.
+            textObject.textEffect = effect == StoryTextEffect.none ? nil : effect.rawValue
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 3) {
+                Text(verbatim: "Aa")
+                    .font(storyFont(for: textObject.parsedTextStyle, size: 17))
+                    .foregroundStyle(ink)
+                    .storyTextEffect(effect, fontSize: 17, textColor: ink)
+                Text(TextEditLabels.title(for: effect))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.85))
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 56)
+            .frame(height: 48)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                : AnyShapeStyle(Color.gray.opacity(0.18)))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(TextEditLabels.title(for: effect))
+        .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Color

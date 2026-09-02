@@ -86,7 +86,7 @@ describe('ROUTE_TABLE (#4278)', () => {
     }
   });
 
-  it('a exactement 60 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
+  it('a exactement 63 entrées — un canary : une entrée en moins est une route perdue en silence', () => {
     // Compte ancré au 2026-08-30 sur les 65 actes d'enregistrement de
     // `route-registration.ts` moins les 8 montages qui exigent PLUS qu'un
     // {module, prefix} (traduction, userDeletions, conversationRoutes,
@@ -143,7 +143,7 @@ describe('ROUTE_TABLE (#4278)', () => {
     // AVANT régénération qu'une seule différence, `+ DELETE
     // /api/v1/admin/share-links/:id (module=registerAdminShareLinkRoutes)`,
     // soit exactement celle-là et aucune autre.
-    expect(ROUTE_TABLE.length).toBe(62);
+    expect(ROUTE_TABLE.length).toBe(63);
   });
 });
 
