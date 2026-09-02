@@ -205,8 +205,11 @@
     <string name="delete_account_warning_preferences">As suas preferências e configurações</string>
     <string name="delete_account_confirm_prompt">Digite %1$s para confirmar</string>
     <string name="delete_account_confirm_label">Frase de confirmação</string>
+    <string name="delete_account_password_label">Senha atual</string>
     <string name="delete_account_button">Excluir minha conta definitivamente</string>
+    <string name="delete_account_error_invalid_password">Senha incorreta. Tente novamente.</string>
     <string name="delete_account_error_pending">Já existe uma solicitação de exclusão em andamento. Verifique seu e-mail.</string>
+    <string name="delete_account_error_no_email">Adicione e verifique um endereço de e-mail antes de excluir sua conta.</string>
     <string name="delete_account_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
     <string name="delete_account_error_generic">Algo deu errado. Tente novamente.</string>
     <string name="delete_account_email_title">Um e-mail de confirmação foi enviado</string>

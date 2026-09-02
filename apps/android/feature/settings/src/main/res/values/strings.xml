@@ -205,8 +205,11 @@
     <string name="delete_account_warning_preferences">Your preferences and settings</string>
     <string name="delete_account_confirm_prompt">Type %1$s to confirm</string>
     <string name="delete_account_confirm_label">Confirmation phrase</string>
+    <string name="delete_account_password_label">Current password</string>
     <string name="delete_account_button">Permanently delete my account</string>
+    <string name="delete_account_error_invalid_password">Incorrect password. Please try again.</string>
     <string name="delete_account_error_pending">A deletion request is already in progress. Check your inbox.</string>
+    <string name="delete_account_error_no_email">Add and verify an email address before you can delete your account.</string>
     <string name="delete_account_error_network">No connection. Check your network and try again.</string>
     <string name="delete_account_error_generic">Something went wrong. Please try again.</string>
     <string name="delete_account_email_title">A confirmation email is on its way</string>

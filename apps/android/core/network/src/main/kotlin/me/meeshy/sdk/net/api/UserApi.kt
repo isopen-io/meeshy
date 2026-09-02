@@ -8,8 +8,6 @@ import me.meeshy.sdk.model.ChangePasswordRequest
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
-import me.meeshy.sdk.model.DeleteAccountRequest
-import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -21,7 +19,6 @@ import me.meeshy.sdk.model.VerifyPhoneChangeRequest
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
-import retrofit2.http.HTTP
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -47,6 +44,29 @@ data class UpdateAvatarRequest(
 @Serializable
 data class UpdateBannerRequest(
     val banner: String,
+)
+
+/**
+ * Body for `POST /me/account/deletion` (`routes/me/delete-account.ts`,
+ * `OpenAccountDeletionBodySchema`) — the modern deletion-request route (#4183, #4799).
+ * Unlike the legacy `DELETE /me/delete-account` route (kept gateway-side for older
+ * installed clients, no longer bound here), it requires the caller's CURRENT
+ * password: a stolen JWT alone can no longer open a deletion request.
+ * [confirmationPhrase] still carries the literal
+ * `me.meeshy.sdk.model.AccountDeletionConfirmation.REQUIRED_PHRASE`.
+ */
+@Serializable
+data class OpenAccountDeletionRequest(
+    val confirmationPhrase: String,
+    val currentPassword: String,
+)
+
+@Serializable
+data class AccountDeletionOpenedResponse(
+    val message: String = "",
+    /** ISO-8601 — the confirmation link's expiry. Kept as the raw wire string; no
+     *  client-side countdown in this lot. */
+    val tokenExpiresAt: String? = null,
 )
 
 interface UserApi {
@@ -146,10 +166,16 @@ interface UserApi {
     @PATCH("users/me/password")
     suspend fun changePassword(@Body body: ChangePasswordRequest): ApiResponse<ChangePasswordResponse>
 
-    // Retrofit needs @HTTP(hasBody = true) to attach a body to a DELETE — gateway route
-    // `DELETE /api/v1/me/delete-account` (routes/me/delete-account.ts).
-    @HTTP(method = "DELETE", path = "me/delete-account", hasBody = true)
-    suspend fun deleteAccount(@Body body: DeleteAccountRequest): ApiResponse<DeleteAccountResponse>
+    /**
+     * `POST /api/v1/me/account/deletion` (routes/me/delete-account.ts) — the modern
+     * deletion-request route requiring the current password (#4183, #4799). The
+     * legacy `DELETE /api/v1/me/delete-account` route stays registered gateway-side
+     * for older installed clients, but this app no longer calls it.
+     */
+    @POST("me/account/deletion")
+    suspend fun openAccountDeletion(
+        @Body body: OpenAccountDeletionRequest,
+    ): ApiResponse<AccountDeletionOpenedResponse>
 
     @POST("users/me/change-phone")
     suspend fun changePhone(@Body body: ChangePhoneRequest): ApiResponse<ChangePhoneResponse>
