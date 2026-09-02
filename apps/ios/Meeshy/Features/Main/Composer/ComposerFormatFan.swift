@@ -44,26 +44,55 @@ nonisolated enum ComposerFormatAvailability {
     /// L'ordre rendu est celui des CANDIDATS, jamais celui de l'offre : un
     /// format qui devient choisissable ne doit pas sauter de place sous le
     /// doigt de quelqu'un qui vient d'ajouter une vidéo.
+    /// - Parameter carriesMoreThanText: le composer porte-t-il autre chose que
+    ///   du texte — un média, une scène ? C'est la SEULE question dont une
+    ///   phrase de refus dépende aujourd'hui, et elle vient sans valeur par
+    ///   défaut : un défaut laisserait un appelant obtenir silencieusement la
+    ///   mauvaise moitié du diagnostic, ce que ce lot existe pour fermer.
     static func verdicts(candidates: [ComposerFormat],
-                         offered: [ComposerFormat]) -> [Verdict] {
+                         offered: [ComposerFormat],
+                         carriesMoreThanText: Bool) -> [Verdict] {
         candidates.map { format in
             offered.contains(format)
                 ? Verdict(format: format, isChoosable: true, reason: nil)
-                : Verdict(format: format, isChoosable: false, reason: reason(for: format))
+                : Verdict(format: format, isChoosable: false,
+                          reason: reason(for: format, carriesMoreThanText: carriesMoreThanText))
         }
     }
 
     /// **Chaque refus a sa propre phrase.** Deux formats qui refusent pour le
     /// même motif n'enseignent rien : l'auteur apprend « non », pas « quoi
     /// faire ».
-    static func reason(for format: ComposerFormat) -> String {
+    ///
+    /// **Le principe était juste et appliqué au mauvais GRAIN** (#4858). Une
+    /// phrase par FORMAT ne peut pas dire une cause quand le format en a
+    /// plusieurs — et la signature `reason(for format:)` interdisait même de
+    /// l'essayer, la cause n'y entrant pas.
+    ///
+    /// Le MOOD refuse pour deux causes OPPOSÉES
+    /// (`ComposerMoodGate.compositionQualifiesAsMood`) : « vous portez plus que
+    /// du texte » (`guard !hasMedia, !hasScene`) et « vous n'avez rien écrit »
+    /// (`!text.isEmpty`). L'ancienne phrase — « Ne porte que du texte » — est
+    /// juste pour la première et TROMPEUSE pour la seconde : sur un composer
+    /// vide elle se lit « vous en avez trop » quand il n'y a rien.
+    ///
+    /// Le RÉEL, lui, disait quelque chose de FAUX. `qualifiesAsReel` accepte
+    /// trois formes — une vidéo ≥ 3 s, un SON ≥ 3 s, ou au moins DEUX images —
+    /// et « Demande une vidéo » n'en nommait qu'une : un auteur à une photo
+    /// près de qualifier était envoyé chercher une vidéo. Une seule phrase
+    /// suffit ici, à condition qu'elle soit vraie ; trois coûteraient trois
+    /// clés pour une seule action, « ajouter de la matière ».
+    static func reason(for format: ComposerFormat, carriesMoreThanText: Bool) -> String {
         switch format {
         case .reel:
             return String(localized: "composer.format.denied.reel",
-                          defaultValue: "Demande une vidéo", bundle: .main)
+                          defaultValue: "Demande une vidéo, un son ou deux photos", bundle: .main)
         case .status:
-            return String(localized: "composer.format.denied.mood",
-                          defaultValue: "Ne porte que du texte", bundle: .main)
+            return carriesMoreThanText
+                ? String(localized: "composer.format.denied.mood",
+                         defaultValue: "Ne porte que du texte", bundle: .main)
+                : String(localized: "composer.format.denied.mood.empty",
+                         defaultValue: "Écrivez d'abord quelque chose", bundle: .main)
         case .story:
             return String(localized: "composer.format.denied.story",
                           defaultValue: "Indisponible depuis cette porte", bundle: .main)
@@ -251,6 +280,13 @@ struct ComposerFormatFan: View {
     /// candidats sont les offerts, ce qui laisse inchangé tout appelant qui ne
     /// se prononce pas.
     var candidateFormats: [ComposerFormat] = []
+
+    /// **Ce que le composer porte AUTRE que du texte** — un média, une scène.
+    ///
+    /// Sans valeur par défaut, et c'est le lot (#4858) : un défaut laisserait
+    /// un hôte obtenir silencieusement la mauvaise moitié du diagnostic — « ne
+    /// porte que du texte » sur un composer vide, où le remède est d'écrire.
+    var carriesMoreThanText: Bool
     @Binding var selection: ComposerFormat
 
     private var candidates: [ComposerFormat] {
@@ -294,7 +330,8 @@ struct ComposerFormatFan: View {
     private var fan: some View {
         Menu {
             ForEach(Array(ComposerFormatAvailability.verdicts(
-                candidates: candidates, offered: offeredFormats).enumerated()), id: \.offset) { entry in
+                candidates: candidates, offered: offeredFormats,
+                carriesMoreThanText: carriesMoreThanText).enumerated()), id: \.offset) { entry in
                 let verdict = entry.element
                 Button {
                     selection = verdict.format
