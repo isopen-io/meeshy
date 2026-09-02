@@ -25,7 +25,11 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import {
+  refuserAccesConversation,
+  verdictAccesConversation,
+  type MessagesDeRefusDAcces
+} from './utils/access-control';
 import type { ConversationParams } from './types';
 import { sendForbidden, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -34,6 +38,21 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+
+/**
+ * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
+ *
+ * `nonMembre` garde le mot que la route servait — `'Unauthorized'`, une prose
+ * qui disait déjà « authentification » sous le statut d'un refus de DROIT, et
+ * qui reste juste pour un non-membre AUTHENTIFIÉ. Ce qui change est le sort de
+ * la session ABSENTE ou MORTE : montée en `optionalAuth`, cette route la
+ * laissait entrer jusqu'ici puis lui répondait 403, le seul statut qu'aucun
+ * client ne lit comme « rafraîchis ta session ».
+ */
+const REFUS_DE_RECHERCHE: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to search this conversation',
+  nonMembre: 'Unauthorized'
+};
 
 /**
  * Enregistre la route de recherche de messages dans une conversation.
@@ -112,9 +131,9 @@ export function registerMessageSearchRoute(
         return sendForbidden(reply, 'Conversation not found');
       }
 
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized');
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_RECHERCHE);
       }
 
       const queryLower = q.toLowerCase().trim();
