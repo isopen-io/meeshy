@@ -24669,7 +24669,7 @@ résultat vide), « ces deux choses divergent » (citer les deux côtés, élém
 élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
 gratuit qu'on ait de ce côté-là de l'asymétrie.
 
-## Leçon 441 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
+## Leçon 444 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
 
 **Le fait (2026-09-02).** Ma consigne permanente de boucle le dit à chaque
 réveil, en gras : « **Tu ne fermes JAMAIS une issue** — la session d'intégration
