@@ -211,6 +211,21 @@ public final class StoryStickerLayer: CALayer {
                 }
             }
             guard let url = resolvedURL else { return }
+            // **Les OCTETS d'abord, l'image ensuite** (#4925). `image(for:)` rend
+            // UNE image : pour un GIF ou un APNG, l'animation est déjà perdue
+            // quand on la reçoit. On demande donc les octets, et on ne retombe
+            // sur le chemin habituel que s'ils ne portent pas d'animation.
+            //
+            // Le surcoût est borné par `AnimatedImageEligibility`, qui tranche
+            // en lisant au plus 1 Ko : un sticker fixe paie une lecture de cache
+            // déjà servie par la même pile (L1 NSCache, L2 disque), jamais un
+            // second téléchargement.
+            if let bytes = await loader.data(for: url.absoluteString),
+               let animated = AnimatedImageDecoder.decode(bytes, maxPixelSize: self.decodePixelBudget) {
+                guard !Task.isCancelled else { return }
+                self.stampAnimated(animated)
+                return
+            }
             let loaded = await loader.image(for: url.absoluteString)
             guard !Task.isCancelled, let cgImage = loaded?.cgImage else { return }
             self.stampBitmap(cgImage)
@@ -219,8 +234,72 @@ public final class StoryStickerLayer: CALayer {
 
     @MainActor
     private func stampBitmap(_ bitmap: CGImage) {
+        removeAnimation(forKey: Self.animatedContentsKey)
         contents = bitmap
         contentsGravity = .resizeAspect
+    }
+
+    /// **Le plafond de décodage, en PIXELS**, dérivé de la couche elle-même
+    /// plutôt que passé en paramètre : `configure` a déjà posé `bounds` et
+    /// `contentsScale`, et la tâche de chargement s'exécute après. Décoder N
+    /// images en pleine résolution pour les peindre dans un carré de 120 pt
+    /// coûterait N bitmaps pour rien — sur un GIF de trente images, c'est la
+    /// différence entre quelques mégaoctets et quelques dizaines.
+    ///
+    /// Le plancher à 64 px protège du cas dégénéré : une couche encore à
+    /// `bounds.zero` rendrait un plafond de 0, et ImageIO refuserait toute
+    /// vignette — un sticker qui n'apparaît jamais, sans erreur nulle part.
+    @MainActor
+    private var decodePixelBudget: Int {
+        max(64, Int((bounds.width * contentsScale).rounded()))
+    }
+
+    /// La clé de l'animation de CONTENU. Nommée et unique : une couche
+    /// reconfigurée doit pouvoir retirer l'ancienne, sinon deux cycles se
+    /// superposeraient sur la même couche recyclée par `StoryRendererCache`.
+    private static let animatedContentsKey = "meeshy.sticker.animatedContents"
+
+    /// **Jouer une image animée sur une COUCHE** (#4925).
+    ///
+    /// `UIImageView` anime tout seul une `UIImage.animatedImage` ; un `CALayer`,
+    /// non — il faut lui poser une `CAKeyframeAnimation` sur `contents`. C'est
+    /// la raison pour laquelle ce lot a DEUX moitiés qui ne se partagent que le
+    /// décodeur : la scène ne passe par aucune vue SwiftUI.
+    ///
+    /// `calculationMode = .discrete` est la ligne qui décide : sans elle,
+    /// Core Animation INTERPOLE entre deux images et rend un fondu enchaîné
+    /// permanent au lieu d'un défilement d'images. Le défaut serait visible mais
+    /// difficile à nommer — « le GIF est flou » plutôt que « les images se
+    /// mélangent ».
+    ///
+    /// Le mouvement réduit fige sur la première image plutôt que de masquer :
+    /// retirer l'image priverait le lecteur du contenu, la figer lui rend le
+    /// contenu sans le mouvement.
+    @MainActor
+    private func stampAnimated(_ decoded: AnimatedImageDecoder.Decoded) {
+        removeAnimation(forKey: Self.animatedContentsKey)
+        contents = decoded.frames.first
+        contentsGravity = .resizeAspect
+
+        guard !UIAccessibility.isReduceMotionEnabled, decoded.frames.count > 1 else { return }
+
+        // **La rasterisation doit tomber.** `configure` pose
+        // `shouldRasterize = mode == .play && sticker.isStatic` : une couche
+        // rasterisée peint son cache, donc la première image, pour toujours.
+        // C'est le genre d'optimisation juste qui annule silencieusement la
+        // feature qu'on vient d'ajouter.
+        shouldRasterize = false
+
+        let animation = CAKeyframeAnimation(keyPath: "contents")
+        animation.values = decoded.frames
+        animation.duration = decoded.duration
+        animation.calculationMode = .discrete
+        // `loopCount == 0` est la valeur par défaut de TOUS les formats et
+        // signifie « à l'infini » — jamais « ne pas jouer ».
+        animation.repeatCount = decoded.loopCount == 0 ? .infinity : Float(decoded.loopCount)
+        animation.isRemovedOnCompletion = false
+        animation.fillMode = .forwards
+        add(animation, forKey: Self.animatedContentsKey)
     }
 
     /// **Pose la transformation d'une animation** (#4821) — réappliquée à
