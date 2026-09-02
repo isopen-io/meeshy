@@ -14,7 +14,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
@@ -124,9 +124,23 @@ export function registerConversationDetailRoute(
     try {
       const authRequest = request as UnifiedAuthRequest;
 
-      // Vérifier que l'utilisateur est authentifié
+      /**
+       * PAS DE SESSION ⇒ 401 ; PAS MEMBRE ⇒ 403 (#4789).
+       *
+       * Le même défaut qu'à `core-list.ts` — voir le doc-comment de ce refus-là
+       * pour ce que le 403 coûtait aux clients, mesuré. Cette route porte en
+       * plus la DÉMONSTRATION de la distinction : plus bas dans le MÊME
+       * handler, le refus de `canAccessConversation` reste
+       * `403 CONVERSATION_ACCESS_DENIED`, parce qu'il dit autre chose — « je
+       * sais qui tu es et ce n'est pas pour toi ». Les deux refus sont
+       * désormais discernables par une valeur MACHINE ; ils ne l'étaient que
+       * par la prose anglaise du message.
+       *
+       * `403` RESTE donc déclaré au schéma de cette route, contrairement à
+       * `GET /conversations` où il n'avait plus d'émetteur.
+       */
       if (!authRequest.authContext.isAuthenticated) {
-        return sendForbidden(reply, 'Authentication required to access this conversation');
+        return sendUnauthorized(reply, 'Authentication required to access this conversation', { code: 'UNAUTHORIZED' });
       }
 
       const { id } = request.params;

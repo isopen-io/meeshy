@@ -88,21 +88,45 @@ describe('la porte de la zone connectée', () => {
   });
 
   /**
-   * LES DEUX ROUTES NE RÉPONDENT PAS PAREIL À LA MÊME SESSION MORTE (#4760), et
-   * c'est LA raison pour laquelle `compte.ts` ne les traite pas pareil. Ce
-   * témoin fixe l'asymétrie, pour qu'un futur « nettoyage » du 403 ne puisse
-   * pas la supprimer sans rougir.
+   * LE FIL PORTE SA PROPRE LIGNE DE REFUS, et ce témoin est le seul qui puisse
+   * le prouver. Le témoin précédent met les DEUX routes en 401 : sa redirection
+   * peut venir de l'identité seule, donc il resterait vert si `conversations()`
+   * cessait de lire le statut. `/auth/me` est ici NOMINALE — c'est la forme
+   * qu'avait prise ce même témoin sous #4760, où une mutation l'avait d'abord
+   * trouvé VERT pour la mauvaise raison.
    *
-   * `/conversations` sert un 403 pour une session ABSENTE — `sendForbidden` en
-   * clair dans `routes/conversations/core-list.ts:93`, sa garde `optionalAuth`
-   * ne refusant rien. Ce 403 DOIT donc renvoyer se connecter.
+   * Depuis #4789, `GET /conversations` rend `401 UNAUTHORIZED` pour une session
+   * absente ou morte (`sendUnauthorized`, `routes/conversations/core-list.ts`)
+   * là où il servait un 403. La ligne `status === 403` de `compte.ts`, écrite
+   * POUR ce défaut, est partie avec lui.
    */
-  it('renvoie se connecter sur le 403 de /conversations — core-list.ts:93 le sert pour une session absente', async () => {
+  it('renvoie se connecter sur le 401 de /conversations, /auth/me étant nominale', async () => {
     const porte = serviteurDe(
       '/',
       () => 'jamais rendu',
-      // `/auth/me` NOMINALE : sans cela le 401 de l'identité provoquerait à lui
-      // seul la redirection, et le témoin passerait sans rien dire du 403.
+      passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () => json({ success: false, code: 'UNAUTHORIZED' }, 401),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(302);
+    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+  });
+
+  /**
+   * ET LE 403 N'EST PLUS UNE SESSION EXPIRÉE — sur AUCUNE des deux routes.
+   * `GET /conversations` ne le sert plus et ne le DÉCLARE plus à son schéma de
+   * réponse (#4789) ; le remettre ici ferait lire « reconnecte-toi » à un refus
+   * de DROIT qu'une route voisine pourrait servir un jour. Un 403 y retombe
+   * donc dans l'illisible, comme n'importe quelle réponse que cet appelant ne
+   * sait pas lire — et l'écran de panne est DESSINÉ, jamais blanc.
+   */
+  it('ne prend plus le 403 de /conversations pour une session expirée', async () => {
+    const porte = serviteurDe(
+      '/',
+      () => 'jamais rendu',
       passerelle({
         '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
         '/api/v1/conversations': () => json({}, 403),
@@ -110,8 +134,8 @@ describe('la porte de la zone connectée', () => {
     );
     const reponse = await porte(requete('/', AVEC_JETON));
 
-    expect(reponse.status).toBe(302);
-    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+    expect(reponse.status).toBe(503);
+    expect(await reponse.text()).toContain('Le service ne répond pas');
   });
 
   /**
