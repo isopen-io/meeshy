@@ -158,19 +158,25 @@ class ComposerAttachmentLadderTest {
     }
 
     @Test
-    fun `the posture the chat screen wires today yields photo, file and voice`() {
-        // camera, location and emoji have no live handler yet → their host flags are off.
+    fun `the posture the chat screen wires today yields every tile but location`() {
+        // Camera and Emoji got a live handler in issue #3738 (camera chooser +
+        // capture, cursor-aware emoji insertion). Location stays off: the wire
+        // field it needs is on ApiMessage/MessageRepository, outside the
+        // chat-only perimeter of that lot — see ChatScreen.kt's comment above
+        // ladderTiles.
         val tiles = ComposerAttachmentLadder.tiles(
             ComposerAttachmentPolicy.affordances(null),
-            showCamera = false,
+            showCamera = true,
             showLocation = false,
-            showEmoji = false,
+            showEmoji = true,
         )
 
         assertThat(kinds(tiles)).containsExactly(
             AttachmentTileKind.Photo,
+            AttachmentTileKind.Camera,
             AttachmentTileKind.File,
             AttachmentTileKind.Voice,
+            AttachmentTileKind.Emoji,
         ).inOrder()
     }
 

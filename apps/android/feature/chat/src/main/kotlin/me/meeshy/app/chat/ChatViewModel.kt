@@ -117,6 +117,7 @@ data class ChatUiState(
      * quand aucun appel n'est en cours ou que la sonde échoue. */
     val activeCall: ActiveCallSession? = null,
     val draft: String = "",
+    val draftRevision: Int = 0,
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
     val errorMessage: String? = null,
@@ -464,6 +465,7 @@ class ChatViewModel @Inject constructor(
                 if (restored != null) {
                     current.copy(
                         draft = restored.text,
+                        draftRevision = current.draftRevision + 1,
                         replyingToMessageId = restored.replyToId,
                         pendingEffects = restored.effects,
                         composerLanguage = restored.selectedLanguage
@@ -865,6 +867,7 @@ class ChatViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     draft = "",
+                    draftRevision = it.draftRevision + 1,
                     clipboardContent = detection.content,
                     mention = it.mention.onTextChange("", mentionRoster),
                     composerLanguage = it.composerLanguage.onDraftChanged(""),
@@ -962,7 +965,7 @@ class ChatViewModel @Inject constructor(
         mentionSearchJob?.cancel()
         _state.update { current ->
             val (newDraft, newMention) = current.mention.select(candidate, current.draft)
-            current.copy(draft = newDraft, mention = newMention)
+            current.copy(draft = newDraft, draftRevision = current.draftRevision + 1, mention = newMention)
         }
     }
 
@@ -1062,6 +1065,7 @@ class ChatViewModel @Inject constructor(
         _state.update {
             it.copy(
                 draft = "",
+                draftRevision = it.draftRevision + 1,
                 clipboardContent = null,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
@@ -1184,6 +1188,7 @@ class ChatViewModel @Inject constructor(
         _state.update {
             it.copy(
                 draft = "",
+                draftRevision = it.draftRevision + 1,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
@@ -1870,6 +1875,7 @@ class ChatViewModel @Inject constructor(
             it.copy(
                 editingMessageId = messageId,
                 draft = message.content,
+                draftRevision = it.draftRevision + 1,
                 actionMessageId = null,
                 replyingToMessageId = null,
             )
@@ -1882,11 +1888,13 @@ class ChatViewModel @Inject constructor(
         }?.message ?: return
         if (message.deletedAt != null) return
         _state.update {
+            val clearsEdit = it.isEditing
             it.copy(
                 replyingToMessageId = messageId,
                 actionMessageId = null,
                 editingMessageId = null,
-                draft = if (it.isEditing) "" else it.draft,
+                draft = if (clearsEdit) "" else it.draft,
+                draftRevision = if (clearsEdit) it.draftRevision + 1 else it.draftRevision,
             )
         }
         persistDraft(_state.value.draft, replyToId = messageId)
@@ -1898,7 +1906,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun cancelEdit() {
-        _state.update { it.copy(editingMessageId = null, draft = "") }
+        _state.update { it.copy(editingMessageId = null, draft = "", draftRevision = it.draftRevision + 1) }
     }
 
     /**
@@ -1993,7 +2001,7 @@ class ChatViewModel @Inject constructor(
     )
 
     private fun applyEdit(messageId: String, content: String) {
-        _state.update { it.copy(draft = "", editingMessageId = null) }
+        _state.update { it.copy(draft = "", draftRevision = it.draftRevision + 1, editingMessageId = null) }
         viewModelScope.launch {
             try {
                 if (messageRepository.editOptimistic(messageId, content)) {

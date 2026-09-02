@@ -20,6 +20,9 @@
     <string name="composer_attach_location">Location</string>
     <string name="composer_attach_voice">Voice</string>
     <string name="composer_attach_emoji">Emoji</string>
+    <string name="chat_camera_chooser_title">Take a photo or video</string>
+    <string name="chat_camera_chooser_photo">Photo</string>
+    <string name="chat_camera_chooser_video">Video</string>
     <string name="chat_composer_read_only">You can\'t send messages in this conversation</string>
     <string name="chat_slow_mode_wait">Slow mode · wait %1$ds</string>
     <string name="chat_effects_title">Message effects</string>

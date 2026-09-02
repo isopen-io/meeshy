@@ -819,6 +819,32 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun a_large_paste_into_an_already_empty_composer_still_bumps_the_draft_revision() =
+        runTest(dispatcher) {
+            val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+            advanceUntilIdle()
+            val revisionBeforePaste = vm.state.value.draftRevision
+
+            vm.onDraftChange("a".repeat(2_500))
+
+            assertThat(vm.state.value.draft).isEmpty()
+            assertThat(vm.state.value.draftRevision).isGreaterThan(revisionBeforePaste)
+        }
+
+    @Test
+    fun ordinary_typing_never_bumps_the_draft_revision() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+        val revisionAtStart = vm.state.value.draftRevision
+
+        vm.onDraftChange("h")
+        vm.onDraftChange("he")
+        vm.onDraftChange("hel")
+
+        assertThat(vm.state.value.draftRevision).isEqualTo(revisionAtStart)
+    }
+
+    @Test
     fun composer_sentiment_is_null_for_a_blank_draft() = runTest(dispatcher) {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
@@ -1392,7 +1418,7 @@ class ChatViewModelTest {
         val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
         val captured = slot<MessageEffects>()
         coEvery {
-            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), capture(captured))
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
         } returns "cmid_1"
         advanceUntilIdle()
 
@@ -1417,7 +1443,7 @@ class ChatViewModelTest {
         val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
         val captured = slot<MessageEffects>()
         coEvery {
-            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), capture(captured))
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), capture(captured))
         } returns "cmid_1"
         advanceUntilIdle()
 
@@ -2603,7 +2629,7 @@ class ChatViewModelTest {
         h.vm.forwardTo("c2")
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -2616,7 +2642,7 @@ class ChatViewModelTest {
         h.vm.forwardTo("c2")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -2640,14 +2666,14 @@ class ChatViewModelTest {
         h.vm.forwardTo("c2")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun forwardTo_surfaces_an_error_and_clears_the_sending_flag_on_failure() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
-            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any())
         } throws RuntimeException("boom")
         advanceUntilIdle()
         h.vm.openForward("m1")
@@ -2679,7 +2705,7 @@ class ChatViewModelTest {
             val gate = CompletableDeferred<Unit>()
             val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
             coEvery {
-                h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+                h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any())
             } coAnswers { gate.await(); "cmid_1" }
             advanceUntilIdle()
 
@@ -2707,7 +2733,7 @@ class ChatViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val h = harness(syncedConversation(), currentUser = me, targetConversations = forwardCandidates())
         coEvery {
-            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any())
+            h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any())
         } coAnswers { gate.await(); "cmid_1" }
         advanceUntilIdle()
 
@@ -2727,7 +2753,7 @@ class ChatViewModelTest {
         gate.complete(Unit)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     private val me = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
