@@ -158,20 +158,29 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
       `la règle réclame ${V3_PATH_PREFIX} nu`,
     ],
     [
-      // La sonde portait `/l` — jusqu'à ce que la zone SERVE `/l/:token`, et elle
-      // est devenue muette sans rien dire. Un fusible qui teste un chemin que le
-      // paquet peut se mettre à servir s'éteint le jour où il le sert : il porte
-      // donc un chemin que la zone ne sert PAS encore, et le déplacer fait partie
-      // du lot qui publie ce chemin-là.
+      // CETTE SONDE S'EST ÉTEINTE DEUX FOIS, ET POUR LA MÊME RAISON.
+      //
+      // Elle portait `/l`, puis `/stories` : à chaque fois un chemin que la zone
+      // ne servait PAS ENCORE, et à chaque fois le lot qui l'a publié l'a rendue
+      // MUETTE — la garde continuait de passer, la mutation ne mordait plus, et
+      // rien ne le disait avant le prochain `--self-test`.
+      //
+      // Un fusible dont le calibre est une DATE de la feuille de route s'éteint
+      // le jour où la feuille de route y arrive. Il porte donc désormais un
+      // chemin que RIEN ne peut publier : ce qu'on éprouve ici n'est pas
+      // `/stories` ni `/l`, c'est la capacité de la garde à voir un chemin
+      // RÉCLAMÉ par la règle et SERVI par personne. N'importe quel chemin absent
+      // de `app/` l'éprouve à l'identique — autant en prendre un qu'aucun écran
+      // ne viendra réclamer.
       'un chemin humain réclamé avant que la zone ne le serve',
       (world) =>
         replaceIn(
           world,
           'prod',
           `(PathPrefix(\`${V3_ASSET_ZONE}\`) || `,
-          `(PathPrefix(\`${V3_ASSET_ZONE}\`) || PathPrefix(\`/stories\`) || `,
+          `(PathPrefix(\`${V3_ASSET_ZONE}\`) || PathPrefix(\`/aucun-ecran-ne-sert-ceci\`) || `,
         ),
-      'la règle réclame /stories, que rien dans',
+      'la règle réclame /aucun-ecran-ne-sert-ceci, que rien dans',
     ],
     [
       // La réécriture est ce qui rend `/__v3/rt/` servi : sans elle, la règle
