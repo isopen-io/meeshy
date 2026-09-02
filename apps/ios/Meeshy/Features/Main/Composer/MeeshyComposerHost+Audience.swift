@@ -67,16 +67,18 @@ extension MeeshyComposerHost {
         .task { await loadTrendingHashtags() }
     }
 
-    /// **Les tendances sont une suggestion, donc leur échec est SILENCIEUX.**
+    /// **Le meuble ne nomme aucun service — pas même pour LIRE.**
     ///
-    /// Une erreur avalée en vide serait un mensonge si la liste était la seule
-    /// façon de poser une balise — elle ne l'est pas : le champ de saisie tient
-    /// la capacité entière. Ce `try?` ne masque donc aucune capacité perdue,
-    /// seulement une suggestion absente, et l'écran reste utile hors-ligne.
+    /// Le fournisseur des tendances vit chez la feuille qui les montre
+    /// (`ComposerHashtagSheet.loadTrending`). Le meuble ne fait que RETENIR
+    /// la réponse entre deux ouvertures : `test_host_opensNoSecondPublicationPath`
+    /// interdit à l'unité du meuble de connaître `PostService`, et lui laisser
+    /// une lecture « inoffensive » aurait ouvert la porte que la garde ferme.
+    ///
+    /// L'échec est SILENCIEUX : une liste vide est l'état nominal (hors-ligne,
+    /// aucune tendance), et le champ de saisie tient la capacité entière.
     func loadTrendingHashtags() async {
         guard trendingHashtags.isEmpty else { return }
-        guard let tendances = try? await PostService.shared.getTrendingHashtags(limit: 20)
-        else { return }
-        trendingHashtags = tendances
+        trendingHashtags = await ComposerHashtagSheet.loadTrending()
     }
 }
