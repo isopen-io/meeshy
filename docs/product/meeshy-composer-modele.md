@@ -346,6 +346,23 @@ fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
 
+**Le quatrième profil s'appelle `status` dans le CODE et « mood » dans la
+PROSE, et les deux sont justes** (relevé du 2026-09-02 : 372 « mood » contre
+181 « status » dans le seul répertoire du composer, parfois dans le même
+doc-comment).
+
+| où | le mot | pourquoi il ne bouge pas |
+|---|---|---|
+| type, fil, base | **`status`** | `ComposerFormat.status`, `PostType.STATUS` (`schema.prisma`) — le changer est une migration, pas un renommage |
+| produit, UI, prose | **« mood »** | c'est le mot que l'auteur lit et que la planche emploie (profil **M**) |
+
+Ce n'est donc **pas** une divergence à réduire, mais une frontière à tenir : un
+identifiant qui traverse le fil garde `status` ; une chaîne d'interface et un
+texte explicatif disent « mood ». Ce qu'il ne faut pas faire, et qui se voit
+déjà, c'est **mélanger les deux dans une même phrase** — un doc-comment qui
+nomme `removedFromStatus` « ce que le profil MOOD retire » oblige son lecteur à
+traduire, et la traduction n'est écrite nulle part.
+
 **« Meeshes » est un terme de communication COMMERCIALE, jamais un nom du modèle**
 (arbitrage porteur, 2026-09-01, #4757). Il désigne les publications de type story,
 réel et post — **sans les moods** —, et c'est précisément pourquoi il ne peut pas
