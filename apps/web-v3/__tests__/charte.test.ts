@@ -11,6 +11,7 @@ import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
+import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -55,6 +56,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
   { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
   { nom: 'app/(public)/stories/[id]/story-feuille.ts', source: FEUILLE_DE_LA_STORY },
+  { nom: 'app/connecte/notifs-feuille.ts', source: FEUILLE_DES_NOTIFS },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -118,6 +120,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/(public)/chat/[lien]/choix-feuille.ts',
       'app/connecte/medias-feuille.ts',
       'app/(public)/stories/[id]/story-feuille.ts',
+      'app/connecte/notifs-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -373,6 +376,13 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.marque .tuile', // la tuile de marque
     '.heros h1 em', // vitrine seule — UN mot de l'accroche
     '.compte', // le compte de non-lus
+    // La boîte (#4898) : la pastille d'une notification NON LUE est de la même
+    // nature que `.compte` — elle dit « ceci vous attend », comme l'accusé dit
+    // « ceci est de moi ». Elle est le SEUL emploi de l'accent sur cet écran :
+    // le glyphe d'un genre et celui d'un avis restent sur l'encre, et une ligne
+    // non lue se distingue par le POIDS de son texte et son filet, jamais par
+    // une couleur seule.
+    '.notif .pastille',
     // Le fil (charte règles 22 et 26) : le cliquable — chevron de retour,
     // puce du Prisme, original à déplier, pièce jointe, envoi, accusé —, et la
     // pastille `.langue`. Le nom d'un auteur, un filet, un fond de ligne ne
