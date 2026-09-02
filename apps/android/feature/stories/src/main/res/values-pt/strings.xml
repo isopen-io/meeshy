@@ -122,6 +122,7 @@
 
     <!-- Story options -->
     <string name="stories_options">Opções da história</string>
+    <string name="stories_action_send_to">Enviar para…</string>
     <string name="stories_action_report">Denunciar</string>
     <string name="stories_action_repost">Republicar</string>
     <string name="stories_action_delete">Excluir</string>
@@ -136,4 +137,13 @@
     <string name="stories_report_reason_hate_speech">Discurso de ódio</string>
     <string name="stories_report_reason_impersonation">Falsidade ideológica</string>
     <string name="stories_report_reason_other">Outro</string>
+
+    <string name="story_send_title">Enviar para…</string>
+    <string name="story_send_caption_hint">Adicionar uma mensagem</string>
+    <string name="story_send_search_hint">Buscar uma conversa</string>
+    <string name="story_send_loading">Carregando conversas…</string>
+    <string name="story_send_empty">Nenhuma conversa</string>
+    <string name="story_send_members">%d membros</string>
+    <string name="story_send_sent">Enviado</string>
+    <string name="story_send_send_a11y">Enviar para %1$s</string>
 </resources>

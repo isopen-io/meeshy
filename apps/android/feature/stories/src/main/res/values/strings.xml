@@ -122,6 +122,7 @@
 
     <!-- Story options -->
     <string name="stories_options">Story options</string>
+    <string name="stories_action_send_to">Send to…</string>
     <string name="stories_action_report">Report</string>
     <string name="stories_action_repost">Repost</string>
     <string name="stories_action_delete">Delete</string>
@@ -136,4 +137,14 @@
     <string name="stories_report_reason_hate_speech">Hate speech</string>
     <string name="stories_report_reason_impersonation">Impersonation</string>
     <string name="stories_report_reason_other">Other</string>
+
+    <!-- Send to… picker -->
+    <string name="story_send_title">Send to…</string>
+    <string name="story_send_caption_hint">Add a message</string>
+    <string name="story_send_search_hint">Search a conversation</string>
+    <string name="story_send_loading">Loading conversations…</string>
+    <string name="story_send_empty">No conversation</string>
+    <string name="story_send_members">%d members</string>
+    <string name="story_send_sent">Sent</string>
+    <string name="story_send_send_a11y">Send to %1$s</string>
 </resources>

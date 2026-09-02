@@ -140,6 +140,8 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showSendTo by remember { mutableStateOf(false) }
+    var sendToStoryId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -325,9 +327,10 @@ fun StoryViewerScreen(
         slideDurationMs,
         showViewers,
         showComments,
+        showSendTo,
         railOverlayActive,
     ) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || railOverlayActive) return@LaunchedEffect
+        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         // Gate: hold the countdown at empty until the current slide's media has
@@ -599,6 +602,14 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                onClick = {
+                                    showOptions = false
+                                    sendToStoryId = state.currentStoryId
+                                    showSendTo = true
+                                },
+                            )
                             if (state.isOwnStory) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
@@ -760,6 +771,18 @@ fun StoryViewerScreen(
             storyId = commentsStoryId,
             accentHex = accent,
             onDismiss = { showComments = false },
+        )
+    }
+
+    val frozenSendToStoryId = sendToStoryId
+    if (showSendTo && frozenSendToStoryId != null) {
+        StorySendToSheet(
+            storyId = frozenSendToStoryId,
+            accentHex = accent,
+            onDismiss = {
+                showSendTo = false
+                sendToStoryId = null
+            },
         )
     }
 }

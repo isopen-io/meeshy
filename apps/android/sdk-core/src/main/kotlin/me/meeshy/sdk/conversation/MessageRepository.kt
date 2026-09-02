@@ -119,6 +119,7 @@ class MessageRepository @Inject constructor(
         originalLanguage: String,
         sender: MeeshyUser,
         replyToId: String? = null,
+        storyReplyToId: String? = null,
         forwardedFromId: String? = null,
         forwardedFromConversationId: String? = null,
         effects: MessageEffects = MessageEffects(),
@@ -141,6 +142,7 @@ class MessageRepository @Inject constructor(
             messageType = messageType,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
+            storyReplyToId = storyReplyToId,
             createdAt = Instant.ofEpochMilli(now).toString(),
             sender = ApiMessageSender(
                 userId = sender.id,
@@ -162,6 +164,7 @@ class MessageRepository @Inject constructor(
             originalLanguage = originalLanguage,
             messageType = messageType,
             replyToId = replyToId,
+            storyReplyToId = storyReplyToId,
             clientMessageId = cmid,
             attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
@@ -238,6 +241,7 @@ class MessageRepository @Inject constructor(
                         originalLanguage = message.originalLanguage
                             ?: LanguageResolver.FALLBACK_LANGUAGE,
                         replyToId = message.replyToId,
+                        storyReplyToId = message.storyReplyToId,
                         clientMessageId = cmid,
                         forwardedFromId = message.forwardedFromId,
                         forwardedFromConversationId = message.forwardedFromConversationId,

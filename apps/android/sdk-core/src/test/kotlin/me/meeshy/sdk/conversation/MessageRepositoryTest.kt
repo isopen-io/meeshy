@@ -586,6 +586,61 @@ class MessageRepositoryTest {
         assertThat(request.forwardedFromConversationId).isEqualTo("c1")
     }
 
+    @Test
+    fun `sendOptimistic story replies carry the storyReplyToId on the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+
+        val bubble = cachedMessage(cmid)
+        assertThat(bubble.storyReplyToId).isEqualTo("story-1")
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
+    }
+
+    @Test
+    fun `a non-story send carries no storyReplyToId`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isNull()
+        assertThat(cachedMessage(cmid).storyReplyToId).isNull()
+    }
+
+    @Test
+    fun `retrySend preserves the storyReplyToId when re-enqueuing from the cached payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
+    }
+
     private suspend fun cachedMessage(id: String): ApiMessage =
         MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
 
