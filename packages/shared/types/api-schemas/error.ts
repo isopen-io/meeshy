@@ -33,6 +33,47 @@
  * mais un ÉTALEMENT à la racine, dont les clés sont propres à chaque route.
  * Une route qui en pose (`retryAfter`, `suggestedNickname`) les déclare EN PLUS
  * de ce superset, sans quoi le sérialiseur les supprime.
+ *
+ * ## Cette liste est FERMÉE côté gestionnaire global (#4689)
+ *
+ * `fast-json-stringify` ne supprime que là où un schéma EXISTE. Le gestionnaire
+ * d'erreurs global posait donc, sur toutes ses branches, des champs que ce
+ * superset ne déclare pas — `timestamp` et `statusCode` sur les deux branches
+ * typées, `details` sur les deux 413 de taille, `stack` sur le repli. La MÊME
+ * erreur typée sortait alors en deux corps différents :
+ *
+ *   429 **déclaré** `...errorResponseSchema` → `{success, error, message, code, retryAfter}`
+ *   429 **non déclaré**                      → `… + statusCode + timestamp`
+ *
+ * > **Le geste vertueux — déclarer son schéma — était celui qui faisait perdre
+ * > des champs**, sur 595 déclarations de statut 4xx/5xx dans 112 modules de
+ * > routes. Chaque déclaration ajoutée au dépôt était une régression muette.
+ *
+ * Le remède retenu n'est PAS d'ajouter les deux champs ici — ce serait graver
+ * dans 595 déclarations deux champs qu'aucun client ne lit, et laisser le
+ * MÉCANISME intact pour le champ suivant. Mesuré sur les trois clients avant
+ * de trancher : aucun ne lit `statusCode` ni `timestamp` dans un corps
+ * d'erreur (web : 6 occurrences, toutes doc-comment ou fixture ; iOS : aucun
+ * modèle `Decodable` ne les porte, `MeeshyError.server(statusCode:)` est
+ * construit depuis `HTTPURLResponse` ; Android : 11 occurrences, toutes
+ * paramètre de la couche HTTP dans `LinkPreviewFetcher`). Le gestionnaire a
+ * donc CESSÉ de les poser, et le statut HTTP continue de porter l'information
+ * de `statusCode` — pour tout le monde, y compris pour qui ne décode pas le
+ * corps.
+ *
+ * Ce qu'un étalement du gestionnaire apporte ENCORE en plus de ce superset est
+ * un inventaire de QUATRE champs, gelé et justifié un par un dans la garde :
+ * `details` (déclaré par `validationErrorResponseSchema`), `retryAfter`
+ * (déclaré par les routes sur leur 429), `errors` et `lockedUntil` (déclarés
+ * NULLE PART — la protection de #4138 ne tient que parce qu'aucune route ne
+ * déclare son 423).
+ *
+ * La relation « ce que le gestionnaire POSE ⊆ ce que ce schéma DÉCLARE » n'est
+ * pas une intention : elle est mesurée à chaque exécution des tests par
+ * `services/gateway/src/__tests__/security/global-error-handler-field-closure-guard.test.ts`.
+ * Elle se satisfait des DEUX côtés — retirer le champ du gestionnaire, ou le
+ * déclarer ici — ce qui est exactement ce qu'on veut d'une garde : elle
+ * interdit la DIVERGENCE, pas un choix de remède.
  */
 export const errorResponseSchema = {
   type: 'object',
