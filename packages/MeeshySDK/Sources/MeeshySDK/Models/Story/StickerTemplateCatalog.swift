@@ -44,7 +44,12 @@ public enum StickerTemplateCatalog {
     /// **Une famille, un fichier** (#4820) : `location`, `time` et `love`
     /// vivent ici — les premières —, chaque famille suivante dans son
     /// `StickerTemplateCatalog+<Famille>.swift`, sous le budget de lignes.
-    public static let all: [StickerTemplate] = location + time + love + weather + text
+    public static let all: [StickerTemplate] =
+        location + locationMore
+        + time + timeExtra
+        + love + loveExtra
+        + weather + text
+        + joy + surprise + mood + greeting + reaction + party + availability
 
     public static let location: [StickerTemplate] = [
         StickerTemplate(id: ID.locationPill,

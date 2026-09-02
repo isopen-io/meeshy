@@ -159,8 +159,15 @@ public enum StickerTemplateRenderer {
     /// garde le PREMIER plutôt que de planter : une palette qui s'ouvre avec un
     /// doublon vaut mieux qu'une app qui ne s'ouvre pas.
     static let registry: [String: StickerTemplateDrawer] = {
-        let familles = locationDrawers + timeDrawers + loveDrawers + weatherDrawers + textDrawers
-        return Dictionary(familles.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
+        let familles: [[StickerTemplateDrawer]] = [
+            locationDrawers, locationMoreDrawers,
+            timeDrawers, timeExtraDrawers,
+            loveDrawers, loveExtraDrawers,
+            weatherDrawers, textDrawers,
+            joyDrawers, surpriseDrawers, moodDrawers, greetingDrawers,
+            reactionDrawers, partyDrawers, availabilityDrawers,
+        ]
+        return Dictionary(familles.joined().map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
     }()
 
     /// Le dessinateur d'un gabarit, ou `nil` s'il est inconnu de ce binaire.

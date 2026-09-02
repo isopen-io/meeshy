@@ -1566,8 +1566,8 @@ struct StoryCardView: View {
                         authorName: currentGroup?.username,
                         textObjects: story.storyEffects?.textObjects ?? [],
                         preferredLanguages: resolvedViewerLanguageChain,
-                        voiceTranscript: currentVoiceCaption
-                    ))
+                        voiceTranscript: currentVoiceCaption,
+                        stickerDescriptions: (story.storyEffects?.stickerObjects ?? []).map { StoryStickerAccessibility.description(for: $0) }))
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.next",
                         defaultValue: "Story suivante"

@@ -38,13 +38,16 @@ final class StickerTemplateRendererTests: XCTestCase {
         case .time:
             return [StickerSlotFiller.timeSlot: "14:32",
                     StickerSlotFiller.hourSlot: "14",
-                    StickerSlotFiller.minuteSlot: "32"]
+                    StickerSlotFiller.minuteSlot: "32",
+                    StickerSlotFiller.dateSlot: "1 septembre 2026"]
         case .love:
             return [StickerSlotFiller.dateSlot: "1 septembre 2026"]
         case .weather:
             return [:]
         case .text:
             return [StickerSlotFiller.textSlot: "Bon anniversaire"]
+        case .joy, .surprise, .mood, .greeting, .reaction, .party, .availability:
+            return [:]
         }
     }
 

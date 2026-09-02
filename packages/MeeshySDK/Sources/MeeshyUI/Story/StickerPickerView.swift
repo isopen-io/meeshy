@@ -193,6 +193,13 @@ public struct StickerPickerView: View {
         case .emoji:   emojiTab
         case .text:    textTab
         case .love:    templateTab(family: .love)
+        case .joy:          templateTab(family: .joy)
+        case .surprise:     templateTab(family: .surprise)
+        case .mood:         templateTab(family: .mood)
+        case .greeting:     templateTab(family: .greeting)
+        case .reaction:     templateTab(family: .reaction)
+        case .party:        templateTab(family: .party)
+        case .availability: templateTab(family: .availability)
         case .time:    templateTab(family: .time)
         case .weather: templateTab(family: .weather)
         case .place:   placeTab
@@ -212,6 +219,20 @@ public struct StickerPickerView: View {
             return String(localized: "sticker.tab.time", defaultValue: "Heure", bundle: .module)
         case .weather:
             return String(localized: "sticker.tab.weather", defaultValue: "Météo", bundle: .module)
+        case .joy:
+            return String(localized: "sticker.tab.joy", defaultValue: "Joie", bundle: .module)
+        case .surprise:
+            return String(localized: "sticker.tab.surprise", defaultValue: "Stupeur", bundle: .module)
+        case .mood:
+            return String(localized: "sticker.tab.mood", defaultValue: "Humeur", bundle: .module)
+        case .greeting:
+            return String(localized: "sticker.tab.greeting", defaultValue: "Salut", bundle: .module)
+        case .reaction:
+            return String(localized: "sticker.tab.reaction", defaultValue: "Réactions", bundle: .module)
+        case .party:
+            return String(localized: "sticker.tab.party", defaultValue: "Fête", bundle: .module)
+        case .availability:
+            return String(localized: "sticker.tab.availability", defaultValue: "Dispo", bundle: .module)
         case .place:
             return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
         case .library:

@@ -111,9 +111,14 @@ extension StickerPickerView {
     /// heure différente de celle qu'il a vue.
     func slots(for family: StickerTemplateFamily) -> [String: String] {
         switch family {
-        case .time:  return StickerSlotFiller.timeSlots(at: openedAt)
+        case .time:
+            // L'heure ET la date : la feuille de calendrier lit la date, les
+            // autres l'heure — un seul jeu figé pour toute la famille.
+            return StickerSlotFiller.timeSlots(at: openedAt)
+                .merging(StickerSlotFiller.dateSlots(at: openedAt)) { heure, _ in heure }
         case .love:  return StickerSlotFiller.dateSlots(at: openedAt)
-        case .weather: return [:]
+        case .weather, .joy, .surprise, .mood, .greeting, .reaction, .party, .availability:
+            return [:]
         case .text:
             return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
         case .location:

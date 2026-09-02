@@ -85,6 +85,16 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     /// Les MOTS de l'auteur, dans une bulle, un ruban, un néon (#4822) — la
     /// seule famille dont un emplacement est de nature `.prose`.
     case text
+    /// Les ÉMOTIONS et les mots de tous les jours (#4820) — joie, stupeur,
+    /// humeur, salutations, réactions, fête, disponibilité. Des THÈMES de
+    /// palette, jamais des natures de scène.
+    case joy
+    case surprise
+    case mood
+    case greeting
+    case reaction
+    case party
+    case availability
 }
 
 // MARK: - Sticker Template Slot
