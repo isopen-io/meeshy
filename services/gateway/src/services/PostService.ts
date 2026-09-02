@@ -8,6 +8,7 @@ import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
+import { applyMediaText } from './posts/mediaText';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
@@ -950,7 +951,7 @@ export class PostService {
     mediaAlt: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await this.applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
+    await applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
   }
 
   /**
@@ -972,39 +973,7 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await this.applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
-  }
-
-  /**
-   * Le corps PARTAGÉ des deux appliqueurs de texte par média.
-   *
-   * EXTRAIT plutôt que recopié : `alt` et `caption` portent exactement les mêmes
-   * deux gardes, la même normalisation du vide et la même borne. Deux copies
-   * auraient divergé au premier ajustement de l'une — et c'est le genre de
-   * divergence qu'aucun témoin ne voit, puisque chaque copie reste cohérente
-   * avec elle-même.
-   *
-   * La colonne est un paramètre LITTÉRAL, pas une chaîne : le compilateur refuse
-   * tout nom qui n'est pas l'un des deux, si bien qu'aucun appelant ne peut
-   * écrire dans une colonne voisine par faute de frappe.
-   */
-  private async applyMediaText(
-    column: 'alt' | 'caption',
-    postId: string,
-    requestedMediaIds: string[] | undefined,
-    texts: Record<string, string> | undefined,
-    client: Pick<PrismaClient, 'postMedia'>,
-  ): Promise<void> {
-    if (!texts || !requestedMediaIds?.length) return;
-    const requested = new Set(requestedMediaIds);
-    const entries = Object.entries(texts).filter(([id]) => requested.has(id));
-    if (entries.length === 0) return;
-    await Promise.all(entries.map(([id, text]) =>
-      client.postMedia.updateMany({
-        where: { id, postId },
-        data: { [column]: text.trim().length > 0 ? text : null },
-      }),
-    ));
+    await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
   }
 
   /**

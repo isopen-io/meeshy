@@ -32,7 +32,11 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import {
+  refuserAccesConversation,
+  verdictAccesConversation,
+  type MessagesDeRefusDAcces
+} from './utils/access-control';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
   ConversationParams,
@@ -46,11 +50,28 @@ import { logger } from './messages-shared';
 import {
   buildAfterWatermarkClause,
   buildMessageListSelect,
+  loadCurrentUserConsumptionMap,
   loadMessageReadStatusMap,
   mapMessageRowForList,
   enrichForwardedMessagesForList,
   enrichPostReplyMessagesForList
 } from './messages-list-query';
+
+/**
+ * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
+ *
+ * `nonMembre` garde MOT POUR MOT la phrase que la route servait déjà — un
+ * refus d'AUTORISATION, correct en 403. Ce qui change est qu'une session
+ * ABSENTE ou MORTE ne le reçoit plus : elle n'a jamais été un refus de droit,
+ * et cette route est montée en `optionalAuth` (`{ requireAuth: false,
+ * allowAnonymous: true }`, `routes/conversations/index.ts`), une garde qui ne
+ * refuse RIEN — c'est donc bien ici que ça se tranche, et le cas nominal d'un
+ * retour après quelques jours arrivait jusque là.
+ */
+const REFUS_DE_LECTURE: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to read this conversation',
+  nonMembre: 'Unauthorized access to this conversation'
+};
 
 /**
  * Enregistre la route de liste paginée des messages d'une conversation.
@@ -204,11 +225,11 @@ export function registerMessagesListRoute(
 
       // Vérifier les permissions d'accès
       t0 = performance.now();
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
       timings.canAccessConversation = performance.now() - t0;
 
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_LECTURE);
       }
 
       // Resolve the current user's participantId in this conversation
@@ -557,6 +578,14 @@ export function registerMessagesListRoute(
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
+      // #3909 — la progression de lecture du participant sur les pièces
+      // jointes de CETTE page. Une requête, bornée aux identifiants rendus.
+      const consumptionMap = await loadCurrentUserConsumptionMap(
+        prisma,
+        messages,
+        currentParticipantId
+      );
+
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => mapMessageRowForList(message, {
         includeTranslations,
@@ -567,6 +596,7 @@ export function registerMessagesListRoute(
         readStatusMap,
         senderPresenceVis,
         listMissingEntry,
+        consumptionMap,
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

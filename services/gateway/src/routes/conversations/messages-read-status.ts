@@ -11,6 +11,7 @@
  * `messages.ts` pour le composeur (`registerMessagesRoutes`).
  */
 import { FastifyInstance } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 // #4349 — le dimensionnement de debit de l'accuse vient de la collection
@@ -103,7 +104,7 @@ export function registerMarkReadRoute(
     onRequest: depreciee({
       depuis: '2026-08-30',
       successeur: (request) =>
-        `/api/v1/conversations/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
+        `${apiPath('/conversations')}/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
     }),
     schema: {
       description: 'Mark all messages in a conversation as read for the authenticated user',

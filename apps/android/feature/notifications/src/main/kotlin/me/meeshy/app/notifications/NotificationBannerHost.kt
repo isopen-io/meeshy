@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,7 +52,21 @@ fun NotificationBannerHost(
         viewModel.setActiveContext(activeConversationId, activePostId)
     }
 
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    // `statusBarsPadding()` — la bannière descend SOUS la barre système (#4600).
+    //
+    // L'hôte est monté à la racine, dans un `Box` plein écran : `enableEdgeToEdge()`
+    // plus `contentWindowInsets = WindowInsets(0,0,0,0)` sur le Scaffold racine
+    // signifient que `y = 0` est le HAUT DE L'ÉCRAN, pas le haut du contenu. Sans
+    // cet inset la bannière recouvrait l'horloge et les icônes système — vu sur
+    // l'enregistrement d'écran de la vérification de #4457.
+    //
+    // Le commentaire du Scaffold racine énonce déjà le contrat : « chaque
+    // destination porte désormais ses propres insets ». La bannière n'est pas une
+    // destination, mais elle est du CONTENU, et la règle vaut pour elle.
+    Box(
+        modifier = modifier.fillMaxWidth().statusBarsPadding(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
         AnimatedVisibility(
             visible = banner != null,
             enter = slideInVertically { -it } + fadeIn(),

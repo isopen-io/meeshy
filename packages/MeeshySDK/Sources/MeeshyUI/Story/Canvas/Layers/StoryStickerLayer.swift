@@ -38,12 +38,34 @@ public final class StoryStickerLayer: CALayer {
                                                           scale: sticker.scale,
                                                           canvasWidth: geometry.renderSize.width)
 
-        if let cg = StoryStickerRasterizer.shared.cgImage(for: sticker.emoji,
-                                                           size: renderedSide) {
-            contents = cg
+        // **Une décoration se dessine, elle ne se rasterise pas en glyphe**
+        // (#4718). Un gabarit MESURE son contenu — une heure, un nom de lieu —
+        // donc sa boîte n'est pas le carré du glyphe.
+        //
+        // Un gabarit INCONNU (publié par une version plus récente) retombe sur
+        // la branche emoji ci-dessous, qui sert `wireEmoji` : le lecteur voit
+        // « 🕐 » plutôt qu'un trou.
+        if sticker.kind == .template,
+           let (image, taille) = StickerTemplateRenderer.image(
+               templateID: sticker.templateId,
+               slots: sticker.slots,
+               metrics: StickerTemplateMetrics.sticker(geometry: geometry,
+                                                       baseSize: sticker.baseSize,
+                                                       scale: sticker.scale),
+               screenScale: renderScale),
+           taille.width > 0, taille.height > 0 {
+            contents = image?.cgImage
+            bounds = CGRect(origin: .zero, size: taille)
+        } else {
+            // `wireEmoji` et non `emoji` : un sticker gabarit posé sans emoji,
+            // ou dont le gabarit est inconnu, doit quand même peindre quelque
+            // chose — la chaîne vide laisserait un TROU là où l'auteur a posé.
+            if let cg = StoryStickerRasterizer.shared.cgImage(for: sticker.wireEmoji,
+                                                               size: renderedSide) {
+                contents = cg
+            }
+            bounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
         }
-
-        bounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(sticker.x))
         let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(sticker.y))

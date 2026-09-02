@@ -48,6 +48,28 @@ nonisolated enum ComposerRailLevel: Equatable {
     /// (#4092 veut qu'il le DEVIENNE ; ce niveau disparaîtra alors, et sa
     /// disparition sera le témoin que la promesse est tenue.)
     case scene
+
+    /// **Ce que la porte fait naître se VOIT-il sur la scène ?**
+    ///
+    /// C'est cette question — et elle seule — qui décide de quel côté la porte
+    /// se pose (directive porteur 2026-08-31) :
+    ///
+    /// > « Sur la rangée à gauche, ce sont les features qui apparaissent sur le
+    /// > canvas visuellement ; on préserve sur la ligne canonique la description
+    /// > du contenu, l'ajout de son de fond, image et vidéo de fond, mention et
+    /// > localisation de la publication. »
+    ///
+    /// Le `switch` est exhaustif à dessein : un cinquième niveau ne compilera
+    /// pas tant qu'il n'aura pas dit s'il se voit. C'est exactement la question
+    /// qu'on oublie de se poser en ajoutant un bouton — et l'oublier avait
+    /// produit deux répartitions, l'une raisonnée par niveau, l'autre recopiée
+    /// dans un littéral (#4561).
+    var appearsOnCanvas: Bool {
+        switch self {
+        case .object, .scene:      return true
+        case .publication, .slide: return false
+        }
+    }
 }
 
 nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
@@ -84,8 +106,22 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// qui n'a pas de scène.
     case mention
 
-    /// Une pastille de lieu POSÉE sur la scène — distincte du LIEU de la
-    /// publication (d'où l'on publie), qui vit au socle.
+    /// **Le LIEU de la publication — d'où l'on publie.**
+    ///
+    /// Son doc-comment a longtemps annoncé « une pastille de lieu POSÉE sur la
+    /// scène, distincte du LIEU de la publication ». La mesure dit l'inverse :
+    /// `handleRailDoor(.place)` appelle `handleDocumentTool(.place)`, dont
+    /// l'effet est `.attachesLocation` et qui ouvre `presentedPortal = .location`
+    /// — le sélecteur de la PUBLICATION. Aucun objet n'est posé sur la scène.
+    ///
+    /// > Un doc-comment qui décrit ce que la porte DEVRAIT faire ne se fait
+    /// > contredire par rien : il est juste dans son intention, il occupe le bon
+    /// > endroit, et le lecteur suivant s'y fie. C'est la troisième occurrence
+    /// > du motif dans cette famille de fichiers (« selection markers » de
+    /// > `editOverlayLayer`, « Internal recording » de la barre universelle).
+    ///
+    /// La pastille de lieu SUR la scène reste à faire ; le jour où elle arrive,
+    /// elle sera une porte de plus, pas une seconde lecture de celle-ci.
     case place
 
     /// **Le DESSIN** — le premier outil de la vue `3b`, et le seul qui n'ajoute
@@ -106,6 +142,19 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// texte annulé ne laisse rien derrière lui.
     case text
 
+    /// **Le HASHTAG de la publication** (#4636, directive porteur 2026-08-31 :
+    /// « mettre l'outil hashtag dans la liste des outils d'un slide ou d'une
+    /// publication »).
+    ///
+    /// Elle est la JUMELLE de `.mention`, et pas seulement par le glyphe : les
+    /// deux désignent une entité que le serveur DÉRIVE du texte. C'est pourquoi
+    /// elle n'ouvre pas un objet de scène mais écrit dans le contenu — voir
+    /// `ComposerHashtags`, qui porte la raison en entier.
+    ///
+    /// Niveau `.publication`, donc ligne canonique du bas : un hashtag n'apparaît
+    /// pas sur la scène, il classe ce qui part.
+    case hashtag
+
     /// Le niveau du modèle sur lequel la porte agit.
     ///
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
@@ -114,8 +163,8 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     var level: ComposerRailLevel {
         switch self {
         case .description:                    return .slide
-        case .mention:                        return .publication
-        case .media, .sound, .sticker, .place, .text: return .object
+        case .mention, .place, .hashtag:      return .publication
+        case .media, .sound, .sticker, .text: return .object
         case .drawing:                        return .scene
         }
     }
@@ -124,7 +173,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
+        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -135,8 +184,24 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .description: return "text.alignleft"
         case .media:       return "photo"
         case .sound:       return "music.note"
-        case .sticker:     return "face.smiling"
+        // **Pas un smiley** (directive porteur 2026-09-01) : cette porte
+        // n'ouvre pas un clavier d'emoji, elle ouvre une palette de
+        // CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ».
+        // Un visage y dirait le contenu d'un seul de ses cinq onglets.
+        //
+        // Aucun glyphe Apple ne s'appelle « sticker » ni « peel » — vérifié
+        // dans `CoreGlyphs.bundle`, noms ET index de recherche, zéro
+        // correspondance. `rectangle.portrait.on.rectangle.portrait.angled`
+        // est le seul qui DIT le geste : deux rectangles portrait, celui de
+        // devant incliné — la feuille qui se soulève de la planche.
+        //
+        // iOS 16.0, soit notre plancher exact : aucune garde de version. Et
+        // style LIGNE, comme les huit autres portes.
+        case .sticker:     return "rectangle.portrait.on.rectangle.portrait.angled"
         case .mention:     return "at"
+        // `number` — le glyphe SYSTÈME du `#`. Posé à côté du `at` de la
+        // mention, il dit la parenté : deux références dérivées du texte.
+        case .hashtag:     return "number"
         case .place:       return "mappin.and.ellipse"
         // `scribble.variable` plutôt qu'un `pencil` générique : ce n'est pas
         // « éditer », c'est TRACER — et le glyphe DIT le verbe (loi 7).
@@ -177,10 +242,31 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         let sceneExists = format != .status
         return canonicalRail.filter { porte in
             guard served.contains(porte) else { return false }
-            // Les deux niveaux qui EXIGENT une toile. Un `status` n'a pas de
-            // scène : ni objet à poser, ni surface où tracer.
-            guard porte.level == .object || porte.level == .scene else { return true }
-            return sceneExists
+            guard !sceneExists else { return true }
+            // Sans toile, ce qui APPARAÎT sur elle n'a rien à poser : la même
+            // question qui range la porte à gauche décide aussi qu'elle ne
+            // survit pas à un format sans scène. Une seule règle, deux effets.
+            guard !porte.level.appearsOnCanvas else { return false }
+            return !removedFromStatus.contains(porte)
         }
     }
+
+    /// **Ce que le profil MOOD retire EN PLUS, et pour une autre raison.**
+    ///
+    /// Planche `2k` : « photo · caméra · lieu · micro — **indisponibles en
+    /// Mood** ». Le lieu ne disparaît pas faute de toile — il n'en a jamais eu
+    /// besoin, puisqu'il vise la publication : il disparaît parce qu'« une
+    /// humeur d'une heure ne dit pas d'où elle est écrite ». C'est un choix
+    /// produit, et il se déclare.
+    ///
+    /// > **Ce retrait a longtemps tenu par ACCIDENT.** Le lieu était classé
+    /// > `.object`, donc écarté par la règle de la toile — un effet de bord
+    /// > d'une classification fausse. Corriger la classification (#4561) a
+    /// > rendu la porte au Mood, et seul le témoin l'a vu.
+    ///
+    /// La leçon vaut au-delà de ce cas : **une règle générale qui remplace un
+    /// effet de bord doit vérifier ce que cet effet de bord PROTÉGEAIT.** Une
+    /// protection non déclarée ne se signale pas quand on la retire — elle
+    /// n'était écrite nulle part.
+    private static let removedFromStatus: Set<ComposerRailDoor> = [.place]
 }

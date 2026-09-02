@@ -301,7 +301,7 @@ struct NotificationCheckView: View {
             HStack {
                 Image(systemName: "bell.fill")
                     .foregroundColor(MeeshyColors.info)
-                Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) Unread", bundle: .main))
+                Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) non lus", bundle: .main))
                     .font(.headline)
             }
             .accessibilityElement(children: .combine)

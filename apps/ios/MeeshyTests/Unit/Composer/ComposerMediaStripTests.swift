@@ -47,10 +47,16 @@ final class ComposerMediaStripTests: XCTestCase {
     // 2 — la surface PEINT le média reçu, en vignettes retirables.
     func test_laSurface_peintLeMedia_enVignettesRetirables() throws {
         // Le ruban a été MONTÉ en barre haute au 2026-08-27 (#4047) et s'appelle
-        // désormais `slideRail` — en Post une slide EST un média, le rail des
-        // slides et l'inventaire des pièces jointes sont le MÊME objet. Ce que
-        // cette garde protège n'a pas changé d'un mot : le média choisi est
-        // VISIBLE et RETIRABLE. Seul son logement a bougé — DEUX fois.
+        // désormais `slideRail`. Ce que cette garde protège n'a pas changé d'un
+        // mot : le média choisi est VISIBLE et RETIRABLE. Seul son logement a
+        // bougé — DEUX fois.
+        //
+        // **Ce qui a changé au #4724, c'est la LISTE qu'il peint.** « En Post
+        // une slide EST un média » reste vrai ; « donc le rail des slides et
+        // l'inventaire des pièces jointes sont le MÊME objet » ne l'est plus,
+        // depuis qu'un média peut être posé SUR la scène sans ouvrir de page.
+        // Un son, un document, une image de premier plan sont des pièces
+        // jointes qui ne sont aucune page.
         //
         // **RE-POINTÉE au #4064.** #4070 a sorti la barre haute de la surface
         // document pour en faire `ComposerTopBar`, partagée avec la surface de
@@ -90,9 +96,19 @@ final class ComposerMediaStripTests: XCTestCase {
     func test_leMeuble_cableSonMediaEtLeRetrait() throws {
         let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(src.contains("structMeeshyComposerHost"), "MeeshyComposerHost introuvable ou vide")
+        // **RE-POINTÉE au #4724, et la raison n'est pas cosmétique.** La barre
+        // haute ne reçoit plus l'inventaire ENTIER : elle reçoit les médias qui
+        // ont fondé une page (`headerTileMedia`). Garder l'ancienne chaîne ici
+        // aurait rougi sur un câblage devenu JUSTE, et — pire — aurait poussé à
+        // « réparer » en re-branchant la liste entière, rouvrant le défaut.
         XCTAssertTrue(
-            src.contains("localMedia:documentLocalMedia"),
-            "Le meuble doit passer `localMedia: documentLocalMedia` à la surface — sans quoi rien n'est peint."
+            src.contains("localMedia:headerTileMedia"),
+            "Le meuble doit passer `localMedia: headerTileMedia` aux deux barres — sans quoi rien "
+                + "n'est peint (ou tout l'est, ce qui est le défaut du #4724)."
+        )
+        XCTAssertTrue(
+            src.contains("ComposerHeaderTiles.tiles(documentLocalMedia,founding:slideIdByMediaURL)"),
+            "…et cette liste doit venir de la RÈGLE, jamais d'un filtre réécrit en ligne dans un `body`."
         )
         XCTAssertTrue(
             src.contains("documentLocalMedia.removeAll"),

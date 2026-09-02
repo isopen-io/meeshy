@@ -1479,70 +1479,6 @@ class ConversationViewModel: ObservableObject {
     /// clock for a full minute on a single hung cellular attempt.
     static let sendRESTTimeoutSeconds: Double = 12
 
-    /// Phase 2 — seeds the local `MediaConsumptionStore` from the server-synced
-    /// per-user consumption surfaced on freshly loaded attachments, so the
-    /// in-bubble waveform tint (audio) / progress bar (video) reflect progress
-    /// made on other devices the moment the conversation opens. The store merges
-    /// with MAX semantics, so a further-along LOCAL position is never regressed
-    /// by a staler server value (and vice-versa). App-side orchestration: it
-    /// derives the playback fraction from the attachment duration and decides
-    /// when to seed — the store itself stays an opaque building block.
-    private func seedMediaConsumption(from messages: [Message]) {
-        for message in messages {
-            for attachment in message.attachments {
-                guard let consumption = attachment.currentUserConsumption else { continue }
-                let durationMs = attachment.duration ?? 0
-                let positionMs: Int?
-                let complete: Bool
-                switch attachment.type {
-                case .audio:
-                    positionMs = consumption.lastPlayPositionMs
-                    complete = consumption.listenedComplete
-                    if !complete, let seconds = Self.seedResumePositionSeconds(
-                        positionMs: positionMs,
-                        hasLocalPosition: AudioPlaybackPositionStore.shared.position(for: attachment.id) != nil
-                    ) {
-                        AudioPlaybackPositionStore.shared.save(seconds, for: attachment.id)
-                    }
-                case .video:
-                    positionMs = consumption.lastWatchPositionMs
-                    complete = consumption.watchedComplete
-                    if !complete, let seconds = Self.seedResumePositionSeconds(
-                        positionMs: positionMs,
-                        hasLocalPosition: VideoPlaybackPositionStore.shared.position(for: attachment.id) != nil
-                    ) {
-                        VideoPlaybackPositionStore.shared.save(seconds, for: attachment.id)
-                    }
-                default:
-                    continue
-                }
-                // Nothing to seed without either completion or a measurable position.
-                guard complete || (positionMs != nil && durationMs > 0) else { continue }
-                // `record` floors `complete` to fraction 1, so 0 here is safe
-                // when only completion is known (no position/duration).
-                let fraction: Double
-                if durationMs > 0, let pos = positionMs {
-                    fraction = Double(pos) / Double(durationMs)
-                } else {
-                    fraction = 0
-                }
-                MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
-            }
-        }
-    }
-
-    /// Pure decision: should the server-synced position seed the LOCAL resume
-    /// store for this attachment? Never overwrites an existing local position
-    /// — a further-along (or intentionally abandoned) local position always
-    /// wins over a server value that may simply be stale. Returns the seconds
-    /// value to seed, or `nil` when there is nothing to seed. The resumability
-    /// dead-zone (too close to either edge) is re-checked at PLAYBACK time by
-    /// the engine itself, so it is deliberately not duplicated here.
-    nonisolated static func seedResumePositionSeconds(positionMs: Int?, hasLocalPosition: Bool) -> Double? {
-        guard !hasLocalPosition, let positionMs, positionMs > 0 else { return nil }
-        return Double(positionMs) / 1000
-    }
-
     func loadMessages() async {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
@@ -1766,7 +1702,7 @@ class ConversationViewModel: ObservableObject {
                 // it as transient and the user would see ghost messages.
                 await handleAccessRevoked(
                     reason: message.isEmpty
-                        ? String(localized: "Cette conversation n'existe plus", defaultValue: "Cette conversation n'existe plus")
+                        ? String(localized: "conversation.error.gone", defaultValue: "Cette conversation n'existe plus")
                         : message
                 )
                 return
@@ -3767,8 +3703,10 @@ class ConversationViewModel: ObservableObject {
     ///   que compte le badge.
     ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    func markAsRead(messageIds: [String]? = nil) {
-        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds))
+    /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
+    ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
+    func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds, visible: visibleIds))
     }
 
     /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux
@@ -3851,30 +3789,18 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    /// Identifiant SERVEUR du message le plus récent, quand le lecteur vient
-    /// de l'atteindre — donc quand la conversation n'a plus de retard.
-    ///
-    /// Trois conditions, toutes nécessaires :
-    /// - la fenêtre chargée est bien au SOMMET (`!hasNewerMessages`) : après un
-    ///   saut vers un message cité, le bas de l'écran n'est pas le bas de la
-    ///   conversation, et croire l'inverse viderait un badge encore dû ;
-    /// - l'appelant est INFORMÉ (`seen != nil`) : un appel aveugle laisse le
-    ///   gateway sur son repli par fenêtre, qui vide déjà le compteur ;
-    /// - le lot contient le dernier message connu du serveur.
-    ///
-    /// Le repli sur `lastCaughtUpMessageId` rend le rattrapage COLLANT :
-    /// remonter dans l'historique après avoir touché le bas ne remet pas la
-    /// conversation en retard tant qu'aucun message plus récent n'est arrivé.
-    /// Sans lui, un lot ultérieur portant des messages anciens supplanterait
-    /// dans l'outbox (coalescence par conversation) celui qui portait le
-    /// rattrapage, et le badge repartirait au prochain sync.
-    private func caughtUpMessageId(seen: [String]?) -> String? {
-        guard let seen, !hasNewerMessages, let newest = newestServerMessageId() else { return nil }
-        if seen.contains(newest) {
-            lastCaughtUpMessageId = newest
-            return newest
-        }
-        return lastCaughtUpMessageId == newest ? newest : nil
+    /// La LOI vit dans `ConversationCatchUpLaw`, pure et interrogeable sans ce
+    /// modèle ; ce site lui fournit l'état et retient ce qu'elle rend.
+    private func caughtUpMessageId(seen: [String]?, visible: [String]) -> String? {
+        let id = ConversationCatchUpLaw.caughtUpId(
+            newestServerId: newestServerMessageId(),
+            windowIsAtTip: !hasNewerMessages,
+            seen: seen,
+            visible: visible,
+            memoized: lastCaughtUpMessageId
+        )
+        if let id { lastCaughtUpMessageId = id }
+        return id
     }
 
     /// Le message le plus récent que le SERVEUR connaît : une bulle

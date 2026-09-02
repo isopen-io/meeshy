@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
 
 const sendEmailInvitationSchema = z.object({
   email: z.email(),
@@ -11,12 +12,7 @@ const sendEmailInvitationSchema = z.object({
 export async function invitationRoutes(fastify: FastifyInstance) {
   fastify.post('/invitations/email', {
     onRequest: [fastify.authenticate],
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 hour',
-      },
-    },
+    config: { rateLimit: createInvitationRateLimitConfig() },
     schema: {
       description: 'Send an email invitation to join Meeshy',
       tags: ['invitations'],

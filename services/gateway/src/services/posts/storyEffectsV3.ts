@@ -148,8 +148,23 @@ export function convertV1ToV3(
     // La spec O8 les attendait déjà ici : `unclaimedCanvasMediaIds` compte
     // `sticker` parmi les CLAIM_BEARING_KINDS et lit `payload.postMediaId`
     // (ci-dessous). Le convertisseur était simplement en retard sur elle.
+    //
+    // MÊME piège, deuxième morsure (#4741). Les stickers à GABARIT — pastille
+    // de lieu, cadre de coeurs, ruban d'heure — portent leur dessin dans
+    // `templateId` et leur texte dans `slots`. Sans ces deux clés, une
+    // décoration qui traverse le serveur redevient son emoji de REPLI : le
+    // composer dessine, le lecteur rend un glyphe.
+    //
+    // L'emoji continue de voyager, et c'est délibéré : il sert le lecteur dont
+    // le build ne connaît pas ce `templateId`, qui verra un glyphe plutôt qu'un
+    // trou. Mais un repli conservé SANS la chose dont il est le repli n'est
+    // plus un repli — c'est le contenu.
     o.payload = {
       emoji: st.emoji,
+      ...(str(st.templateId) ? { templateId: st.templateId } : {}),
+      ...(st.slots && typeof st.slots === 'object' && !Array.isArray(st.slots)
+        ? { slots: st.slots }
+        : {}),
       ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
       ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
@@ -179,7 +194,21 @@ export function convertV1ToV3(
 
   for (const L of asArray(blob.locationObjects)) {
     const o = baseObject(L, 'place', 'fg', z++);
-    o.payload = { place: L.place ?? null };
+    // MÊME piège, TROISIÈME morsure (#4832) — sur le FRÈRE du champ ci-dessus.
+    // Le lot #4717 a donné un gabarit à la pastille de lieu : `styleId` nomme
+    // le gabarit qui la DÉCORE. Sans lui, une pastille décorée qui traverse le
+    // serveur redevient la pastille de BASE, et la perte est invisible parce
+    // que cette pastille de base EST le repli d'un `styleId` absent.
+    //
+    // La forme du défaut n'est pas humaine : ce convertisseur RECOMPOSE la
+    // charge clé par clé, donc chaque branche est un inventaire à tenir à jour
+    // et toute clé ajoutée en amont s'y perd en silence. Le témoin qui
+    // l'attraperait vraiment est un témoin d'EXHAUSTIVITÉ (#4833) — celui par
+    // clé ne parle que des clés auxquelles on a déjà pensé.
+    o.payload = {
+      place: L.place ?? null,
+      ...(str(L.styleId) ? { styleId: L.styleId } : {}),
+    };
     objects.push(o);
   }
   for (const a of asArray(blob.audioPlayerObjects)) {

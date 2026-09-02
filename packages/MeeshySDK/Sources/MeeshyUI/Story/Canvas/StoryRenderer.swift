@@ -54,15 +54,21 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
-/// La pastille de lieu est hors timeline par design (voir doc `StoryLocationObject`
-/// dans MeeshySDK) : `nil` pour les quatre champs de timing en fait un item
-/// `isStatic` toujours visible, jamais gouverné par une fenêtre de lecture.
-extension StoryLocationObject: RenderableItem {
-    public var startTime: Double? { nil }
-    public var duration: Double? { nil }
-    public var fadeIn: Double? { nil }
-    public var fadeOut: Double? { nil }
-}
+/// **La pastille de lieu porte ses quatre champs de timing comme ses trois
+/// sœurs** (directive porteur 2026-08-31, #4591) — donc la conformité est vide,
+/// comme les leurs.
+///
+/// > Elle fabriquait ici quatre `nil` EN DUR, justifiés par le doc-comment du
+/// > modèle qui affirmait « hors timeline par design ». C'était le site le plus
+/// > dangereux du cercle : `MeeshyUI` compile en `defaultIsolation(MainActor)`,
+/// > donc ces quatre calculées OMBRAIENT les propriétés stockées dans tout le
+/// > module. Les champs ajoutés au modèle n'auraient gouverné **aucun pixel** du
+/// > canvas, et rien n'aurait rougi — c'est l'isolation, pas la logique, qui a
+/// > fini par le dire.
+///
+/// **Un repli qui rend `nil` sans condition n'est pas une valeur par défaut :
+/// c'est une réponse qui empêche la question d'être posée.**
+extension StoryLocationObject: RenderableItem {}
 
 extension RenderableItem {
     /// A static item has no timing windows, no fades, no keyframes — its rendered

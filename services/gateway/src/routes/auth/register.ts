@@ -17,6 +17,7 @@ import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { candidatsDePseudo } from '../directory/availability';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -292,7 +293,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // FORME, ce que porte `phoneNumberValid` — déjà présent dans l'ancienne
   // réponse.
   fastify.get('/check-availability', {
-    onRequest: depreciee({ depuis: '2026-08-29', successeur: '/api/v1/directory/availability' }),
+    onRequest: depreciee({ depuis: '2026-08-29', successeur: apiPath('/directory/availability') }),
     schema: {
       deprecated: true,
       description:

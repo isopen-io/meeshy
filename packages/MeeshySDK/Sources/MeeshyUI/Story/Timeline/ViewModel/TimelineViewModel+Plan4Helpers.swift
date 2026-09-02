@@ -124,15 +124,21 @@ extension TimelineViewModel {
     /// `nil` quand l'identifiant ne correspond à rien, ou à un audio — qui ne
     /// se voit pas.
     public func clipTransform(id: String) -> ClipTransform? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) {
-            return ClipTransform(x: m.x, y: m.y, scale: m.scale,
-                                 rotation: m.rotation, zIndex: m.zIndex)
+        guard let objet = project.sceneObject(id: id) else { return nil }
+        // **Le `nil` des trois autres familles est PRÉSERVÉ, et désormais
+        // ÉCRIT** (#4591). La cascade rendait `nil` pour un sticker, un lieu et
+        // un audio sans le dire : seul l'audio avait sa raison au doc-comment
+        // (« qui ne se voit pas »), les deux autres étaient un silence.
+        //
+        // Le `switch` exhaustif ne change aucun comportement — il rend la
+        // décision visible, et oblige une sixième famille à la prendre.
+        switch objet.kind {
+        case .media, .text:
+            return ClipTransform(x: objet.x, y: objet.y, scale: objet.scale,
+                                 rotation: objet.rotation, zIndex: objet.zIndex)
+        case .sticker, .location, .audio:
+            return nil
         }
-        if let t = project.textObjects.first(where: { $0.id == id }) {
-            return ClipTransform(x: t.x, y: t.y, scale: t.scale,
-                                 rotation: t.rotation, zIndex: t.zIndex)
-        }
-        return nil
     }
 
     /// Règle UN champ de la transformation, en préservant les autres. Le
@@ -249,11 +255,10 @@ extension TimelineViewModel {
     // MARK: - Internal clip dimension helper (accessible to extension)
 
     func clipDuration(id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
-        if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
-        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
-        return nil
+        // Cinq lignes pour un champ que la somme porte : `duration` y est
+        // `Double?`, et son `nil` pour un LIEU est le même que celui que cette
+        // cascade rendait — un lieu n'a pas de temps propre (#4591).
+        project.sceneObject(id: id)?.duration.map { Float($0) }
     }
 
     // MARK: - Clip property mutations (used by ClipInspector callbacks)

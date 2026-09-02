@@ -53,13 +53,18 @@ struct ComposerDocumentSurface: View {
 
     var onTool: ((ComposerDocumentTool) -> Void)? = nil
 
-    /// **Le média LOCAL déjà choisi (B, #3883).** La surface le REÇOIT et le
-    /// peint — elle reste sans état ; le meuble possède `documentLocalMedia`.
-    /// Sélectionner une photo ne montrait rien jusqu'ici : la preuve visible du
-    /// choix vit dans `slideRail`, monté en BARRE HAUTE (#4047) — en Post une
-    /// slide EST un média, le rail des slides et l'inventaire des pièces
-    /// jointes sont donc le MÊME objet, et n'en faire qu'un est ce qui les
-    /// empêche de diverger.
+    /// **Les médias qui ont une TUILE — les FONDS de slide (B, #3883, #4724).**
+    /// La surface les REÇOIT et les peint — elle reste sans état ; le meuble
+    /// possède `documentLocalMedia` et décide qui gagne une tuile
+    /// (`headerTileMedia`).
+    ///
+    /// **Ce n'est plus l'inventaire des pièces jointes**, et la nuance est le
+    /// #4724. « En Post une slide EST un média » reste vrai ; « donc le rail des
+    /// slides et l'inventaire des pièces jointes sont le MÊME objet » ne l'est
+    /// plus depuis qu'un média peut être posé SUR la scène sans ouvrir de page.
+    /// Un son, un document, une image de premier plan sont des pièces jointes
+    /// qui ne sont aucune page — les compter ici faisait grossir le carrousel
+    /// d'une tuile qui ne menait nulle part.
     var localMedia: [ComposerDocumentMedia] = []
 
     /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce
@@ -103,6 +108,41 @@ struct ComposerDocumentSurface: View {
     /// premier, qui montrerait exactement la même chose (loi 2). `nil` ⇒ le rail
     /// reste ce qu'il était, un inventaire avec son bouton de retrait.
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)? = nil
+    /// **Le son de FOND de la publication** (#4657) — `nil` quand il n'y en a
+    /// pas, et la rangée retrouve alors sa forme d'avant : avatar et texte côte
+    /// à côte. Une pastille toujours montée, vide, occuperait la place d'un son
+    /// qui n'existe pas.
+    var backgroundSound: StoryAudioPlayerObject? = nil
+    /// **Ce que le doigt fait de la pastille du son de fond** (#4668). `nil` ⇒
+    /// elle reste une lecture : la surface ne fabrique pas d'action que l'hôte
+    /// ne lui a pas donnée.
+    var onEditBackgroundSound: (() -> Void)? = nil
+    /// **Ce que le doigt fait d'une carte de son de contenu.**
+    ///
+    /// Toucher la carte rouvre « Création audio » SUR ce son. `nil` ⇒ la carte
+    /// s'écoute sans s'éditer, plutôt qu'un tap qui ne ferait rien (loi 4) — un
+    /// composer qui sert la carte sans servir l'édition existe : c'est celui
+    /// d'une surface en lecture seule.
+    ///
+    /// **Le son touché voyage en ARGUMENT depuis #4672** : avec N cartes, un
+    /// rappel sans argument ouvrirait toujours le même — un contrôle qui a l'air
+    /// de répondre et désigne son voisin.
+    var onEditForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
+
+    /// **Retirer le son de la carte, par appui LONG** (#4696, directive porteur
+    /// 2026-09-01 : « introduire le longpress sur les objets pour avoir un menu
+    /// contenant la suppression »).
+    ///
+    /// Le geste double celui de la feuille, et c'est voulu : ouvrir puis
+    /// supprimer demande trois gestes pour défaire ce qu'un seul a posé.
+    /// `nil` ⇒ pas de menu — la surface ne fabrique pas une entrée sans effet.
+    var onDeleteForegroundSound: ((ComposerForegroundSound) -> Void)? = nil
+
+    /// **Le son placé en CONTENU de publication** (directive porteur
+    /// 2026-09-01). Résolu par le meuble (`ComposerForegroundSound.resolve`),
+    /// jamais fouillé ici : la surface reste une présentation. `nil` ⇒ aucune
+    /// carte — et c'est le cas de l'écrasante majorité des publications.
+    var foregroundSounds: [ComposerForegroundSound] = []
 
     /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
     ///
@@ -354,7 +394,101 @@ struct ComposerDocumentSurface: View {
     }
 
     /// L'écran document HISTORIQUE — texte long seul, sans scène.
+    ///
+    /// **L'avatar dit QUI publie (#4071).** La maquette `1a` le pose à gauche du
+    /// champ, et il n'est pas décoratif : le composer s'ouvre depuis le fil, où
+    /// plusieurs comptes peuvent se succéder, et la seule chose qui distingue
+    /// « je publie » de « je réponds » est le visage à côté du curseur. Il est
+    /// posé par la loi 8 sans y contrevenir — il ne dépend d'aucun contenu,
+    /// c'est une propriété de la SESSION, présente dès l'ouverture.
     private var textOnlyContent: some View {
+        // **Deux dispositions, et le son décide** (#4657). Sans son de fond, la
+        // rangée reste ce qu'elle était : avatar et texte côte à côte. Avec un
+        // son, la pastille prend la place à droite de l'avatar — les deux
+        // attributs qui existent AVANT le premier caractère tapé se lisent d'un
+        // coup d'œil — et le texte descend de ce qu'ils occupent, au lieu
+        // d'être recouvert.
+        Group {
+            if let backgroundSound {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 12) {
+                        avatarView
+                        ComposerAvatarSoundBadge(sound: backgroundSound,
+                                                 onTap: onEditBackgroundSound)
+                        Spacer(minLength: 0)
+                    }
+                    textOnlyField
+                    foregroundSoundCard
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) {
+                        avatarView
+                            .padding(.top, 10)
+                        textOnlyField
+                    }
+                    foregroundSoundCard
+                }
+            }
+        }
+    }
+
+    /// **Le son du CONTENU se joue là où le contenu se lit** (#4657).
+    ///
+    /// Il est monté ICI, et nulle part ailleurs, parce que `textOnlyContent`
+    /// EST la branche « sans canvas » : le `if showsScene` de `content` a déjà
+    /// tranché au-dessus. C'est la seule garde de cette condition — en écrire
+    /// une seconde dans la règle de résolution ferait deux vérités pour un fait,
+    /// et la seconde se tairait le jour où la première changerait.
+    ///
+    /// Avec une scène, un son de premier plan est un OBJET posé sur le canvas
+    /// et s'y édite ; il n'a pas besoin d'une carte sous le texte.
+    @ViewBuilder
+    private var foregroundSoundCard: some View {
+        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
+        // fichier : les précédents restaient dans la publication — donc ils
+        // partaient — sans que rien à l'écran ne dise qu'ils existaient. Un
+        // contenu publié qu'on ne peut ni entendre, ni rogner, ni retirer.
+        //
+        // `ForEach` sur l'identité du FICHIER : deux sons peuvent partager
+        // durée, type et texte sans être le même son.
+        ForEach(foregroundSounds) { son in
+            MeeshyAudioTranscriptPlayer(
+                url: son.url,
+                duration: son.duration,
+                cues: son.cues,
+                fallbackText: son.text,
+                // Le plateau est sombre PAR CONSTRUCTION — comme les deux
+                // champs de texte de cette surface, qui posent déjà
+                // `isDark: true` sans consulter le thème de l'appareil.
+                isDark: true,
+                onEdit: onEditForegroundSound.map { rappel in { rappel(son) } }
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .modifier(ComposerSoundDeletionMenu(
+                supprimer: onDeleteForegroundSound.map { rappel in { rappel(son) } }))
+        }
+    }
+
+    /// L'avatar, extrait des deux dispositions : le monter deux fois le ferait
+    /// diverger au premier réglage, et c'est le même visage dans les deux cas.
+    private var avatarView: some View {
+        MeeshyAvatar(
+            name: AuthManager.shared.currentUser?.displayName
+                ?? AuthManager.shared.currentUser?.username ?? "M",
+            context: .feedComposer,
+            avatarURL: AuthManager.shared.currentUser?.avatar,
+            // Loi 6 — une vignette montre la DONNÉE. Le ThumbHash évite le
+            // rond vide pendant que l'image arrive : le substitut porte
+            // déjà les couleurs du vrai avatar.
+            thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+        )
+        .padding(.leading, 16)
+        .accessibilityHidden(true)
+    }
+
+    private var textOnlyField: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(ComposerDocumentCopy.placeholder)
@@ -428,18 +562,37 @@ struct ComposerDocumentSurface: View {
             // côtés, avec des outils qu'aucun geste n'atteignait.
             HStack(spacing: 16) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    // 8 pt entre TUILES, pas 16 : depuis #4071 chaque entree porte son mot,
-                    // donc elle est deux fois plus large qu'un glyphe nu. Garder
-                    // l'ecart des glyphes aurait fait defiler la rangee au bout de
-                    // trois entrees.
-                    HStack(spacing: 8) {
+                    // L'ecart et la largeur de tuile viennent de
+                    // `ComposerDocumentToolRowFit`, qui porte la MESURE : a
+                    // 52 pt et 8 pt d'ecart, trois entrees sur sept ne rendaient
+                    // aucun pixel a taille nominale sur 402 pt (#4071). Resserrer
+                    // ne fait pas tout tenir — rien ne le pourrait sans passer
+                    // sous la cible tactile — mais fait PARAITRE la derniere,
+                    // et c'est le signal qui manquait.
+                    HStack(spacing: ComposerDocumentToolRowFit.spacing) {
                         if let toolRowLeadingAccessory {
                             toolRowLeadingAccessory
                         }
                         ForEach(tools, id: \.rawValue) { tool in
                             toolButton(tool)
-                            // Icône « couleur de fond » JUSTE APRÈS l'emoji
-                            // (#4031) : elle replie/déplie la palette.
+                            // **La bascule de fond reste au 4e rang (#4071),
+                            // et j'y suis revenu APRÈS mesure.**
+                            //
+                            // Huit entrées nommées ne tiennent pas sur 402 pt —
+                            // ni en les resserrant, ni en les réordonnant :
+                            // quelque chose débordera toujours. Le vrai
+                            // arbitrage n'est donc pas « quel OUTIL cacher »
+                            // mais « quelle PORTE ».
+                            //
+                            // Je l'avais passée en queue pour rendre visibles
+                            // « Fichier », « Position » et « Vocal ». Mesuré à
+                            // l'écran, c'était pire : elle devenait invisible,
+                            // alors que **c'est elle qui fait NAÎTRE la
+                            // scène** (vue `1b` : « choisir un fond fait naître
+                            // la scène incrustée »). Cacher la porte d'une
+                            // branche entière du composer coûte plus que cacher
+                            // deux outils qui, eux, restent atteignables au
+                            // balayage — et la tuile qui dépasse le dit.
                             if tool == .emoji, onPickBackground != nil {
                                 backgroundColorToggle
                             }
@@ -513,7 +666,7 @@ struct ComposerDocumentSurface: View {
                     .minimumScaleFactor(0.75)
             }
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 52)
+            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(
@@ -542,7 +695,7 @@ struct ComposerDocumentSurface: View {
                 Image(systemName: "paintpalette")
                     .font(.title3)
                     .symbolRenderingMode(.hierarchical)
-                Text(ComposerDocumentCopy.background)
+                Text(ComposerDocumentCopy.backgroundShort)
                     .font(.caption2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -550,7 +703,7 @@ struct ComposerDocumentSurface: View {
             .foregroundColor(showColorPalette
                 ? Color(hex: MeeshyColors.brandPrimaryHex)
                 : MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: 52)
+            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(
@@ -657,5 +810,29 @@ extension View {
 nonisolated enum ComposerMediaChipAffordance {
     static func showsRemove(isSelected: Bool, isSelectable: Bool) -> Bool {
         isSelected || !isSelectable
+    }
+}
+
+
+/// **Le menu de suppression d'une carte de son** (#4696).
+///
+/// Un modificateur plutôt qu'un `.contextMenu` posé en ligne : sans fermeture,
+/// AUCUN menu ne se monte — un `.contextMenu` vide s'ouvrirait quand même, sur
+/// rien, et un appui long qui répond par un cadre vide se lit comme une panne.
+private struct ComposerSoundDeletionMenu: ViewModifier {
+    let supprimer: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let supprimer {
+            content.contextMenu {
+                Button(role: .destructive, action: supprimer) {
+                    Label(String(localized: "composer.audio.delete.action",
+                                 defaultValue: "Supprimer le son", bundle: .main),
+                          systemImage: "trash")
+                }
+            }
+        } else {
+            content
+        }
     }
 }

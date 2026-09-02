@@ -423,6 +423,27 @@ public enum StorySlideRenderer {
         let center = CGPoint(x: size.width * sticker.x, y: size.height * sticker.y)
         drawRotated(sticker.rotation, around: center, in: ctx) {
             guard let image else {
+                // **Le second renderer doit connaître le gabarit** (#4718).
+                // `StoryRenderer` (CALayer) et celui-ci (CGContext) sont deux
+                // chemins de rendu distincts : n'en câbler qu'un donnerait une
+                // décoration visible au canvas et absente de la miniature — ou
+                // l'inverse. La couche est le SITE UNIQUE du dessin, ici comme
+                // pour la pastille de lieu juste au-dessus.
+                if sticker.kind == .template {
+                    let layer = StoryStickerLayer()
+                    layer.configure(with: sticker,
+                                    geometry: CanvasGeometry(renderSize: size),
+                                    mode: .play)
+                    let boîte = layer.bounds.size
+                    if boîte.width > 0, boîte.height > 0 {
+                        ctx.saveGState()
+                        ctx.translateBy(x: center.x - boîte.width * sticker.anchor.x,
+                                        y: center.y - boîte.height * sticker.anchor.y)
+                        layer.render(in: ctx)
+                        ctx.restoreGState()
+                        return
+                    }
+                }
                 let attrs: [NSAttributedString.Key: Any] = [
                     .font: UIFont.systemFont(ofSize: side),
                 ]

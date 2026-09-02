@@ -105,11 +105,13 @@ const mockUser = {
   phoneVerifiedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-  userFeature: {
-    twoFactorEnabledAt: null,
-    autoTranslateEnabled: true,
-    encryptionPreference: null
-  }
+  // `twoFactorEnabledAt` est PROJETÉ par `validateMagicLink` : Prisma le rend
+  // donc toujours — `null` quand le compte n'a pas de second facteur, jamais
+  // absent. Il vivait ici sous une clé `userFeature` qui ne correspond à AUCUN
+  // modèle du schéma (vérifié) ni à aucune clé du `select` : le champ lu par la
+  // production valait `undefined`, c'est-à-dire l'état INDÉTERMINÉ que la garde
+  // #4534 refuse. Un double ment aussi par ce qu'il ACCEPTE.
+  twoFactorEnabledAt: null
 };
 
 const mockGeoData = {

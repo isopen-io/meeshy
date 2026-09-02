@@ -497,12 +497,46 @@ describe('GET /links — pagination', () => {
     );
   });
 
-  it('la réponse porte pagination (offset) ET cursorPagination — les deux formes, jamais une seule', async () => {
+  // #4351 critère 3 — remplace « la réponse porte les DEUX formes, jamais une
+  // seule », qui gardait exactement ce que l'issue appelle le défaut : deux
+  // objets de pagination côte à côte dans un même corps, sans que l'appelant
+  // puisse savoir lequel fait foi. Ce n'est pas le SUPPORT de l'offset qui
+  // devait disparaître — `?offset=` reste accepté, le témoin ci-dessus le
+  // garde — c'est leur COHABITATION.
+  it('sans curseur : `pagination` SEUL — `cursorPagination` est absent du corps', async () => {
     const res = await app.inject({ method: 'GET', url: '/links' });
     const body = res.json();
     expect(body.pagination).toEqual(expect.objectContaining({ total: 1, offset: 0, limit: 50 }));
-    expect(body.cursorPagination).toBeDefined();
-    expect(body.cursorPagination.nextCursor).toBe(mockLink.id);
+    expect(body.cursorPagination).toBeUndefined();
+  });
+
+  it('avec `?cursor=` : `cursorPagination` SEUL — `pagination` est absent du corps', async () => {
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
+    const res = await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
+    const body = res.json();
+    expect(body.cursorPagination).toEqual(expect.objectContaining({ nextCursor: mockLink.id }));
+    expect(body.pagination).toBeUndefined();
+  });
+
+  it('et un curseur ne paie AUCUN comptage de toute la collection', async () => {
+    // Le `count()` partait sur chaque appel, curseur compris, pour alimenter
+    // un `total` que la pagination par curseur ne porte pas. Ce témoin
+    // n'assertit pas la RÉPONSE — elle serait identique dans les deux cas —
+    // mais le travail SERVEUR, seul endroit où la dépense se voit.
+    prisma.conversationShareLink.count.mockClear();
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
+
+    await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
+
+    expect(prisma.conversationShareLink.count).not.toHaveBeenCalled();
+  });
+
+  it('alors que sans curseur, il le paie — sinon `total` serait fabriqué', async () => {
+    prisma.conversationShareLink.count.mockClear();
+
+    await app.inject({ method: 'GET', url: '/links' });
+
+    expect(prisma.conversationShareLink.count).toHaveBeenCalled();
   });
 
   it('?cursor=<id> résout la date de création du curseur et filtre createdAt < elle, sans `skip`', async () => {

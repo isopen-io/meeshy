@@ -39,6 +39,7 @@ import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS } from './config/cors-methods';
+import { fastifyCorsOrigin } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
 import { MutationLogService } from './services/MutationLogService';
@@ -398,42 +399,12 @@ class MeeshyServer {
       }
     });
 
-    // CORS configuration
+    // CORS — la règle vit dans `config/cors-origins` (#4480), pas ici : la porte
+    // WebSocket applique la MÊME, et deux littéraux jumeaux avaient divergé.
     await this.server.register(cors, {
-      origin: config.isDev ? true : (origin, cb) => {
-        // Add your production domains here
-        const allowedOrigins = process.env.CORS_ORIGINS?.split(',') ||
-                               process.env.ALLOWED_ORIGINS?.split(',') ||
-                               [
-                                 // Local development
-                                 'http://localhost:3100',
-                                 'http://localhost',
-                                 'http://localhost:80',
-                                 'http://127.0.0.1',
-                                 'http://127.0.0.1:80',
-                                 // Production
-                                 'https://meeshy.me',
-                                 'https://www.meeshy.me',
-                                 'https://gate.meeshy.me',
-                                 'https://ml.meeshy.me',
-                                 // Staging
-                                 'https://staging.meeshy.me:8443',
-                                 'https://gate.staging.meeshy.me:8443',
-                                 'https://ml.staging.meeshy.me:8443'
-                               ];
-
-        logger.info(`CORS check: origin="${origin}", allowed="${allowedOrigins.join(',')}"`);
-
-        // Allow requests without origin (e.g., mobile apps, Postman, curl)
-        // Allow requests from allowed origins
-        if (!origin || allowedOrigins.includes(origin)) {
-          return cb(null, true);
-        }
-
-        // Log the rejection for debugging
-        logger.warn(`CORS rejected origin: "${origin}"`);
-        return cb(new Error('Not allowed by CORS'), false);
-      },
+      origin: fastifyCorsOrigin({
+        onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
+      }),
       credentials: true,
       methods: CORS_METHODS
     });
@@ -678,6 +649,19 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Cast to `any` once to safely access error properties below.
       const err: any = error as any;
 
+      // Ce gestionnaire ne pose plus AUCUN champ que `errorResponseSchema` ne
+      // DÉCLARE (#4689). Il y posait `timestamp` et `statusCode` sur les deux
+      // branches typées, `details` sur deux des trois 413, `stack` sur le
+      // repli. `fast-json-stringify` ne supprime que là où un schéma EXISTE :
+      // une route qui déclarait consciencieusement son 4xx servait donc MOINS
+      // qu'une route qui ne déclarait rien — le geste vertueux était celui qui
+      // faisait perdre des champs, sur 595 déclarations de statut. Mesuré
+      // avant de retirer : aucun des trois clients ne lit `statusCode` ni
+      // `timestamp` dans un corps d'erreur, et le statut HTTP porte déjà
+      // l'information de `statusCode` pour tout le monde, y compris pour qui
+      // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
+      // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
+
       // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
       // `err.validation`. Sans cette branche il tombait dans le repli
       // générique et ressortait en « Internal Server Error / An unexpected
@@ -690,10 +674,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // par tout repli qui lit ce champ.
       const schemaRefusal = schemaValidationErrorResponse(error);
       if (schemaRefusal) {
-        return reply.code(schemaRefusal.statusCode).send({
-          ...schemaRefusal,
-          timestamp: new Date().toISOString()
-        });
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
       }
 
       // TOUTE la hiérarchie typée, en UNE branche (#4212).
@@ -716,23 +698,15 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // demande un témoin par sous-classe.
       const typed = typedErrorResponse(error);
       if (typed) {
-        return reply.code(typed.statusCode).send({
-          ...typed,
-          timestamp: new Date().toISOString()
-        });
+        const { statusCode: typeStatus, ...corpsType } = typed;
+        return reply.code(typeStatus).send(corpsType);
       }
 
       // Gestion des erreurs de limite de fichiers multipart
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`,
-          details: {
-            maxFiles: 30,
-            limit: 'Files limit reached'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
         });
       }
 
@@ -740,13 +714,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         return reply.code(413).send({
           error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`,
-          details: {
-            maxFileSize: '4 GB',
-            limit: 'File size exceeded'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
         });
       }
 
@@ -754,9 +722,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_PARTS_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Parts',
-          message: `Too many parts in the multipart request. Please reduce the number of elements.`,
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `Too many parts in the multipart request. Please reduce the number of elements.`
         });
       }
 
@@ -764,10 +730,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       const statusCode = (err && err.statusCode) || 500;
       return reply.code(statusCode).send({
         error: 'Internal Server Error',
-        message: config.isDev ? (err && err.message) : 'An unexpected error occurred',
-        statusCode,
-        timestamp: new Date().toISOString(),
-        ...(config.isDev && { stack: err && err.stack })
+        message: config.isDev ? (err && err.message) : 'An unexpected error occurred'
       });
     });
 

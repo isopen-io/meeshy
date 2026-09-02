@@ -19,6 +19,7 @@ import { mintConversationShareLink } from '../links/utils/share-link-mint';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { NEW_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
@@ -31,11 +32,13 @@ import {
 // `link-admission-single-source-guard.test.ts` interdit d'y revenir.
 import { performLinkJoin, resolveClientIp } from './link-admission';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
 import { depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -149,7 +152,18 @@ export function registerSharingRoutes(
           requireNickname: { type: 'boolean', description: 'Require nickname for anonymous users' },
           requireEmail: { type: 'boolean', description: 'Require email for anonymous users' },
           requireBirthday: { type: 'boolean', description: 'Require birthday for anonymous users' },
-          allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes' },
+          // #4354 — ACCEPTÉ VIDE, REFUSÉ NON VIDE. Le champ n'est plus
+          // appliqué (#4167 : pas de base GeoIP), mais dix liens sur dix
+          // l'envoient à vide : un refus sur sa PRÉSENCE casserait toute
+          // création jusqu'à la mise à jour des clients. `maxItems: 0` refuse
+          // exactement là où l'utilisateur serait trompé — quand il DEMANDE
+          // une restriction.
+          allowedCountries: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 0,
+            description: "INERTE (#4167) — aucun filtre par pays n'est appliqué ; une valeur non vide est refusée"
+          },
           allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
           allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges' }
         }
@@ -172,7 +186,7 @@ export function registerSharingRoutes(
     // canonique : `POST /links` l'est. `onRequest` court avant TOUTE garde
     // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
     // qui échoue est celui qui a le plus besoin de savoir migrer.
-    onRequest: [depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links' })],
+    onRequest: [depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -315,7 +329,7 @@ export function registerSharingRoutes(
     },
     onRequest: [depreciee({
       depuis: '2026-08-30',
-      successeur: (request) => `/api/v1/links?conversationId=${(request.params as { conversationId: string }).conversationId}`,
+      successeur: (request) => apiPath(`/links?conversationId=${(request.params as { conversationId: string }).conversationId}`),
     })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -466,7 +480,7 @@ export function registerSharingRoutes(
     // FONCTION de la requête, comme pour `/anonymous/join/:linkId`.
     onRequest: [depreciee({
       depuis: '2026-08-30',
-      successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}/members`,
+      successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}/members`),
     })],
     preValidation: [requiredAuth]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -485,9 +499,15 @@ export function registerSharingRoutes(
       // donc du COMPTE de l'appelant. `email` est `@unique` et non nul sur
       // `User` — un lien `requireEmail` est satisfait sans jamais solliciter
       // l'appelant.
+      // #4662 — les QUATRE rangs, jamais `systemLanguage` seul. C'est cette
+      // langue que `performLinkJoin` compare à `allowedLanguages` : chargée au
+      // rang 1 nu, elle REFUSAIT l'entrée à un lecteur dont la langue admise
+      // vit au rang 2, 3 ou 4, en lui opposant le repli du site. Et c'est le
+      // `select` qui décidait, pas l'appel — une projection étroite rend la
+      // descente impossible EN AVAL sans qu'aucun témoin de rang ne rougisse.
       const requester = await prisma.user.findUnique({
         where: { id: userToken.userId },
-        select: { email: true, systemLanguage: true }
+        select: { email: true, ...RECIPIENT_LANG_SELECT }
       });
 
       const result = await performLinkJoin({
@@ -499,7 +519,7 @@ export function registerSharingRoutes(
           firstName: '',
           lastName: '',
           email: requester?.email,
-          language: normalizeLanguageForDedup(requester?.systemLanguage || 'fr'),
+          language: normalizeLanguageForDedup(recipientLanguage(requester, 'fr')),
         },
         broadcast: (message, conversationId) =>
           fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
@@ -778,22 +798,19 @@ export function registerSharingRoutes(
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
+      // #4174 — la table de droits vient du site UNIQUE
+      // (`services/participantRights.ts`). Elle était écrite ICI, et elle
+      // DIFFÉRAIT de celle que `POST …/participants` posait pour le même
+      // geste : `canSendVideos` et `canSendAudios` y valaient `false`. Le
+      // même utilisateur, ajouté au même groupe, recevait donc des droits
+      // différents selon le bouton employé — alors que les deux portes
+      // partagent le résolveur d'admission, produisent la même ligne de rôle
+      // `member`, et sont déclenchées par le même écran.
       const invitedMemberFields = {
         type: 'user',
         displayName: userToInvite.displayName || userToInvite.username,
         role: 'member',
-        permissions: {
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendVideos: false,
-          canSendAudios: false,
-          canSendLocations: false,
-          canSendLinks: false,
-          // Un membre invité après coup lit depuis son arrivée ; un
-          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
-          canViewHistory: false
-        }
+        permissions: { ...NEW_MEMBER_PERMISSIONS }
       };
 
       // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne

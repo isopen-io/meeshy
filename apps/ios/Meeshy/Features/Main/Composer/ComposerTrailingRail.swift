@@ -43,13 +43,32 @@ struct ComposerTrailingRail: View {
     /// `nil` ⇒ l'hôte ne sait pas en créer, donc aucune frame (loi 4).
     var onAddSlide: (() -> Void)?
 
+    /// **L'HISTORIQUE, qui vivait au socle** (directive porteur 2026-08-31) :
+    ///
+    /// > « À droite, ça agit sur les dimensions des objets, + undo/redo devrait
+    /// > y être, + création d'un autre slide. »
+    ///
+    /// Ce qu'il défait, ce sont des gestes sur les OBJETS — poser un texte,
+    /// déplacer un média, tracer. Au socle, il voisinait avec l'audience et le
+    /// bouton publier, qui décident de l'ENVOI : la zone dit « ce qui part »,
+    /// l'historique dit « ce que j'ai fait ». Deux niveaux du modèle dans une
+    /// seule rangée.
+    ///
+    /// `nil` ⇒ absent, jamais grisé — même contrat que `onAddSlide`, et pour la
+    /// même raison : défaire un geste qui n'existe pas n'est pas un état, c'est
+    /// une promesse creuse.
+    var onUndo: (() -> Void)?
+    var onRedo: (() -> Void)?
+
     @State private var lastTapped: String?
 
     /// **Le rail EXISTE dès qu'il a le `[+]`**, même sans objet sélectionné.
     /// C'est ce qui distingue les deux côtés depuis la directive : le gauche
     /// suit ce que l'auteur FAIT, le droit ce que la SCÈNE offre — et créer une
     /// slide s'offre en permanence.
-    private var isEmpty: Bool { actions.isEmpty && onAddSlide == nil }
+    private var isEmpty: Bool {
+        actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil
+    }
 
     var body: some View {
         if !isEmpty {
@@ -71,6 +90,26 @@ struct ComposerTrailingRail: View {
                 }
                 ForEach(actions, id: \.self) { action in
                     actionButton(action)
+                }
+                // **L'historique en BAS, le plus près du pouce.** Défaire est le
+                // geste le plus fréquent du rail, et le ressort qui pousse le
+                // contenu vers le bas met la dernière entrée à portée. Le `[+]`
+                // garde sa place tout en haut : il n'agit pas sur un objet mais
+                // ajoute une PAGE, et la directive du 2026-08-30 l'y a mis.
+                if onUndo != nil || onRedo != nil {
+                    if !actions.isEmpty || onAddSlide != nil {
+                        Divider()
+                            .frame(width: 22)
+                            .overlay(MeeshyColors.textSecondary(isDark: true).opacity(0.25))
+                    }
+                    if let onUndo {
+                        historyButton(systemName: "arrow.uturn.backward",
+                                      label: ComposerHistoryCopy.undo, action: onUndo)
+                    }
+                    if let onRedo {
+                        historyButton(systemName: "arrow.uturn.forward",
+                                      label: ComposerHistoryCopy.redo, action: onRedo)
+                    }
                 }
             }
             .frame(width: ComposerRailGeometry.railWidth)
@@ -125,6 +164,28 @@ struct ComposerTrailingRail: View {
         }
         .accessibilityLabel(Text(action.title))
     }
+
+    /// Une entrée d'historique — même gabarit que les contrôleurs voisins, pour
+    /// que la colonne reste une colonne. Le verre de la capsule du socle ne la
+    /// suit pas : ici c'est le socle du RAIL qui le porte, pour toutes.
+    private func historyButton(systemName: String,
+                               label: String,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                // `.title3`, comme les deux contrôleurs voisins de la même
+                // colonne : une taille figée ne scalerait pas avec le Dynamic
+                // Type, et l'historique n'a aucune raison d'être le seul bouton
+                // du rail à ne pas grossir avec les autres.
+                .font(.title3)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: ComposerRailGeometry.railWidth,
+                       height: ComposerRailGeometry.railWidth)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(label))
+    }
+
 }
 
 /// Le libellé du rail. Les ACTIONS, elles, portent déjà le leur
@@ -193,3 +254,4 @@ nonisolated enum ComposerTrailingRailPolicy {
         .filter(served.contains)
     }
 }
+

@@ -228,7 +228,11 @@ final class WindowMetricsSSOTTests: XCTestCase {
         let deliberate: Set<String> = [
             "DeviceLayout.swift",              // the last resort when no scene exists
             "BubbleStandardLayout.swift",      // decode target: widest the image may need
-            "ConversationMediaGalleryView.swift" // decode target: widest the image may need
+            // Relocalisation PURE (98e96de97d) : la mesure n'a pas bougé, son
+            // fichier si — `ConversationMediaGalleryView` a été découpé pour rentrer
+            // dans son budget, et cette garde nommait l'ANCIEN fichier. Le nom
+            // change, la population des sites délibérés reste de trois.
+            "ConversationMediaGalleryView+Rules.swift" // decode target: widest the image may need
         ]
 
         var found: Set<String> = []

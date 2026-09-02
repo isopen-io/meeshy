@@ -26,10 +26,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 const mockCanAccessConversation = jest.fn();
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn().mockResolvedValue([]),

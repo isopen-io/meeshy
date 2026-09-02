@@ -710,7 +710,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             ]
 
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations",
+                ConversationsEndpoint.root,
                 method: "GET",
                 body: nil,
                 queryItems: queryItems

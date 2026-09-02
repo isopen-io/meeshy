@@ -33,7 +33,8 @@ import { logger } from './messages-shared';
 function cleanAttachmentsForApi(
   attachments: any[],
   languageFilter?: readonly string[],
-  currentParticipantId?: string
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
 ): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
@@ -59,11 +60,12 @@ function cleanAttachmentsForApi(
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
 
-    // #4177 — `currentUserConsumption` (progression PERSONNELLE de lecture,
-    // par pièce jointe) retiré : ni déclaré dans `messageAttachmentSchema`
-    // ni lu par aucun client — fast-json-stringify le retirait depuis
-    // toujours. Réintroduire cette projection exige de la déclarer d'abord
-    // au schéma partagé (hors territoire de ce correctif).
+    // #3909 — la progression PERSONNELLE de lecture, REVENUE, et cette fois
+    // déclarée au `messageAttachmentSchema` avant d'être calculée. #4177
+    // l'avait retirée parce qu'elle mourait à la sérialisation ; l'ordre
+    // corrigé est déclaration → projection → lecteur. `null` = jamais consommé
+    // par ce participant, ce qu'un lecteur doit distinguer de « position 0 ».
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -370,6 +372,82 @@ export async function loadMessageReadStatusMap(
 }
 
 /**
+ * La progression PERSONNELLE de lecture d'un participant sur une pièce jointe.
+ *
+ * Sert la reprise cross-device : rouvrir un vocal ou une vidéo repart là où on
+ * s'était arrêté, sur n'importe quel appareil (#3909).
+ */
+export type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+/**
+ * Charge la progression du participant courant sur les pièces jointes de la
+ * PAGE — une seule requête, bornée aux identifiants rendus, scopée au
+ * participant. Miroir exact de `userReactionsMap`.
+ *
+ * ## Ce champ a déjà vécu, et il est mort d'être indéclaré
+ *
+ * La projection existait depuis juin 2026 et `fast-json-stringify` la retirait
+ * de CHAQUE réponse, faute d'être déclarée au `messageAttachmentSchema` : deux
+ * requêtes Prisma par page payées pour un champ qu'aucun client ne recevait.
+ * #4177 a retiré ce travail mort, à raison.
+ *
+ * Ce qui la ramène n'est pas l'inverse de ce retrait : c'est la DÉCLARATION,
+ * posée d'abord (`packages/shared/types/api-schemas.ts`). Sans elle, ce
+ * chargeur remourrait en silence — et le lecteur web qui l'attend
+ * (`useMediaConsumptionReporter`) serait un contrôle non alimenté, ce qui se
+ * voit encore moins qu'un champ absent.
+ */
+export async function loadCurrentUserConsumptionMap(
+  prisma: PrismaClient,
+  messages: readonly any[],
+  currentParticipantId: string | undefined
+): Promise<Map<string, CurrentUserConsumption>> {
+  const map = new Map<string, CurrentUserConsumption>();
+  if (!currentParticipantId || messages.length === 0) return map;
+
+  const attachmentIds: string[] = messages.flatMap((m: any) =>
+    Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+  );
+  if (attachmentIds.length === 0) return map;
+
+  try {
+    const rows = await prisma.attachmentStatusEntry.findMany({
+      where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+      // Borne EXACTE, pas arbitraire : `@@unique([attachmentId, participantId])`
+      // garantit au plus une ligne par pièce jointe pour ce participant, donc
+      // `take` ne peut rien tronquer — il DIT seulement la borne que le couple
+      // impose déjà, ce que le cliquet des `findMany` non bornés demande.
+      take: attachmentIds.length,
+      select: {
+        attachmentId: true,
+        lastPlayPositionMs: true,
+        listenedComplete: true,
+        lastWatchPositionMs: true,
+        watchedComplete: true,
+      },
+    });
+    for (const row of rows) {
+      map.set(row.attachmentId, {
+        lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+        listenedComplete: row.listenedComplete ?? false,
+        lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+        watchedComplete: row.watchedComplete ?? false,
+      });
+    }
+  } catch (err) {
+    // Une reprise absente coûte un redémarrage au début ; faire échouer la
+    // liste entière coûte la conversation. La carte vide est le bon repli.
+    logger.warn('[CONVERSATIONS] Failed to load media consumption:', err);
+  }
+  return map;
+}
+
+/**
  * Sérialise une ligne `Message` de `GET /conversations/:id/messages` au
  * format `GatewayMessage` (@meeshy/shared/types) : présence de l'expéditeur,
  * pièces jointes nettoyées, traductions filtrées par le Prisme, accusés de
@@ -390,6 +468,8 @@ export type MessageRowMappingContext = {
   }>;
   senderPresenceVis: any;
   listMissingEntry: any;
+  /** #3909 — la progression de lecture du participant, par pièce jointe. */
+  consumptionMap: Map<string, CurrentUserConsumption>;
 };
 
 export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext): any {
@@ -520,7 +600,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
           _count: message._count
         };
 

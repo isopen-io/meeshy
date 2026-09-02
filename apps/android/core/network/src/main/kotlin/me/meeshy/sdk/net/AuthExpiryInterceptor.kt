@@ -51,6 +51,9 @@ public class AuthExpiryInterceptor(
          * sur la suppression de compte rend 401 INVALID_PASSWORD, qui n'est pas
          * non plus une session expiree.
          */
+        // api-path: l'intercepteur RECONNAÎT les portes d'entrée pour ne pas
+        // déconnecter sur un 401 qui n'est qu'un identifiant refusé. Il ne les
+        // appelle pas ; une interface Retrofit ne saurait pas exprimer ça.
         private val AUTH_ENTRY_POINTS = listOf("/auth/login", "/auth/register", "/me/account/deletion")
     }
 }

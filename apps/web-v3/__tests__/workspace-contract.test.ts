@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import nextConfig from '../next.config';
+import ts from 'typescript';
 
 const ROOT = join(__dirname, '..');
 
@@ -11,11 +12,29 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const readJson = (relativePath: string): unknown =>
   JSON.parse(readFileSync(join(ROOT, relativePath), 'utf8'));
 
+/**
+ * `tsconfig.json` est du JSONC, pas du JSON — TypeScript y accepte les
+ * commentaires, et le nôtre en porte un qui explique pourquoi `exclude` nomme
+ * `packages`. `JSON.parse` les refuse : ce témoin lisait donc une forme plus
+ * étroite que celle que l'outil accepte, et rougissait sur un fichier VALIDE.
+ *
+ * On lit avec le parseur de TypeScript lui-même, qui est exactement celui qui
+ * lira ce fichier en production — le témoin mesure ainsi ce que `tsc` mesure,
+ * et non ce qu'une bibliothèque plus stricte tolère.
+ */
+const readJsonc = (relativePath: string): unknown => {
+  const { config, error } = ts.readConfigFile(join(ROOT, relativePath), (chemin) =>
+    readFileSync(chemin, 'utf8'),
+  );
+  if (error) throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+  return config;
+};
+
 const at = (value: unknown, ...path: readonly string[]): unknown =>
   path.reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), value);
 
 const manifest = (): unknown => readJson('package.json');
-const tsconfig = (): unknown => readJson('tsconfig.json');
+const tsconfig = (): unknown => readJsonc('tsconfig.json');
 
 describe('le paquet apps/web-v3', () => {
   it('porte un nom de workspace disjoint de celui du legacy', () => {

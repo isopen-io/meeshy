@@ -1871,6 +1871,34 @@ final class ConversationViewModelTests: XCTestCase {
         wait(for: [cleared], timeout: 0.5)
     }
 
+    /// **#3902 — le message le plus récent est À L'ÉCRAN, il n'a simplement pas
+    /// fini son délai de présence.**
+    ///
+    /// Même lot que le test ci-dessus, à UNE différence près : la surface dit
+    /// ce qu'elle montre. Sur une conversation à fort débit c'est le cas
+    /// nominal — le lot est drainé toutes les ~300 ms, un message plus récent
+    /// est arrivé entre-temps, et la coïncidence `seen.contains(newest)`
+    /// n'arrive quasiment jamais. Le badge doit tomber quand même.
+    ///
+    /// Le contraste avec `…seenBatchWithoutNewestMessage_leavesBadgeAlone` est
+    /// le cœur du lot : vues du seul `seen`, les deux situations sont
+    /// INDISCERNABLES. C'est `visibleIds` qui les sépare.
+    func test_markAsRead_newestIsOnScreenButNotYetDwelt_clearsBadge() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idOldest], visibleIds: [Self.idOldest, Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
     /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de
     /// la conversation. Traiter le dernier message chargé comme le plus récent
     /// viderait un badge encore dû.

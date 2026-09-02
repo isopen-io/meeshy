@@ -69,6 +69,14 @@ export * from './push-notification.js';
 // Export des types posts/stories/statuts
 export * from './post.js';
 
+// **Le contrat de SCÈNE, atteignable par l'index comme tout le reste.**
+// Il était joignable uniquement par chemin profond
+// (`@meeshy/shared/types/canvas-v3`), que cinq fichiers web importaient déjà —
+// donc utilisé, mais invisible à qui parcourt la surface du paquet. Un contrat
+// qu'on ne trouve pas se réinvente : `Post.storyEffects` est encore `unknown`
+// ci-dessus, et chaque consommateur revalide pour son compte.
+export * from './canvas-v3.js';
+
 // Export des types communauté
 export * from './community.js';
 

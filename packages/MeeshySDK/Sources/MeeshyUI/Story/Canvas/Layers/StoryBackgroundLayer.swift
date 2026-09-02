@@ -143,6 +143,17 @@ public final class StoryBackgroundLayer: CALayer {
     private static let timelineSeekDriftThreshold: Double = 0.30
 
     nonisolated(unsafe) var contentLayer: CALayer?
+    /// Le flou qui habille les bandes d'un média AJUSTÉ — voir
+    /// `StoryBackgroundLayer+LetterboxFill.swift`. Stocké ici parce qu'une
+    /// extension ne porte pas de propriété.
+    nonisolated(unsafe) var letterboxFillLayer: CALayer?
+    /// Les sources candidates, RETENUES pour le chemin rapide : lui ne repasse
+    /// pas par la branche qui les connaît.
+    nonisolated(unsafe) var letterboxFillHashes: [String] = []
+    /// Le bitmap de fond DÉJÀ posé — la source la plus fidèle de la bande, et
+    /// la seule dont dispose l'atelier : `StoryThumbHashEnricher` ne calcule les
+    /// hachages qu'à la PUBLICATION.
+    nonisolated(unsafe) var letterboxSourceImage: UIImage?
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
     private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
@@ -229,6 +240,7 @@ public final class StoryBackgroundLayer: CALayer {
                     override: self.transform3D.videoFitMode)
             }
         }
+        noteStampedBackground(display)
         markFinalContentStamped()
     }
 
@@ -347,6 +359,7 @@ extension StoryBackgroundLayer {
                           playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                           letterboxColor: UIColor? = nil,
                           slidePreviewThumbHash: String? = nil,
+                          letterboxFillHashes: [String] = [],
                           filter: StoryFilter? = nil,
                           filterIntensity: Float = 1.0,
                           contentVersion: UInt64 = 0) {
@@ -475,11 +488,20 @@ extension StoryBackgroundLayer {
                     }
                 }
             }
+            // Le double-tap OUVRE ou REFERME les bandes sans rebuild : elles se
+            // peignent (ou se retirent) ici, sur le même geste qui change la
+            // gravity. Sans cette ligne, basculer en AJUSTÉ laissait la bande
+            // nue jusqu'au prochain rebuild — un même geste avec deux résultats,
+            // selon un chemin que l'auteur ne voit pas.
+            refreshLetterboxFill(hashes: letterboxFillHashes)
             return
         }
 
         // Clear existing content
         contentLayer?.removeFromSuperlayer()
+        letterboxFillLayer?.removeFromSuperlayer()
+        letterboxFillLayer = nil
+        letterboxSourceImage = nil
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
         if let observer = backgroundLoopObserver {
@@ -723,6 +745,12 @@ extension StoryBackgroundLayer {
                 _ = try? await CacheCoordinator.shared.video.data(for: cacheKey)
             }
         }
+
+        // **Le remplissage de bande se pose ICI, une seule fois pour les cinq
+        // branches** — jamais dans chacune. `insertSublayer(at: 0)` le range
+        // sous tout ce que le `switch` vient d'ajouter, quel que soit l'ordre,
+        // et une pose par branche aurait divergé au premier `case` ajouté.
+        refreshLetterboxFill(hashes: letterboxFillHashes)
 
         // Transform appliqué au CONTENT — voir `applyContentTransform`.
         applyContentTransform(transform.caTransform())

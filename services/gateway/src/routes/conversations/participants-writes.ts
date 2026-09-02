@@ -2,29 +2,87 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import {
-  disclosableEntryRights,
-  resolveEntryRights,
   PARTICIPANT_RIGHT_NAMES,
+  NEW_MEMBER_PERMISSIONS,
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
-import { participantUserRooms } from '../../socketio/emitToConversationParticipants';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { hasMinimumMemberRole, memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
+import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
-import { z } from 'zod';
+import { recipientLanguage } from '../../utils/recipient-language';
+import { appliquerDroitsDeParticipant } from './participant-rights-core';
+import { repondreAuRefus } from './utils/participant-geste-reponse';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
+
+/**
+ * Le plafond d'un lot d'ajout (#4557).
+ *
+ * Cinquante, parce que l'admission est SÉQUENTIELLE et que chaque tour émet son
+ * propre éventail : un lot sans plafond ferait d'un appel HTTP une boucle de
+ * diffusion sans borne. Le nombre est déclaré ICI, lu par le schéma de la route
+ * ET par la normalisation — un plafond écrit deux fois est un plafond qui
+ * diverge.
+ */
+export const MAX_PARTICIPANTS_PER_CALL = 50;
+
+/** Ce qui est arrivé à UN identifiant du lot. */
+export type ParticipantAdmissionVerdict = {
+  readonly userId: string;
+  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found';
+  readonly participantId?: string;
+};
+
+/**
+ * Lit le corps d'un ajout, sous ses DEUX formes, et rend la liste à admettre.
+ *
+ * `userId` (forme historique) et `userIds[]` (le lot) donnent la même chose :
+ * une liste dédoublonnée, non vide, bornée. Le dédoublonnage n'est pas un
+ * confort — deux fois le même identifiant dans un lot produirait deux
+ * admissions, donc deux avis d'arrivée pour une seule personne.
+ *
+ * PURE et exportée : c'est la moitié du contrat qu'un témoin peut interroger
+ * sans monter Fastify ni Prisma.
+ */
+export function normalizeParticipantBatch(
+  body: { userId?: unknown; userIds?: unknown } | null | undefined
+): { userIds: string[]; single: boolean; error?: undefined } | { userIds: string[]; single: boolean; error: string } {
+  const enLot = Array.isArray(body?.userIds);
+  const brut: unknown[] = enLot
+    ? body!.userIds as unknown[]
+    : (body?.userId === undefined || body?.userId === null ? [] : [body.userId]);
+  const single = !enLot;
+
+  const propres = brut
+    .filter((v): v is string => typeof v === 'string')
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+
+  if (propres.length !== brut.length) {
+    return { userIds: [], single, error: 'userIds must contain non-empty strings' };
+  }
+  const uniques = [...new Set(propres)];
+  if (uniques.length === 0) {
+    return { userIds: [], single, error: 'userId or userIds is required' };
+  }
+  // Le plafond se mesure sur la liste DÉDOUBLONNÉE : refuser cinquante et une
+  // entrées dont deux identiques punirait une saisie que le serveur ramène de
+  // toute façon à cinquante.
+  if (uniques.length > MAX_PARTICIPANTS_PER_CALL) {
+    return { userIds: [], single, error: `userIds accepts at most ${MAX_PARTICIPANTS_PER_CALL} entries` };
+  }
+  return { userIds: uniques, single };
+}
 
 /**
  * Routes d'ÉCRITURE des participants — `PATCH .../participants/:participantId/rights`
@@ -35,48 +93,14 @@ const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoute
  * l'ordre original des routes. Extrait le 2026-08-30 (#4284) pour ramener
  * `participants.ts` sous le budget de taille — pur déplacement, aucun
  * comportement changé.
- */
-
-/**
- * Les rangs qui font un HÔTE de la conversation, tels qu'un `where` Prisma peut
- * les matcher. DÉRIVÉS de la hiérarchie plutôt que retapés : un rang ajouté
- * au-dessus de `moderator` en fera partie sans qu'on ait à y penser, et le
- * dépôt n'a qu'UNE autorité sur « qui est au-dessus de qui »
- * (`hasMinimumMemberRole`).
  *
- * Les DEUX casses y figurent, et ce n'est pas une précaution : le filtre part
- * en BASE, où un `in` Prisma ne connaît pas `mode: 'insensitive'`.
- * `Participant.role` s'écrit en minuscules depuis #3875, mais les lignes
- * écrites AVANT portent encore `'ADMIN'`/`'CREATOR'` tant que
- * `scripts/migrations/normalize-participant-role-casing.ts` n'a pas tourné en
- * production — et le symptôme d'un filtre trop étroit est un administrateur
- * qui ne reçoit tout simplement PAS l'événement, en silence, sans erreur.
- * Deux lignes plus haut, la garde du demandeur replie déjà la casse
- * (`viewerRole.toLowerCase()`) : le filtre de base ne doit pas être le seul
- * endroit du fichier qui l'ignore.
+ * **#4713 — le geste des DROITS n'est plus écrit ici.** Tout ce qui décide
+ * (autorité, lecture, écriture du delta, éventails) vit dans
+ * `participant-rights-core.ts` et s'appelle SANS Fastify ; ce fichier n'en
+ * garde que le schéma, l'authentification et la traduction du verdict. Le geste
+ * d'ADMISSION (`POST …/participants`), lui, reste entier ici : #4713 extrait,
+ * il ne fusionne pas — la route unifiée est un autre lot (#4176).
  */
-const CONVERSATION_HOST_ROLE_MATCHES: readonly string[] = memberRoleCasings(
-  Object.values(MemberRole).filter((role) => hasMinimumMemberRole(role, MemberRole.MODERATOR)),
-);
-
-/**
- * `PATCH …/rights` : un instant ISO 8601 (décalage admis), `null` pour retirer,
- * absent pour ne rien dire.
- *
- * Borné au PRÉSENT. Le plancher est un `createdAt: { gte: date }` : une date à
- * venir n'exclut pas seulement le passé, elle exclut aussi les messages À
- * VENIR — y compris ceux que l'intéressé écrit lui-même. Sans cette borne,
- * « ouvrir l'historique depuis le 1er janvier prochain » rendait le participant
- * AVEUGLE à toute la conversation, silencieusement : un mute déguisé en octroi,
- * qu'aucune erreur ne signalait à l'administrateur qui venait de l'écrire.
- */
-const HISTORY_VISIBLE_FROM_BODY = z.iso
-  .datetime({ offset: true, error: 'historyVisibleFrom must be an ISO 8601 date-time or null' })
-  .refine((value) => Date.parse(value) <= Date.now(), {
-    error: 'historyVisibleFrom must not be in the future: a future floor hides every message, including the participant\'s own',
-  })
-  .nullable()
-  .optional();
 
 export function registerParticipantWriteRoutes(
   fastify: FastifyInstance,
@@ -99,6 +123,10 @@ export function registerParticipantWriteRoutes(
    * inscrit compris : un administrateur ouvre l'historique depuis une DATE —
    * jamais depuis un message, qui se supprime — et `null` retire l'octroi. La
    * lecture le respecte partout par `services/historyFloor`.
+   *
+   * Le TRAVAIL est dans `appliquerDroitsDeParticipant`
+   * (`participant-rights-core.ts`) : ce gestionnaire déclare, authentifie et
+   * traduit, rien d'autre.
    */
   fastify.patch<{
     Params: { id: string; participantId: string };
@@ -162,235 +190,285 @@ export function registerParticipantWriteRoutes(
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
-      const { id, participantId } = request.params;
-      const authRequest = request as UnifiedAuthRequest;
-      const currentUserId = authRequest.authContext?.userId;
-
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Access denied: you are not a member of this conversation', { code: 'CONVERSATION_ACCESS_DENIED' });
-      }
-
-      // Le corps est filtré sur la liste des droits CONNUS avant tout le reste :
-      // ce qui n'y figure pas ne doit jamais atteindre `anonymousSession.rights`,
-      // où Prisma l'écrirait sans broncher — un type composite Mongo n'a pas de
-      // colonne à violer.
-      const body = (request.body ?? {}) as Record<string, unknown>;
-      const requested = PARTICIPANT_RIGHT_NAMES
-        .filter((name) => typeof body[name] === 'boolean')
-        .map((name) => [name, body[name] as boolean] as const);
-
-      // L'octroi par date : `undefined` = non nommé, `null` = retiré, sinon
-      // une date. Validé ici parce que le schéma Fastify ne sait dire qu'une
-      // chaîne ou `null` — pas qu'elle est un instant.
-      const historyGrant = HISTORY_VISIBLE_FROM_BODY.safeParse(body.historyVisibleFrom);
-      if (!historyGrant.success) {
-        return sendBadRequest(
-          reply,
-          historyGrant.error.issues[0]?.message ?? 'historyVisibleFrom must be an ISO 8601 date-time or null',
-          { code: 'INVALID_HISTORY_VISIBLE_FROM' }
-        );
-      }
-      const historyVisibleFrom: Date | null | undefined =
-        historyGrant.data === undefined ? undefined : historyGrant.data === null ? null : new Date(historyGrant.data);
-
-      if (requested.length === 0 && historyVisibleFrom === undefined) {
-        return sendBadRequest(reply, 'No known right named in the request body');
-      }
-
-      const viewerRow = currentUserId
-        ? await prisma.participant.findFirst({
-            where: authRequest.authContext?.isAnonymous
-              ? { id: currentUserId, conversationId, isActive: true }
-              : { userId: currentUserId, conversationId, isActive: true },
-            select: { role: true }
-          })
-        : null;
-
-      const viewerActor = {
-        conversationRole: viewerRow?.role,
-        platformRole: authRequest.authContext?.registeredUser?.role,
-      };
-      if (!actorHasMinimumRole(viewerActor, MemberRole.MODERATOR)) {
-        return sendForbidden(reply, 'Only conversation admins and moderators may change a visitor\'s rights');
-      }
-
-      // L'octroi par DATE n'est pas un droit d'entrée de plus : il OUVRE ce qui
-      // précède l'arrivée, et la règle produit le réserve à un ADMINISTRATEUR de
-      // la conversation. Un modérateur est lui-même BORNÉ par le plancher — le
-      // rang 1 de `historyFloorFor` exige `admin`, pas `moderator` — donc écrire
-      // ce champ lui donnait le moyen de se l'ouvrir À LUI-MÊME, sur sa propre
-      // ligne. La garde porte sur le CHAMP, pas sur la route : les droits
-      // booléens que ce même endpoint lui confie ne franchissent aucun plancher
-      // et restent à sa portée.
-      if (historyVisibleFrom !== undefined && !actorHasMinimumRole(viewerActor, MemberRole.ADMIN)) {
-        return sendForbidden(
-          reply,
-          'Only conversation admins may grant or revoke history access by date',
-          { code: 'HISTORY_GRANT_REQUIRES_ADMIN' }
-        );
-      }
-
-      const target = await prisma.participant.findFirst({
-        where: { id: participantId, conversationId, isActive: true }
+      const verdict = await appliquerDroitsDeParticipant({
+        prisma,
+        conversationIdentifier: request.params.id,
+        participantId: request.params.participantId,
+        authContext: (request as UnifiedAuthRequest).authContext,
+        body: request.body,
+        socketIO: fastify.socketIOHandler,
       });
 
-      if (!target) {
-        return sendNotFound(reply, 'Participant not found in this conversation');
-      }
+      if (verdict.genre === 'refus') return repondreAuRefus(reply, verdict);
 
-      // La surcharge BOOLÉENNE vit dans `anonymousSession`, qu'un participant
-      // inscrit n'a pas. Refuser explicitement vaut mieux qu'écrire une session
-      // anonyme sur quelqu'un qui a un compte. L'octroi par date, lui, est un
-      // scalaire de la ligne participant et vaut pour tous.
-      if (requested.length > 0 && target.type !== 'anonymous') {
-        return sendBadRequest(reply, 'Only no-account participants carry an entry-rights override', { code: 'PARTICIPANT_HAS_ACCOUNT' });
-      }
-
-      // La surcharge est un DELTA. Un droit ramené à sa valeur du join voit son
-      // entrée EFFACÉE plutôt que réécrite à l'identique : une surcharge qui
-      // recopie le join cesse de le suivre, et l'hôte perd tout moyen de revenir
-      // en arrière.
-      const priorRights = { ...(target.anonymousSession?.rights ?? {}) } as Record<string, boolean>;
-      const joinPermissions = target.permissions as unknown as Record<string, boolean | undefined>;
-
-      for (const [name, value] of requested) {
-        if (joinPermissions?.[name] === value) {
-          delete priorRights[name];
-        } else {
-          priorRights[name] = value;
-        }
-      }
-
-      const updated = await prisma.participant.update({
-        where: { id: target.id },
-        data: {
-          ...(requested.length > 0
-            ? { anonymousSession: { ...target.anonymousSession, rights: priorRights } }
-            : {}),
-          ...(historyVisibleFrom !== undefined ? { historyVisibleFrom } : {})
-        }
-      });
-
-      const rights = resolveEntryRights(updated ?? target, priorRights);
-      const grantedFrom: Date | null =
-        historyVisibleFrom !== undefined ? historyVisibleFrom : (target.historyVisibleFrom ?? null);
-
-      // Deux audiences, DEUX charges — décision porteur #3898 (option b),
-      // même patron que `presence-audience.ts` : `historyVisibleFrom` est un
-      // fait de MODÉRATION (« l'hôte a octroyé l'historique à X depuis le
-      // 3 mars »), pas un fait de conversation ordinaire. La room de
-      // conversation entière ne le voit plus ; seuls les AUTRES HÔTES
-      // (admin/moderator/creator) et l'INTÉRESSÉ lui-même le reçoivent, sur
-      // leur room personnelle.
-      //
-      // Contrat client : un hôte connecté ET dans la room de conversation
-      // reçoit DEUX événements pour le même changement, et **leur ordre ne se
-      // suppose pas** — la charge réduite part d'ailleurs en PREMIER ici, une
-      // lecture Prisma la séparant des rooms personnelles. Ce qui tient le
-      // contrat n'est donc pas un rang mais la forme : la charge réduite
-      // n'AFFIRME rien sur l'octroi (clé ABSENTE, jamais `null`), donc un
-      // client qui discrimine sur la PRÉSENCE de la clé converge vers le même
-      // état quel que soit l'ordre d'arrivée. Les deux consommateurs le font
-      // (`carriesHistoryGrant` côté iOS, `!== undefined` côté web) ; Android
-      // n'a pas de consommateur. Un client qui recopierait la valeur
-      // INCONDITIONNELLEMENT effacerait l'octroi — c'est la règle du § « Un
-      // champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour
-      // l'émetteur » (CLAUDE.md), appliquée ici.
-      const manager = fastify.socketIOHandler?.getManager();
-      const io = manager?.getIO();
-
-      // Le middleware d'auth met en cache la ligne participant : sans
-      // invalidation, le prochain envoi de ce visiteur serait arbitré sur ses
-      // anciens droits pendant toute la durée du cache.
-      //
-      // Posée AVANT la diffusion, jamais après : l'écriture est acquise, et
-      // tout ce qui suit est accessoire. La laisser derrière l'éventail la
-      // rendait otage d'une lecture Prisma et d'un `.emit()` — dont le dépôt
-      // dit lui-même qu'il LÈVE quand l'adaptateur ou l'encodeur est en défaut
-      // (`emitWithSeq`). Même ordre que `_emitPresenceSnapshot`, qui place le
-      // durable HORS de son `try`.
-      manager?.invalidateParticipantCache?.(target.id, conversationId);
-
-      try {
-        if (io) {
-          const fullPayload = {
-            conversationId,
-            participantId: target.id,
-            updatedBy: currentUserId ?? '',
-            rights,
-            historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
-          };
-          // La clé est ABSENTE, jamais `null` : `null` dirait « octroi
-          // retiré », ce que la room de conversation n'a pas à savoir.
-          //
-          // `rights.canViewHistory` part avec lui (#4009, décision porteur
-          // 2026-08-27) : c'est le MÊME fait de modération — « qui a le droit
-          // de voir l'historique » — dit sous une autre forme. #3898 n'avait
-          // nommé que la date, et le booléen voisin, dans le même objet, avait
-          // continué son chemin vers la room entière.
-          const { historyVisibleFrom: _omitted, rights: fullRights, ...rest } = fullPayload;
-          // #4056 — la loi est partagée avec la fiche REST. La room n'héberge
-          // pas : `viewerHostsTheRoom: false`.
-          const roomPayload = { ...rest, rights: disclosableEntryRights(fullRights, false) };
-
-          io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
-
-          // La room personnelle porte le `User.id` d'un inscrit et le
-          // `Participant.id` d'un visiteur sans compte — même clé que
-          // `participantUserRoomTargets`. L'intéressé reçoit toujours la charge
-          // complète : c'est SA date.
-          io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
-
-          // Les AUTRES hôtes (admin/moderator/creator) de la conversation — pour
-          // qu'ils voient le changement, sans l'exposer à la room entière. Un
-          // hôte qui est AUSSI l'intéressé (rare : un admin octroie l'historique
-          // à un autre admin) reçoit deux fois la même charge sur sa room —
-          // idempotent, jamais faux.
-          const hosts = await prisma.participant.findMany({
-            where: { conversationId, isActive: true, role: { in: [...CONVERSATION_HOST_ROLE_MATCHES] } },
-            select: { id: true, userId: true }
-          });
-          for (const room of participantUserRooms(hosts)) {
-            io.to(room).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
-          }
-        }
-      } catch (error) {
-        // La diffusion est ACCESSOIRE : l'écriture est persistée et le cache
-        // déjà invalidé. Rendre 500 ici annoncerait à l'hôte que son geste a
-        // échoué alors qu'il a pris effet — et le ferait rejouer.
-        logger.warn('participant rights broadcast failed', {
-          conversationId,
-          participantId: target.id,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-
-      return sendSuccess(reply, {
-        participantId: target.id,
-        conversationId,
-        rights,
-        historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
-      });
+      return sendSuccess(reply, verdict.donnees);
     } catch (error) {
       logger.error('Error updating participant rights', error as Error);
       return sendInternalError(reply, 'Internal server error');
     }
   });
 
+  /**
+   * L'admission d'UNE personne — tout ce que l'ancien handler faisait pour son
+   * unique `userId`, à l'identique : écriture (création ou rejoin), avis
+   * d'arrivée dans le fil, `conversation:joined` en salle, effectif absolu aux
+   * rooms personnelles, auto-join des sockets, `conversation:new` à l'arrivant,
+   * et les deux notifications.
+   *
+   * Elle rend un VERDICT plutôt que d'écrire une réponse : c'est ce qui permet
+   * à un refus de ne pas emporter le lot.
+   */
+  async function admitOneParticipant(options: {
+    conversationId: string;
+    conversation: { isActive: boolean | null; closedAt: Date | null } | null;
+    userId: string;
+    currentUserId: string | undefined;
+  }): Promise<ParticipantAdmissionVerdict> {
+    const { conversationId, conversation, userId, currentUserId } = options;
+
+    const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
+    if (!userToAdd) return { userId, outcome: 'not-found' };
+
+    // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
+    // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
+    // fabriquait une ligne neuve et active, ce qui défaisait le bannissement
+    // sans passer par `POST …/unban` — laquelle exige le rang `admin` là où
+    // cette route s'ouvre aussi aux `moderator`, et écrit une trace. Voir
+    // `services/conversations/conversationEntryAdmission.ts`.
+    const entry = await resolveConversationEntry({ prisma, conversationId, userId, conversation });
+
+    if (entry.outcome === 'closed') return { userId, outcome: 'not-found' };
+    if (entry.outcome === 'banned') return { userId, outcome: 'banned' };
+    if (entry.outcome === 'already-member') return { userId, outcome: 'already-member' };
+
+    // #4174 — la table de droits vient du site UNIQUE
+    // (`services/participantRights.ts`), partagé avec `POST …/invite`.
+    // C'est la table de CE handler qui a été retenue : la variante de
+    // l'autre porte fermait `canSendVideos`/`canSendAudios` en laissant
+    // `canSendFiles` ouvert, donc ne fermait rien — un fichier peut être
+    // une vidéo.
+    const addedMemberFields = {
+      type: 'user',
+      displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
+      avatar: userToAdd.avatar,
+      role: 'member',
+      // #4662 — `Participant.language` est la colonne que ses lecteurs prennent
+      // pour la langue du membre quand aucun prisme `User` ne se résout
+      // (`resolveParticipantLanguage`, `offlineParticipantQueue`). La poser
+      // depuis `systemLanguage` NU y inscrivait le repli du site pour tout
+      // compte dont la langue vit au rang 2, 3 ou 4 — le cas NOMINAL dès que la
+      // locale appareil (rang 4) diffère de la langue applicative. Le repli
+      // reste un PARAMÈTRE du site : `'en'` est celui de cette porte, et
+      // trancher « quelle langue pour un compte sans AUCUNE préférence ? » est
+      // un arbitrage produit, pas un correctif de Prisme.
+      language: recipientLanguage(userToAdd, 'en'),
+      permissions: { ...NEW_MEMBER_PERMISSIONS }
+    };
+
+    // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
+    // départ : les deux doivent s'accorder. Un rejoin conserve son `joinedAt`
+    // d'origine en base — l'événement, lui, date l'ADHÉSION qu'il annonce,
+    // c'est-à-dire maintenant.
+    const joinedAt = new Date();
+
+    let joinedParticipantId: string;
+    if (entry.outcome === 'rejoin' && entry.participantId) {
+      const rejoined = await prisma.participant.update({
+        where: { id: entry.participantId },
+        data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
+      });
+      joinedParticipantId = rejoined.id;
+      invalidateParticipantLookup(entry.participantId, conversationId);
+    } else {
+      const created = await prisma.participant.create({
+        data: {
+          conversationId: conversationId,
+          userId: userId,
+          ...addedMemberFields,
+          joinedAt
+        }
+      });
+      joinedParticipantId = created.id;
+    }
+
+    // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
+    // qui ne se voit pas dans le fil est une entrée que les présents
+    // découvrent au premier message de l'arrivant.
+    await postJoinSystemMessage(
+      {
+        prisma,
+        broadcast: (message, targetConversationId) =>
+          fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, targetConversationId)
+            ?? Promise.resolve()
+      },
+      {
+        conversationId,
+        participantId: joinedParticipantId,
+        displayName: addedMemberFields.displayName,
+        isAnonymous: false,
+        viaShareLink: false
+      }
+    );
+
+    // R6-1 — broadcast so other members' devices refresh the participant list
+    // in real time (the POST previously created the row silently → stale member
+    // lists until manual reload). Mirrors the role-update emit below.
+    // conversation:joined feeds ParticipantsView (invalidate+reload) and
+    // ConversationSyncEngine (participants cache invalidate) on iOS.
+    const socketManager = fastify.socketIOHandler?.getManager();
+    const io = socketManager?.getIO();
+    if (io) {
+      io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
+        conversationId,
+        userId,
+      });
+
+      // `conversation:joined` ci-dessus ne peut PAS porter l'effectif : le
+      // même nom, le même payload `{conversationId, userId}`, servent l'ack
+      // self-only qu'un socket reçoit en REJOIGNANT LA ROOM
+      // (`ConversationHandler`) — que produit chaque ouverture de fil, et qui
+      // ne change aucune appartenance. Compter dessus gonflerait le compteur
+      // à chaque ouverture ; c'est pourquoi aucun client n'incrémentait, et
+      // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
+      // bannissement −1, ajout rien).
+      //
+      // D'où l'événement dédié, symétrique de `conversation:participant-left`
+      // jusque dans son payload, et adressé comme lui aux rooms PERSONNELLES :
+      // le compteur se lit sur l'écran de liste, que ses lecteurs regardent
+      // précisément quand ils ne sont pas dans la room de conversation.
+      //
+      // Le nouvel arrivant est ÉCARTÉ de l'éventail : il reçoit
+      // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
+      // compte DÉJÀ. L'incrémenter en plus le mettrait en trop.
+      const audience = await prisma.participant.findMany({
+        where: { conversationId, isActive: true, NOT: { userId } },
+        // `role` et `user.role` en plus : les deux titres qui ouvrent
+        // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+        // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
+        // présentation, et c'était la plafonnée, pour tout le monde.
+        select: { id: true, userId: true, role: true, user: { select: { role: true } } },
+      });
+      // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
+      // rattrape jamais d'un événement manqué (hors ligne, trou de
+      // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
+      // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
+      //
+      // `+ 1` parce que l'éventail ÉCARTE l'arrivant : il est actif depuis
+      // l'écriture juste au-dessus, donc il compte, mais il ne figure pas dans
+      // `audience`. Une seconde requête ne rendrait rien de plus.
+      //
+      // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
+      // pour les lecteurs autorisés. Un broadcast unique ne portait que la
+      // présentation plafonnée, et écrasait donc chez l'admin du groupe la
+      // valeur exacte que le REST venait de lui servir.
+      emitConversationMemberCountEvent({
+        io,
+        conversationId,
+        participants: audience,
+        event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED,
+        payload: {
+          conversationId,
+          userId,
+          displayName: addedMemberFields.displayName,
+          joinedAt: joinedAt.toISOString(),
+        },
+        memberCount: audience.length + 1,
+      });
+    }
+    // Auto-join the added user's currently-connected sockets to the conversation
+    // room so they receive message:new events immediately without a reconnect.
+    if (socketManager) {
+      socketManager.joinUserToConversationRoom(userId, conversationId).catch(
+        (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
+      );
+    }
+    // Emit CONVERSATION_NEW to the added user's room so connected clients
+    // (iOS: ConversationListViewModel.conversationNew handler) discover the
+    // conversation immediately without waiting for a push notification.
+    if (io) {
+      try {
+        const conv = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { type: true, title: true, createdAt: true },
+        });
+        const allParticipantIds = await prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: { userId: true },
+        }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
+        if (conv) {
+          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
+            conversationId,
+            conversationType: conv.type,
+            title: conv.title ?? null,
+            creatorId: currentUserId ?? userId,
+            participantIds: allParticipantIds,
+            createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
+          });
+        }
+      } catch (err) {
+        logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });
+      }
+    }
+
+    const notificationService = fastify.notificationService;
+    if (notificationService) {
+      notificationService.createAddedToConversationNotification({
+        recipientUserId: userId,
+        addedByUserId: currentUserId,
+        conversationId,
+      }).catch((err: unknown) => logger.error('Notification error added', err as Error));
+
+      const existingMembers = await prisma.participant.findMany({
+        where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
+        select: { userId: true },
+      });
+      // Une seule diffusion pour toute l'audience : le profil du nouveau
+      // membre, la conversation et l'effectif sont les mêmes pour chacun, et
+      // le mute se demande en une requête. La boucle d'appels unitaires qui
+      // précédait les relisait par destinataire.
+      const recipientUserIds = existingMembers
+        .map((member) => member.userId)
+        .filter((id): id is string => !!id);
+      if (recipientUserIds.length > 0) {
+        notificationService.createMemberJoinedNotificationsBatch(recipientUserIds, {
+          newMemberUserId: userId,
+          conversationId,
+          joinMethod: 'invited' as const,
+        }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
+      }
+    }
+
+    return { userId, outcome: entry.outcome === 'rejoin' ? 'rejoin' : 'new', participantId: joinedParticipantId };
+  }
+
+  /**
+   * **Un verdict par identifiant, jamais un échec en bloc (#4557).**
+   *
+   * Le web invitait N personnes par N appels (`invite-user-modal.tsx`, un
+   * `Promise.all` d'un `POST …/invite` par personne). Chacun repayait la
+   * résolution de conversation, la vérification de rang de l'appelant, l'avis
+   * d'arrivée et l'éventail de diffusion — et surtout, **un seul refus dans le
+   * lot n'était pas distinguable d'une panne**, côté client : `Promise.all`
+   * rejette au premier échec, et l'écran ne savait pas dire QUI n'était pas
+   * passé.
+   *
+   * D'où la forme retenue : le corps accepte `userIds[]` (≤ 50) et la réponse
+   * porte un verdict par identifiant. Les refus qui portent sur la
+   * CONVERSATION ou sur l'APPELANT restent des refus de requête (410, 403) —
+   * ils sont les mêmes pour tout le lot, et les diluer en cinquante verdicts
+   * identiques ferait passer pour un résultat partiel ce qui n'a rien produit.
+   *
+   * `userId` reste accepté et rend le même corps : les trois clients y sont
+   * encore, et le champ `message` qu'ils lisent est conservé.
+   */
   fastify.post<{
     Params: { id: string };
-    Body: { userId: string };
+    Body: { userId?: string; userIds?: string[] };
   }>('/conversations/:id/participants', {
     schema: {
-      description: 'Add a participant to a conversation - requires admin/moderator role',
+      description: 'Add one or many participants to a conversation - requires moderator role',
       tags: ['conversations', 'participants'],
-      summary: 'Add participant',
+      summary: 'Add participants',
       params: {
         type: 'object',
         required: ['id'],
@@ -400,9 +478,15 @@ export function registerParticipantWriteRoutes(
       },
       body: {
         type: 'object',
-        required: ['userId'],
         properties: {
-          userId: { type: 'string', description: 'User ID to add to conversation' }
+          userId: { type: 'string', description: 'Single user to add (legacy form, still served)' },
+          userIds: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: MAX_PARTICIPANTS_PER_CALL,
+            description: `Users to add in one call (max ${MAX_PARTICIPANTS_PER_CALL})`
+          }
         }
       },
       response: {
@@ -417,7 +501,25 @@ export function registerParticipantWriteRoutes(
                 // ne renvoie que `message`. Retiré plutôt que fabriqué —
                 // l'inventaire cesse de promettre un champ qui n'a jamais existé
                 // (même traitement que `users/profile.ts|permissions`, cycle 91 bis §5).
-                message: { type: 'string', example: 'Participant ajouté avec succès' }
+                message: { type: 'string', example: 'Participant ajouté avec succès' },
+                // #4557 — le verdict, par identifiant. DÉCLARÉ, sans quoi
+                // fast-json-stringify le retirerait de chaque réponse et le
+                // client resterait aveugle au refus partiel qu'on vient de lui
+                // rendre lisible.
+                results: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string' },
+                      outcome: {
+                        type: 'string',
+                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found'],
+                        description: 'What happened to THIS identifier'
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -426,6 +528,7 @@ export function registerParticipantWriteRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -433,9 +536,11 @@ export function registerParticipantWriteRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { userId } = request.body;
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
+
+      const demandes = normalizeParticipantBatch(request.body);
+      if (demandes.error) return sendBadRequest(reply, demandes.error);
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
@@ -464,20 +569,10 @@ export function registerParticipantWriteRoutes(
         return sendForbidden(reply, 'Only admins and moderators can add participants');
       }
 
-      const userToAdd = await prisma.user.findFirst({
-        where: { id: userId }
-      });
-
-      if (!userToAdd) {
-        return sendNotFound(reply, 'User not found');
-      }
-
-      // Le `findFirst({ isActive: true })` qui précédait ne pouvait PAS voir la
-      // ligne d'un banni (bannir écrit `isActive: false`) : le `create` lui
-      // fabriquait une ligne neuve et active, ce qui défaisait le bannissement
-      // sans passer par `POST …/unban` — laquelle exige le rang `admin` là où
-      // cette route s'ouvre aussi aux `moderator`, et écrit une trace. Voir
-      // `services/conversations/conversationEntryAdmission.ts`.
+      // La conversation est lue UNE fois pour tout le lot : son état est le
+      // même pour chaque identifiant, et une conversation close refuse la
+      // requête ENTIÈRE plutôt que de rendre cinquante verdicts identiques.
+      //
       // La SEULE des trois portes qui ne tenait pas déjà l'état de la
       // conversation : elle n'autorisait que sur le rang de l'appelant, et un
       // rang survit à la clôture (fermer n'écrit sur AUCUNE ligne
@@ -487,219 +582,44 @@ export function registerParticipantWriteRoutes(
         where: { id: conversationId },
         select: { isActive: true, closedAt: true },
       });
-
-      const entry = await resolveConversationEntry({ prisma, conversationId, userId, conversation });
-
-      if (entry.outcome === 'closed') {
+      if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
       }
 
-      if (entry.outcome === 'banned') {
-        return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
+      // SÉQUENTIEL, et ce n'est pas une négligence : deux admissions
+      // concurrentes sur la même conversation liraient le même effectif et
+      // émettraient deux fois le même total. L'éventail de diffusion n'est pas
+      // mécanique — chaque tour a ses destinataires et son compte.
+      const results: ParticipantAdmissionVerdict[] = [];
+      for (const userId of demandes.userIds) {
+        results.push(await admitOneParticipant({ conversationId, conversation, userId, currentUserId }));
       }
 
-      if (entry.outcome === 'already-member') {
-        return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
-      }
-
-      const addedMemberFields = {
-        type: 'user',
-        displayName: userToAdd.displayName ?? userToAdd.username ?? `${userToAdd.firstName ?? ''} ${userToAdd.lastName ?? ''}`.trim(),
-        avatar: userToAdd.avatar,
-        role: 'member',
-        language: userToAdd.systemLanguage ?? 'en',
-        permissions: {
-          canSendMessages: true,
-          canSendFiles: true,
-          canSendImages: true,
-          canSendAudios: true,
-          canSendVideos: true,
-          canSendLocations: false,
-          canSendLinks: false,
-          // Un membre ajouté après coup lit depuis son arrivée ; un
-          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
-          canViewHistory: false
+      // **La forme historique garde son contrat d'ERREUR** — et ce n'est pas
+      // une timidité. Les trois clients déployés appellent avec `userId` et
+      // lisent le 400/403 pour dire « déjà membre » / « banni » : leur rendre
+      // un 200 dont le refus vit dans un champ qu'ils ne lisent pas
+      // transformerait un refus en succès à l'écran, sur toutes les versions
+      // installées. Le verdict par personne est un contrat NEUF, réservé à la
+      // forme neuve ; l'ancienne le reçoit en plus, jamais à la place.
+      if (demandes.single && results.length === 1) {
+        const seul = results[0];
+        if (seul.outcome === 'not-found') return sendNotFound(reply, 'User not found');
+        if (seul.outcome === 'banned') {
+          return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
         }
-      };
-
-      // Partagé par l'écriture et l'emit, comme `leftAt` sur le chemin du
-      // départ : les deux doivent s'accorder. Un rejoin conserve son `joinedAt`
-      // d'origine en base — l'événement, lui, date l'ADHÉSION qu'il annonce,
-      // c'est-à-dire maintenant.
-      const joinedAt = new Date();
-
-      let joinedParticipantId: string;
-      if (entry.outcome === 'rejoin' && entry.participantId) {
-        const rejoined = await prisma.participant.update({
-          where: { id: entry.participantId },
-          data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
-        });
-        joinedParticipantId = rejoined.id;
-        invalidateParticipantLookup(entry.participantId, conversationId);
-      } else {
-        const created = await prisma.participant.create({
-          data: {
-            conversationId: conversationId,
-            userId: userId,
-            ...addedMemberFields,
-            joinedAt
-          }
-        });
-        joinedParticipantId = created.id;
-      }
-
-      // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
-      // qui ne se voit pas dans le fil est une entrée que les présents
-      // découvrent au premier message de l'arrivant.
-      await postJoinSystemMessage(
-        {
-          prisma,
-          broadcast: (message, targetConversationId) =>
-            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, targetConversationId)
-              ?? Promise.resolve()
-        },
-        {
-          conversationId,
-          participantId: joinedParticipantId,
-          displayName: addedMemberFields.displayName,
-          isAnonymous: false,
-          viaShareLink: false
-        }
-      );
-
-      // R6-1 — broadcast so other members' devices refresh the participant list
-      // in real time (the POST previously created the row silently → stale member
-      // lists until manual reload). Mirrors the role-update emit below.
-      // conversation:joined feeds ParticipantsView (invalidate+reload) and
-      // ConversationSyncEngine (participants cache invalidate) on iOS.
-      const socketManager = fastify.socketIOHandler?.getManager();
-      const io = socketManager?.getIO();
-      if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
-          conversationId,
-          userId,
-        });
-
-        // `conversation:joined` ci-dessus ne peut PAS porter l'effectif : le
-        // même nom, le même payload `{conversationId, userId}`, servent l'ack
-        // self-only qu'un socket reçoit en REJOIGNANT LA ROOM
-        // (`ConversationHandler`) — que produit chaque ouverture de fil, et qui
-        // ne change aucune appartenance. Compter dessus gonflerait le compteur
-        // à chaque ouverture ; c'est pourquoi aucun client n'incrémentait, et
-        // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
-        // bannissement −1, ajout rien).
-        //
-        // D'où l'événement dédié, symétrique de `conversation:participant-left`
-        // jusque dans son payload, et adressé comme lui aux rooms PERSONNELLES :
-        // le compteur se lit sur l'écran de liste, que ses lecteurs regardent
-        // précisément quand ils ne sont pas dans la room de conversation.
-        //
-        // Le nouvel arrivant est ÉCARTÉ de l'éventail : il reçoit
-        // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
-        // compte DÉJÀ. L'incrémenter en plus le mettrait en trop. (Le client
-        // écarte la même identité de son côté — l'auto-join de room ci-dessous
-        // est asynchrone et pourrait le faire entrer dans la room de
-        // conversation avant cet emit.)
-        const audience = await prisma.participant.findMany({
-          where: { conversationId, isActive: true, NOT: { userId } },
-          // `role` et `user.role` en plus : les deux titres qui ouvrent
-          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
-          // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
-          // présentation, et c'était la plafonnée, pour tout le monde.
-          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
-        });
-        // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
-        // rattrape jamais d'un événement manqué (hors ligne, trou de
-        // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
-        // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
-        //
-        // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il est
-        // actif depuis l'écriture juste au-dessus, donc il compte, mais il ne
-        // figure pas dans `audience`. Une seconde requête ne rendrait rien de
-        // plus.
-        //
-        // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
-        // pour les lecteurs autorisés. Un broadcast unique ne portait que la
-        // présentation plafonnée, et écrasait donc chez l'admin du groupe la
-        // valeur exacte que le REST venait de lui servir.
-        emitConversationMemberCountEvent({
-          io,
-          conversationId,
-          participants: audience,
-          event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED,
-          payload: {
-            conversationId,
-            userId,
-            displayName: addedMemberFields.displayName,
-            joinedAt: joinedAt.toISOString(),
-          },
-          memberCount: audience.length + 1,
-        });
-      }
-      // Auto-join the added user's currently-connected sockets to the conversation
-      // room so they receive message:new events immediately without a reconnect.
-      if (socketManager) {
-        socketManager.joinUserToConversationRoom(userId, conversationId).catch(
-          (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
-        );
-      }
-      // Emit CONVERSATION_NEW to the added user's room so connected clients
-      // (iOS: ConversationListViewModel.conversationNew handler) discover the
-      // conversation immediately without waiting for a push notification.
-      if (io) {
-        try {
-          const conv = await prisma.conversation.findUnique({
-            where: { id: conversationId },
-            select: { type: true, title: true, createdAt: true },
-          });
-          const allParticipantIds = await prisma.participant.findMany({
-            where: { conversationId, isActive: true },
-            select: { userId: true },
-          }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
-          if (conv) {
-            io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
-              conversationId,
-              conversationType: conv.type,
-              title: conv.title ?? null,
-              creatorId: currentUserId ?? userId,
-              participantIds: allParticipantIds,
-              createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
-            });
-          }
-        } catch (err) {
-          logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });
+        if (seul.outcome === 'already-member') {
+          return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
         }
       }
 
-      const notificationService = fastify.notificationService;
-      if (notificationService) {
-        notificationService.createAddedToConversationNotification({
-          recipientUserId: userId,
-          addedByUserId: currentUserId,
-          conversationId,
-        }).catch((err: unknown) => logger.error('Notification error added', err as Error));
-
-        const existingMembers = await prisma.participant.findMany({
-          where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
-          select: { userId: true },
-        });
-        // Une seule diffusion pour toute l'audience : le profil du nouveau
-        // membre, la conversation et l'effectif sont les mêmes pour chacun, et
-        // le mute se demande en une requête. La boucle d'appels unitaires qui
-        // précédait les relisait par destinataire.
-        const recipientUserIds = existingMembers
-          .map((member) => member.userId)
-          .filter((id): id is string => !!id);
-        if (recipientUserIds.length > 0) {
-          notificationService.createMemberJoinedNotificationsBatch(recipientUserIds, {
-            newMemberUserId: userId,
-            conversationId,
-            joinMethod: 'invited' as const,
-          }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
-        }
-      }
-
-      return sendSuccess(reply, { message: 'Participant ajouté avec succès' });
+      const ajoutes = results.filter((r) => r.outcome === 'new' || r.outcome === 'rejoin').length;
+      return sendSuccess(reply, {
+        message: ajoutes === results.length
+          ? 'Participant ajouté avec succès'
+          : `${ajoutes}/${results.length} participant(s) ajouté(s)`,
+        results,
+      });
 
     } catch (error) {
       logger.error('Error adding participant', error as Error);
@@ -707,3 +627,4 @@ export function registerParticipantWriteRoutes(
     }
   });
 }
+

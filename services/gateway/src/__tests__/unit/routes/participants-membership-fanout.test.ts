@@ -26,6 +26,7 @@ jest.mock('../../../routes/conversations/utils/access-control', () => ({
 }));
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),
   isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)),
 }));
 

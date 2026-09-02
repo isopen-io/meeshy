@@ -298,132 +298,54 @@ extension UniversalComposerBar {
 
     // MARK: - Recording Logic
 
+    /// **Démarrer — la prise appartient au parent.**
+    ///
+    /// Il n'y a plus de « chemin interne ». Celui qui vivait ici n'enregistrait
+    /// rien : un `Timer` qui incrémentait un compteur, puis une pièce jointe
+    /// `voice` et une URL fabriquée depuis l'horloge. Voir le doc-comment des
+    /// quatre relais sur `UniversalComposerBar` (#4560).
     func startRecording() {
         onAnyInteraction?()
-        // Delegated recording: parent manages real AVAudioRecorder
-        if let onStartRecording {
-            onStartRecording()
-            isRecording = true
-            onRecordingChange?(true)
-            HapticFeedback.medium()
-            return
-        }
-        // Internal recording (stories, etc.)
-        isRecording = true
-        recordingDuration = 0
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            Task { @MainActor in self.recordingDuration += 0.1 }
-        }
-        onRecordingChange?(true)
+        onStartRecording()
         HapticFeedback.medium()
     }
 
-    /// Stop the recording and place the audio in the attachment tray — the
-    /// `[stop]` control. The audio becomes an editable attachment; nothing is
-    /// sent. Delegated to the parent for the message context; for internal
-    /// recording (stories, comments) it materializes a `ComposerAttachment`.
+    /// Arrêter et poser l'audio dans le tiroir — le contrôle `[stop]`. Ce qui
+    /// est posé est ce que le PARENT a enregistré ; la barre ne fabrique aucune
+    /// pièce jointe.
     func stopRecordingToAttachment() {
         onAnyInteraction?()
-        // Delegated recording: parent stops the recorder + appends to its tray
-        if let onStopRecordingToAttachment {
-            onStopRecordingToAttachment()
-            isRecording = false
-            onRecordingChange?(false)
-            HapticFeedback.light()
-            return
-        }
-        // Internal recording (stories, etc.)
-        guard recordingDuration > 0.5 else {
-            // Too short — cancel
-            isRecording = false
-            recordingTimer?.invalidate()
-            recordingTimer = nil
-            recordingDuration = 0
-            onRecordingChange?(false)
-            return
-        }
-
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        // Add voice attachment
-        let attachment = ComposerAttachment.voice(duration: duration)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            attachments.append(attachment)
-        }
-
-        // Callback for parent to handle actual audio data
-        if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-            onVoiceRecord?(url, duration)
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
+        onStopRecordingToAttachment()
         HapticFeedback.light()
     }
 
-    /// Stop the recording and send the voice message immediately — the `[↑]`
-    /// control. No preview, no editor. Delegated to the parent for the message
-    /// context; for internal recording it materializes the voice attachment
-    /// and runs the normal send.
+    /// Arrêter et envoyer tout de suite — le contrôle `[↑]`. Ni aperçu, ni
+    /// éditeur.
     func sendRecording() {
         onAnyInteraction?()
-        // Delegated recording: parent stops the recorder + sends right away
-        if let onSendRecording {
-            onSendRecording()
-            isRecording = false
-            onRecordingChange?(false)
-            HapticFeedback.medium()
-            return
-        }
-        // Internal recording (stories, comments) — materialize the voice
-        // attachment, then run the normal send.
-        stopRecordingToAttachment()
-        handleSend()
+        onSendRecording()
+        HapticFeedback.medium()
     }
 
-    /// Cancel recording — discard audio without creating an attachment.
-    /// Delegates to parent if `onCancelRecording` is provided; otherwise resets internal state.
+    /// Annuler — l'audio est jeté, aucune pièce jointe n'est créée.
     func cancelRecording() {
         onAnyInteraction?()
-        if let onCancelRecording {
-            onCancelRecording()
-            isRecording = false
-            onRecordingChange?(false)
-            return
-        }
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        recordingDuration = 0
-        onRecordingChange?(false)
+        onCancelRecording()
     }
 
-    /// Force-stop recording when switching stories — always saves the voice attachment regardless of duration
+    /// **Arrêt FORCÉ, au changement de story.**
+    ///
+    /// Elle ne consultait aucun relais et faisait le travail interne
+    /// elle-même — donc, sous délégation, elle jetait la prise du parent en
+    /// silence tout en croyant « toujours sauver le vocal ». Elle pose
+    /// désormais l'audio comme le contrôle `[stop]`, ce que son nom promet.
     func forceStopRecording() {
-        guard isRecording else { return }
-        let duration = recordingDuration
-
-        isRecording = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-
-        if duration > 0.3 {
-            let attachment = ComposerAttachment.voice(duration: duration)
-            attachments.append(attachment)
-            if let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice_\(Int(Date().timeIntervalSince1970)).m4a") as URL? {
-                onVoiceRecord?(url, duration)
-            }
-        }
-
-        recordingDuration = 0
-        onRecordingChange?(false)
+        guard effectiveIsRecording else { return }
+        onStopRecordingToAttachment()
     }
 
-    // MARK: - Expand & Start Recording
+
+    // MARK: - Déplier puis démarrer
 
     func expandAndStartRecording() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {

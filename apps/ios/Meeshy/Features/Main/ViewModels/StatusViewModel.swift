@@ -156,7 +156,7 @@ class StatusViewModel: ObservableObject {
                 try? await CacheCoordinator.shared.statuses.save(entries, for: cacheKey)
             } else {
                 if statuses.isEmpty {
-                    error = String(localized: "Impossible de charger les statuts", defaultValue: "Impossible de charger les statuts")
+                    error = String(localized: "status.load.error", defaultValue: "Impossible de charger les statuts")
                 }
             }
         } catch {

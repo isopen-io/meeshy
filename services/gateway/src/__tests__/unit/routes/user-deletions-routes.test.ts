@@ -48,16 +48,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import under test ────────────────────────────────────────────────────────
 
 import userDeletionsRoutes from '../../../routes/user-deletions';
@@ -89,7 +79,6 @@ type PrismaConvPref = {
   id: string;
   userId: string;
   conversationId: string;
-  deletedForUserAt: Date | null;
   clearHistoryBefore: Date | null;
   conversation?: {
     id: string;
@@ -155,7 +144,6 @@ const DELETED_PREF: PrismaConvPref = {
   id: 'pref-1',
   userId: USER_ID,
   conversationId: CONV_ID,
-  deletedForUserAt: new Date('2024-01-01'),
   clearHistoryBefore: null,
   conversation: {
     id: CONV_ID,

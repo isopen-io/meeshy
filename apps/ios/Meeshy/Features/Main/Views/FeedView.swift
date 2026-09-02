@@ -349,7 +349,7 @@ struct FeedView: View {
     private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -433,7 +433,7 @@ struct FeedView: View {
     private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
         do {
             let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/bookmark",
+                PostsEndpoint.byPostIdBookmark(postId: postId),
                 method: bookmark ? "POST" : "DELETE"
             )
             return true
@@ -488,11 +488,11 @@ struct FeedView: View {
                 try await RepostPublisher.shared.publish(
                     .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
                 postRepostDelta[postId, default: 0] -= 1
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost"))
             }
         }
     }
@@ -547,12 +547,19 @@ struct FeedView: View {
         viewModel.posts.map { "\($0.id)|\($0.isLiked)|\($0.isBookmarkedByMe)|\($0.isRepostedByMe)" }
     }
 
+    /// #4621 — le pluriel appartient au CATALOGUE, pas à un ternaire Swift.
+    ///
+    /// Le code choisissait entre deux clés selon `count > 1` : une règle
+    /// française plaquée sur les sept langues. L'arabe a SIX catégories de
+    /// pluriel, et aucune n'était atteignable ainsi ; le russe ou le polonais,
+    /// si l'app s'y ouvre un jour, en ont quatre. Une seule clé, avec ses
+    /// `variations.plural`, laisse chaque langue appliquer LA SIENNE.
     private var newPostsBannerText: String {
-        let count = viewModel.newPostsCount
-        let label = count > 1
-            ? String(localized: "nouveaux posts", defaultValue: "nouveaux posts")
-            : String(localized: "nouveau post", defaultValue: "nouveau post")
-        return "\(count) \(label)"
+        String(
+            localized: "feed.new-posts.count",
+            defaultValue: "\(viewModel.newPostsCount) nouveaux posts",
+            bundle: .main
+        )
     }
 
     var body: some View {
@@ -704,7 +711,7 @@ struct FeedView: View {
                 HapticFeedback.light()
             }) {
                 HStack {
-                    Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
+                    Text(String(localized: "feed.compose.subtitle", defaultValue: "Partager quelque chose avec le monde…"))
                         .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                     Spacer()
@@ -737,7 +744,7 @@ struct FeedView: View {
                     HapticFeedback.light()
                 } label: {
                     Label(
-                        String(localized: "Photo ou video", defaultValue: "Photo ou vid\u{00E9}o"),
+                        String(localized: "feed.attach.photo-or-video", defaultValue: "Photo ou vidéo"),
                         systemImage: "photo.fill"
                     )
                 }
@@ -753,7 +760,7 @@ struct FeedView: View {
                     HapticFeedback.light()
                 } label: {
                     Label(
-                        String(localized: "Appareil photo", defaultValue: "Appareil photo"),
+                        String(localized: "feed.attach.camera", defaultValue: "Appareil photo"),
                         systemImage: "camera.fill"
                     )
                 }
@@ -763,7 +770,7 @@ struct FeedView: View {
                     HapticFeedback.light()
                 } label: {
                     Label(
-                        String(localized: "Enregistrement audio", defaultValue: "Enregistrement audio"),
+                        String(localized: "feed.attach.audio-recording", defaultValue: "Enregistrement audio"),
                         systemImage: "mic.fill"
                     )
                 }
@@ -779,7 +786,7 @@ struct FeedView: View {
                     HapticFeedback.light()
                 } label: {
                     Label(
-                        String(localized: "Fichier", defaultValue: "Fichier"),
+                        String(localized: "feed.attach.file-short", defaultValue: "Fichier"),
                         systemImage: "doc.fill"
                     )
                 }
@@ -795,7 +802,7 @@ struct FeedView: View {
                     HapticFeedback.light()
                 } label: {
                     Label(
-                        String(localized: "Position", defaultValue: "Position"),
+                        String(localized: "feed.attach.location-short", defaultValue: "Position"),
                         systemImage: "location.fill"
                     )
                 }
@@ -819,7 +826,7 @@ struct FeedView: View {
                         .foregroundColor(.white)
                 }
             }
-            .accessibilityLabel(String(localized: "Ajouter du contenu", defaultValue: "Ajouter du contenu"))
+            .accessibilityLabel(String(localized: "feed.compose.add-content", defaultValue: "Ajouter du contenu"))
         }
         .padding(16)
         .background(
@@ -1099,12 +1106,12 @@ struct FeedView: View {
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
                                 .accessibilityHidden(true)
-                            Text(String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil"))
+                            Text(String(localized: "feed.load.error", defaultValue: "Impossible de charger le fil"))
                                 .font(.headline)
                             Text(error)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Button(String(localized: "Reessayer", defaultValue: "Reessayer")) {
+                            Button(String(localized: "common.retry", defaultValue: "Réessayer")) {
                                 Task { await viewModel.loadFeed() }
                             }
                             .buttonStyle(.bordered)
@@ -1116,9 +1123,9 @@ struct FeedView: View {
                     // Empty state when no posts and no error
                     if viewModel.hasLoaded && viewModel.posts.isEmpty && !viewModel.isLoading && viewModel.error == nil {
                         AdaptiveContentUnavailableView(
-                            String(localized: "Aucune publication", defaultValue: "Aucune publication"),
+                            String(localized: "feed.empty.title", defaultValue: "Aucune publication"),
                             systemImage: "text.bubble",
-                            description: Text(String(localized: "Les publications de vos contacts apparaitront ici", defaultValue: "Les publications de vos contacts apparaitront ici"))
+                            description: Text(String(localized: "feed.empty.subtitle", defaultValue: "Les publications de vos contacts apparaîtront ici"))
                         )
                     }
 
@@ -1340,7 +1347,7 @@ struct FeedView: View {
                         await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
-                onPublishBorrowed: { sound in
+                onPublishBorrowed: { sound, _ in
                     showAudioComposer = false
                     Task { await publishBorrowedSoundPost(sound) }
                 }
@@ -1389,7 +1396,7 @@ struct FeedView: View {
                             recoveredPostCmid = nil
                         }
                     } label: {
-                        Text(String(localized: "Annuler", defaultValue: "Annuler"))
+                        Text(String(localized: "common.cancel", defaultValue: "Annuler"))
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
@@ -1398,7 +1405,7 @@ struct FeedView: View {
 
                     Spacer()
 
-                    Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
+                    Text(String(localized: "feed.compose.title", defaultValue: "Nouveau post"))
                         .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
@@ -1413,7 +1420,7 @@ struct FeedView: View {
                                 .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
-                            Text(String(localized: "Publier", defaultValue: "Publier"))
+                            Text(String(localized: "common.publish", defaultValue: "Publier"))
                                 .font(.subheadline.weight(.bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
@@ -1529,7 +1536,7 @@ struct FeedView: View {
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
-                        Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
+                        Text(String(localized: "feed.compose.placeholder", defaultValue: "Qu'avez-vous en tête ?"))
                             .font(.body)
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
@@ -1594,37 +1601,37 @@ struct FeedView: View {
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
-                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
-                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.take-photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
-                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
+                    .accessibilityLabel(String(localized: "feed.attach.emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
-                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
+                    .accessibilityLabel(String(localized: "feed.attach.file", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
-                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
+                    .accessibilityLabel(String(localized: "feed.attach.location", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
-                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
+                    .accessibilityLabel(String(localized: "feed.attach.record-audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
 
@@ -1646,7 +1653,7 @@ struct FeedView: View {
                                     )
                             )
                     }
-                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityLabel(String(localized: "feed.post.language", defaultValue: "Langue du post"))
                     .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)

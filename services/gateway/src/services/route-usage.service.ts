@@ -101,6 +101,17 @@
  * frontiere (echantillon en entree, instantane en sortie) est `readonly`.
  */
 
+import { apiBasePath, apiPath } from '@meeshy/shared/api/prefix';
+
+/**
+ * Le préfixe SERVI, suivi d'une barre — la forme qu'ont les routes montées.
+ *
+ * Lu UNE fois, à l'import : c'est aussi à l'import que `ROUTES_SURVEILLEES` se
+ * fige, et les deux doivent lire la même configuration. Un préfixe relu plus
+ * tard décrirait une passerelle que ce registre ne décrit pas.
+ */
+const PREFIXE_SERVI = `${apiBasePath()}/`;
+
 /** Lecture d'horloge, en millisecondes. Injectable pour que la fenetre se teste. */
 export type Horloge = () => number;
 
@@ -146,6 +157,13 @@ export type SurveilleeMalDeclaree = {
   readonly motif: MotifMauvaiseDeclaration;
 };
 
+/** Le nom d'une adresse retiree, si l'echantillon en vise une (#4365). */
+export function routeRetireeDe(echantillon: { method: string; rawPath?: string | undefined }): string | undefined {
+  if (!echantillon.rawPath) return undefined;
+  const chemin = echantillon.rawPath.split('?')[0];
+  return ROUTES_RETIREES.has(`${echantillon.method} ${chemin}`) ? chemin : undefined;
+}
+
 /** L'echantillon tel que le hook `onResponse` le lit, sans aucune identite. */
 export type EchantillonUsage = {
   readonly method: string;
@@ -154,6 +172,15 @@ export type EchantillonUsage = {
   readonly versionHeader?: string | undefined;
   readonly platformHeader?: string | undefined;
   readonly userAgent?: string | undefined;
+  /**
+   * Le chemin BRUT, sans requête — le seul témoin d'une route RETIRÉE (#4365).
+   *
+   * Quand une adresse n'est plus montée, `routePattern` est `undefined` et
+   * tout son trafic tombe dans le seau unique `(unrouted)`. On sait alors
+   * qu'il y a des 404, jamais SUR QUOI. C'est précisément la question que
+   * posent les quatre lots de retrait : « ce couple est-il encore appelé ? ».
+   */
+  readonly rawPath?: string | undefined;
 };
 
 /** Un seau servi : une route, une origine, un compte, une derniere vue. */
@@ -208,6 +235,42 @@ const TOUTES = '*';
 
 /** Ce qui remplace le motif quand la requete n'a matche aucune route. */
 export const ROUTE_NON_MONTEE = '(unrouted)';
+
+/**
+ * Les adresses RETIRÉES qu'on veut continuer à compter (#4365).
+ *
+ * ## Pourquoi elles ne peuvent pas passer par `ROUTES_SURVEILLEES`
+ *
+ * Le compteur s'attache aux routes SERVIES : une adresse retirée n'est plus
+ * montée, donc `routePattern` vaut `undefined` et son trafic se noie dans le
+ * seau unique `(unrouted)` avec toutes les fautes de frappe de la planète. On
+ * sait qu'il y a des 404 ; on ne sait pas sur quoi — et c'est exactement la
+ * question que posent les quatre lots de retrait (#4186, #4187, #4188, #4190),
+ * dont le critère commun exige « journaux d'accès à zéro sur 30 jours ».
+ *
+ * ## Le zéro que cette table rend LISIBLE, et celui qu'elle ne rend pas
+ *
+ * Un couple ABSENT de cette table et à zéro dans `(unrouted)` ne prouve rien —
+ * `(unrouted)` agrège. Un couple PRÉSENT ici et à zéro prouve qu'aucune
+ * requête n'a atteint cette adresse pendant la fenêtre. C'est la seule forme
+ * de zéro qui vaille, et elle exige de DÉCLARER ce qu'on surveille avant de
+ * pouvoir l'affirmer.
+ *
+ * ## Ce qu'elle ne corrige pas, et qui doit se lire avec le chiffre
+ *
+ * Les deux angles morts que #4275 nomme déjà valent ici : un cache navigateur
+ * ou un service worker sert sans atteindre le gateway, et l'agrégat est en
+ * mémoire, par instance. Un zéro se lit AVEC eux, jamais seul.
+ *
+ * Le chemin est comparé LITTÉRALEMENT (après retrait de la requête) : ces
+ * adresses n'ont pas de paramètre, ou alors elles n'entrent pas ici.
+ */
+export const ROUTES_RETIREES: ReadonlySet<string> = new Set([
+  `POST ${apiPath('/auth/validate-session')}`,
+  `GET ${apiPath('/auth/magic-link/validate')}`,
+  `GET ${apiPath('/me/me')}`,
+  `GET ${apiPath('/users/me/test')}`,
+]);
 
 /**
  * Le vocabulaire CLOS des plateformes. Un en-tete hors de cette liste retombe
@@ -361,7 +424,10 @@ export class RouteUsageCounter {
   record(echantillon: EchantillonUsage): void {
     const maintenant = this.clock();
     const tranche = this.trancheCourante(maintenant);
-    const route = echantillon.routePattern ?? ROUTE_NON_MONTEE;
+    // Une adresse RETIRÉE garde son nom plutôt que de se noyer dans
+    // `(unrouted)` — sans quoi son zéro serait indistinguable de celui d'une
+    // faute de frappe (#4365).
+    const route = echantillon.routePattern ?? routeRetireeDe(echantillon) ?? ROUTE_NON_MONTEE;
 
     if (this.watchedKeys.has(`${echantillon.method} ${route}`)) {
       // Le seau TOTAL. Il existe deja — le pre-semis de `trancheCourante` l'a
@@ -548,14 +614,14 @@ const CATEGORIES_PREFERENCES = [
  */
 export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   // #4178 — la lecture de soi converge sur `GET /api/v1/me`
-  { method: 'GET', route: '/api/v1/auth/me', issue: 4178 },
-  { method: 'GET', route: '/api/v1/me/preferences/encryption', issue: 4178 },
+  { method: 'GET', route: apiPath('/auth/me'), issue: 4178 },
+  { method: 'GET', route: apiPath('/me/preferences/encryption'), issue: 4178 },
 
   // #4181 — les vingt-huit routes par categorie de preferences
   ...CATEGORIES_PREFERENCES.flatMap((categorie) =>
     (['GET', 'PUT', 'PATCH', 'DELETE'] as const).map((method) => ({
       method,
-      route: `/api/v1/me/preferences/${categorie}`,
+      route: apiPath(`/me/preferences/${categorie}`),
       issue: 4181,
     }))
   ),
@@ -564,41 +630,41 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   // ne peut pas tomber a zero — le surveiller serait un faux zero inverse.
 
   // #4182 — les categories de conversation quittent les preferences
-  { method: 'GET', route: '/api/v1/me/preferences/categories', issue: 4182 },
-  { method: 'POST', route: '/api/v1/me/preferences/categories', issue: 4182 },
-  { method: 'GET', route: '/api/v1/me/preferences/categories/:categoryId', issue: 4182 },
-  { method: 'PATCH', route: '/api/v1/me/preferences/categories/:categoryId', issue: 4182 },
-  { method: 'DELETE', route: '/api/v1/me/preferences/categories/:categoryId', issue: 4182 },
-  { method: 'POST', route: '/api/v1/me/preferences/categories/reorder', issue: 4182 },
+  { method: 'GET', route: apiPath('/me/preferences/categories'), issue: 4182 },
+  { method: 'POST', route: apiPath('/me/preferences/categories'), issue: 4182 },
+  { method: 'GET', route: apiPath('/me/preferences/categories/:categoryId'), issue: 4182 },
+  { method: 'PATCH', route: apiPath('/me/preferences/categories/:categoryId'), issue: 4182 },
+  { method: 'DELETE', route: apiPath('/me/preferences/categories/:categoryId'), issue: 4182 },
+  { method: 'POST', route: apiPath('/me/preferences/categories/reorder'), issue: 4182 },
 
   // #4184 — changer d'e-mail ou de telephone exige la preuve de possession
-  { method: 'PATCH', route: '/api/v1/users/me', issue: 4184 },
-  { method: 'POST', route: '/api/v1/users/me/change-email', issue: 4184 },
-  { method: 'POST', route: '/api/v1/users/me/verify-email-change', issue: 4184 },
-  { method: 'POST', route: '/api/v1/users/me/resend-email-change-verification', issue: 4184 },
-  { method: 'POST', route: '/api/v1/users/me/change-phone', issue: 4184 },
-  { method: 'POST', route: '/api/v1/users/me/verify-phone-change', issue: 4184 },
+  { method: 'PATCH', route: apiPath('/users/me'), issue: 4184 },
+  { method: 'POST', route: apiPath('/users/me/change-email'), issue: 4184 },
+  { method: 'POST', route: apiPath('/users/me/verify-email-change'), issue: 4184 },
+  { method: 'POST', route: apiPath('/users/me/resend-email-change-verification'), issue: 4184 },
+  { method: 'POST', route: apiPath('/users/me/change-phone'), issue: 4184 },
+  { method: 'POST', route: apiPath('/users/me/verify-phone-change'), issue: 4184 },
 
   // #4161 — les trois alias de profil, dont la queue installee est longue
-  { method: 'GET', route: '/api/v1/users/:id', issue: 4161 },
-  { method: 'GET', route: '/api/v1/users/id/:id', issue: 4161 },
-  { method: 'GET', route: '/api/v1/u/:username', issue: 4161 },
-  { method: 'GET', route: '/api/v1/users/:userId/stats', issue: 4161 },
+  { method: 'GET', route: apiPath('/users/:id'), issue: 4161 },
+  { method: 'GET', route: apiPath('/users/id/:id'), issue: 4161 },
+  { method: 'GET', route: apiPath('/u/:username'), issue: 4161 },
+  { method: 'GET', route: apiPath('/users/:userId/stats'), issue: 4161 },
 
   // #4155 — signaler un contenu n'est plus un geste d'administration
-  { method: 'POST', route: '/api/v1/admin/reports', issue: 4155 },
+  { method: 'POST', route: apiPath('/admin/reports'), issue: 4155 },
 
   // #4154 — les dix adresses historiques d'ecriture de compte
-  { method: 'PATCH', route: '/api/v1/admin/users/:userId/role', issue: 4154 },
-  { method: 'PATCH', route: '/api/v1/admin/users/:userId/status', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/unlock', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/enable-2fa', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/disable-2fa', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/verify-email', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/verify-phone', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/verify-age', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/voice-consent', issue: 4154 },
-  { method: 'POST', route: '/api/v1/admin/users/:userId/reset-password', issue: 4154 },
+  { method: 'PATCH', route: apiPath('/admin/users/:userId/role'), issue: 4154 },
+  { method: 'PATCH', route: apiPath('/admin/users/:userId/status'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/unlock'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/enable-2fa'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/disable-2fa'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/verify-email'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/verify-phone'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/verify-age'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/voice-consent'), issue: 4154 },
+  { method: 'POST', route: apiPath('/admin/users/:userId/reset-password'), issue: 4154 },
 
   // ── Les trente-sept adresses DEPRECIEES sous `/api/v1/` (#4488) ───────────
   //
@@ -616,61 +682,81 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   // dont la fleche va du CODE vers cette liste.
 
   // #4149 — les neuf listes de posts convergent sur `GET /social/posts?scope=`
-  { method: 'GET', route: '/api/v1/posts/feed', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/feed/stories', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/stories/mine', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/feed/reels', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/feed/statuses', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/feed/statuses/discover', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/user/:userId', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/community/:communityId', issue: 4149 },
-  { method: 'GET', route: '/api/v1/posts/bookmarks', issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/feed'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/feed/stories'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/stories/mine'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/feed/reels'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/feed/statuses'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/feed/statuses/discover'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/user/:userId'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/community/:communityId'), issue: 4149 },
+  { method: 'GET', route: apiPath('/posts/bookmarks'), issue: 4149 },
 
   // #4346 — les trois listes restantes rejoignent la meme union
-  { method: 'GET', route: '/api/v1/posts/hashtag/:tag', issue: 4346 },
-  { method: 'GET', route: '/api/v1/posts/nearby', issue: 4346 },
-  { method: 'GET', route: '/api/v1/sounds/:id/posts', issue: 4346 },
+  { method: 'GET', route: apiPath('/posts/hashtag/:tag'), issue: 4346 },
+  { method: 'GET', route: apiPath('/posts/nearby'), issue: 4346 },
+  { method: 'GET', route: apiPath('/sounds/:id/posts'), issue: 4346 },
 
   // #4283 — les cinq portes de demande d'ami cessent de diverger de `/directory`
-  { method: 'POST', route: '/api/v1/friend-requests', issue: 4283 },
-  { method: 'GET', route: '/api/v1/friend-requests/received', issue: 4283 },
-  { method: 'GET', route: '/api/v1/friend-requests/sent', issue: 4283 },
-  { method: 'PATCH', route: '/api/v1/friend-requests/:id', issue: 4283 },
-  { method: 'DELETE', route: '/api/v1/friend-requests/:id', issue: 4283 },
+  { method: 'POST', route: apiPath('/friend-requests'), issue: 4283 },
+  { method: 'GET', route: apiPath('/friend-requests/received'), issue: 4283 },
+  { method: 'GET', route: apiPath('/friend-requests/sent'), issue: 4283 },
+  { method: 'PATCH', route: apiPath('/friend-requests/:id'), issue: 4283 },
+  { method: 'DELETE', route: apiPath('/friend-requests/:id'), issue: 4283 },
+
+  // #4370 — les deux couples TUS montes SANS appelant confirme.
+  //
+  // #4190 a retire chirurgicalement des verbes du montage TUS et a laisse ces
+  // deux-la, en ecrivant pourquoi : « la confirmation precede le retrait, couple
+  // par couple — les retirer serait les retirer sur une SUPPOSITION, exactement
+  // le raisonnement que ce lot corrige ». La regle est juste ; il lui manquait
+  // l'instrument qui rend la confirmation possible.
+  //
+  // `POST /uploads/*` a une raison PROTOCOLAIRE : TUS autorise
+  // `POST + X-HTTP-Method-Override: PATCH` pour les clients qui ne peuvent pas
+  // emettre PATCH. Un client qui l'emprunte est invisible a un inventaire qui
+  // croise « gateway x clients » sur le verbe.
+  //
+  // `HEAD /uploads` n'en a aucune : la specification pose HEAD sur l'URL d'un
+  // televersement, jamais sur la collection. C'est le meilleur candidat au
+  // retrait — et c'est precisement pour ca qu'il faut le COMPTER avant, pas
+  // le supposer mort.
+  { method: 'POST', route: apiPath('/uploads/*'), issue: 4370 },
+  { method: 'HEAD', route: apiPath('/uploads'), issue: 4370 },
 
   // #4167 — les trois portes anonymes deleguent a la loi d'admission unique
-  { method: 'POST', route: '/api/v1/anonymous/join/:linkId', issue: 4167 },
-  { method: 'POST', route: '/api/v1/anonymous/refresh', issue: 4167 },
-  { method: 'POST', route: '/api/v1/anonymous/leave', issue: 4167 },
+  { method: 'POST', route: apiPath('/anonymous/join/:linkId'), issue: 4167 },
+  { method: 'POST', route: apiPath('/anonymous/refresh'), issue: 4167 },
+  { method: 'POST', route: apiPath('/anonymous/leave'), issue: 4167 },
 
   // #4170 — `GET /links` absorbe les trois lectures et les deux ecritures
-  { method: 'GET', route: '/api/v1/links/my-links', issue: 4170 },
-  { method: 'GET', route: '/api/v1/links/stats', issue: 4170 },
-  { method: 'PATCH', route: '/api/v1/links/:linkId/toggle', issue: 4170 },
-  { method: 'PATCH', route: '/api/v1/links/:linkId/extend', issue: 4170 },
+  { method: 'GET', route: apiPath('/links/my-links'), issue: 4170 },
+  { method: 'GET', route: apiPath('/links/stats'), issue: 4170 },
+  { method: 'PATCH', route: apiPath('/links/:linkId/toggle'), issue: 4170 },
+  { method: 'PATCH', route: apiPath('/links/:linkId/extend'), issue: 4170 },
 
   // #4164 — `/directory/blocks` devient l'ENSEMBLE des blocages
-  { method: 'POST', route: '/api/v1/users/:userId/block', issue: 4164 },
-  { method: 'DELETE', route: '/api/v1/users/:userId/block', issue: 4164 },
-  { method: 'GET', route: '/api/v1/users/me/blocked-users', issue: 4164 },
+  { method: 'POST', route: apiPath('/users/:userId/block'), issue: 4164 },
+  { method: 'DELETE', route: apiPath('/users/:userId/block'), issue: 4164 },
+  { method: 'GET', route: apiPath('/users/me/blocked-users'), issue: 4164 },
 
   // Le partage de conversation, trois adresses et trois lots distincts
-  { method: 'POST', route: '/api/v1/conversations/:id/new-link', issue: 4169 },
-  { method: 'GET', route: '/api/v1/conversations/:conversationId/links', issue: 4351 },
-  { method: 'POST', route: '/api/v1/conversations/join/:linkId', issue: 4353 },
+  { method: 'POST', route: apiPath('/conversations/:id/new-link'), issue: 4169 },
+  { method: 'GET', route: apiPath('/conversations/:conversationId/links'), issue: 4351 },
+  { method: 'POST', route: apiPath('/conversations/join/:linkId'), issue: 4353 },
 
   // #4349 — les cinq adaptateurs de la collection unique d'accuses de lecture
-  { method: 'GET', route: '/api/v1/conversations/:conversationId/read-statuses', issue: 4349 },
-  { method: 'POST', route: '/api/v1/conversations/:conversationId/mark-as-read', issue: 4349 },
-  { method: 'POST', route: '/api/v1/conversations/:conversationId/mark-as-received', issue: 4349 },
-  { method: 'POST', route: '/api/v1/conversations/:conversationId/messages/:messageId/delivery-receipt', issue: 4349 },
-  { method: 'POST', route: '/api/v1/conversations/:id/mark-read', issue: 4349 },
+  { method: 'GET', route: apiPath('/conversations/:conversationId/read-statuses'), issue: 4349 },
+  { method: 'POST', route: apiPath('/conversations/:conversationId/mark-as-read'), issue: 4349 },
+  { method: 'POST', route: apiPath('/conversations/:conversationId/mark-as-received'), issue: 4349 },
+  { method: 'POST', route: apiPath('/conversations/:conversationId/messages/:messageId/delivery-receipt'), issue: 4349 },
+  { method: 'POST', route: apiPath('/conversations/:id/mark-read'), issue: 4349 },
 
   // #4350 — lire ses propres permissions n'est pas un geste d'administration
-  { method: 'GET', route: '/api/v1/admin/me/permissions', issue: 4350 },
+  { method: 'GET', route: apiPath('/admin/me/permissions'), issue: 4350 },
 
   // #4158 — la disponibilite d'un identifiant passe par `/directory`
-  { method: 'GET', route: '/api/v1/auth/check-availability', issue: 4158 },
+  { method: 'GET', route: apiPath('/auth/check-availability'), issue: 4158 },
 
   // ── Les neuf alias DEPRECIES hors `/api/v1/` (#4470) ──────────────────────
   //
@@ -857,7 +943,7 @@ export function surveilleesMalDeclarees(
 
 function motifDe(r: RouteSurveillee): MotifMauvaiseDeclaration | null {
   if (!r.route.startsWith('/')) return 'chemin-non-absolu';
-  if (r.route.startsWith('/api/v1/')) return r.horsPrefixe ? 'declaration-perimee' : null;
+  if (r.route.startsWith(PREFIXE_SERVI)) return r.horsPrefixe ? 'declaration-perimee' : null;
   if (!r.horsPrefixe) return 'hors-prefixe-sans-declaration';
   if (r.horsPrefixe.raison.trim() === '') return 'raison-vide';
   const racine = r.horsPrefixe.famille === 'alias-racine';

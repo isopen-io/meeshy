@@ -171,10 +171,12 @@ final class ReportMessageSheetPaletteTests: XCTestCase {
     /// cessait d'être présentée sous un forçage sombre, la démonstration
     /// ci-dessus changerait de nature — ce test l'ancre.
     func test_theSheetIsStillPresentedFromTheForcedDarkStoryHierarchy() throws {
+        // #4084 — la feuille est présentée depuis le menu d'options, qui vit
+        // dans l'en-tête ; celui-ci a quitté `+Sidebar` pour son propre fichier.
         XCTAssertTrue(
-            strippedSource("Features/Main/Views/StoryViewerView+Sidebar.swift")
+            strippedSource("Features/Main/Views/StoryViewerView+Header.swift")
                 .contains("ReportMessageSheet("),
-            "Point de présentation attendu : le rail d'actions de StoryViewerView."
+            "Point de présentation attendu : l'en-tête de StoryViewerView."
         )
         XCTAssertTrue(
             strippedSource("Features/Main/Views/StoryViewerView.swift")

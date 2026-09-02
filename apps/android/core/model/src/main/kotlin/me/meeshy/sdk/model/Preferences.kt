@@ -174,7 +174,8 @@ data class PrivacyPreferences(
     val allowGroupInvites: Boolean = true,
     val allowCallsFromNonContacts: Boolean = false,
     val saveMediaToGallery: Boolean = false,
-    val allowAnalytics: Boolean = true,
+    // #4578 — gardée par un consentement : jamais vraie par défaut.
+    val allowAnalytics: Boolean = false,
     val shareUsageData: Boolean = false,
     val blockScreenshots: Boolean = false,
     val hideProfileFromSearch: Boolean = false,
@@ -329,7 +330,8 @@ data class ApplicationPreferences(
     val keyboardShortcutsEnabled: Boolean = true,
     val tutorialsCompleted: List<String> = emptyList(),
     val betaFeaturesEnabled: Boolean = false,
-    val telemetryEnabled: Boolean = true,
+    // #4578 — gardée par un consentement : jamais vraie par défaut.
+    val telemetryEnabled: Boolean = false,
     val extras: Map<String, JsonElement> = emptyMap(),
 )
 

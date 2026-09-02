@@ -170,12 +170,16 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
         
-        let kind: CanvasItemKind = {
-            if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
-            if slide.effects.stickerObjects?.contains(where: { $0.id == id }) == true { return .sticker }
-            if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
-            return .media
-        }()
+        // **Une famille, UNE fonction** (#4671). Ce bloc redemandait « de quel
+        // type est cet objet ? » et répondait autrement que `itemKind(forId:)` :
+        // il retombait sur `.media` pour tout inconnu — donc pour une pastille
+        // AUDIO — pendant que l'autre rendait `nil`. Deux écritures d'une seule
+        // règle, déjà divergentes le jour où la troisième famille est apparue.
+        //
+        // Le repli `.media` disparaît avec la duplication : un objet dont la
+        // famille est inconnue n'a pas de menu, plutôt qu'un menu de média posé
+        // sur autre chose.
+        guard let kind = itemKind(forId: id) else { return nil }
 
         return UIContextMenuConfiguration(
             identifier: id as NSString,
@@ -194,7 +198,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 isLocked: isLockedItem(id: id),
                 isBackground: isBackgroundItem(id: id),
                 sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
-                hasEditor: onItemDoubleTapped != nil,
+                hasEditor: hasEditor(for: kind),
                 canLeaveScene: canLeaveScene
             )
             .map { action in
@@ -379,6 +383,21 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             let item = stickers.remove(at: idx)
             stickers.append(item)
             slide.effects.stickerObjects = stickers
+            onItemModified?(slide)
+            return
+        }
+        // **Chip de SON** (#4759). Sans cette branche, « mettre au premier
+        // plan » sur une chip de son était un no-op silencieux — la même
+        // absence que celle qui rendait `bringForward` inerte, un site plus
+        // loin. Le rang ET la position dans le tableau sont posés, comme dans
+        // les trois branches ci-dessus : le rendu lit les deux.
+        if var sons = slide.effects.audioPlayerObjects,
+           let idx = sons.firstIndex(where: { $0.id == id }) {
+            guard (sons[idx].zIndex ?? 0) < topZ - 1 || idx != sons.count - 1 else { return }
+            sons[idx].zIndex = topZ
+            let item = sons.remove(at: idx)
+            sons.append(item)
+            slide.effects.audioPlayerObjects = sons
             onItemModified?(slide)
             return
         }

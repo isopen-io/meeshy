@@ -496,15 +496,6 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
             />
           )}
 
-          {profile.entryLink.allowedCountries.length > 0 && (
-            <ProfileRow
-              testId="participant-profile-entry-link-countries"
-              icon={<MapPin className="h-3.5 w-3.5" />}
-              label={t('participantProfile.linkCountries', 'Pays admis')}
-              value={profile.entryLink.allowedCountries.join(', ')}
-            />
-          )}
-
           {profile.entryLink.allowedLanguages.length > 0 && (
             <ProfileRow
               testId="participant-profile-entry-link-languages"

@@ -23,6 +23,7 @@ import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
+import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
 import type { ResolvedPostMentions } from '../../services/posts/postMentions';
@@ -129,9 +130,12 @@ function rejectNonV3StoryEffects(
   }
   const parsedCanvas = CanvasV3Schema.safeParse(storyEffects);
   if (!parsedCanvas.success) {
+    // La borne est ICI : `issuesServies` ne tronque pas — elle NORMALISE la
+    // forme (site unique #4487). Cinq issues suffisent à se corriger, et un
+    // canvas cassé peut en rendre des dizaines sur un écran verrouillé.
     sendBadRequest(reply, 'Invalid canvas', {
       code: 'CANVAS_INVALID',
-      details: { issues: parsedCanvas.error.issues.slice(0, 5) },
+      details: { issues: issuesServies(parsedCanvas.error.issues.slice(0, 5)) },
     });
     return true;
   }
@@ -163,21 +167,18 @@ function rejectUnclaimedCanvasMedia(
   return true;
 }
 
-/**
- * Assainit chaque légende d'une carte `mediaId → texte` (#4055).
+/*
+ * `sanitizeMediaCaptions` vivait ICI, et n'était appelée par personne (#4055).
  *
- * `undefined` reste `undefined` — la clé absente veut dire « je ne dis rien des
- * légendes », et fabriquer une carte vide dirait « aucune », ce qui n'est pas la
- * même phrase.
+ * Elle est SUPPRIMÉE, pas rebranchée : l'assainissement des deux colonnes de
+ * texte par média a rejoint `PostService.applyMediaText`, leur point de passage
+ * obligé avant la base. La garder à la route en aurait fait une seconde règle
+ * pour la même question — et celle-ci ne couvrait que `caption`, laissant `alt`
+ * sans garde alors que les deux partagent déjà leur écriture.
+ *
+ * Ce qu'elle laisse comme leçon : une garde MORTE est pire qu'une garde
+ * absente. L'absence se cherche ; la présence rassure.
  */
-function sanitizeMediaCaptions(
-  captions: Record<string, string> | undefined,
-): Record<string, string> | undefined {
-  if (!captions) return undefined;
-  return Object.fromEntries(
-    Object.entries(captions).map(([id, text]) => [id, SecuritySanitizer.sanitizeText(text)]),
-  );
-}
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,

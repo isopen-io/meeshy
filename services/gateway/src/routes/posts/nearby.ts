@@ -11,6 +11,7 @@ import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscov
 import { createSocialDiscoveryRateLimitConfig, checkSharedRateLimit, type SharedRateLimitVerdict } from './socialRateLimit';
 import { getCacheStore } from '../../services/CacheStore';
 import { depreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 /**
  * GET /posts/nearby + GET /posts/nearby/density — recherche géospatiale de
@@ -237,7 +238,7 @@ export function registerNearbyRoutes(
   // partagé ci-dessus) : critère 6, « une fusion qui recopie un handler
   // recrée le doublon qu'elle prétend fermer ».
   fastify.get('/posts/nearby', {
-    onRequest: depreciee({ depuis: NEARBY_SCOPE_DEPUIS, successeur: '/api/v1/social/posts?scope=nearby' }),
+    onRequest: depreciee({ depuis: NEARBY_SCOPE_DEPUIS, successeur: apiPath('/social/posts?scope=nearby') }),
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialDiscoveryRateLimitConfig() },
   }, async (request: FastifyRequest, reply: FastifyReply) => {

@@ -28,7 +28,7 @@ final class APIServiceTests: XCTestCase {
         mock.stub("/test", result: ["key": "value"])
 
         let _: [String: String] = try await mock.request(
-            endpoint: "/test",
+            TestEndpoint.root,
             method: "GET",
             body: nil,
             queryItems: nil
@@ -44,8 +44,8 @@ final class APIServiceTests: XCTestCase {
         mock.stub("/a", result: ["k": "v"])
         mock.stub("/b", result: ["k": "v"])
 
-        let _: [String: String] = try await mock.request(endpoint: "/a", method: "GET", body: nil, queryItems: nil)
-        let _: [String: String] = try await mock.request(endpoint: "/b", method: "POST", body: nil, queryItems: nil)
+        let _: [String: String] = try await mock.request(FictionalEndpoint("/a"), method: "GET", body: nil, queryItems: nil)
+        let _: [String: String] = try await mock.request(FictionalEndpoint("/b"), method: "POST", body: nil, queryItems: nil)
 
         XCTAssertEqual(mock.requestCount, 2)
         XCTAssertEqual(mock.requestEndpoints, ["/a", "/b"])
@@ -60,7 +60,7 @@ final class APIServiceTests: XCTestCase {
 
         do {
             let _: [String: String] = try await mock.request(
-                endpoint: "/fail",
+                FictionalEndpoint("/fail"),
                 method: "GET",
                 body: nil,
                 queryItems: nil
@@ -76,7 +76,7 @@ final class APIServiceTests: XCTestCase {
 
         do {
             let _: [String: String] = try await mock.request(
-                endpoint: "/unstubbed",
+                FictionalEndpoint("/unstubbed"),
                 method: "GET",
                 body: nil,
                 queryItems: nil
@@ -96,7 +96,7 @@ final class APIServiceTests: XCTestCase {
 
         struct TestBody: Encodable { let username: String }
         let _: APIResponse<[String: Bool]> = try await mock.post(
-            endpoint: "/auth/login",
+            AuthEndpoint.login,
             body: TestBody(username: "test")
         )
 
@@ -114,7 +114,7 @@ final class APIServiceTests: XCTestCase {
 
         struct UpdateBody: Encodable { let displayName: String }
         let _: APIResponse<[String: Bool]> = try await mock.put(
-            endpoint: "/users/me",
+            UsersEndpoint.me,
             body: UpdateBody(displayName: "New Name")
         )
 
@@ -129,7 +129,7 @@ final class APIServiceTests: XCTestCase {
         let responseData = makeAPIResponse(success: true, data: ["success": true])
         mock.stub("/messages/123", result: responseData)
 
-        let _: APIResponse<[String: Bool]> = try await mock.delete(endpoint: "/messages/123")
+        let _: APIResponse<[String: Bool]> = try await mock.delete(FictionalEndpoint("/messages/123"))
 
         XCTAssertEqual(mock.deleteCount, 1)
         XCTAssertEqual(mock.requestMethods, ["DELETE"])
@@ -144,7 +144,7 @@ final class APIServiceTests: XCTestCase {
 
         struct PatchBody: Encodable { let theme: String }
         let _: APIResponse<[String: Bool]> = try await mock.patch(
-            endpoint: "/settings",
+            FictionalEndpoint("/settings"),
             body: PatchBody(theme: "dark")
         )
 
@@ -191,7 +191,7 @@ final class APIServiceTests: XCTestCase {
         let mock = makeMockClient()
         mock.authToken = "token"
         mock.stub("/test", result: ["k": "v"])
-        let _: [String: String] = try await mock.request(endpoint: "/test", method: "GET", body: nil, queryItems: nil)
+        let _: [String: String] = try await mock.request(TestEndpoint.root, method: "GET", body: nil, queryItems: nil)
 
         mock.reset()
 

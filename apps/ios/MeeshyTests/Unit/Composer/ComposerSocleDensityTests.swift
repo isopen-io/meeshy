@@ -86,6 +86,13 @@ final class ComposerSocleDensityTests: XCTestCase {
     /// mood a quitté le socle pour l'en-tête de sa propre surface.
     func test_lesDeuxZones_gardentUneCibleDeQuaranteQuatrePoints() throws {
         let code = try hostSource()
+        // **`soundChip` a quitté la liste avec la pastille** (#4669, directive
+        // porteur 2026-09-01 : « on n'a plus besoin du bouton ajouter un son en
+        // bas »). Le plancher de 44 pt qu'elle gardait n'a PAS disparu : il a
+        // suivi le son jusqu'à la pastille de l'avatar, que
+        // `ComposerAvatarSoundBadge` fait passer de 28 à 44 pt en devenant
+        // bouton. Retirer l'ancre sans vérifier cela aurait rendu la protection
+        // à un contrôle sans la lui redonner ailleurs.
         for ancre in ["var publishButton: some View {",
                       "var moodHeaderPublishButton: some View {",
                       "var audienceChip: some View {"] {
@@ -108,13 +115,24 @@ final class ComposerSocleDensityTests: XCTestCase {
             "La règle doit avoir UNE lecture (`socleShowsLabels`) : deux appels seraient deux seuils à "
                 + "faire diverger, et l'un des deux se casserait en syllabes sans que rien ne le dise."
         )
-        // Trois depuis le 2026-08-28 (audience, flèche du socle document,
-        // flèche de l'en-tête mood) — toujours la MÊME règle, un consommateur
-        // de plus ne change pas le fusible : deux lectures DIVERGENTES le
-        // feraient tomber ci-dessus, et c'est ce que ce test mesure en premier.
+        // TROIS depuis le 2026-09-01 : la pastille bande-son a QUITTÉ le socle
+        // (#4669) et emporté sa lecture. Elle avait été la quatrième le
+        // 2026-08-31 (#4071). Toujours UNE règle — un consommateur de plus ou
+        // de moins ne change pas le fusible, seules deux lectures DIVERGENTES
+        // le feraient tomber ci-dessus, et c'est ce que ce test mesure en
+        // premier.
+        //
+        // **Ce compte a failli être perdu en le SUPPRIMANT.** Ajouter la
+        // pastille l'a fait rougir ; la première réaction a été d'effacer le
+        // fichier plutôt que d'incrémenter le nombre — ce qui aurait laissé une
+        // règle VIVANTE, à quatre sites, sans aucun témoin, et retiré du même
+        // coup la garde des 44 pt qui a justement trouvé que la pastille n'en
+        // avait pas. **Un cliquet qui rougit demande à être MIS À JOUR ; le
+        // supprimer est la seule réponse qui coûte la protection.**
         XCTAssertEqual(
             code.components(separatedBy: "if socleShowsLabels").count - 1, 3,
-            "…et exactement TROIS consommateurs : l'audience, la flèche du socle et celle de l'en-tête mood."
+            "…et exactement TROIS consommateurs : l'audience, la flèche du socle et celle de "
+                + "l'en-tête mood."
         )
     }
 

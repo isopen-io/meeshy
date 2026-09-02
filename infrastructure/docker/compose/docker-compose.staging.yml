@@ -218,7 +218,7 @@ services:
       - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
       - ALLOWED_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
       - FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons — même règle qu'en prod :
@@ -234,9 +234,9 @@ services:
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - MEESHY_PASSWORD=${MEESHY_PASSWORD}
-      - ATABETH_PASSWORD=${ATABETH_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
+      - MEESHY_PASSWORD=${MEESHY_PASSWORD:?MEESHY_PASSWORD absente sur l hote. Vide, le compte BIGBOSS naitrait avec le mot de passe public bigboss123}
+      - ATABETH_PASSWORD=${ATABETH_PASSWORD:?ATABETH_PASSWORD absente sur l hote. Vide, le compte naitrait avec le mot de passe public admin123}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - MEESHY_EMAIL=${MEESHY_EMAIL}
       - ATABETH_EMAIL=${ATABETH_EMAIL}
@@ -361,6 +361,85 @@ services:
       - "traefik.http.routers.frontend-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3100"
+      # Plancher attrape-tout, explicite plutôt que déduit de la longueur de
+      # règle : le routeur v3 ci-dessous PREND `/__v3/_next` au legacy, et
+      # laisser Traefik arbitrer sur la longueur ferait dépendre le partage de
+      # la zone d'un détail de syntaxe. Miroir de docker-compose.prod.yml.
+      - "traefik.http.routers.frontend-staging.priority=1"
+
+  # ===========================================================================
+  # FRONTEND V3 STAGING - la zone v3, servie À CÔTÉ du legacy
+  # ===========================================================================
+  # La v3 n'était déployée sur AUCUN staging (#4630) : elle vivait dans
+  # docker-compose.prod.yml et nulle part ailleurs, si bien qu'aucune de ses
+  # issues ne pouvait satisfaire la règle « on ne ferme que si staging est
+  # concluant ». `scripts/check-v3-pipeline.mjs` ne l'avait pas vu parce que sa
+  # surface déclarée s'arrêtait à ci.yml, docker.yml et docker-compose.prod.yml
+  # — elle couvre désormais ce fichier.
+  #
+  # La règle ne réclame que `/__v3/_next`, et c'est un INVARIANT, pas une étape
+  # provisoire : `assetPrefix: '/__v3'` préfixe les URL que Next FABRIQUE pour
+  # ses bundles, et rien d'autre. `next build` n'émettant aujourd'hui aucune
+  # PAGE d'App Router, tout autre chemin réclamé serait pris au legacy pour y
+  # répondre le 404 ANGLAIS du routeur Pages — sans <html lang>, sans le script
+  # anti-flash de thème. Un chemin ne se réclame qu'une fois qu'il est servi.
+  frontend-v3-staging:
+    image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:staging}
+    container_name: meeshy-frontend-v3-staging
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      # Appel SERVEUR à serveur : il passe par le réseau interne et n'a pas à
+      # ressortir par Traefik.
+      - MEESHY_GATEWAY_URL=http://gateway-staging:3000
+      # L'URL PUBLIQUE, celle que les plateformes mettent en cache pour og:url.
+      # Absente, elle retomberait sur l'en-tête Host — l'hôte INTERNE derrière
+      # Traefik — et la carte d'aperçu serait cachée sous deux origines.
+      - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
+    depends_on:
+      gateway-staging:
+        condition: service_healthy
+    networks:
+      - meeshy-staging-network
+      - meeshy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://0.0.0.0:3300/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=meeshy_meeshy-network"
+      # LE PÉRIMÈTRE DE LA ZONE v3 SUR STAGING — § 4.9 de la conception.
+      #
+      # `Path` plutôt que `PathPrefix` pour les six chemins humains : `Path` est
+      # une ÉGALITÉ, donc `/about` est pris au legacy sans lui prendre
+      # `/about/quoi-que-ce-soit`, que la v3 ne sert pas et qui répondrait 404.
+      # `PathPrefix` reste la forme juste pour `/__v3/_next` (les bundles) et
+      # `/l/` (le jeton est un sous-chemin).
+      #
+      # LA BARRE FINALE DE `/l/` N'EST PAS UNE COQUETTERIE. `PathPrefix` de
+      # Traefik est un préfixe de CHAÎNE, pas de SEGMENTS : `PathPrefix(`/l`)`
+      # emportait `/login`, `/links` et `/lien` — trois routes que le legacy sert
+      # — et le visiteur y recevait le 404 du routeur Pages de la v3. Mesuré sur
+      # staging le 2026-09-01 ; `/login` est l'appel à l'action de la vitrine, et
+      # il était mort depuis la bascule de l'étape 2. Gardé par l'invariant
+      # « aucun PathPrefix ne vole une route voisine du legacy ».
+      #
+      # ORDRE, dans UN sens seulement (§ 4.4 bis) : un chemin entre d'abord dans
+      # `V3_ZONE_PREFIXES` de `apps/web/public/sw.js`, dont l'image est DÉPLOYÉE,
+      # avant d'être ajouté ici. Sans quoi le worker legacy — enregistré sur
+      # `scope: '/'` — continue de servir son shell depuis le cache aux visiteurs
+      # REVENANTS, et le retour arrière du § 4.3 est inerte chez eux. Gardé par
+      # l'invariant « le worker legacy s'efface devant ce que la règle réclame »
+      # de `scripts/check-v3-pipeline.mjs`, posé une fois par déploiement.
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`) || Path(`/login`) || Path(`/signup`) || Path(`/chats`) || PathPrefix(`/chats/`))"
+      - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
+      - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"
+      - "traefik.http.services.frontend-v3-staging.loadbalancer.server.port=3300"
+      - "traefik.http.routers.frontend-v3-staging.priority=100"
 
   # ===========================================================================
   # AGENT STAGING - Conversation Agent Service

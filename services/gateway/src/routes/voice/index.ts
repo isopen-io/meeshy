@@ -4,6 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { AudioTranslateService } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { logger } from '../../utils/logger';
@@ -85,7 +86,7 @@ export function registerVoiceRoutes(
   audioTranslateService: AudioTranslateService,
   translationService?: MessageTranslationService
 ): void {
-  registerVoiceRoutesBody(fastify, audioTranslateService, translationService, '/api/v1/voice');
+  registerVoiceRoutesBody(fastify, audioTranslateService, translationService, apiPath('/voice'));
 }
 
 /**

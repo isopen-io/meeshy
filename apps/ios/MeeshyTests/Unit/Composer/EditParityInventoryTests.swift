@@ -59,6 +59,9 @@ final class EditParityInventoryTests: XCTestCase {
 
     private static let feuille = "Meeshy/Features/Main/Components/EditPostSheet.swift"
     private static let surfaceDocument = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    /// La PORTE du document, sortie de la surface au découpage `70b04d2aeb`.
+    /// C'est elle qui poste le brouillon — donc elle qui porte `originalLanguage`.
+    private static let porteDuDocument = "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
     private static let gardeQuiLitLaFeuille = "MeeshyTests/Unit/Views/SheetToolbarSemanticsTests.swift"
 
     private func lire(_ relativePath: String) throws -> String {
@@ -94,7 +97,20 @@ final class EditParityInventoryTests: XCTestCase {
     }
 
     private func inventaire() throws -> [Capacite] {
+        // **La mesure lit l'UNITÉ, pas le seul fichier de surface (#4072).**
+        //
+        // Elle rendait NON TENUE une capacité pourtant LIVRÉE (T2.2, `973db35ab8`) :
+        // le découpage de `ComposerDocumentSurface` (`70b04d2aeb`, « six cliquets
+        // suivent le découpage ») a sorti la porte du document dans son propre
+        // fichier, et ce cliquet-ci était le SEPTIÈME — celui que le lot n'a pas
+        // vu. Le code était juste, la mesure lisait le fichier qu'il venait de
+        // quitter.
+        //
+        // C'est le mode d'échec le plus cher d'une extraction : la garde ne dit
+        // pas « j'ai perdu mon sujet », elle dit « la capacité a disparu » — et
+        // envoie chercher une régression qui n'existe pas.
         let sourceDuDocument = try code(Self.surfaceDocument)
+            + code(Self.porteDuDocument)
 
         // 1 — CHAMP CONTENU + VALIDITE.
         // Le meuble a les deux : `ComposerDocumentDraft` porte un texte, le plan
@@ -317,7 +333,7 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// Les huit AUTRES portes ne touchent ni l'une ni l'autre feuille
+    /// Les sept AUTRES portes ne touchent ni l'une ni l'autre feuille
     /// d'edition. Un cas neuf dans `LegacyComposer` est une valeur que n'importe
     /// quelle ligne de la table peut se mettre a rendre ; l'interdire ici est ce
     /// qui empeche une porte de creation d'atterrir sur une surface d'edition.
@@ -325,7 +341,6 @@ final class EditParityInventoryTests: XCTestCase {
         let portesQuiNEditentRien: [ComposerOrigin] = [
             .storyTray,
             .feedComposer,
-            .reelTab,
             .moodChip,
             .repost(ofPostId: "post-source", sourceFormat: .story),
             .draft(id: "brouillon-42"),

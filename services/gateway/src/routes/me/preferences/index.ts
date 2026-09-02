@@ -40,6 +40,7 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { depreciee } from '../../../utils/deprecation';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
 
@@ -51,7 +52,7 @@ const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
 // jamais par une date posee a la main.
 const ANNONCE_ENCRYPTION = {
   depuis: '2026-08-29',
-  successeur: '/api/v1/me?expand=security',
+  successeur: apiPath('/me?expand=security'),
 } as const;
 
 export async function userPreferencesRoutes(fastify: FastifyInstance) {

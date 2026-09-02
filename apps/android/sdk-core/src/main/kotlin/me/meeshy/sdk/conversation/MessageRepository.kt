@@ -111,7 +111,21 @@ class MessageRepository @Inject constructor(
     /**
      * Optimistic send (ARCHITECTURE.md §5): the message appears instantly as a
      * `SENDING` bubble backed by Room, and a `SEND_MESSAGE` mutation is queued
-     * on the conversation's FIFO outbox lane. Returns the bubble's `cmid`.
+     * on the conversation's FIFO outbox lane. Returns the bubble's id.
+     *
+     * **Cet identifiant est un `cid_`, jamais un `cmid_`** (#4624). Il porte
+     * QUATRE roles, et ils ne sont pas separables : id de la ligne Room, corps
+     * `clientMessageId` envoye au gateway, cle de la ligne d'outbox (que
+     * `reconcileSent` reinjecte dans `deleteByIds`) et — le role qui les scelle
+     * — identifiant LOCAL par lequel `MessageCacheSource.persist` purge la
+     * bulle optimiste, en lisant le `clientMessageId` que le SERVEUR renvoie.
+     * Les quatre partagent donc une valeur, et le serveur impose son format :
+     * `^cid_<uuid v4 minuscule>` aux trois portes (REST, socket, lien
+     * anonyme). `OutboxIds.cmid()` produisait un prefixe que les trois
+     * rejetaient en 400 — aucun message ne partait d'Android.
+     *
+     * Le `cmid` reste la cle des mutations qui ne sont PAS des messages (amis,
+     * preferences, televersements de media) : il ne voyage pas sur ce fil-ci.
      */
     suspend fun sendOptimistic(
         conversationId: String,
@@ -127,7 +141,7 @@ class MessageRepository @Inject constructor(
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
     ): String {
-        val cmid = OutboxIds.cmid()
+        val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
         // A queued send references each prerequisite upload by its cmid until the
@@ -135,7 +149,7 @@ class MessageRepository @Inject constructor(
         // list keeps a text-only send exactly as before (null attachmentIds).
         val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
         val optimistic = ApiMessage(
-            id = cmid,
+            id = cid,
             conversationId = conversationId,
             senderId = sender.id,
             content = content,
@@ -150,7 +164,7 @@ class MessageRepository @Inject constructor(
                 username = sender.username,
                 avatar = sender.avatar,
             ),
-            clientMessageId = cmid,
+            clientMessageId = cid,
             attachments = attachments,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
@@ -165,7 +179,7 @@ class MessageRepository @Inject constructor(
             messageType = messageType,
             replyToId = replyToId,
             storyReplyToId = storyReplyToId,
-            clientMessageId = cmid,
+            clientMessageId = cid,
             attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
@@ -186,10 +200,10 @@ class MessageRepository @Inject constructor(
                 targetId = conversationId,
                 payload = MeeshyApi.json.encodeToString(request),
                 dependsOn = placeholderIds.toSet(),
-                cmid = cmid,
+                cmid = cid,
             ),
         )
-        return cmid
+        return cid
     }
 
     /**

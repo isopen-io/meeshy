@@ -67,21 +67,35 @@ WORKDIR /app
 
 COPY apps/web-v3/package.json ./
 
-# Les paquets du monorepo que la v3 DÉCLARE. Aucun des deux n'a d'étape de
-# build : `@meeshy/design-tokens` est trois feuilles CSS, `@meeshy/icons` est
-# deux SVG COMMITÉS (le sprite Phosphor et son sous-sprite critique, § 8.5) —
-# leur générateur ne tourne jamais ici, et `@phosphor-icons/core` est une
-# devDependency de la RACINE qui n'entre pas dans l'image. webpack les lit à
-# travers le lien de workspace. Le `workspaces` posé ici — bun le lit dans
-# package.json, pnpm dans pnpm-workspace.yaml — est ce qui crée ce lien.
+# Les paquets du monorepo que la v3 DÉCLARE. Les deux premiers n'ont pas
+# d'étape de build : `@meeshy/design-tokens` est trois feuilles CSS,
+# `@meeshy/icons` est deux SVG COMMITÉS (le sprite Phosphor et son sous-sprite
+# critique, § 8.5) — leur générateur ne tourne jamais ici, et
+# `@phosphor-icons/core` est une devDependency de la RACINE qui n'entre pas dans
+# l'image. webpack les lit à travers le lien de workspace. Le `workspaces` posé
+# ici — bun le lit dans package.json, pnpm dans pnpm-workspace.yaml — est ce qui
+# crée ce lien.
+#
+# `@meeshy/shared`, LUI, SE CONSTRUIT, et il entre pour UNE raison : la descente
+# du Prisme Linguistique. Le `CLAUDE.md` racine en fait une loi à SITE UNIQUE —
+# `resolvePrismTranslation()` — et rappelle que « c'est la réécriture qui a
+# produit trois familles divergentes en trois cycles ». Un écran de conversation
+# qui réécrirait la boucle en serait la quatrième. Ses `exports` pointent vers
+# `dist/`, d'où la construction ci-dessous, reprise à l'identique de
+# `apps/web/Dockerfile`.
+#
+# Ce que cela coûte est borné : l'étage BUILDER porte tout le paquet, l'étage
+# RUNNER ne reçoit que ce que `output: 'standalone'` a tracé — ici trois
+# modules, `conversation-helpers` et ses deux utilitaires de langue.
 COPY packages/design-tokens/ ./packages/design-tokens/
 COPY packages/icons/ ./packages/icons/
+COPY packages/shared/ ./packages/shared/
 
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/design-tokens', 'packages/icons']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
-      printf 'packages:\n  - "packages/design-tokens"\n  - "packages/icons"\n' > pnpm-workspace.yaml; \
+      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/design-tokens', 'packages/icons', 'packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
+      printf 'packages:\n  - "packages/design-tokens"\n  - "packages/icons"\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
     else \
-      printf 'packages:\n  - "."\n  - "packages/design-tokens"\n  - "packages/icons"\n' > pnpm-workspace.yaml; \
+      printf 'packages:\n  - "."\n  - "packages/design-tokens"\n  - "packages/icons"\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
     fi
 
 COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
@@ -94,6 +108,19 @@ RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
       corepack prepare pnpm@${PNPM_VERSION} --activate && \
       pnpm install --no-frozen-lockfile; \
     fi
+
+# === CONSTRUCTION DU PAQUET PARTAGÉ ===
+# Ses `exports` pointent vers `dist/`, que `.gitignore` exclut : sans cette
+# étape, `@meeshy/shared/utils/conversation-helpers` est introuvable à la
+# compilation. Recette identique à celle de `apps/web/Dockerfile`.
+RUN echo "=== Building shared package (web-v3) ===" && \
+    cd packages/shared && \
+    if [ "$PACKAGE_MANAGER" = "bun" ]; then \
+      bun run build; \
+    else \
+      pnpm run build; \
+    fi && \
+    cd /app
 
 # ===== BUILDER STAGE =====
 FROM base AS builder
@@ -116,10 +143,10 @@ COPY apps/web-v3/ ./
 # gestionnaire ne le RÉTABLIRAIT si l'install était rejouée ici : on le
 # reconstitue à l'identique, comme le fait apps/web/Dockerfile.
 RUN if [ "$PACKAGE_MANAGER" = "bun" ]; then \
-      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/design-tokens', 'packages/icons']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
-      printf 'packages:\n  - "packages/design-tokens"\n  - "packages/icons"\n' > pnpm-workspace.yaml; \
+      node -e "const fs = require('fs'); const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); p.workspaces = ['packages/design-tokens', 'packages/icons', 'packages/shared']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));" && \
+      printf 'packages:\n  - "packages/design-tokens"\n  - "packages/icons"\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
     else \
-      printf 'packages:\n  - "."\n  - "packages/design-tokens"\n  - "packages/icons"\n' > pnpm-workspace.yaml; \
+      printf 'packages:\n  - "."\n  - "packages/design-tokens"\n  - "packages/icons"\n  - "packages/shared"\n' > pnpm-workspace.yaml; \
     fi
 
 ENV NEXT_TELEMETRY_DISABLED=1

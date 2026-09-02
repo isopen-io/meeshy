@@ -21,6 +21,7 @@ import {
   buildPublicProfile,
   servirProfilPublic,
 } from './public-profile';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 /**
  * Le sursis des trois portes de profil (#4274, corrigé #4440).
@@ -48,7 +49,7 @@ const DEPUIS_PROFIL = '2026-08-29';
 /** L'annonce d'un alias de profil — le successeur porte le handle RÉSOLU. */
 const annonceProfil = (handle: string): AdresseDepreciee => ({
   depuis: DEPUIS_PROFIL,
-  successeur: `/api/v1/directory/people/${encodeURIComponent(handle)}`,
+  successeur: apiPath(`/directory/people/${encodeURIComponent(handle)}`),
   retraitLe: dateDeRetrait(DEPUIS_PROFIL),
 });
 
@@ -101,7 +102,7 @@ const QUERYSTRING_FIELDS = {
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
     // Successeur RÉSOLU depuis la requête, jamais un gabarit (#4440) — voir DEPUIS_PROFIL.
-    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { username: string }).username)}` }),
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => apiPath(`/directory/people/${encodeURIComponent((request.params as { username: string }).username)}`) }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
@@ -180,7 +181,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
     // Successeur RÉSOLU (#4440) — `id` porte un ObjectId OU un username, tous deux acceptés tels quels par `/directory/people/:handle`.
-    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { id: string }).id)}` }),
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => apiPath(`/directory/people/${encodeURIComponent((request.params as { id: string }).id)}`) }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
@@ -319,7 +320,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
     // Successeur RÉSOLU (#4440) — `id` est ici contraint à un ObjectId par le schéma des `params`, accepté tel quel en aval.
-    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => `/api/v1/directory/people/${encodeURIComponent((request.params as { id: string }).id)}` }),
+    onRequest: depreciee({ depuis: DEPUIS_PROFIL, successeur: (request) => apiPath(`/directory/people/${encodeURIComponent((request.params as { id: string }).id)}`) }),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',

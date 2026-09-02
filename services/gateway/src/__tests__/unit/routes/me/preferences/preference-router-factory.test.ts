@@ -34,17 +34,6 @@ jest.mock('../../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn<any>(({ op }: { op: () => Promise<any> }) => op()),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { createPreferenceRouter } from '../../../../../routes/me/preferences/preference-router-factory';
@@ -604,17 +593,48 @@ describe('PATCH / — n\'applique QUE les clés envoyées', () => {
     await app.close();
   });
 
-  it('ignore toujours une clé inconnue du schéma', async () => {
+  // #4589 — remplace « ignore toujours une clé inconnue du schéma », qui
+  // gardait exactement le défaut : la clé était retirée en SILENCE et la route
+  // répondait 200. Mesuré sur staging le 2026-08-31 — `PATCH
+  // /me/preferences/privacy {"profileVisibility":"private"}` rendait
+  // `{"success":true}` et n'écrivait rien. Le client croit avoir transmis.
+  //
+  // Le témoin garde désormais les DEUX moitiés : le refus, et le fait qu'il
+  // NOMME la clé. Sans la seconde, un 400 muet passerait — et c'est
+  // exactement ce que servait `sendBadRequest(reply, 'VALIDATION_ERROR')`.
+  it('REFUSE une clé inconnue du schéma, et la nomme', async () => {
     const app = await buildDefaultedApp({ pushEnabled: false });
 
-    await app.inject({
+    const res = await app.inject({
       method: 'PATCH',
       url: '/',
       payload: { vibrate: false, sneaky: 'x' },
     });
 
+    expect(res.statusCode).toBe(400);
+    const corps = res.json();
+    expect(corps.error).toBe('VALIDATION_ERROR');
+    expect(corps.issues[0].code).toBe('unrecognized_keys');
+    // `keys`, pas `path` : une clé refusée par `strict()` laisse `path` VIDE.
+    // Le fait est mesuré, pas déduit — un témoin posé sur `path` resterait
+    // vert sur un tableau vide et ne garderait rien.
+    expect(corps.issues[0].keys).toEqual(['sneaky']);
+    expect((app as any).prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('et laisse passer un corps entièrement déclaré — la rigueur ne referme pas la porte', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { vibrate: false },
+    });
+
+    expect(res.statusCode).toBe(200);
     const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
-    expect(written).not.toHaveProperty('sneaky');
+    expect(written).toHaveProperty('vibrate', false);
     await app.close();
   });
 });

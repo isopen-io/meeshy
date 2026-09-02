@@ -310,10 +310,15 @@ extension StoryCanvasUIView {
             isLocked: isLockedItem(id: id),
             isBackground: isBackgroundItem(id: id),
             sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
-            hasEditor: onItemDoubleTapped != nil
+            hasEditor: hasEditor(for: kind)
         )
         var actions: [UIAccessibilityCustomAction] = []
-        if offered.contains(.edit), kind == .text || kind == .media {
+        // **La restriction par kind a quitté ce site** (#4074). Elle y vivait en
+        // local — `kind == .text || kind == .media` — pendant que le menu visuel
+        // ne l'appliquait PAS : VoiceOver taisait « Modifier » sur un sticker,
+        // l'œil le voyait, et le toucher ne faisait rien. Les deux lisent
+        // désormais `hasEditor(for:)`, le site unique.
+        if offered.contains(.edit) {
             actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
             ) { [weak self] _ in

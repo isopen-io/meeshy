@@ -36,7 +36,7 @@ final class ThreadRepliesLoader {
         limit: Int = 50
     ) async throws -> [MeeshyMessage] {
         let response: OffsetPaginatedAPIResponse<[APIMessage]> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
+            ConversationsEndpoint.byIdMessages(id: conversationId),
             method: "GET",
             body: nil,
             queryItems: [

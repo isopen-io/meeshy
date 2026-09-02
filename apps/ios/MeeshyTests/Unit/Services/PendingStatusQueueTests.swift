@@ -30,49 +30,69 @@ final class MockStatusFlushClient: APIClientProviding, @unchecked Sendable {
     }
 
     func request<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         method: String,
         body: Data?,
         queryItems: [URLQueryItem]?
     ) async throws -> T {
+        let endpoint = legacyPath(for: typedEndpoint)
         lock.withLock { _calledEndpoints.append(endpoint) }
         if let error = lock.withLock({ _errorToThrow }) { throw error }
         return try makeResponse(for: T.self)
     }
 
+    /// Le repli par défaut du protocole a été retiré (#4282) : ce double doit
+    /// implémenter aussi la variante à en-têtes, qu'il n'assertait pas.
+    func requestWithHeaders<T: Decodable>(
+        _ typedEndpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        headers: [String: String]?
+    ) async throws -> T {
+        try await request(typedEndpoint, method: method, body: body, queryItems: queryItems)
+    }
+
     func paginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         cursor: String?,
         limit: Int
     ) async throws -> PaginatedAPIResponse<[T]> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
     func offsetPaginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         offset: Int,
         limit: Int
     ) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
-    func post<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T> {
+    func post<T: Decodable, U: Encodable>(_ typedEndpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
-    func put<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T> {
+    func put<T: Decodable, U: Encodable>(_ typedEndpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
-    func patch<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T> {
+    func patch<T: Decodable, U: Encodable>(_ typedEndpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
-    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
+    func delete(_ typedEndpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 
-    func delete<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T> {
+    func delete<T: Decodable, U: Encodable>(_ typedEndpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T> {
+        let endpoint = legacyPath(for: typedEndpoint)
         throw NSError(domain: "MockStatusFlushClient.notImplemented", code: 0)
     }
 }

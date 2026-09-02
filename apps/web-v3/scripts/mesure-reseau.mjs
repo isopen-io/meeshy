@@ -271,12 +271,28 @@ const VITALS = `() => new Promise((resolve) => {
   }), 600);
 })`;
 
-export const mesurePage = async ({ url, commande, navigateur, viewport, timeoutMs, profil }) => {
+// L'agent par DÉFAUT : un iPhone, parce que le § 8.3 exprime ses plafonds sur un
+// téléphone. Il est un DÉFAUT et non une constante gravée : une route peut ne
+// rendre de pixels qu'à un AUTRE agent — `/l/:token` ne peint que pour un robot
+// d'aperçu, l'humain recevant une 302. Sans ce paramètre, mesurer une telle
+// route obligeait à réécrire la session CDP et le bloc VITALS ailleurs, c'est-
+// à-dire à fabriquer la jumelle que ce fichier existe pour éviter.
+const AGENT_PAR_DEFAUT =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+export const mesurePage = async ({
+  url,
+  commande,
+  navigateur,
+  viewport,
+  timeoutMs,
+  profil,
+  userAgent,
+}) => {
   const contexte = await navigateur.newContext({
     viewport: viewport || { width: 390, height: 844 },
     deviceScaleFactor: 2,
-    userAgent:
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    userAgent: userAgent || AGENT_PAR_DEFAUT,
   });
   const page = await contexte.newPage();
   const cdp = await contexte.newCDPSession(page);

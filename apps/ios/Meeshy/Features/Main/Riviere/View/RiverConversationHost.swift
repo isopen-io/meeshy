@@ -104,8 +104,39 @@ struct RiverConversationHost: View {
         ))
     }
 
+    /// Cache de rendu — un type RÉFÉRENCE, délibérément : le muter pendant
+    /// l'évaluation du `body` ne doit RIEN réinvalider. Un `@State` de VALEUR
+    /// écrit ici déclencherait la passe suivante, c'est-à-dire exactement la
+    /// boucle que #3946 corrige.
+    private final class ContentsMemo {
+        var key: RiverConversationMapping.ContentsKey?
+        var value: [RiverBubbleContent] = []
+    }
+
+    @State private var memo = ContentsMemo()
+
+    /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
+    /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
+    /// aperçu de réponse, avis système et `ProfileSheetUser`. C'était rejoué à
+    /// chaque passe de `body`, et la Rivière en fait beaucoup — la
+    /// republication des cadres réévalue la racine (#3946, pistes 1 et 2).
+    ///
+    /// La clé coûte un balayage de closures BON MARCHÉ ; la construction, elle,
+    /// n'a plus lieu que lorsqu'une de ses entrées a réellement changé. Ce que
+    /// la clé doit couvrir — et pourquoi l'empreinte n'y suffit pas — est dit
+    /// une seule fois, sur `RiverConversationMapping.ContentsKey`.
     private var contents: [RiverBubbleContent] {
-        RiverConversationMapping.contents(
+        let key = RiverConversationMapping.contentsKey(
+            geometry: geometry,
+            messages: messages,
+            viewerId: viewerId,
+            text: text,
+            presence: presence,
+            storyRing: storyRing
+        )
+        if memo.key == key { return memo.value }
+
+        let built = RiverConversationMapping.contents(
             geometry: geometry,
             messages: messages,
             viewerId: viewerId,
@@ -114,6 +145,9 @@ struct RiverConversationHost: View {
             presence: presence,
             storyRing: storyRing
         )
+        memo.key = key
+        memo.value = built
+        return built
     }
 
     /// **Le pane reçoit une taille MESURÉE, pas une taille négociée.**

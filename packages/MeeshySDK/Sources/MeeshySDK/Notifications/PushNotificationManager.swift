@@ -188,7 +188,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         let body = UnregisterDeviceTokenRequest(token: token)
         do {
             let _: APIResponse<[String: String]> = try await APIClient.shared.request(
-                endpoint: "/users/register-device-token",
+                UsersEndpoint.registerDeviceToken,
                 method: "DELETE",
                 body: try JSONEncoder().encode(body)
             )
@@ -318,7 +318,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
         do {
             let _: APIResponse<RegisterDeviceTokenResponse> = try await APIClient.shared.post(
-                endpoint: "/users/register-device-token",
+                UsersEndpoint.registerDeviceToken,
                 body: request
             )
             try? keychainStore.save(token, forKey: Self.lastRegisteredTokenKey, account: nil)

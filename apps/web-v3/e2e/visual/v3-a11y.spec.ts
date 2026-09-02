@@ -35,6 +35,27 @@ const routes = routesPubliques({
   echantillons: ECHANTILLONS,
 });
 
+// L'INSTRUMENT PROUVE QU'IL VOIT — et il ne peut le prouver que là où le build a eu lieu.
+//
+// Ces deux témoins vivaient dans `__tests__/a11y-gate.test.ts`, exécuté par le job
+// `Test web-v3`, qui ne lance jamais `next build` : ils rendaient `ENOENT` à chaque run.
+// Ici, le job `a11y-v3` construit l'application avant de lancer ce fichier — c'est le
+// sens de son étape « Build apps/web-v3 (le manifeste que le balayage lit) ».
+//
+// Ce que le reste du fichier ne dit pas déjà : l'assertion `pagesEmises` du bloc § 8.5
+// ci-dessous est CONDITIONNÉE à `routes.length === 0`, donc muette dès qu'une route
+// `(public)` existe. Les deux témoins qui suivent sont inconditionnels — ils tiennent la
+// distinction PAGE / GESTIONNAIRE DE ROUTE quel que soit l'état du lot L1.
+test.describe("le manifeste RÉEL de la v3 — l'instrument prouve qu'il voit", () => {
+  test('porte au moins le gestionnaire /healthz, livré en L-0.5', () => {
+    expect(entrees.map((entree) => entree.route)).toContain('/healthz/route');
+  });
+
+  test('se compose exactement des PAGES émises, jamais des gestionnaires de route', () => {
+    expect(pagesEmises(entrees).map((entree) => entree.route)).not.toContain('/healthz/route');
+  });
+});
+
 test.describe('§ 8.5 — accessibilité des routes (public)', () => {
   // Un balayage VIDE ne sort pas vert par vacuité : il doit dire POURQUOI il est vide, et sa
   // raison s'éteint d'elle-même. Si des pages d'App Router sont émises alors qu'aucune n'est

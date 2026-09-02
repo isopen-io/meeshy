@@ -191,7 +191,7 @@ struct ThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .transition(.opacity)
-                    .accessibilityLabel(String(localized: "Erreur d'envoi", defaultValue: "Send error"))
+                    .accessibilityLabel(String(localized: "thread.send.error", defaultValue: "Erreur d'envoi"))
                     .accessibilityValue(sendError)
             }
 

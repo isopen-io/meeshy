@@ -56,13 +56,41 @@ describe('createLinkSchema', () => {
     expect(createLinkSchema.safeParse({ maxUses: 1.5 }).success).toBe(false);
   });
 
-  it('accepts allowedCountries, allowedLanguages, allowedIpRanges as string arrays', () => {
+  it('accepte allowedLanguages et allowedIpRanges — les deux filtres RÉELS', () => {
     const result = createLinkSchema.safeParse({
-      allowedCountries: ['FR', 'US'],
       allowedLanguages: ['fr', 'en'],
       allowedIpRanges: ['192.168.1.0/24'],
     });
     expect(result.success).toBe(true);
+  });
+
+  /**
+   * `allowedCountries` : ce témoin affirmait l'inverse jusqu'au 2026-08-31.
+   *
+   * #4167 avait retiré le champ de la loi d'admission — un filtre par pays
+   * exigerait une base GeoIP que la passerelle n'embarque pas. La décision
+   * n'avait pas atteint la porte de création, qui l'acceptait encore, ni
+   * l'affichage, qui le montrait comme appliqué : quelqu'un pouvait cocher
+   * « limiter aux pays suivants », le voir confirmé, et partager le lien en
+   * croyant qu'il était géo-restreint (#4354).
+   *
+   * Un contrôle décoratif est pire qu'une absence, parce qu'on compte dessus.
+   */
+  it('REFUSE une liste de pays non vide — la restriction n\'existe pas, le refus le DIT', () => {
+    const result = createLinkSchema.safeParse({ allowedCountries: ['FR', 'US'] });
+    expect(result.success).toBe(false);
+    // Le message NOMME la raison : un 400 muet enverrait chercher une faute de
+    // frappe là où il n'y a pas de fonctionnalité.
+    expect(JSON.stringify(result)).toContain('GeoIP');
+  });
+
+  it('accepte une liste de pays VIDE — dix liens sur dix l\'envoient ainsi', () => {
+    // Mesuré sur l'intégration le 2026-08-31 : les clients publiés envoient le
+    // champ à vide à chaque création. Un refus sur sa PRÉSENCE casserait toute
+    // création de lien jusqu'à leur mise à jour — le refus vise la DEMANDE de
+    // restriction, pas le champ.
+    expect(createLinkSchema.safeParse({ allowedCountries: [] }).success).toBe(true);
+    expect(createLinkSchema.safeParse({}).success).toBe(true);
   });
 
   it('accepts valid expiresAt ISO datetime', () => {

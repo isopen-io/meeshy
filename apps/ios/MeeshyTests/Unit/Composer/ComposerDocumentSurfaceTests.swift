@@ -67,35 +67,102 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     }
 
     /// La promesse que V3 attend, et la seconde condition de levée de l'éventail :
-    /// choisir « Story » depuis le fil doit changer la surface, pas seulement
-    /// un libellé.
-    func test_surface_duFeedComposer_devientLaScene_quandLAuteurChoisitLaStory() {
+    /// choisir « Story » depuis le fil doit changer l'ÉCRAN, pas seulement un
+    /// libellé.
+    ///
+    /// **Ce que le témoin mesure a changé de niveau le 2026-09-01** (#4700). Il
+    /// exigeait `surface == .scene`, c'est-à-dire l'atelier du SDK — l'autre
+    /// composer de story, que la directive porteur retire du chemin. La
+    /// promesse, elle, n'a pas bougé : le choix doit changer ce que l'auteur
+    /// voit. Elle se vérifie désormais sur la VUE MONTÉE, où elle a toujours
+    /// été vraie — `ComposerMountedView` distingue un document plat d'un
+    /// document QUI A une scène, ce que `ComposerSurfaceKind` ne sait pas dire.
+    ///
+    /// > Un témoin dont la loi change n'est pas forcément un témoin à retirer :
+    /// > c'est souvent un témoin posé au mauvais NIVEAU, que la nouvelle loi
+    /// > oblige enfin à descendre là où sa promesse vit.
+    func test_surface_duFeedComposer_montreUnCanvas_quandLAuteurChoisitLaStory() {
         let profil = ComposerProfile.profile(for: .feedComposer)
+        let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .story)
 
+        XCTAssertEqual(surface, .document,
+                       "la story ne charge plus l'atelier depuis le fil (#4700)")
         XCTAssertEqual(
-            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .story),
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .story, documentHasScene: false)
+            ),
             .scene,
-            "Basculer le document en story doit ouvrir l'atelier — sinon le choix ne change rien."
+            "Basculer le document en story doit montrer un canvas — sinon le choix ne change rien."
+        )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: .post, documentHasScene: false)
+            ),
+            .document,
+            "…et le même routage sous un POST vide reste un document : c'est le CHOIX qui change l'écran."
         )
     }
 
-    /// La règle contre-intuitive, et celle qui protège le travail de l'auteur :
-    /// une porte qui a ouvert une CAPTURE garde sa scène même passée en post.
-    /// Faire décider le format seul viderait l'écran de quiconque tape « Post »
-    /// depuis le tray, alors que la loi 9 autorise à changer de format, jamais
-    /// à jeter ce qui est composé.
-    func test_surface_duStoryTray_resteLaScene_memeAuFormatPost() {
+    /// **L'invariant est intact ; il a changé de COUCHE** (#4751, 2026-09-01).
+    ///
+    /// Ce que ce témoin protège n'a pas bougé d'un pouce : la loi 9 autorise à
+    /// changer de format, jamais à jeter ce qui est composé. Ce qui a bougé,
+    /// c'est l'endroit où cette protection VIT.
+    ///
+    /// L'ancienne version l'affirmait sur `surface(opening:format:)` — une
+    /// règle PURE, qui ne sait rien de ce que l'auteur a posé. Elle passait
+    /// donc au vert pour une raison qui n'était pas la sienne : `.cameraReady`
+    /// était exemptée et rendait `.scene` pour TOUT le monde, canvas composé ou
+    /// écran vierge. Le témoin disait « le canvas survit » et mesurait
+    /// « la caméra est exemptée ».
+    ///
+    /// > Un témoin qui affirme A et mesure B reste vert jusqu'au jour où B
+    /// > change, puis rougit en accusant le mauvais coupable. Le retourner
+    /// > demande de retrouver quelle couche porte VRAIMENT ce qu'il énonçait.
+    ///
+    /// Ici c'est `ComposerMountedView.mounted(surface:hasScene:)` : elle monte
+    /// la scène dès qu'il Y A une scène, quelle que soit la surface commandée
+    /// par le format. C'est cette fonction, et elle seule, qui garantit qu'un
+    /// canvas composé survit au passage en post.
+    func test_leCanvasComposé_surviTAuPassageEnPost() {
         let profil = ComposerProfile.profile(for: .storyTray)
+        let surfaceEnPost = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post)
 
         XCTAssertEqual(
-            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post),
+            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: true),
             .scene,
             "Le canvas déjà composé ne disparaît pas parce que l'auteur publie en post."
         )
+        XCTAssertEqual(
+            ComposerMountedView.mounted(surface: surfaceEnPost, hasScene: false),
+            .document,
+            "…et un post SANS rien de composé reste un document : c'est la scène "
+                + "qui commande, pas la porte d'où l'on vient."
+        )
     }
 
+    /// Et la porte du tray ouvre bien le MEUBLE — la conséquence directe du
+    /// changement ci-dessus, écrite ici pour que la lecture du corpus de ce
+    /// fichier ne dépende pas d'un autre.
+    func test_laPorteDuTray_ouvreLeMeuble() {
+        let profil = ComposerProfile.profile(for: .storyTray)
+        for format in Self.tousLesFormats where format != .status {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format),
+                .document,
+                "storyTray au format \(nom(format)) : le composer v3 sert toutes ses portes"
+            )
+        }
+    }
+
+    /// **`.cameraReady` a quitté ce corpus le 2026-09-01** (#4751) : la caméra
+    /// du tray ouvre désormais le MEUBLE, qui arme lui-même le viseur
+    /// (`armsCameraOnAppear`). Reste `.videoCameraReady`, dont l'enregistrement
+    /// vidéo vit encore dans l'atelier.
     func test_surface_desOuverturesDeCapture_estToujoursLaScene() {
-        for opening in [ComposerOpening.cameraReady, .videoCameraReady] {
+        for opening in [ComposerOpening.videoCameraReady] {
             for format in Self.tousLesFormats {
                 XCTAssertEqual(
                     ComposerSurfaceRouting.surface(opening: opening, format: format), .scene,
@@ -105,17 +172,46 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// Invariant traversant : une story et un réel ne sont JAMAIS un document.
-    /// Des pages et une prise continue ont besoin d'un canvas ; les servir sans
-    /// scène perdrait tout ce qui les distingue d'un post.
-    func test_surface_storyEtReel_neSontJamaisUnDocument() {
-        for opening in Self.toutesLesOuvertures {
-            for format in [ComposerFormat.story, .reel] {
-                XCTAssertEqual(
-                    ComposerSurfaceRouting.surface(opening: opening, format: format), .scene,
-                    "\(nom(format)) sous \(nom(opening)) doit garder sa scène."
-                )
-            }
+    /// **Le RÉEL n'est JAMAIS un document** — une prise continue a besoin d'un
+    /// canvas, et la servir sans scène perdrait ce qui la distingue d'un post.
+    ///
+    /// **La STORY a quitté cet invariant le 2026-09-01** (#4700). Il portait
+    /// les deux formats ensemble, et ce couplage n'était pas anodin : il disait
+    /// « ce qui a besoin d'un canvas monte l'atelier ». Le meuble a désormais sa
+    /// PROPRE scène incrustée, et la story s'y compose — la directive porteur
+    /// retire l'autre composer de son chemin, pas son canvas.
+    ///
+    /// La story garde la scène sur les quatre ouvertures qui ARRIVENT avec du
+    /// contenu ; elle ne la prend plus là où l'auteur choisit son format. Le
+    /// détail des deux moitiés vit dans `ComposerStoryCanvasTests`, qui les
+    /// nomme toutes les deux.
+    func test_surface_leReelNEstJamaisUnDocument_etLaStorySuitSonOuverture() {
+        // **Le réel a rejoint le meuble le 2026-09-01** (#4751) là où l'auteur
+        // choisit et à la caméra du tray ; il garde la scène là où de la
+        // MATIÈRE arrive, comme la story.
+        for opening in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .reel), .scene,
+                "réel sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
+            )
+        }
+        for opening in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .story), .scene,
+                "story sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
+            )
+        }
+        for opening in [ComposerOpening.keyboardOnContent, .moodGrid, .cameraReady] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .reel), .document,
+                "réel sous \(nom(opening)) se compose dans le meuble (#4751)."
+            )
+        }
+        for opening in [ComposerOpening.keyboardOnContent, .moodGrid, .cameraReady] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .story), .document,
+                "story sous \(nom(opening)) se compose dans le meuble (#4700, #4751)."
+            )
         }
     }
 
@@ -287,9 +383,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// crue, et l'auteur y aurait trouvé un écran sans issue.
     func test_chaquePorteServieParLeMeuble_monteLaSurfaceQueSonFormatCommande() {
         let portesDuMeuble: [(nom: String, origine: ComposerOrigin, surface: ComposerSurfaceKind)] = [
-            (nom: "storyTray", origine: .storyTray, surface: .scene),
+            // **`.scene` → `.document` le 2026-09-01** (#4751) : la porte du
+            // tray ouvre le MEUBLE. Elle reste dans la table, et c'est le
+            // point — une porte qu'on retire de la mesure en même temps qu'on
+            // change sa surface n'est plus mesurée du tout.
+            (nom: "storyTray", origine: .storyTray, surface: .document),
             (nom: "feedComposer", origine: .feedComposer, surface: .document),
-            (nom: "reelTab", origine: .reelTab, surface: .scene),
             // Lot 4.6 / 4.7 : la porte du mood et la republication d'un mood
             // rejoignent le tableau. La table est ADDITIVE — en retirer une
             // entrée sans la remplacer perd une porte de la mesure, en silence.
@@ -355,7 +454,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let portesSansMood: [(nom: String, origine: ComposerOrigin)] = [
             (nom: "storyTray", origine: .storyTray),
             (nom: "feedComposer", origine: .feedComposer),
-            (nom: "reelTab", origine: .reelTab),
             (nom: "draft", origine: .draft(id: "brouillon-42")),
             (nom: "share", origine: .share),
             (nom: "conversationMedia",
@@ -1086,7 +1184,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// ordre. Sans ce témoin, la règle pourrait rétrécir l'offre de la CRÉATION
     /// sans que rien ne rougisse — la loi 4 mord dans les deux sens.
     func test_lOffre_dUneCreation_estLesSixNiveauxDuSDK() {
-        for origine in [ComposerOrigin.moodChip, .feedComposer, .storyTray, .reelTab] {
+        for origine in [ComposerOrigin.moodChip, .feedComposer, .storyTray] {
             XCTAssertEqual(
                 ComposerAudienceOffer.offered(for: origine),
                 PostVisibility.composerSelectableCases,
@@ -1375,6 +1473,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         let intentArme = PublishIntent.document(
             localMedia: arme.localMedia,
+            declaredType: nil,
             forcePlainPost: arme.forcePlainPost,
             content: arme.text,
             visibility: arme.visibility.rawValue,
@@ -1396,6 +1495,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         let intentNonArme = PublishIntent.document(
             localMedia: nonArme.localMedia,
+            declaredType: nil,
             forcePlainPost: nonArme.forcePlainPost,
             content: nonArme.text,
             visibility: nonArme.visibility.rawValue,
@@ -1586,9 +1686,15 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// s'ajoute sans verdict.
     ///
     /// Une ouverture n'est rien d'autre qu'une CLÉ DE ROUTAGE : elle n'a que
-    /// deux lecteurs de production dans tout le dépôt, `surface(opening:format:)`
-    /// et `focusesContentOnAppear(opening:)` (plus `ComposerFormatFanPlacement`,
-    /// qui la reçoit en paramètre). Un septième cas ajouté sans entrer dans le
+    /// TROIS lecteurs de production dans tout le dépôt —
+    /// `surface(opening:format:)`, `focusesContentOnAppear(opening:)` et
+    /// `armsCameraOnAppear(opening:)` (#4751) — plus `ComposerFormatFanPlacement`,
+    /// qui la reçoit en paramètre.
+    ///
+    /// > Cette énumération portait « deux lecteurs » jusqu'au 2026-09-01, et
+    /// > c'est le genre de phrase qui se périme sans rougir : un troisième
+    /// > lecteur ne fait tomber aucun test en s'ajoutant. Elle est comptée ici
+    /// > pour que la prochaine addition passe par cette ligne. Un septième cas ajouté sans entrer dans le
     /// corpus ci-dessus n'aurait donc AUCUNE mesure.
     ///
     /// **La confrontation se fait à `allCases`, et c'est la seule formulation
@@ -1613,16 +1719,31 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     // MARK: - La rangée d'outils
 
-    /// L'ordre n'est pas décoratif : c'est la position que les doigts
-    /// connaissent depuis des mois sur `FeedComposerSheet`. Le réordonner
-    /// déplacerait six affordances d'un coup, sans que personne l'ait demandé.
-    func test_rangCanonique_miroiteLaFeuilleHistorique_dansSonOrdre() {
+    /// **L'ordre suit la maquette `1a`, et il a CHANGÉ au #4071.**
+    ///
+    /// Il miroitait la feuille historique, où `@` se rangeait à côté de l'emoji
+    /// — les deux seuls outils dont la destination est le TEXTE et non une
+    /// pièce jointe. C'était élégant, et ça coûtait trois outils.
+    ///
+    /// Mesuré au simulateur `Meeshy-iOS26`, taille nominale, écran de 402 pt :
+    /// quatre tuiles visibles sur sept. `.mention` au 4e rang poussait
+    /// `.document`, `.place` et `.microphone` ENTIÈREMENT hors champ — trois
+    /// chaînes complètes jusqu'au brouillon et au publieur, dont aucun pixel ne
+    /// paraissait. La rangée déborde de toute façon (sept tuiles nommées ne
+    /// tiennent pas sur 402 pt sans passer sous la cible tactile de 44 pt) : la
+    /// seule question est CE QUI déborde, et ce sont les ajouts de l'app, pas
+    /// les six outils que la maquette nomme.
+    ///
+    /// `.mention` perd le moins à ce déplacement : c'est le seul outil de la
+    /// rangée à avoir une SECONDE porte — taper `@` dans le texte ouvre la même
+    /// bande de suggestions.
+    func test_rangCanonique_suitLOrdreDeLaMaquette() {
         XCTAssertEqual(
             ComposerDocumentTool.canonicalRow,
-            [.photo, .camera, .emoji, .mention, .document, .place, .microphone],
-            "photo · caméra · emoji · mention · document · lieu · micro — l'ordre de la feuille "
-                + "absorbée, où `@` se range à côté de l'emoji : les deux seuls outils dont la "
-                + "destination n'est pas une pièce jointe."
+            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
+            "photo · caméra · emoji · doc · lieu · micro — les six de la maquette d'abord, "
+                + "puis ce que l'app ajoute en propre (loi 1 : ce qui dépasse RESTE, mais ne "
+                + "passe pas devant)."
         )
     }
 
@@ -1659,7 +1780,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertFalse(visibles.contains(.camera), "Une capture refusée retire l'outil, elle ne le grise pas.")
         XCTAssertEqual(
-            visibles, [.photo, .emoji, .mention, .document, .place, .microphone],
+            visibles, [.photo, .emoji, .document, .place, .microphone, .mention],
             "Les autres gardent leur ordre : le retrait ne réorganise pas la rangée."
         )
     }

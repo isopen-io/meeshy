@@ -33,6 +33,7 @@ import {
 // `POST /conversations/:id/new-link` dans `sharing.ts` pour le même chantier
 // d'API-simplification) — jamais un `Deprecation`/`Link` écrit à la main ici.
 import { depreciee } from '../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // #4165 — plafond de l'échantillon de participants actifs lu par
 // `GET /anonymous/link/:identifier` pour estimer les langues parlées d'un
@@ -191,10 +192,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     // paramètre (`:key`), donc une FONCTION de la requête plutôt qu'un
     // gabarit non suivable (cf. `utils/deprecation.ts` § « Le successeur
     // peut dépendre de la requête »). `linkId` est le MÊME identifiant que
-    // `key` sur la porte cible : les deux acceptent linkId/identifier/id.
+    // `key` sur la porte cible : les deux acceptent linkId/identifier — plus
+    // l'ObjectId jusqu'à #4692, qui l'a retiré de `findShareLinkByKey`.
     onRequest: [depreciee({
       depuis: '2026-08-30',
-      successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}/members`,
+      successeur: (request) => apiPath(`/links/${(request.params as { linkId: string }).linkId}/members`),
     })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -336,7 +338,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
     },
     // ALIAS de `PATCH /guest-sessions/me` (#4167).
-    onRequest: [depreciee({ depuis: '2026-08-30', successeur: '/api/v1/guest-sessions/me' })]
+    onRequest: [depreciee({ depuis: '2026-08-30', successeur: apiPath('/guest-sessions/me') })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);
@@ -408,7 +410,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
     },
     // ALIAS de `DELETE /guest-sessions/me` (#4167).
-    onRequest: [depreciee({ depuis: '2026-08-30', successeur: '/api/v1/guest-sessions/me' })]
+    onRequest: [depreciee({ depuis: '2026-08-30', successeur: apiPath('/guest-sessions/me') })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);

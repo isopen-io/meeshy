@@ -231,8 +231,14 @@ final class OutboxUploadContextGuardTests: XCTestCase {
             sansContexte,
             [
                 "ConversationView+AttachmentHandlers.swift:sendMessageWithAttachments",
-                "OutboxDispatcher.swift:dispatchSendMessage",
-                "OutboxDispatcher.swift:dispatchSendMessage"
+                // **Le découpage du 2026-08-31 (`ec6591a296`) a déplacé ces deux
+                // sites** de `OutboxDispatcher.swift` vers son extension
+                // `+Messages.swift`. L'inventaire nommait l'ANCIEN fichier et la
+                // garde rougissait — bruyamment, ce qui est la bonne direction :
+                // une garde qui nomme un fichier et le perd doit tomber, jamais
+                // passer sur une chaîne vide.
+                "OutboxDispatcher+Messages.swift:dispatchSendMessage",
+                "OutboxDispatcher+Messages.swift:dispatchSendMessage"
             ],
             "Un téléversement sans contexte crée un `MessageAttachment` ; si ce site alimente le `mediaIds` "
                 + "d'un post, le post naîtra VIDE (`PostService.createPost` ne réclame que des `PostMedia`, "

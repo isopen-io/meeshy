@@ -49,7 +49,7 @@ export function useRegisterForm({ onSuccess, linkId, onJoinSuccess }: UseRegiste
   // Create a stable login function
   const login = useCallback((user: User, token: string, sessionToken?: string, expiresIn?: number) => {
     setUser(user);
-    setTokens(token, undefined, sessionToken, expiresIn);
+    setTokens({ authToken: token, sessionToken, expiresIn });
   }, [setUser, setTokens]);
 
   // Initialiser le state avec une fonction d'initialisation paresseuse (lazy initialization)

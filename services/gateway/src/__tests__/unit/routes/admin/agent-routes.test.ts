@@ -35,6 +35,9 @@ const mockPrisma: any = {
   agentUserRole: {
     count: jest.fn<any>(),
     findMany: jest.fn<any>(),
+    // #4465 — `GET /stats` compte les utilisateurs contrôlés distincts en
+    // base (`$group` + `$count`) plutôt que de charger une ligne par rôle.
+    aggregateRaw: jest.fn<any>().mockResolvedValue([{ total: 0 }]),
     upsert: jest.fn<any>(),
     update: jest.fn<any>(),
   },
@@ -115,7 +118,14 @@ describe('Agent Admin Routes', () => {
         .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(3);
       mockPrisma.agentUserRole.count.mockResolvedValueOnce(25);
-      mockPrisma.agentUserRole.findMany.mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }]);
+      // #4465 — `agentUserRole.findMany` n'est plus appelé par `/stats` (le
+      // compte d'utilisateurs contrôlés distincts passe par `aggregateRaw`,
+      // ci-dessus) : ne PAS poser de `mockResolvedValueOnce` ici, sous peine
+      // de décaler la file d'attente des tests suivants qui, eux, appellent
+      // encore `agentUserRole.findMany` (`jest.clearAllMocks()` ne vide pas
+      // les valeurs `Once` non consommées — voir le commentaire de
+      // `GET /configs` juste en dessous).
+      mockPrisma.agentUserRole.aggregateRaw.mockResolvedValueOnce([{ total: 2 }]);
       mockPrisma.agentAnalytic.aggregate.mockResolvedValueOnce({
         _sum: { messagesSent: 0, totalWordsSent: 0 },
         _avg: { avgConfidence: 0 },
@@ -131,6 +141,7 @@ describe('Agent Admin Routes', () => {
         totalConfigs: 10,
         activeConfigs: 3,
         totalRoles: 25,
+        totalControlledUsers: 2,
       }));
       expect(body.data.totalArchetypes).toBeGreaterThan(0);
     });

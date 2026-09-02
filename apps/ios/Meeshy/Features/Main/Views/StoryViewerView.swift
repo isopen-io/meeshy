@@ -1609,8 +1609,18 @@ struct StoryViewerView: View {
     /// Les surfaces NON scrollables (strip d'emojis, strip de langues,
     /// transcription) gardent, elles, le swipe de fermeture — c'est un simple
     /// bandeau, aucun recognizer concurrent ne peut voler le geste.
+    /// **La légende dépliée en fait partie depuis #4831.** Son corpus est une
+    /// `ScrollView` comme les autres, et elle a vécu HORS de cette liste tout le
+    /// temps où elle a existé : un glissement pour lire faisait naviguer ou
+    /// refermer.
+    ///
+    /// > Un mécanisme de cession qui ÉNUMÈRE ses ayants droit ne protège que ce
+    /// > qu'on a pensé à y inscrire. Chaque surface défilante ajoutée après lui
+    /// > naît hors de sa protection, et rien ne rougit — le mécanisme fait
+    /// > exactement ce pour quoi il a été écrit.
     var hasScrollableReaderSurface: Bool { // internal for cross-file extension access
         showCommentsOverlay || showFullEmojiPicker || showFullLanguagePicker
+            || isCaptionExpanded
     }
 
     /// Bord supérieur de la surface scrollable à opposer au point de départ du

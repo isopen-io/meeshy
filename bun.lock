@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "1.32.1",
+      "version": "1.33.0",
       "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
@@ -132,6 +132,7 @@
       "dependencies": {
         "@meeshy/design-tokens": "workspace:*",
         "@meeshy/icons": "workspace:*",
+        "@meeshy/shared": "workspace:*",
         "next": "15.5.23",
         "react": "19.2.8",
         "react-dom": "19.2.8",
@@ -144,6 +145,7 @@
         "@testing-library/jest-dom": "^7.0.0",
         "@testing-library/react": "^16.3.2",
         "@types/jest": "^30.0.0",
+        "@types/jest-axe": "^3.5.9",
         "@types/node": "^20.19.43",
         "@types/react": "^19.2.18",
         "@types/react-dom": "^19.2.4",
@@ -158,6 +160,7 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^5.2.0",
         "jest": "^30.4.2",
+        "jest-axe": "^11.0.0",
         "jest-environment-jsdom": "^30.4.1",
         "typescript": "^6.0.3",
       },
@@ -172,7 +175,7 @@
     },
     "packages/shared": {
       "name": "@meeshy/shared",
-      "version": "1.14.1",
+      "version": "1.15.0",
       "dependencies": {
         "@prisma/client": "^6.19.3",
         "zod": "^4.4.3",
@@ -190,7 +193,7 @@
     },
     "services/agent": {
       "name": "@meeshy/agent",
-      "version": "1.0.32",
+      "version": "1.0.33",
       "dependencies": {
         "@langchain/core": "^1.2.9",
         "@langchain/langgraph": "^1.4.12",
@@ -221,7 +224,7 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.32.1",
+      "version": "1.33.0",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
         "@fastify/helmet": "^13.0.2",
@@ -303,7 +306,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.31.1",
+      "version": "1.32.0",
     },
   },
   "overrides": {

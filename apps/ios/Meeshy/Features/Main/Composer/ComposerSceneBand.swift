@@ -50,6 +50,66 @@ nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
     }
 }
 
+/// **Ce que la ZONE BASSE porte — un seul des trois, jamais deux** (#4579).
+///
+/// ## Le défaut que cette règle ferme
+///
+/// La surface écrivait `if let toolOptions { toolOptions } else if let band { … }`
+/// pendant que le meuble passait `toolOptions: AnyView(MeeshyToolOptionsPanel(…))`
+/// **inconditionnellement** — le panneau se vide lui-même quand aucun outil
+/// n'est déplié, ce qui est une bonne décision de VUE et une mauvaise source de
+/// VÉRITÉ. `toolOptions == nil` était donc toujours faux, et
+/// `ComposerSceneBandView` n'a **jamais** été montée dans la scène incrustée.
+///
+/// Trois surfaces en sont mortes d'un coup, sans qu'aucune ne rougisse :
+///
+/// | ce qui ne pouvait pas paraître | vue |
+/// |---|---|
+/// | la palette de fond + les effets d'ouverture | `1b` |
+/// | la bande de rognage | `2d` |
+/// | **tout jeton d'objet dont la destination est une bande** | `1c` |
+///
+/// La troisième est la plus coûteuse : les jetons livrés au lot précédent
+/// portent une `destination: ComposerSceneBand?` et ouvraient donc une bande
+/// que rien ne pouvait monter. **Un contrôle livré, testé, et inerte.**
+///
+/// ## Ce qui rend la leçon dure
+///
+/// Le commentaire qui DIAGNOSTIQUE ce défaut était déjà écrit, deux lignes plus
+/// bas, sur la rangée de jetons :
+///
+/// > « Le témoin d'"outil ouvert" est le MODE DU RAIL, jamais la présence du
+/// > panneau d'options : l'hôte passe ce dernier inconditionnellement (il se
+/// > vide lui-même), donc `toolOptions == nil` était toujours faux. »
+///
+/// **J'ai décrit le mécanisme et corrigé la seule occurrence que je regardais.**
+/// Un diagnostic écrit au-dessus d'une ligne qui a encore le défaut ne le
+/// signale pas — il prouve qu'on le savait.
+///
+/// ## Pourquoi une RÈGLE et pas un second booléen
+///
+/// Un `if toolIsOpen` recopié à la main dans la vue serait redevenu, au premier
+/// ajout, une seconde loi divergeant de `ComposerObjectChips.isServed`. Les deux
+/// lisent désormais la MÊME question — « un outil est-il ouvert ? » — et cette
+/// question a une seule réponse, `railMode`.
+nonisolated enum ComposerLowZone: Equatable {
+
+    /// Un outil est déplié : ses options prennent le bas.
+    case toolOptions
+    /// Aucun outil : la bande demandée ET servie.
+    case band(ComposerSceneBand)
+    /// Ni l'un ni l'autre — le bas ne porte que le socle.
+    case nothing
+
+    /// `toolIsOpen` vient de `railMode`, la seule source qui SAIT qu'un outil
+    /// est ouvert — jamais de la présence d'une vue, qui peut être montée vide.
+    static func resolve(toolIsOpen: Bool, band: ComposerSceneBand?) -> ComposerLowZone {
+        if toolIsOpen { return .toolOptions }
+        guard let band else { return .nothing }
+        return .band(band)
+    }
+}
+
 /// **La bande contextuelle de la scène.** Montée SOUS le canvas et AU-DESSUS de
 /// la description, ce qui donne au bas de l'écran un dégradé de niveaux du
 /// modèle : l'objet (les rails), la scène (cette bande), la slide (la
@@ -96,6 +156,16 @@ struct ComposerSceneBandView: View {
     /// demandée, la première ce qui l'empêche de paraître vide si elle l'était.
     var timelineContent: AnyView?
 
+    /// **Le contenu de la bande `textStyles`, composé par l'HÔTE** (#4083).
+    ///
+    /// Même motif que `timelineContent` : le spécimen a besoin du VRAI texte de
+    /// l'objet sélectionné et du rappel qui écrit le style — deux choses que
+    /// seul le meuble connaît. La bande reste une règle de PLACE.
+    ///
+    /// `nil` ⇒ rien à montrer, et `ComposerSceneCapabilities.bands(…)` ne
+    /// l'aura alors jamais servie.
+    var textStylesContent: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
@@ -108,12 +178,20 @@ struct ComposerSceneBandView: View {
             // tolérée : c'est la trace de la loi 4, tenue des deux côtés.
             if let timelineContent { timelineContent } else { EmptyView() }
         case .textStyles:
-            // Aucun contenu : ce contexte appartient au critère mais n'a pas
-            // d'hôte ici — les 18 styles exigent un objet `text` sélectionné,
-            // qu'aucune porte de cette surface ne pose encore (#4083).
-            // `ComposerSceneBand.opened` ne le sert donc jamais, et sa garde le
-            // prouve : c'est là que l'absence est tenue, pas ici.
-            EmptyView()
+            // **Le spécimen des 18 styles** (#4083). Il a un hôte depuis le
+            // 2026-08-31 : le meuble compose `TextStyleSpecimenBand` avec le
+            // texte réel de l'objet sélectionné.
+            //
+            // > Ce cas rendait `EmptyView()` et le commentaire l'assumait —
+            // > « les 18 styles exigent un objet `text` sélectionné, qu'aucune
+            // > porte de cette surface ne pose encore ». La porte existait
+            // > depuis #4401 ; c'est la BANDE qui n'était pas servie, et le
+            // > jeton « STYLE » de l'inspecteur pointait donc sur du vide.
+            //
+            // Le repli reste, pour la même raison que celui de `timeline` : la
+            // loi 4 tenue des DEUX côtés — la capacité empêche la bande d'être
+            // demandée, ce repli l'empêche de paraître vide si elle l'était.
+            if let textStylesContent { textStylesContent } else { EmptyView() }
         }
     }
 

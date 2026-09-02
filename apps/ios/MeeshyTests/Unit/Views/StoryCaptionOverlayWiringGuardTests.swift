@@ -12,11 +12,12 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
     private static let canvasPath = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
     private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
     private static let contentPath = "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"
+    private static let captionLayerPath = "Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift"
 
     // MARK: - La couche partagée remplace le cartouche
 
     func test_leLecteurMonteLaCouchePartagee() throws {
-        let source = try Self.strippedSource(at: Self.canvasPath)
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
         XCTAssertTrue(
             source.contains("MediaCaptionOverlay("),
             "le lecteur de story doit monter `MediaCaptionOverlay` — le composant partagé qui tient la règle des dix mots (#4474)"
@@ -28,7 +29,7 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
     /// l'OMBRE à la place. Réintroduire un fond plein sous la légende doit faire
     /// rougir.
     func test_laLegendeNaPlusDeCartoucheOpaque() throws {
-        let source = try Self.strippedSource(at: Self.canvasPath)
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
         guard let bloc = Self.captionBlock(in: source) else {
             throw GuardIsBlind(description: "Bloc de la légende introuvable : la garde ne garde plus rien")
         }
@@ -45,7 +46,7 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
     /// **Le défaut EXACT qui la rendait indépliable.** `allowsHitTesting(false)`
     /// posé sur le conteneur éteint le bouton « voir plus » avec le reste.
     func test_leBlocDeLegendeNestPlusRenduIntouchable() throws {
-        let source = try Self.strippedSource(at: Self.canvasPath)
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
         guard let bloc = Self.captionBlock(in: source) else {
             throw GuardIsBlind(description: "Bloc de la légende introuvable")
         }
@@ -101,6 +102,117 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
                 "changer de \(axe) doit replier la légende — sans quoi la lecture gèle sur la story suivante (#4474)"
             )
         }
+    }
+
+    /// **La story REFUSE le voile du composant** (directive porteur 2026-09-02).
+    ///
+    /// Elle a mieux : sa scène s'efface à 0,28 et laisse remonter le fond
+    /// naturel de la slide. Le dégradé du composant s'y AJOUTAIT — deux
+    /// mécanismes pour un seul effet, dont l'un venait remplacer l'autre, et
+    /// aucun témoin ne pouvait rougir puisque chacun faisait son travail.
+    ///
+    /// > Un mécanisme REMPLACÉ ne disparaît pas de lui-même. Quand une directive
+    /// > change la MANIÈRE d'obtenir un effet, quelqu'un doit retirer l'ancienne.
+    func test_laStoryRefuseLeVoileDuComposant() throws {
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
+        guard let bloc = Self.captionBlock(in: source) else {
+            throw GuardIsBlind(description: "Bloc de la légende introuvable")
+        }
+        XCTAssertTrue(
+            bloc.contains("dimsBackgroundWhenExpanded: false"),
+            "la story doit refuser le voile de la couche partagée — sa scène s'efface déjà (#4831)"
+        )
+    }
+
+    // MARK: - Lire ne doit pas faire tourner la story
+
+    /// **Le corpus déplié est une `ScrollView` montée sous le drag du lecteur**
+    /// (directive porteur 2026-09-02 : « permettre le defilement sans agir sur
+    /// les swipe up et down de la story »).
+    ///
+    /// `unifiedDragGesture` est monté sur un ANCÊTRE de tout le contenu du
+    /// lecteur. Le mécanisme qui lui fait rendre la main existe depuis les
+    /// commentaires — `hasScrollableReaderSurface` + le bord publié par
+    /// `StoryReaderScrollableSurfaceTopKey` — mais il énumère ses surfaces une
+    /// par une, et la légende n'y a jamais été inscrite.
+    ///
+    /// > Un mécanisme de cession qui énumère ses ayants droit ne protège que ce
+    /// > qu'on a pensé à y écrire. Chaque nouvelle surface défilante naît HORS
+    /// > de sa protection, sans que rien ne rougisse.
+    func test_laLegendeDeplieeCedeLeGesteAuDefilement() throws {
+        let source = try Self.strippedSource(at: Self.viewerPath)
+        guard let range = source.range(of: "var hasScrollableReaderSurface: Bool {") else {
+            throw GuardIsBlind(description: "`hasScrollableReaderSurface` introuvable")
+        }
+        let bloc = Self.braceBlock(in: source, from: range.lowerBound)
+        XCTAssertTrue(
+            bloc.contains("isCaptionExpanded"),
+            "une légende dépliée embarque sa propre `ScrollView` : le drag du lecteur doit lui rendre les gestes qui y naissent (#4831)"
+        )
+    }
+
+    /// Le bord supérieur RÉEL de la zone défilante — sans lui, la garde de point
+    /// de départ retombe sur son fail-safe (« tout le geste revient à la
+    /// surface ») et le lecteur perd ses swipes sur toute la hauteur de l'écran
+    /// dès qu'une légende est dépliée.
+    func test_leLecteurPublieLeBordDeLaZoneDefilanteDeLaLegende() throws {
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
+        guard let bloc = Self.captionBlock(in: source) else {
+            throw GuardIsBlind(description: "Bloc de la légende introuvable")
+        }
+        // DEUX assertions, parce que la mesure vit dans une vue à part : le bloc
+        // MONTE la sonde, la sonde PUBLIE la clé. Ne chercher la clé que dans le
+        // bloc rougirait sur une extraction parfaitement correcte ; ne la
+        // chercher que dans le fichier laisserait passer une sonde que plus
+        // personne ne monte — le défaut de la couche morte, une échelle plus bas.
+        XCTAssertTrue(
+            bloc.contains("captionScrollableSurfaceProbe"),
+            "le bloc de la légende doit monter la sonde qui publie le bord de sa zone défilante (#4831)"
+        )
+        XCTAssertTrue(
+            source.contains("StoryReaderScrollableSurfaceTopKey"),
+            "et cette sonde doit publier la clé — sinon la cession du geste est aveugle et le drag parent avale tout l'écran (#4831)"
+        )
+    }
+
+    /// **Le haut du viewport ramène le corpus en tête** (directive porteur
+    /// 2026-09-02). L'atome ne connaît que sa fenêtre ; c'est l'hôte qui sait ce
+    /// qu'est « le haut du viewport », et qui doit donc armer le token.
+    func test_leHautDuViewportRamèneLeCorpusEnTête() throws {
+        let source = try Self.strippedSource(at: Self.captionLayerPath)
+        guard let bloc = Self.captionBlock(in: source) else {
+            throw GuardIsBlind(description: "Bloc de la légende introuvable")
+        }
+        XCTAssertTrue(
+            bloc.contains("scrollToTopToken:"),
+            "l'hôte doit passer le token de retour en tête à la couche partagée (#4831)"
+        )
+        let couche = try Self.strippedSource(at: Self.captionLayerPath)
+        XCTAssertTrue(
+            couche.contains("captionScrollToTopToken += 1"),
+            "et l'armer depuis la zone tactile posée au-dessus du corpus (#4831)"
+        )
+        XCTAssertTrue(
+            couche.contains("storyTopChromeReserve"),
+            "cette zone est montée AU-DESSUS du chrome (zIndex 60) : sans réserve, elle avale le bouton de fermeture (#4831)"
+        )
+    }
+
+    /// **Une couche extraite qui n'est plus montée est une couche MORTE.**
+    ///
+    /// Toutes les gardes ci-dessus lisent maintenant le fichier de la légende ;
+    /// aucune ne dirait que le canvas a cessé de l'appeler. Le fichier resterait
+    /// parfait, ses témoins verts, et l'écran n'aurait plus de légende.
+    ///
+    /// > Déplacer du code déplace aussi ce que les gardes MESURENT. Celle qui
+    /// > garde le nouveau site ne garde pas le lien vers lui — et c'est le lien
+    /// > que l'extraction vient de créer.
+    func test_leCanvasMonteToujoursLaCoucheExtraite() throws {
+        let source = try Self.strippedSource(at: Self.canvasPath)
+        XCTAssertTrue(
+            source.contains("captionLayer(geometry: geometry)"),
+            "le canvas doit monter `captionLayer` — extraite du canvas en #4831, elle n'est rendue par personne d'autre"
+        )
     }
 
     // MARK: - Extraction

@@ -23,6 +23,7 @@ import {
   selectForFields,
   type ColumnPlan,
 } from '../../utils/sparse-fieldset';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
@@ -411,7 +412,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
             },
             cursorPagination: {
               type: 'object',
-              description: 'La forme CIBLE de pagination — offset reste accepté (ci-dessus) tant que iOS/Android ne l\'ont pas adopté (packages/MeeshySDK et apps/android hors territoire de ce lot).',
+              description: 'La forme CIBLE de pagination. UNE SEULE des deux formes est servie par réponse (#4351) : `?cursor=` rend `cursorPagination` seul, `?offset=` (ou rien) rend `pagination` seul. `?offset=` reste accepté — Android le déclare (LinkApi.listMyLinks) — mais les deux objets ne cohabitent plus dans un même corps.',
               properties: {
                 limit: { type: 'number' },
                 hasMore: { type: 'boolean' },
@@ -537,6 +538,12 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       // projection ne demande plus.
       const select = selectForFields(linkPlan, clesServies(expand, requestedFields));
 
+      // #4351 / #4175 — le `count()` ne part QUE si la réponse va servir un
+      // `total`. Il partait sur CHAQUE appel, curseur compris, pour alimenter
+      // un champ que la pagination par curseur ne porte pas : un comptage de
+      // toute la collection payé à chaque page pour être jeté. Un curseur
+      // n'a pas besoin de savoir combien il reste — c'est même ce qui le rend
+      // stable sous insertion.
       const [links, total, summary] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where: findManyWhere,
@@ -545,7 +552,9 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
           take: limit,
           select,
         }),
-        fastify.prisma.conversationShareLink.count({ where }),
+        usingCursor
+          ? Promise.resolve(null)
+          : fastify.prisma.conversationShareLink.count({ where }),
         includeSet.has('summary') ? computeShareLinksSummary(fastify, where) : Promise.resolve(null),
       ]);
 
@@ -572,12 +581,32 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         return restrictFields(enriched, requestedFields);
       });
 
-      const pagination = createPaginationMeta(total, offset, limit, links.length);
-      const cursorPagination = buildCursorPaginationMeta(
-        limit,
-        links.length,
-        links.length > 0 ? (links[links.length - 1] as { id: string }).id : null
-      );
+      // #4351 critère 3 — UNE seule forme de pagination PAR RÉPONSE.
+      //
+      // La réponse portait les deux objets, toujours, côte à côte : un
+      // appelant ne pouvait pas savoir lequel faisait foi, et deux clients
+      // pouvaient paginer la même adresse par deux mécanismes différents sans
+      // que rien ne le signale. Ce que la fusion devait supprimer, ce n'est
+      // pas le SUPPORT de l'offset — `?offset=` reste accepté, Android le
+      // déclare (`LinkApi.listMyLinks`) — c'est la COHABITATION dans un même
+      // corps.
+      //
+      // La forme servie suit donc celle qui a été DEMANDÉE : `?cursor=` rend
+      // `cursorPagination` seul, `?offset=` (ou rien) rend `pagination` seul.
+      // Retirer `pagination` inconditionnellement aurait tronqué en silence la
+      // liste du web, qui lit `data.pagination?.hasMore` pour son bouton
+      // « charger plus » (`apps/web/app/links/page.tsx`) — mesuré avant, et
+      // c'est pourquoi le web migre vers le curseur dans le même lot.
+      const pagination = usingCursor
+        ? undefined
+        : createPaginationMeta(total ?? 0, offset, limit, links.length);
+      const cursorPagination = usingCursor
+        ? buildCursorPaginationMeta(
+            limit,
+            links.length,
+            links.length > 0 ? (links[links.length - 1] as { id: string }).id : null
+          )
+        : undefined;
 
       const meta: Record<string, unknown> = {};
       if (viewerIsModerator !== undefined) meta.viewerIsModerator = viewerIsModerator;
@@ -595,8 +624,8 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: mapped,
-        pagination,
-        cursorPagination,
+        ...(pagination ? { pagination } : {}),
+        ...(cursorPagination ? { cursorPagination } : {}),
         ...(Object.keys(meta).length > 0 && { meta }),
       });
     } catch (error) {
@@ -617,7 +646,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
    * aucun des deux ne migre ici. Le retrait suit le compteur de #4275.
    */
   fastify.get('/links/stats', {
-    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links?include=summary' })],
+    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: apiPath('/links?include=summary') })],
     schema: {
       description: 'Get aggregated statistics for all share links created by the authenticated user. Returns total link counts, active link counts, and total usage.',
       tags: ['links'],

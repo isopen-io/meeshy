@@ -414,6 +414,266 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
+## Le composer met ses portes SUR LE PLATEAU, et les répartit par NIVEAU (directive porteur 2026-08-31)
+
+> « Cette approche est meilleure, ce qui permet de manipuler tout le canvas sans
+> problème : on exploite la place du plateau sans encombrer le canvas. […] On
+> préserve des actions sur la ligne canonique comme la description du contenu,
+> l'ajout de son de fond, image et vidéo de fond, mention et localisation de la
+> publication ; et sur la rangée à gauche, ce sont les features qui apparaissent
+> sur le canvas visuellement. »
+
+### 1. Aucun contrôle ne se pose SUR la scène
+
+Les rails, les contrôleurs et les portes vivent **dans les couloirs du plateau**,
+jamais en surimpression du canvas. Deux raisons, et la seconde est celle que la
+directive ajoute :
+
+- **loi 6** — un contrôle posé sur la scène fait mentir l'aperçu sur le rendu
+  final : l'auteur compose avec des pixels qui ne partiront pas ;
+- **la manipulation** — un objet se déplace, se pince et se tourne *n'importe où*
+  dans le cadre. Un rail flottant vole les touches de la bande qu'il couvre, et
+  l'auteur découvre la zone morte en essayant d'y traîner quelque chose.
+
+Le plateau est de la place DISPONIBLE : la scène est figée en 9:16 et l'écran ne
+l'est pas. L'occuper ne coûte rien ; occuper le canvas coûte une zone morte.
+
+> Un arbitrage antérieur (2026-08-28) avait posé le rail **à droite, dans la
+> scène**, en s'appuyant sur les quatre bulles de la planche `1b`. Cette
+> directive le remplace. Un doc-comment qui décrit l'ancien arbitrage est un
+> piège au sens du § *contrôle inerte* : il énonce une raison juste pour une
+> disposition qui n'est plus celle du produit.
+
+### 2. La place d'une porte se lit à son NIVEAU, jamais à une liste
+
+`ComposerRailDoor.level` classe déjà chaque porte, avec un `switch` exhaustif :
+`.publication`, `.slide`, `.object`, `.scene`. **C'est lui qui décide où la porte
+se pose**, et aucune liste écrite à la main ne double cette décision.
+
+| ce que la porte vise | où elle se pose | pourquoi |
+|---|---|---|
+| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
+| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, image/vidéo de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
+
+**Le même média n'est pas la même porte selon son PLAN.** Une image de FOND
+appartient à la slide et vit en bas ; une image de PREMIER PLAN devient un
+`MeeshyObject` et vit à gauche. Idem pour le son : un son de fond est un attribut
+de la publication (il porte son crédit au socle), un son POSÉ est un objet
+visible. Ranger les deux sous une seule porte « média » ou « son » est ce qui
+rend la sémantique illisible pour l'auteur.
+
+### Le témoin
+
+Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais à une
+liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
+niveau elle est, et son niveau la range tout seul.
+
+### 2 bis. Les TROIS zones du plateau, et sur quoi chacune agit (directive porteur 2026-08-31, révision)
+
+> « Ce qui est affiché **en bas du plateau lorsqu'aucun outil n'est actif** agit
+> sur le canvas de manière générale. À **gauche** du plateau, ce sont les
+> contrôles qui agissent sur les **objets du slide**. À **droite**, ça agit sur
+> les **dimensions des objets**, + undo/redo devrait y être, + création d'un
+> autre slide dès lors qu'on a déjà un slide de créé. »
+
+Cette formulation PRÉCISE celle du § 2. Elle ne parle plus de « ce qui apparaît
+visuellement » mais de **sur quoi le contrôle agit** — et les deux coïncident
+pour les portes, tout en tranchant ce que la première laissait flou : la place
+des contrôleurs, de l'historique et de la création de slide.
+
+| zone | agit sur | contenu |
+|---|---|---|
+| **bas du plateau** (aucun outil actif) | le CANVAS en général | ce qui vaut pour la scène entière ou la publication — fond, description, mention, lieu |
+| **gauche** | les OBJETS du slide | les portes qui posent ou éditent un objet — média, sticker, dessin, texte |
+| **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
+| **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
+
+> **Le SOCLE n'est dans aucune de ces zones, et ce n'est pas un oubli.** Audience ·
+> Aperçu · Publier vivent au MEUBLE, sous les trois surfaces, et ne bougent jamais
+> (loi 5 de la planche — trois membres, jamais plus). `ComposerSceneSurface.swift:35`
+> l'écrit à l'endroit où on le chercherait : « Le SOCLE n'est pas ici ». Le « bas du
+> plateau » de la première ligne est la **rangée d'outils**, une autre rangée : y
+> ranger une entrée du socle, ou l'inverse, mélange ce qui décide de la PUBLICATION
+> avec ce qui agit sur la SCÈNE.
+
+**Ce que la révision déplace — FAIT et RESTE, mesuré le 2026-09-01 :**
+
+- ✅ **FAIT — undo / redo ont quitté le socle pour le rail DROIT** (#4586,
+  première moitié). Ils sont montés sur le rail *trailing*
+  (`MeeshyComposerHost+Surfaces.swift:464-466` → `ComposerTrailingRail.swift:60,99`)
+  et le socle n'en porte plus qu'un commentaire. La raison qui l'a décidé tient
+  toujours : ils agissent sur ce qui a été fait aux OBJETS, pas sur l'envoi ; au
+  socle ils voisinaient avec l'audience et le bouton publier, qui décident de la
+  publication.
+- ⬜ **RESTE — la création d'une slide doit être CONDITIONNELLE** : « dès lors
+  qu'on a déjà un slide de créé ». Le `[+]` est monté **sans condition**
+  (`MeeshyComposerHost+Surfaces.swift:458`), et `ComposerTrailingRail.swift:70`
+  revendique explicitement l'inverse (« créer une slide s'offre en
+  permanence ») — les deux doivent tomber dans le même commit, sans quoi le
+  correctif laissera derrière lui un doc-comment qui le contredit.
+
+**⚠️ Le son A DE NOUVEAU une porte, depuis le 2026-09-01** (#4722). Le
+paragraphe qui suit décrit l'état d'AVANT ce jour ; il est conservé parce que le
+raisonnement qui l'a produit reste juste et que la panne qu'il a causée est
+instructive.
+
+*Ce qui avait été écrit* : « le son n'a plus de porte — il n'y a qu'une façon
+d'ajouter un son sur le canvas, une chip par la palette du § 3, et le son de
+FOND reste au socle ». La porte du rail ouvrait alors la MÊME feuille que la
+pastille du socle (`presentedPortal = .sound`, ligne pour ligne) : un bouton en
+double, jamais une capacité en double.
+
+*Ce qui est vrai aujourd'hui*, mesuré : `ComposerRailDoor.sound` existe
+(`ComposerRailDoor.swift:89`) et `ComposerHostRules.swift:436` écrit « **La
+porte SON est REVENUE le 2026-09-01** ». Les deux destinations de remplacement
+sur lesquelles le retrait s'appuyait **n'existaient ni l'une ni l'autre** : la
+palette porte cinq onglets — `emoji`, `love`, `time`, `place`, `library` — et
+pas de son (#4579 **ouvert**), et la pastille du socle est partie le lendemain,
+remplacée par une pastille d'avatar qui n'affiche qu'un CRÉDIT — donc qui ne se
+peint que s'il y a déjà un son.
+
+> **Deux retraits justifiés, chacun renvoyant vers un chemin que l'autre ne
+> fournit pas.** Ni l'un ni l'autre commit n'était faux ; c'est leur SOMME qui a
+> fermé la porte — et une somme n'a pas de site où rougir. Le témoin qui
+> l'attrape n'interroge donc aucun retrait : il demande que la scène serve AU
+> MOINS UN chemin vers le son.
+
+> **Vérifier LAQUELLE des deux avant de retirer est ce qui sépare une
+> déduplication d'une régression.** Deux boutons qui ouvrent la même feuille se
+> retirent l'un l'autre sans rien coûter ; deux boutons qui ouvrent deux
+> chemins obligent à choisir lequel survit — et à le dire.
+
+### 2 ter. Le composer crée une MeeshyPublication — pas une story à slides (directive porteur 2026-08-31)
+
+> « Et non `StorySlide` — on adopte la sémantique nouvelle de la structure des
+> MeeshyDocument, qui utilise **MeeshyComposer** pour se créer. »
+>
+> « **`MeeshyPublication` EST `MeeshyDocument`** — fusionner la terminologie en
+> `MeeshyPublication`. » (arbitrage du même jour)
+
+Le composer est né dans le pipeline STORY et en a hérité la nomenclature
+(`StorySlide`, `StoryEffects`, `StoryTextObject`…). **Ce n'est plus ce qu'il
+fait.** Il compose une PUBLICATION, dont une story n'est qu'un des profils de
+sortie — au même titre que le post, le réel et le mood.
+
+**`MeeshyDocument` n'existe pas.** Le terme est apparu une fois dans la planche
+et une fois dans une directive ; l'arbitrage le fond dans `MeeshyPublication`.
+Un concept à deux noms se paie deux fois : à l'écriture, où il faut choisir, et
+à la lecture, où il faut se demander si la différence en est une.
+
+Le vocabulaire à employer — doc-comments, issues, raisonnements :
+
+| terme | ce qu'il désigne | type Swift |
+|---|---|---|
+| `MeeshyPublication` | ce que le composer produit, tous profils confondus | — (enveloppe à écrire) |
+| `MeeshyScene` | la surface 9:16 d'une slide | — (`StoryEffects` la porte) |
+| `MeeshySlide` | une page de la publication | — (`StorySlide`) |
+| `MeeshySceneObject` | ce qu'on pose sur une scène — texte, média fg, sticker, chip de lieu, chip de son | **`MeeshySceneObject`** (somme à cinq cas) |
+| `MeeshyComposer` | l'outil qui crée la publication | `MeeshyComposerHost` |
+
+**`MeeshyObject` → `MeeshySceneObject`** (arbitrage porteur du même jour) : le
+nom dit OÙ l'objet vit. Un « objet Meeshy » sans qualificatif aurait aussi bien
+désigné une publication ou une slide.
+
+Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
+`MeeshyObject`, 64 de `MeeshyScene`, 38 de `MeeshySlide`, 35 de
+`MeeshyPublication`).
+
+**Le premier de ces noms EST un type depuis le 2026-08-31** :
+`MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
+une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
+rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
+`isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
+Les quatre autres noms restent à écrire.
+
+**Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
+quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
+de l'ordre des familles, et les divergences n'étaient visibles nulle part. Douze
+sont repointées sur la somme ; **une seule** exclusion est écrite dans le code
+(`StoryComposerViewModel+ZOrder.swift:59` — à `zIndex` égal, l'ordre décide avec
+qui `bringForward` permute).
+
+**Le reste se COMPTE, il ne se cite pas.** Les nombres qui vivaient ici
+(« trente-quatre », « trois exclues ») avaient été DÉRIVÉS d'une addition dont
+les trois termes n'avaient pas la même unité — des fonctions, des fonctions, et
+des *raisons*. Aucune garde ne les épinglait : ils ont donc pu dériver sans
+jamais contredire personne. Ce qui les remplace est le critère :
+
+```bash
+# les cascades restantes : un id cherché dans ≥ 2 familles, forme `first(where:)`
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\b.*first\(where:" -- '*.swift'
+# la forme que le critère ci-dessus NE VOIT PAS, et où vivaient deux bugs :
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\??\.removeAll" -- '*.swift'
+```
+
+> **Un inventaire qui rate une syntaxe rate le bug qu'il servait à trouver.** La
+> seconde commande est celle qui manquait : les trois chemins de SUPPRESSION
+> (#4758) et le couple `bringForward`/`sendBackward` (#4759) écrivent la cascade
+> en `removeAll { }` et en fermetures de mutation, jamais en `first(where:)`.
+> Ils étaient donc hors de tout compte — et c'est précisément là que la pastille
+> de lieu est devenue ineffaçable et que le son a cessé d'être classable.
+
+> **Un type qui n'existe pas ne peut pas diverger — il oblige seulement chaque
+> site à réinventer la règle.** C'est ainsi que la pastille de lieu s'est
+> retrouvée sans fenêtre de temps sur cinq sites qui se citaient l'un l'autre
+> (leçon 373).
+
+> C'est l'inverse du motif de la « règle doublée » : là, une règle raisonnée
+> était doublée par un littéral et seul le littéral était appelé ; ici, **le NOM
+> existe sans la CHOSE**. Un vocabulaire sans type ne peut pas diverger de son
+> implémentation — il n'en a pas — mais il oblige chaque relecteur à traduire, et
+> la traduction n'est écrite nulle part. Elle s'est déjà payée : le doc-comment
+> de `ComposerRailDoor.place` promettait « une pastille de lieu posée sur la
+> scène » (vocabulaire cible) là où le code ouvrait le sélecteur de la
+> publication (comportement réel).
+
+**Ne PAS renommer les types Story en masse.** Ils sont sérialisés (`StoryEffects`
+voyage en JSON vers la passerelle, `CanvasV3Migration` lit d'anciennes formes) et
+partagés avec le reader et l'export : un renommage de surface casserait la
+lecture des publications existantes. La migration se fait par enveloppes ou par
+`typealias` documentés — jamais par un `sed`. Pilotage : #4591.
+
+**Corollaire déjà appliqué** : l'historique appartient à la PUBLICATION, pas à
+l'envoi — la planche écrit « Historique de la `MeeshyPublication`, conservé »
+(elle disait `MeeshyDocument` avant la fusion de terminologie). C'est ce qui
+justifie son déplacement du socle vers le rail des objets (#4586).
+
+> Cette phrase a été FAUSSE pendant une minute : elle citait la planche telle
+> qu'elle était avant que le même commit ne la corrige. **Une citation est datée
+> par le fichier qu'elle cite** — la changer sans relire ce qui la cite fabrique
+> une référence qui n'a jamais existé.
+
+### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
+
+> « Dans l'icône (smile/sticker) il faudra juste proposer directement des
+> constructions permettant de mettre des chips de lieu (en prenant les lieux
+> autour), des chips de son (en permettant de choisir lequel), etc. — qu'on peut
+> positionner, grandir sur la scène. **Ça évite d'avoir plusieurs icônes
+> redondants aux icônes canoniques** qui concernent le document ou métadonnée du
+> slide. » (directive porteur 2026-08-31)
+
+Deux icônes qui se ressemblent et agissent sur deux NIVEAUX différents ne se
+distinguent pas à l'œil — le niveau est invisible, seul le glyphe se voit. Un ♪
+qui pose un son sur la scène et un ♫ qui choisit le son de fond de la
+publication sont, pour l'auteur, le même bouton à deux endroits.
+
+**La règle** : quand une intention nouvelle POSE un objet sur la scène, elle
+entre dans la **palette de constructions** (derrière l'entrée sticker), jamais
+dans la rangée comme une icône de plus. La rangée nomme des FAMILLES ; la palette
+nomme des constructions.
+
+| ce qu'on ajoute | où ça va |
+|---|---|
+| une construction qui pose un objet sur la scène (chip de lieu, chip de son, sondage, minuteur…) | la **palette**, derrière `sticker` |
+| une entrée qui vise la publication ou la slide | la **ligne canonique** |
+| une famille entièrement nouvelle de matière | et seulement alors, une porte |
+
+**Le témoin** : aucune porte de la rangée de gauche ne pose un objet qu'une
+entrée canonique pose déjà. C'est la formulation vérifiable de « éviter plusieurs
+icônes redondants » — elle s'éprouve sur les niveaux, pas sur les glyphes.
+
+Pilotage : #4579.
+
 ## Les gestes de glissement sont PROGRESSIFS et ANNULABLES (directive porteur 2026-08-30)
 
 > « Il faut préférer ce type de swipe À CHAQUE FOIS qu'on parle de mettre un

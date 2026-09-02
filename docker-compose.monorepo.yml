@@ -1,1 +1,16 @@
-infrastructure/docker/compose/docker-compose.monorepo.yml
+# Ce fichier N'EST PAS une composition. [#4544]
+#
+# La racine portait ici un LIEN dont la cible n'a jamais existé — mesuré, aucun
+# commit du dépôt n'a jamais écrit
+# infrastructure/docker/compose/docker-compose.monorepo.yml.
+#
+# Le nom vient de la réorganisation décrite dans docs/ARCHITECTURE_REORGANIZATION.md,
+# qui prévoyait ce déplacement sans jamais l'exécuter. Les compositions du
+# monorepo sont, depuis, celles d'infrastructure/docker/compose/.
+#
+# Même forme et même contrainte que docker-compose.yml de la racine — voir son
+# en-tête pour le pourquoi de ${VAR:?message} et de l'absence de « : ».
+
+services:
+  ou-est-la-composition-monorepo:
+    image: ${MEESHY_COMPOSITION_MONOREPO:?La composition monorepo n existe plus. Les compositions du monorepo vivent sous infrastructure/docker/compose/ - docker-compose.dev.yml, docker-compose.local.yml, docker-compose.staging.yml, docker-compose.prod.yml}

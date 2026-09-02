@@ -467,8 +467,13 @@ const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
   // une balise `og:image` DOIT porter une URL ABSOLUE — et élargir l'exemption
   // à tous les segments aurait exempté du même coup un `` `${baseURL}/api/…` ``
   // visant le GATEWAY, la classe exacte que cette garde existe pour attraper.
-  // Une garde de sécurité ne s'élargit pas pour faire décroître un compteur :
-  // l'angle mort est nommé et suivi sous #4422.
+  // Une garde de sécurité ne s'élargit pas pour faire décroître un compteur.
+  //
+  // #4422 a tranché : l'exemption N'EST PAS élargie, et le comptage d'un
+  // chemin local atteint par URL absolue est CONSERVÉ — deux témoins
+  // synthétiques le figent dans les deux sens. Le comptage n'était pas un
+  // angle mort à combler : c'est la contrainte qui a produit le bon
+  // correctif, celui décrit juste en dessous.
   //
   // Ce qui les a fait sortir est le geste que la garde VISE depuis le début :
   // le chemin est écrit UNE fois (`OG_IMAGE_PATH` / `ogImageUrl`, dans
@@ -576,6 +581,53 @@ describe('Ce que le balayage sait discriminer', () => {
   it('ignore un littéral qui matche une route LOCALE Next.js (BFF same-origin, pas le gateway)', () => {
     const source = `await fetch('/api/upload/avatar', { method: 'POST', body: form });`;
     expect(scanApiPathLiterals(source, 'x.ts', LOCAL_PREFIXES)).toEqual([]);
+  });
+
+  /**
+   * #4422 — un chemin local atteint par URL ABSOLUE reste COMPTÉ, et c'est la
+   * décision.
+   *
+   * L'exemption locale teste le PREMIER segment du gabarit. Dans
+   * `` `${frontendUrl}/api/health` ``, le premier segment est la chaîne VIDE :
+   * l'exemption ne joue pas, et le site compte alors qu'il vise une route
+   * locale parfaitement servie.
+   *
+   * ## Pourquoi on ne l'élargit PAS
+   *
+   * Tester tous les segments exempterait du même coup un
+   * `` `${baseURL}/api/…` `` visant le GATEWAY — la classe exacte que cette
+   * garde existe pour attraper (#4219, #4222, #4337). La seule information qui
+   * distingue les deux est le NOM de la variable interpolée, et faire dépendre
+   * une exemption de sécurité d'un nom de variable, c'est reconduire le motif
+   * que ce dépôt ne cesse de trouver : un signal crédible que rien n'applique.
+   * Renommer `frontendUrl` en `origin` désarmerait la garde sans qu'aucun
+   * témoin ne tombe.
+   *
+   * ## Ce que le comptage FAIT à la place
+   *
+   * Il pousse vers le geste que la garde vise depuis le début : **écrire le
+   * chemin une seule fois**. C'est ce qui a sorti les quatre sites
+   * `og-image-dynamic` de l'inventaire — `OG_IMAGE_PATH` / `ogImageUrl` dans
+   * `lib/og-image-params.ts`, et les quatre pages l'appellent. Le littéral
+   * restant est nu, donc son premier segment EST le chemin, donc l'exemption
+   * joue.
+   *
+   * Le comptage n'est donc pas un angle mort à combler : c'est la contrainte
+   * qui a produit le bon correctif. Les deux témoins ci-dessous le figent dans
+   * les DEUX sens, faute de quoi un lot suivant élargirait l'exemption « pour
+   * faire décroître un compteur ».
+   */
+  it("COMPTE un chemin local atteint par URL absolue — l'exemption ne joue que sur le premier segment", () => {
+    const source = 'const u = `${frontendUrl}/api/health?x=1`;';
+    expect(scanApiPathLiterals(source, 'x.ts', LOCAL_PREFIXES)).toHaveLength(1);
+  });
+
+  it('COMPTE aussi le même gabarit visant le GATEWAY — les deux sont indistinguables sans lire le nom de la variable', () => {
+    // Le sens qui interdit l'élargissement : si le premier témoin devenait
+    // vert par une exemption élargie, celui-ci le deviendrait AUSSI — et c'est
+    // exactement le site qu'on ne veut jamais laisser passer.
+    const source = 'const u = `${baseURL}/api/v1/conversations`;';
+    expect(scanApiPathLiterals(source, 'x.ts', LOCAL_PREFIXES)).toHaveLength(1);
   });
 
   it("NE PARDONNE PAS un chemin local passé à buildApiUrl — ce wrapper vise TOUJOURS le gateway", () => {

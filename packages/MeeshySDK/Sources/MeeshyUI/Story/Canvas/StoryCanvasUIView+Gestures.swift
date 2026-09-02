@@ -112,11 +112,26 @@ extension StoryCanvasUIView {
         onItemDoubleTapped?(id, kind)
     }
 
+    /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).
+    ///
+    /// `audio` y est entré le 2026-09-01, et son absence coûtait plus qu'un
+    /// éditeur manquant : `handleSingleTap` fait
+    /// `guard let id = hitTestItem(…), let kind = itemKind(forId: id) else { … onBackgroundTapped?() }`.
+    /// Le hit-test TROUVAIT bien la pastille audio — sa couche est nommée — mais
+    /// le kind manquait, donc toucher une pastille audio se comportait
+    /// exactement comme toucher le vide : ça DÉSÉLECTIONNAIT. Pas un contrôle
+    /// inerte : un contrôle qui fait le contraire.
+    ///
+    /// **Le menu contextuel POSAIT la même question et répondait autrement** :
+    /// son classifieur retombait sur `.media` pour un audio, là où celui-ci
+    /// rendait `nil`. Deux écritures d'une seule règle, déjà divergentes ; il
+    /// appelle désormais cette fonction.
     func itemKind(forId id: String) -> CanvasItemKind? {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
         if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
+        if (slide.effects.audioPlayerObjects ?? []).contains(where: { $0.id == id }) { return .audio }
         return nil
     }
 
@@ -155,7 +170,15 @@ extension StoryCanvasUIView {
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
+            // **La borne a un nom depuis le #4722.** Elle était écrite en
+            // littéral ici, et la puce audio en ajoute un SECOND geste de
+            // taille — en SwiftUI, sur un objet que ce recognizer ne saisit
+            // même pas (`manipulable` exclut `.audio`). Deux littéraux
+            // identiques divergent au premier ajustement de l'un, et aucun
+            // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
+            // lui-même.
+            let newScale = SceneObjectScalePolicy.settled(
+                base: baseScale, gestureScale: Double(recognizer.scale))
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
@@ -475,21 +498,43 @@ extension StoryCanvasUIView {
                                                             bakedScale: bakedScale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
-            // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
-            // dans bounds (baseSide × scale), transform = rotation only.
-            // Mêmes raisons que la branche media — éviter le double-scale au
-            // 2e geste sur le même sticker.
-            let designSide = CGFloat(sticker.baseSize * sticker.scale)
-            let renderedSide = geo.render(designSide)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
-            if layer.bounds.size != newBounds.size {
-                layer.bounds = newBounds
+            if sticker.kind == .template {
+                // **Un gabarit n'est PAS carré** (#4744). La branche ci-dessous
+                // reconstruit des bounds de côté `baseSize × scale` — vrai d'un
+                // GLYPHE, qui est carré par nature ; faux d'une décoration, dont
+                // la boîte est MESURÉE par `StickerTemplateRenderer` (une carte
+                // postale est large et basse, un ruban plus large encore).
+                // L'imposer écrasait la décoration dans un carré faux pendant
+                // tout le geste, puis la laissait sauter au rebuild de fin.
+                //
+                // Même remède que le texte et la pastille de lieu, dont la
+                // boîte est mesurée pour les mêmes raisons : un RATIO
+                // transitoire par-dessus la rotation, la re-rasterisation nette
+                // venant à `.ended`. On ne touche pas aux bounds : les
+                // remesurer à chaque image coûterait un dessin Core Graphics
+                // par frame.
+                let bakedScale = (layer as? StoryStickerLayer)?.sticker?.scale ?? sticker.scale
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                layer.transform = Self.liveTextGestureTransform(rotationDegrees: sticker.rotation,
+                                                               modelScale: sticker.scale,
+                                                               bakedScale: bakedScale)
+            } else {
+                // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
+                // dans bounds (baseSide × scale), transform = rotation only.
+                // Mêmes raisons que la branche media — éviter le double-scale au
+                // 2e geste sur le même sticker.
+                let designSide = CGFloat(sticker.baseSize * sticker.scale)
+                let renderedSide = geo.render(designSide)
+                let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+                if layer.bounds.size != newBounds.size {
+                    layer.bounds = newBounds
+                }
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                let rotation = CGFloat(sticker.rotation * .pi / 180)
+                layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             }
-            layer.position = renderPosition(x: sticker.x, y: sticker.y)
-            let rotation = CGFloat(sticker.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
             // La pastille position rasterise son scale dans `bounds` au

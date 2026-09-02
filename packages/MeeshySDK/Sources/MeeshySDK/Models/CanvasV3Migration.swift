@@ -274,6 +274,16 @@ public extension CanvasV3 {
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
             if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
+            // **Le gabarit qui DÉCORE la pastille** (#4717) doit voyager (#4832).
+            // Omis quand `nil` — toute pastille publiée avant ce lot se réencode
+            // alors octet pour octet, et son repli reste celui que
+            // `StoryLocationLayer` applique déjà.
+            //
+            // Ce champ est le FRÈRE de `templateId` sur un sticker, avec une
+            // relation différente : un sticker EST son gabarit, un lieu en est
+            // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
+            // délibérés — ne pas les unifier.
+            if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
@@ -426,6 +436,26 @@ public extension CanvasV3 {
         // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
         // disparaît chez un lecteur qui ne rend que l'emoji.
         var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        // **Le GABARIT voyage, pas seulement son repli** (#4741).
+        //
+        // `wireEmoji` ci-dessus rend, pour un sticker à gabarit, l'emoji de
+        // REPLI du catalogue. Le fil portait donc soigneusement le repli d'une
+        // décoration qu'il ne portait pas : une pastille de lieu publiée
+        // revenait « 📍 », un cadre de cœurs « 💕 ». Le composer dessinait, le
+        // lecteur rendait un glyphe.
+        //
+        // > Un repli conservé sans la chose dont il est le repli n'est plus un
+        // > repli : c'est le contenu.
+        //
+        // Le repli RESTE émis — il sert le lecteur dont le build ne connaît pas
+        // ce `templateId` (une décoration plus récente que lui), qui verra un
+        // glyphe plutôt qu'un trou.
+        if let templateId = nonEmpty(sticker.templateId) {
+            payload["templateId"] = .string(templateId)
+            if !sticker.slots.isEmpty {
+                payload["slots"] = .object(sticker.slots.mapValues { CanvasJSONValue.string($0) })
+            }
+        }
         if let postMediaId = nonEmpty(sticker.postMediaId) {
             payload["postMediaId"] = .string(postMediaId)
         }
@@ -544,6 +574,7 @@ public extension StoryEffects {
         var locations: [StoryLocationObject] = []
         var audios: [StoryAudioPlayerObject] = []
         var bandEdges: [String: ObjectAnchor.Edge] = [:]
+        var unpaintable: [String] = []
         var timingEnds: [String: Double] = [:]
         var anchorPoints: [String: String] = [:]
 
@@ -585,7 +616,18 @@ public extension StoryEffects {
                 drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
                                                  from: object.payload.array("strokes"))
                 drawingData = object.payload.string("data").flatMap { Data(base64Encoded: $0) }
-            case .mention, .reserved:
+            case .mention:
+                // Kind CONNU que la scène ne peint pas : une mention est une
+                // métadonnée, pas un objet. Ne JAMAIS le compter comme une
+                // rupture — la sentinelle rougirait sur toute story qui cite
+                // quelqu'un.
+                continue
+            case .reserved(let raw):
+                // **Un kind d'un document plus récent que ce build** (#4088).
+                // Le décodeur l'a gardé ; la conversion ne sait pas le loger.
+                // Sans ce mémo, le lecteur peindrait la scène AMPUTÉE comme si
+                // c'était la composition de l'auteur.
+                unpaintable.append(raw)
                 continue
             }
         }
@@ -595,6 +637,7 @@ public extension StoryEffects {
         mediaObjects = medias.isEmpty ? nil : medias
         stickerObjects = stickerFamily.isEmpty ? nil : stickerFamily
         audioPlayerObjects = audios.isEmpty ? nil : audios
+        wireUnpaintableKinds = unpaintable.isEmpty ? nil : Array(Set(unpaintable)).sorted()
         wireBandEdge = bandEdges.isEmpty ? nil : bandEdges
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
@@ -721,12 +764,23 @@ public extension StoryEffects {
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
         let postMediaId = object.payload.string("postMediaId") ?? ""
         guard let emoji = stickerEmoji(object.payload.string("emoji"),
-                                       hasImage: !postMediaId.isEmpty) else { return nil }
+                                       hasImage: !postMediaId.isEmpty,
+                                       hasTemplate: !(object.payload.string("templateId") ?? "").isEmpty)
+        else { return nil }
+        // Symétrique de `stickerPayload` : sans ces deux clés, une décoration
+        // revenait `.emoji` et se rendait comme son repli.
+        let templateId = object.payload.string("templateId") ?? ""
+        var slots: [String: String] = [:]
+        for (clef, valeur) in (object.payload.object("slots") ?? [:]) {
+            if case .string(let texte) = valeur { slots[clef] = texte }
+        }
         return StorySticker(
             id: object.id,
             emoji: emoji,
             postMediaId: postMediaId,
             provider: object.payload.string("provider"),
+            templateId: templateId,
+            slots: slots,
             sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
@@ -741,9 +795,14 @@ public extension StoryEffects {
 
     /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
     /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
-    private static func stickerEmoji(_ wire: String?, hasImage: Bool) -> String? {
-        guard hasImage else { return wire }
-        return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji
+    /// `nil` ⇒ l'objet est REJETÉ. Un gabarit doit donc y survivre même sans
+    /// emoji : `wireEmoji` en émet un, mais un document écrit par un autre
+    /// client pourrait n'en porter aucun — et une décoration jetée pour un
+    /// repli manquant serait perdue au lieu d'être dégradée (#4741).
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool, hasTemplate: Bool) -> String? {
+        if hasImage { return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji }
+        if hasTemplate { return wire ?? "" }
+        return wire
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {
@@ -755,7 +814,8 @@ public extension StoryEffects {
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
-            sourceLanguage: object.locale)
+            sourceLanguage: object.locale,
+            styleId: nonEmpty(object.payload.string("styleId")))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {

@@ -19,6 +19,7 @@ import {
   demandeAvecConversationSchema,
 } from './directory/friend-requests';
 import { depreciee } from '../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // Schemas de validation
 const createFriendRequestSchema = z.object({
@@ -54,12 +55,12 @@ const DEPUIS_ALIAS_FRIENDS = '2026-08-29';
 
 /** Le successeur d'une route PAR ID porte l'id RÉSOLU, jamais le gabarit `:id`. */
 const successeurDemandeCiblee = (request: FastifyRequest): string =>
-  `/api/v1/directory/friend-requests/${encodeURIComponent((request.params as { id: string }).id)}`;
+  `${apiPath('/directory/friend-requests')}/${encodeURIComponent((request.params as { id: string }).id)}`;
 
 const ANNONCE_ALIAS_FRIENDS = {
-  envoyer: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests' },
-  recues: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests?direction=received' },
-  envoyees: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: '/api/v1/directory/friend-requests?direction=sent' },
+  envoyer: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: apiPath('/directory/friend-requests') },
+  recues: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: apiPath('/directory/friend-requests?direction=received') },
+  envoyees: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: apiPath('/directory/friend-requests?direction=sent') },
   agir: { depuis: DEPUIS_ALIAS_FRIENDS, successeur: successeurDemandeCiblee },
 } as const;
 

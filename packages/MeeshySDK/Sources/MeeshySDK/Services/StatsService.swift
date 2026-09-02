@@ -9,13 +9,13 @@ public final class StatsService: @unchecked Sendable {
     }
 
     public func fetchStats() async throws -> UserStats {
-        let response: APIResponse<UserStats> = try await api.request(endpoint: "/users/me/stats")
+        let response: APIResponse<UserStats> = try await api.request(UsersEndpoint.meStats)
         return response.data
     }
 
     public func fetchTimeline(days: Int = 30) async throws -> [TimelinePoint] {
         let response: APIResponse<[TimelinePoint]> = try await api.request(
-            endpoint: "/users/me/stats/timeline",
+            UsersEndpoint.meStatsTimeline,
             queryItems: [URLQueryItem(name: "days", value: "\(days)")]
         )
         return response.data
@@ -23,7 +23,7 @@ public final class StatsService: @unchecked Sendable {
 
     public func fetchAchievements() async throws -> [Achievement] {
         let response: APIResponse<[Achievement]> = try await api.request(
-            endpoint: "/users/me/stats/achievements"
+            UsersEndpoint.meStatsAchievements
         )
         return response.data
     }

@@ -6,7 +6,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, OpenAccountDeletionBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
 import bcrypt from 'bcryptjs';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
@@ -211,14 +211,25 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
               },
             },
           },
+          // Les cinq REFUS que ce gestionnaire sert, et rien d'autre. Un statut
+          // non déclaré échappe entièrement à `fast-json-stringify` (mesuré :
+          // Fastify 5 retombe sur `JSON.stringify`, qui ne retire RIEN) — c'est
+          // l'asymétrie de #4689, et la seule façon de la fermer est de déclarer
+          // le statut, jamais d'espérer que l'enveloppe reste propre. Le 404 est
+          // arrivé avec le compte introuvable ; le 401 reste servi par la garde
+          // de session ci-dessous.
           400: errorResponseSchema,
           401: errorResponseSchema,
+          404: errorResponseSchema,
           409: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
     },
     async (request, reply) => {
+      // Le SEUL 401 que cette route sert encore : « je ne sais pas qui tu es ».
+      // Les deux autres refus (compte absent, mot de passe faux) répondent à une
+      // question qui n'est pas celle de l'identité, et ont donc quitté ce statut.
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
@@ -233,13 +244,57 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
           select: { email: true, password: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT },
         });
 
+        // 404, et non 401 : la SESSION est valide — `fastify.authenticate` vient
+        // de la résoudre — c'est la LIGNE qui manque. Le seul chemin qui mène
+        // ici est une authentification servie par le cache d'auth (5 min) pour
+        // un compte purgé entre-temps, ou une lecture servie par un secondaire
+        // en retard sur le jeu de réplicas. Le second cas se lit `null` pour un
+        // compte parfaitement vivant : rendre 401 y ferait DÉCONNECTER quelqu'un
+        // sur une lecture qui ne prouve rien (c'est le verdict `unknown` de
+        // `NotificationService.messageLiveness`, pas le verdict `gone`).
+        //
+        // MESURÉ : les trois routes SŒURS de ré-authentification du dépôt rendent
+        // toutes 404 sur cette même condition — `PATCH /users/me/password` et
+        // `PATCH /users/me/username` (`routes/users/profile-credentials.ts:81`,
+        // `:209`) et `POST /users/me/contact-changes` (`routes/users/contact-changes.ts:142`),
+        // toutes trois `sendNotFound(reply, 'User not found')`. Cette route était
+        // la seule des quatre à répondre 401.
         if (!compte) {
-          return sendUnauthorized(reply, 'Compte introuvable', { code: 'UNAUTHORIZED' });
+          return sendNotFound(reply, 'Compte introuvable', { code: 'ACCOUNT_NOT_FOUND' });
         }
 
+        // 400, et non 401 : « je sais très bien qui tu es, c'est ton mot de passe
+        // qui est faux ». Un 401 sur une session VALIDE fait entrer la route dans
+        // la famille « session expirée » de toutes les piles clientes (#4811).
+        //
+        // MESURÉ côté iOS, et le coût n'est pas cosmétique :
+        // `APIClient.mapUnauthorized` (`packages/MeeshySDK/…/Networking/APIClient.swift:307`)
+        // rend `.sessionExpired` pour tout 401 dont l'adresse n'est pas de type
+        // `credentials` ; `MeEndpoint.accountDeletion` prend le défaut `.bearer`
+        // (`MeeshyEndpoint.swift:52`). Le 401 partait donc dans la branche
+        // rafraîchir → rejouer → `handleUnauthorized()` (`APIClient.swift:740-782`) :
+        // **saisir un mauvais mot de passe pour supprimer son compte déconnectait
+        // l'utilisateur**, en rejouant au passage la requête une seconde fois.
+        // Android tient la même règle (`TokenRefreshPolicy.mapUnauthorized`,
+        // `JwtExpiry.kt:155` — seul `/auth/login*` échappe au teardown).
+        //
+        // 400 plutôt que le 403 proposé par #4811, pour deux raisons mesurées :
+        //   · 403 dit « interdit », ce qui décrit un DROIT qui manque, jamais une
+        //     preuve qu'on n'a pas su fournir ;
+        //   · les trois routes sœurs ci-dessus rendent déjà 400
+        //     (`sendBadRequest(reply, 'Current password is incorrect')`). 403 aurait
+        //     forké une quatrième réponse pour une condition identique ; 400 aligne
+        //     les quatre. Les deux sortent également la route du chemin
+        //     401 → refresh → teardown, donc sans liste d'exceptions par client.
+        //
+        // Le CODE reste `INVALID_PASSWORD` : mesuré, aucun client des quatre
+        // surfaces (`apps/web`, `apps/web-v3`, `packages/MeeshySDK` + `apps/ios`,
+        // `apps/android`) ne le lit — changer le statut ne peut donc casser aucun
+        // branchement existant — et il reste le discriminant nommable pour celui
+        // qui voudra distinguer ce 400 d'un 400 de validation.
         const motDePasseValide = await bcrypt.compare(currentPassword, compte.password ?? '');
         if (!motDePasseValide) {
-          return sendUnauthorized(reply, 'Mot de passe incorrect', { code: 'INVALID_PASSWORD' });
+          return sendBadRequest(reply, 'Mot de passe incorrect', { code: 'INVALID_PASSWORD' });
         }
 
         // Le refus EXPLICITE, avant toute écriture. Ouvrir la demande sans

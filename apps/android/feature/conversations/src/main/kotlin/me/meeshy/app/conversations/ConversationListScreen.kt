@@ -321,7 +321,10 @@ fun ConversationListScreen(
  * the menu and forwards the intent. Menu-open is local UI state, closed after each pick.
  */
 @Composable
-private fun LockSecurityMenu(
+// `internal` depuis #4600 : l'en-tete vit desormais dans son propre fichier, et
+// `private` ne franchit pas cette frontiere — la meme que toute extraction fait
+// traverser, et qui ne se voit qu'a la compilation.
+internal fun LockSecurityMenu(
     canChange: Boolean,
     canRemove: Boolean,
     onChange: () -> Unit,

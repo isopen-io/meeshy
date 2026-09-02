@@ -337,7 +337,7 @@ final class GlobalSearchViewModel: ObservableObject {
     private func fetchRemoteConversationResults(query: String) async -> [GlobalSearchConversationResult] {
         do {
             let response: APIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations/search",
+                ConversationsEndpoint.search,
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
@@ -537,7 +537,7 @@ final class GlobalSearchViewModel: ObservableObject {
     private func fetchRemoteMessageResults(query: String) async -> [GlobalSearchMessageResult] {
         do {
             let response: APIResponse<[APIConversation]> = try await api.request(
-                endpoint: "/conversations/search",
+                ConversationsEndpoint.search,
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
@@ -595,7 +595,7 @@ final class GlobalSearchViewModel: ObservableObject {
     ) async -> [GlobalSearchMessageResult] {
         do {
             let response: MessagesAPIResponse = try await api.request(
-                endpoint: "/conversations/\(conversationId)/messages/search",
+                ConversationsEndpoint.byIdMessagesSearch(id: conversationId),
                 queryItems: [
                     URLQueryItem(name: "q", value: query),
                     URLQueryItem(name: "limit", value: "5"),

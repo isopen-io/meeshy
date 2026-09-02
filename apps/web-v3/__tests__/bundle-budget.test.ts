@@ -397,6 +397,14 @@ describe('le fichier budgets.json du dépôt', () => {
     readonly groupes?: readonly Groupe[];
     readonly routes?: readonly RegleDeRoute[];
     readonly questions_ouvertes?: readonly { readonly id: string; readonly constat: string }[];
+    readonly reseau?: {
+      readonly ecrans?: readonly {
+        readonly motifs: readonly string[];
+        readonly plafonds: Readonly<
+          Record<string, { readonly valeur: number | null; readonly statut: string }>
+        >;
+      }[];
+    };
   };
 
   const budgets: Budgets = JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8'));
@@ -457,7 +465,10 @@ describe('le fichier budgets.json du dépôt', () => {
   // contradiction doit être DÉCLARÉE : c'est une décision d'architecture, pas
   // un détail de gate.
   describe('le plancher mesuré contre le plafond du rôle premier', () => {
-    const mesures: { readonly plancher_next_ko?: number } = JSON.parse(
+    const mesures: {
+      readonly plancher_next_ko?: number;
+      readonly plancher_next_requetes?: { readonly valeur?: number };
+    } = JSON.parse(
       readFileSync(join(__dirname, '..', 'budgets-mesures.json'), 'utf8'),
     );
 
@@ -477,6 +488,29 @@ describe('le fichier budgets.json du dépôt', () => {
         expect(declare).toContain(String(g.plafonds.ecran_ko.valeur)),
       );
       expect(declare).toContain('plancher');
+    });
+
+    /**
+     * La même contradiction, comptée en REQUÊTES — celle que le premier écran
+     * rendu par une page rencontre (§ 8.3, `/l/:token/expired` : 2 « HTML +
+     * CSS »). Le runtime d'App Router en pose quatre de plus dans le `<head>`
+     * de toute page, y compris une page sans un seul composant client.
+     *
+     * Ce témoin ne juge pas le chiffre : il exige qu'un GATE que le PLANCHER
+     * franchit soit DÉCLARÉ. Un gate franchi par construction et non déclaré
+     * est un gate que la première exécution rouge fera desserrer en silence.
+     */
+    it('déclare le plancher de requêtes dès qu’un GATE d’écran passe en dessous', () => {
+      const plancher = mesures.plancher_next_requetes?.valeur ?? 0;
+      const franchis = (budgets.reseau?.ecrans ?? []).filter((ecran) => {
+        const plafond = ecran.plafonds.requetes_avant_premier_pixel;
+        return plafond?.statut === 'GATE' && plafond.valeur !== null && plafond.valeur < plancher;
+      });
+      const declare = (budgets.questions_ouvertes ?? []).map((q) => `${q.id} ${q.constat}`).join(' ');
+
+      expect(plancher).toBeGreaterThan(0);
+      expect(franchis.map((ecran) => ecran.motifs.join(','))).toContain('/l/*/expired');
+      expect(declare).toContain(String(plancher));
     });
   });
 });

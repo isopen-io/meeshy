@@ -157,10 +157,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
-        // **Le socle depuis le 2026-08-30** : la capsule annuler/rétablir a
-        // suivi les deux boutons descendus de la barre haute, et garde leur
-        // police figée — même cadre fixe, même raison (voir `totalCeiling`).
-        "Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -207,6 +203,21 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
+        // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
+        // porte DEUX sites figés dont les origines sont opposées, et les
+        // confondre avalerait en silence le second :
+        //
+        //   · le glyphe de lecture d'une vidéo (12 pt) est une RELOCALISATION —
+        //     il vient de `galleryImageView`, dont le visuel est devenu
+        //     `FeedMediaTile` pour que le carrousel et l'aperçu d'une
+        //     republication rendent la même vignette. La population ne bouge
+        //     pas, seul le nom s'ajoute ;
+        //   · la chevronnette d'une flèche de pagination (14 pt) est un VRAI
+        //     ajout, et `totalCeiling` monte d'un cran pour lui, avec sa raison :
+        //     elle vit dans un cercle de 34 pt qu'elle déborderait si elle
+        //     scalait, exactement la doctrine 86i. La cible tactile reste à 44,
+        //     posée par-dessus.
+        "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView+Attachments.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
@@ -233,7 +244,14 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryViewerContainer.swift",
         "Features/Main/Views/StoryViewerView+Canvas.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
-        "Features/Main/Views/StoryViewerView+Sidebar.swift",
+        // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
+        // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues
+        // pour 1 369 lignes) et emporte AVEC LUI les quatre sites figés — des
+        // glyphes dans un cadre fixe, dont la raison d'exemption voyage avec
+        // eux. La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling`
+        // ne changent, seul le NOM change. Le rail n'en porte plus aucun : il
+        // sort de la liste et n'y revient jamais.
+        "Features/Main/Views/StoryViewerView+Header.swift",
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
@@ -294,6 +312,19 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
     /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
     /// et les confondre aurait masqué l'un des deux.
+    /// **248 depuis #4096.** Un cran, pour la chevronnette des flèches de
+    /// pagination du carrousel (14 pt dans un cercle fixe de 34). Le second
+    /// site figé du même fichier — le glyphe de lecture d'une vidéo — n'y
+    /// participe pas : il a été DÉPLACÉ depuis `FeedPostCard+Media.swift`.
+    /// **247 depuis #4586.** Un cran de MOINS : la capsule annuler/rétablir a
+    /// quitté le socle pour le rail des objets, et sa police figée n'a pas
+    /// suivi — le rail emploie `.title3`, comme ses deux contrôleurs voisins.
+    /// `MeeshyComposerHost+Socle.swift` sort donc de `bearingFiles` : il ne
+    /// porte plus aucun site.
+    ///
+    /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
+    /// > cliquet et devient un plafond : il ne rougirait plus que sur une
+    /// > régression plus grosse que l'écart accumulé.
     private static let totalCeiling = 247
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée

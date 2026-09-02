@@ -88,20 +88,32 @@ extension StoryComposerViewModel {
         return effects.backgroundTransform?.videoFitMode != "fit"
     }
 
-    /// Ratio de canvas à PERSISTER (`nil` = pas de fond, portrait 9:16 par
-    /// défaut) dérivé du fond d'un slide : « l'import du fond impose le cadre
-    /// et forme du Canvas ». Ratio CONTINU du fond (pas de snap binaire
-    /// portrait/landscape, directive user 2026-07-14), clampé à [9/21, 21/9]
-    /// pour éviter un canvas dégénéré sur un fond au ratio extrême (panorama,
-    /// capture ultra-haute).
+    /// **La SCÈNE est figée en 9:16 — le fond n'impose plus sa forme
+    /// (directive porteur, 2026-08-31).**
+    ///
+    /// Elle suivait le ratio CONTINU du fond, clampé à [9/21, 21/9] : « l'import
+    /// du fond impose le cadre et forme du Canvas » (directive du 2026-07-14).
+    /// Une photo paysage donnait donc un canvas 16:9 — ce que le porteur a
+    /// mesuré sur capture, là où toutes les planches du document montrent une
+    /// scène verticale.
+    ///
+    /// **Ce que la règle d'avant coûtait, au-delà de la forme** : le canvas
+    /// changeait de proportion SOUS la composition. Un texte posé sur une scène
+    /// verticale se retrouvait ailleurs dès qu'on ajoutait un fond paysage, et
+    /// l'outil de dessin traçait sur un cadre qui n'était plus celui de la carte
+    /// (#4515). Une scène qui change de forme n'est plus une scène : c'est un
+    /// cadre qui suit son contenu, quand c'est au contenu de trouver sa place
+    /// dans le cadre.
+    ///
+    /// `nil` veut dire « portrait 9:16 » — la valeur par défaut de
+    /// `StoryCanvasAspect.from(ratio:)`. On n'écrit donc pas un nombre : **on
+    /// s'abstient d'en imposer un**, ce qui laisse le défaut du modèle décider.
+    ///
+    /// Ce qui est déjà PUBLIÉ garde son ratio : cette règle ne gouverne que ce
+    /// qui se compose maintenant. Et le média qui ne remplit pas la scène laisse
+    /// des bandes — elles se peignent, elles ne restent pas noires.
     static func canvasAspectRatio(forBackgroundOf effects: StoryEffects) -> Double? {
-        guard let bg = effects.resolvedBackgroundMedia else { return nil }
-        return clampedCanvasRatio(bg.aspectRatio)
-    }
-
-    /// Clamp pur, testé indirectement via `canvasAspectRatio(forBackgroundOf:)`.
-    private static func clampedCanvasRatio(_ ratio: Double) -> Double {
-        min(21.0 / 9.0, max(9.0 / 21.0, ratio))
+        nil
     }
 
     var isContentToolActive: Bool {
@@ -396,11 +408,18 @@ extension StoryComposerViewModel {
     /// `currentEffects`, la seule source de vérité (et la seule unité persistée
     /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
     /// deux lieux successifs ne se superposent pas exactement.
+    /// - Parameter styleId: le gabarit qui DÉCORE la pastille (#4717). `nil`
+    ///   rend la pastille d'origine, au pixel près — c'est le cas de la porte
+    ///   canonique du lieu, qui n'a pas à choisir une décoration.
+    /// `public` depuis le #4579 : la palette de constructions du composer
+    /// unifié — qui vit dans l'APP — pose des lieux décorés. Son voisin
+    /// `addSticker` l'était déjà pour la même raison.
     @discardableResult
-    func addLocation(place: SharedPlace) -> StoryLocationObject {
+    public func addLocation(place: SharedPlace, styleId: String? = nil) -> StoryLocationObject {
         let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
         let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset,
-                                        sourceLanguage: declaredContentLanguage)
+                                        sourceLanguage: declaredContentLanguage,
+                                        styleId: styleId)
         var effects = currentEffects
         effects.locationObjects.append(badge)
         currentEffects = effects
@@ -439,6 +458,41 @@ extension StoryComposerViewModel {
         stickers.append(sticker)
         effects.stickerObjects = stickers
         currentEffects = effects
+        bringToFront(id: sticker.id)
+        return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
+    /// **Pose une DÉCORATION** — un gabarit et ses emplacements déjà figés
+    /// (#4716).
+    ///
+    /// Le placement, la cascade et le z-order sont ceux de `addSticker(emoji:)` :
+    /// une décoration est un sticker, pas une sixième famille de scène.
+    ///
+    /// Deux choses lui sont propres :
+    /// - **l'échelle vient du GABARIT**, jamais de `StorySticker.posedScale` —
+    ///   ce 2,2 agrandit un glyphe nu, et ferait déborder un cartouche qui
+    ///   mesure déjà son contenu ;
+    /// - **l'emoji de repli est écrit ICI**, pas à la publication : un brouillon
+    ///   relu par une version antérieure — qui ne sait rien du gabarit — doit
+    ///   déjà montrer un glyphe. Même règle que le sticker image juste en
+    ///   dessous.
+    @discardableResult
+    public func addSticker(template: StickerTemplate,
+                           slots: [String: String]) -> StorySticker {
+        let count = currentEffects.stickerObjects?.count ?? 0
+        let offset = Double(count % 5) * 0.04
+        var sticker = StorySticker(emoji: template.fallbackEmoji,
+                                   templateId: template.id,
+                                   slots: slots,
+                                   sourceLanguage: declaredContentLanguage,
+                                   x: 0.5 + offset, y: 0.5 + offset)
+        sticker.scale = template.posedScale
+        var effects = currentEffects
+        var stickers = effects.stickerObjects ?? []
+        stickers.append(sticker)
+        effects.stickerObjects = stickers
+        currentEffects = effects
+        selectedElementId = sticker.id
         bringToFront(id: sticker.id)
         return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
     }
@@ -620,17 +674,27 @@ extension StoryComposerViewModel {
     ///   personne d'autre » ;
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
-    @discardableResult
     /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
     /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
     /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
     /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
     /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
     /// pose le premier.
-    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **Un son emprunté, éventuellement ROGNÉ** (#4657).
+    ///
+    /// `trim` porte l'intervalle conservé, en secondes depuis le début de la
+    /// piste. Il se pose en `sourceStart`/`sourceEnd` — **jamais** en découpant
+    /// un fichier : un son de la bibliothèque garde son `soundId`, et le crédit
+    /// de son auteur avec lui. Ré-encoder une copie rognée en ferait un fichier
+    /// anonyme, ce que la doctrine du crédit interdit.
+    ///
+    /// `nil` ⇒ la piste entière, comme avant ce lot.
+    @discardableResult
+    public func addBorrowedSound(_ sound: APISound,
+                                 trim: ClosedRange<TimeInterval>? = nil) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
-        let obj = StoryAudioPlayerObject(
+        var obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: "overlay",
             x: 0.5,
@@ -648,6 +712,15 @@ extension StoryComposerViewModel {
             soundId: sound.id,
             soundAuthorUsername: sound.uploader?.username
         )
+        // Le rognage se pose sur la SOURCE, pas sur un fichier : c'est ce qui
+        // laisse `soundId` intact, donc le crédit de l'auteur (#4657).
+        // `duration` suit l'intervalle — sans quoi la piste annoncerait sa
+        // longueur entière et le lecteur attendrait après la fin du segment.
+        if let trim {
+            obj.sourceStart = trim.lowerBound
+            obj.sourceEnd = trim.upperBound
+            obj.duration = Float(trim.upperBound - trim.lowerBound)
+        }
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
         audios.append(obj)
@@ -778,6 +851,26 @@ extension StoryComposerViewModel {
         var texts = effects.textObjects
         guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
         texts[index].text = text
+        effects.textObjects = texts
+        currentEffects = effects
+    }
+
+    /// **La famille typographique d'un texte de la scène** (#4083, vue `2e`).
+    ///
+    /// `TextEditToolOptions` l'écrit par un `@Binding var textObject` — ce qui
+    /// convient à un panneau qui POSSÈDE l'objet le temps d'une édition, et pas
+    /// du tout à une bande qui n'a qu'un identifiant. Sans ce site, le spécimen
+    /// aurait dû se fabriquer un binding, c'est-à-dire une SECONDE écriture du
+    /// même champ, à faire diverger au premier ajout d'effet de bord.
+    ///
+    /// Même forme que `updateTextContent` juste au-dessus, délibérément : deux
+    /// écritures du même tableau qui ne se ressemblent pas se relisent deux
+    /// fois.
+    public func updateTextStyle(id: String, style: StoryTextStyle) {
+        var effects = currentEffects
+        var texts = effects.textObjects
+        guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
+        texts[index].textStyle = style.rawValue
         effects.textObjects = texts
         currentEffects = effects
     }

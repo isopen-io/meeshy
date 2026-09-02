@@ -57,6 +57,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { zodIssueSchema, issuesServies } from '../../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
 import { sendWithETag } from '../../../utils/etag';
@@ -130,8 +131,13 @@ type CategoryWrite = {
   readonly category: PreferenceCategory;
   /** Ce qui sera ÉCRIT dans la colonne JSON. */
   readonly stored: PreferenceDocument;
-  /** L'état que le serveur OBÉIRA — c'est lui que la garde de consentement lit. */
+  /** L'état que le serveur OBÉIRA. */
   readonly effective: PreferenceDocument;
+  /**
+   * Ce que le CORPS NOMME — et c'est lui, depuis #4578, que la garde de
+   * consentement lit. Voir le commentaire du site de validation plus bas.
+   */
+  readonly submitted: PreferenceDocument;
 };
 
 export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
@@ -160,7 +166,17 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
               data: categoriesResponseSchema,
             },
           },
-          400: errorResponseSchema,
+          400: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              issues: {
+                type: 'array',
+                items: zodIssueSchema,
+                description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+              },
+            },
+          },
           401: errorResponseSchema,
           500: errorResponseSchema,
         },
@@ -235,7 +251,17 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
               data: categoriesResponseSchema,
             },
           },
-          400: errorResponseSchema,
+          400: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              issues: {
+                type: 'array',
+                items: zodIssueSchema,
+                description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+              },
+            },
+          },
           401: errorResponseSchema,
           403: {
             description: 'Consentements requis manquants',
@@ -305,18 +331,28 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           return {
             category,
             stored,
-            // La garde de consentement lit l'état OBÉI, pas le document écrit :
-            // en `replace`, une clé absente n'est pas « éteinte », elle relève
-            // de son défaut — et c'est ce défaut qui sera servi et appliqué.
             effective: resolveComplete(PREFERENCE_REGISTRY[category].defaults, stored),
+            submitted,
           };
         });
 
+        // #4578 — la garde lit `submitted`, pas `effective`.
+        //
+        // Elle lisait l'état OBÉI, au motif qu'« en `replace`, une clé absente
+        // n'est pas éteinte, elle relève de son défaut — et c'est ce défaut qui
+        // sera servi et appliqué ». La seconde moitié était l'affirmation à
+        // vérifier, et la mesure sur staging l'a partagée en deux : pour la
+        // famille AUDIO une garde d'USAGE existe et fait le travail, donc
+        // stocker `true` n'applique rien ; pour `telemetryEnabled` et
+        // `allowAnalytics` aucun lecteur d'usage n'existe — d'où leur passage à
+        // `false` par défaut dans le même lot, plutôt qu'une garde d'écriture
+        // qui verrouillait trois catégories de réglages sur sept pour un compte
+        // neuf. Détail complet : `preference-router-factory.ts`, même lot.
         const violations = (
           await Promise.all(
             writes.map(async (write) =>
               (
-                await consentService.validatePreferences(userId, write.category, write.effective)
+                await consentService.validatePreferences(userId, write.category, write.submitted)
               ).map((violation) => ({ ...violation, category: write.category }))
             )
           )
@@ -383,7 +419,15 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
       } catch (error) {
         const failure = error as { name?: string; message?: string };
         if (failure.name === 'ZodError') {
-          return sendBadRequest(reply, 'VALIDATION_ERROR', { message: failure.message });
+          // #4589 — le refus NOMME ce qu'il refuse. `failure.message` seul est
+          // une prose Zod sérialisée : lisible par un humain qui la déplie,
+          // inutilisable par un client qui veut pointer le champ fautif.
+          // `issues` est déclaré au schéma 243 ci-dessus, sinon
+          // `fast-json-stringify` l'effacerait.
+          return sendBadRequest(reply, 'VALIDATION_ERROR', {
+            message: failure.message,
+            details: { issues: issuesServies((failure as { issues?: unknown[] }).issues ?? []) },
+          });
         }
 
         fastify.log.error({ error }, 'Error updating preferences');
@@ -421,7 +465,17 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
               },
             },
           },
-          400: errorResponseSchema,
+          400: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              issues: {
+                type: 'array',
+                items: zodIssueSchema,
+                description: 'Une entrée par champ refusé — une clé inconnue vit dans `keys` (#4589)',
+              },
+            },
+          },
           401: errorResponseSchema,
           500: errorResponseSchema,
         },

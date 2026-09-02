@@ -115,7 +115,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     }
 
     public func list(offset: Int = 0, limit: Int = 30) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
-        try await api.offsetPaginatedRequest(endpoint: "/conversations", offset: offset, limit: limit)
+        try await api.offsetPaginatedRequest(ConversationsEndpoint.root, offset: offset, limit: limit)
     }
 
     /// Cursor-based pagination over the user's conversations. Pass
@@ -142,7 +142,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             queryItems.append(URLQueryItem(name: "before", value: cursor))
         }
         let body: ConversationListResponseBody = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: queryItems
         )
         let items = body.data.map { $0.toConversation(currentUserId: currentUserId) }
@@ -167,7 +167,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `limit`/`offset` à transmettre ici.
     public func search(query: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations/search",
+            ConversationsEndpoint.search,
             queryItems: [URLQueryItem(name: "q", value: query)]
         )
         return response.data
@@ -175,19 +175,19 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
 
     public func getById(_ conversationId: String) async throws -> APIConversation {
         let response: APIResponse<APIConversation> = try await api.request(
-            endpoint: "/conversations/\(conversationId)"
+            ConversationsEndpoint.byId(id: conversationId)
         )
         return response.data
     }
 
     public func create(type: String, title: String? = nil, participantIds: [String]) async throws -> CreateConversationResponse {
         let body = CreateConversationRequest(type: type, title: title, participantIds: participantIds)
-        let response: APIResponse<CreateConversationResponse> = try await api.post(endpoint: "/conversations", body: body)
+        let response: APIResponse<CreateConversationResponse> = try await api.post(ConversationsEndpoint.root, body: body)
         return response.data
     }
 
     public func delete(conversationId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byId(id: conversationId))
     }
 
     // Endpoints fire-and-forget : la reponse est ignoree (`let _`). Les trois
@@ -200,15 +200,15 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     // `data` : il tolere n'importe quelle forme de corps, quel que soit
     // l'endpoint et quelle que soit l'evolution future du gateway.
     public func markRead(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byIdMarkRead(id: conversationId), method: "POST")
     }
 
     public func markAsReceived(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byConversationIdMarkAsReceived(conversationId: conversationId), method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {
-        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(ConversationsEndpoint.byIdMarkUnread(id: conversationId), method: "POST")
     }
 
     public func getParticipants(conversationId: String, limit: Int = 100, cursor: String? = nil) async throws -> PaginatedAPIResponse<[APIParticipant]> {
@@ -217,7 +217,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         return try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants",
+            ConversationsEndpoint.byIdParticipants(id: conversationId),
             queryItems: queryItems
         )
     }
@@ -233,7 +233,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         participantId: String
     ) async throws -> ConversationParticipantProfile {
         let response: APIResponse<ConversationParticipantProfile> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/profile"
+            ConversationsEndpoint.byIdParticipantsByParticipantIdProfile(id: conversationId, participantId: participantId)
         )
         return response.data
     }
@@ -256,7 +256,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         rights: [String: Bool]
     ) async throws -> ParticipantEntryCapabilities {
         let response: APIResponse<ParticipantRightsUpdateResult> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
+            ConversationsEndpoint.byIdParticipantsByParticipantIdRights(id: conversationId, participantId: participantId),
             body: rights
         )
         return response.data.rights
@@ -286,7 +286,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             .map { Self.historyGrantFloor(for: $0) }
             .map { ISO8601DateFormatter().string(from: $0) }
         let response: APIResponse<ParticipantHistoryGrantUpdateResult> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
+            ConversationsEndpoint.byIdParticipantsByParticipantIdRights(id: conversationId, participantId: participantId),
             body: HistoryGrantBody(historyVisibleFrom: iso)
         )
         return response.data.historyVisibleFrom
@@ -326,7 +326,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
 
     public func deleteForMe(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/conversations/\(conversationId)/delete-for-me"
+            ConversationsEndpoint.byIdDeleteForMe(id: conversationId)
         )
     }
 
@@ -344,7 +344,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// échoue au lieu de mentir.
     public func removeParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)",
+            ConversationsEndpoint.byIdParticipantsByUserId(id: conversationId, userId: key),
             method: "DELETE"
         )
     }
@@ -363,7 +363,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     public func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         struct RoleBody: Encodable { let role: String }
         let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(userId)/role",
+            ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
             body: RoleBody(role: role)
         )
     }
@@ -417,13 +417,13 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             autoTranslateEnabled: autoTranslateEnabled
         )
         let response: APIResponse<UpdateConversationResponse> = try await api.put(
-            endpoint: "/conversations/\(conversationId)", body: body)
+            ConversationsEndpoint.byId(id: conversationId), body: body)
         return response.data.toAPIConversation()
     }
 
     public func leave(conversationId: String) async throws {
         let _: APIResponse<LeaveConversationResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/leave",
+            ConversationsEndpoint.byIdLeave(id: conversationId),
             method: "POST"
         )
     }
@@ -439,7 +439,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func banParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<BanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)/ban",
+            ConversationsEndpoint.byIdParticipantsByUserIdBan(id: conversationId, userId: key),
             method: "PATCH"
         )
     }
@@ -450,7 +450,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
     public func unbanParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<UnbanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(key)/unban",
+            ConversationsEndpoint.byIdParticipantsByUserIdUnban(id: conversationId, userId: key),
             method: "PATCH"
         )
     }
@@ -458,7 +458,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// Récupère les conversations en commun avec un utilisateur spécifique
     public func listSharedWith(userId: String, limit: Int = 50) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "withUserId", value: userId),
                 URLQueryItem(name: "limit", value: "\(limit)")
@@ -470,7 +470,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// Finds the most recent existing direct conversation with a given user, or nil if none exists.
     public func findDirectWith(userId: String) async throws -> APIConversation? {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             queryItems: [
                 URLQueryItem(name: "type", value: "direct"),
                 URLQueryItem(name: "withUserId", value: userId),

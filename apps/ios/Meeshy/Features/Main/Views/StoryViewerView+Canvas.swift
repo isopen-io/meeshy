@@ -1148,6 +1148,12 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
+    /// **Le token de retour en tête du corpus** (#4831).
+    ///
+    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// suspend l'horloge de lecture et appartient donc au parent — remonter une
+    /// fenêtre de défilement ne regarde personne d'autre que cette carte.
+    @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
 
     /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
@@ -1205,7 +1211,7 @@ struct StoryCardView: View {
     /// dessous des layer des controles de la story »).
     let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
-    private var topInset: CGFloat {
+    var topInset: CGFloat { // internal for cross-file extension access
         max(geometry.safeAreaInsets.top, 59)
     }
 
@@ -1221,7 +1227,7 @@ struct StoryCardView: View {
     /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
-    private var currentStoryDescription: String? {
+    var currentStoryDescription: String? { // internal for cross-file extension access
         guard let story = currentStory,
               let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
               !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1241,7 +1247,7 @@ struct StoryCardView: View {
     /// la forme à la composition (« l'import de l'image de fond impose le cadre et
     /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
     /// par défaut. Fallback portrait pour toutes les stories antérieures.
-    private var readerCanvasRatio: CGFloat {
+    var readerCanvasRatio: CGFloat { // internal for cross-file extension access
         CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
     }
 
@@ -1409,7 +1415,7 @@ struct StoryCardView: View {
             : progress
     }
 
-    private var canvasFitSize: CGSize {
+    var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
         // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
         // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
         // 16:9 si l'auteur a importé un fond paysage).
@@ -1438,9 +1444,9 @@ struct StoryCardView: View {
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
     /// l'ombre et l'animation de la carte en phase avec le cadrage.
-    private var canvasIsExpanded: Bool { canvasPresentation == .free }
+    var canvasIsExpanded: Bool { canvasPresentation == .free } // internal : idem
 
-    private var readerCanvasFraming: StoryCanvasFraming.Result {
+    var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
         StoryCanvasFraming.resolve(.init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
@@ -1538,7 +1544,13 @@ struct StoryCardView: View {
             }
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
-            if let story = currentStory {
+            // La SENTINELLE prend la place de la scène quand ce build ne sait pas
+            // la peindre (#4088). La bifurcation est ICI, au-dessus de la chaîne
+            // d'accessibilité du canvas : plus bas, `children: .ignore` aplatirait
+            // ses deux boutons — le seul geste utile deviendrait inatteignable.
+            if currentStoryIsUnpaintable {
+                sentinelLayer
+            } else if let story = currentStory {
                 // La porte v3 et les fils du viewer vivent dans
                 // `currentContentHost(_:)`.
                 currentContentHost(story)
@@ -1594,7 +1606,14 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
-                    .opacity(contentOpacity)
+                    // Déplier la légende EFFACE la scène pour laisser remonter
+                    // le fond ThumbHash déjà monté sous elle (Layer 1.5) — ou,
+                    // sans média, la couleur de fond de la story. Multiplié
+                    // avec `contentOpacity` : les deux répondent à « combien de
+                    // cette scène voit-on ? » et se cumulent.
+                    .opacity(contentOpacity
+                             * CaptionExpansionSpace.storySceneOpacity(captionExpanded: isCaptionExpanded))
+                    .animation(.easeInOut(duration: 0.22), value: isCaptionExpanded)
                     .offset(x: openingSlideFraction * canvasFitSize.width,
                             y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -1618,6 +1637,23 @@ struct StoryCardView: View {
                     // Coupée en plein écran (carte = plein bord, pas d'ombre).
                     .shadow(color: .black.opacity(canvasIsExpanded ? 0 : 0.4),
                             radius: 20, y: 8)
+                    // **Déplier la légende FLOUTE la scène** (directive porteur
+                    // 2026-09-02) : « pour les story pas besoin de cacher quoi
+                    // que ce soit, quand on déplie, on floute juste la story et
+                    // on affiche le texte déplié ».
+                    //
+                    // La story n'a rien à sacrifier — pas de carte d'auteur en
+                    // bas, pas de pellicule : sa scène OCCUPE déjà tout. Elle
+                    // recule donc au lieu de céder la place, et le texte passe
+                    // devant. C'est l'inverse de la galerie plein écran, où
+                    // c'est l'auteur qui s'efface (`ConversationMediaGalleryView`)
+                    // — deux réponses à la même question, « où trouver la
+                    // place ? », parce que les deux surfaces n'ont pas le même
+                    // voisinage.
+                    //
+                    // Le flou est posé APRÈS l'ombre et le cadrage : il porte
+                    // sur la carte telle qu'elle est rendue, coins compris, et
+                    // ne déborde donc pas de son clip.
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1709,30 +1745,7 @@ struct StoryCardView: View {
                 .transition(.opacity)
             }
 
-            // === Description overlay (B2, #3925 — la légende de la story) ===
-            //
-            // La face LECTURE de la section description repliable du composer :
-            // le contenu partagé du composer unifié (`slide.content`), résolu par
-            // le Prisme, s'affiche par-dessus le canvas composé — comme la légende
-            // d'un réel. Gaté sur `currentVoiceCaption == nil` : la transcription
-            // vocale (exploration à la demande, menu « … ») prend le bas de la
-            // scène quand elle est active — les deux ne se chevauchent jamais.
-            //
-            // **Elle était INERTE.** `Text` brut dans un cartouche noir opaque,
-            // `lineLimit(4)`, et `allowsHitTesting(false)` sur tout le bloc :
-            // rien ne pouvait la déplier, et le cartouche masquait la
-            // composition qu'il commente. `MediaCaptionOverlay` (SDK) tient
-            // désormais la règle — dix MOTS, de l'ombre plutôt qu'une boîte, et
-            // le plein écran ancré au coin bas-gauche quand on déplie (#4474).
-            if currentVoiceCaption == nil, let description = currentStoryDescription {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
-                                        onToggle: onCaptionExpansionToggled)
-                }
-                .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
-                .transition(.opacity)
-            }
+            captionLayer(geometry: geometry)
 
             // === Background audio badge ===
             //
@@ -2068,6 +2081,24 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
+            // **Le rail passe AU-DESSUS du corpus déplié** (#4831).
+            //
+            // La légende est montée en `zIndex(60)` pour recevoir son tap (elle
+            // vivait sous la couche de gestes, #4762) ; le rail, déclaré plus
+            // bas mais sans `zIndex`, se retrouvait DESSOUS. Or le corpus
+            // déplié est une `ScrollView` en `frame(maxWidth: .infinity)` :
+            // elle prend les touchers sur toute la colonne, y compris la bande
+            // du rail — dont le texte s'écarte pourtant soigneusement
+            // (`expandedTrailingInset`). Mesuré au simulateur : Send, Vues,
+            // Partager, Enregistrer et Traductions restaient PARFAITEMENT
+            // VISIBLES et ne répondaient plus.
+            //
+            // > Écarter un TEXTE d'un voisin ne lui rend pas ses touchers. La
+            // > vue qui les prend n'est pas celle qu'on voit : c'est son
+            // > conteneur, et lui n'a pas de retrait. Un contrôle visible et
+            // > inerte est pire qu'un contrôle caché — rien n'indique pourquoi
+            // > il ne répond pas.
+            .zIndex(70)
 
             // === Layer 9: Reaction flight (tuile agrandie → cœur, ≤ 1 s) ===
             if let flight = reactionFlight {

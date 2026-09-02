@@ -181,8 +181,38 @@ public final class StoryCanvasUIView: UIView {
 
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
-    public enum CanvasItemKind: Sendable, Equatable {
-        case text, media, sticker, location
+    public enum CanvasItemKind: Sendable, Equatable, Hashable, CaseIterable {
+        case text, media, sticker, location, audio
+    }
+
+    /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur** (#4074).
+    ///
+    /// `onItemDoubleTapped != nil` répond à « l'hôte a-t-il câblé un éditeur ? ».
+    /// C'est une question de CANVAS, et « Modifier » est une décision par
+    /// OBJET : l'atelier câble le rappel, puis fait `case .sticker, .location:
+    /// break` — le menu offrait donc « Modifier » sur un sticker, et rien ne se
+    /// produisait.
+    ///
+    /// > **Un booléen de canvas ne peut pas répondre à une question par objet.**
+    /// > Le menu a la `kind` sous la main (`contextMenu(for:kind:)`) ; ce qui
+    /// > manquait était de la CONSULTER.
+    ///
+    /// Défaut `[.text, .media]` — ce que le rappel de l'atelier traite
+    /// réellement. Un hôte qui n'en sait éditer qu'un le restreint (la scène
+    /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté).
+    public var editableKinds: Set<CanvasItemKind> = [.text, .media]
+
+    /// **Le site UNIQUE de la question « cet objet a-t-il un éditeur ? »**, lu
+    /// par le menu visuel ET par les actions VoiceOver.
+    ///
+    /// Les deux avaient déjà DIVERGÉ : l'accessibilité restreignait à
+    /// `kind == .text || kind == .media` en local, le menu visuel non — pendant
+    /// que le doc-comment de l'accessibilité affirmait appliquer « la MÊME règle
+    /// que le menu long-press ». Une règle déclarée partagée et écrite deux fois
+    /// diverge sans que rien ne le voie : chaque copie reste cohérente avec
+    /// elle-même.
+    func hasEditor(for kind: CanvasItemKind) -> Bool {
+        onItemDoubleTapped != nil && editableKinds.contains(kind)
     }
 
     /// Called when the user single-taps an item on the canvas. Used by the
@@ -258,6 +288,25 @@ public final class StoryCanvasUIView: UIView {
     let rootLayer = CALayer()
     let itemsContainer = CALayer()
     let editOverlayLayer = CALayer()
+
+    /// **L'objet SÉLECTIONNÉ, et ce qu'on en dit** (#4073, vue `1c`).
+    ///
+    /// Le doc-comment de `editOverlayLayer` promettait « snap guides, selection
+    /// markers » depuis toujours ; seuls les guides existaient. Le canvas
+    /// n'avait AUCUNE notion d'objet sélectionné — la scène du composer
+    /// affichait donc son inspecteur, ses contrôleurs et son menu contextuel
+    /// sans jamais montrer SUR QUOI ils portaient.
+    ///
+    /// > Un commentaire qui décrit un mécanisme absent ne se fait contredire
+    /// > par rien (leçon 335). Celui-ci a survécu à toutes les passes parce
+    /// > qu'il énonçait la bonne intention au bon endroit.
+    ///
+    /// Le libellé du badge vient de l'HÔTE : ce que dit « TEXT · PLAN FG · z 2 »
+    /// est du vocabulaire produit, pas une donnée du canvas. Le canvas tient la
+    /// GÉOMÉTRIE, l'app tient les MOTS.
+    var selectionMarkerId: String?
+    var selectionMarkerBadge: String?
+    var selectionMarkerLayers: [CALayer] = []
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
@@ -484,6 +533,20 @@ public final class StoryCanvasUIView: UIView {
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
 
+    /// **Le canvas DIT quand il s'endort** (#3915).
+    ///
+    /// `isEditClockThrottled` vivait en UIKit et n'en sortait pas : la couche
+    /// SwiftUI posée par-dessus — la puce audio de premier plan et ses deux
+    /// `TimelineView(.animation(…))` — continuait donc de redessiner à 30 fps
+    /// sur un écran au repos, sur l'horloge d'ANIMATION de SwiftUI, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    ///
+    /// Appelé aux DEUX bascules (`idleDownEditClock`, `resumeEditClockFromIdle`)
+    /// et à elles seules : c'est ce qui garantit qu'un réveil n'attend aucune
+    /// frame — l'interaction qui réveille l'horloge réveille l'animation dans le
+    /// même tour.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
+
     /// Notifié pendant un pinch à 3 doigts (zoom du viewport). Le composer
     /// SwiftUI s'y abonne pour piloter `canvasScale` + l'overlay éphémère
     /// `viewportPinchDelta` sans avoir besoin d'un `MagnificationGesture`
@@ -499,6 +562,14 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false
+
+    /// **Le muet de CE canvas est-il verrouillé ?** (#4084)
+    ///
+    /// Posé par `setReaderContext` depuis `ScenePlayerConfig.locksMute`. Une
+    /// carte de fil est muette PAR CONSTRUCTION ; sans ce champ, le verrou
+    /// n'existait qu'au niveau du prop et n'atteignait le canvas qu'à la passe
+    /// de rendu suivante. Entre les deux, une notification DIFFUSÉE gagnait.
+    public internal(set) var muteIsLocked: Bool = false
     /// `slideAudioRevision` contre laquelle `audioMixer` a été configuré la
     /// dernière fois. Permet à `reconfigureAudioForPlayback()` de sauter le
     /// rechargement (coûteux) des `AVAudioFile` tant que la COMPOSITION de la

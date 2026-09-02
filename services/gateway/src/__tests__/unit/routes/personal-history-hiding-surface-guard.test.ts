@@ -146,7 +146,22 @@ const SURFACES: Record<string, Classification> = {
   // responsabilité — GET /configs/:conversationId/messages) : même deux
   // lectures, même raison, seul le chemin a changé.
   'admin/agent-configs.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
-  'admin/content.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
+  // 3 → 4 (`07d57a92ad`) : la quatrième lecture est VOULUE, et elle est une
+  // CORRECTION DE SÉCURITÉ, pas une surface nouvelle. #4384 avait fermé la
+  // lecture du texte d'un message protégé sur `GET /admin/messages` ; le filtre
+  // `?search=` de la MÊME route interrogeait toujours la colonne brute, si bien
+  // qu'un modérateur ne pouvait plus LIRE un message à vue unique mais pouvait
+  // le DEVINER terme à terme, en observant si la ligne apparaît. Le correctif
+  // pré-balaye les candidats (`take: SEARCH_SCAN_CAP`), écarte les lignes
+  // protégées par le prédicat PARTAGÉ `messageContentIsProtected`, puis pagine
+  // sur les seuls identifiants servables. D'où un `findMany` de plus — sur le
+  // chemin AVEC recherche uniquement, le chemin sans recherche gardant sa
+  // pagination en base.
+  //
+  // Ce compte monte donc parce qu'un trou s'est fermé. L'incrémenter en le
+  // disant est ce que ce cliquet demande ; le laisser rouge aurait appris à
+  // ses lecteurs à le regeler sans lire.
+  'admin/content.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
   // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
   // que le balayage élargi rend visible.
@@ -156,12 +171,24 @@ const SURFACES: Record<string, Classification> = {
   // distincts par langue, volumes quotidiens), invisibles jusque-là.
   'admin/languages.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/system-rankings.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
-  // 4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
-  // lectures) est passée en régime SOUVERAIN et a été extraite dans son
-  // propre fichier — voir l'entrée `admin/conversation-messages-sovereign.ts`
-  // ci-dessous, déjà EXEMPTE elle aussi. Aucune lecture n'a disparu : elle a
-  // changé de fichier, comme `users/preferences.ts` plus bas (#4161).
-  'admin/users.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // `admin/users.ts` a tenu 4 lectures, puis 2, puis AUCUNE — et il sort donc
+  // de ce registre. Le trajet, dans l'ordre :
+  //   4 → 2 (#4333 c.3) : `GET /admin/conversations/:id/messages` (2 des 4
+  //   lectures) est passée en régime SOUVERAIN et a été extraite dans son
+  //   propre fichier — voir l'entrée `admin/conversation-messages-sovereign.ts`
+  //   ci-dessous, déjà EXEMPTE elle aussi.
+  //   2 → 0 (#4284) : les deux portes qui lisent `Report` sont parties dans
+  //   `admin/user-reports.ts`, le fichier ayant franchi le budget de taille
+  //   (< 1000 lignes, `route-file-size-budget.test.ts`). Même découpage par
+  //   RESPONSABILITÉ que `admin/agent.ts` → `admin/agent-configs.ts` juste
+  //   au-dessus, et même conséquence ici : aucune lecture n'a disparu, elle
+  //   a changé de fichier, comme `users/preferences.ts` plus bas (#4161).
+  // La lecture de messages de `admin/user-reports.ts` est la jointure de
+  // `GET /admin/users/:userId/reported-messages` : `Report.reportedEntityId`
+  // est polymorphe, donc la porte énumère les participations puis les messages
+  // de l'utilisateur pour construire son filtre. Deux lectures, exemptées au
+  // même titre que leur fichier d'origine.
+  'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
   'admin/conversation-messages-sovereign.ts': {
     kind: 'exempt',
     reads: 2,

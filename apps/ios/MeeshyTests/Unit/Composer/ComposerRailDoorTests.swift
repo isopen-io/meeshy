@@ -39,9 +39,44 @@ final class ComposerRailDoorTests: XCTestCase {
     // MARK: - Les niveaux du modèle
 
     func test_quatrePortes_creentUnObjetDeScene() {
-        for porte in [ComposerRailDoor.media, .sound, .sticker, .place] {
+        for porte in [ComposerRailDoor.media, .sound, .sticker, .text] {
             XCTAssertEqual(porte.level, .object, "\(porte.rawValue)")
         }
+    }
+
+    /// **Le LIEU vise la publication, et c'est MESURÉ.**
+    ///
+    /// Son doc-comment annonçait « une pastille de lieu POSÉE sur la scène,
+    /// distincte du LIEU de la publication ». La chaîne dit l'inverse :
+    /// `handleRailDoor(.place)` → `handleDocumentTool(.place)` → effet
+    /// `.attachesLocation` → `presentedPortal = .location`, le sélecteur de la
+    /// PUBLICATION. Aucun objet n'est posé sur la scène.
+    ///
+    /// > Un doc-comment qui décrit ce que la porte DEVRAIT faire ne se fait
+    /// > contredire par rien : il est juste dans son intention, il occupe le bon
+    /// > endroit, et le lecteur suivant s'y fie. Troisième occurrence du motif
+    /// > dans cette famille de fichiers.
+    ///
+    /// **Le niveau se lit à ce que la porte OUVRE, pas à ce qu'on aimerait
+    /// qu'elle fasse** — et il ne décide pas seul de sa présence.
+    ///
+    /// > La première version de ce témoin affirmait « un statut n'a pas de
+    /// > toile, il a un lieu » et exigeait `.place` sur un `status`. Faux : la
+    /// > planche `2k` retire le lieu du Mood, pour une raison de PROFIL. J'avais
+    /// > déduit la conséquence du niveau au lieu de la lire dans la spécification
+    /// > — l'erreur exacte que le lot corrigeait, commise en le corrigeant.
+    /// > Voir `test_leLieu_estRetireDuMood_parChoixProduit_nonParAbsenceDeToile`.
+    func test_leLieu_viseLaPublication_carCEstLeSelecteurQuIlOuvre() {
+        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas,
+                       "elle ne pose rien sur la scène — elle ouvre un sélecteur")
+
+        // Elle survit dans les trois formats à scène : son niveau ne l'expose
+        // pas à la règle de la toile.
+        let surUneStory = ComposerRailDoor.offered(served: [.place, .text],
+                                                   format: .story, allowsCapture: true)
+        XCTAssertTrue(surUneStory.contains(.place))
+        XCTAssertTrue(surUneStory.contains(.text))
     }
 
     func test_laDescription_viseLaSlide_etNeCreeAucunObjet() {
@@ -91,7 +126,11 @@ final class ComposerRailDoorTests: XCTestCase {
     /// de la maquette, en y intercalant les portes qu'elle ne dessine pas.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .text, .drawing, .sticker, .mention, .place])
+                       [.description, .media, .sound, .text, .drawing, .sticker,
+                        .mention, .hashtag, .place],
+                       "`.hashtag` se range JUSTE APRÈS `.mention` (#4636) : les deux "
+                       + "désignent une entité que le serveur dérive du texte, et la "
+                       + "position que les doigts apprennent suit cette parenté.")
     }
 
     func test_leRailCanonique_neManqueAucunePorte() {
@@ -125,8 +164,47 @@ final class ComposerRailDoorTests: XCTestCase {
             served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
         XCTAssertFalse(offertes.contains { $0.level == .object },
                        "Un mood n'a pas de scène : rien à y poser.")
-        XCTAssertEqual(offertes, [.description, .mention],
-                       "…et les deux portes qui ne visent pas la scène restent.")
+        XCTAssertEqual(offertes, [.description, .mention, .hashtag],
+                       "…et les TROIS portes qui ne visent pas la scène restent. "
+                       + "`.hashtag` y est entrée le 2026-09-01 (#4636) : comme la mention, "
+                       + "elle vise la publication, donc l'absence de toile ne la retire pas.")
+    }
+
+    /// **Le LIEU disparaît du Mood pour une raison qui n'est PAS l'absence de
+    /// toile — et ce retrait tenait par accident.**
+    ///
+    /// Planche `2k` : « photo · caméra · lieu · micro — indisponibles en Mood ».
+    /// Le lieu vise la publication, donc il n'a jamais eu besoin d'une scène :
+    /// il est retiré parce qu'une humeur d'une heure ne dit pas d'où elle est
+    /// écrite.
+    ///
+    /// Tant que `.place` était classée `.object` (à tort — elle ouvre le
+    /// sélecteur de la publication), la règle de la toile l'écartait par EFFET
+    /// DE BORD. Corriger la classification au #4561 a rendu la porte au Mood, et
+    /// seul ce témoin l'a vu.
+    ///
+    /// > **Une règle générale qui remplace un effet de bord doit vérifier ce que
+    /// > cet effet de bord PROTÉGEAIT.** Une protection non déclarée ne se
+    /// > signale pas quand on la retire : elle n'était écrite nulle part.
+    func test_leLieu_estRetireDuMood_parChoixProduit_nonParAbsenceDeToile() {
+        let mood = ComposerRailDoor.offered(
+            served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
+        XCTAssertFalse(mood.contains(.place), "planche 2k — lieu indisponible en Mood")
+
+        // Le fusible qui distingue les deux raisons : le lieu N'EST PAS de
+        // niveau objet, donc son retrait ne peut pas venir de la règle de la
+        // toile. Sans cette moitié, remettre `.place` en `.object` rendrait le
+        // témoin vert en réintroduisant exactement le défaut corrigé.
+        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas)
+
+        // Et il SURVIT partout ailleurs : le retrait est celui d'un profil,
+        // jamais celui de la porte.
+        for format in [ComposerFormat.story, .post, .reel] {
+            XCTAssertTrue(ComposerRailDoor.offered(served: [.place], format: format,
+                                                   allowsCapture: true).contains(.place),
+                          "\(format)")
+        }
     }
 
     func test_dansLesTroisFormatsAScene_lesPortesDObjet_sontOffertes() {
@@ -159,6 +237,27 @@ final class ComposerRailDoorTests: XCTestCase {
         XCTAssertFalse(glyphes.contains(where: \.isEmpty))
         XCTAssertEqual(Set(glyphes).count, glyphes.count,
                        "Deux portes qui partagent un glyphe sont deux verbes qu'on ne distingue pas (loi 7).")
+    }
+
+    /// **#4719 — la porte sticker ne montre plus un visage.**
+    ///
+    /// Elle n'ouvre pas un clavier d'emoji : elle ouvre une palette de
+    /// CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ». Un
+    /// visage y annonçait le contenu d'un seul de ses cinq onglets.
+    ///
+    /// Le témoin porte sur la VALEUR et non sur la source : il ne peut donc pas
+    /// naître mort, et il rougit aussi bien si le smiley revient que si le
+    /// glyphe est remplacé par un troisième.
+    func test_porteSticker_montreLaFeuilleQuiSeDecolle_etPlusLeSmiley() {
+        XCTAssertEqual(ComposerRailDoor.sticker.symbolName,
+                       "rectangle.portrait.on.rectangle.portrait.angled")
+    }
+
+    /// Le smiley reste là où il dit vrai : la porte EMOJI de la rangée du
+    /// document, qui insère bien un emoji dans le texte. Retirer les deux
+    /// d'un même geste aurait été le contresens symétrique.
+    func test_lePorteEmojiDuDocument_gardeSonSmiley() {
+        XCTAssertEqual(ComposerDocumentTool.emoji.symbolName, "face.smiling")
     }
 }
 
@@ -209,10 +308,29 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         // s'intercale entre le ressort et les entrées. Ce qui reste vrai — et
         // qui est la seule chose que ce témoin doit dire — c'est que le ressort
         // PRÉCÈDE tout ce qui se peint, portes comme contrôleurs.
-        XCTAssertTrue(source.contains("Spacer(minLength:0)switchmode{"),
+        // **Le ressort est CONDITIONNEL depuis #4072** : il n'a de sens que pour
+        // un rail de COULOIR, vertical et pleine hauteur. Sur le rail qui FLOTTE
+        // sur la scène il étirait le socle de verre sur toute la carte et faisait
+        // déborder la dernière entrée — mesuré à l'écran.
+        //
+        // Ce que le témoin doit dire n'a pas changé : le ressort PRÉCÈDE tout ce
+        // qui se peint. Sa condition s'intercale, elle ne le déplace pas.
+        XCTAssertTrue(source.contains("ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}switchmode{"),
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
         XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
-        XCTAssertTrue(source.contains("case.tool(letcontrols):ForEach(controls)"))
+        // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
+        //
+        // L'assertion littérale `case.tool(letcontrols):ForEach(controls)` est
+        // tombée au #4582, quand un `ScrollView` horizontal s'est intercalé — un
+        // changement légitime, et le témoin le refusait pour une raison qu'il
+        // n'avait jamais eue : il vérifiait une DISPOSITION en croyant vérifier
+        // un ANCRAGE.
+        //
+        // Ce que ce témoin doit dire est plus haut : le ressort précède tout ce
+        // qui se peint. Que les contrôleurs soient peints se vérifie sans
+        // épingler par quoi ils sont enveloppés.
+        XCTAssertTrue(source.contains("case.tool(letcontrols):"))
+        XCTAssertTrue(source.contains("ForEach(controls)"))
     }
 
     /// **La vue ne décide de rien.** Elle reçoit `doors` déjà filtrées ; si elle
@@ -434,6 +552,32 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("viewModel.addSticker(image:item.thumbnail,"))
     }
 
+    /// **Les trois autres constructions de la palette POSENT aussi** (#4579).
+    ///
+    /// Une grille de décorations qui vibre sous le doigt sans rien poser coûte
+    /// plus qu'une grille absente : elle PROMET (loi 4). Le rappel n'ayant pas
+    /// de défaut côté SDK, ce meuble ne compilerait pas sans eux — mais le
+    /// témoin dit à QUOI ils sont branchés, ce que le compilateur ne dit pas.
+    func test_laFeuilleSticker_poseAussiLesDecorations() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addSticker(template:gabarit,slots:emplacements)"),
+                      "Une décoration d'amour ou d'heure doit devenir un sticker gabarit.")
+    }
+
+    /// **Et un LIEU décoré reste un lieu.**
+    ///
+    /// Lui seul porte les coordonnées et l'id de POI que la plateforme LIT
+    /// (`/posts/nearby`). Le poser en `StorySticker` donnerait une décoration
+    /// qui PARAÎT juste et dont la donnée géographique est partie — le défaut
+    /// le plus coûteux du lot, parce qu'il ne se voit pas à l'écran.
+    func test_uneDecorationDeLieu_posteUnObjetDeLieu_jamaisUnSticker() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addLocation(place:lieu,styleId:gabarit.id)"),
+                      "Un lieu décoré doit rester un StoryLocationObject.")
+        XCTAssertFalse(source.contains("addSticker(template:gabarit,slots:emplacements)placeSlots"),
+                       "Aucun chemin ne doit convertir un lieu en sticker.")
+    }
+
     /// L'empilement route vers le MODÈLE, jamais vers la vue UIKit.
     func test_lEmpilement_routeVersLeViewModel() throws {
         let source = compact(try hostSource())
@@ -651,22 +795,88 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
     ///
     /// Ce témoin garde la destination — le vrai sujet — plutôt que la
     /// distinction des chemins, qui n'était que le moyen.
-    func test_leSonEnregistre_atterritSurLaScene_jamaisDansLeDocument() throws {
+    ///
+    /// **Repointé au 2026-09-01.** Ce témoin épinglait
+    /// `attachPastedAudio(url:url,role:chosenSoundRole)` — une chaîne que le
+    /// #4657 a fait disparaître en fusionnant « Vocal » et « Ajouter un son »
+    /// dans UNE vue, où l'auteur choisit désormais le PLACEMENT. Il rougissait
+    /// donc en permanence sur du code juste, et ne gardait plus rien.
+    ///
+    /// > Un renommage n'emmène pas les témoins qui citent l'ancien nom : ils
+    /// > passent au ROUGE, ce qui a l'air d'une régression, et cessent de
+    /// > garder, ce qui n'a l'air de rien.
+    ///
+    /// La destination — le vrai sujet — se garde mieux qu'avant : elle est
+    /// maintenant CONDITIONNELLE, et le témoin épingle les deux branches.
+    /// **Repointé une SECONDE fois au 2026-09-01 (#4722)**, et ses deux moitiés
+    /// n'avaient pas la même raison de rougir :
+    ///
+    /// - `case.background:attachBackgroundSound(url:url)` était périmée AVANT ce
+    ///   lot — mesuré sur `HEAD`, la chaîne n'y était pas non plus. Le fond
+    ///   passe par `attachBackgroundSound(url:)` appelé plus bas, hors du
+    ///   `case` ;
+    /// - `case.foreground:documentLocalMedia.append(` l'était aussi : le
+    ///   contenu se pose par `ComposerMediaOrder.replacing` depuis le #4698,
+    ///   qui remplace À SA PLACE plutôt que d'ajouter au bout.
+    ///
+    /// > **Un témoin de source rouge depuis un lot antérieur ne garde plus
+    /// > rien, et son rouge se confond avec celui du lot en cours.** C'est ce
+    /// > qui rend une CI durablement rouge coûteuse : elle transforme chaque
+    /// > nouveau rouge en question de datation.
+    ///
+    /// Ce que ce lot change VRAIMENT : le premier plan ne pose plus une chose,
+    /// il en choisit une selon la SURFACE. Les deux branches sont épinglées.
+    func test_leSonEnregistre_atterritSelonSonPLACEMENT_jamaisAilleurs() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("viewModel.attachPastedAudio(url:url,role:chosenSoundRole)"),
-                      "le son enregistré doit rejoindre la SCÈNE, avec le rôle choisi par l'auteur")
+        XCTAssertTrue(source.contains("switchchosenSoundPlacement{"),
+                      "la destination du son enregistré se décide sur le PLACEMENT choisi")
+        XCTAssertTrue(source.contains("attachBackgroundSound(url:url)"),
+                      "placé en FOND, il rejoint la scène")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia=ComposerMediaOrder.replacing("),
+                      "placé en CONTENU sur une surface SANS scène, il rejoint la liste média du "
+                          + "document — c'est une pièce jointe du post, pas une bande-son")
+        XCTAssertTrue(source.contains("case.sceneChip:"),
+                      "et sur une SCÈNE, le même choix pose une puce dessus (#4722)")
         XCTAssertFalse(source.contains("case.record:handleDocumentTool(.microphone)"),
-                       "ce chemin versait le vocal dans la liste média du DOCUMENT")
+                       "ce chemin versait le vocal dans la liste média du DOCUMENT sans rien demander")
     }
 
-    /// Le rôle de mixage est OFFERT, et il descend jusqu'à l'objet créé — un
+    /// Le placement est OFFERT, et il descend jusqu'à l'objet créé — un
     /// sélecteur qui ne changerait rien serait un contrôle sans effet (loi 4).
-    func test_leRoleDeMixage_estOffertEtDescendJusquALObjet() throws {
+    ///
+    /// **Repointé au 2026-09-01**, même raison que ci-dessus : le choix vit
+    /// dans `chosenSoundPlacement` depuis le #4657, et il est écrit par le
+    /// commutateur de « Création audio » plutôt que par un sélecteur du meuble.
+    /// L'ancienne moitié (`chosenSoundRole`) survit dans `soundRolePicker`, une
+    /// vue que plus aucun écran ne monte — c'est le sujet de #4664, et un
+    /// témoin qui l'épingle garde un mort.
+    func test_lePlacement_estOffertEtDescendJusquALObjet() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("chosenSoundRole=role"),
-                      "le sélecteur doit ÉCRIRE le choix")
-        XCTAssertTrue(source.contains("role:chosenSoundRole"),
-                      "et ce choix doit atteindre la création de l'objet audio")
+        // **Périmée depuis le #4671, pas depuis ce lot** : la liaison est
+        // désormais conditionnelle — une pastille du canvas n'a pas de
+        // placement à choisir, et la feuille reçoit alors `nil`. Mesuré sur
+        // `HEAD` : la chaîne exacte n'y était pas non plus.
+        XCTAssertTrue(source.contains("placement:editedSceneChipId==nil?$chosenSoundPlacement:nil"),
+                      "la feuille doit recevoir le placement en LIAISON — sinon son commutateur "
+                          + "n'écrirait rien")
+        // **Le placement décide la DESTINATION, pas un argument passé plus
+        // bas.** Il ne voyage plus comme un `role:` — il choisit la branche, et
+        // chaque branche appelle le site qui sait poser ce qu'elle vise. C'est
+        // plus fort que ce que ce témoin exigeait : un argument peut se perdre
+        // dans une fonction qui l'ignore, une branche non prise ne s'exécute
+        // pas.
+        XCTAssertTrue(source.contains("case.background:attachBackgroundSound(url:destination)"),
+                      "un fichier placé en FOND doit remplacer le fond de la slide")
+        // **Et placé en premier plan, il demande D'ABORD où ce premier plan
+        // atterrit** (#4722) : une puce sur une scène, une carte de contenu
+        // sans scène. La pose inconditionnelle qu'épinglait ce témoin était
+        // juste sur une scène et fausse sur un post texte, où rien ne rend un
+        // objet de scène — le son y disparaissait de l'écran sans quitter la
+        // publication.
+        XCTAssertTrue(source.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "…et placé en CONTENU sur une SCÈNE, devenir une puce posée dessus")
+        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia.append("),
+                      "…ou, sans scène, une pièce jointe du document")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un
@@ -809,38 +1019,78 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    func test_laSource_estLisible() throws {
-        let s = try topBarSource()
-        XCTAssertGreaterThan(s.count, 800)
-        XCTAssertTrue(s.contains("var historyPair"))
+    private func trailingRailSource() throws -> String {
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
+        let url = racine.appendingPathComponent(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(brut.contains("struct ComposerTrailingRail"),
+                      "ce n'est pas le rail droit — la garde lirait à côté")
+        return AppSourceGuard.stripComments(brut)
     }
 
-    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.** Un
-    /// « annuler » grisé occupe la place et l'attention d'un contrôle pour ne
-    /// rien promettre, sur une barre qui porte déjà quatre choses.
+    func test_lesSources_sontLisibles() throws {
+        XCTAssertGreaterThan(try topBarSource().count, 800)
+        XCTAssertGreaterThan(try trailingRailSource().count, 800)
+    }
+
+    /// **L'INVARIANT que cette classe protège n'a pas changé : l'historique
+    /// n'est PAS en barre haute.**
+    ///
+    /// C'est le défaut d'origine, nommé au simulateur : « le bouton “Annuler”
+    /// en haut à droite pendant un outil actif agit comme UNDO, pas comme
+    /// fermeture ». En français le mot dit les deux, et le voisinage du chrome
+    /// d'outil — dont le `(x)` ferme vraiment — tranchait pour le mauvais sens.
+    ///
+    /// La collision se lève par la GÉOGRAPHIE. Le socle l'avait levée ; le rail
+    /// droit la lève aussi, et mieux : rien n'y ferme quoi que ce soit, et ce
+    /// qui l'entoure agit précisément sur les objets que l'historique défait.
+    func test_lHistorique_nEstPasEnBarreHaute() throws {
+        let source = compact(try topBarSource())
+        XCTAssertFalse(source.contains("var historyPair"),
+                       "la paire a quitté le socle ET la barre haute (#4586)")
+    }
+
+    /// **Il vit au rail DROIT** (directive porteur 2026-08-31) : « à droite, ça
+    /// agit sur les dimensions des objets, + undo/redo devrait y être ».
+    ///
+    /// Ce qu'il défait, ce sont des gestes sur les OBJETS. Au socle il
+    /// voisinait avec l'audience et le bouton publier, qui décident de l'ENVOI.
+    func test_lHistorique_vitAuRailDroit() throws {
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("varonUndo:(()->Void)?"))
+        XCTAssertTrue(rail.contains("varonRedo:(()->Void)?"))
+        XCTAssertTrue(rail.contains("ComposerHistoryCopy.undo"))
+        XCTAssertTrue(rail.contains("ComposerHistoryCopy.redo"))
+    }
+
+    /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.**
+    ///
+    /// Le contrat l'exprime par l'optionnel : `nil` ⇒ aucun bouton. C'est le
+    /// même patron que `onAddSlide`, et il remplace les `if canUndoHistory`
+    /// que le socle portait — la question est désormais posée UNE fois, par le
+    /// meuble, au lieu d'être reposée par la vue.
     func test_lesControles_nExistentQueSilsAgissent() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains("ifcanUndoHistory||canRedoHistory{"))
-        XCTAssertTrue(source.contains("ifcanUndoHistory{"))
-        XCTAssertTrue(source.contains("ifcanRedoHistory{"))
-        XCTAssertFalse(source.contains(".disabled(!canUndoHistory)"),
-                       "Griser au lieu d'absenter contredit la loi 4.")
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("ifletonUndo{"))
+        XCTAssertTrue(rail.contains("ifletonRedo{"))
+        XCTAssertFalse(rail.contains(".disabled("),
+                       "griser au lieu d'absenter contredit la loi 4")
+
+        let meuble = compact(try topBarSource())
+        XCTAssertTrue(meuble.contains("onUndo:composerServesHistory&&viewModel.canUndoGlobal"),
+                      "le juge de l'historique reste ComposerHistoryService")
     }
 
-    /// **Ils sont posés ENTRE l'œil et Publier**, pas ailleurs sur la rangée :
-    /// c'est la place que la directive nomme, et elle porte le sens — parmi ce
-    /// qui décide de l'envoi.
-    func test_laPaire_estEntreLOeilEtPublier() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains("{previewButton}historyPairpublishButton"))
+    /// **Le rail n'existe pas s'il n'a RIEN à porter.** Sans cette moitié,
+    /// retirer les actions et l'historique laisserait un socle de verre vide
+    /// flotter à droite de la scène.
+    func test_leRail_nExistePasVide() throws {
+        let rail = compact(try trailingRailSource())
+        XCTAssertTrue(rail.contains("actions.isEmpty&&onAddSlide==nil&&onUndo==nil&&onRedo==nil"))
     }
 
-    /// **UNE capsule, pas deux boutons voisins** : annuler et rétablir sont un
-    /// seul contrôle à deux sens, comme les chevrons d'un navigateur.
-    func test_lesDeux_partagentUneSeuleCapsule() throws {
-        let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains(".adaptiveGlass(in:Capsule())"))
-    }
 
     /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
     /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
@@ -1018,10 +1268,44 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
 
     /// **Et il cesse de recevoir les touches** : sans cela, le doigt qui trace
     /// déplacerait aussi l'objet sous lui — deux gestes pour un seul mouvement.
+    ///
+    /// **Le verrou a DÉMÉNAGÉ dans le canvas au `42b02bc9a9`**, et cette garde
+    /// est restée rouge sur `dev` jusqu'à ce qu'un run COMPLET la trouve : les
+    /// runs ciblés nommaient `ComposerRailDoorTests`, la première classe du
+    /// fichier, et ces témoins vivent dans la douzième. **`-only-testing:` cible
+    /// une CLASSE, jamais un fichier** — un fichier de quinze classes n'en
+    /// exécute qu'une.
+    ///
+    /// Pourquoi il a déménagé : la surface de dessin était posée sur le CADRE de
+    /// mise en page, quand le canvas ajuste sa carte au ratio puis la CENTRE. Un
+    /// trait tiré hors de la carte était perdu à la publication. La surface est
+    /// donc entrée DANS le canvas — et le verrou avec elle, sans quoi elle
+    /// tombait sous le `allowsHitTesting(false)` de la scène et plus aucun trait
+    /// ne passait.
+    ///
+    /// La garde interroge donc les DEUX moitiés, chacune chez elle : la surface
+    /// PASSE le calque, le canvas le VERROUILLE.
     func test_leCanvas_neRecoitPlusLesTouchesPendantLeDessin() throws {
-        let source = compact(try surfaceSource())
-        XCTAssertTrue(source.contains(".allowsHitTesting(drawingSurface==nil)"))
-        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+        XCTAssertTrue(compact(try surfaceSource()).contains("canvasOverlay:drawingSurface"),
+                      "la surface doit PASSER le calque au canvas")
+        XCTAssertTrue(compact(try canvasSource()).contains(".allowsHitTesting(canvasOverlay==nil)"),
+                      "et le canvas doit cesser de recevoir les touches tant qu'il le porte")
+    }
+
+    /// La source du canvas encastré, dans le SDK — lue par son chemin, comme
+    /// `StoryCanvasActionTitleLocalizationTests` le fait déjà pour les titres
+    /// d'actions. Un `#filePath` remonte à `apps/ios`, d'où le détour par la
+    /// racine du dépôt.
+    private func canvasSource() throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let url = racine.appendingPathComponent(
+            "packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThan(brut.count, 1000, "source vide — la garde serait verte par omission")
+        return AppSourceGuard.stripComments(brut)
     }
 
     /// **La surface n'est montée QUE pendant le mode** (loi 4) — une couche de
@@ -1238,9 +1522,14 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     /// directive du 2026-08-30 : les contrôleurs sont au rail, leurs options
     /// sous la scène. Trois couches empilées sur une scène déjà encadrée par
     /// deux rails, c'était une de trop.
+    ///
+    /// **Elle n'est plus un `.overlay` de la scène depuis le `42b02bc9a9`** :
+    /// elle entre dans le canvas par `canvasOverlay`, qui la borne à la CARTE
+    /// ajustée plutôt qu'au cadre de mise en page. Ce que ce témoin garde n'a
+    /// pas changé — une seule couche sur la scène, et pas les barres d'outils.
     func test_laCapture_estLeSeulOverlayDeLaScene() throws {
         let source = compact(try surfaceSource())
-        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+        XCTAssertTrue(source.contains("canvasOverlay:drawingSurface"))
         XCTAssertFalse(source.contains(".overlay{drawingToolbar}"),
                        "Les réglages du pinceau vivent au rail, plus par-dessus la scène.")
         XCTAssertFalse(source.contains(".overlay{textToolbar}"),

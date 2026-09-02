@@ -1787,26 +1787,53 @@ struct ConversationView: View {
                         scrollState.isScrollingActiveList = isActive
                     }
                 },
-                onMessagesSeen: { seenIds in
+                onMessagesSeen: { seenIds, visibleIds in
                     // Seule source de vérité de la lecture : ces identifiants
                     // ont été RÉELLEMENT affichés assez longtemps.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
-                    viewModel.markAsRead(messageIds: seenIds)
+                    viewModel.markAsRead(messageIds: seenIds, visibleIds: visibleIds)
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the
                     // quoted reply. Resolves the story id to a (group, slide)
                     // pair via StoryViewModel — preserves the legacy behaviour
                     // from ConversationView+MessageRow (now dead code).
-                    if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {
-                        let group = storyViewModel.storyGroups[groupIdx]
-                        let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
-                        overlayState.storyViewerUserId = group.id
-                        overlayState.storyViewerGroupIndex = groupIdx
-                        overlayState.storyViewerSlideIndex = slideIdx
-                        overlayState.storyViewerStartAtFirstUnviewed = false
-                        overlayState.showStoryViewer = true
+                    guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {
+                        // Vue `3h` (#4098) — la citation SUBSISTE à l'expiration
+                        // de la story, mais son lien, lui, ne survit pas. Cette
+                        // branche n'existait pas : story expirée, purgée ou
+                        // jamais chargée, le tap ne faisait RIEN. Pas d'erreur,
+                        // pas d'explication — l'utilisateur touchait la carte
+                        // trois fois avant de conclure que l'app était figée.
+                        //
+                        // Loi 4 du dépôt : un contrôle existe s'il a un effet.
+                        // Le chemin voisin — un MESSAGE cité introuvable — fait
+                        // déjà exactement ceci douze lignes plus haut
+                        // (`conversation.messageNotFound`) ; la story n'avait
+                        // simplement jamais reçu son pendant.
+                        //
+                        // C'est ici, et NULLE PART ailleurs, que l'échec se
+                        // constate : le client ne PEUT pas préjuger de
+                        // l'expiration. Le droit d'ouvrir une story passé son
+                        // heure est DÉCLARÉ par le serveur
+                        // (`StoryItem.referenceAccess`, « never recomputed from
+                        // `expiresAt` here ») — une personne nommée dans la
+                        // story y accède encore. Une carte qui s'annoncerait
+                        // « expirée » d'après sa seule date mentirait sur une
+                        // story que ce tap aurait ouverte.
+                        FeedbackToastManager.shared.show(
+                            String(localized: "conversation.storyUnavailable", bundle: .main),
+                            type: .info
+                        )
+                        return
                     }
+                    let group = storyViewModel.storyGroups[groupIdx]
+                    let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
+                    overlayState.storyViewerUserId = group.id
+                    overlayState.storyViewerGroupIndex = groupIdx
+                    overlayState.storyViewerSlideIndex = slideIdx
+                    overlayState.storyViewerStartAtFirstUnviewed = false
+                    overlayState.showStoryViewer = true
                 },
                 onViewSenderStory: { userId in
                     // Anneau story d'un avatar de bulle (conversations de

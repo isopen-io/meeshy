@@ -89,11 +89,58 @@ nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
-        case .cameraReady, .videoCameraReady, .resume, .mediaSeeded:
+        // **Les TROIS ouvertures qui portent déjà de la MATIÈRE gardent la
+        // scène** — une dette nommée, plus une exemption raisonnée.
+        //
+        // Elles arrivent avec un média reçu d'une conversation ou un brouillon
+        // repeuplé, et l'atelier est le seul écran qui les tienne déjà.
+        // `.mediaSeeded` en fait la démonstration : `ConversationMediaComposerDoor`
+        // documente que router son média ailleurs le ferait disparaître de
+        // l'écran ET de la publication, `ComposerDocumentDraft` n'ayant ni
+        // `mediaIds`, ni fichier. Leur retirer la scène ferait perdre à
+        // l'auteur ce qu'il vient de confier.
+        //
+        // Elles tomberont quand le meuble saura REPRENDRE et SEMER (#4751) —
+        // et c'est à ce moment-là qu'on retournera leur témoin, jamais avant.
+        case .videoCameraReady, .resume, .mediaSeeded:
             return .scene
-        case .keyboardOnContent, .moodGrid:
+        // **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751,
+        // directive porteur : « se concentrer sur le composer v3 et non
+        // l'ancien »).
+        //
+        // Elle y était entrée par RESSEMBLANCE. L'argument de l'exemption —
+        // « elles arrivent avec de la matière que le meuble ne tient pas » —
+        // valait pour les trois autres et pas pour elle : la caméra n'arrive
+        // avec RIEN. Elle promet un viseur, et le meuble sait l'ouvrir depuis
+        // toujours (`presentMediaIntake(.camera)`).
+        //
+        // > Une exemption qui couvre quatre cas d'un seul argument doit être
+        // > vérifiée sur les quatre. Ici le quatrième était la porte la plus
+        // > visible du Feed — « Créer une story » — et c'est elle qui montait
+        // > l'ancien écran.
+        //
+        // Ce que la promesse devient : `armsCameraOnAppear` l'honore DANS le
+        // meuble. Router sans armer aurait tenu la lettre de la directive en
+        // perdant ce que la porte annonce.
+        //
+        // **Ici, l'auteur CHOISIT.** C'est le « nouveau composer » de la
+        // directive porteur du 2026-09-01, et c'est là que la story cessait
+        // d'être composée dans le meuble : `.scene` monte `StoryComposerView` —
+        // l'atelier du SDK, la vue de composition de story qui préexistait au
+        // meuble. Une story s'écrivait donc dans un composer et un post dans un
+        // autre, sur un écran que l'auteur croit unique.
+        case .cameraReady, .keyboardOnContent, .moodGrid:
             switch format {
-            case .story, .reel: return .scene
+            case .story: return .document
+            // **Le RÉEL rejoint le meuble le 2026-09-01** (#4751). Il était
+            // resté sur l'atelier au #4700 par prudence — sa timeline y vivait.
+            // Elle vit AUSSI au meuble depuis le #4082 : `ComposerSceneBand`
+            // porte une bande `timeline`, montée sous la scène.
+            //
+            // Le garder à part faisait changer de COMPOSER en changeant de
+            // format, sur un écran que l'auteur croit unique — le défaut exact
+            // que le #4700 avait corrigé pour la story et laissé pour le réel.
+            case .reel: return .document
             case .post: return .document
             case .status: return .mood
             }
@@ -117,6 +164,33 @@ nonisolated enum ComposerSurfaceRouting {
         switch opening {
         case .keyboardOnContent: return true
         case .cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded: return false
+        }
+    }
+
+    /// **Le VISEUR se lève là où la porte l'a promis** (#4751) — jumelle exacte
+    /// de la règle du clavier, et écrite à côté d'elle pour que la question
+    /// « qu'est-ce qui s'ouvre tout seul ? » ait UN endroit.
+    ///
+    /// `.cameraReady` a quitté l'exemption qui l'envoyait à l'atelier ; sans
+    /// cette règle, elle serait devenue une entrée neutre — le meuble se
+    /// serait ouvert sur une scène vide, et la porte la plus visible du Feed
+    /// aurait cessé de tenir ce que son nom annonce.
+    ///
+    /// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle
+    /// > PROMET. Ce qui était honoré par l'écran d'arrivée doit l'être
+    /// > explicitement au nouveau, sinon la promesse disparaît avec le
+    /// > déménagement — sans qu'aucun site ne rougisse, puisque plus personne
+    /// > ne la porte.
+    ///
+    /// **Les deux ne sont JAMAIS vrais ensemble** : un viseur et un clavier qui
+    /// s'ouvriraient de concert se disputeraient l'écran, et le second
+    /// recouvrirait le premier. L'exhaustivité des deux `switch` le garantit
+    /// case par case plutôt que par une assertion croisée, qu'un troisième
+    /// mode d'ouverture pourrait contourner.
+    static func armsCameraOnAppear(opening: ComposerOpening) -> Bool {
+        switch opening {
+        case .cameraReady, .videoCameraReady: return true
+        case .keyboardOnContent, .moodGrid, .resume, .mediaSeeded: return false
         }
     }
 }
@@ -269,6 +343,117 @@ nonisolated enum ComposerChromeOwnership {
     /// et la scène publie par l'atelier, jamais par ceci.
     static func headerPaintsPublish(for surface: ComposerSurfaceKind) -> Bool {
         surface == .mood
+    }
+}
+
+/// **La bande-son de la PUBLICATION, au socle (#4071 — vues `1a` et `1b`).**
+///
+/// La maquette la range « parmi ce qui décide de l'envoi », avec l'audience,
+/// l'aperçu et Publier — pas dans les outils qui font entrer de la matière sur
+/// la scène. C'est cohérent avec ce qu'elle EST : un son de fond appartient à
+/// la publication entière, pas à la slide courante.
+///
+/// **Ce que cette place répare.** La porte son existait et sa feuille était
+/// complète — enregistreur, rôle de mixage, bibliothèque, fichier. La
+/// vérification au simulateur du 2026-08-30 a montré qu'aucun écran du parcours
+/// réel n'y menait depuis le document : le chemin manquait, pas la surface.
+///
+/// **Le CRÉDIT d'un son — ce qui joue, et à qui on le doit** (#4669).
+///
+/// La règle a quitté le socle avec la pastille qui l'y montrait (directive
+/// porteur 2026-09-01 : « on n'a plus besoin du bouton ajouter un son en bas »)
+/// et suit le son là où il se lit maintenant : à côté de l'avatar.
+///
+/// **Le déménagement n'était pas cosmétique.** La pastille du socle était le
+/// SEUL endroit du composer qui affichait `soundAuthorUsername` ; la retirer
+/// sans emporter sa composition aurait fait disparaître l'attribution d'un son
+/// emprunté — une perte qu'aucun témoin n'aurait signalée, puisque rien
+/// n'assertait qu'elle était montrée quelque part.
+///
+/// Ce que la règle ne fait plus : inviter. « Ajouter un son » était le mot de
+/// la pastille VIDE, et une pastille vide n'existe plus — un crédit décrit un
+/// son qui joue, ou n'est pas rendu du tout. Le paramètre a donc cessé d'être
+/// optionnel : le cas « pas de son » se traite chez l'appelant, en ne montrant
+/// rien, et non ici en fabriquant une phrase.
+/// **Ce qui reste ICI, et ce qui est parti** (fusion 2026-09-01).
+///
+/// La règle avait une JUMELLE au SDK — `StoryAudioIdentity` — écrite le même
+/// jour pour la même question, et les deux ne rendaient pas la même réponse :
+/// `attribution` lisait `name` et `soundAuthorUsername` en direct, sans jamais
+/// consulter `soundId`, si bien qu'un vocal NOMMÉ s'annonçait comme un morceau
+/// de l'étagère. Ce qui décide de la FORME d'une piste est parti là-bas, en un
+/// seul exemplaire.
+///
+/// Ce qui reste ici est ce qui ne peut pas y aller : la LOCALE du lecteur. Une
+/// durée s'écrit « 0:12 » pour l'œil et se dit « douze secondes » à voix haute,
+/// et les deux dépendent de la langue de l'appareil — le SDK, qui ne connaît ni
+/// l'une ni l'autre, ne peut composer que la moitié invariable.
+///
+/// > La frontière n'est donc pas « app ou SDK » mais **ce qui dépend du lecteur
+/// > et ce qui dépend de la piste**. C'est la seule qui ne se redessine pas au
+/// > premier champ ajouté.
+nonisolated enum ComposerSoundCredit {
+
+    /// **Le crédit ne se fabrique jamais.** Il tient à `soundAuthorUsername`,
+    /// que seul l'EMPRUNT renseigne ; un vocal mis en fond porte le bon mixage
+    /// et aucun auteur, et lui en inventer un serait mentir sur la provenance.
+    /// De même une durée inconnue ne devient pas « 0:00 » — un compteur faux se
+    /// lit comme une piste vide.
+    static func label(for sound: StoryAudioPlayerObject,
+                      locale: Locale = .current) -> String {
+        compose(sound, locale: locale) { LocalizedNumber.duration(seconds: $0, locale: $1) }
+    }
+
+    /// **La pastille est LUE à voix haute, et « 0:12 » ne se dit pas.**
+    ///
+    /// L'hôte posait `.accessibilityLabel(Text(label(for:)))` — la chaîne
+    /// MONTRÉE, resservie telle quelle. VoiceOver y lit une horloge : « zéro
+    /// heure douze » pour un extrait de douze secondes. La doctrine du dépôt
+    /// sépare les deux depuis 247i — `LocalizedNumber.duration` pour ce qu'on
+    /// VOIT, `spokenDuration` pour ce qu'on ENTEND — et cette pastille était
+    /// le site où les deux étaient confondus.
+    ///
+    /// > Une chaîne qui sert à la fois de libellé visuel et de libellé
+    /// > d'accessibilité n'est pas une économie : c'est une décision prise pour
+    /// > l'un des deux lecteurs et subie par l'autre.
+    ///
+    /// Le titre et le crédit sont IDENTIQUES dans les deux — c'est la même
+    /// pastille — et c'est pourquoi la composition est un site UNIQUE : deux
+    /// fonctions écrites côte à côte auraient divergé au premier champ ajouté.
+    static func spokenLabel(for sound: StoryAudioPlayerObject,
+                            locale: Locale = .current) -> String {
+        compose(sound, locale: locale) { LocalizedNumber.spokenDuration(seconds: $0, locale: $1) }
+    }
+
+    /// **Un son sans titre n'en reçoit pas un d'emprunt.**
+    ///
+    /// La composition posait « Ajouter un son » comme nom de repli — ce qui
+    /// avait un sens tant qu'elle habillait un BOUTON d'ajout, et n'en a plus
+    /// aucun sur une pastille d'état : un vocal se serait annoncé « Ajouter un
+    /// son · 0:07 », une invitation servie comme un titre. Sans titre, le crédit
+    /// est sa seule durée.
+    /// La DURÉE seule, telle qu'on la VOIT. `nil` quand elle est inconnue — un
+    /// « 0:00 » fabriqué se lit comme une piste vide.
+    static func durationLabel(for sound: StoryAudioPlayerObject,
+                              locale: Locale = .current) -> String? {
+        guard let secondes = sound.duration, secondes > 0 else { return nil }
+        return LocalizedNumber.duration(seconds: Int(secondes.rounded()), locale: locale)
+    }
+
+    /// **La composition reste UNIQUE** : elle APPELLE les deux moitiés plutôt
+    /// que de recomposer leur contenu. Deux assemblages écrits côte à côte
+    /// auraient divergé au premier champ ajouté — et c'est justement ce que la
+    /// séparation ci-dessus rendait tentant.
+    private static func compose(_ sound: StoryAudioPlayerObject,
+                                locale: Locale,
+                                duree: (Int, Locale) -> String) -> String {
+        var morceaux: [String] = []
+        let credit = StoryAudioIdentity.attribution(of: sound)
+        if !credit.isEmpty { morceaux.append(credit) }
+        if let secondes = sound.duration, secondes > 0 {
+            morceaux.append(duree(Int(secondes.rounded()), locale))
+        }
+        return morceaux.joined(separator: " · ")
     }
 }
 

@@ -35,6 +35,23 @@ struct ComposerMentionStrip: View {
                                 accentColor: accentColor,
                                 avatarURL: candidate.avatarURL
                             )
+                            // **`isDark: true` n'est pas un oubli, c'est une
+                            // CONSÉQUENCE** (#4122). La bande n'apparaît que
+                            // sur le plateau du composer, dont les trois
+                            // teintes sont sombres par doctrine
+                            // (`PlateauTint` : « un fond sombre laisse la scène
+                            // être la seule source de lumière »). Le suivre
+                            // avec le `colorScheme` peindrait du texte sombre
+                            // sur un fond sombre en thème clair — l'inverse
+                            // exact du défaut qu'on croirait corriger.
+                            //
+                            // Mesuré sur les trois teintes (capsule à 6 % de
+                            // `textPrimary` par-dessus) : le pseudo tient
+                            // **6,62:1** au pire cas — au-dessus d'AA. Un token
+                            // plus discret (`textMuted`) y tomberait à
+                            // **4,01:1**, donc SOUS le seuil : le correctif
+                            // intuitif dégraderait ce qu'il prétend réparer.
+                            // Verrouillé par `ComposerMentionStripContrastTests`.
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(candidate.displayName)
                                     .font(MeeshyFont.relative(13, weight: .semibold))

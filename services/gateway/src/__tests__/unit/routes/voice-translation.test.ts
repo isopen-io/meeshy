@@ -36,18 +36,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // `routes/voice/types` n'est plus REMPLACÉ, il est PROLONGÉ.
 //
 // Ce double listait trois schémas à la main « pour éviter les dépendances

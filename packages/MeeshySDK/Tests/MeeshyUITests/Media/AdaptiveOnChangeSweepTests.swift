@@ -76,11 +76,11 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
 
     func test_unifiedAudioRecorderSheet_usesAdaptiveOnChange_notRawOnChange() throws {
         // Ex-`StoryVoiceRecorder` — feuille unifiée depuis 2026-08-13.
-        let source = try sdkSource("Sources/MeeshyUI/Media/UnifiedAudioRecorderSheet.swift")
+        let source = try sdkSource("Sources/MeeshyUI/Media/AudioRecorderSheet.swift")
         XCTAssertFalse(source.contains(".onChange(of: recorder.isRecording) { isRecording in"),
-                        "UnifiedAudioRecorderSheet must not use the deprecated single-param .onChange")
+                        "AudioRecorderSheet must not use the deprecated single-param .onChange")
         XCTAssertTrue(source.contains(".adaptiveOnChange(of: recorder.isRecording) { _, isRecording in"),
-                      "UnifiedAudioRecorderSheet must react to isRecording through adaptiveOnChange")
+                      "AudioRecorderSheet must react to isRecording through adaptiveOnChange")
     }
 
     func test_universalAudioRecorderView_usesAdaptiveOnChange_notRawOnChange() throws {

@@ -24,6 +24,7 @@ import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { dateDeRetrait, depreciee } from '../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const DEPUIS_VOICE_LEGACY = '2026-08-29';
 
@@ -555,7 +556,7 @@ export async function voiceAnalysisLegacyAliasRoutes(fastify: FastifyInstance): 
     'onRequest',
     depreciee({
       depuis: DEPUIS_VOICE_LEGACY,
-      successeur: (request) => `/api/v1${request.url}`,
+      successeur: (request) => apiPath(`${request.url}`),
       retraitLe: dateDeRetrait(DEPUIS_VOICE_LEGACY),
     })
   );
