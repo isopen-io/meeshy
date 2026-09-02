@@ -333,7 +333,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille DISPONIBILITÉ
 
-    static let availabilityDrawers: [StickerTemplateDrawer] = availabilityCards.map(availabilityDrawer) + [
+    static let availabilityDrawers: [StickerTemplateDrawer] = availabilityCards.map { availabilityDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.availabilityOnline,
             name: { String(localized: "sticker.template.availability.online", defaultValue: "En ligne", bundle: .module) },

@@ -657,7 +657,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille FÊTE
 
-    static let partyDrawers: [StickerTemplateDrawer] = stackCards.map(stackDrawer) + [
+    static let partyDrawers: [StickerTemplateDrawer] = stackCards.map { stackDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.partyBalloons,
             name: { String(localized: "sticker.template.party.balloons", defaultValue: "Ballons", bundle: .module) },

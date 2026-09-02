@@ -433,7 +433,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille HUMEURS
 
-    static let moodDrawers: [StickerTemplateDrawer] = moodCards.map(moodCardDrawer) + [
+    static let moodDrawers: [StickerTemplateDrawer] = moodCards.map { moodCardDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.moodAngry,
             name: { String(localized: "sticker.template.mood.angry", defaultValue: "En colère", bundle: .module) },

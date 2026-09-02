@@ -198,5 +198,5 @@ extension StickerTemplateRenderer {
                     haut: StickerTemplatePalette.night, bas: StickerTemplatePalette.ink,
                     texte: StickerTemplatePalette.surface,
                     icône: { r in StickerTemplateDrawing.drawSymbol("moon.stars.fill", in: r, color: StickerTemplatePalette.warmBulb, weight: .bold) }),
-    ].map(weatherDrawer)
+    ].map { weatherDrawer($0) }
 }

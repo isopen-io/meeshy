@@ -578,5 +578,5 @@ extension StickerTemplateRenderer {
             name: { Self.kissesCaption },
             measure: { _, m in Self.kissesSize(metrics: m) },
             draw: { _, m, échelle in Self.kissesImage(metrics: m, screenScale: échelle) }),
-    ] + greetingCards.map(cardDrawer)
+    ] + greetingCards.map { cardDrawer($0) }
 }

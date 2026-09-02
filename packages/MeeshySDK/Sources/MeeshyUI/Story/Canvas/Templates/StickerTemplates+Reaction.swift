@@ -543,5 +543,5 @@ extension StickerTemplateRenderer {
     ]
 
     static let reactionDrawers: [StickerTemplateDrawer] =
-        wordDrawers + discs.map(discDrawer) + shapeDrawers
+        wordDrawers + discs.map { discDrawer($0) } + shapeDrawers
 }

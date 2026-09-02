@@ -52,11 +52,13 @@ extension StickerTemplateRenderer {
         let tailleTexte: CGSize
     }
 
+    /// La CASSE entre dans la mesure : un cadre en capitales mesure les
+    /// capitales, sinon la boîte du tap et l'image rendue divergent.
     @MainActor
     private static func proseLayout(_ slots: [String: String], metrics: StickerTemplateMetrics,
                                     textScale: CGFloat = 0.78, weight: UIFont.Weight = .bold,
-                                    monospace: Bool = false) -> ProseLayout {
-        let texte = proseText(slots)
+                                    monospace: Bool = false, uppercase: Bool = false) -> ProseLayout {
+        let texte = uppercase ? proseText(slots).uppercased() : proseText(slots)
         let police = monospace
             ? StickerTemplateDrawing.digitFont(size: metrics.fontSize * textScale, weight: weight)
             : StickerTemplateDrawing.font(size: metrics.fontSize * textScale, weight: weight)
@@ -83,19 +85,16 @@ extension StickerTemplateRenderer {
     @MainActor
     private static func textSize(_ cadre: TextFrame, slots: [String: String],
                                  metrics: StickerTemplateMetrics) -> CGSize {
-        let l = proseLayout(slots, metrics: metrics, textScale: cadre.textScale, weight: cadre.weight)
+        let l = proseLayout(slots, metrics: metrics, textScale: cadre.textScale, weight: cadre.weight,
+                            uppercase: cadre.uppercase)
         return cadre.size(l.tailleTexte, metrics)
     }
 
     @MainActor
     private static func textImage(_ cadre: TextFrame, slots: [String: String],
                                   metrics: StickerTemplateMetrics, screenScale: CGFloat) -> (UIImage?, CGSize) {
-        var l = proseLayout(slots, metrics: metrics, textScale: cadre.textScale, weight: cadre.weight)
-        if cadre.uppercase {
-            l = ProseLayout(texte: l.texte.uppercased(), police: l.police,
-                            tailleTexte: measureWrapped(l.texte.uppercased(), font: l.police,
-                                                        maxWidth: metrics.fontSize * 9))
-        }
+        let l = proseLayout(slots, metrics: metrics, textScale: cadre.textScale, weight: cadre.weight,
+                            uppercase: cadre.uppercase)
         let taille = cadre.size(l.tailleTexte, metrics)
         return StickerTemplateDrawing.rasterize(size: taille, screenScale: screenScale) {
             let zone = cadre.frame(CGRect(origin: .zero, size: taille), metrics)
@@ -324,5 +323,5 @@ extension StickerTemplateRenderer {
                 return r
             },
             textColor: StickerTemplatePalette.pin, textScale: 0.80, weight: .heavy, uppercase: true),
-    ].map(textDrawer)
+    ].map { textDrawer($0) }
 }
