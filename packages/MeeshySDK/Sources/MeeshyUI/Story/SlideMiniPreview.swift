@@ -285,6 +285,22 @@ struct SlideMiniPreview: View {
                     .rotationEffect(.degrees(Double(sticker.rotation)))
                     .position(x: CGFloat(sticker.x) * size.width,
                               y: CGFloat(sticker.y) * size.height)
+            } else if let bitmap = StoryStickerLayer.bitmapCacheKeys(for: sticker)
+                        .lazy.compactMap({ loadedImages[$0] }).first {
+                // **Un sticker IMAGE se peint dans la vignette** (#4852) — la
+                // même taille, la même rotation et la même position que le
+                // glyphe, le bitmap ajusté dans le carré du sticker comme sur
+                // la scène (`StoryStickerLayer`, gravité `.resizeAspect`).
+                let side = CanvasGeometry.stickerFontSize(
+                    baseSize: sticker.baseSize, scale: sticker.scale,
+                    canvasWidth: size.width)
+                Image(uiImage: bitmap)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: side, height: side)
+                    .rotationEffect(.degrees(Double(sticker.rotation)))
+                    .position(x: CGFloat(sticker.x) * size.width,
+                              y: CGFloat(sticker.y) * size.height)
             } else {
                 // La MÊME règle de taille que la scène, le composite et
                 // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la

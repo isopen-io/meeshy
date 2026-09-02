@@ -520,7 +520,7 @@ public enum StoryRenderer {
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
             layer.configure(with: sticker, geometry: geometry, mode: mode,
-                            renderScale: contentsScale)
+                            renderScale: contentsScale, imageCache: imageCache, resolver: resolver)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.
