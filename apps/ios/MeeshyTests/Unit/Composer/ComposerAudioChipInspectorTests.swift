@@ -110,3 +110,65 @@ final class ComposerAudioChipInspectorTests: XCTestCase {
         XCTAssertTrue(ComposerObjectChips.chips(forSelected: "loc", in: slide).isEmpty)
     }
 }
+
+/// **Les CINQ familles ont leur badge** (#4559, servi le 2026-09-02).
+///
+/// Le lieu et le son rendaient `nil`, sous une raison écrite et vraie : leur mot
+/// n'existait pas au catalogue. Les deux clés y sont désormais, en sept langues.
+///
+/// > Une absence JUSTIFIÉE par un manque réparable est une dette, pas une
+/// > décision — et celle-ci se lisait comme une décision parce qu'elle était
+/// > bien écrite. Le seul moyen de les distinguer est de relire ce que
+/// > l'absence invoque, puis d'aller voir si c'est encore vrai.
+///
+/// Ce que le badge coûtait de ne pas exister : un son sélectionné montrait ses
+/// jetons sans que le canvas dise ce qui était sélectionné — l'auteur réglait
+/// une taille sans savoir la taille de QUOI.
+final class ComposerSceneObjectBadgeTests: XCTestCase {
+
+    private func slideAvecSon() -> StorySlide {
+        var effets = StoryEffects()
+        var son = StoryAudioPlayerObject(id: "aud", postMediaId: "pm-1", name: "Voix")
+        son.zIndex = 3
+        effets.audioPlayerObjects = [son]
+        return StorySlide(id: "s1", effects: effets)
+    }
+
+    private func slideAvecLieu() -> StorySlide {
+        var slide = StorySlide(id: "s1", effects: StoryEffects())
+        slide.locationObjects = [
+            StoryLocationObject(id: "loc",
+                                place: SharedPlace(latitude: 48.8, longitude: 2.3, name: "Paris"))
+        ]
+        return slide
+    }
+
+    /// **LE témoin.** Un son sélectionné se NOMME.
+    func test_unSonSelectionne_aUnBadge() {
+        XCTAssertNotNil(ComposerObjectChips.badge(forSelected: "aud", in: slideAvecSon()),
+                        "sans badge, l'auteur règle une taille sans savoir la taille de quoi")
+    }
+
+    /// Un lieu aussi.
+    func test_unLieuSelectionne_aUnBadge() {
+        XCTAssertNotNil(ComposerObjectChips.badge(forSelected: "loc", in: slideAvecLieu()))
+    }
+
+    /// **Le badge PORTE le rang**, et il le lit sur l'objet — c'est ce qui
+    /// distingue une étiquette d'une lecture. Sur l'audio le `zIndex` est
+    /// optionnel : la somme le résout à zéro, et le badge doit dire ce rang-là
+    /// plutôt que de se taire.
+    func test_leBadgeDuSon_ditSonRang() {
+        let badge = ComposerObjectChips.badge(forSelected: "aud", in: slideAvecSon())
+        XCTAssertTrue(badge?.contains("3") ?? false,
+                      "le badge doit dire le rang réel de la chip — mesuré : \(badge ?? "nil")")
+    }
+
+    /// **Le seul `nil` qui subsiste est celui d'un id qui ne désigne plus rien**
+    /// — un objet supprimé pendant que la sélection le tenait encore. Un état
+    /// NOMINAL, et le canvas n'encadre alors rien plutôt que d'encadrer du vide.
+    func test_unIdQuiNeDesignePlusRien_neDonneAucunBadge() {
+        XCTAssertNil(ComposerObjectChips.badge(forSelected: "fantome", in: slideAvecSon()))
+        XCTAssertNil(ComposerObjectChips.badge(forSelected: nil, in: slideAvecSon()))
+    }
+}

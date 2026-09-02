@@ -219,25 +219,42 @@ nonisolated enum ComposerObjectChips {
         // Le PLAN et le RANG viennent de la somme, qui les résout pour les cinq
         // familles — y compris l'asymétrie du `zIndex` optionnel de l'audio.
         // Seul le MOT reste à décider ici : c'est du vocabulaire produit.
-        guard let mot = badgeKind(objet.kind) else { return nil }
-        return badge(kind: mot, isBackground: objet.isBackground,
+        // **Plus de `guard let` ici** : `badgeKind` est TOTAL depuis que les
+        // cinq familles ont leur mot. Le seul `nil` qui subsiste est celui du
+        // dessus — l'id qui ne désigne plus rien, un objet supprimé pendant que
+        // la sélection le tenait encore. Un état NOMINAL, pas une lacune.
+        return badge(kind: badgeKind(objet.kind), isBackground: objet.isBackground,
                      zIndex: objet.zIndex, locale: locale)
     }
 
-    /// **Le mot d'un kind — `nil` ⇒ pas de badge.**
+    /// **Le mot d'un kind — TOTAL, plus aucun `nil`.**
     ///
-    /// Le lieu et le son n'en ont pas, et ce n'est pas un oubli : leur mot
-    /// n'existe pas au catalogue (#4559 en tient les dix-neuf), et en inventer
-    /// un ici le mettrait hors de portée du cliquet de localisation.
+    /// **Les CINQ familles ont leur mot depuis le 2026-09-02.**
     ///
-    /// Le `switch` exhaustif remplace le `return nil` implicite de l'ancienne
-    /// cascade : même comportement, décision ÉCRITE.
-    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String? {
+    /// Le lieu et le son rendaient `nil`, et la raison écrite était vraie : leur
+    /// mot n'existait pas au catalogue, et en inventer un ici l'aurait mis hors
+    /// de portée du cliquet de localisation. Les deux clés sont désormais
+    /// posées en sept langues (`composer.chip.kind.audio` / `.location`), donc
+    /// la raison est levée et l'absence n'a plus de fondement.
+    ///
+    /// > Une absence JUSTIFIÉE par un manque réparable est une dette, pas une
+    /// > décision. Celle-ci se lisait comme une décision parce qu'elle était
+    /// > bien écrite — et le seul moyen de la distinguer était de relire ce
+    /// > qu'elle invoquait, puis d'aller voir si c'était encore vrai.
+    ///
+    /// Ce que le badge coûtait de ne pas exister : un son sélectionné affichait
+    /// ses jetons sans que le canvas dise ce qui était sélectionné. L'auteur
+    /// réglait une taille sans savoir la taille de QUOI.
+    ///
+    /// Le rendu est désormais TOTAL — plus aucun `nil`, donc plus aucune
+    /// famille silencieuse.
+    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String {
         switch kind {
-        case .text:    return ComposerObjectChipsCopy.kindText
-        case .media:   return ComposerObjectChipsCopy.kindMedia
-        case .sticker: return ComposerObjectChipsCopy.kindSticker
-        case .location, .audio: return nil
+        case .text:     return ComposerObjectChipsCopy.kindText
+        case .media:    return ComposerObjectChipsCopy.kindMedia
+        case .sticker:  return ComposerObjectChipsCopy.kindSticker
+        case .audio:    return ComposerObjectChipsCopy.kindAudio
+        case .location: return ComposerObjectChipsCopy.kindLocation
         }
     }
 
