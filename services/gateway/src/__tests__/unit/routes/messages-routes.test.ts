@@ -868,21 +868,21 @@ describe('GET /conversations/:id/messages', () => {
     );
   });
 
-  it('shareLink with max-uses exceeded → 403 SHARE_LINK_MAX_USES', async () => {
+  // #4827 — `maxUses` borne l'ADMISSION, jamais la LECTURE. `maxUses:1, currentUses:1` = le lien personnel
+  // JUSTE après son unique invité ; les compteurs restent dans la charge pour que ce témoin TOMBE si la garde revenait.
+  it('un participant admis par un lien PLEIN lit toujours le fil (#4827)', async () => {
     prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt: new Date(), shareLinkId: 'link-1' });
     prisma.conversationShareLink.findFirst.mockResolvedValue({
       allowViewHistory: true,
       expiresAt: null,
-      maxUses: 5,
-      currentUses: 5,
+      maxUses: 1,
+      currentUses: 1,
     });
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.count.mockResolvedValue(0);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('usage limit'),
-      expect.objectContaining({ code: 'SHARE_LINK_MAX_USES' }),
-    );
+    expect({ success: reply._body.success, code: reply._body.code, data: reply._body.data }).toEqual({ success: true, code: undefined, data: [] });
   });
 
   it('shareLink without view history → historyStartDate set to joinedAt', async () => {

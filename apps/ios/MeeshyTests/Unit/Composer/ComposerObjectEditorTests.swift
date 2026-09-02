@@ -237,6 +237,56 @@ final class ComposerObjectEditorTests: XCTestCase {
                       "Le dépliage LOCAL passe par sa règle — voir #4842.")
     }
 
+    /// **#4850 — l'aperçu plein écran n'ENCADRE plus l'objet.**
+    ///
+    /// > « En plein ecran pourquoi mettre un cadre violet autour du texte, je
+    /// > trouve inutile... » — directive porteur, 2026-09-02.
+    ///
+    /// Le cadre est justifié SUR LA SCÈNE : là il désigne, parmi plusieurs
+    /// objets, celui que le doigt saisit. Sur cet écran l'objet EST le sujet —
+    /// le titre le nomme, les neuf sections le règlent, il n'y a rien dont le
+    /// distinguer. Un signe qui n'apprend rien occupe la place de ce qui
+    /// apprend (loi 8, appliquée à un ornement plutôt qu'à un panneau).
+    ///
+    /// **Le doc-comment de `scene` DÉFENDAIT le cadre** — « le cadre qui
+    /// l'encadre est ce qui rend le réglage lisible pendant qu'on le change ».
+    /// La directive est postérieure ; la justification est révoquée dans le
+    /// même commit, sinon le prochain lecteur la retrouve et la croit valide.
+    ///
+    /// Mesuré avant de retirer : `selectedItemId` ne gouverne QUE le marqueur
+    /// (`StoryCanvasRepresentable:270` → `setSelectionMarker`). Il ne décide ni
+    /// de ce qui répond au doigt, ni de ce qui s'édite en ligne — le passer à
+    /// `nil` n'enlève donc aucun geste.
+    func test_lApercuPleinEcran_nEncadrePlusLObjet() throws {
+        let code = compact(try source("ComposerObjectEditorView.swift"))
+        XCTAssertTrue(code.contains("selectedItemId:nil"),
+                      "Le cadre violet est retiré (#4850) — l'objet est déjà le sujet de l'écran.")
+        XCTAssertFalse(code.contains("selectedItemId:objectId"))
+    }
+
+    /// **#4850 — la section s'appelle POLICE, parce que c'est ce qu'elle est.**
+    ///
+    /// Le porteur demandait « Effet + Police » ou deux sections. La mesure a
+    /// tranché autrement, et c'est elle qu'il faut garder : `StoryTextStyle` est
+    /// un sélecteur de POLICE et rien d'autre — les dix-huit cas résolvent tous
+    /// vers une famille, une graisse ou un design
+    /// (`storyFont(for:size:)`, `StoryTextFontResolver.baseFont`), et AUCUN
+    /// n'applique d'effet. « Neon » ne brille pas ; « Tag » ne bombe pas ;
+    /// « Affiche » est Avenir Next Condensed.
+    ///
+    /// Sept des dix-huit sont donc des polices DÉGUISÉES en effets, et c'est ce
+    /// mélange de vocabulaire — pas le mélange d'axes — que l'auteur voyait.
+    /// Les vrais effets ont déjà leurs sections : FOND, CADRE, CONTOUR.
+    ///
+    /// Ce témoin tombera le jour où un style appliquera un effet : ce sera le
+    /// moment de rouvrir la question des deux axes, pas avant.
+    func test_laSectionDesPolices_neSAppellePlusSTYLE() throws {
+        let code = try source("ComposerObjectEditorView.swift")
+        XCTAssertTrue(code.contains("defaultValue: \"POLICE\""),
+                      "STYLE nommait un axe que la section ne porte pas (#4850).")
+        XCTAssertFalse(code.contains("defaultValue: \"STYLE\""))
+    }
+
     /// Le style prend la forme du spécimen `2e` — le vrai texte, sur son vrai
     /// fond, et la grille des dix-huit.
     func test_leStyle_prendLaFormeDuSpecimen() throws {

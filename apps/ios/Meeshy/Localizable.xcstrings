@@ -3203,43 +3203,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النمط"
+            "value": "الخط"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "STIL"
+            "value": "SCHRIFTART"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "STYLE"
+            "value": "FONT"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "ESTILO"
+            "value": "FUENTE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "STYLE"
+            "value": "POLICE"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "STILE"
+            "value": "CARATTERE"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "ESTILO"
+            "value": "FONTE"
           }
         }
       }
@@ -45458,43 +45458,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يتطلب مقطع فيديو"
+            "value": "يتطلب فيديو أو صوتًا أو صورتين"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfordert ein Video"
+            "value": "Braucht ein Video, einen Ton oder zwei Fotos"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Needs a video"
+            "value": "Needs a video, a sound or two photos"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Requiere un vídeo"
+            "value": "Necesita un vídeo, un sonido o dos fotos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demande une vidéo"
+            "value": "Demande une vidéo, un son ou deux photos"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Richiede un video"
+            "value": "Richiede un video, un suono o due foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Precisa de um vídeo"
+            "value": "Precisa de um vídeo, um som ou duas fotos"
           }
         }
       }
@@ -45542,6 +45542,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apenas texto"
+          }
+        }
+      }
+    },
+    "composer.format.denied.mood.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اكتب شيئًا أولاً"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schreib zuerst etwas"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write something first"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe algo primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écrivez d'abord quelque chose"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrivi prima qualcosa"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escreva algo primeiro"
           }
         }
       }

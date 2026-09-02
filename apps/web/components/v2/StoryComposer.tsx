@@ -15,7 +15,7 @@ import { ComposerFormatFan } from '@/components/composer/ComposerFormatFan';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
-import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
+import { DEFAULT_PUBLICATION_VISIBILITY, type PostVisibility } from '@meeshy/shared/types/post';
 import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import { webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/lib/composer-door';
 import {
@@ -75,7 +75,9 @@ const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NO
 /// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`,
 /// partagé avec `ComposerDocumentSurface`/`ComposerMoodSurface` depuis le
 /// module du picker) — jamais publiés sans liste (le trou W6).
-type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
+/// #4809 — alias de la source : les six valeurs sont exactement `PostVisibility`
+/// (packages/shared/types/post.ts), jamais recopiées.
+type StoryVisibility = PostVisibility;
 
 /**
  * La charge d'une publication story, déclarée UNE fois — consommée par les

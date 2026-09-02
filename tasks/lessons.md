@@ -24035,6 +24035,40 @@ qui se dérive tient.* Partout où du code recopie une liste — clés d'une cha
 entrées d'une rangée, champs d'un `select`, sites d'une règle — la liste est une
 dette, et le témoin doit interroger la SOURCE, jamais la copie.
 
+### AMENDEMENT — le TEST qui manquait, et qui se pose à la DÉCLARATION
+
+Cette leçon décrit un symptôme : un repli soigné efface la trace de la perte.
+Elle ne donnait aucun moyen de le voir venir. Une session voisine l'a extrait
+d'un cas de la même famille rencontré le même jour (#4868) — `hasMoreComments`
+initialisé à `true` pour signifier « je ne sais pas encore », et lu partout « il
+y en a plus ». Le détail rendait donc « Commentaires (0) » et « Charger plus »
+côte à côte.
+
+Ce n'est pas une analogie avec le cas des gabarits : c'est le **même mécanisme
+sur deux types différents**.
+
+| cas | valeur par défaut | ce qu'elle rend indiscernable |
+|---|---|---|
+| `styleId` absent | `location.pill`, **un gabarit valide** | « pas arrivé » et « pas de gabarit » rendent le même pixel |
+| `hasMoreComments` | `true`, **une réponse valide** | « je ne sais pas » et « il y en a » rendent le même bouton |
+
+> **Le test : la valeur par défaut appartient-elle au DOMAINE DES VALEURS
+> LÉGITIMES ?**
+>
+> - **Oui** ⇒ elle est indiscernable d'une vraie réponse. Il faut un état HORS
+>   domaine — `nil`, un cas d'énumération dédié, un sentinel.
+> - **Non** ⇒ elle se distingue toute seule, et le repli est sans danger.
+
+Ce qui rend ce test précieux est **le moment où il se pose** : à la DÉCLARATION,
+avant qu'aucun consommateur n'existe. Les deux cas ci-dessus ont été trouvés
+depuis l'aval — un pixel faux, un bouton en trop — c'est-à-dire des mois après
+que la décision de type ait été prise, et par hasard. Le test, lui, se pose en
+écrivant la ligne.
+
+Et il explique pourquoi « un tri-état écrasé en booléen » et « un repli bien
+choisi » sont le même défaut : dans les deux cas, l'ignorance a été codée avec
+une valeur qui signifie déjà autre chose.
+
 ## Leçon 432 — Une API qui répond par une EXCEPTION n'offre que la prévention, et la prévention s'écrit devant l'APPEL
 
 **Le fait (2026-09-02).** Toucher le bouton d'enregistrement du viseur vidéo
@@ -24432,7 +24466,160 @@ doublon est laid ; taire la légende d'un auteur est une perte de contenu. *Une
 garde qui hésite tombe du côté où l'on ne perd rien* — formulation d'une
 session voisine, adoptée.
 
-## Leçon 440 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+## Leçon 440 — Un outil de détection se règle contre l'erreur qui n'a PAS de vérificateur
+
+**Le fait (2026-09-02, #4853).** En extrayant 309 lignes de `PostDetailView.swift`,
+j'ai balayé mécaniquement les membres privés dont le bloc dépendait, et ouvert les
+sept trouvés. Deux erreurs opposées ont suivi, et elles n'ont pas coûté la même
+chose :
+
+| erreur | qui l'attrape | coût réel |
+|---|---|---|
+| **faux négatif** — `DetailMediaAuthor`, type privé que mon motif `private (func\|var\|let)` ne pouvait pas voir | le **compilateur**, immédiatement | un cycle de build, ~2 min |
+| **faux positif** — `accentColor`, ouvert alors que ses deux occurrences étaient des ÉTIQUETTES d'argument (`accentColor: repost.authorColor`) | **rien** | l'encapsulation reste élargie, sans terme |
+
+> **Le compilateur est un vérificateur GRATUIT des faux négatifs, et il n'existe
+> aucun vérificateur des faux positifs.** Ouvrir un membre qui n'en avait pas
+> besoin ne produit ni erreur, ni avertissement, ni test rouge : le défaut
+> s'installe et personne ne le rencontrera jamais.
+
+**Ce que ça retourne.** « Ratisser large pour ne rien manquer » est le bon réglage
+quand les deux erreurs coûtent pareil — et le MAUVAIS dès qu'un vérificateur
+gratuit existe d'un seul côté. Ici il fallait régler contre les faux POSITIFS,
+c'est-à-dire accepter de manquer une dépendance et laisser le compilateur la
+rendre.
+
+**Le geste, généralisé** (formulation d'une session voisine, qui a vu plus loin
+que le cas) :
+
+> Avant de régler n'importe quel outil de détection — balayage, garde, linter,
+> heuristique — demander : **laquelle de mes deux erreurs a déjà un
+> vérificateur ?** Ici le compilateur ; ailleurs un test, un gate, un utilisateur
+> qui râle. **On règle contre celle qui n'en a pas.**
+
+**Corollaire pour nos gardes de source, dont ce dépôt écrit beaucoup** : une garde
+trop STRICTE rougit et se fait corriger le jour même ; une garde trop LÂCHE passe
+au vert pour toujours. C'est le même déséquilibre, et il justifie de préférer
+systématiquement la garde qui risque de rougir à tort. Voisine directe de la
+§ « les gardes NÉGATIVES meurent en silence » : une garde qui ne peut plus
+rougir a exactement le profil de coût du faux positif d'ici — invisible et
+définitive.
+
+**Et le détail technique qui a produit le faux positif, parce qu'il se rejouera** :
+dans un type, un membre s'atteint par `self` IMPLICITE, donc **sans point**.
+Mesuré sur ce lot : **0 dépendance sur 7** était atteinte par `.nom`. Un filtre
+« ne compter que `\.nom\b` ou `\bnom\s*\(` » — proposé de bonne foi pour réduire
+les faux positifs — en aurait trouvé 2 sur 7. Ce qui marche : **effacer les
+positions d'étiquette (`nom:` précédé de `(` ou `,`) AVANT de chercher le nom
+nu.** Il isole le seul faux positif et garde les six vraies.
+
+Dernière chose, sur la confiance qu'on accorde à un balayage : j'avais écrit qu'il
+« retrouve seul ce qui avait été trouvé à la main ». C'était vrai et **ça ne
+prouvait rien** — je lui avais donné un fichier où j'avais déjà appliqué la
+correction. Un outil ne se valide pas sur un cas qu'on a préparé pour lui. Même
+famille que le témoin qui doit TOMBER avant le correctif.
+
+### AMENDEMENT du même jour — le vérificateur des faux positifs existe, et ce n'est pas un outil
+
+Cette leçon affirmait qu'« il n'existe aucun vérificateur des faux positifs ».
+**C'est faux, et la correction vient d'une session voisine.** Quelques heures
+après avoir écrit ce qui précède, j'ai produit un faux positif d'une autre
+espèce : un relevé sur `tasks/lessons.md` m'a fait conclure que le `CLAUDE.md`
+racine citait un numéro de leçon AMBIGU. La mesure avait l'air propre et
+désignait un défaut dans le document le plus lu du dépôt.
+
+Ce qui l'a attrapée n'est pas une vérification. C'est que **j'allais citer les
+deux leçons dans l'issue** — et qu'en les ouvrant pour les recopier, j'ai vu
+« 288 », « 288 bis », « 288 ter », « 288 quater » : une famille à suffixes, pas un
+doublon. Mon motif `^## Leçon [0-9]+` avait tronqué au nombre.
+
+> **Une mesure se relit toute seule ; une preuve CITÉE oblige à rouvrir la
+> source.** Le compte se produit sans jamais rouvrir le fichier — l'extrait, non.
+
+D'où la discipline, qui est le vérificateur manquant :
+
+**Une issue, un commentaire ou un commit qui ACCUSE doit contenir l'EXTRAIT, pas
+seulement le compte.** Deux lignes du fichier valent mieux qu'un nombre juste,
+non pas parce qu'elles convainquent mieux le lecteur, mais parce que **les
+produire force l'auteur à retourner à la source** — c'est-à-dire à faire
+exactement ce qu'un faux positif empêche de faire.
+
+Cela vaut pour les trois formes que ce dépôt écrit le plus : « N sites font X »
+(citer deux), « ce champ n'est lu nulle part » (citer la recherche ET son
+résultat vide), « ces deux choses divergent » (citer les deux côtés, élément par
+élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
+gratuit qu'on ait de ce côté-là de l'asymétrie.
+
+## Leçon 441 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
+
+**Le fait (2026-09-02).** Ma consigne permanente de boucle le dit à chaque
+réveil, en gras : « **Tu ne fermes JAMAIS une issue** — la session d'intégration
+ferme, sur mesure rejouée. » J'ai fermé quatre issues dans la même heure, sans
+appeler une seule fois une API de fermeture.
+
+Le mot-clé `Closes #n` dans un message de commit suffit. `dev` étant la branche
+PAR DÉFAUT du dépôt, GitHub ferme l'issue à la seconde où la poussée atterrit.
+Mesuré, issue par issue, dans le journal d'événements :
+
+```
+#4585  10:28:03  closed  commit_id=cd46251f7f
+#4682  10:38:23  closed  commit_id=7716dee4bd
+#4688  10:20:09  closed  commit_id=918c6f31ca
+#4860  10:20:08  closed  commit_id=98419744bc
+```
+
+**La cause n'est pas une inattention : c'est un conflit entre deux règles
+ÉCRITES du même projet.**
+
+| règle | forme | ce qui l'applique |
+|---|---|---|
+| `CLAUDE.md` § pilotage — « l'issue **fermée** par le commit qui la livre (`Closes #n`) » | une CONVENTION | GitHub, mécaniquement, à chaque poussée |
+| la consigne de la boucle — « tu ne fermes JAMAIS une issue » | une INTERDICTION | rien |
+
+Suivre les deux à la lettre EXÉCUTE la première et viole la seconde. Et la
+violation ne laisse aucune trace lisible : l'issue se ferme proprement, avec un
+lien vers le bon commit, exactement comme si quelqu'un l'avait décidé.
+
+> **Une interdiction n'a pas de moteur.** Une convention qu'un outil exécute en
+> a un. Quand les deux se contredisent, ce n'est pas la plus récente ni la plus
+> impérative qui l'emporte — c'est celle qui a un mécanisme derrière elle, et
+> l'autre est enfreinte SANS RAPPORT D'ERREUR.
+
+C'est ce qui rend cette famille chère : je me croyais conforme parce que je
+n'avais jamais posé sciemment un geste de fermeture. Le contrôle que j'appliquais
+portait sur mes APPELS ; la règle portait sur un EFFET.
+
+### La question à se poser
+
+Devant toute règle de la forme « ne fais jamais X », demander : **quel autre
+geste de mon travail PRODUIT X sans le nommer ?** Ici : un mot dans un message
+de commit. Ailleurs, la même forme se retrouve partout — un `git push` qui
+déclenche un déploiement, un fichier renommé qui casse un import dynamique, une
+dépendance ajoutée qui embarque un postinstall, un label posé qui déclenche un
+workflow. Le geste interdit est rarement celui qu'on s'interdit ; c'est celui
+qu'on fait sans savoir qu'il l'est.
+
+### Ce que j'ai fait, et ce que je n'ai PAS fait
+
+`Closes` est remplacé par `Avance #n` dans mes messages de commit — le lien vers
+l'issue reste, la fermeture disparaît.
+
+**Je n'ai PAS rouvert les quatre.** Rouvrir est un changement d'état au même
+titre que fermer : la consigne m'interdit l'un, elle ne m'autorise pas l'autre
+en compensation. Et le point de contrôle que ma fermeture a sauté — l'intégration
+qui rejoue la mesure — appartient au porteur, pas à moi. Elles sont taguées
+`to-integrate`, chaque relais porte les commandes de rejeu, et le fait est dit en
+tête de chacun.
+
+> **Réparer une infraction par son symétrique est une seconde infraction.** La
+> réparation juste est de rendre l'état LISIBLE à qui a le droit de le changer.
+
+Voisines : § 433 (ce qui s'énumère se périme, ce qui se dérive tient) — même
+asymétrie entre ce qu'on déclare et ce qui s'exécute ; § 440 (un outil de
+détection se règle contre l'erreur qui n'a pas de vérificateur) — ici
+l'interdiction ÉTAIT l'erreur sans vérificateur.
+
+## Leçon 442 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
 
 **Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
 ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
@@ -24456,7 +24643,7 @@ Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
 base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
 n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
 
-## Leçon 441 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+## Leçon 443 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
 
 **Ce qui s'est passé.** Deux fois dans la même session, un lot vert
 localement a rougi la CI quarante minutes plus tard sur un cliquet de
