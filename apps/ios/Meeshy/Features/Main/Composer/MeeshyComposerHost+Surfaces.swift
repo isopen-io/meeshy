@@ -1033,6 +1033,12 @@ extension MeeshyComposerHost {
             // 2026-08-30 : depuis l'entrée Post, l'éventail n'offrait que Post
             // et Story — la bascule vers Réel et Mood semblait ne pas exister.
             candidateFormats: ComposerFormat.allComposable,
+            // **La cause du refus, pas seulement le refus** (#4858). Les MÊMES
+            // deux faits que `moodGate` juge — un média ingéré, une scène — de
+            // sorte que la phrase servie ne peut pas contredire le verdict qui
+            // l'a produite. Les lire ici plutôt que de les recalculer dans
+            // l'éventail est ce qui garde les deux d'accord.
+            carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
             selection: formatSelection
         )
         .font(.footnote.weight(.semibold))
