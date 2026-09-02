@@ -282,7 +282,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                                 backdropCapture.cropRegion(frame)
                                             },
                                             mediaFrameProvider: mediaFrameProvider,
-                                            contentsScale: 1.0)
+                                            contentsScale: 1.0,
+                                            reduceMotion: false)
 
             // Opening transition — only visible during the first
             // `StoryRenderer.slideTransitionDuration`. The live canvas uses

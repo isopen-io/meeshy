@@ -491,6 +491,7 @@ extension StoryComposerViewModel {
                                    sourceLanguage: declaredContentLanguage,
                                    x: 0.5 + offset, y: 0.5 + offset)
         sticker.scale = template.posedScale
+        sticker.animation = template.animation
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)

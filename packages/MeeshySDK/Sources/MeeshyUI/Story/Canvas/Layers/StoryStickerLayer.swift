@@ -78,7 +78,29 @@ public final class StoryStickerLayer: CALayer {
 
         // Stickers are pre-rasterized via StoryStickerRasterizer; in .play we
         // additionally flag the layer for the GPU rasterization fast path.
+        // Une décoration ANIMÉE reste rasterisable : la pose (#4821) est une
+        // transformation de la couche, pas un redessin de son contenu.
         shouldRasterize = mode == .play && sticker.isStatic
         if shouldRasterize { rasterizationScale = renderScale }
+    }
+
+    /// **Pose la transformation d'une animation** (#4821) — réappliquée à
+    /// CHAQUE tick par la post-passe de `StoryRenderer`, jamais au build : la
+    /// couche peut venir du cache d'export, où la transformation du tick
+    /// précédent survivrait sinon.
+    ///
+    /// La rotation de l'AUTEUR et celle de l'animation s'additionnent ; le
+    /// décalage est une fraction des `bounds`, donc indépendant de l'écran ; le
+    /// pivot reste `anchorPoint`, posé par `configure`.
+    @MainActor
+    public func applyAnimationPose(_ pose: StickerAnimation.Pose,
+                                   baseRotationDegrees: Double) {
+        var pose3D = CATransform3DMakeTranslation(CGFloat(pose.offsetX) * bounds.width,
+                                                  CGFloat(pose.offsetY) * bounds.height, 0)
+        pose3D = CATransform3DRotate(pose3D,
+                                     CGFloat(baseRotationDegrees + pose.rotationDegrees) * .pi / 180,
+                                     0, 0, 1)
+        pose3D = CATransform3DScale(pose3D, CGFloat(pose.scale), CGFloat(pose.scale), 1)
+        transform = pose3D
     }
 }

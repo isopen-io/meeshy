@@ -439,6 +439,7 @@ public extension CanvasV3 {
         if !sticker.slots.isEmpty {
             payload["slots"] = .object(sticker.slots.mapValues(CanvasJSONValue.string))
         }
+        if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -753,6 +754,7 @@ public extension StoryEffects {
             provider: object.payload.string("provider"),
             templateId: templateId,
             slots: object.payload.stringMap("slots") ?? [:],
+            animation: object.payload.string("animation").flatMap(StickerAnimation.init(rawValue:)),
             sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
