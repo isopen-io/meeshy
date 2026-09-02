@@ -95,6 +95,23 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case reaction
     case party
     case availability
+    /// Le second lot de thèmes (#4820, vers les 200) — la nature et les
+    /// animaux, l'encouragement, les réponses d'un mot.
+    case nature
+    case cheer
+    case answer
+    /// Le troisième lot (#4820) — ce qu'on mange, ce qu'on court. Deux thèmes
+    /// que la famille DISPONIBILITÉ frôle sans les dire : « en pause » est un
+    /// état, un café est une invitation.
+    case food
+    case sport
+    /// Le quatrième lot (#4820), qui porte le catalogue à 200 — partir, la
+    /// journée de travail, ce qu'on écoute. TRAVAIL dit ce sur QUOI on
+    /// travaille, là où DISPONIBILITÉ dit l'état de la personne ; MUSIQUE ne
+    /// porte aucun titre, un titre écrit relevant de la famille TEXTE.
+    case travel
+    case work
+    case music
 }
 
 // MARK: - Sticker Template Slot

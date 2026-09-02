@@ -117,7 +117,9 @@ extension StickerPickerView {
             return StickerSlotFiller.timeSlots(at: openedAt)
                 .merging(StickerSlotFiller.dateSlots(at: openedAt)) { heure, _ in heure }
         case .love:  return StickerSlotFiller.dateSlots(at: openedAt)
-        case .weather, .joy, .surprise, .mood, .greeting, .reaction, .party, .availability:
+        case .weather, .joy, .surprise, .mood, .greeting, .reaction, .party, .availability,
+             .nature, .cheer, .answer, .food, .sport,
+             .travel, .work, .music:
             return [:]
         case .text:
             return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
