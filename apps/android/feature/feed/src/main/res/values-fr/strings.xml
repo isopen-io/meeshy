@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feed_title">Fil d\'actualité</string>
+    <string name="feed_title">Meeshy Feed</string>
     <string name="feed_empty">Aucune publication pour l\'instant</string>
     <string name="feed_like">J\'aime</string>
     <string name="feed_unknown_author">Inconnu</string>
@@ -148,4 +148,20 @@
     <string name="feed_report_reason_hate_speech">Discours haineux</string>
     <string name="feed_report_reason_impersonation">Usurpation d\'identité</string>
     <string name="feed_report_reason_other">Autre</string>
+
+    <!-- Actions de l'en-tête repliable -->
+    <string name="feed_header_reels">Lancer les Réels</string>
+    <string name="feed_header_nearby">Publications à proximité</string>
+
+    <!-- À proximité -->
+    <string name="nearby_title">À proximité</string>
+    <string name="nearby_back">Retour</string>
+    <string name="nearby_empty">Aucune publication à proximité pour le moment</string>
+    <string name="nearby_permission_title">Accès à la localisation requis</string>
+    <string name="nearby_permission_message">Autorisez la localisation pour voir les publications partagées près de vous.</string>
+    <string name="nearby_permission_action">Autoriser</string>
+    <string name="nearby_location_unavailable">Localisation indisponible — vérifiez vos réglages de localisation et réessayez</string>
+    <string name="nearby_retry">Réessayer</string>
+    <string name="nearby_distance_meters">à %1$d m</string>
+    <string name="nearby_distance_km">à %1$.1f km</string>
 </resources>

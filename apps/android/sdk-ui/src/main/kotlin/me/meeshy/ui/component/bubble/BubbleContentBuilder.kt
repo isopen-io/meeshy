@@ -137,6 +137,7 @@ public object BubbleContentBuilder {
                     attachmentId = attachment.id,
                     name = attachment.originalName ?: attachment.fileName,
                     sizeBytes = attachment.fileSize,
+                    url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                 )
             }
         val text = when {

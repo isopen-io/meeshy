@@ -236,4 +236,12 @@
     <string name="global_search_recent_title">Pesquisas recentes</string>
     <string name="global_search_recent_clear">Limpar</string>
     <string name="global_search_recent_remove">Remover</string>
+
+    <!-- Conversation header + share-link picker -->
+    <string name="conversations_create_share_link">Criar um link de compartilhamento</string>
+    <string name="share_link_picker_title">Escolher uma conversa</string>
+    <string name="share_link_picker_back">Voltar</string>
+    <string name="share_link_picker_empty_title">Nenhuma conversa para compartilhar ainda</string>
+    <string name="share_link_picker_empty_body">Crie um link de compartilhamento a partir de um grupo, comunidade, canal ou conversa aberta que você modera.</string>
+    <string name="share_link_picker_empty_cta">Nova conversa</string>
 </resources>

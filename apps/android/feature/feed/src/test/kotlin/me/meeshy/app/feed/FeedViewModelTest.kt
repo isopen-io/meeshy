@@ -69,6 +69,7 @@ class FeedViewModelTest {
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val feedMediaUploader: FeedMediaUploader = mockk(relaxed = true)
     private val reportRepository: me.meeshy.sdk.report.ReportRepository = mockk(relaxed = true)
+    private val workManager: androidx.work.WorkManager = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
@@ -97,7 +98,7 @@ class FeedViewModelTest {
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
     }
 
     @Test
@@ -167,6 +168,23 @@ class FeedViewModelTest {
         vm.toggleLike("p1")
 
         coVerify(exactly = 1) { repository.toggleLike("p1") }
+    }
+
+    /**
+     * Regression guard: `PostRepository.toggleLike` only persists an outbox row —
+     * nothing replays it on reconnect unless a `WorkManager` flush is scheduled.
+     * `FeedViewModel` is the only caller of the post-like outbox path, so it must
+     * schedule [me.meeshy.sdk.outbox.OutboxFlushWorker] itself, matching every
+     * other outbox producer (ChatViewModel, SettingsViewModel, ...).
+     */
+    @Test
+    fun `toggleLike schedules an outbox flush after enqueueing`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+
+        val vm = viewModel()
+        vm.toggleLike("p1")
+
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     @Test
@@ -426,7 +444,7 @@ class FeedViewModelTest {
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
-        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
+        return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
     }
 
     @Test
@@ -931,6 +949,16 @@ class FeedViewModelTest {
         vm.toggleBookmark("p1")
 
         coVerify(exactly = 1) { repository.toggleBookmark("p1") }
+    }
+
+    /** Bookmark analogue of the like-flush regression guard above. */
+    @Test
+    fun `toggleBookmark schedules an outbox flush after enqueueing`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.toggleBookmark("p1")
+
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     // --- live comment-count sync (comment:added / comment:deleted) ---

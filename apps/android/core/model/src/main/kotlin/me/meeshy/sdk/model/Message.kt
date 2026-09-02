@@ -163,6 +163,10 @@ data class SendMessageRequest(
     val originalLanguage: String,
     val messageType: String = "text",
     val replyToId: String? = null,
+    // Wire twin of `ApiMessage.storyReplyToId` above — the RECEIVE side already
+    // carried it; the SEND side never did, so no client could ever construct a
+    // request the gateway's `storyReplyToId` (SendMessageBodySchema) accepts.
+    val storyReplyToId: String? = null,
     val clientMessageId: String,
     val attachmentIds: List<String>? = null,
     val forwardedFromId: String? = null,

@@ -74,6 +74,12 @@ class CallPresenterTest {
     }
 
     @Test
+    fun `speaker reflects media intent`() {
+        assertThat(present(CallState.Connected, media = CallMedia(isSpeakerOn = true)).isSpeakerOn).isTrue()
+        assertThat(present(CallState.Connected, media = CallMedia(isSpeakerOn = false)).isSpeakerOn).isFalse()
+    }
+
+    @Test
     fun `camera is on only for a video call with camera enabled`() {
         assertThat(present(CallState.Connected, media = CallMedia(isCameraOn = true)).isCameraOn).isTrue()
     }
