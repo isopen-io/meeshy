@@ -59,6 +59,17 @@ nonisolated enum ActiveClipResolver {
                 windows.append(Window(id: s.id, start: Float(s.startTime ?? 0), duration: Float(d)))
             }
         }
+        // **La cinquième famille, et le trou s'OUVRAIT avec #4840.** Tant
+        // qu'aucun geste ne pouvait poser de fenêtre sur un lieu, `duration`
+        // valait toujours `nil` : ce filtre ne tombait jamais, et l'absence
+        // était sans effet. Elle devient visible à l'instant où la fenêtre est
+        // atteignable — une pastille qui en porte une doit devenir le clip
+        // actif pendant la lecture, comme ses quatre sœurs.
+        for l in project.locationObjects {
+            if let d = l.duration, d > 0 {
+                windows.append(Window(id: l.id, start: Float(l.startTime ?? 0), duration: Float(d)))
+            }
+        }
         return windows
     }
 }
