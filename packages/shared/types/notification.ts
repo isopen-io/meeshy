@@ -76,12 +76,8 @@ export enum NotificationTypeEnum {
 
   // ===== FRIEND CONTENT EVENTS (Phase 4F) =====
   // Fired when a friend publishes new content.
-  //
-  // `friend_new_mood` porte le contenu de type STATUS — un seul type de
-  // contenu, pas deux : c'est le nom PRODUIT du profil qui a donné son nom au
-  // type de notification, et il le garde (§ 7, la prose dit « mood »). Le
-  // DISCRIMINANT qui voyage avec, lui, dit STATUS — cf. `SocialPostType`
-  // (#4906).
+  // `friend_new_mood` porte du STATUS : le nom PRODUIT a donné son nom au type
+  // de notification et le garde (§ 7), le DISCRIMINANT dit STATUS (#4906).
   FRIEND_NEW_STORY = 'friend_new_story',
   FRIEND_NEW_POST = 'friend_new_post',
   FRIEND_NEW_MOOD = 'friend_new_mood',
@@ -475,34 +471,17 @@ export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
 
 /**
  * Type de contenu social qui TRAVERSE LE FIL — le type de `metadata.postType`
- * et de `metadata.contentType`, les deux discriminants que les trois clients
- * lisent pour choisir le wording, l'icône et la destination.
+ * et `metadata.contentType`, les discriminants que les trois clients lisent.
+ * C'est EXACTEMENT `PostType`, par ALIAS et non par recopie : une recopie
+ * dérive en silence, l'alias rend la dérive IMPOSSIBLE.
  *
- * C'est EXACTEMENT `PostType`, par ALIAS et non par recopie : le fil ne peut
- * pas déclarer légal ce que la base ne sait pas produire, et une recopie de la
- * liste dérive en silence là où l'alias rend la dérive IMPOSSIBLE. `enum
- * PostType` (`prisma/schema.prisma`) vaut `POST | REEL | STORY | STATUS` —
- * dont `STATUS`, « Éphémère 1h — mood textuel avec audio optionnel ».
- *
- * **`'MOOD'` en est sorti (#4906, 2026-09-02.)** C'est le nom PRODUIT de
- * `STATUS`, et `docs/product/meeshy-composer-modele.md` § 7 tranche la
- * frontière : « un identifiant qui traverse le fil garde `status` ; une chaîne
- * d'interface et un texte explicatif disent "mood" ». Rien ne l'émettait — ni
- * la base, ni les émetteurs iOS qui figent `"STATUS"` — et il n'était pas
- * inoffensif pour autant : **une valeur de fil que personne n'émet est une
- * AUTORISATION**. Le type la disait légale, les huit surfaces clientes le
- * confirmaient en la tolérant, et les deux qui ne suivaient pas ne l'auraient
- * dit qu'en production — la PASSERELLE reclassait un mood en `post_like`/POST
- * (`status_reaction` élu sur `=== 'STATUS'`), et le CATALOGUE rendait la même
- * entité de deux façons selon le synonyme employé (« votre humeur » ou
- * « votre statut »), ce que le § 7 nomme mélanger les deux dans une phrase.
- *
- * Les CLIENTS gardent leur tolérance de lecture — une charge déjà persistée
- * peut porter « MOOD », et un client ne durcit jamais sur une valeur qu'il
- * acceptait. Côté serveur, la même tolérance vit dans
- * `NotificationPostLabelKind` (`utils/notification-strings.ts`) : la clé de
- * PROSE du catalogue, qui n'est pas un identifiant de fil.
- *
+ * **`'MOOD'` en est sorti (#4906)** — nom PRODUIT de `STATUS`, et le § 7 de
+ * `docs/product/meeshy-composer-modele.md` tient la frontière : un identifiant
+ * de fil garde `status`, la prose dit « mood ». Rien ne l'émettait, ce qui ne
+ * le rendait pas inoffensif — **une valeur de fil que personne n'émet est une
+ * AUTORISATION**, et deux surfaces la traitaient à part. La tolérance de
+ * LECTURE reste (clients, `NotificationPostLabelKind` au catalogue) : on ne
+ * durcit pas sur une valeur déjà persistée.
  * Cliquet : `__tests__/types/social-post-type-wire-guard.test.ts`.
  */
 export type SocialPostType = PostType;
