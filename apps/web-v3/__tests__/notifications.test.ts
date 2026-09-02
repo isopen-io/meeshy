@@ -2,7 +2,11 @@
  * @jest-environment node
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { boiteDuLecteur } from '@/lib/api/notifications';
+import { GLYPHE_PAR_DEFAUT, NOTIFS, glypheDuGenre } from '@/lib/contenu/notifs';
 
 /**
  * CE QUE CES TÉMOINS ÉPROUVENT — la PROJECTION de ce que la passerelle sert,
@@ -181,5 +185,45 @@ describe('la boîte du lecteur', () => {
       `${BASE}/api/v1/notifications?limit=30`,
       expect.objectContaining({ headers: expect.objectContaining({ authorization: `Bearer ${JETON}` }) }),
     );
+  });
+});
+
+describe('la copie de la boîte', () => {
+  it('rend un glyphe RÉEL du sprite pour un genre inconnu, jamais une référence vide', () => {
+    expect(glypheDuGenre('un_genre_que_la_passerelle_inventera_demain')).toBe(GLYPHE_PAR_DEFAUT);
+    expect(GLYPHE_PAR_DEFAUT).toMatch(/^ph-[a-z-]+$/);
+  });
+
+  it('donne à chaque genre que la passerelle ÉMET un glyphe du sprite', () => {
+    // Relevés dans services/gateway/src/services/notifications/ — si la passerelle
+    // en ajoute un, ce témoin ne rougit pas (le défaut le couvre) : il fixe que
+    // ceux qu'on CONNAÎT sont nommés, pas que la liste est close.
+    const emis = [
+      'message', 'new_message', 'message_edited', 'message_reply', 'reply',
+      'story_thread_reply', 'mention', 'user_mentioned', 'message_reaction',
+      'comment_reaction', 'contact_request', 'friend_request', 'contact_accepted',
+      'friend_new_post', 'friend_new_story', 'friend_new_mood', 'friend_story_comment',
+      'story_new_comment', 'new_conversation', 'new_conversation_direct',
+      'new_conversation_group', 'member_joined', 'missed_call', 'system',
+    ];
+
+    const sprite = readFileSync(
+      join(__dirname, '..', '..', '..', 'packages', 'icons', 'sprite.svg'),
+      'utf8',
+    );
+
+    for (const genre of emis) {
+      const glyphe = glypheDuGenre(genre);
+      // La vraie garde : le glyphe EXISTE dans le sprite. Une table qui nomme
+      // `ph-bell-ringing` (qui n'y est pas) serait verte sur toute assertion de
+      // forme et rendrait une icône vide en production.
+      expect(sprite).toContain(`id="${glyphe}"`);
+    }
+  });
+
+  it('accorde le compteur de non-lues au singulier comme au pluriel', () => {
+    expect(NOTIFS.nonLues(0)).toBe('0 non lue');
+    expect(NOTIFS.nonLues(1)).toBe('1 non lue');
+    expect(NOTIFS.nonLues(7)).toBe('7 non lues');
   });
 });
