@@ -24035,6 +24035,40 @@ qui se dérive tient.* Partout où du code recopie une liste — clés d'une cha
 entrées d'une rangée, champs d'un `select`, sites d'une règle — la liste est une
 dette, et le témoin doit interroger la SOURCE, jamais la copie.
 
+### AMENDEMENT — le TEST qui manquait, et qui se pose à la DÉCLARATION
+
+Cette leçon décrit un symptôme : un repli soigné efface la trace de la perte.
+Elle ne donnait aucun moyen de le voir venir. Une session voisine l'a extrait
+d'un cas de la même famille rencontré le même jour (#4868) — `hasMoreComments`
+initialisé à `true` pour signifier « je ne sais pas encore », et lu partout « il
+y en a plus ». Le détail rendait donc « Commentaires (0) » et « Charger plus »
+côte à côte.
+
+Ce n'est pas une analogie avec le cas des gabarits : c'est le **même mécanisme
+sur deux types différents**.
+
+| cas | valeur par défaut | ce qu'elle rend indiscernable |
+|---|---|---|
+| `styleId` absent | `location.pill`, **un gabarit valide** | « pas arrivé » et « pas de gabarit » rendent le même pixel |
+| `hasMoreComments` | `true`, **une réponse valide** | « je ne sais pas » et « il y en a » rendent le même bouton |
+
+> **Le test : la valeur par défaut appartient-elle au DOMAINE DES VALEURS
+> LÉGITIMES ?**
+>
+> - **Oui** ⇒ elle est indiscernable d'une vraie réponse. Il faut un état HORS
+>   domaine — `nil`, un cas d'énumération dédié, un sentinel.
+> - **Non** ⇒ elle se distingue toute seule, et le repli est sans danger.
+
+Ce qui rend ce test précieux est **le moment où il se pose** : à la DÉCLARATION,
+avant qu'aucun consommateur n'existe. Les deux cas ci-dessus ont été trouvés
+depuis l'aval — un pixel faux, un bouton en trop — c'est-à-dire des mois après
+que la décision de type ait été prise, et par hasard. Le test, lui, se pose en
+écrivant la ligne.
+
+Et il explique pourquoi « un tri-état écrasé en booléen » et « un repli bien
+choisi » sont le même défaut : dans les deux cas, l'ignorance a été codée avec
+une valeur qui signifie déjà autre chose.
+
 ## Leçon 432 — Une API qui répond par une EXCEPTION n'offre que la prévention, et la prévention s'écrit devant l'APPEL
 
 **Le fait (2026-09-02).** Toucher le bouton d'enregistrement du viseur vidéo
