@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// **« Ce contenu n'est plus disponible » n'est pas une réponse à un échec
 /// réseau** (#4903).
@@ -51,5 +52,25 @@ final class PostDetailAbsenceReasonTests: XCTestCase {
     func test_unPostPrésent_gagneSurUneErreurRésiduelle() {
         XCTAssertEqual(PostDetailAbsenceReason.resolve(hasPost: true, isLoading: false, error: "vieille erreur"),
                        .present)
+    }
+
+    /// **Le défaut SYMÉTRIQUE, trouvé en relisant mon propre correctif.**
+    ///
+    /// Distinguer « échec » de « disparition » ne sert à rien si TOUTE erreur
+    /// compte comme un échec : un 404 — le serveur a répondu, et il a dit non —
+    /// afficherait « vérifiez votre connexion » et proposerait de réessayer une
+    /// requête qui échouera identiquement. Corriger un mensonge en le
+    /// retournant n'est pas le corriger.
+    /// L'erreur est construite comme `APIClient` la lève — `MeeshyError`, pas
+    /// `APIError` : un témoin écrit avec le mauvais type passerait au vert en
+    /// gardant une règle morte.
+    func test_un404_estUneRéponse_pasUnÉchec() {
+        XCTAssertTrue(PostDetailAbsenceReason.isNotFound(MeeshyError.server(statusCode: 404, message: "Post not found")))
+    }
+
+    /// Tout le reste laisse la question OUVERTE — donc mérite un réessai.
+    func test_lesAutresErreurs_restentDesÉchecs() {
+        XCTAssertFalse(PostDetailAbsenceReason.isNotFound(MeeshyError.server(statusCode: 500, message: "boom")))
+        XCTAssertFalse(PostDetailAbsenceReason.isNotFound(URLError(.notConnectedToInternet)))
     }
 }

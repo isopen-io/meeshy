@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Pourquoi il n'y a rien à montrer — la question que l'écran ne posait pas.**
 ///
@@ -43,6 +44,32 @@ nonisolated enum PostDetailAbsenceReason: Equatable {
     /// 2. **une tentative tourne-t-elle ?** — sinon une erreur ANCIENNE
     ///    trancherait pendant qu'une nouvelle requête est en vol ;
     /// 3. **qu'est-ce qui a échoué ?** — seulement alors.
+
+    /// **Un 404 n'est pas un échec — c'est une réponse.**
+    ///
+    /// Le serveur a répondu, et il a dit « cette ressource n'existe pas ».
+    /// Confondre les deux ferait mentir l'écran dans l'AUTRE sens : une story
+    /// réellement supprimée inviterait à « vérifier la connexion » et à
+    /// réessayer une requête qui échouera identiquement.
+    ///
+    /// **Le type testé est `MeeshyError`, et c'est tout le sujet.**
+    ///
+    /// J'ai d'abord copié la règle voisine, qui filtre `APIError.serverError`.
+    /// Elle ne peut pas matcher : `APIClient` compte **23 `throw MeeshyError`
+    /// et zéro `throw APIError`** (mesuré), si bien qu'une garde écrite contre
+    /// `APIError` ne s'exécute jamais sur un appel passé par `api.request`.
+    /// `StoryViewerView` documente déjà cette confusion pour l'avoir payée.
+    ///
+    /// Une règle recopiée hérite de ses défauts en silence : celle-ci serait
+    /// née MORTE, et son témoin l'aurait déclarée juste — un test écrit avec
+    /// le même `APIError` que le code passe au vert sans rien prouver du
+    /// terrain. C'est pourquoi les témoins construisent l'erreur telle que
+    /// l'`APIClient` la lève.
+    nonisolated static func isNotFound(_ error: Error) -> Bool {
+        if case MeeshyError.server(let statusCode, _) = error { return statusCode == 404 }
+        return false
+    }
+
     nonisolated static func resolve(hasPost: Bool, isLoading: Bool, error: String?) -> PostDetailAbsenceReason {
         if hasPost { return .present }
         if isLoading { return .stillLoading }
