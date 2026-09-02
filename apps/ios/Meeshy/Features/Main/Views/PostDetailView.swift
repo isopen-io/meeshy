@@ -368,7 +368,7 @@ struct PostDetailView: View {
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
-    var accentColor: String {
+    private var accentColor: String {
         displayPost?.authorColor ?? "6366F1"
     }
 
