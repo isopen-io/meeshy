@@ -2639,43 +2639,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مخطط ثنائي الأبعاد"
+            "value": "الخط الزمني"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "2D-PLAN"
+            "value": "TIMELINE"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "2D PLAN"
+            "value": "TIMELINE"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "PLANO 2D"
+            "value": "TIMELINE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PLAN 2D"
+            "value": "TIMELINE"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "PIANO 2D"
+            "value": "TIMELINE"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "PLANO 2D"
+            "value": "LINHA DO TEMPO"
           }
         }
       }
@@ -93982,6 +93982,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Online"
+          }
+        }
+      }
+    },
+    "story.caption.scroll_to_top": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العودة إلى بداية النص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Textanfang zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to the top of the text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al inicio del texto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir au début du texte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Torna all'inizio del testo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar ao início do texto"
+          }
+        }
+      }
+    },
+    "story.caption.scroll_to_top.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمرّر الوصف حتى أول كلمة فيه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrollt die Beschreibung bis zum ersten Wort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrolls the description back to its first word"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplaza la descripción hasta su primera palabra"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fait défiler la description jusqu'à son premier mot"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fa scorrere la descrizione fino alla prima parola"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rola a descrição até a primeira palavra"
           }
         }
       }

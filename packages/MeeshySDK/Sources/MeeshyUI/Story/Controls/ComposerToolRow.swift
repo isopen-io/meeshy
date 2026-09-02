@@ -78,11 +78,56 @@ struct ComposerToolRow: View, Equatable {
     /// L'écart canonique de la rangée du document. Il remplace les 10 pt des
     /// pastilles : sans cercle autour de l'icône, un interstice serré collait
     /// les glyphes.
-    private static let spacing: CGFloat = 16
+    ///
+    /// **Il n'est plus RENDU tel quel depuis #4379** — c'est le nominal que la
+    /// rangée garde tant qu'elle tient, et qui cède le premier quand elle ne
+    /// tient plus. Voir `renderedSpacing`.
+    private static let nominalSpacing: CGFloat = 16
+
+    /// **Le plus serré qu'on accepte avant de laisser défiler** (#4379).
+    ///
+    /// En dessous, les glyphes se collent : une rangée qui « tient » en devenant
+    /// illisible n'a rien résolu. C'est ce plancher qui rend le resserrement
+    /// honnête — il dit jusqu'où la mise en page a le droit d'aller pour éviter
+    /// un balayage, et à partir d'où le balayage est la bonne réponse.
+    private static let minimumSpacing: CGFloat = 8
+
+    /// La marge horizontale de la rangée. **Elle ne cède pas** : c'est elle qui
+    /// tient la première et la dernière entrée à distance du bord courbe, et la
+    /// rogner pour gagner une entrée déplacerait le problème sur le pouce.
+    private static let margin: CGFloat = 16
+
+    /// La largeur MESURÉE de la rangée. `0` tant que la mesure n'est pas
+    /// remontée — et la règle rend alors le nominal plutôt qu'une estimation :
+    /// une rangée qui naîtrait tassée puis se détendrait ferait sauter les
+    /// glyphes sous le doigt.
+    @State private var measuredWidth: CGFloat = 0
+
+    /// **Le nombre d'entrées RÉELLEMENT peintes**, slot de tête compris.
+    ///
+    /// C'est exactement ce que #4379 a coûté : la rangée en portait six quand le
+    /// `ScrollView` a été posé, et une septième est entrée par `leadingAccessory`
+    /// (#4136) sans que personne ne remesure. Le compte est donc DÉRIVÉ de ce
+    /// qu'on rend, jamais écrit en dur — une huitième entrée resserrera la
+    /// rangée d'elle-même.
+    private var entryCount: Int {
+        StoryToolMode.composerOrder.count + (leadingAccessory == nil ? 0 : 1)
+    }
+
+    /// L'écart effectivement rendu, décidé par `ComposerRowFit` — la loi de
+    /// tenue que la rangée du document lit aussi (#4582).
+    private var renderedSpacing: CGFloat {
+        ComposerRowFit.spacing(count: entryCount,
+                               tileWidth: Self.hitSide,
+                               nominalSpacing: Self.nominalSpacing,
+                               minimumSpacing: Self.minimumSpacing,
+                               margin: Self.margin,
+                               available: measuredWidth)
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Self.spacing) {
+            HStack(spacing: renderedSpacing) {
                 if let leadingAccessory {
                     leadingAccessory
                 }
@@ -99,8 +144,19 @@ struct ComposerToolRow: View, Equatable {
             // de les aérer. C'est le raisonnement de la rangée canonique, repris
             // au mot.
             .padding(.vertical, 2)
-            .padding(.horizontal, Self.spacing)
+            .padding(.horizontal, Self.margin)
         }
+        // **La mesure porte sur le `ScrollView`, pas sur l'écran** — et c'est ce
+        // qui rend la règle juste partout : la rangée vit dans un plateau qui a
+        // ses propres marges, et un calcul fait sur `UIScreen` aurait cru
+        // disposer de points que la rangée n'a pas.
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ComposerToolRowWidthKey.self,
+                                       value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(ComposerToolRowWidthKey.self) { measuredWidth = $0 }
         .accessibilityElement(children: .contain)
     }
 
@@ -343,5 +399,15 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
 
     func makeCoordinator() -> FABPanGestureCoordinator {
         FABPanGestureCoordinator(onSwipeUp: onSwipeUp, onSwipeDown: onSwipeDown)
+    }
+}
+
+
+/// La largeur visible de la rangée d'outils. Une TAILLE, pas un décalage : la
+/// lecture par préférence reste fiable sur toutes les versions d'iOS.
+private struct ComposerToolRowWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

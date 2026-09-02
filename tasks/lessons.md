@@ -23970,3 +23970,464 @@ mon changement leur fait ? », ici « lequel a oublié ? ».
    plus petit glyphe fait 17, pas 18. Le calcul m'aurait laissé sous le minimum
    en me donnant l'impression de l'avoir atteint. Corrigé à 14, re-mesuré,
    45-48.
+
+## Leçon 431 — Un repli BIEN TESTÉ rend un champ perdu indiscernable d'un champ absent
+
+**Le fait.** `StoryLocationObject.styleId` — le gabarit qui décore une pastille
+de lieu (#4717) — ne quittait jamais l'appareil. Trois sites le perdaient, dans
+les deux sens : l'aller v1→v3 du SDK, le retour v3→v1, et le convertisseur de la
+passerelle. Le lot qui a créé le champ est FERMÉ ; le champ n'a jamais voyagé.
+
+Personne ne l'a vu pendant deux semaines, et la raison est la seule partie
+intéressante : **le repli d'un `styleId` absent est `location.pill`, c'est-à-dire
+l'un des six gabarits.** Le seul gabarit qui survivait à l'aller-retour était
+donc celui qui SERT de repli. Décorer une pastille en « pastille » marchait
+parfaitement ; les cinq autres retombaient dessus, en silence, avec exactement
+l'aspect que le lot promettait de préserver « au pixel près ».
+
+Et les témoins livrés par ce lot étaient bons — ils mesuraient la RÉSILIENCE du
+rendu : un id inconnu retombe sur la pastille, un id d'une autre famille aussi.
+Tous verts. Aucun ne mesurait la SURVIE du champ.
+
+> **Un repli est une machine à effacer les preuves.** Plus il est soigné, moins
+> la perte se voit : il rend « le champ n'est pas arrivé » identique à « il n'y
+> avait pas de champ ». Un repli non testé finit par produire un trou visible ;
+> un repli parfait produit un contenu plausible.
+
+**Le geste — où s'écrit le témoin.** Un témoin qui vérifie qu'un champ VOYAGE
+s'écrit sur une valeur qui DIFFÈRE du repli. Sur la valeur de repli, la règle
+juste et le champ perdu rendent le même verdict, donc le témoin ne peut pas
+tomber. C'est la forme exacte de la **leçon 261** (« un témoin de RANG s'écrit
+sur un rang AUTRE que le premier »), portée d'un résolveur à un convertisseur :
+partout où une valeur par défaut existe, elle est l'endroit où l'on ne mesure
+rien.
+
+**La moitié structurelle, et pourquoi un témoin par clé ne suffit pas.** Ces
+convertisseurs ne TRANSPORTENT pas une charge : ils la RECOMPOSENT clé par clé.
+Chaque branche est donc un inventaire humain à tenir à jour, et toute clé
+ajoutée en amont s'y perd sans que rien ne rougisse. Trois pertes en deux jours
+sur le même fichier — `postMediaId`/`provider`, puis `templateId`/`slots`, puis
+`styleId`. Le correctif du matin avait livré un témoin par clé, juste et vert :
+il ne POUVAIT pas attraper `styleId`.
+
+> **Un témoin par clé ne parle que des clés auxquelles on a déjà pensé** —
+> c'est-à-dire précisément l'ensemble sur lequel on ne se trompe pas. Ce qui
+> attrape la classe entière est un témoin d'EXHAUSTIVITÉ : comparer l'ensemble
+> des clés que l'ÉMETTEUR produit à l'ensemble que le convertisseur recompose,
+> sans en nommer aucune. Ouvert en #4833.
+
+**Et un commentaire qui raconte le piège ne protège pas du piège.** Le code
+fautif du convertisseur portait, juste au-dessus, un commentaire décrivant ce
+défaut pour l'avoir déjà subi. Il dit « c'est arrivé » ; il ne dit pas « ça peut
+recommencer », et surtout **il ne compte rien**. Seul un témoin qui se DÉRIVE de
+la source compte.
+
+**La jumelle de MISE EN PAGE** (relevée par une session voisine dans le même
+cycle, sur `ComposerToolRow`) : une rangée qui ÉNUMÈRE ses entrées à la main a
+le même défaut. Mesurée à six entrées, une septième est entrée par un slot
+d'accessoire, personne n'a remesuré — et là encore un repli sauvait les
+apparences, un `ScrollView` : le geste existait, donc la loi 4 restait tenue, et
+un défilement n'a pas d'état d'échec. Le correctif a la même forme que #4833 :
+dériver le compte de ce qui est RENDU plutôt que de l'écrire.
+
+**La règle générale, valable des deux côtés :** *ce qui s'énumère se périme, ce
+qui se dérive tient.* Partout où du code recopie une liste — clés d'une charge,
+entrées d'une rangée, champs d'un `select`, sites d'une règle — la liste est une
+dette, et le témoin doit interroger la SOURCE, jamais la copie.
+
+## Leçon 432 — Une API qui répond par une EXCEPTION n'offre que la prévention, et la prévention s'écrit devant l'APPEL
+
+**Le fait (2026-09-02).** Toucher le bouton d'enregistrement du viseur vidéo
+tuait l'application. `AVCaptureMovieFileOutput.startRecording(to:recordingDelegate:)`
+ne rend pas d'erreur quand il n'a pas de connexion active : il lève une
+`NSInvalidArgumentException`. Aucun `do/catch` Swift ne la rattrape, aucun
+`guard` en aval ne la voit passer. Le seul résultat possible est la mort du
+processus.
+
+> **Devant une API qui répond par une exception Objective-C, le choix
+> « rattraper ou prévenir » n'existe pas.** Il n'y a que la prévention. Et une
+> prévention n'a qu'une place : DEVANT l'appel, dans la même fonction — pas
+> « quelque part dans le fichier », pas dans l'appelant.
+
+Le témoin de câblage a donc deux moitiés, et la seconde est celle qui compte :
+la garde EXISTE (facile), et elle **précède l'appel dans le corps de
+`startSegment()`** (ce qui la rend efficace). Une garde posée dans
+`startRecording()` seul aurait laissé intact le second site d'appel — celui
+qui rouvre un segment après une bascule de caméra.
+
+**Ce qui a laissé le défaut vivre.** Le chemin vidéo était vert partout : sept
+témoins sur le raccord des segments, deux sur le changement de caméra en cours
+d'enregistrement. Aucun ne pouvait poser la question qui tue — « et si la
+connexion n'existe pas ? » — parce qu'aucun ne monte de caméra. **Une garde qui
+manque ne se voit pas dans le cas nominal**, et une famille de témoins qui
+partage un présupposé ne le teste jamais.
+
+**Le corollaire d'ordre.** Le correctif n'est pas seulement le `guard`. Le
+chrono d'enregistrement partait AVANT le segment : sans réordonner, un refus
+aurait laissé courir une durée sur une vidéo que rien n'écrit — point rouge et
+compteur qui monte sur un enregistrement fantôme. *Quand on ajoute une
+condition d'échec à une fonction qui n'en avait pas, relire tout ce qu'elle
+pose AVANT et APRÈS l'appel gardé* : ce qui était inconditionnel devient un
+mensonge d'état.
+
+**Et la manière dont il a été trouvé.** En vérifiant AU SIMULATEUR un lot qui
+n'avait aucun rapport (la tenue des rangées), en cherchant un chemin vers une
+surface. Le gate était vert, il l'aurait été indéfiniment. **Conduire l'app
+trouve ce qu'aucune suite ne peut poser** — c'est le sens de la directive
+« utilise le simulateur pour tester et valider ».
+
+## Leçon 433 — Ce qui s'ÉNUMÈRE se périme, ce qui se DÉRIVE tient
+
+**Deux cas, deux sessions, la même forme, le même jour.** Un convertisseur v1↔v3
+qui RECOMPOSE une charge clé par clé a perdu `styleId` en silence — troisième
+perte en deux jours sur le même fichier (session voisine, #4832/#4833). Une
+rangée d'outils qui ÉNUMÈRE ses entrées a été mesurée à six, une septième est
+entrée par un slot d'accessoire, et personne n'a remesuré : la timeline ne
+rendait plus **aucun pixel** à taille nominale sur un iPhone 16 Pro (#4379).
+
+> Partout où du code recopie une liste — clés d'une charge, entrées d'une
+> rangée, champs d'un `select`, sites d'une règle — **la liste est une dette**,
+> et le témoin doit interroger la SOURCE, jamais la copie. Un témoin par clé ne
+> parle que des clés auxquelles on a déjà pensé.
+
+Le correctif de la rangée ne resserre pas un écart : il DÉRIVE le compte de ce
+qui est rendu (`composerOrder.count + (leadingAccessory == nil ? 0 : 1)`). Une
+huitième entrée resserrera la rangée d'elle-même.
+
+**Ce que les deux cas ajoutent l'un à l'autre : le REPLI cachait la perte.**
+Chez le voisin, le repli d'un `styleId` absent est `location.pill` — le seul
+gabarit qui survivait à l'aller-retour était celui qui SERT de repli. Chez moi,
+la rangée était un `ScrollView` : le geste existait, la loi 4 restait tenue, et
+**un défilement n'a pas d'état d'échec**. Ce qui manquait était le SIGNAL, pas
+le contrôle.
+
+> **Plus le repli est soigné, moins la perte se voit.** Il rend « ce n'est pas
+> arrivé » indiscernable de « il n'y avait rien » (leçon 431, autre face).
+
+**Et le piège de l'origine.** Le `ScrollView` de la rangée avait été posé pour
+un cas ACCESSIBLE — « à `accessibility-XXXL` six outils dépassent ». Le
+raisonnement était juste, daté, et cité de bonne foi pendant deux mois. Un
+dispositif posé pour un cas extrême finit par masquer une entrée dans le cas
+ORDINAIRE, et son commentaire d'origine continue de le justifier.
+
+## Leçon 434 — `optional()` ne dit rien du PRODUCTEUR, et c'est le miroir exact de la 373
+
+**Le fait.** Le lot #4591 (`acecfd51e7`) a corrigé une faute de lecture qu'il
+nomme lui-même, et très bien : on lisait `timing: optional()` dans le contrat
+partagé comme « cette famille n'a pas de temps », d'où un cercle de six absences
+(leçon 373). La règle qu'il en tire est juste :
+
+> `optional` décrit la PRÉSENCE d'un champ, jamais la CAPACITÉ d'une famille.
+
+Puis, dans la même note de livraison, il écrit : « Aucune publication existante
+ne change : les quatre champs sont **optionnels sur le fil** et absents partout. »
+C'est la MÊME optionalité, relue cette fois comme la preuve que le champ
+VOYAGE. Mesuré au dépôt : la branche `place` de `CanvasV3Migration` passe
+`timing: timingV3(start: nil, …)` et n'émet ni `duration`, ni `fadeIn`, ni
+`fadeOut` ; le retour n'en relit aucun (#4840).
+
+> **Une optionalité de schéma est muette dans les DEUX sens.** Elle n'interdit
+> pas à une famille d'avoir un temps ; elle ne promet pas non plus qu'un
+> producteur en émet. Elle décrit ce que le fil TOLÈRE, jamais ce qu'un site
+> ÉCRIT — et un contrat permissif (`payload: z.record(z.string(), z.unknown())`,
+> `canvas-v3.ts:59`) n'a rien à dire du tout.
+
+**Le geste.** Devant un champ optionnel au contrat, ne jamais conclure : aller
+lire le PRODUCTEUR, nommément. La question n'est pas « le fil accepte-t-il ce
+champ ? » mais « quel site l'écrit, et sur quel chemin ? ». C'est la jumelle,
+côté émission, de la question du cycle 122 (« qui AFFICHE ce que ce résolveur
+élit ? ») : ici, **qui ÉMET ce que ce schéma autorise ?**
+
+**Ce qui rend le cas instructif** n'est pas l'erreur — c'est qu'elle survient
+dans le lot qui vient d'énoncer la règle contre elle. Une règle formulée pour un
+sens ne se retourne pas toute seule ; elle protège de la lecture qu'on vient de
+payer, pas de sa symétrique. **Quand on écrit une règle du type « X ne dit pas
+Y », se demander tout de suite : dit-il non-Y ?**
+
+**La forme générale, et pourquoi elle se rejouera.** Ce n'est pas une étourderie
+locale : c'est un signal qu'on DISQUALIFIE pour une lecture et qu'on QUALIFIE
+aussitôt pour la lecture inverse.
+
+> **Disqualifier une lecture d'un signal ne le qualifie pas pour son contraire.**
+> Apprendre que `optional()` ne prouve pas « pas de temps » ne lui fait pas
+> prouver « le champ voyage ». Il reste MUET — et un signal muet le reste dans
+> les deux sens.
+
+Une session voisine, arrivée au même endroit par un autre axe le même jour, le
+formule d'un cran plus haut, et les deux versions se valent : *une règle énoncée
+sans énumérer ses dimensions n'est relue que sur celle qui l'a fait naître.*
+Chez elle, « un bloc qui grandit ne rencontre pas les mêmes voisins » n'avait
+servi qu'à la PLACE, laissant les touchers, le Z et les gestes (leçon 435). Ici,
+« qui lit ce champ ? » ne ramène jamais l'éditeur ni le convertisseur — puisque
+justement ils ne le lisent pas. **Dans les deux cas la règle est juste, citée, et
+protège un quart de ce qu'elle couvre.**
+
+**Corollaire de méthode, payé dans le même tour.** J'ai d'abord écrit dans #4840
+que le cercle « avait été brisé en trois sommets ». Le message du commit disait
+SIX, avec sa table. J'avais compté les sommets que je voyais depuis mon point
+d'entrée au lieu de lire l'inventaire de celui qui les avait réparés — et
+l'inventaire était à un `git log -1` de distance.
+## Leçon 435 — un composant qui GRANDIT change de voisinage, et la règle qui le dit n'a été appliquée qu'à UNE dimension
+
+**Le fait (2026-09-02, #4831).** Quatre directives du porteur sur le corpus déplié
+d'une story — retirer le fond sombre, laisser défiler sans faire tourner la
+story, garder l'invite visible, ramener en tête au toucher du haut. Les quatre
+sont des symptômes du même fait : **la légende repliée ne rencontre personne, la
+légende dépliée rencontre tout le monde** — le rail d'actions, le drag du
+lecteur, le chrome du haut, la couche de gestes.
+
+Le dépôt le savait déjà. Le doc-comment de `expandedTrailingInset`, écrit un jour
+plus tôt (#4762), dit exactement :
+
+> Un bloc qui grandit ne rencontre pas les mêmes voisins que le bloc replié. Ce
+> qui ne se chevauchait pas dans un état peut se chevaucher dans l'autre — la
+> place se vérifie DÉPLIÉE, pas au repos.
+
+Elle n'avait été appliquée qu'à **la place**. Trois autres dimensions du même
+voisinage étaient restées non vérifiées, et chacune portait un défaut :
+
+| dimension | le défaut, à l'état déplié seulement |
+|---|---|
+| la place | *corrigée en #4762* — le texte passait sous les icônes |
+| les **touchers** | la `ScrollView` du corpus, en `frame(maxWidth: .infinity)`, prenait la bande du rail : Send, Vues, Partager, Enregistrer **visibles et inertes** |
+| le **z** | la légende avait pris `zIndex(60)` pour recevoir son propre tap ; le rail, déclaré plus bas sans `zIndex`, était passé dessous |
+| les **gestes** | `unifiedDragGesture`, monté sur un ancêtre, restait actif sur le corpus : lire le faisait tourner ou refermer la story |
+
+> **Une règle appliquée à UNE dimension a l'air appliquée.** Le commentaire était
+> là, juste, cité, et il n'a protégé que ce qu'il avait servi à corriger. Quand
+> une règle parle de VOISINAGE, elle en gouverne au moins quatre : la place, les
+> touchers, l'ordre de superposition et les gestes — et il faut les nommer, sinon
+> seule la première est relue.
+
+**La forme générale, dégagée avec la session voisine le même jour** (leçon 434,
+qui déroule la question « qui touche ce CHAMP ? » là où celle-ci déroule « qui
+touche cet ESPACE ? ») :
+
+> **Quand une règle naît d'un symptôme, elle hérite de la dimension de ce
+> symptôme et d'aucune autre.** Ce qu'il faut écrire n'est donc pas la phrase
+> seule mais la LISTE des dimensions qu'elle couvre — sans quoi la relecture
+> suivante retrouve la phrase, la trouve juste, et ne la rejoue que sur le cas
+> qui l'a fait naître. Les dimensions manquantes sont invisibles à la recherche
+> qui a produit la règle, par construction.
+
+### Trois corollaires, chacun payé séparément
+
+**Le conteneur prend les touchers que le contenu évite.** Le corpus s'écartait
+soigneusement du rail ; c'est sa `ScrollView` qui captait. Une marge est une
+propriété du CONTENU, le hit-test une propriété du CONTENEUR — les deux ne se
+rencontrent jamais. *Écarter un texte d'un voisin ne lui rend pas ses touchers.*
+Et un contrôle **visible et inerte** est pire qu'un contrôle caché : rien
+n'indique pourquoi il ne répond pas.
+
+**Un nombre juste dans un repère est faux dans l'autre.** `expandedTrailingInset:
+68` était exprimé dans la colonne du canvas, qui déborde volontairement le
+viewport (491,3 pt pour un écran de 402 — le cadrage même qui avait sauvé le
+texte en #4762). **68 pt de colonne n'en valent que 24 à l'écran.** Rien ne le
+signale : les deux s'écrivent « 68 ». Le correctif qui répare une dimension
+fournit le repère qui trahit la suivante.
+
+**Un mécanisme REMPLACÉ ne disparaît pas de lui-même.** L'assombrissement du fond
+était passé du voile de la légende à l'effacement de la scène (`storySceneOpacity`,
+directive du même jour) — et les deux se sont cumulés pendant une journée. Aucun
+témoin ne pouvait rougir : chacun faisait exactement ce pour quoi il avait été
+écrit. *Quand une directive change la MANIÈRE d'obtenir un effet, quelqu'un doit
+retirer l'ancienne manière — ce n'est jamais automatique.*
+
+### Le sixième défaut, et c'est moi qui l'ai écrit
+
+Le correctif du voile a d'abord retiré le dégradé du composant **pour ses trois
+hôtes**. La directive n'en nommait qu'un — la story — et c'est le seul qui a le
+mécanisme de remplacement : sa scène s'efface d'elle-même. Le lecteur de réel et
+le plein écran média n'ont, eux, qu'un voile de BAS DE PAGE
+(`[.clear, .black.opacity(0.75)]`), calibré pour une légende repliée et presque
+transparent là où un corpus déplié monte. Leur retirer celui du composant, c'était
+poser du texte blanc sur une vidéo claire — en croyant appliquer une directive qui
+ne parlait pas d'eux.
+
+> **Une directive formulée sur UN hôte ne se code pas dans le composant PARTAGÉ.**
+> Elle se code en PARAMÈTRE, avec le défaut qui préserve les hôtes qu'elle ne
+> nomme pas. Sinon on « applique » la demande en dégradant deux surfaces dont
+> personne ne s'est plaint — et l'auteur du correctif est le dernier à le voir,
+> puisqu'il regarde l'écran sur lequel la demande a été faite.
+
+C'est la même leçon que ci-dessus, sur l'axe des HÔTES au lieu de celui des
+dimensions : un changement hérite du périmètre du symptôme qui l'a déclenché, et
+il faut nommer ce périmètre explicitement pour ne pas l'étendre par distraction.
+
+### Et une jumelle de la 433
+
+`hasScrollableReaderSurface` ÉNUMÈRE les surfaces auxquelles le drag du lecteur
+rend la main : commentaires, sélecteur d'emojis, explorateur de langues. Le
+mécanisme est bon, testé, documenté — et la légende dépliée n'y avait jamais été
+inscrite, parce qu'elle est née après lui. C'est la 433 (*ce qui s'énumère se
+périme, ce qui se dérive tient*) sur un objet qui n'est ni une clé de charge ni
+une entrée de rangée, mais un AYANT DROIT. Toute nouvelle surface défilante naît
+hors de cette protection, en silence.
+
+**Le témoin qui attrape la classe** serait dérivé, pas énuméré : « toute vue du
+lecteur qui monte une `ScrollView` figure dans `hasScrollableReaderSurface` ».
+Ouvert en suivi de #4831 → #4837.
+
+## Leçon 436 — Un contrôle qui répond à un endroit et pas à un autre n'est jamais INERTE : c'est une géométrie qui MENT
+
+**Le fait (2026-09-02).** Les en-têtes de section de l'éditeur d'objet
+rapportaient une frame de `370 × 21` à l'arbre d'accessibilité — donc « une
+cible pleine largeur » à qui la LIT. `idb ui tap` au milieu de la rangée ne
+déclenchait rien ; le même tap **sur le mot** ouvrait la section. Le label était
+un simple `Text` dans un `DisclosureGroup` : la frame annoncée était celle de la
+rangée, la zone touchable celle des glyphes.
+
+Mon premier diagnostic a été « ce contrôle est inerte » — le plus coûteux de
+tous, puisqu'il envoie chercher un défaut de câblage qui n'existe pas.
+
+> **Le discriminant est bon marché : taper une seconde fois, AILLEURS sur le
+> même contrôle.** Inerte partout ⇒ défaut du produit. Inerte à un endroit ⇒
+> défaut de la géométrie, ou de la mesure.
+
+**La même famille, l'autre bout de la chaîne.** Une session voisine a payé le
+symétrique le même jour : une capture redimensionnée à 420 px pour un écran de
+402 pt décalait ses taps de 30 pt en bas d'écran, et un tap sur « voir plus »
+ouvrait le sélecteur de photos deux couches plus bas. Chez elle le cadre est
+juste et la CONVERSION ment ; chez moi la conversion est juste et le CADRE ment.
+Même symptôme, causes opposées, même second tap pour trancher.
+
+**Le corollaire de correctif.** Agrandir la frame ne suffit pas : sans
+`contentShape(Rectangle())`, on n'agrandit que le vide. Et la règle des 44 pt se
+mesure sur la zone TOUCHABLE, jamais sur la frame rapportée — c'est la leçon 428
+(« le MOT qu'on peut toucher est l'angle mort de la règle des 44 pt ») vue par
+l'outil de mesure au lieu du doigt.
+
+## Leçon 437 — Dans un worktree partagé, l'INDEX est partagé aussi
+
+**Le fait (2026-09-02).** Deux sessions devaient toucher le même
+`Localizable.xcstrings` — l'une pour deux clés neuves, l'autre pour sept valeurs.
+Chacune a appliqué, indépendamment et sans se concerter, la même parade : *je
+fabrique un blob depuis `HEAD` avec ma seule modification, je le stage à la main
+avec `git update-index --cacheinfo`, je committe l'index.*
+
+La parade est juste contre le DISQUE et fausse contre l'INDEX. Chacune a relu
+l'index une minute plus tard et y a trouvé le blob de l'AUTRE, plus ses fichiers
+stagés. Un `git commit` sans chemins aurait, dans les deux sens, emporté le lot
+du voisin et écrasé sa moitié du catalogue.
+
+> **Fabriquer un blob à la main protège du contenu du disque, pas de l'index —
+> qui n'appartient à personne dans un worktree partagé.** Entre le
+> `update-index` et le `commit`, n'importe qui peut avoir stagé autre chose, y
+> compris à la même place.
+
+**Ce qui a sauvé les deux lots**, et c'est la règle à garder : `git add` du
+fichier partagé TEL QU'IL EST SUR DISQUE (les deux travaux réunis), puis
+`git commit -- <chemins>` de son seul code — qui prend l'ARBRE et ignore
+l'index. Le fichier partagé part alors avec le commit de celui des deux qui le
+tient, en portant les deux travaux.
+
+**Le piège jumeau, payé par la voisine.** Sa parade de secours — « je compare à
+`origin/dev` avant de committer » — l'a fait lire le diff À L'ENVERS : elle a
+pris les `-` pour mon travail alors que ce sont les lignes de la référence, en a
+conclu que ma valeur était déjà poussée, et a repris le fichier depuis
+`origin/dev` — effaçant mes sept valeurs, qu'elle a restaurées dans la foulée.
+Dans `git diff <ref> -- <fichier>`, `+` est le DISQUE.
+
+> Les deux moitiés se résument en une phrase : **sur un arbre partagé, le seul
+> état qu'on possède est celui qu'on vient d'écrire, et il faut le relire juste
+> avant de committer.**
+
+## Leçon 438 — Une capture montre ce qui est RENDU, jamais POURQUOI : un écart avec la cible peut être une DÉCISION
+
+**Le fait (2026-09-02, #4508).** Le rail d'actions du lecteur de story diverge de
+sa cible `2f.png` sur trois points. J'en ai diagnostiqué deux depuis la seule
+capture d'écran, en les écrivant comme des arbitrages tranchés dans l'issue.
+**Les deux étaient faux**, et je ne l'ai vu qu'en ouvrant le fichier pour l'éditer :
+
+| ce que la capture montrait | ce que le code disait |
+|---|---|
+| « il manque les pastilles rondes de la cible » | elles ont été RETIRÉES sur spec porteur du 2026-06-25 (« supprimer les cercles autour des FABs, juste le glyph + ombre ») — le commentaire est trois lignes au-dessus du code que j'allais changer |
+| « `Abc` est du TEXTE, seul de son espèce dans un rail de glyphes » | c'est `Image(systemName: "textformat.abc")`, un SF Symbol comme ses voisins ; il *dessine* des lettres |
+
+Sur trois écarts, **un seul** était un oubli. Les deux autres étaient l'un une
+décision, l'autre une illusion d'optique.
+
+> **Un écart entre un écran et sa maquette n'est pas une dette par défaut.** Il
+> peut être un oubli, une décision antérieure que la maquette ignore, ou une
+> lecture fautive du rendu. Les trois se ressemblent parfaitement à l'écran —
+> et deux sur trois se dissipent en ouvrant le fichier.
+
+**Ce qui rend le piège coûteux ici** : la maquette est plus RÉCENTE que la
+directive (document arrêté au 2026-08-28, spec du 2026-06-25), donc la règle de
+préséance du `CLAUDE.md` semblait me donner raison. Mais une planche générique
+qui dessine des pastilles ne *demande* pas d'annuler une directive qu'elle ne
+connaît pas : elle montre un état antérieur, elle ne prescrit pas un retour en
+arrière. Le dépôt avait déjà payé la version voisine de cette faute — le retour
+porteur du même jour (revert `328dd69026`) sanctionne un lot qui avait lu le
+SILENCE du document comme une prescription.
+
+**How to apply.** Avant de rapprocher un écran de sa cible, pour CHAQUE écart :
+
+1. Ouvrir le site du rendu et lire son doc-comment — les specs datées vivent là,
+   pas dans les issues.
+2. `git log -S "<la chose absente>"` sur le fichier : ce qui manque a peut-être
+   été retiré, et le message de commit dit par qui et pourquoi.
+3. Vérifier que ce qu'on lit à l'écran est ce qu'on croit — un symbole qui
+   ressemble à du texte reste un symbole.
+
+Et écrire l'arbitrage dans l'issue AVANT de coder ne protège de rien si l'on n'a
+pas encore ouvert le code : c'est exactement l'ordre qui m'a fait publier deux
+arbitrages faux avant de les corriger deux fois. **La loi 2 dit d'écrire avant de
+coder ; elle ne dit pas d'écrire avant de LIRE.**
+
+Voisines : § 435 (une règle appliquée à une seule de ses dimensions),
+§ 433 (ce qui s'énumère se périme — les numéros « 1. / 2. / 3. » des blocs du
+rail, faux dès qu'on déplace un bloc, ont été retirés dans le même lot).
+
+## Leçon 438 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
+
+**Le fait (2026-09-02).** Le `content` d'une story est tantôt une légende
+d'auteur, tantôt un index de recherche que la passerelle dérive de la
+concaténation des overlays. Pour qu'un lecteur ne rende pas le texte deux fois,
+il lui faut **deux** choses, écrites chez **deux hôtes différents** :
+
+- le **prédicat** qui distingue index et légende — il vit au *gateway*
+  (`isContentDerivedFromTextObjects`) ;
+- le **repli de clé** `text` / alias legacy `content` sur l'overlay — il vit
+  dans le *décodeur SDK iOS* (`StoryModels.swift:460`).
+
+| ce que le client a | résultat |
+|---|---|
+| ni l'un ni l'autre | doublon |
+| le repli, pas le prédicat | doublon |
+| **le prédicat, pas le repli** | **croit avoir corrigé, n'a rien corrigé** |
+| les deux | correct |
+
+La troisième ligne est la dangereuse : la comparaison porte alors sur une
+concaténation VIDE, rend « ce n'est pas un index », donc « c'est une vraie
+légende » — et le doublon survit **sous une garde qui a l'air posée**.
+
+> Quand une correction exige deux mécanismes situés chez deux propriétaires,
+> énumérer les combinaisons AVANT d'écrire la garde. Celle qui « corrige à
+> moitié » est toujours celle qui ne rougit pas.
+
+**Mesuré sur les trois clients, trois erreurs différentes** : iOS ne pose pas
+la question ; Android non plus, et rend l'index AU CENTRE, là où l'objet vit
+déjà ; le web a une garde — mais son critère est un PROXY, `isCanvasV3` au lieu
+de « ce contenu est-il dérivé ? ». Le proxy se trompe dans les DEUX sens : une
+story v1 avec overlays porte quand même un index (doublon), et une story v3
+peut porter une vraie légende, que le web TAIT (perte de contenu).
+
+> **Un proxy n'est pas une garde.** Il répond à une question voisine, et sa
+> justesse tient tant que les deux questions coïncident. Le jour où elles
+> divergent, il se trompe dans les deux sens à la fois — et le sens qui PERD du
+> contenu est plus grave que celui qui en montre trop.
+
+**La cause racine n'est pas une garde manquante, c'est un champ qui ne dit pas
+qui l'a écrit.** `content` porte sa valeur, jamais sa PROVENANCE. Une
+redéduction côté client marche, mais elle est facultative (l'oublier ne rougit
+pas), fragile (séparateur, clé, `trim`) et ambiguë (une légende égale à la
+concaténation est indécidable). Le doublon n'est qu'un symptôme : le prochain
+sera un aperçu de liste, un digest, un partage externe. Issue de contrat
+ouverte (#4846) plutôt qu'un troisième correctif de vue.
+
+**Et le fail-safe n'est pas symétrique.** Overlays absents, concaténation non
+reconstituable ⇒ le verdict est « vraie légende », donc on AFFICHE. Montrer un
+doublon est laid ; taire la légende d'un auteur est une perte de contenu. *Une
+garde qui hésite tombe du côté où l'on ne perd rien* — formulation d'une
+session voisine, adoptée.

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 // **La GÉOMÉTRIE de la rangée d'entrées du document, sortie de
 // `ComposerDocumentRules.swift` le 2026-08-31.**
@@ -43,9 +44,27 @@ nonisolated enum ComposerDocumentToolRowFit {
     /// qui paraît. L'aération se paie ailleurs — sur la marge de la rangée.
     static let spacing: CGFloat = 6
 
+    /// **L'arithmétique vit dans `ComposerRowFit`, une seule fois** (#4582).
+    ///
+    /// Elle vivait ici, et ne gouvernait que cette rangée — ce que l'issue
+    /// nomme sans détour :
+    ///
+    /// > *« Une loi qui ne couvre qu'un site n'est pas une loi, c'est un
+    /// > correctif local. Et elle est pire qu'absente pour le lecteur suivant :
+    /// > sa présence donne l'impression que la question est traitée, et son nom
+    /// > (`…ToolRowFit`) ne dit pas qu'elle ne parle que d'une rangée sur
+    /// > quatre. »*
+    ///
+    /// Ce type reste — il porte les NOMBRES de cette rangée, qui ne sont pas
+    /// ceux de la rangée de l'atelier. Ce qu'il ne porte plus est la boucle :
+    /// deux écritures d'un même calcul auraient divergé au premier ajustement,
+    /// et aucune des deux n'aurait rougi.
+    ///
+    /// `margin: 0` est une DÉCLARATION : la marge de cette rangée est posée par
+    /// son hôte, pas comptée ici. La rangée de l'atelier, elle, porte la sienne.
     static func rowWidth(count: Int) -> CGFloat {
-        guard count > 0 else { return 0 }
-        return CGFloat(count) * minimumTileWidth + CGFloat(count - 1) * spacing
+        ComposerRowFit.rowWidth(count: count, tileWidth: minimumTileWidth,
+                                spacing: spacing, margin: 0)
     }
 
     static func overflow(count: Int, available: CGFloat) -> CGFloat {
@@ -59,8 +78,8 @@ nonisolated enum ComposerDocumentToolRowFit {
     /// sur la fin, parce que c'est le premier pixel qui fait le signal — pas
     /// la tuile entière.
     static func lastTilePeeks(count: Int, available: CGFloat) -> Bool {
-        guard count > 0, available > 0 else { return false }
-        let debutDeLaDerniere = CGFloat(count - 1) * (minimumTileWidth + spacing)
-        return debutDeLaDerniere < available
+        ComposerRowFit.lastTilePeeks(count: count, tileWidth: minimumTileWidth,
+                                     spacing: spacing, margin: 0,
+                                     available: available)
     }
 }

@@ -28,7 +28,17 @@ import XCTest
 final class FileSizeBudgetGuardTests: XCTestCase {
 
     /// Le budget de la directive. Un fichier neuf n'a aucune raison de le dépasser.
-    private static let budget = 1100
+    /// Relevé à 1200 le 2026-09-02 (directive porteur : « relâcher un peu la
+    /// consigne de 1100 ; 1000-1200 est acceptable »). Le plafond DUR est 1200 ;
+    /// 1000 reste le seuil au-delà duquel un découpage se justifie sans se
+    /// discuter, mais il ne se mesure pas ici — un cliquet n'a qu'un seuil.
+    ///
+    /// **Ce relèvement n'a rien effacé.** Trois fichiers sont repassés sous le
+    /// budget par ce seul fait (`MyStoriesView` 1158, `ConversationMediaViews`
+    /// 1120, `ComposerMoodSurface` 1109) : ils sortent de la liste ci-dessous, et
+    /// `legacyLineCeiling` baisse EXACTEMENT de ce qu'ils pesaient — jamais du
+    /// cumul du jour, qui scellerait les lignes que la règle 3 vient de refuser.
+    private static let budget = 1200
 
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
@@ -39,13 +49,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "CallView.swift",
-        "ComposerMoodSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
         "ConversationViewModel.swift",
@@ -57,7 +65,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
-        "MyStoriesView.swift",
         "OnboardingStepViews.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
@@ -182,33 +189,27 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // n'expliquent que 63 des 432, le reste venant de découpes voisines livrées
     // entre-temps. Soustraire aurait laissé 369 lignes de mou — de quoi
     // accueillir en silence l'ajout que ce cliquet existe pour refuser.
-    //
-    // 2026-09-02 — 71 266 → 71 145 (−121). Cinq fichiers de la dette avaient GROSSI en
-    // amont sans que rien ne rougisse à leur commit : `StoryViewerView+Canvas.swift`
-    // (+79, à 2 716), `PostDetailView.swift` (+36), `ConversationView.swift`
-    // (+27), `FeedView.swift` (+7) et `MeeshyApp.swift` (+4) — 71 443 mesurés,
-    // 177 au-dessus du cran. Le plafond ne MONTE jamais : la dette se paie par
-    // une découpe, par responsabilité. `StoryComposerBarView` — l'unique
-    // composer du lecteur de story, son staging de pièces jointes, sa capture
-    // vocale et sa soumission — quitte `StoryViewerView+Canvas.swift` pour
-    // `StoryViewerView+CanvasComposerBar.swift` (318 lignes, sous le budget) ;
-    // l'hôte retombe à 2 418 et RESTE en dette. Le nombre est REMESURÉ sur les
-    // 34 noms avec la méthode de `lineCount(of:)`, jamais soustrait — les 298
-    // lignes déplacées expliquent 298 des 71 443, et le reste du cumul est
-    // celui du jour, pas celui d'un commentaire.
-    //
-    // #4823 (sticker de conversation, moitié ENVOI) — 71 145 → 70 853 (−292).
-    // Le lot devait AJOUTER à deux fichiers de la dette : `sendMessage` et
-    // `insertOptimisticMediaMessage` (`ConversationViewModel.swift`) pour
-    // propager `sticker` + encoder `stickerJson`, et `ConversationComposerState`
-    // (`ConversationView.swift`) pour la porte de présentation de la palette.
-    // Extraire d'abord : le saut vers un message hors fenêtre part chez lui
-    // (`ConversationViewModel+JumpToMessage.swift`, 198 lignes) et l'état du
-    // composer aussi (`ConversationComposerState.swift`, 147 lignes). Les deux
-    // hôtes RESTENT en dette (4 833 et 2 896) ; le plafond suit le cumul
-    // REMESURÉ sur les 34 noms avec la méthode de `lineCount(of:)` — les
-    // lignes ajoutées ne se soustraient pas de tête, elles se mesurent.
-    private static let legacyLineCeiling = 70_853
+    /// Baissé de 3 387 le 2026-09-02 — la somme EXACTE des trois fichiers sortis
+    /// de la liste au relèvement du budget, mesurée à leur taille du jour.
+    ///
+    /// **Il reste 165 lignes de dette IMPAYÉE, et c'est voulu.** Elles ont été
+    /// attribuées, fichier par fichier, en comparant au commit qui a posé le
+    /// plafond précédent (`0912db893d`) : `PostDetailView` +93,
+    /// `StoryViewerView+Canvas` +45, `MessageListViewController` +17,
+    /// `StoryViewerView` +10. Les quatre RESTENT dans la dette, donc le
+    /// relèvement du budget ne les absout pas : la règle 3 demeure rouge tant que
+    /// ces 165 lignes ne sont pas extraites (#4841). Un plafond qui se lève pour
+    /// couvrir une croissance qu'il vient de refuser cesse d'être un cliquet.
+    ///
+    /// 2026-09-02 (fusion de la branche stickers, #4823) — 67 879 → 67 385 (−494).
+    /// Les 165 lignes impayées ci-dessus le sont : `StoryComposerBarView` a
+    /// quitté `StoryViewerView+Canvas.swift` (298 lignes), le saut vers un
+    /// message hors fenêtre a quitté `ConversationViewModel.swift` (152) et
+    /// l'état du composer `ConversationView.swift` (70) — trois découpes par
+    /// responsabilité faites AVANT d'ajouter aux hôtes, qui restent en dette.
+    /// Le nombre est REMESURÉ sur les 31 noms avec la méthode de
+    /// `lineCount(of:)` sur l'arbre fusionné, jamais soustrait.
+    private static let legacyLineCeiling = 67_385
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

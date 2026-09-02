@@ -850,6 +850,12 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
+    /// **Le token de retour en tête du corpus** (#4831).
+    ///
+    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// suspend l'horloge de lecture et appartient donc au parent — remonter une
+    /// fenêtre de défilement ne regarde personne d'autre que cette carte.
+    @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
 
     /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
@@ -907,7 +913,7 @@ struct StoryCardView: View {
     /// dessous des layer des controles de la story »).
     let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
-    private var topInset: CGFloat {
+    var topInset: CGFloat { // internal for cross-file extension access
         max(geometry.safeAreaInsets.top, 59)
     }
 
@@ -923,12 +929,32 @@ struct StoryCardView: View {
     /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
-    private var currentStoryDescription: String? {
-        guard let story = currentStory,
-              let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
-              !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return resolved
+    ///
+    /// **Et il ne rend une légende que s'il y en a une** (#4502). Le `content`
+    /// d'une story a DEUX natures pour un seul nom : la légende de l'auteur, ou
+    /// l'index de recherche que la passerelle fabrique en concaténant les
+    /// objets texte d'une story qui n'en a pas. Rendu tel quel, cet index
+    /// affichait le texte du canvas une SECONDE fois, en légende, juste
+    /// dessous.
+    ///
+    /// La décision est prise sur l'ORIGINAL et le RÉSOLU est rendu — décider
+    /// sur le résolu ramènerait le doublon pour les seuls lecteurs d'une autre
+    /// langue, la passerelle composant aussi l'index dans chaque langue. Toute
+    /// la règle, son fail-safe compris, vit dans `StoryDerivedContent` (SDK) :
+    /// ce corps ne fait plus que lui poser la question.
+    var currentStoryDescription: String? { // internal for cross-file extension access
+        guard let story = currentStory else { return nil }
+        return StoryDerivedContent.caption(
+            original: story.content,
+            resolved: story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
+            // `\.text` est la BONNE clé : le décodeur du SDK normalise déjà
+            // l'alias legacy `content` vers `text` (`StoryTextObject.init(from:)`,
+            // « prefer new key, fall back to legacy »). Lire la mauvaise aurait
+            // vidé la comparaison — donc rendu « vraie légende » et laissé le
+            // doublon intact, sans que rien ne rougisse. Mesuré avant de poser
+            // cette ligne, sur demande de la session qui a écrit la règle.
+            overlayTexts: story.storyEffects?.textObjects.map(\.text) ?? []
+        )
     }
 
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
@@ -943,7 +969,7 @@ struct StoryCardView: View {
     /// la forme à la composition (« l'import de l'image de fond impose le cadre et
     /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
     /// par défaut. Fallback portrait pour toutes les stories antérieures.
-    private var readerCanvasRatio: CGFloat {
+    var readerCanvasRatio: CGFloat { // internal for cross-file extension access
         CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
     }
 
@@ -1420,122 +1446,11 @@ struct StoryCardView: View {
                 }
             }
 
-            // === Voice caption overlay (transcription voix) ===
-            if let transcription = currentVoiceCaption {
-                VStack {
-                    Spacer()
-                    Text(transcription)
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black.opacity(0.55))
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, topInset + 130)
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            voiceCaptionLayer
 
-            // === Description overlay (B2, #3925 — la légende de la story) ===
-            //
-            // La face LECTURE de la section description repliable du composer :
-            // le contenu partagé du composer unifié (`slide.content`), résolu par
-            // le Prisme, s'affiche par-dessus le canvas composé — comme la légende
-            // d'un réel. Gaté sur `currentVoiceCaption == nil` : la transcription
-            // vocale (exploration à la demande, menu « … ») prend le bas de la
-            // scène quand elle est active — les deux ne se chevauchent jamais.
-            //
-            // **Elle était INERTE.** `Text` brut dans un cartouche noir opaque,
-            // `lineLimit(4)`, et `allowsHitTesting(false)` sur tout le bloc :
-            // rien ne pouvait la déplier, et le cartouche masquait la
-            // composition qu'il commente. `MediaCaptionOverlay` (SDK) tient
-            // désormais la règle — dix MOTS, de l'ombre plutôt qu'une boîte, et
-            // le plein écran ancré au coin bas-gauche quand on déplie (#4474).
-            if currentVoiceCaption == nil, let description = currentStoryDescription {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    // 20 pt — le retrait des couches voisines de ce canvas (la
-                    // transcription vocale juste au-dessus le pose aussi). Il
-                    // était en dur dans la couche ; il est désormais DIT ici,
-                    // pour que le lecteur de réel puisse aligner la sienne sur
-                    // sa propre colonne (directive porteur 2026-09-01).
-                    MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
-                                        horizontalInset: 20,
-                                        // Le rail d'actions occupe la bande droite
-                                        // (x ≈ 318 → 386 sur un écran de 402).
-                                        // Repliée la légende ne l'atteint pas ;
-                                        // dépliée elle monte sous lui. Mesuré à
-                                        // l'écran : texte et icônes superposés,
-                                        // les deux illisibles.
-                                        expandedTrailingInset: 68,
-                                        onToggle: onCaptionExpansionToggled)
-                }
-                // **La légende tient la colonne du CANVAS, pas celle de l'hôte**
-                // (#4762). Ce conteneur déborde volontairement le viewport pour
-                // la pagination (mesuré : 491,3 pt à x = −44,7 sur un écran de
-                // 402) ; sans cette largeur, le `frame(maxWidth: .infinity)` de
-                // la légende résout celle du CONTENEUR et le texte sort des deux
-                // côtés — « The latest apps » s'affichait « e latest apps ».
-                .frame(width: StoryCanvasFraming.captionColumnWidth(
-                    viewport: geometry.size,
-                    ratio: readerCanvasRatio,
-                    scale: readerCanvasFraming.scale))
-                // **La légende garde sa position** (directive porteur 2026-09-02) : elle
-                // MONTE depuis là où elle est, elle ne descend pas au bas de
-                // l'écran. La marge basse était annulée au dépliage — le texte
-                // changeait donc de place au moment où on demandait à en voir plus.
-                .padding(.bottom, topInset + 130)
-                .transition(.opacity)
-                // **L'invite doit recevoir le doigt** (#4762, mesuré au
-                // simulateur le 2026-09-02).
-                //
-                // La couche de gestes (`StoryGestureOverlayView`, « Layer 6 »)
-                // est montée APRÈS cette légende dans le même `ZStack` — donc
-                // AU-DESSUS. Son `Color.clear.contentShape(Rectangle())` couvre
-                // tout le cadre et son `DragGesture(minimumDistance: 0)`
-                // reconnaît dès le touch-down : le bouton « voir plus » ne
-                // recevait donc JAMAIS son tap. Mesuré : trois taps sur sa cible
-                // ont fait NAVIGUER le lecteur d'une story à l'autre, sans
-                // jamais déplier.
-                //
-                // > Un contrôle correctement rendu, correctement câblé, sous une
-                // > couche qui prend tous les touchers, est un contrôle INERTE —
-                // > et rien ne rougit : la couche fait exactement son travail.
-                //
-                // Le relèvement est SÛR parce que la légende repliée ne prend le
-                // doigt QUE sur son bouton : elle ne pose aucun `contentShape`
-                // sur son fond (doc de `MediaCaptionOverlay.collapsedCaption`),
-                // donc la navigation continue de passer partout ailleurs.
-                // Dépliée, son voile PREND les touchers — et c'est voulu : on lit.
-                .zIndex(60)
-            }
+            captionLayer(geometry: geometry)
 
-            // === Background audio badge ===
-            //
-            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
-            // FOND (directive user 2026-07-30) : depuis que le header affiche la
-            // note musicale suivie de l'onde animée, ce chip répétait la même
-            // information au milieu de l'image. Les chips du canvas restent
-            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
-            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
-            //
-            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
-            // morceau et crédite son auteur — une attribution que le header, qui
-            // ne dit que la présence, ne porte pas.
-            if let audio = currentStory?.backgroundAudio {
-                VStack {
-                    Spacer()
-                    backgroundAudioBadge(audio: audio)
-                        .padding(.bottom, topInset + 165)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .allowsHitTesting(false)
-            }
+            backgroundAudioLayer
 
             // === Translation indicator (Prisme Linguistique — discret) ===
             // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
@@ -1849,6 +1764,24 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .environment(\.colorScheme, readerChromeScheme)
+            // **Le rail passe AU-DESSUS du corpus déplié** (#4831).
+            //
+            // La légende est montée en `zIndex(60)` pour recevoir son tap (elle
+            // vivait sous la couche de gestes, #4762) ; le rail, déclaré plus
+            // bas mais sans `zIndex`, se retrouvait DESSOUS. Or le corpus
+            // déplié est une `ScrollView` en `frame(maxWidth: .infinity)` :
+            // elle prend les touchers sur toute la colonne, y compris la bande
+            // du rail — dont le texte s'écarte pourtant soigneusement
+            // (`expandedTrailingInset`). Mesuré au simulateur : Send, Vues,
+            // Partager, Enregistrer et Traductions restaient PARFAITEMENT
+            // VISIBLES et ne répondaient plus.
+            //
+            // > Écarter un TEXTE d'un voisin ne lui rend pas ses touchers. La
+            // > vue qui les prend n'est pas celle qu'on voit : c'est son
+            // > conteneur, et lui n'a pas de retrait. Un contrôle visible et
+            // > inerte est pire qu'un contrôle caché — rien n'indique pourquoi
+            // > il ne répond pas.
+            .zIndex(70)
 
             // === Layer 9: Reaction flight (tuile agrandie → cœur, ≤ 1 s) ===
             if let flight = reactionFlight {
@@ -2240,30 +2173,6 @@ struct StoryCardView: View {
 
     // MARK: - Background Audio Badge
 
-    private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(11, weight: .semibold))
-            Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if let uploader = audio.uploaderName {
-                Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
-                    .opacity(0.7)
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
-    }
 
     // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
     // retiré du canvas (directive user 2026-07-30) : le header du reader porte

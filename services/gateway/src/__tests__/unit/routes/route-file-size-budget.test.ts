@@ -1,7 +1,7 @@
 /**
  * Le CLIQUET du budget de taille sous `routes/` (#4284, critère 3).
  *
- * La directive 2026-08-28 pose un budget de 800–1100 lignes par fichier et une
+ * La directive 2026-09-02 pose un budget de 1000–1200 lignes par fichier (elle relâche le 800–1100 du 2026-08-28) et une
  * règle stricte : « Un fichier qui dépasse se DÉCOUPE […] Ajouter à un fichier
  * déjà hors budget est interdit : on extrait d'abord, on ajoute ensuite. »
  *
@@ -23,7 +23,7 @@
  * volontaire : une liste vide est une garde qu'on ne peut pas contourner en
  * ajoutant une ligne au bon endroit.
  *
- * ### Le seuil : 1000, pas 1100
+ * ### Le seuil : 1000, pas 1200
  *
  * Le porteur a demandé « moins de 1000 lignes » en ouvrant le lot. C'est plus
  * strict que la fourchette documentée, et laisse 100 lignes de marge sous le
@@ -56,7 +56,7 @@ import { overBudget, walk } from '../../helpers/file-size-sweep';
 
 const ROUTES_DIR = join(__dirname, '../../../routes');
 
-/** Le plafond demandé par le porteur, plus strict que la directive (1100). */
+/** Le plafond demandé par le porteur, plus strict que la directive (1200 depuis le 2026-09-02). */
 const MAX_LINES = 1000;
 
 describe('budget de taille des fichiers de routes (#4284)', () => {

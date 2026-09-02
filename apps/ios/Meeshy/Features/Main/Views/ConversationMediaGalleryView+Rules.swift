@@ -204,4 +204,63 @@ enum CaptionExpansionSpace {
     nonisolated static func storySceneOpacity(captionExpanded: Bool) -> Double {
         captionExpanded ? 0.28 : 1
     }
+
+    /// **La bande que le rail d'actions occupe à droite de la scène.**
+    ///
+    /// Repliée, la légende tient dans le bas et ne rencontre personne ; dépliée,
+    /// elle monte et traverse le rail (Envoyer, Vues, Partager, Enregistrer,
+    /// Traductions), qui court sur presque toute la hauteur. Le corpus lui laisse
+    /// donc cette bande — et la zone tactile du retour en tête aussi, sans quoi
+    /// un tap destiné au rail remonterait le texte à la place.
+    ///
+    /// > Deux vues qui doivent éviter le MÊME voisin doivent l'éviter avec le
+    /// > MÊME nombre. Deux littéraux identiques ne sont pas une règle partagée :
+    /// > ils sont deux règles qui se ressemblent, jusqu'au jour où le rail bouge.
+    ///
+    /// C'est la bande BRUTE, en points d'ÉCRAN. Les vues qui vivent dans la
+    /// colonne du canvas ne l'emploient jamais telle quelle : elles passent par
+    /// `railClearanceInset(columnWidth:viewportWidth:)`, qui la traduit dans leur
+    /// repère.
+    nonisolated static var storyActionRailInset: CGFloat { 68 }
+
+    /// **Ce que le chrome haut du lecteur ne cède JAMAIS** — barres de
+    /// progression, ligne d'auteur, fermeture.
+    ///
+    /// La zone qui ramène le corpus en tête couvre le vide au-dessus du texte :
+    /// c'est ce qui la rend atteignable sans viser. Mais elle est montée en
+    /// `zIndex(60)`, donc AU-DESSUS du chrome — sans cette réserve, elle
+    /// avalerait le bouton de fermeture de la story, et l'utilisateur qui veut
+    /// sortir remonterait un texte à la place.
+    ///
+    /// Le nombre est celui que le lecteur réserve déjà à son chrome pour borner
+    /// le rail (`topReserved`, `StoryViewerView+Canvas`) : la même bande, dite
+    /// une seule fois.
+    nonisolated static func storyTopChromeReserve(topInset: CGFloat) -> CGFloat {
+        topInset + 100
+    }
+
+    /// **Le dégagement du rail, EN COORDONNÉES DE COLONNE** — qui n'est pas la
+    /// même chose qu'en coordonnées d'écran.
+    ///
+    /// Sert aux DEUX voisins du rail : le corpus déplié (que le texte ne doit
+    /// pas chevaucher) et la zone qui le ramène en tête (qui ne doit pas
+    /// avaler ses touchers).
+    ///
+    /// La légende vit dans la colonne du CANVAS, qui déborde volontairement le
+    /// viewport pour la pagination (mesuré : 491,3 pt pour un écran de 402, donc
+    /// 44,7 pt de débordement de chaque côté). C'est ce cadrage qui a sauvé le
+    /// texte en #4762 — sans lui il sortait par la gauche.
+    ///
+    /// > Le même cadrage qui a réparé le TEXTE trahit la zone TACTILE. Un
+    /// > retrait de 68 pt exprimé dans une colonne de 491 laisse son bord droit
+    /// > à 378 pt d'écran, pas à 334 : le rail d'actions se retrouve recouvert
+    /// > aux trois quarts. Un nombre juste dans un repère est faux dans l'autre,
+    /// > et rien ne le signale — les deux valent « 68 ».
+    ///
+    /// On rend donc au retrait ce que le débordement lui a pris. À gauche, rien
+    /// à faire : déborder hors de l'écran n'y prend aucun toucher.
+    nonisolated static func railClearanceInset(columnWidth: CGFloat,
+                                               viewportWidth: CGFloat) -> CGFloat {
+        max(0, (columnWidth - viewportWidth) / 2) + storyActionRailInset
+    }
 }

@@ -207,7 +207,21 @@ export function convertV1ToV3(
 
   for (const L of asArray(blob.locationObjects)) {
     const o = baseObject(L, 'place', 'fg', z++);
-    o.payload = { place: L.place ?? null };
+    // MÊME piège, TROISIÈME morsure (#4832) — sur le FRÈRE du champ ci-dessus.
+    // Le lot #4717 a donné un gabarit à la pastille de lieu : `styleId` nomme
+    // le gabarit qui la DÉCORE. Sans lui, une pastille décorée qui traverse le
+    // serveur redevient la pastille de BASE, et la perte est invisible parce
+    // que cette pastille de base EST le repli d'un `styleId` absent.
+    //
+    // La forme du défaut n'est pas humaine : ce convertisseur RECOMPOSE la
+    // charge clé par clé, donc chaque branche est un inventaire à tenir à jour
+    // et toute clé ajoutée en amont s'y perd en silence. Le témoin qui
+    // l'attraperait vraiment est un témoin d'EXHAUSTIVITÉ (#4833) — celui par
+    // clé ne parle que des clés auxquelles on a déjà pensé.
+    o.payload = {
+      place: L.place ?? null,
+      ...(str(L.styleId) ? { styleId: L.styleId } : {}),
+    };
     objects.push(o);
   }
   for (const a of asArray(blob.audioPlayerObjects)) {

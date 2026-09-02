@@ -53,6 +53,16 @@ struct ComposerObjectEditorView: View {
     /// divergeraient au premier tap.
     let onSelectObject: (String) -> Void
 
+    /// **Ce qui est DÉPLIÉ, une section à la fois** (#4842). L'état est LOCAL
+    /// à l'écran, et jamais celui que le ViewModel porte pour la rangée
+    /// d'outils : c'est ce dernier qui rendait la zone basse d'une édition de
+    /// texte vide tant qu'aucune bulle n'avait été tapée, et ce lot ne le
+    /// ramène pas. (Son identifiant n'est pas cité ici : une garde de source
+    /// l'interdit dans ce fichier, et un doc-comment qui le nomme la fait
+    /// rougir aussi sûrement qu'un appel — mesuré.)
+    @State private var openedSection: ComposerObjectEditorSection? =
+        ComposerObjectEditorDisclosure.initiallyOpened
+
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
 
@@ -161,7 +171,7 @@ struct ComposerObjectEditorView: View {
                     // a fixé — le même ordre que les bulles du rail, pour que
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
-                        section(ComposerObjectEditorCopy.tool(tool)) {
+                        section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
                             TextEditToolOptions(tool: tool, textObject: binding)
                         }
                     }
@@ -180,7 +190,7 @@ struct ComposerObjectEditorView: View {
     /// réel, avec le vrai texte de la scène.
     @ViewBuilder
     private func styleSection(_ binding: Binding<StoryTextObject>) -> some View {
-        section(ComposerObjectEditorCopy.tool(.style)) {
+        section(ComposerObjectEditorCopy.tool(.style), .tool(.style)) {
             TextStyleSpecimenBand(
                 text: binding.wrappedValue.text,
                 selection: binding.wrappedValue.parsedTextStyle,
@@ -200,7 +210,7 @@ struct ComposerObjectEditorView: View {
     /// la conversion, et surtout le `nil` de « permanent », qu'une paire de
     /// glissières nues perdrait au premier réglage.
     private var timingSection: some View {
-        section(ComposerObjectEditorCopy.timing) {
+        section(ComposerObjectEditorCopy.timing, .timing) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
                     .font(MeeshyFont.relative(12, weight: .medium))
@@ -268,7 +278,7 @@ struct ComposerObjectEditorView: View {
     /// simplifiée ici perdrait les poignées de bord, le verrou des fonds et le
     /// signal de blocage du scroll, que l'atelier a déjà.
     private var planSection: some View {
-        section(ComposerObjectEditorCopy.plan) {
+        section(ComposerObjectEditorCopy.plan, .plan) {
             GeometryReader { geo in
                 Plan2DView(
                     tracks: Plan2DLayout.tracks(from: viewModel.currentEffects,
@@ -326,15 +336,54 @@ struct ComposerObjectEditorView: View {
 
     // MARK: - Le gabarit d'une section
 
+    /// **Une section, son titre, et l'état de son dépliage** (#4842).
+    ///
+    /// `DisclosureGroup` plutôt qu'un chevron maison, pour une raison qui n'est
+    /// pas la commodité : il ANNONCE « développé »/« replié » à VoiceOver, dans
+    /// les sept langues, sans qu'aucune clé de catalogue soit écrite. Un
+    /// chevron dessiné à la main ne dit rien à personne.
+    ///
+    /// Le `set` du binding IGNORE la valeur que SwiftUI lui passe et demande à
+    /// la règle. Ce n'est pas une négligence : `opened(after:from:)` rend le
+    /// même verdict (taper l'ouverte ferme, taper une autre bascule) ET tient
+    /// la promesse qui compte — jamais deux ouvertes. Laisser la vue écrire
+    /// `openedSection = tapped` aurait remis la loi hors de portée des témoins.
     private func section<Content: View>(_ titre: String,
+                                        _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // Le corps est ÉVALUÉ ici : `DisclosureGroup` garde son contenu en
+        // fermeture échappante, et un `content()` non échappant ne peut pas y
+        // entrer. La valeur, elle, voyage.
+        let corps = content()
+        return DisclosureGroup(isExpanded: Binding(
+            get: { ComposerObjectEditorDisclosure.isOpen(id, opened: openedSection) },
+            set: { _ in
+                openedSection = ComposerObjectEditorDisclosure.opened(after: id,
+                                                                      from: openedSection)
+            }
+        )) {
+            corps
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            // **44 pt sur toute la RANGÉE, et une forme qui les remplit.**
+            // Mesuré au doigt : un label réduit à son `Text` rapportait bien
+            // une frame de 370 × 21 à l'arbre d'accessibilité — donc « une
+            // cible pleine largeur » à qui la LIT — mais ne répondait qu'aux
+            // GLYPHES. Un tap au milieu de la rangée, entre le mot et le
+            // chevron, ne déclenchait rien. Deux défauts d'un coup : 21 pt sous
+            // le plancher HIG, et une cible dont l'arbre ment sur l'étendue.
+            //
+            // `contentShape` est ce qui fait de la frame la cible ; sans lui,
+            // l'agrandir ne fait qu'agrandir le vide.
             Text(titre)
                 .font(MeeshyFont.relative(9.5, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.5))
-            content()
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
+        .tint(.white.opacity(0.55))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -387,8 +436,16 @@ nonisolated enum ComposerObjectEditorCopy {
         String(localized: "composer.object.editor.timing", defaultValue: "APPARITION", bundle: .main)
     }
 
+    /// **« TIMELINE », pas « PLAN 2D »** (directive porteur 2026-09-02).
+    ///
+    /// La CLÉ garde son nom : elle désigne le composant monté
+    /// (`Plan2DView` du SDK), et renommer une clé de catalogue casserait les
+    /// sept traductions déjà posées sans rien apporter. Ce qui change est le
+    /// MOT que l'auteur lit — et il rejoint le vocabulaire que le reste de
+    /// l'app emploie déjà pour la même chose (`story.tool.timeline`), au lieu
+    /// d'un terme de géométrie que cette section était seule à porter.
     static var plan: String {
-        String(localized: "composer.object.editor.plan", defaultValue: "PLAN 2D", bundle: .main)
+        String(localized: "composer.object.editor.plan", defaultValue: "TIMELINE", bundle: .main)
     }
 
     static var start: String {

@@ -212,7 +212,18 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// l'énuméré du SDK plutôt qu'une liste recopiée : un huitième outil ajouté
     /// là-bas doit paraître ici, et une garde sur un littéral serait restée
     /// verte en l'oubliant.
-    func test_lEditeur_empileTousLesOutils_sansEnDeplierAucun() throws {
+    /// **Renommée au #4842.** Elle s'appelait `…sansEnDeplierAucun` et gardait
+    /// deux choses distinctes sous un seul nom : que les outils viennent du SDK
+    /// (toujours vrai), et que l'écran n'empile TOUT (plus vrai — la directive
+    /// porteur du 2026-09-01 le lui interdit).
+    ///
+    /// Ce qui SURVIT est la moitié qui compte, et sa raison est intacte :
+    /// l'écran ne doit dépendre d'aucun outil déplié **du ViewModel**, parce
+    /// que c'est cette condition qui laissait la zone basse d'une édition de
+    /// texte VIDE tant qu'aucune bulle du rail n'avait été tapée. Le dépliage
+    /// du #4842 est LOCAL et n'a pas d'état vide possible — la distinction
+    /// n'est pas un détail, c'est tout l'écart entre les deux défauts.
+    func test_lEditeur_prendSesOutilsDuSDK_etNeDependDAucunOutilDeployeDuViewModel() throws {
         let code = compact(try source("ComposerObjectEditorView.swift"))
         // `compact` retire TOUS les blancs : le fragment ne peut pas en porter.
         XCTAssertTrue(code.contains("ForEach(TextEditTool.all.filter{$0 != .style}".replacingOccurrences(of: " ", with: "")),
@@ -220,8 +231,10 @@ final class ComposerObjectEditorTests: XCTestCase {
                       + "la main divergerait au premier outil ajouté au SDK.")
         XCTAssertTrue(code.contains("TextEditToolOptions(tool:tool,textObject:binding)"))
         XCTAssertFalse(code.contains("expandedTool"),
-                       "L'écran ne doit dépendre d'AUCUN outil déplié : c'est cette "
-                       + "condition qui rendait la zone basse vide pendant l'édition.")
+                       "L'écran ne doit dépendre d'AUCUN outil déplié du ViewModel : c'est "
+                       + "cette condition qui rendait la zone basse vide pendant l'édition.")
+        XCTAssertTrue(code.contains("ComposerObjectEditorDisclosure"),
+                      "Le dépliage LOCAL passe par sa règle — voir #4842.")
     }
 
     /// Le style prend la forme du spécimen `2e` — le vrai texte, sur son vrai

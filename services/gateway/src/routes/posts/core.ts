@@ -4,6 +4,7 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
+import { postSignalText } from '../../services/posts/storyContentComposition';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
 import { MediaService } from '../../services/MediaService';
@@ -545,7 +546,22 @@ export function registerCoreRoutes(
         }
       }
 
+      // **Le texte qui alimente les SIGNAUX, dérivé À LA DEMANDE** (#4502).
+      //
+      // `content` ne porte plus le texte de scène : la passerelle a cessé de
+      // l'y recopier (directive porteur 2026-08-30). Les deux consommateurs
+      // ci-dessous en dépendaient sans le savoir — ils lisaient `postContent`,
+      // deux cents lignes après son affectation, et la recopie les servait.
+      //
+      // `postSignalText` rend la légende de l'auteur si elle existe, sinon la
+      // concaténation des textes de scène. Jamais les deux : « sinon on
+      // référence le contenu réel » est la seconde moitié de la directive, et
+      // concaténer referait le doublon qu'on vient de retirer.
       const postContent = (post as any).content as string | undefined;
+      const postSignals = postSignalText({
+        content: postContent,
+        storyEffects: (post as any).storyEffects,
+      });
 
       // GW1 — use the DECORATED instance (wired push+socket+email by
       // server.ts), never a bare local NotificationService: a bare instance
@@ -641,8 +657,10 @@ export function registerCoreRoutes(
         }
       }
 
-      if (postContent) {
-        const hashtags = hashtagService.extractHashtags(postContent);
+      // Un `#voyage` posé sur la SCÈNE reste indexé : sans la dérivation il
+      // cesserait de l'être le jour où la recopie a été retirée, en silence.
+      if (postSignals) {
+        const hashtags = hashtagService.extractHashtags(postSignals);
         if (hashtags.length > 0) {
           hashtagService.createPostHashtags((post as any).id as string, hashtags).catch((err: unknown) => {
             fastify.log.error(`[POST /posts] hashtag persist failed: ${err}`);
@@ -657,7 +675,7 @@ export function registerCoreRoutes(
           postId: (post as any).id as string,
           authorId: authContext.registeredUser.id,
           contentType: postTypeForNotif,
-          excerpt: postContent?.slice(0, 100),
+          excerpt: postSignals?.slice(0, 100),
           postCreatedAt: (post as any).createdAt ?? undefined,
           postExpiresAt: (post as any).expiresAt ?? undefined,
           excludeUserIds: mentionedUserIdsForDedup,
