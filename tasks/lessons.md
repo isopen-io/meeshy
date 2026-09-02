@@ -24740,7 +24740,7 @@ résultat vide), « ces deux choses divergent » (citer les deux côtés, élém
 élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
 gratuit qu'on ait de ce côté-là de l'asymétrie.
 
-## Leçon 450 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
+## Leçon 446 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
 
 **Le fait (2026-09-02).** Ma consigne permanente de boucle le dit à chaque
 réveil, en gras : « **Tu ne fermes JAMAIS une issue** — la session d'intégration
@@ -24809,7 +24809,7 @@ asymétrie entre ce qu'on déclare et ce qui s'exécute ; § 440 (un outil de
 détection se règle contre l'erreur qui n'a pas de vérificateur) — ici
 l'interdiction ÉTAIT l'erreur sans vérificateur.
 
-## Leçon 451 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+## Leçon 447 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
 
 **Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
 ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
@@ -24833,7 +24833,7 @@ Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
 base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
 n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
 
-## Leçon 452 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+## Leçon 448 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
 
 **Ce qui s'est passé.** Deux fois dans la même session, un lot vert
 localement a rougi la CI quarante minutes plus tard sur un cliquet de
@@ -24867,7 +24867,7 @@ Le motif commun aux deux morsures : la garde vivait dans une suite que
 l'agent qui écrivait n'a pas lue, parce qu'elle ne nomme pas le fichier
 qu'il modifiait — elle nomme une LISTE où il figure. Chercher « qui me
 mesure ? » (grep du nom de fichier dans les tests) avant « où j'ajoute ? ».
-## Leçon 446 — Un bouchon qui ne rejoue pas la COURSE du serveur rend vert un client qui la perd
+## Leçon 449 — Un bouchon qui ne rejoue pas la COURSE du serveur rend vert un client qui la perd
 
 Trois des seize défauts de la revue croisée du fil temps réel (#4524) avaient la
 même forme : le témoin était vert contre `e2e/visual/lib/*` et faux contre la
@@ -24899,7 +24899,7 @@ qu'un `Participant.id` n'a pas de curseur. Le cas est resté — il gage l'ordre
 d'envoi et le rattrapage —, le séparateur est gagé côté membre, et la
 conception le DIT au lieu de le laisser croire.
 
-## Leçon 447 — Un critère écrit dans le vocabulaire d'un adaptateur est vert par vacuité sur la porte qu'il gate
+## Leçon 450 — Un critère écrit dans le vocabulaire d'un adaptateur est vert par vacuité sur la porte qu'il gate
 
 **Le fait (2026-09-02, livraison de `join`, #4522).** Le critère de fin de
 l'écran, le § 6.3.A de la conception et la charte (règle 20) nommaient « les
@@ -24944,7 +24944,7 @@ SERVEUR, là où le legacy poste depuis le navigateur — présentait comme cell
 du conteneur. La question qui attrape les trois est la même : **pour chaque
 champ que la porte LIT, qui le lui FOURNIT, et depuis quel bord ?**
 
-## Leçon 448 — Un refus qui arrive AVANT la lecture de ce que le lecteur détient tranche à sa place
+## Leçon 451 — Un refus qui arrive AVANT la lecture de ce que le lecteur détient tranche à sa place
 
 **Le fait (2026-09-02, revue croisée de `join`, #4522).** `/chat/:lien`
 lisait le cookie de la place APRÈS l'aperçu du lien, parce que c'est l'aperçu
@@ -24984,7 +24984,7 @@ vient (`Sec-Purpose`, `Sec-Fetch-Site`) et ce qu'elle tient déjà (le cookie)
 `apps/web-v3/app/provenance.ts`, `app/(public)/chat/[lien]/route.ts` ›
 `situeLInvite` / `rejonction`.
 
-## Leçon 449 — Un document qui dit ce que la passerelle PORTE sans citer l'émetteur fait écrire un bouchon qui le porte — et un témoin vert par vacuité
+## Leçon 452 — Un document qui dit ce que la passerelle PORTE sans citer l'émetteur fait écrire un bouchon qui le porte — et un témoin vert par vacuité
 
 **Le fait (2026-09-02, revue croisée de `rights`, #4523).** La conception
 (§ 12.3), le critère de fin, trois doc-commentaires et le spec affirmaient
