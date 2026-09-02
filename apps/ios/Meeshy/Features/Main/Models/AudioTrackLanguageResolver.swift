@@ -28,19 +28,54 @@ nonisolated enum AudioTrackLanguageResolver {
         preferredLanguages: [String],
         translatedAudios: [MessageTranslatedAudio]
     ) -> String? {
-        guard !translatedAudios.isEmpty else { return nil }
+        resolve(
+            manualOverride: manualOverride,
+            originalLanguage: originalLanguage,
+            preferredLanguages: preferredLanguages,
+            availableLanguages: translatedAudios.map(\.targetLanguage)
+        )
+    }
+
+    /// **La MÊME loi, exprimée sur des CODES de langue** (#4926).
+    ///
+    /// Elle existe parce qu'une seconde loi existait déjà :
+    /// `ReelAudioLanguageResolver.preferredAudioLanguage`, dans
+    /// `ReelsPlayerView.swift`, réécrivait ce parcours de rang mot pour mot —
+    /// même règle, même exactitude, autre signature (le réel connaît les codes
+    /// de ses pistes TTS, pas les objets). Deux lois JUSTES qui disent la même
+    /// chose ne se signalent nulle part le jour où l'une évolue : c'est
+    /// exactement le motif que le § Prisme du `CLAUDE.md` racine décrit — « la
+    /// réécriture, pas l'appel manquant, a produit trois familles divergentes en
+    /// trois cycles ».
+    ///
+    /// La variante par objets ci-dessus n'est plus qu'une projection de
+    /// celle-ci. `ReelAudioLanguageResolverTests` et
+    /// `AudioTrackLanguageResolverTests` gardent les deux entrées, inchangées :
+    /// leur passage EST la preuve que la convergence ne change aucun verdict.
+    ///
+    /// Le filtre sur les codes VIDES vient du réel, et il est nécessaire depuis
+    /// que `SocialAudioTrack.originalLanguage` peut rendre `""` pour « langue
+    /// d'origine inconnue » : sans lui, une chaîne vide dans le prisme
+    /// s'égalerait à cette origine inconnue et rendrait `nil` au rang où elle
+    /// apparaît. Les deux producteurs de prisme du dépôt écartent déjà les
+    /// vides — le filtre garde la loi juste même si un troisième naissait.
+    static func resolve(
+        manualOverride: String? = nil,
+        originalLanguage: String,
+        preferredLanguages: [String],
+        availableLanguages: [String]
+    ) -> String? {
+        let available = Set(availableLanguages.map { $0.lowercased() })
+        guard !available.isEmpty else { return nil }
         let original = originalLanguage.lowercased()
-        func hasTrack(_ code: String) -> Bool {
-            translatedAudios.contains { $0.targetLanguage.lowercased() == code }
-        }
         if let manual = manualOverride?.lowercased() {
             if manual == original { return nil }
-            return hasTrack(manual) ? manual : nil
+            return available.contains(manual) ? manual : nil
         }
-        for lang in preferredLanguages {
+        for lang in preferredLanguages where !lang.isEmpty {
             let lower = lang.lowercased()
             if lower == original { return nil }
-            if hasTrack(lower) { return lower }
+            if available.contains(lower) { return lower }
         }
         return nil
     }

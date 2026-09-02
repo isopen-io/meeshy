@@ -160,6 +160,17 @@ extension FeedPostCard {
                     accentColor: media.thumbnailColor,
                     transcription: media.transcription,
                     translatedAudios: media.translatedAudios,
+                    // Prisme AUDIO (#4926) — la piste ET la bande de
+                    // transcription sortent de la MÊME élection : un seul
+                    // paramètre, donc structurellement une seule descente
+                    // (§ cycle 128 du CLAUDE.md racine).
+                    initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                        originalLanguage: SocialAudioTrack.originalLanguage(
+                            transcription: media.transcription,
+                            carrier: post.originalLanguage
+                        ),
+                        translatedAudios: media.translatedAudios
+                    ),
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media,

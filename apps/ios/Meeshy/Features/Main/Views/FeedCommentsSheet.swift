@@ -2363,6 +2363,7 @@ struct CommentRowView: View, Equatable {
                         accentColor: accentColor,
                         commentId: comment.id,
                         carrierText: comment.displayContent,
+                        carrierOriginalLanguage: comment.originalLanguage,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,
