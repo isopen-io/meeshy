@@ -100,11 +100,37 @@ struct ComposerObjectEditorView: View {
 
     // MARK: - L'en-tête
 
+    /// Le nombre d'objets POSÉS sur la slide — lu du modèle à chaque rendu, donc
+    /// il suit l'ajout et le retrait sans qu'on quitte l'écran.
+    private var objectCount: Int {
+        ComposerSceneObjectCount.posed(on: viewModel.currentSlide)
+    }
+
     private var header: some View {
         HStack {
-            Text(ComposerObjectEditorCopy.title)
-                .font(MeeshyFont.relative(16, weight: .semibold))
+            // **`< N` à la place du titre** (#4935, directive porteur
+            // 2026-09-03). Le titre nommait l'écran ; il ne disait ni d'où l'on
+            // vient, ni que cet écran édite UN objet parmi N — alors que le
+            // plan 2D permet justement d'en désigner un autre sans sortir.
+            //
+            // Le chiffre est peint SANS le mot : le glyphe et le nombre tiennent
+            // dans le pouce, et c'est VoiceOver qui reçoit la phrase entière
+            // (`spokenLabel`) — une chaîne pour l'œil, une pour l'oreille, parce
+            // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
+            Button(action: onClose) {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left")
+                        .font(MeeshyFont.relative(15, weight: .semibold))
+                    Text(LocalizedNumber.exact(objectCount))
+                        .font(MeeshyFont.relative(16, weight: .semibold).monospacedDigit())
+                }
                 .foregroundStyle(.white)
+                .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ComposerSceneObjectCount.spokenLabel(count: objectCount))
+            .accessibilityAddTraits(.isButton)
             Spacer()
             Button(action: onClose) {
                 Text(ComposerObjectEditorCopy.done)
