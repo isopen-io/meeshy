@@ -4,6 +4,14 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { logError } from '../../utils/logger';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { validatePagination } from '../../utils/pagination';
+import {
+  cursorPage,
+  decodePageCursor,
+  keysetWhere,
+  orderByFor,
+  type CursorPosition,
+  type CursorSort,
+} from '../../utils/cursor-pagination';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
@@ -483,6 +491,100 @@ export type PageDeDemandes = {
 };
 
 /**
+ * L'ordre TOTAL de la liste — DÉCLARÉ une fois, et ce que le curseur encode
+ * (#4900).
+ *
+ * « Total » n'est pas décoratif. Cette route bornait sa page par
+ * `{ createdAt: { lt } }` SEUL : deux demandes nées dans la même milliseconde que
+ * la dernière ligne servie étaient TOUTES LES DEUX jetées de la page suivante, et
+ * n'apparaissaient sur AUCUNE page. Son alias DÉPRÉCIÉ (`routes/friends.ts`)
+ * ayant rallié la loi partagée au lot #4175, le déprécié départageait ses ex æquo
+ * quand son successeur canonique ne le faisait pas — retirer l'alias aurait donc
+ * fait PERDRE une correction, l'inversion exacte qu'un plan de dépréciation ne
+ * peut pas signaler.
+ *
+ * La loi partagée dérive de cette seule déclaration l'`orderBy`, la clause de
+ * reprise ET la signature inscrite dans le jeton : les trois ne peuvent plus
+ * diverger.
+ */
+const ORDRE_DEMANDES: CursorSort = [
+  { field: 'createdAt', direction: 'desc', kind: 'date' },
+  { field: 'id', direction: 'desc', kind: 'string' },
+];
+
+/**
+ * L'ordre — PARTIEL — sous lequel les jetons EN VOL ont été frappés.
+ *
+ * Cette route a servi son curseur en HORODATAGE ISO EN CLAIR. Le motif que la
+ * loi porte déjà pour `/notifications` s'applique : un jeton sans version est
+ * accepté quand ses clés sont exactement les champs d'un ordre DÉCLARÉ.
+ *
+ * ## Qui tient un tel jeton, MESURÉ
+ *
+ * Aucun client ne le PERSISTE au-delà d'une session : les deux consommateurs le
+ * gardent dans une variable LOCALE et drainent la liste entière en une passe —
+ * `useFriendRequestsV2` (`apps/web/hooks/v2/use-friend-requests-v2.ts`) met en
+ * cache la LISTE drainée, pas le curseur, et `ContactsListViewModel`
+ * (`apps/ios/…/Features/Contacts/`) fait de même. L'exposition réelle est donc
+ * un drain À CHEVAL sur un déploiement — page N frappée par l'ancien code,
+ * page N+1 servie par le nouveau (ou l'inverse, en flotte mixte). Refuser le
+ * jeton y interromprait le drain au milieu : la liste de contacts reviendrait
+ * TRONQUÉE, et sans erreur visible pour le lecteur.
+ *
+ * ## Ce que cette position permet, et ce qu'elle ne permet pas
+ *
+ * L'ordre est PARTIEL : un horodatage seul ne dit pas SUR LAQUELLE des lignes de
+ * sa milliseconde le client s'est arrêté. La loi en dérive donc la seule clause
+ * que cette position autorise, `{ createdAt: { lt } }` — exactement la fenêtre
+ * que le client avait, ni plus étroite ni plus large. Elle ne départage pas les
+ * ex æquo, et ne le peut pas : c'est précisément ce qui manquait au jeton, et
+ * la raison pour laquelle il est devenu TOTAL. La page reste ORDONNÉE et
+ * RÉ-ANCRÉE sous l'ordre total, si bien que le jeton rendu en échange départage
+ * — la transition ne dure qu'UNE page.
+ */
+const ORDRE_HISTORIQUE: CursorSort = ORDRE_DEMANDES.slice(0, 1);
+
+/** Une position de reprise, avec l'ORDRE sous lequel elle a été frappée. */
+type Reprise = { readonly ordre: CursorSort; readonly position: CursorPosition };
+
+/**
+ * Le jeton d'un appelant relu — opaque d'abord, historique ensuite, `null` sinon.
+ *
+ * L'ordre des deux tentatives n'est pas indifférent : un jeton opaque est du
+ * base64url, qu'aucun analyseur de date ne lit, tandis qu'un horodatage ISO n'est
+ * pas un jeton opaque valide. Les deux formes ne se recouvrent pas, et la forme
+ * COURANTE est essayée la première.
+ *
+ * `null` couvre tout le reste — jeton tronqué, d'une version inconnue, ou frappé
+ * sous un AUTRE ordre.
+ *
+ * ## Pourquoi 400, quand l'alias sert la première page
+ *
+ * Le dépôt connaît les deux lectures d'un jeton illisible et la loi les laisse
+ * décider ({@link decodePageCursor}). `routes/friends.ts` sert la première page ;
+ * cette route rend 400 (contrat de #4254), et le discriminant est le CLIENT.
+ *
+ * Les deux consommateurs de cette adresse DRAINENT en boucle et ne s'arrêtent
+ * que sur un curseur ABSENT, en APPENDANT à un accumulateur borné à 500 — les
+ * deux le disent en commentaire, mot pour mot : « redemander la même page
+ * tournerait en rond jusqu'au plafond en collectant des doublons ». Un repli
+ * silencieux sur la première page produirait exactement cela : le même lot
+ * re-servi jusqu'à la borne, sans qu'aucune erreur ne remonte. Le 400 arrête la
+ * boucle, et se voit.
+ *
+ * L'alias, lui, n'a que des appelants par RANG (`offset`) qui n'envoient jamais
+ * de curseur : son repli y est inerte.
+ */
+function repriseDepuis(cursor: string): Reprise | null {
+  const totale = decodePageCursor(cursor, ORDRE_DEMANDES);
+  if (totale) return { ordre: ORDRE_DEMANDES, position: totale };
+
+  const horodatage = new Date(cursor);
+  if (Number.isNaN(horodatage.getTime())) return null;
+  return { ordre: ORDRE_HISTORIQUE, position: { createdAt: horodatage.toISOString() } };
+}
+
+/**
  * LISTER — une route pour les trois listings et le fantôme.
  *
  * `GET /friend-requests/received`, `/sent`, `/users/friend-requests` et un
@@ -520,22 +622,15 @@ export async function listerDemandes(
     : direction === 'sent' ? { senderId: params.acteurId }
     : { OR: [{ receiverId: params.acteurId }, { senderId: params.acteurId }] };
 
-  // Le curseur est l'HORODATAGE, pas l'identifiant : c'est la clé de tri, et
-  // les deux index composés se terminent par elle. Un curseur sur l'id ferait
-  // trier en mémoire ce que l'index sait rendre ordonné.
-  //
-  // Il est VALIDÉ avant d'atteindre Prisma. C'est la porte que les clients
-  // s'apprêtent à emprunter : ils PERSISTENT un curseur (cache disque iOS,
-  // cache React Query web) et le renvoient au réveil. Une valeur tronquée ou
-  // d'un format d'une version voisine produisait `Invalid Date`, que Prisma
-  // rejette — soit un 500 sur une liste, là où le contrat doit dire 400 et où
-  // le client sait alors repartir de la première page.
-  const borneDate = params.cursor ? new Date(params.cursor) : null;
-  if (borneDate && Number.isNaN(borneDate.getTime())) {
-    return { refus: { code: 400, message: 'cursor must be an ISO 8601 timestamp' } };
+  // Le curseur est relu par la LOI PARTAGÉE, jamais borné à la main : elle tient
+  // ENSEMBLE l'`orderBy`, la clause de reprise et la signature du jeton, si bien
+  // que les trois ne peuvent plus diverger. Un jeton illisible reste un 400, et
+  // un horodatage ISO — la forme que cette route servait — reprend toujours
+  // (cf. {@link repriseDepuis}).
+  const point = params.cursor ? repriseDepuis(params.cursor) : null;
+  if (params.cursor && point === null) {
+    return { refus: { code: 400, message: 'cursor is not a cursor served by this route' } };
   }
-
-  const borne = borneDate ? { createdAt: { lt: borneDate } } : {};
 
   const filtreTexte = params.q
     ? {
@@ -548,39 +643,51 @@ export async function listerDemandes(
       }
     : {};
 
+  // La clause de reprise, ET-isée avec les gardes de la route et jamais
+  // substituée : c'est ce qui rend impossible la faute la plus chère — une page
+  // suivante qui « oublie » l'identité du lecteur.
+  //
+  // La loi rend son `OR` en LECTURE SEULE (elle ne laisse aucun site d'appel
+  // muter sa clause) là où Prisma déclare le sien mutable. La COPIE traduit
+  // l'une dans l'autre — c'est ce que `cursorQuery` obtient par une assertion
+  // de type, que ce site n'a pas besoin de reprendre.
+  const reprise = point
+    ? [{ OR: [...keysetWhere(point.ordre, point.position).OR] }]
+    : [];
+
   const lignes = await fastify.prisma.friendRequest.findMany({
     where: {
       AND: [
         identite,
         params.status ? { status: params.status } : {},
-        borne,
         filtreTexte,
+        ...reprise,
       ],
     },
     include: INCLUDE_PARTIES,
-    orderBy: { createdAt: 'desc' },
+    orderBy: orderByFor(ORDRE_DEMANDES),
+    // La ligne SONDE : elle dit `hasMore` sans compter la table.
     take: taille + 1,
   });
 
-  const hasMore = lignes.length > taille;
-  const page = hasMore ? lignes.slice(0, taille) : lignes;
+  // Le curseur se frappe sur la ligne BRUTE — `servirParties` MASQUE des champs
+  // de présence, il ne retire aucune ligne : la ligne lue EST la ligne servie.
+  // Faire dépendre la pagination d'une projection filtrée est exactement ce qui
+  // produit, ailleurs dans le dépôt, des pages vides que le client compense à la
+  // main.
+  const servie = cursorPage({
+    sort: ORDRE_DEMANDES,
+    rows: lignes as unknown as Array<Record<string, unknown>>,
+    limit: taille,
+  });
 
-  // Le curseur se lit sur la ligne BRUTE — `servirParties` ne touche qu'aux
-  // parties, mais faire dépendre la pagination d'une projection filtrée serait
-  // exactement le genre de couplage qui casse une page sur un cas de bord.
-  const items = await servirParties(
-    fastify,
-    request,
-    page as unknown as Array<Record<string, unknown>>
-  );
+  const items = await servirParties(fastify, request, servie.page);
 
   return {
     valeur: {
       items,
-      hasMore,
-      nextCursor: hasMore
-        ? (page[page.length - 1] as unknown as { createdAt: Date }).createdAt.toISOString()
-        : null,
+      hasMore: servie.pagination.hasMore,
+      nextCursor: servie.pagination.nextCursor,
       limit: taille,
     },
   };

@@ -55,6 +55,13 @@ const VU = { showOnline: true, showLastSeenTimestamp: true };
 const MASQUE = { showOnline: false, showLastSeenTimestamp: false };
 
 import { directoryFriendRequestsRoutes } from '../../../../routes/directory/friend-requests';
+import { decodePageCursor, type CursorSort } from '../../../../utils/cursor-pagination';
+
+/** L'ordre TOTAL de la liste — relu ici tel que la route le déclare (#4900). */
+const ORDRE_DEMANDES: CursorSort = [
+  { field: 'createdAt', direction: 'desc', kind: 'date' },
+  { field: 'id', direction: 'desc', kind: 'string' },
+];
 
 const PREFIXE = '/api/v1/directory';
 const MOI = '507f1f77bcf86cd799439011';
@@ -304,9 +311,14 @@ describe('Le listing fusionné', () => {
     const corps = res.json();
     expect(corps.data).toHaveLength(2);
     expect(corps.pagination.hasMore).toBe(true);
-    // Le curseur est l'HORODATAGE : c'est la clé de tri, et les deux index
-    // composés se terminent par elle.
-    expect(corps.pagination.nextCursor).toBe(new Date('2026-08-02').toISOString());
+    // Le curseur est OPAQUE (#4900) : la loi partagée le frappe sur la DERNIÈRE
+    // LIGNE SERVIE, et il porte l'ordre TOTAL — l'horodatage ET l'`id` qui
+    // départage les ex æquo. C'était un horodatage ISO en clair, donc un
+    // identifiant lisible et un curseur sans départage.
+    expect(decodePageCursor(corps.pagination.nextCursor, ORDRE_DEMANDES)).toEqual({
+      createdAt: new Date('2026-08-02').toISOString(),
+      id: 'b',
+    });
 
     // `direction=any` interroge les DEUX colonnes d'identité.
     const where = (prisma.friendRequest.findMany as any).mock.calls[0][0].where;
@@ -464,13 +476,19 @@ describe('La présence des parties obéit à la loi, sur les trois producteurs',
 });
 
 /**
- * Un curseur ILLISIBLE rend 400, pas 500 (#4254).
+ * Un curseur ILLISIBLE rend 400, pas 500 (#4254) — et le jeton HISTORIQUE reste
+ * servi (#4900).
  *
- * Les deux clients s'apprêtent à PERSISTER ce curseur — cache disque iOS,
- * cache React Query web — et à le renvoyer au réveil. `new Date('...')` sur une
- * valeur tronquée ou d'un format d'une version voisine rend `Invalid Date`, que
- * Prisma rejette : la liste répondait 500, un code sur lequel aucun client ne
- * sait repartir de la première page.
+ * Une valeur tronquée ou d'un format d'une version voisine produisait
+ * `Invalid Date`, que Prisma rejette : la liste répondait 500, un code sur lequel
+ * aucun client ne sait repartir de la première page. Le contrat 400 tient après
+ * le passage à la loi partagée.
+ *
+ * L'horodatage ISO que cette route servait AVANT ce passage, lui, continue de
+ * REPRENDRE : les deux consommateurs drainent la liste entière en une passe
+ * (`useFriendRequestsV2` côté web, `ContactsListViewModel` côté iOS), et refuser
+ * leur jeton interromprait ce drain au milieu — liste TRONQUÉE, sans erreur
+ * visible.
  */
 describe('Le curseur est un contrat, pas une chaîne libre', () => {
   it('refuse un curseur illisible AVANT la requête', async () => {
