@@ -24035,6 +24035,40 @@ qui se dérive tient.* Partout où du code recopie une liste — clés d'une cha
 entrées d'une rangée, champs d'un `select`, sites d'une règle — la liste est une
 dette, et le témoin doit interroger la SOURCE, jamais la copie.
 
+### AMENDEMENT — le TEST qui manquait, et qui se pose à la DÉCLARATION
+
+Cette leçon décrit un symptôme : un repli soigné efface la trace de la perte.
+Elle ne donnait aucun moyen de le voir venir. Une session voisine l'a extrait
+d'un cas de la même famille rencontré le même jour (#4868) — `hasMoreComments`
+initialisé à `true` pour signifier « je ne sais pas encore », et lu partout « il
+y en a plus ». Le détail rendait donc « Commentaires (0) » et « Charger plus »
+côte à côte.
+
+Ce n'est pas une analogie avec le cas des gabarits : c'est le **même mécanisme
+sur deux types différents**.
+
+| cas | valeur par défaut | ce qu'elle rend indiscernable |
+|---|---|---|
+| `styleId` absent | `location.pill`, **un gabarit valide** | « pas arrivé » et « pas de gabarit » rendent le même pixel |
+| `hasMoreComments` | `true`, **une réponse valide** | « je ne sais pas » et « il y en a » rendent le même bouton |
+
+> **Le test : la valeur par défaut appartient-elle au DOMAINE DES VALEURS
+> LÉGITIMES ?**
+>
+> - **Oui** ⇒ elle est indiscernable d'une vraie réponse. Il faut un état HORS
+>   domaine — `nil`, un cas d'énumération dédié, un sentinel.
+> - **Non** ⇒ elle se distingue toute seule, et le repli est sans danger.
+
+Ce qui rend ce test précieux est **le moment où il se pose** : à la DÉCLARATION,
+avant qu'aucun consommateur n'existe. Les deux cas ci-dessus ont été trouvés
+depuis l'aval — un pixel faux, un bouton en trop — c'est-à-dire des mois après
+que la décision de type ait été prise, et par hasard. Le test, lui, se pose en
+écrivant la ligne.
+
+Et il explique pourquoi « un tri-état écrasé en booléen » et « un repli bien
+choisi » sont le même défaut : dans les deux cas, l'ignorance a été codée avec
+une valeur qui signifie déjà autre chose.
+
 ## Leçon 432 — Une API qui répond par une EXCEPTION n'offre que la prévention, et la prévention s'écrit devant l'APPEL
 
 **Le fait (2026-09-02).** Toucher le bouton d'enregistrement du viseur vidéo
@@ -24484,3 +24518,34 @@ Dernière chose, sur la confiance qu'on accorde à un balayage : j'avais écrit 
 prouvait rien** — je lui avais donné un fichier où j'avais déjà appliqué la
 correction. Un outil ne se valide pas sur un cas qu'on a préparé pour lui. Même
 famille que le témoin qui doit TOMBER avant le correctif.
+
+### AMENDEMENT du même jour — le vérificateur des faux positifs existe, et ce n'est pas un outil
+
+Cette leçon affirmait qu'« il n'existe aucun vérificateur des faux positifs ».
+**C'est faux, et la correction vient d'une session voisine.** Quelques heures
+après avoir écrit ce qui précède, j'ai produit un faux positif d'une autre
+espèce : un relevé sur `tasks/lessons.md` m'a fait conclure que le `CLAUDE.md`
+racine citait un numéro de leçon AMBIGU. La mesure avait l'air propre et
+désignait un défaut dans le document le plus lu du dépôt.
+
+Ce qui l'a attrapée n'est pas une vérification. C'est que **j'allais citer les
+deux leçons dans l'issue** — et qu'en les ouvrant pour les recopier, j'ai vu
+« 288 », « 288 bis », « 288 ter », « 288 quater » : une famille à suffixes, pas un
+doublon. Mon motif `^## Leçon [0-9]+` avait tronqué au nombre.
+
+> **Une mesure se relit toute seule ; une preuve CITÉE oblige à rouvrir la
+> source.** Le compte se produit sans jamais rouvrir le fichier — l'extrait, non.
+
+D'où la discipline, qui est le vérificateur manquant :
+
+**Une issue, un commentaire ou un commit qui ACCUSE doit contenir l'EXTRAIT, pas
+seulement le compte.** Deux lignes du fichier valent mieux qu'un nombre juste,
+non pas parce qu'elles convainquent mieux le lecteur, mais parce que **les
+produire force l'auteur à retourner à la source** — c'est-à-dire à faire
+exactement ce qu'un faux positif empêche de faire.
+
+Cela vaut pour les trois formes que ce dépôt écrit le plus : « N sites font X »
+(citer deux), « ce champ n'est lu nulle part » (citer la recherche ET son
+résultat vide), « ces deux choses divergent » (citer les deux côtés, élément par
+élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
+gratuit qu'on ait de ce côté-là de l'asymétrie.
