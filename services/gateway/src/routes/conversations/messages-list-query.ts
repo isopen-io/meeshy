@@ -267,6 +267,21 @@ export function buildMessageListSelect(options: {
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // La protection du message CITÉ — le niveau que ce select ne
+            // demandait pas du tout, alors que `attachmentFullSelect` la sert
+            // déjà sur ses PIÈCES JOINTES (`reply-attachment-protection-contract`).
+            // Sans ces champs, un client ne peut pas savoir qu'il rend le texte
+            // d'un message à vue unique : répondre à un message protégé en
+            // publiait le contenu entier dans chaque bulle-citation du fil.
+            // Même famille, une couche plus haut : ce que la route CONSTRUIT et
+            // ce que le schéma DÉCLARE sont deux vérités séparées — les deux
+            // ont dû bouger.
+            isViewOnce: true,
+            isBlurred: true,
+            expiresAt: true,
+            effectFlags: true,
+            isEncrypted: true,
+            encryptionMode: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
