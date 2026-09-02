@@ -177,3 +177,67 @@ nonisolated enum ComposerBackgroundSoundReplacement {
         return audioObjects.contains(where: { $0.id == background.id }) ? background.id : nil
     }
 }
+
+/// **La trace du son de FOND sur la surface SCÈNE** (#4918).
+///
+/// > Directive porteur 2026-09-02 : « Lorsqu'on ajoute un son de fond à un
+/// > slide de story, on ne voit pas où le son se trouve. »
+///
+/// ## Il ne manquait ni composant, ni loi, ni résolveur — seulement un CÂBLAGE
+///
+/// `ComposerSoundColumn.avatarBadge` résout le fond servi, `avatarBadgeSound`
+/// l'expose, `ComposerAvatarSoundBadge` le peint, et `deleteEditedSound` le
+/// retire. Les quatre sont livrés depuis #4657/#4668/#4669/#4696 — et n'avaient
+/// **qu'un seul consommateur**, `documentSurface`. Sur la surface SCÈNE, celle
+/// qu'une story monte, le fond jouait sans laisser de trace.
+///
+/// ## Pourquoi la trace ne se pose PAS sur le canvas
+///
+/// `apps/ios/CLAUDE.md` § 1 : « Aucun contrôle ne se pose SUR la scène […] les
+/// rails, les contrôleurs et les portes vivent dans les couloirs du plateau. »
+/// La loi 6 en donne la raison, et un son de fond en est le cas d'école : il ne
+/// produit AUCUN pixel au rendu final, donc l'afficher sur la scène ferait
+/// mentir l'aperçu sur ce qui part.
+///
+/// Cela tranche l'arbitrage que #4918 laissait ouvert : des trois places
+/// proposées, l'entrée de rail GAUCHE est fermée par `appearsOnCanvas` (le rail
+/// est réservé à ce qui se voit sur la toile, ce qu'un son n'est pas) et la
+/// pastille ancrée est déconseillée par l'issue elle-même. Reste la bande de
+/// chrome — lue dans le COULOIR, jamais en surimpression.
+///
+/// ## Ce que cette loi décide, et c'est tout
+///
+/// La marche du bas de `ComposerSceneSurface` descend les niveaux du modèle —
+/// l'objet, la scène, la slide, la publication — et sa règle constante est
+/// qu'un outil ouvert occupe cette zone SEUL (`ComposerLowZone`,
+/// `ComposerObjectChips.isServed`). La trace suit cette règle : sans elle, elle
+/// s'ajouterait au panneau ouvert et ferait remonter la scène sous le doigt
+/// pendant qu'on règle autre chose.
+///
+/// > Le critère 1 de l'issue n'en souffre pas : il exige de voir le fond
+/// > **sans ouvrir de panneau**. Quand un panneau est ouvert, l'exigence ne
+/// > porte plus.
+///
+/// Elle vit ici plutôt que dans un `if` du corps de vue pour la raison que
+/// `ComposerBackgroundSoundReplacement` porte déjà : une décision écrite dans
+/// une vue ne s'interroge qu'à la garde de source.
+nonisolated enum ComposerSceneSoundTrace {
+
+    /// Le son dont la scène doit montrer la trace — `nil` ⇒ rien à peindre.
+    ///
+    /// - Parameter background: ce que la scène tient pour son fond, tel que
+    ///   `avatarBadgeSound` le sert. **Y compris la forme LEGACY** que
+    ///   `resolvedBackgroundAudio` synthétise depuis `backgroundAudioId` : la
+    ///   trace ne demande rien d'autre que le son servi, donc un fond sans
+    ///   objet s'affiche comme les autres (critère 4). Une loi qui aurait
+    ///   cherché son objet — pour lire sa position ou son rang — aurait écarté
+    ///   en silence la seule forme qu'une reprise de brouillon produit.
+    /// - Parameter toolIsOpen: le MODE DU RAIL, jamais la présence d'un panneau.
+    ///   Les deux ont divergé ici même : l'hôte passe le panneau
+    ///   inconditionnellement (il se vide lui-même), et lire sa présence avait
+    ///   rendu `ComposerSceneBandView` INERTE pendant des semaines.
+    static func served(background: StoryAudioPlayerObject?,
+                       toolIsOpen: Bool) -> StoryAudioPlayerObject? {
+        toolIsOpen ? nil : background
+    }
+}

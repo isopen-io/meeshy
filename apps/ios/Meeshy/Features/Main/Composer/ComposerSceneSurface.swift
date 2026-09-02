@@ -295,6 +295,28 @@ struct ComposerSceneSurface: View {
             }
     }
 
+    // MARK: - Le son de FOND de la slide (#4918)
+
+    /// **Le fond sonore dont la scène montre la trace** — `nil` ⇒ aucun fond,
+    /// et le bas de l'écran reste ce qu'il était.
+    ///
+    /// La surface le REÇOIT, elle ne le cherche pas : le meuble le résout par
+    /// `avatarBadgeSound`, qui applique la loi de `ComposerSoundColumn` — la
+    /// place dit le FOND, et un son de CONTENU n'y paraît jamais.
+    ///
+    /// **La même valeur qu'affiche la surface document**, et c'est le point du
+    /// lot : un son de fond posé sur une story se lisait nulle part pendant
+    /// qu'il se lisait à côté de l'avatar sur un post.
+    var backgroundSound: StoryAudioPlayerObject?
+
+    /// **Ce que le doigt ouvre sur la trace** — `nil` ⇒ elle reste une lecture.
+    ///
+    /// Le RETRAIT passe par là (critère 2 de #4918) : la feuille porte le (x)
+    /// de `deleteEditedSound`, et son doc-comment dit pourquoi le geste vit là
+    /// et nulle part ailleurs — « trois boutons dispersés auraient été trois
+    /// lois ». Deux gestes, ce que la dimension 7 demande.
+    var onEditBackgroundSound: (() -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -558,6 +580,26 @@ struct ComposerSceneSurface: View {
                 // invisible le reste du temps. Un texte qui part avec la
                 // publication et que l'auteur ne voit jamais est un texte qu'il
                 // oublie.
+                // **La trace du son de FOND, au niveau SLIDE de l'escalier**
+                // (#4918). Elle se pose au-dessus de la description parce que
+                // les deux appartiennent à la même marche : la description dit
+                // ce que la slide RACONTE, la trace AVEC QUOI elle se raconte.
+                //
+                // Dans le COULOIR, jamais sur la scène — `apps/ios/CLAUDE.md`
+                // § 1 : un son de fond ne produit aucun pixel au rendu, donc
+                // l'afficher sur le canvas ferait mentir l'aperçu (loi 6).
+                //
+                // La capsule est celle de la surface document
+                // (`ComposerAvatarSoundBadge`) : onde pour un enregistrement,
+                // titre et crédit pour un emprunt, durée toujours. Deux
+                // capsules pour un même objet auraient été deux vocabulaires.
+                if let trace = ComposerSceneSoundTrace.served(background: backgroundSound,
+                                                              toolIsOpen: toolIsOpen) {
+                    ComposerAvatarSoundBadge(sound: trace, onTap: onEditBackgroundSound)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let descriptionPanel { descriptionPanel }
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
