@@ -19,11 +19,13 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +59,9 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
+
+/** How many reels from the end of the thread trigger the next cursor page. */
+private const val LOAD_MORE_THRESHOLD = 3
 
 /**
  * Full-screen vertical reel thread (iOS `ReelsPlayerView` parity): one video per page,
@@ -115,7 +120,12 @@ fun ReelsScreen(
                 LaunchedEffect(pagerState, reelIds) {
                     snapshotFlow { pagerState.currentPage }
                         .distinctUntilChanged()
-                        .collect { page -> viewModel.setCurrentReel(reelIds.getOrNull(page)) }
+                        .collect { page ->
+                            viewModel.setCurrentReel(reelIds.getOrNull(page))
+                            // Infinite scroll: fetch the next cursor page a few reels before
+                            // the pager runs out, so the fetch lands before the user does.
+                            if (page >= reelIds.size - LOAD_MORE_THRESHOLD) viewModel.loadMore()
+                        }
                 }
                 VerticalPager(
                     state = pagerState,
@@ -134,6 +144,7 @@ fun ReelsScreen(
                             onLike = { viewModel.toggleLike(reel.id) },
                             onComments = { onOpenPost(reel.id) },
                             onRepost = { viewModel.repost(reel.id) },
+                            onBookmark = { viewModel.toggleBookmark(reel.id) },
                             onShare = {
                                 viewModel.recordShare(reel.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
@@ -185,6 +196,7 @@ private fun ReelOverlay(
     onLike: () -> Unit,
     onComments: () -> Unit,
     onRepost: () -> Unit,
+    onBookmark: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -241,6 +253,15 @@ private fun ReelOverlay(
                 count = reel.repostCount,
                 contentDescription = stringResource(R.string.reels_repost),
                 onClick = onRepost,
+            )
+            ReelAction(
+                icon = if (reel.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                tint = if (reel.isBookmarked) MeeshyPalette.Warning else MeeshyPalette.White,
+                count = reel.bookmarkCount,
+                contentDescription = stringResource(
+                    if (reel.isBookmarked) R.string.reels_unbookmark else R.string.reels_bookmark,
+                ),
+                onClick = onBookmark,
             )
             ReelAction(
                 icon = Icons.Filled.Share,

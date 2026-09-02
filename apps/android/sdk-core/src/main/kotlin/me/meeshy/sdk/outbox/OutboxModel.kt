@@ -22,6 +22,10 @@ public enum class OutboxKind {
     SEND_FRIEND_REQUEST,
     PIN_MESSAGE,
     UNPIN_MESSAGE,
+    LIKE_POST,
+    UNLIKE_POST,
+    BOOKMARK_POST,
+    UNBOOKMARK_POST,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -114,6 +118,12 @@ public object OutboxLaneMap {
         OutboxKind.PIN_MESSAGE,
         OutboxKind.UNPIN_MESSAGE,
         -> OutboxLaneAssignment.Shared(OutboxLanes.PIN)
+
+        OutboxKind.LIKE_POST,
+        OutboxKind.UNLIKE_POST,
+        OutboxKind.BOOKMARK_POST,
+        OutboxKind.UNBOOKMARK_POST,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
     }
 
     /**

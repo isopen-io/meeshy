@@ -6,5 +6,7 @@
     <string name="reels_like">J\'aime</string>
     <string name="reels_comments">Commentaires</string>
     <string name="reels_repost">Reposter</string>
+    <string name="reels_bookmark">Enregistrer</string>
+    <string name="reels_unbookmark">Retirer l\'enregistrement</string>
     <string name="reels_share">Partager</string>
 </resources>

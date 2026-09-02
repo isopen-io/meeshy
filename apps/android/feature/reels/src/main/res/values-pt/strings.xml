@@ -6,5 +6,7 @@
     <string name="reels_like">Curtir</string>
     <string name="reels_comments">Comentários</string>
     <string name="reels_repost">Repostar</string>
+    <string name="reels_bookmark">Salvar</string>
+    <string name="reels_unbookmark">Remover salvo</string>
     <string name="reels_share">Compartilhar</string>
 </resources>
