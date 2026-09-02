@@ -209,11 +209,31 @@ extension StickerTemplateRenderer {
             let contrôle = Self.travelPoint(r, 0.20, 1.00)
             StickerTemplatePalette.surface.withAlphaComponent(0.80).setFill()
             for index in 0..<6 {
-                let t = CGFloat(index) / 5.0
-                let inverse = 1 - t
+                // **Les trois poids de la Bézier sont HISSÉS et TYPÉS** — la
+                // géométrie est identique, seule la façon de l'écrire change.
+                //
+                // Écrites en ligne, les deux coordonnées formaient chacune une
+                // somme de trois produits de trois à quatre facteurs mêlant
+                // `CGFloat` et le littéral `2`. Le vérificateur de types doit
+                // alors explorer les surcharges de `*` et `+` sur tout l'arbre,
+                // et le coût est combinatoire : il a dépassé sa limite sur le
+                // runner CI (`unable to type-check this expression in
+                // reasonable time`) alors que la même expression passait sur
+                // une machine plus rapide.
+                //
+                // C'est la seule classe d'erreur où « ça compile chez moi » est
+                // littéralement vrai et sans valeur : le verdict dépend d'un
+                // DÉLAI, donc de la machine. Un build local vert n'en garde
+                // aucune — seul un budget (`-warn-long-function-bodies`) le
+                // ferait, et il rougirait sur la machine la plus rapide.
+                let t: CGFloat = CGFloat(index) / 5.0
+                let inverse: CGFloat = 1 - t
+                let poidsDépart: CGFloat = inverse * inverse
+                let poidsContrôle: CGFloat = 2 * inverse * t
+                let poidsQueue: CGFloat = t * t
                 let position = CGPoint(
-                    x: inverse * inverse * départ.x + 2 * inverse * t * contrôle.x + t * t * queue.x,
-                    y: inverse * inverse * départ.y + 2 * inverse * t * contrôle.y + t * t * queue.y)
+                    x: poidsDépart * départ.x + poidsContrôle * contrôle.x + poidsQueue * queue.x,
+                    y: poidsDépart * départ.y + poidsContrôle * contrôle.y + poidsQueue * queue.y)
                 Self.travelDisc(center: position,
                                 radius: f.bord * (0.55 + 0.55 * t)).fill()
             }
