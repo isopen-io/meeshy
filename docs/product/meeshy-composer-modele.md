@@ -383,6 +383,63 @@ déjà, c'est **mélanger les deux dans une même phrase** — un doc-comment qu
 nomme `removedFromStatus` « ce que le profil MOOD retire » oblige son lecteur à
 traduire, et la traduction n'est écrite nulle part.
 
+**« décoration » et « gabarit » sont les mots du PRODUIT ; `sticker` et
+`template` ceux du CODE** — même forme que la frontière ci-dessus, et pas
+davantage une divergence à réduire.
+
+| où | le mot | pourquoi il ne bouge pas |
+|---|---|---|
+| kind, fil, type | **`sticker`** · **`template`** | `sticker` est l'un des sept `ACTIVE_KINDS` (`canvas-v3.ts:5`) ; `StickerTemplateCatalog` et `templateId` traversent le fil — les changer est une migration |
+| produit, UI, prose, issues | **« décoration »** · **« gabarit »** | c'est ce que l'auteur POSE et ce que la planche dessine |
+
+Ce qu'il ne faut pas faire est encore une fois de mélanger les deux dans une
+même phrase : « le sticker à gabarit » oblige son lecteur à traduire dans les
+deux sens à la fois.
+
+**Ce qu'une décoration EST, et la ligne qui décide où elle se pose.** Un gabarit
+est un cadre plus des FENTES (`slots`) — un dessin en code, pas un glyphe.
+Cette ligne de partage vit aujourd'hui dans un doc-comment
+(`StickerTemplate.swift`) ; elle est une RÈGLE, donc sa place est ici :
+
+> **Une FAMILLE d'objet de scène existe quand la plateforme LIT la donnée ;
+> sinon c'est un sticker avec un gabarit.**
+
+- un **lieu** porte des coordonnées et un id de POI que la plateforme lit
+  (`/posts/nearby`) ⇒ il reste un objet `place`, simplement DÉCORÉ ;
+- une heure figée, un cœur ⇒ un objet `sticker` de nature gabarit.
+
+Tout mettre en sticker ferait de la pastille de lieu décorée la JUMELLE de
+l'objet `place`, dont une seule des deux porterait la donnée géographique. Et
+une famille par thème (`time`, `love`, `weather`…) rouvrirait les cascades que
+la somme à cinq cas a fermées (#4591).
+
+**Un catalogue, DEUX portes — et c'est délibéré.** Le même
+`StickerTemplateCatalog` est adressé par deux champs qui ne disent pas la même
+chose :
+
+| champ | porteur | la relation |
+|---|---|---|
+| `templateId` | objet `sticker` | l'objet **EST** ce gabarit |
+| `styleId` | objet `place` | l'objet **est DÉCORÉ PAR** ce gabarit |
+
+Les unifier par un renommage effacerait précisément la distinction qui justifie
+que le lieu garde sa famille. Sur un sticker, le RANG décide : `templateId` gagne
+sur `postMediaId`, qui gagne sur l'emoji.
+
+**Le repli voyage TOUJOURS avec la chose dont il est le repli.** Le catalogue est
+une constante du binaire : un id inconnu — publié par une version plus récente,
+ou lu par un client qui ne dessine aucun gabarit — retombe sur un repli
+(l'emoji pour un sticker, la pastille de base pour un lieu) plutôt que sur un
+trou. Web et Android ne dessinent aucun gabarit et servent ce repli : c'est la
+règle COMPAT 1, déclarée par #4819 et #4821, pas un oubli.
+
+> Mais **un repli conservé SANS la chose dont il est le repli n'est plus un
+> repli : c'est le contenu.** Trois fois en deux jours, un champ de gabarit a
+> été perdu par un convertisseur pendant que son repli, lui, voyageait
+> soigneusement (#4741, #4832). Et la perte est d'autant plus invisible que le
+> repli est bon : un `styleId` absent rend `location.pill`, donc le seul gabarit
+> qui survivait à l'aller-retour était celui qui SERT de repli.
+
 **« Meeshes » est un terme de communication COMMERCIALE, jamais un nom du modèle**
 (arbitrage porteur, 2026-09-01, #4757). Il désigne les publications de type story,
 réel et post — **sans les moods** —, et c'est précisément pourquoi il ne peut pas
