@@ -72,6 +72,7 @@ extension StickerPickerView {
         switch family {
         case .time:  return StickerSlotFiller.timeSlots(at: openedAt)
         case .love:  return StickerSlotFiller.dateSlots(at: openedAt)
+        case .weather: return [:]
         case .location:
             guard let lieu = currentPlace else { return [:] }
             return StickerSlotFiller.placeSlots(for: lieu)
@@ -164,51 +165,13 @@ extension StickerPickerView {
         return "\(nom) — \(valeurs.joined(separator: ", "))"
     }
 
-    /// Les noms des neuf gabarits. Des clés LITTÉRALES, une par gabarit : une
-    /// clé construite dynamiquement serait invisible au catalogue de chaînes,
-    /// donc jamais traduite.
+    /// Le nom d'un gabarit — celui que son DESSINATEUR déclare, à côté de son
+    /// dessin (`StickerTemplateDrawer.name`). Un id inconnu de ce binaire
+    /// (publié par une version plus récente) reçoit le libellé générique.
     static func templateName(_ id: String) -> String {
-        switch id {
-        case StickerTemplateCatalog.ID.locationPill:
-            return String(localized: "sticker.template.location.pill",
-                          defaultValue: "Pastille", bundle: .module)
-        case StickerTemplateCatalog.ID.locationPostcard:
-            return String(localized: "sticker.template.location.postcard",
-                          defaultValue: "Carte postale", bundle: .module)
-        case StickerTemplateCatalog.ID.locationTicket:
-            return String(localized: "sticker.template.location.ticket",
-                          defaultValue: "Étiquette", bundle: .module)
-        case StickerTemplateCatalog.ID.locationStamp:
-            return String(localized: "sticker.template.location.stamp",
-                          defaultValue: "Timbre", bundle: .module)
-        case StickerTemplateCatalog.ID.locationCompass:
-            return String(localized: "sticker.template.location.compass",
-                          defaultValue: "Boussole", bundle: .module)
-        case StickerTemplateCatalog.ID.locationMarquee:
-            return String(localized: "sticker.template.location.marquee",
-                          defaultValue: "Enseigne", bundle: .module)
-        case StickerTemplateCatalog.ID.timeDigital:
-            return String(localized: "sticker.template.time.digital",
-                          defaultValue: "Heure numérique", bundle: .module)
-        case StickerTemplateCatalog.ID.timeAnalog:
-            return String(localized: "sticker.template.time.analog",
-                          defaultValue: "Cadran", bundle: .module)
-        case StickerTemplateCatalog.ID.timeRibbon:
-            return String(localized: "sticker.template.time.ribbon",
-                          defaultValue: "Ruban", bundle: .module)
-        case StickerTemplateCatalog.ID.loveHeartFrame:
-            return String(localized: "sticker.template.love.heartFrame",
-                          defaultValue: "Cœur", bundle: .module)
-        case StickerTemplateCatalog.ID.loveDoubleHeart:
-            return String(localized: "sticker.template.love.doubleHeart",
-                          defaultValue: "Deux cœurs", bundle: .module)
-        case StickerTemplateCatalog.ID.loveSince:
-            return String(localized: "sticker.template.love.sinceName",
-                          defaultValue: "Depuis le", bundle: .module)
-        default:
-            return String(localized: "sticker.template.unknown",
-                          defaultValue: "Décoration", bundle: .module)
-        }
+        StickerTemplateRenderer.drawer(for: id)?.name()
+            ?? String(localized: "sticker.template.unknown",
+                      defaultValue: "Décoration", bundle: .module)
     }
 }
 

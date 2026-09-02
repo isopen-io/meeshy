@@ -41,10 +41,33 @@ final class StickerTemplateRendererTests: XCTestCase {
                     StickerSlotFiller.minuteSlot: "32"]
         case .love:
             return [StickerSlotFiller.dateSlot: "1 septembre 2026"]
+        case .weather:
+            return [:]
         }
     }
 
     // MARK: - La garde qui relie le CATALOGUE au DESSIN
+
+    /// **Le registre et le catalogue sont deux listes du MÊME ensemble**
+    /// (#4820). Un gabarit catalogué sans dessinateur rendrait son repli ; un
+    /// dessinateur sans gabarit serait du code mort que rien n'atteint.
+    func test_everyDrawer_hasItsTemplate_andEveryTemplate_itsDrawer() {
+        let catalogués = Set(StickerTemplateCatalog.all.map(\.id))
+        let dessinables = StickerTemplateRenderer.drawableTemplateIDs
+        XCTAssertEqual(catalogués.subtracting(dessinables), [],
+                       "gabarits catalogués sans dessinateur")
+        XCTAssertEqual(dessinables.subtracting(catalogués), [],
+                       "dessinateurs sans gabarit au catalogue")
+    }
+
+    /// Chaque dessinateur porte le NOM que la palette et VoiceOver disent —
+    /// et il n'est jamais le libellé générique réservé à l'inconnu.
+    func test_everyDrawer_namesItself() {
+        for gabarit in StickerTemplateCatalog.all {
+            let nom = StickerTemplateRenderer.drawer(for: gabarit.id)?.name() ?? ""
+            XCTAssertFalse(nom.isEmpty, "\(gabarit.id) — dessinateur sans nom")
+        }
+    }
 
     /// **Un gabarit CATALOGUÉ doit être DESSINÉ.**
     ///
@@ -108,7 +131,8 @@ final class StickerTemplateRendererTests: XCTestCase {
             }
             rendus[gabarit.id] = png
         }
-        XCTAssertEqual(rendus.count, 6, "six pastilles de lieu attendues")
+        XCTAssertEqual(rendus.count, StickerTemplateCatalog.templates(family: .location).count,
+                       "chaque pastille de lieu cataloguée doit se dessiner")
     }
 
     /// Et elles ne se distinguent pas seulement par leur contenu : leurs

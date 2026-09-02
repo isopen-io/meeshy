@@ -13,6 +13,12 @@ function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
 }
 
+function isStringMap(v: unknown): v is Record<string, string> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
+    && Object.keys(v as Record<string, unknown>).length > 0;
+}
+
 function isPivot(v: unknown): v is { x: number; y: number } {
   return typeof v === 'object' && v !== null
     && typeof (v as { x?: unknown }).x === 'number'
@@ -152,7 +158,15 @@ export function convertV1ToV3(
       emoji: st.emoji,
       ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
       ...(str(st.provider) ? { provider: st.provider } : {}),
+      // `templateId`/`slots` : une DÉCORATION (#4716) porte un gabarit et ses
+      // valeurs figées à la pose. Même défaut que `postMediaId` ci-dessus, même
+      // correctif (#4819) : les reconstruire ici, sinon un cadran d'heure qui
+      // traverse le serveur ressort en « 🕐 ».
+      ...(str(st.templateId) ? { templateId: st.templateId } : {}),
+      ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
+      ...(str(st.animation) ? { animation: st.animation } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
+      ...(typeof st.duration === 'number' ? { duration: st.duration } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
       ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
       ...(typeof st.fadeOut === 'number' ? { fadeOut: st.fadeOut } : {}),

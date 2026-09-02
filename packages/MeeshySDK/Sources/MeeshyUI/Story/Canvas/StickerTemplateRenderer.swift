@@ -129,7 +129,8 @@ public struct StickerTemplateMetrics: Equatable, Sendable {
 
 // MARK: - Sticker Template Renderer
 
-/// **Le dessin des gabarits — un seul chemin, pas deux** (#4717).
+/// **Le dessin des gabarits — un seul chemin, pas deux** (#4717), servi par un
+/// REGISTRE de dessinateurs (#4820).
 ///
 /// ## Pourquoi MESURER et DESSINER sont deux fonctions
 ///
@@ -146,39 +147,41 @@ public struct StickerTemplateMetrics: Equatable, Sendable {
 /// gabarit ici imposerait le même repli aux deux, et l'un des deux serait faux.
 public enum StickerTemplateRenderer {
 
+    // MARK: Le registre
+
+    /// **Tous les dessinateurs, indexés par id de gabarit** — agrégés depuis
+    /// les familles, chacune déclarée dans son propre fichier
+    /// (`StickerTemplates+<Famille>.swift`).
+    ///
+    /// L'ordre d'agrégation n'a pas de sens produit ; deux dessinateurs pour un
+    /// même id seraient une erreur d'inventaire, que le témoin
+    /// `everyDrawer_hasItsTemplate_andEveryTemplate_itsDrawer` attrape. Ici on
+    /// garde le PREMIER plutôt que de planter : une palette qui s'ouvre avec un
+    /// doublon vaut mieux qu'une app qui ne s'ouvre pas.
+    static let registry: [String: StickerTemplateDrawer] = {
+        let familles = locationDrawers + timeDrawers + loveDrawers
+        return Dictionary(familles.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
+    }()
+
+    /// Le dessinateur d'un gabarit, ou `nil` s'il est inconnu de ce binaire.
+    @MainActor
+    public static func drawer(for templateID: String) -> StickerTemplateDrawer? {
+        registry[templateID]
+    }
+
+    /// Les ids que ce binaire sait dessiner — pour les gardes d'inventaire.
+    @MainActor
+    public static var drawableTemplateIDs: Set<String> { Set(registry.keys) }
+
+    // MARK: Les deux entrées
+
     /// La taille qu'occupera le gabarit, sans le rasteriser.
     @MainActor
     public static func measuredSize(templateID: String,
                                     slots: [String: String],
                                     metrics: StickerTemplateMetrics) -> CGSize? {
-        switch templateID {
-        case StickerTemplateCatalog.ID.locationPill:
-            return pillSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.locationPostcard:
-            return postcardSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.locationTicket:
-            return ticketSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.locationStamp:
-            return stampSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.locationCompass:
-            return compassSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.locationMarquee:
-            return marqueeSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.timeDigital:
-            return digitalSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.timeAnalog:
-            return analogSize(metrics: metrics)
-        case StickerTemplateCatalog.ID.timeRibbon:
-            return ribbonSize(slots: slots, metrics: metrics)
-        case StickerTemplateCatalog.ID.loveHeartFrame:
-            return heartFrameSize(metrics: metrics)
-        case StickerTemplateCatalog.ID.loveDoubleHeart:
-            return doubleHeartSize(metrics: metrics)
-        case StickerTemplateCatalog.ID.loveSince:
-            return sinceSize(slots: slots, metrics: metrics)
-        default:
-            return nil
-        }
+        guard let dessinateur = drawer(for: templateID) else { return nil }
+        return dessinateur.measure(slots, metrics)
     }
 
     /// Le gabarit rasterisé, prêt pour `CALayer.contents`.
@@ -192,33 +195,7 @@ public enum StickerTemplateRenderer {
                              slots: [String: String],
                              metrics: StickerTemplateMetrics,
                              screenScale: CGFloat) -> (UIImage?, CGSize)? {
-        switch templateID {
-        case StickerTemplateCatalog.ID.locationPill:
-            return pillImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.locationPostcard:
-            return postcardImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.locationTicket:
-            return ticketImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.locationStamp:
-            return stampImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.locationCompass:
-            return compassImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.locationMarquee:
-            return marqueeImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.timeDigital:
-            return digitalImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.timeAnalog:
-            return analogImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.timeRibbon:
-            return ribbonImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.loveHeartFrame:
-            return heartFrameImage(metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.loveDoubleHeart:
-            return doubleHeartImage(metrics: metrics, screenScale: screenScale)
-        case StickerTemplateCatalog.ID.loveSince:
-            return sinceImage(slots: slots, metrics: metrics, screenScale: screenScale)
-        default:
-            return nil
-        }
+        guard let dessinateur = drawer(for: templateID) else { return nil }
+        return dessinateur.draw(slots, metrics, screenScale)
     }
 }

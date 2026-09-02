@@ -27,6 +27,33 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(sticker?.payload.emoji).toBe('🖼️');
   });
 
+  it('transporte le gabarit et les valeurs figées d\'une décoration (#4819)', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        { id: 's1', emoji: '🕐', x: 0.5, y: 0.5, templateId: 'time.analog',
+          slots: { time: '14:32', hour: '14', minute: '32' }, duration: 3.5, animation: 'pulse' },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('time.analog');
+    expect(sticker?.payload.slots).toEqual({ time: '14:32', hour: '14', minute: '32' });
+    expect(sticker?.payload.duration).toBe(3.5);
+    expect(sticker?.payload.animation).toBe('pulse');
+  });
+
+  it('ignore des emplacements qui ne sont pas des chaînes', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        { id: 's1', emoji: '🕐', x: 0.5, y: 0.5, templateId: 'time.analog', slots: { hour: 14 } },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('time.analog');
+    expect(sticker?.payload.slots).toBeUndefined();
+  });
+
   it('n\'invente aucune clé sur un sticker emoji seul', () => {
     const doc = convertV1ToV3({
       stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],

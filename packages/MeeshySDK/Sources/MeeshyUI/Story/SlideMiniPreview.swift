@@ -286,8 +286,13 @@ struct SlideMiniPreview: View {
                     .position(x: CGFloat(sticker.x) * size.width,
                               y: CGFloat(sticker.y) * size.height)
             } else {
+                // La MÊME règle de taille que la scène, le composite et
+                // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la
+                // vignette ignorait `baseSize` et la largeur de scène.
                 Text(sticker.wireEmoji)
-                    .font(.system(size: max(3, CGFloat(sticker.scale) * 4)))
+                    .font(.system(size: CanvasGeometry.stickerFontSize(
+                        baseSize: sticker.baseSize, scale: sticker.scale,
+                        canvasWidth: size.width)))
                     .rotationEffect(.degrees(Double(sticker.rotation)))
                     .position(x: CGFloat(sticker.x) * size.width,
                               y: CGFloat(sticker.y) * size.height)
