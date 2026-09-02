@@ -1600,7 +1600,14 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
-                    .opacity(contentOpacity)
+                    // Déplier la légende EFFACE la scène pour laisser remonter
+                    // le fond ThumbHash déjà monté sous elle (Layer 1.5) — ou,
+                    // sans média, la couleur de fond de la story. Multiplié
+                    // avec `contentOpacity` : les deux répondent à « combien de
+                    // cette scène voit-on ? » et se cumulent.
+                    .opacity(contentOpacity
+                             * CaptionExpansionSpace.storySceneOpacity(captionExpanded: isCaptionExpanded))
+                    .animation(.easeInOut(duration: 0.22), value: isCaptionExpanded)
                     .offset(x: openingSlideFraction * canvasFitSize.width,
                             y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -1641,8 +1648,6 @@ struct StoryCardView: View {
                     // Le flou est posé APRÈS l'ombre et le cadrage : il porte
                     // sur la carte telle qu'elle est rendue, coins compris, et
                     // ne déborde donc pas de son clip.
-                    .blur(radius: CaptionExpansionSpace.storySceneBlurRadius(captionExpanded: isCaptionExpanded))
-                    .animation(.easeInOut(duration: 0.2), value: isCaptionExpanded)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1771,7 +1776,11 @@ struct StoryCardView: View {
                     viewport: geometry.size,
                     ratio: readerCanvasRatio,
                     scale: readerCanvasFraming.scale))
-                .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
+                // **La légende garde sa position** (directive porteur 2026-09-02) : elle
+                // MONTE depuis là où elle est, elle ne descend pas au bas de
+                // l'écran. La marge basse était annulée au dépliage — le texte
+                // changeait donc de place au moment où on demandait à en voir plus.
+                .padding(.bottom, topInset + 130)
                 .transition(.opacity)
                 // **L'invite doit recevoir le doigt** (#4762, mesuré au
                 // simulateur le 2026-09-02).

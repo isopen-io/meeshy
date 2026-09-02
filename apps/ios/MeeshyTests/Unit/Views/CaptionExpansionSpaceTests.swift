@@ -23,13 +23,16 @@ final class CaptionExpansionSpaceTests: XCTestCase {
 
     // MARK: La story — la scène recule, rien ne se cache
 
-    func test_storyAuRepos_aucunFlou() {
-        XCTAssertEqual(CaptionExpansionSpace.storySceneBlurRadius(captionExpanded: false), 0,
-            "Un flou permanent ferait payer à toute lecture le coût d'un geste que personne n'a fait.")
+    func test_storyAuRepos_laSceneEstPLEINE() {
+        XCTAssertEqual(CaptionExpansionSpace.storySceneOpacity(captionExpanded: false), 1,
+            "Au repos la scène se voit entière — rien ne se paie tant que personne n'a demandé à lire.")
     }
 
-    func test_storyDepliee_laSceneSeFloute() {
-        XCTAssertGreaterThan(CaptionExpansionSpace.storySceneBlurRadius(captionExpanded: true), 0)
+    func test_storyDepliee_laSceneSEFFACE_sansDisparaitre() {
+        let o = CaptionExpansionSpace.storySceneOpacity(captionExpanded: true)
+        XCTAssertLessThan(o, 1, "La scène doit s'effacer pour laisser remonter le fond naturel.")
+        XCTAssertGreaterThan(o, 0,
+            "Elle s'efface, elle ne DISPARAÎT pas : on doit encore deviner ce qu'on lisait.")
     }
 
     /// Le témoin qui dit la DIFFÉRENCE, et pas seulement les deux valeurs :
@@ -39,7 +42,7 @@ final class CaptionExpansionSpaceTests: XCTestCase {
         let depliee = true
         XCTAssertFalse(CaptionExpansionSpace.showsAuthorDetails(captionExpanded: depliee),
             "Plein écran : on cache.")
-        XCTAssertGreaterThan(CaptionExpansionSpace.storySceneBlurRadius(captionExpanded: depliee), 0,
-            "Story : on floute — et on ne cache rien.")
+        XCTAssertLessThan(CaptionExpansionSpace.storySceneOpacity(captionExpanded: depliee), 1,
+            "Story : la scène s'efface — et on ne cache rien.")
     }
 }
