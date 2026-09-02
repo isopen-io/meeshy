@@ -547,7 +547,10 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
     resultatsDesTours.push({ tour, arret: 'prerequis manquant', blocage: cadrage.blocage, etat: cadrage.etat })
     break
   }
-  const choisis = (cadrage.travaux || []).slice(0, PLAFOND)
+  // `sauter` : les cles a REPORTER au tour suivant (le porteur veut livrer plus tot ce qui est pret).
+  const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter.filter((c) => typeof c === 'string') : [])
+  const choisis = (cadrage.travaux || []).slice(0, PLAFOND).filter((t) => !SAUTER.has(t.cle))
+  if (SAUTER.size) log(`Reportes au tour suivant : ${[...SAUTER].join(', ')}`)
   const rang = (cle) => { const i = DABORD.indexOf(cle); return i === -1 ? DABORD.length : i }
   const travaux = [...choisis].sort((a, b) => rang(a.cle) - rang(b.cle))
   if (!travaux.length) {
