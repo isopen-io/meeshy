@@ -33,6 +33,28 @@ internal fun headlineText(headline: BannerHeadline): String = when (headline) {
 }
 
 /**
+ * What [NotificationBannerHost] shows once the recipient's own preview toggle
+ * (`UserNotificationPreferences.showPreview`) is applied — mirrors the gateway's
+ * `showPreview:false` substitution for the PUSH banner
+ * (`NotificationService.pushMessage` / `pushReproducedNotification`, both drop every
+ * content-bearing field and replace the body with a generic localized string). This client must
+ * reproduce that substitution itself: `notification:new` (the socket event
+ * [NotificationBannerViewModel] renders) carries the FULL content unconditionally — the
+ * gateway's substitution only ever gated the PUSH payload, never the socket one.
+ *
+ * Only content fields are cleared — [BannerHeadline] (sender identity) is untouched, exactly as
+ * on the gateway: `showSenderName` gates the title independently of `showPreview` gating the
+ * body, and this function does not decide `showSenderName`.
+ */
+internal fun NotificationBannerPresentation.appliedPreviewSetting(
+    showPreview: Boolean,
+): NotificationBannerPresentation = if (showPreview) {
+    this
+} else {
+    copy(body = null, mediaSummary = null, reactionBadge = null, thumbnailUrl = null)
+}
+
+/**
  * The body, or failing that a translated media summary — order matters: a content with text shows
  * it, a content without at least says what kind of media it is.
  */

@@ -13,9 +13,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.notifications.R
 import me.meeshy.ui.component.MeeshyNotificationToast
 
 /**
@@ -58,7 +60,11 @@ fun NotificationBannerHost(
             banner?.let { shown ->
                 MeeshyNotificationToast(
                     senderName = headlineText(shown.presentation.headline),
-                    title = presentationBodyText(shown.presentation) ?: "",
+                    title = if (shown.previewHidden) {
+                        stringResource(R.string.notification_banner_preview_hidden)
+                    } else {
+                        presentationBodyText(shown.presentation) ?: ""
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     avatarName = shown.avatarName,
                     onTap = {

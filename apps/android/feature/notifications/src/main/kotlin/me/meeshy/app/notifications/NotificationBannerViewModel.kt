@@ -32,6 +32,14 @@ data class InAppBanner(
     val avatarUrl: String?,
     val conversationId: String?,
     val postId: String?,
+    /**
+     * `UserNotificationPreferences.showPreview` coupé (#4818) : [presentation] a déjà son
+     * contenu masqué ([NotificationBannerPresentation.appliedPreviewSetting]), et ce drapeau
+     * dit à [NotificationBannerHost] de peindre le libellé générique à la place — un `body`
+     * naturellement vide (headline de relation, contenu sans texte) ne doit PAS déclencher
+     * le même libellé, d'où le drapeau explicite plutôt qu'une inférence sur `body == null`.
+     */
+    val previewHidden: Boolean = false,
 )
 
 /**
@@ -133,12 +141,13 @@ class NotificationBannerViewModel @Inject constructor(
     private suspend fun handle(notification: ApiNotification) {
         val admit = dedupWindow.admit(notification.id, clock.nowMillis())
         dedupWindow = admit.window
+        val prefs = preferencesStore.preferences.value
         val decision = NotificationToastPolicy.decide(
             notification = notification,
             activeConversationId = activeConversationId,
             activePostId = activePostId,
             isDuplicateDelivery = admit.isDuplicate,
-            preferences = preferencesStore.preferences.value,
+            preferences = prefs,
             now = clock.localDateTime(),
         )
         val shown = (decision as? NotificationToastDecision.Show)?.notification ?: return
@@ -162,12 +171,13 @@ class NotificationBannerViewModel @Inject constructor(
                 ),
                 isDirect = (conversation?.type ?: shown.context?.conversationType)
                     .equals("direct", ignoreCase = true),
-            ),
+            ).appliedPreviewSetting(showPreview = prefs.showPreview),
             avatarName = shown.actor?.displayName?.takeIf { it.isNotBlank() }
                 ?: shown.actor?.username.orEmpty(),
             avatarUrl = shown.actor?.avatar ?: shown.context?.conversationAvatar,
             conversationId = conversationId,
             postId = shown.context?.postId ?: shown.metadata?.postId,
+            previewHidden = !prefs.showPreview,
         )
         dismissJob = viewModelScope.launch {
             delay(VISIBLE_MS)

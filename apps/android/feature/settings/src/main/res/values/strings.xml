@@ -30,6 +30,10 @@
     <string name="settings_new_message_notifications">New messages</string>
     <string name="settings_notification_sound">Sound</string>
     <string name="settings_notification_vibration">Vibration</string>
+    <string name="settings_notif_show_preview">Message preview</string>
+    <string name="settings_notif_show_sender_name">Sender name</string>
+    <string name="settings_notif_group_notifications">Group notifications</string>
+    <string name="settings_notif_badge_enabled">App icon badge</string>
     <string name="settings_dnd">Do Not Disturb</string>
     <string name="settings_dnd_start">From</string>
     <string name="settings_dnd_end">Until</string>

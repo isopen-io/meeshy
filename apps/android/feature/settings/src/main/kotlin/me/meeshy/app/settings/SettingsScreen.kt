@@ -254,6 +254,31 @@ fun SettingsScreen(
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setVibrationEnabled,
                 )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_preview),
+                    checked = notifications.showPreview,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowPreview,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_sender_name),
+                    checked = notifications.showSenderName,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowSenderName,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_group_notifications),
+                    checked = notifications.groupNotifications,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setGroupNotifications,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_badge_enabled),
+                    checked = notifications.notificationBadgeEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setNotificationBadgeEnabled,
+                )
                 DndScheduleRows(
                     notifications = notifications,
                     onSetEnabled = viewModel::setDndEnabled,

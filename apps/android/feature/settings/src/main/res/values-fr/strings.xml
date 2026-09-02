@@ -30,6 +30,10 @@
     <string name="settings_new_message_notifications">Nouveaux messages</string>
     <string name="settings_notification_sound">Son</string>
     <string name="settings_notification_vibration">Vibration</string>
+    <string name="settings_notif_show_preview">Aperçu des messages</string>
+    <string name="settings_notif_show_sender_name">Nom de l\'expéditeur</string>
+    <string name="settings_notif_group_notifications">Regrouper les notifications</string>
+    <string name="settings_notif_badge_enabled">Badge de l\'application</string>
     <string name="settings_dnd">Ne pas déranger</string>
     <string name="settings_dnd_start">De</string>
     <string name="settings_dnd_end">À</string>
