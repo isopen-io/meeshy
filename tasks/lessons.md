@@ -23568,7 +23568,7 @@ Deux notes de méthode :
   connecté. Le témoin le dit maintenant dans son doc-comment, pour que le rouge
   du jour-là se lise comme une attente et non comme une panne.
 
-## Leçon 419 — Deux valeurs correctement calculées, non consultées ensemble : la forme dominante d'une nuit
+## Leçon 421 — Deux valeurs correctement calculées, non consultées ensemble : la forme dominante d'une nuit
 
 Trois défauts trouvés en quelques heures sur le composer, par trois sessions, avec
 la MÊME structure — et aucun ne rougissait nulle part, parce que **chaque moitié
