@@ -194,6 +194,37 @@ nonisolated struct BubbleContent: Equatable {
         let linkRules: JoinNoticeMetadata.LinkRules?
     }
 
+    /// **Ce qu'un sticker de conversation DESSINE** (#4823) — la projection en
+    /// primitifs de `MessageSticker`, pour que `BubbleSticker` reste une
+    /// feuille `Equatable` sans lire `MeeshyMessage`.
+    ///
+    /// Le PNG rendu par l'expéditeur voyage en pièce jointe image ORDINAIRE :
+    /// c'est le REPLI d'un lecteur qui ne sait pas dessiner le gabarit. Il est
+    /// projeté ici en `Picture` — et non transporté en `MeeshyMessageAttachment`,
+    /// qui n'est pas `Equatable` — puis EXCLU de `attachments` par le builder,
+    /// sinon la grille visuelle le rendrait une seconde fois sous le sticker.
+    struct Sticker: Equatable {
+        /// La pièce jointe PNG, réduite à ce que `ProgressiveCachedImage` lit.
+        struct Picture: Equatable {
+            let attachmentId: String
+            let fileUrl: String
+            let thumbnailUrl: String?
+            let thumbHash: String?
+            let thumbnailColor: String
+        }
+
+        /// Gabarit du `StickerTemplateCatalog`. `nil` ou vide = sticker emoji.
+        let templateId: String?
+        /// Les valeurs FIGÉES des emplacements du gabarit.
+        let slots: [String: String]
+        /// Le mouvement de la décoration — `nil` = immobile.
+        let animation: StickerAnimation?
+        /// L'emoji du sticker, ou le repli d'un gabarit.
+        let emoji: String?
+        /// Le PNG rendu par l'expéditeur, s'il est arrivé.
+        let picture: Picture?
+    }
+
     let messageId: String
     let kind: Kind
     let text: Text?
@@ -228,6 +259,14 @@ nonisolated struct BubbleContent: Equatable {
     /// "member-joined"`). Quand nil, un `.system` retombe sur la notice
     /// centrée ordinaire.
     let joinNotice: JoinNotice?
+    /// Présent pour un message-sticker RENDABLE (`message.sticker?.ifRenderable`).
+    /// Quand non nil, `ThemedMessageBubble` monte `BubbleSticker` à la place
+    /// de la bulle standard — sans chrome, comme un emoji libre.
+    ///
+    /// `var … = nil` et non `let` : l'init memberwise sert encore une dizaine
+    /// de témoins (`Unit/Focal/*`) qui énumèrent chaque champ ; une valeur par
+    /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
+    var sticker: Sticker? = nil
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
@@ -309,5 +348,6 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.senderName == rhs.senderName
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
+            && lhs.sticker == rhs.sticker
     }
 }

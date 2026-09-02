@@ -196,7 +196,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // 34 noms avec la méthode de `lineCount(of:)`, jamais soustrait — les 298
     // lignes déplacées expliquent 298 des 71 443, et le reste du cumul est
     // celui du jour, pas celui d'un commentaire.
-    private static let legacyLineCeiling = 71_145
+    //
+    // #4823 (sticker de conversation, moitié ENVOI) — 71 145 → 70 853 (−292).
+    // Le lot devait AJOUTER à deux fichiers de la dette : `sendMessage` et
+    // `insertOptimisticMediaMessage` (`ConversationViewModel.swift`) pour
+    // propager `sticker` + encoder `stickerJson`, et `ConversationComposerState`
+    // (`ConversationView.swift`) pour la porte de présentation de la palette.
+    // Extraire d'abord : le saut vers un message hors fenêtre part chez lui
+    // (`ConversationViewModel+JumpToMessage.swift`, 198 lignes) et l'état du
+    // composer aussi (`ConversationComposerState.swift`, 147 lignes). Les deux
+    // hôtes RESTENT en dette (4 833 et 2 896) ; le plafond suit le cumul
+    // REMESURÉ sur les 34 noms avec la méthode de `lineCount(of:)` — les
+    // lignes ajoutées ne se soustraient pas de tête, elles se mesurent.
+    private static let legacyLineCeiling = 70_853
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

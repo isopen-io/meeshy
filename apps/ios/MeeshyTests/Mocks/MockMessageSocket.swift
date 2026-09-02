@@ -110,6 +110,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     /// Dernier lieu partagé transmis au repli socket (Lot 2 — chaîne
     /// d'écriture du lieu) ; nil quand le message n'en portait pas.
     var lastSendViaSocketFallbackLocation: SharedPlace?
+    /// Dernier sticker transmis au repli socket (#4823) ; nil quand le message
+    /// n'en portait pas.
+    var lastSendViaSocketFallbackSticker: MessageSticker?
     var callInitiateCallCount = 0
     var callInitiateResult: Result<MessageSocketManager.CallInitiateAck, Error> = .success(
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
@@ -193,6 +196,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastSendViaSocketFallbackAttachmentIds = attachmentIds
         lastSendViaSocketFallbackIsEncrypted = isEncrypted
         lastSendViaSocketFallbackLocation = location
+        lastSendViaSocketFallbackSticker = sticker
         return sendViaSocketFallbackResult
     }
 
@@ -342,6 +346,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastSendViaSocketFallbackAttachmentIds = nil
         lastSendViaSocketFallbackIsEncrypted = nil
         lastSendViaSocketFallbackLocation = nil
+        lastSendViaSocketFallbackSticker = nil
         callInitiateCallCount = 0
         callJoinCallCount = 0
         callLeaveCallCount = 0
