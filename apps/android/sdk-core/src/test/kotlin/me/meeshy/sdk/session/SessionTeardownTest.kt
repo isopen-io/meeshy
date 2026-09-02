@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiNotification
@@ -65,6 +66,7 @@ class SessionTeardownTest {
         storyDraftStore: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
         friendshipCache: FriendshipCache = FriendshipCache(),
         notificationRepository: NotificationRepository = NotificationRepository(mockk(relaxed = true)),
+        blockCache: BlockCache = BlockCache(),
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -73,6 +75,7 @@ class SessionTeardownTest {
         storyDraftStore,
         friendshipCache,
         notificationRepository,
+        blockCache,
     )
 
     private fun composerDraft() = StoryComposerDraftSnapshot(
@@ -161,6 +164,18 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_clearsTheBlockCache() = runTest {
+        val blockCache = BlockCache()
+        blockCache.setBlocked("bob", blocked = true)
+        assertThat(blockCache.isBlocked("bob")).isTrue()
+
+        teardown(blockCache = blockCache).wipe()
+
+        assertThat(blockCache.isBlocked("bob")).isFalse()
+        assertThat(blockCache.blockedCount).isEqualTo(0)
+    }
+
+    @Test
     fun wipe_isIdempotentOnAnAlreadyClearDevice() = runTest {
         val categoryStore = InMemoryCategorySnapshotStore()
         val draftStore = InMemoryConversationDraftStore()
@@ -168,6 +183,7 @@ class SessionTeardownTest {
         val storyDraftStore = InMemoryStoryComposerDraftStore()
         val friendshipCache = FriendshipCache()
         val notificationRepository = NotificationRepository(mockk(relaxed = true))
+        val blockCache = BlockCache()
         val instance = teardown(
             categoryStore = categoryStore,
             draftStore = draftStore,
@@ -175,6 +191,7 @@ class SessionTeardownTest {
             storyDraftStore = storyDraftStore,
             friendshipCache = friendshipCache,
             notificationRepository = notificationRepository,
+            blockCache = blockCache,
         )
 
         instance.wipe()
@@ -188,5 +205,6 @@ class SessionTeardownTest {
         assertThat(storyDraftStore.load()).isNull()
         assertThat(friendshipCache.pendingReceivedCount).isEqualTo(0)
         assertThat(notificationRepository.unreadCountStream.value).isEqualTo(0)
+        assertThat(blockCache.blockedCount).isEqualTo(0)
     }
 }

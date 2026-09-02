@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.notification.NotificationRepository
@@ -19,11 +20,11 @@ import me.meeshy.sdk.story.StoryComposerDraftStore
  * messages, stories, categories, unsent chat drafts, an in-progress story composer
  * draft, conversation-lock PINs (same reasoning as iOS's own
  * `ConversationLockManager.resetForLogout`) — and, in-memory, the previous
- * account's friendship graph ([FriendshipCache]) and notifications
- * ([NotificationRepository]): both are process-wide `@Singleton`s, so without an
- * explicit clear here a second account signing in on the SAME process would see
- * the first account's pending friend requests and unread notifications until it
- * happened to revalidate them.
+ * account's friendship graph ([FriendshipCache]), blocklist ([BlockCache]) and
+ * notifications ([NotificationRepository]): all three are process-wide
+ * `@Singleton`s, so without an explicit clear here a second account signing in
+ * on the SAME process would see the first account's pending friend requests,
+ * blocked users and unread notifications until it happened to revalidate them.
  *
  * [wipe] is called by [me.meeshy.sdk.auth.AuthRepository.logout] before the caller
  * treats the session as ended, so a subsequent login never races a still-running
@@ -44,6 +45,7 @@ public class DefaultSessionTeardown(
     private val storyComposerDraftStore: StoryComposerDraftStore,
     private val friendshipCache: FriendshipCache,
     private val notificationRepository: NotificationRepository,
+    private val blockCache: BlockCache,
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -55,5 +57,6 @@ public class DefaultSessionTeardown(
         storyComposerDraftStore.clear()
         friendshipCache.clear()
         notificationRepository.clear()
+        blockCache.clear()
     }
 }

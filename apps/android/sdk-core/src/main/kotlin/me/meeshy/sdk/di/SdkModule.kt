@@ -25,6 +25,7 @@ import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.SharedPrefsLocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.SharedPrefsStarredMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
 import me.meeshy.sdk.language.InterfaceLanguageStore
@@ -270,6 +271,7 @@ object SdkModule {
         storyComposerDraftStore: StoryComposerDraftStore,
         friendshipCache: FriendshipCache,
         notificationRepository: NotificationRepository,
+        blockCache: BlockCache,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -279,6 +281,7 @@ object SdkModule {
             storyComposerDraftStore,
             friendshipCache,
             notificationRepository,
+            blockCache,
         )
 
     @Provides
