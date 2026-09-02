@@ -13,6 +13,7 @@
     <string name="settings_section_chats">Conversas</string>
     <string name="settings_starred_messages">Mensagens salvas</string>
     <string name="settings_share_links">Ligações de partilha</string>
+    <string name="settings_saved_posts">Publicações salvas</string>
     <string name="settings_section_privacy">Privacidade e segurança</string>
     <string name="settings_section_data">Dados</string>
     <string name="settings_section_about">Sobre</string>

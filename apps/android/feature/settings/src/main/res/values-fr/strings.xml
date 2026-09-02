@@ -13,6 +13,7 @@
     <string name="settings_section_chats">Discussions</string>
     <string name="settings_starred_messages">Messages enregistrés</string>
     <string name="settings_share_links">Liens de partage</string>
+    <string name="settings_saved_posts">Publications enregistrées</string>
     <string name="settings_section_privacy">Confidentialité et sécurité</string>
     <string name="settings_section_data">Données</string>
     <string name="settings_section_about">À propos</string>

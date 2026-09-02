@@ -97,6 +97,7 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
+    onOpenSaved: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenTwoFactor: () -> Unit = {},
@@ -277,6 +278,11 @@ fun SettingsScreen(
                     label = stringResource(R.string.settings_starred_messages),
                     detail = null,
                     onClick = onOpenStarred,
+                )
+                SettingsRow(
+                    label = stringResource(R.string.settings_saved_posts),
+                    detail = null,
+                    onClick = onOpenSaved,
                 )
                 SettingsRow(
                     label = stringResource(R.string.settings_share_links),

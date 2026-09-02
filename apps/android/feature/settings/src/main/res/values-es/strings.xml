@@ -13,6 +13,7 @@
     <string name="settings_section_chats">Chats</string>
     <string name="settings_starred_messages">Mensajes guardados</string>
     <string name="settings_share_links">Enlaces de invitación</string>
+    <string name="settings_saved_posts">Publicaciones guardadas</string>
     <string name="settings_section_privacy">Privacidad y seguridad</string>
     <string name="settings_section_data">Datos</string>
     <string name="settings_section_about">Acerca de</string>
