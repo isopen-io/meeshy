@@ -321,6 +321,7 @@ extension MeeshyComposerHost {
             localMedia: headerTileMedia,
             selectedMediaURL: selectedSlideMediaURL,
             selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            format: selectedFormat,
             formatFan: mountsFormatFan
                 && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
                 ? AnyView(formatChip) : nil,
@@ -571,6 +572,18 @@ extension MeeshyComposerHost {
             drawingSurface: viewModel.isDrawingActive
                 ? AnyView(MeeshyDrawingSurface(viewModel: viewModel))
                 : nil,
+            // **#4918 — le son de fond laisse enfin une trace sur la SCÈNE.**
+            //
+            // La valeur est celle que la surface document sert depuis #4657 :
+            // même résolveur, même loi, même capsule. Elle n'avait qu'un
+            // consommateur, et la surface qu'une STORY monte n'était pas lui —
+            // un fond posé sur une story jouait donc sans que rien ne le dise.
+            //
+            // Il ne manquait ni composant, ni modèle, ni règle : seulement ce
+            // câblage. C'est le motif que le composer répète — une feature
+            // « absente » y est presque toujours une feature non branchée.
+            backgroundSound: avatarBadgeSound,
+            onEditBackgroundSound: editBackgroundSoundAction,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -923,10 +936,43 @@ extension MeeshyComposerHost {
     /// descriptions ». Ce que la loi 9 / B1 protégeait (un seul contenu,
     /// aller-retour scène ↔ document) valait tant que la description ÉTAIT le
     /// texte du post ; cette prémisse est révoquée, la loi la suit.
+    /// **Le champ écrit ce que son RÔLE désigne** (#4890) — et le rôle vient du
+    /// FORMAT, jamais de ce site.
+    ///
+    /// `docs/product/meeshy-composer-modele.md` § 3 : en Story et en Réel le
+    /// texte de la slide EST le contenu de la publication ; en Post c'est la
+    /// **légende du média** de cette slide, et le `content` du post a son propre
+    /// logement. Le document nommait déjà ce champ comme le site fautif —
+    /// « juste en S/R et faux en P » — pendant que le code écrivait
+    /// `currentSlide.content` dans les deux cas.
+    ///
+    /// > **Un nom qui vaut pour deux rôles ne fait pas rougir quand on sert le
+    /// > mauvais.** C'est pourquoi la décision n'est plus prise ici sous le mot
+    /// > « description » : `ComposerSlideTextRole` la porte, une fois.
     var sceneDescriptionBinding: Binding<String> {
         Binding(
-            get: { viewModel.currentSlide.content ?? "" },
-            set: { viewModel.applyContentText($0) }
+            get: {
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    return viewModel.currentSlide.content ?? ""
+                case .caption:
+                    // Sans média sur la slide courante, il n'y a pas de légende
+                    // à lire — et surtout aucune raison de retomber sur le
+                    // contenu, qui appartient au post et non à ce média.
+                    guard let media = selectedSlideMediaURL else { return "" }
+                    return documentMediaCaptions[media] ?? ""
+                }
+            },
+            set: { texte in
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    viewModel.applyContentText(texte)
+                case .caption:
+                    ComposerSlideTextRole.applyCaption(texte,
+                                                       to: selectedSlideMediaURL,
+                                                       in: &documentMediaCaptions)
+                }
+            }
         )
     }
     // MARK: - Le mood

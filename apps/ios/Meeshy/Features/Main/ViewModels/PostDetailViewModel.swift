@@ -160,7 +160,9 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            self.error = error.localizedDescription
+            // 404 ⇒ absence, pas échec : `post == nil` le dit déjà, et
+            // signaler un échec inviterait à réessayer pour rien (#4903).
+            self.error = PostDetailAbsenceReason.isNotFound(error) ? nil : error.localizedDescription
         }
     }
 

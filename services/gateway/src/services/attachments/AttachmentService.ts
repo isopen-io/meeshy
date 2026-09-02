@@ -9,16 +9,10 @@ import path from 'path';
 import type {
   Attachment,
   AttachmentType,
-  AttachmentWithMetadata,
   ACCEPTED_MIME_TYPES,
 } from '@meeshy/shared/types/attachment';
 import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
-import type {
-  AttachmentTranscription,
-  AttachmentTranslations,
-} from '@meeshy/shared/types/attachment-audio';
-import { toSocketIOAudios } from '@meeshy/shared/types/attachment-audio';
 import {
   AttachmentEncryptionService,
   getAttachmentEncryptionService,
@@ -405,6 +399,21 @@ export class AttachmentService {
    * dépendent de personne, et il les pose APRÈS le filtre de l'appelant pour
    * que celui-ci ne puisse qu'ajouter — sortir de la conversation demandée ou
    * ressusciter une tombstone reste inexprimable.
+   *
+   * Cette méthode lisait DEUX colonnes lourdes de plus — `transcription`
+   * (texte + segments mot-à-mot) et `translations` (toutes les langues) — pour
+   * chacune des 100 pièces d'une page, les mappait, et le sérialiseur de la
+   * route les jetait : elles ne sont déclarées par aucun schéma de LISTE.
+   * Travail mort en base, sans le moindre effet sur le fil (#4887, défaut 3 ;
+   * mesuré par #4392, au sens de #4177). Le retrait s'est fait ICI, au
+   * `select` — jamais par un élargissement du schéma servi : le DÉTAIL
+   * (`getAttachmentWithMetadata`) reste le seul chemin vers ces deux colonnes.
+   *
+   * Le `select` et le mapper qui restaient sont, à la ligne près,
+   * `attachmentServiceRowSelect` et `toAttachment` — la projection que #4166 a
+   * établie pour `getAttachment` et `getAttachmentsByIds`. Deux copies d'une
+   * même forme dérivent ; une seule ne peut pas. La méthode rend donc un
+   * `Attachment`, comme ses deux sœurs.
    */
   async getConversationAttachments(
     conversationId: string,
@@ -414,7 +423,7 @@ export class AttachmentService {
       offset?: number;
       messageFilter?: Prisma.MessageWhereInput;
     } = {}
-  ): Promise<AttachmentWithMetadata[]> {
+  ): Promise<Attachment[]> {
     const where: Prisma.MessageAttachmentWhereInput = {
       message: {
         ...options.messageFilter,
@@ -436,71 +445,10 @@ export class AttachmentService {
       orderBy: { createdAt: 'desc' },
       take: options.limit || 50,
       skip: options.offset || 0,
-      select: {
-        id: true,
-        messageId: true,
-        fileName: true,
-        originalName: true,
-        mimeType: true,
-        fileSize: true,
-        fileUrl: true,
-        thumbnailUrl: true,
-        width: true,
-        height: true,
-        duration: true,
-        bitrate: true,
-        sampleRate: true,
-        codec: true,
-        channels: true,
-        uploadedBy: true,
-        isAnonymous: true,
-        createdAt: true,
-        isForwarded: true,
-        capturedInApp: true,
-        isViewOnce: true,
-        viewOnceCount: true,
-        isBlurred: true,
-        viewedCount: true,
-        downloadedCount: true,
-        consumedCount: true,
-        isEncrypted: true,
-        transcription: true,
-        translations: true,
-      }
+      select: attachmentServiceRowSelect,
     });
 
-    return attachments.map((att) => ({
-      id: att.id,
-      messageId: att.messageId,
-      fileName: att.fileName,
-      originalName: att.originalName,
-      mimeType: att.mimeType,
-      fileSize: att.fileSize,
-      fileUrl: att.fileUrl,
-      thumbnailUrl: att.thumbnailUrl || undefined,
-      width: att.width || undefined,
-      height: att.height || undefined,
-      duration: att.duration || undefined,
-      bitrate: att.bitrate || undefined,
-      sampleRate: att.sampleRate || undefined,
-      codec: att.codec || undefined,
-      channels: att.channels || undefined,
-      uploadedBy: att.uploadedBy,
-      isAnonymous: att.isAnonymous,
-      createdAt: att.createdAt.toISOString(),
-      isForwarded: att.isForwarded ?? false,
-      capturedInApp: att.capturedInApp ?? false,
-      isViewOnce: att.isViewOnce ?? false,
-      viewOnceCount: att.viewOnceCount ?? 0,
-      isBlurred: att.isBlurred ?? false,
-      viewedCount: att.viewedCount ?? 0,
-      downloadedCount: att.downloadedCount ?? 0,
-      consumedCount: att.consumedCount ?? 0,
-      isEncrypted: att.isEncrypted ?? false,
-      transcription: att.transcription as unknown as AttachmentTranscription | null,
-      translatedAudios: toSocketIOAudios(att.id, att.translations as unknown as AttachmentTranslations | undefined),
-      translations: (att.translations as unknown as AttachmentTranslations | undefined) || {}
-    }));
+    return attachments.map((att) => this.toAttachment(att));
   }
 
   // ==================== CHIFFREMENT ====================

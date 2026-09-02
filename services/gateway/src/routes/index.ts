@@ -153,6 +153,7 @@ import callRoutes from './calls';
 import { voiceProfileRoutes } from './voice-profile';
 import { voiceAnalysisRoutes, voiceAnalysisLegacyAliasRoutes } from './voice-analysis';
 import { appRoutes } from './app';
+import { socialEventsRoutes } from './social/events';
 import { healthProbeRoutes } from './health';
 
 const API_PREFIX = apiBasePath();
@@ -179,8 +180,9 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 61 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
- * `conversation-receipts` ; #4348 en ajoute une, `me-consents`), réparties en
+ * 63 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
+ * `conversation-receipts` ; #4348 en ajoute une, `me-consents` ; #4150 en
+ * ajoute une, `social-events`), réparties en
  * QUATRE segments plutôt qu'une liste plate — et ce n'est pas une préférence
  * de mise en page.
  *
@@ -382,6 +384,21 @@ export const ROUTE_TABLE_BEFORE_VOICE_PLUGIN: readonly RouteRegistrationEntry[] 
 
 /** Après `postRoutes`, jusqu'à la fin de `registerAllRoutes`. */
 export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
+  // ── Télémétrie sociale ────────────────────────────────────────────────
+  // `POST /social/events` (#4150) — le point d'ingestion UNIQUE de la
+  // télémétrie de lecture, vers lequel les six adresses historiques
+  // (`/posts/:id/view`, `/impression`, `/impressions/batch`,
+  // `/engagement/batch`, `/downloads`, `/anonymous-view`) délèguent en alias.
+  //
+  // Ce SEGMENT, et pas un autre : les trois premiers sont suivis d'un montage
+  // ANONYME (`conversationRoutes`, `postRoutes`, le bloc de traduction), dont
+  // `route-manifest/collect.ts` étiquette le contenu par un compteur GLOBAL
+  // incrémenté dans l'ORDRE D'EXÉCUTION. Une entrée insérée AVANT l'un d'eux
+  // décale les libellés `anonyme~N` de tout ce qui s'enregistre anonymement à
+  // l'intérieur, et fait rougir `route-manifest-ratchet` sans qu'aucune route
+  // n'ait bougé. Le quatrième segment est la QUEUE : rien d'anonyme ne le suit.
+  { name: 'social-events', prefix: API_PREFIX, module: socialEventsRoutes },
+
   // ── Amorçage applicatif, diagnostics ─────────────────────────────────
   { name: 'app-bootstrap', prefix: API_PREFIX, module: appRoutes },
   { name: 'health-probes', prefix: `${API_PREFIX}/health`, module: healthProbeRoutes },
@@ -391,7 +408,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 61 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 63 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageCodeNormalizer
 import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
 
 /**
@@ -37,6 +38,8 @@ data class StoryTextObjectView(
     val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
     val background: StoryTextBackground = StoryTextBackground.None,
+    /** The EFFECT axis (#4870) — glow / shadow / relief — the canvas paints over the glyphs. */
+    val effect: StoryTextEffect = StoryTextEffect.NONE,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -162,6 +165,7 @@ object StoryTextObjectProjection {
             fadeOut = textObject.fadeOut ?: 0.0,
             keyframes = textObject.keyframes.orEmpty(),
             background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
+            effect = StoryTextEffect.fromWire(textObject.textEffect),
         )
 
     /**

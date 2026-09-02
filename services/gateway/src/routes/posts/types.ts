@@ -110,6 +110,11 @@ const StoryTextObjectSchema = z.object({
   textBg: z.string().max(STORY_HEX_MAX).optional(),
   borderColor: z.string().max(STORY_HEX_MAX).optional(),
   borderWidth: z.number().min(0).max(100).optional(),
+  // L'axe EFFET (#4870) — `glow` | `shadow` | `relief`, absent ⇒ aucun. Une
+  // chaîne bornée comme `textStyle`, pas un énuméré : un client plus récent
+  // peut publier une valeur que ce serveur ne connaît pas, et les lecteurs
+  // retombent sur « aucun » plutôt que de refuser la story.
+  textEffect: z.string().max(STORY_STYLE_MAX).optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),

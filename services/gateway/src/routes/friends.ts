@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone } from '../utils/response.js';
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { withMutationLog, MutationResultGone } from '../utils/withMutationLog';
 import {
@@ -20,6 +20,15 @@ import {
 } from './directory/friend-requests';
 import { depreciee } from '../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types';
+import {
+  cursorPage,
+  cursorPaginationSchema,
+  cursorQuery,
+  cursorQueryProperty,
+  encodePageCursor,
+  type CursorSort,
+} from '../utils/cursor-pagination';
 
 // Schemas de validation
 const createFriendRequestSchema = z.object({
@@ -52,6 +61,132 @@ const updateFriendRequestSchema = z.object({
  * l'utilisateur croit accompli.
  */
 const DEPUIS_ALIAS_FRIENDS = '2026-08-29';
+
+/**
+ * L'ordre TOTAL des deux listes — DÉCLARÉ une fois, et ce que le curseur encode
+ * (#4175).
+ *
+ * `id` en second rang n'est pas décoratif : la route canonique
+ * (`friend-requests-core.listerDemandes`) borne par `{ createdAt: { lt } }` SEUL,
+ * si bien que deux demandes nées dans la même milliseconde que la dernière ligne
+ * servie sont TOUTES LES DEUX jetées de la page suivante. La loi partagée dérive
+ * de cette déclaration l'`orderBy`, la clause de reprise ET la signature inscrite
+ * dans le jeton, donc les trois ne peuvent plus diverger.
+ */
+const ORDRE_DEMANDES: CursorSort = [
+  { field: 'createdAt', direction: 'desc', kind: 'date' },
+  { field: 'id', direction: 'desc', kind: 'string' },
+];
+
+/**
+ * Le fragment de `querystring` des deux listes — un seul, pour deux adresses qui
+ * répondent à la même question dans deux directions.
+ *
+ * `offset` n'a PLUS de `default` (#4175), et c'est ce qui rend la forme
+ * choisissable : Fastify active `useDefaults` d'AJV, donc un `default` ÉCRIT la
+ * valeur dans `request.query` avant le handler, qui ne peut alors plus
+ * distinguer « rang non demandé » de « rang zéro ». Avec le `default: '0'` qui
+ * vivait ici, chaque première page repayait un `count()` complet, y compris pour
+ * un client qui n'a jamais demandé de rang.
+ */
+const QUERY_LISTE_DEMANDES = {
+  type: 'object',
+  properties: {
+    offset: {
+      type: 'string',
+      description:
+        'DEPRECATED — rank-based pagination. A rank skips rows when the list moves between two pages; use cursor. Absent = the page is served by cursor.',
+    },
+    limit: {
+      type: 'string',
+      description: 'Number of items per page (max 100)',
+      default: '20',
+    },
+    cursor: cursorQueryProperty,
+  },
+} as const;
+
+type QueryListeDemandes = { offset?: string; limit?: string; cursor?: string };
+
+/**
+ * UNE page de demandes — la même loi pour les deux directions.
+ *
+ * ## Qui gagne quand `cursor` et `offset` arrivent ensemble
+ *
+ * La forme est choisie par la PRÉSENCE de `cursor`, jamais par sa lisibilité :
+ * un rang et une ancre ne décrivent pas la même fenêtre, et arbitrer entre les
+ * deux dans une seule réponse servirait un rang que l'appelant n'entendait pas
+ * comme un point de reprise. Un curseur ILLISIBLE reste donc une page au
+ * curseur — la première. C'est le repli du reste du dépôt : refuser couperait le
+ * défilement sur une erreur que le lecteur ne peut pas réparer.
+ *
+ * `offset` ABSENT vaut « sers-moi au curseur », ce qui retire le `count()` du
+ * chemin nominal dès la PREMIÈRE page. Android envoie aujourd'hui les deux
+ * adresses avec un `offset` explicite (`FriendRepository.kt`) et iOS de même
+ * (`FriendService.receivedRequests` / `.sentRequests`) : ils restent servis
+ * exactement comme avant, et le jour où l'un cesse d'envoyer le rang il gagne la
+ * forme keyset sans changement de serveur.
+ *
+ * ## Le curseur pagine la collection RENDUE
+ *
+ * `servirParties` MASQUE des champs de présence, il ne retire aucune ligne : la
+ * ligne lue est la ligne servie, et le curseur est frappé sur la ligne BRUTE —
+ * faire dépendre la pagination d'une projection filtrée est exactement ce qui
+ * produit, ailleurs dans le dépôt, des pages vides que le client doit compenser
+ * à la main.
+ */
+async function servirPageDemandes(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: { where: Record<string, unknown>; include: Record<string, unknown> }
+): Promise<unknown> {
+  const { offset, limit, cursor } = request.query as QueryListeDemandes;
+  const { offset: rang, limit: taille } = validatePagination(offset ?? '0', limit);
+
+  const servirParRang = cursor === undefined && offset !== undefined;
+  const requete = cursorQuery({ sort: ORDRE_DEMANDES, cursor, limit: taille, where: options.where });
+
+  const [lignes, total] = await Promise.all([
+    fastify.prisma.friendRequest.findMany({
+      where: servirParRang ? options.where : requete.where,
+      include: options.include,
+      orderBy: requete.orderBy,
+      // Une ligne SONDE au curseur : elle dit `hasMore` sans compter la table.
+      take: servirParRang ? taille : requete.take,
+      ...(servirParRang ? { skip: rang } : {}),
+    }),
+    servirParRang
+      ? fastify.prisma.friendRequest.count({ where: options.where })
+      : Promise.resolve(0),
+  ]);
+
+  // La loi de présence (#4283) — le MÊME gate que `directory` (`servirParties`),
+  // sans lequel `isOnline`/`lastActiveAt` sortiraient BRUTS pour une partie qui
+  // n'est pas encore un ami accepté.
+  const servir = (rows: readonly Record<string, unknown>[]) =>
+    servirParties(fastify, request, rows as Array<Record<string, unknown>>);
+
+  if (servirParRang) {
+    const hasMore = rang + lignes.length < total;
+    const derniere = lignes[lignes.length - 1];
+    const pagination: PaginationMeta & CursorPaginationMeta = {
+      total,
+      limit: taille,
+      offset: rang,
+      hasMore,
+      // Le rang rend MALGRÉ TOUT un curseur : c'est la rampe de migration. Un
+      // client démarre sur la page 1 (dont il veut le total) et passe au curseur
+      // pour la suite, sans jamais redemander la même page.
+      nextCursor: hasMore && derniere ? encodePageCursor(ORDRE_DEMANDES, derniere) : null,
+      form: 'offset',
+    };
+    return sendSuccess(reply, await servir(lignes), { pagination });
+  }
+
+  const servie = cursorPage({ sort: ORDRE_DEMANDES, rows: lignes, limit: taille });
+  return sendSuccess(reply, await servir(servie.page), { pagination: servie.pagination });
+}
 
 /** Le successeur d'une route PAR ID porte l'id RÉSOLU, jamais le gabarit `:id`. */
 const successeurDemandeCiblee = (request: FastifyRequest): string =>
@@ -183,21 +318,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       description: 'DEPRECATED — use GET /directory/friend-requests?direction=received, which paginates by cursor and shares this route\'s presence gate (#4283). Get all pending friend requests received by the authenticated user. Returns paginated list of requests with sender information.',
       tags: ['friends'],
       summary: 'Get received friend requests (deprecated)',
-      querystring: {
-        type: 'object',
-        properties: {
-          offset: {
-            type: 'string',
-            description: 'Pagination offset',
-            default: '0'
-          },
-          limit: {
-            type: 'string',
-            description: 'Number of items per page (max 100)',
-            default: '20'
-          }
-        }
-      },
+      querystring: QUERY_LISTE_DEMANDES,
       response: {
         200: {
           description: 'List of received friend requests',
@@ -208,15 +329,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               type: 'array',
               items: demandeAvecPresenceSchema
             },
-            pagination: {
-              type: 'object',
-              properties: {
-                total: { type: 'number', description: 'Total number of requests' },
-                limit: { type: 'number', description: 'Items per page' },
-                offset: { type: 'number', description: 'Current offset' },
-                hasMore: { type: 'boolean', description: 'Whether more items exist' }
-              }
-            }
+            // Le fragment PARTAGÉ (#4175) : `fast-json-stringify` retire toute
+            // clé qu'aucun schéma ne déclare, donc un `nextCursor` ou un `form`
+            // calculés mais non déclarés seraient jetés au dernier mètre.
+            pagination: cursorPaginationSchema
           }
         },
         401: {
@@ -235,45 +351,12 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = request.user!.userId;
-      /* istanbul ignore next -- Fastify AJV applies schema defaults before handler runs */
-      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
-
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
-
-      const whereClause = { receiverId: userId, status: 'pending' as const };
-
-      const [friendRequests, totalCount] = await Promise.all([
-        fastify.prisma.friendRequest.findMany({
-          // `INCLUDE_PARTIES.sender` (#4283) — la MÊME projection que la
-          // route canonique, plutôt qu'un `select` local qui charge cinq
-          // colonnes et OUBLIE `isOnline`/`lastActiveAt`. Avant ce lot, la
-          // requête ne les demandait même pas : le schéma de réponse pouvait
-          // bien les DÉCLARER, elles restaient absentes de la ligne Prisma —
-          // exactement le défaut « correctif appliqué à `directory`, laissé
-          // intact ici » que #4283 ferme, une couche plus bas que le schéma.
-          where: whereClause,
-          include: { sender: INCLUDE_PARTIES.sender },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.friendRequest.count({ where: whereClause })
-      ]);
-
-      // La loi de présence (#4283) — le MÊME gate que `directory`
-      // (`servirParties`), sans lequel `isOnline`/`lastActiveAt` sortiraient
-      // BRUTS pour un expéditeur qui n'est pas encore un ami accepté :
-      // exactement la fuite que la directive du 2026-08-25 interdit.
-      const servedRequests = await servirParties(
-        fastify, request, friendRequests as unknown as Array<Record<string, unknown>>
-      );
-
-      return sendPaginatedSuccess(reply, servedRequests, {
-        total: totalCount,
-        limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + friendRequests.length < totalCount
+      // `INCLUDE_PARTIES.sender` (#4283) — la MÊME projection que la route
+      // canonique, plutôt qu'un `select` local qui charge cinq colonnes et
+      // OUBLIE `isOnline`/`lastActiveAt`.
+      return await servirPageDemandes(fastify, request, reply, {
+        where: { receiverId: request.user!.userId, status: 'pending' as const },
+        include: { sender: INCLUDE_PARTIES.sender },
       });
 
     } catch (error) {
@@ -291,21 +374,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       description: 'DEPRECATED — use GET /directory/friend-requests?direction=sent, which paginates by cursor and shares this route\'s presence gate (#4283). Get all friend requests sent by the authenticated user. Returns paginated list of requests with receiver information, including pending, accepted, and rejected requests.',
       tags: ['friends'],
       summary: 'Get sent friend requests (deprecated)',
-      querystring: {
-        type: 'object',
-        properties: {
-          offset: {
-            type: 'string',
-            description: 'Pagination offset',
-            default: '0'
-          },
-          limit: {
-            type: 'string',
-            description: 'Number of items per page (max 100)',
-            default: '20'
-          }
-        }
-      },
+      querystring: QUERY_LISTE_DEMANDES,
       response: {
         200: {
           description: 'List of sent friend requests',
@@ -316,15 +385,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
               type: 'array',
               items: demandeAvecPresenceSchema
             },
-            pagination: {
-              type: 'object',
-              properties: {
-                total: { type: 'number', description: 'Total number of requests' },
-                limit: { type: 'number', description: 'Items per page' },
-                offset: { type: 'number', description: 'Current offset' },
-                hasMore: { type: 'boolean', description: 'Whether more items exist' }
-              }
-            }
+            // Le fragment PARTAGÉ (#4175) : `fast-json-stringify` retire toute
+            // clé qu'aucun schéma ne déclare, donc un `nextCursor` ou un `form`
+            // calculés mais non déclarés seraient jetés au dernier mètre.
+            pagination: cursorPaginationSchema
           }
         },
         401: {
@@ -343,38 +407,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = request.user!.userId;
-      /* istanbul ignore next -- Fastify AJV applies schema defaults before handler runs */
-      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
-
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
-
-      const whereClause = { senderId: userId };
-
-      const [friendRequests, totalCount] = await Promise.all([
-        fastify.prisma.friendRequest.findMany({
-          // `INCLUDE_PARTIES.receiver` — même raison que GET .../received
-          // ci-dessus : projection PARTAGÉE avec la route canonique (#4283).
-          where: whereClause,
-          include: { receiver: INCLUDE_PARTIES.receiver },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.friendRequest.count({ where: whereClause })
-      ]);
-
-      // La loi de présence (#4283) — voir le commentaire jumeau de GET
-      // .../received.
-      const servedRequests = await servirParties(
-        fastify, request, friendRequests as unknown as Array<Record<string, unknown>>
-      );
-
-      return sendPaginatedSuccess(reply, servedRequests, {
-        total: totalCount,
-        limit: limitNum,
-        offset: offsetNum,
-        hasMore: offsetNum + friendRequests.length < totalCount
+      // `INCLUDE_PARTIES.receiver` — même raison que GET .../received :
+      // projection PARTAGÉE avec la route canonique (#4283).
+      return await servirPageDemandes(fastify, request, reply, {
+        where: { senderId: request.user!.userId },
+        include: { receiver: INCLUDE_PARTIES.receiver },
       });
 
     } catch (error) {

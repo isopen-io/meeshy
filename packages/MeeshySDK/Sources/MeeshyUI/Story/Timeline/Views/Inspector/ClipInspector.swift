@@ -20,7 +20,15 @@ public struct ClipInspector: View {
     // MARK: - Snapshot
 
     public struct ClipSnapshot: Equatable, Sendable {
-        public enum Kind: String, Sendable, Equatable { case video, audio, text, image, sticker }
+        public enum Kind: String, Sendable, Equatable {
+            case video, audio, text, image, sticker
+            /// Pastille de LIEU — sa fiche ne porte que la fenêtre et le nom.
+            /// Sans ce cas, `TimelineInspectorHost.clipSnapshot` rendait `nil`,
+            /// et toute la chaîne du doigt se coupait trois appels plus haut :
+            /// pas de fiche ⇒ pas de sélection ⇒ pas de poignées de rognage
+            /// (#4840, moitié manquante).
+            case place
+        }
         public let id: String
         public let displayName: String
         public let kind: Kind
@@ -126,7 +134,15 @@ public struct ClipInspector: View {
                                        isBackground: Bool) -> [Section] {
         var sections: [Section] = [.header]
         if hasAudioAffordances(kind: kind) { sections.append(.volume) }
-        sections.append(.animation)
+        // **Même règle que la rangée d'interrupteurs ci-dessous, et elle
+        // manquait** (#4899) : `.animation` était montée pour les CINQ
+        // familles, alors que ses trois contrôles — fondu d'entrée, fondu de
+        // sortie, « Animer au playhead » — sont refusés pour un sticker comme
+        // pour un lieu. La fiche affichait même l'ÉTAT du fondu, donc la puce
+        // se cochait et le modèle ne bougeait pas.
+        if supportsFade(kind: kind) || supportsKeyframes(kind: kind) {
+            sections.append(.animation)
+        }
         // La rangée d'interrupteurs ne s'affiche que si l'un d'eux agit
         // vraiment. Texte et sticker n'ont NI boucle NI bascule de fond :
         // `setClipLoop` / `setClipBackground` les ignorent silencieusement.
@@ -150,7 +166,9 @@ public struct ClipInspector: View {
         guard !isBackground else { return false }
         switch kind {
         case .video, .image, .text: return true
-        case .audio, .sticker:      return false
+        // Le lieu suit le sticker : `SetClipPropertyCommand` refuse ses
+        // propriétés, elles se règlent au doigt sur le canvas.
+        case .audio, .sticker, .place: return false
         }
     }
 
@@ -423,8 +441,8 @@ public struct ClipInspector: View {
     /// without driving the SwiftUI view body.
     public static func hasAudioAffordances(kind: ClipSnapshot.Kind) -> Bool {
         switch kind {
-        case .video, .audio:          return true
-        case .image, .text, .sticker: return false
+        case .video, .audio:                 return true
+        case .image, .text, .sticker, .place: return false
         }
     }
 
@@ -434,22 +452,32 @@ public struct ClipInspector: View {
     public static func supportsBackgroundToggle(kind: ClipSnapshot.Kind) -> Bool {
         switch kind {
         case .video, .audio, .image: return true
-        case .text, .sticker:        return false
+        case .text, .sticker, .place: return false
         }
     }
 
     /// True quand la corbeille de l'inspecteur détruit réellement le clip. Un
     /// sticker se retire depuis le CANVAS (`deleteClip` le refuse
     /// explicitement) — le bouton n'aurait rien supprimé.
+    /// Écrit en `switch` EXHAUSTIF plutôt qu'en `kind != .sticker` : la forme
+    /// négative accueille toute famille NEUVE du bon côté par défaut, en
+    /// silence. Un lieu s'y serait glissé comme supprimable alors que
+    /// `deleteClip` le refuse — le bouton n'aurait rien supprimé.
     public static func supportsDeletion(kind: ClipSnapshot.Kind) -> Bool {
-        kind != .sticker
+        switch kind {
+        case .video, .audio, .image, .text: return true
+        case .sticker, .place:              return false
+        }
     }
 
     /// True quand découper le clip à la tête de lecture a un sens. Un sticker
     /// est un point d'apparition, pas une matière qu'on tranche — même raison
     /// que `supportsDeletion`.
     public static func supportsSplit(kind: ClipSnapshot.Kind) -> Bool {
-        kind != .sticker
+        switch kind {
+        case .video, .audio, .image, .text: return true
+        case .sticker, .place:              return false
+        }
     }
 
     /// True when looping a clip makes sense. RÈGLE PRODUIT : la boucle est
@@ -459,8 +487,36 @@ public struct ClipInspector: View {
     public static func supportsLoop(kind: ClipSnapshot.Kind, isBackground: Bool) -> Bool {
         guard isBackground else { return false }
         switch kind {
-        case .video, .audio:          return true
-        case .image, .text, .sticker: return false
+        case .video, .audio:                 return true
+        case .image, .text, .sticker, .place: return false
+        }
+    }
+
+    /// True quand poser un fondu d'entrée / de sortie a un effet. La vérité
+    /// est celle de la COMMANDE, jamais une seconde liste : `setClipFadeIn` /
+    /// `setClipFadeOut` sortent sans rien faire pour un sticker et pour un
+    /// lieu — leur montrer les puces de fondu affichait un état que rien ne
+    /// pouvait changer.
+    public static func supportsFade(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio, .image, .text: return true
+        case .sticker, .place:              return false
+        }
+    }
+
+    /// True quand poser une étape d'animation a un effet. Vérité de
+    /// `TimelineProject.mutateKeyframes`, qui lève `invalidState` pour un
+    /// sticker et pour un lieu — « leur famille temporelle est
+    /// start/duration/fade, sans courbe ».
+    ///
+    /// Deux prédicats plutôt qu'un, alors qu'ils rendent aujourd'hui le même
+    /// verdict : ce sont deux QUESTIONS, tranchées par deux commandes
+    /// différentes. Les fondre ferait qu'une famille future acceptant l'un
+    /// sans l'autre n'aurait aucun endroit où le dire.
+    public static func supportsKeyframes(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio, .image, .text: return true
+        case .sticker, .place:              return false
         }
     }
 
@@ -478,6 +534,9 @@ public struct ClipInspector: View {
         case .sticker:
             return String(localized: "story.timeline.a11y.clip.sticker",
                           defaultValue: "Clip autocollant", bundle: .module)
+        case .place:
+            return String(localized: "story.timeline.a11y.clip.place",
+                          defaultValue: "Pastille de lieu", bundle: .module)
         }
     }
 
@@ -1161,6 +1220,7 @@ public struct ClipInspector: View {
         case .text:  return "textformat"
         case .image: return "photo"
         case .sticker: return "face.smiling"
+        case .place:   return "mappin.circle.fill"
         }
     }
 }

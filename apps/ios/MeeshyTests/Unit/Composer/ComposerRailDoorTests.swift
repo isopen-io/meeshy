@@ -40,7 +40,10 @@ final class ComposerRailDoorTests: XCTestCase {
 
     func test_quatrePortes_creentUnObjetDeScene() {
         for porte in [ComposerRailDoor.media, .sound, .sticker, .text] {
-            XCTAssertEqual(porte.level, .object, "\(porte.rawValue)")
+            // **En STORY** : depuis #4893 le corpus de texte n'est posable que là.
+            // Hors Story il qualifie la publication — c'est
+            // `ComposerRailGeographyByFormatTests` qui garde l'autre moitié.
+            XCTAssertEqual(porte.level(for: .story), .object, "\(porte.rawValue)")
         }
     }
 
@@ -67,8 +70,8 @@ final class ComposerRailDoorTests: XCTestCase {
     /// > — l'erreur exacte que le lot corrigeait, commise en le corrigeant.
     /// > Voir `test_leLieu_estRetireDuMood_parChoixProduit_nonParAbsenceDeToile`.
     func test_leLieu_viseLaPublication_carCEstLeSelecteurQuIlOuvre() {
-        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
-        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas,
+        XCTAssertEqual(ComposerRailDoor.place.level(for: .post), .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level(for: .post).appearsOnCanvas,
                        "elle ne pose rien sur la scène — elle ouvre un sélecteur")
 
         // Elle survit dans les trois formats à scène : son niveau ne l'expose
@@ -80,7 +83,7 @@ final class ComposerRailDoorTests: XCTestCase {
     }
 
     func test_laDescription_viseLaSlide_etNeCreeAucunObjet() {
-        XCTAssertEqual(ComposerRailDoor.description.level, .slide)
+        XCTAssertEqual(ComposerRailDoor.description.level(for: .post), .slide)
     }
 
     /// **Le point que ce lot a mesuré plutôt que supposé.** L'issue annonçait
@@ -88,7 +91,7 @@ final class ComposerRailDoorTests: XCTestCase {
     /// aurait été un contrôle SANS EFFET, ce kind n'ayant aucun producteur et
     /// étant jeté à la relecture. La porte livrée vise la publication.
     func test_laMention_viseLaPublication_pasUnObjetDeScene() {
-        XCTAssertEqual(ComposerRailDoor.mention.level, .publication,
+        XCTAssertEqual(ComposerRailDoor.mention.level(for: .post), .publication,
                        "Une mention voyage en `CreatePostRequest.mentions`, jamais comme objet de scène.")
     }
 
@@ -101,8 +104,10 @@ final class ComposerRailDoorTests: XCTestCase {
     /// cette raison ferait rougir ce témoin, et c'est ce qu'on lui demande.
     func test_chaquePorte_declareSonNiveau() {
         for porte in ComposerRailDoor.allCases {
-            XCTAssertTrue([.publication, .slide, .object, .scene].contains(porte.level),
-                          porte.rawValue)
+            for format in ComposerFormat.allComposable {
+                XCTAssertTrue([.publication, .slide, .object, .scene].contains(porte.level(for: format)),
+                              "\(porte.rawValue) / \(format)")
+            }
         }
     }
 
@@ -113,8 +118,8 @@ final class ComposerRailDoorTests: XCTestCase {
         let sansScene = ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
                                                  format: .status, allowsCapture: true)
         for porte in sansScene {
-            XCTAssertNotEqual(porte.level, .object, porte.rawValue)
-            XCTAssertNotEqual(porte.level, .scene, porte.rawValue)
+            XCTAssertNotEqual(porte.level(for: .status), .object, porte.rawValue)
+            XCTAssertNotEqual(porte.level(for: .status), .scene, porte.rawValue)
         }
     }
 
@@ -142,14 +147,18 @@ final class ComposerRailDoorTests: XCTestCase {
     // MARK: - Loi 4 : une porte non servie est ABSENTE
 
     func test_unePorteQueLHoteNeSertPas_estAbsente() {
+        // **Format `.post`** : le témoin parle de la loi 4 (ce que l'hôte SERT),
+        // pas de la géographie. Le poser sur `.story` y mêlerait le retrait du
+        // paragraphe (#4893), qui est une autre règle — et un témoin qui teste
+        // deux règles à la fois ne dit plus laquelle est tombée.
         let offertes = ComposerRailDoor.offered(
-            served: [.description, .media], format: .story, allowsCapture: true)
+            served: [.description, .media], format: .post, allowsCapture: true)
         XCTAssertEqual(offertes, [.description, .media])
     }
 
     func test_lOrdreSurvit_auxPortesRetirees() {
         let offertes = ComposerRailDoor.offered(
-            served: [.place, .description, .sound], format: .story, allowsCapture: true)
+            served: [.place, .description, .sound], format: .post, allowsCapture: true)
         XCTAssertEqual(offertes, [.description, .sound, .place],
                        "L'ordre du rail ne se recompose pas au gré de ce qui reste.")
     }
@@ -162,7 +171,7 @@ final class ComposerRailDoorTests: XCTestCase {
     func test_enMood_aucunePorteDObjet_nEstOfferte() {
         let offertes = ComposerRailDoor.offered(
             served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
-        XCTAssertFalse(offertes.contains { $0.level == .object },
+        XCTAssertFalse(offertes.contains { $0.level(for: .status) == .object },
                        "Un mood n'a pas de scène : rien à y poser.")
         XCTAssertEqual(offertes, [.description, .mention, .hashtag],
                        "…et les TROIS portes qui ne visent pas la scène restent. "
@@ -195,8 +204,8 @@ final class ComposerRailDoorTests: XCTestCase {
         // niveau objet, donc son retrait ne peut pas venir de la règle de la
         // toile. Sans cette moitié, remettre `.place` en `.object` rendrait le
         // témoin vert en réintroduisant exactement le défaut corrigé.
-        XCTAssertEqual(ComposerRailDoor.place.level, .publication)
-        XCTAssertFalse(ComposerRailDoor.place.level.appearsOnCanvas)
+        XCTAssertEqual(ComposerRailDoor.place.level(for: .post), .publication)
+        XCTAssertFalse(ComposerRailDoor.place.level(for: .post).appearsOnCanvas)
 
         // Et il SURVIT partout ailleurs : le retrait est celui d'un profil,
         // jamais celui de la porte.
@@ -208,11 +217,25 @@ final class ComposerRailDoorTests: XCTestCase {
     }
 
     func test_dansLesTroisFormatsAScene_lesPortesDObjet_sontOffertes() {
-        for format in [ComposerFormat.story, .post, .reel] {
+        for format in [ComposerFormat.reel, .post] {
             let offertes = ComposerRailDoor.offered(
                 served: Set(ComposerRailDoor.allCases), format: format, allowsCapture: true)
             XCTAssertEqual(offertes, ComposerRailDoor.canonicalRail, "\(format)")
         }
+    }
+
+    /// **La STORY offre tout SAUF le paragraphe** (#4893) — elle est le seul
+    /// format à en retirer une, et le témoin le dit à part plutôt que d'affaiblir
+    /// celui d'à côté en une égalité de sous-ensemble.
+    ///
+    /// > « À la place de paragraphe c'est donc le corpus de texte qu'on doit
+    /// > afficher en mode story. » — directive porteur 2026-09-02
+    func test_uneStory_offreToutSaufLeParagraphe() {
+        let offertes = ComposerRailDoor.offered(
+            served: Set(ComposerRailDoor.allCases), format: .story, allowsCapture: true)
+        XCTAssertEqual(offertes, ComposerRailDoor.canonicalRail.filter { $0 != .description })
+        XCTAssertTrue(offertes.contains(.text),
+                      "le corpus de texte prend la place du paragraphe")
     }
 
     // MARK: - La capture ne gouverne PAS la porte média
@@ -1120,7 +1143,7 @@ final class ComposerDrawingDoorTests: XCTestCase {
     /// le ranger en `.object` aurait promis des contrôleurs d'empilement à
     /// quelque chose qui n'est pas un objet.
     func test_leDessin_agitSurLaSCENE() {
-        XCTAssertEqual(ComposerRailDoor.drawing.level, .scene)
+        XCTAssertEqual(ComposerRailDoor.drawing.level(for: .story), .scene)
     }
 
     /// La porte est SERVIE, et elle atteint le rail sur un format à scène.
@@ -1144,7 +1167,7 @@ final class ComposerDrawingDoorTests: XCTestCase {
     /// La porte TEXTE agit sur un OBJET — un `StoryTextObject` du plan `fg`,
     /// déplaçable et ordonnable comme les autres.
     func test_leTexte_agitSurUnObjet() {
-        XCTAssertEqual(ComposerRailDoor.text.level, .object)
+        XCTAssertEqual(ComposerRailDoor.text.level(for: .story), .object)
     }
 
     /// Et elle disparaît d'un `status`, qui n'a pas de scène où poser l'objet.
@@ -1486,17 +1509,40 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
                         + "que l'atelier possède (leçon 336).")
     }
 
-    /// Le texte parcourt le SIEN — style, couleur, alignement, fond, cadrage,
-    /// contour, langue. Et le panneau d'OPTIONS, lui, vient du SDK en entier.
+    /// Le texte parcourt le SIEN — police, effet, couleur, alignement, fond,
+    /// cadrage, contour, langue. Et le panneau d'OPTIONS, lui, vient du SDK en
+    /// entier.
     func test_leTexte_monteLesOutilsDeLAtelier() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
         let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(source.contains("TextEditTool.allCases.map"))
+        XCTAssertTrue(source.contains("TextEditTool.all.map"),
+                      "Le rail lit `TextEditTool.all` — l'ordre APPRIS par les doigts — jamais "
+                      + "`allCases`, dont l'ordre porte la sérialisation (#4870).")
+        XCTAssertFalse(source.contains("TextEditTool.allCases.map"))
         XCTAssertTrue(compact(try hostSource()).contains("MeeshyToolOptionsPanel(viewModel:viewModel)"),
                       "Les options — palette, glissière, 18 styles — viennent du SDK, pas d'une bande maison.")
+    }
+
+    /// **Le rail partage l'ORDRE de la rangée** (#4870). `TextEditTool.all` et
+    /// `allCases` coïncidaient jusqu'à l'EFFET — ajouté en QUEUE de l'énuméré
+    /// (la sérialisation) et DEUXIÈME sur la rangée (les doigts). Un rail qui
+    /// lirait `allCases` mettrait l'EFFET en dernier ici et en deuxième sur la
+    /// rangée flottante et dans l'éditeur plein écran : trois surfaces, deux
+    /// ordres, pour le même outil. Revue adverse du lot, 2026-09-02.
+    @MainActor
+    func test_leTexte_monteSesOutilsDansLOrdreDeLaRangee() {
+        guard case .tool(let controls) = ComposerRailMode.resolve(drawing: false,
+                                                                  textEditing: true,
+                                                                  expandedDrawingTool: nil,
+                                                                  expandedTextTool: nil,
+                                                                  doors: []) else {
+            return XCTFail("le mode texte doit rendre des contrôleurs")
+        }
+        XCTAssertEqual(controls.map(\.id), TextEditTool.all.map { "text.\($0.rawValue)" })
+        XCTAssertEqual(controls.map(\.id).dropFirst().first, "text.effect")
     }
 
     /// **Poser un texte OUVRE son éditeur, dans le même geste.** Une coquille

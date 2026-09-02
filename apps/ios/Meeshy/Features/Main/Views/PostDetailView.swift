@@ -54,7 +54,12 @@ struct PostDetailView: View {
     /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
     var targetParentCommentId: String?
 
-    @StateObject private var viewModel = PostDetailViewModel()
+    // `internal` et non `private` : les deux écrans d'absence vivent dans
+    // `PostDetailView+AbsenceStates.swift`, et un `private` de portée FICHIER
+    // les rendrait inaccessibles depuis une extension frère (piège documenté
+    // dans `apps/ios/CLAUDE.md`, déjà payé sur `composerFocusTrigger`).
+    @State private var showsReactionPalette = false
+    @StateObject var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
     /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
     /// les contacts (parité avec `FeedCommentsSheet`).
@@ -727,43 +732,6 @@ struct PostDetailView: View {
         }
     }
 
-    /// Contenu introuvable : expiré, retiré, ou jamais accessible à cette
-    /// personne. On ne distingue pas — le serveur répond la même chose dans les
-    /// trois cas, et prétendre le contraire serait inventer.
-    private var unavailableState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock.badge.xmark")
-                .font(.system(size: 40))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "feed.post.detail.unavailable.title",
-                        defaultValue: "Ce contenu n'est plus disponible", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .multilineTextAlignment(.center)
-            Text(String(localized: "feed.post.detail.unavailable.body",
-                        defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button {
-                // Même geste que la flèche de l'en-tête (`postDetailHeader`) —
-                // et le seul disponible ici : l'en-tête ne se rend qu'avec un
-                // post, donc cette branche n'en a aucun.
-                HapticFeedback.light()
-                router.pop()
-            } label: {
-                Text(String(localized: "feed.post.detail.unavailable.back",
-                            defaultValue: "Retour", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, 4)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -841,15 +809,25 @@ struct PostDetailView: View {
                 ProgressView()
                 Spacer()
             } else {
-                // Ni post, ni chargement : la cible n'existe plus. Cette branche
-                // n'existait pas — l'écran rendait une PAGE BLANCHE surmontée
-                // d'un composeur de commentaire, sans en-tête donc sans bouton
-                // retour. C'est exactement où atterrit un `/l/<token>` de story
-                // expirée, le cas le plus fréquent de ces liens (toute story
-                // meurt à 24 h) : le lien ouvre enfin la bonne destination, il
-                // fallait encore que la destination dise quelque chose.
+                // Ni post, ni chargement. Cette branche n'existait pas —
+                // l'écran rendait une PAGE BLANCHE surmontée d'un composeur de
+                // commentaire, sans en-tête donc sans bouton retour. C'est
+                // exactement où atterrit un `/l/<token>` de story expirée, le
+                // cas le plus fréquent de ces liens (toute story meurt à 24 h).
+                //
+                // Elle disait ensuite « ce contenu n'est plus disponible » pour
+                // les DEUX causes : la cible a disparu, ou la requête a échoué.
+                // Le second cas est un MENSONGE — l'écran affirme une
+                // suppression qui n'a pas eu lieu et n'offre que « Retour »,
+                // retirant la seule action utile : réessayer (#4903).
                 Spacer()
-                unavailableState
+                if PostDetailAbsenceReason.resolve(hasPost: false,
+                                                   isLoading: false,
+                                                   error: viewModel.error) == .loadFailed {
+                    loadFailedState
+                } else {
+                    unavailableState
+                }
                 Spacer()
             }
 
@@ -1483,6 +1461,23 @@ struct PostDetailView: View {
     // MARK: - Actions Bar
 
     @ViewBuilder
+    /// **Poser un émoji AUTRE que le cœur.** Le cœur garde
+    /// `toggleDetailPostHeart` : lui seul porte `detailIsLiked`, le compteur
+    /// affiché et sa réconciliation. Un émoji quelconque n'a pas d'état à
+    /// peindre dans cette barre — le geste est donc ADDITIF, jamais un
+    /// basculement, pour ne pas promettre un état que la vue ne sait pas
+    /// afficher.
+    private func sendDetailReaction(_ emoji: String) {
+        guard emoji != MeeshyQuickReactions.heart else {
+            toggleDetailPostHeart()
+            return
+        }
+        Task {
+            _ = try? await SocialSocketManager.shared.addPostReaction(
+                postId: postId, emoji: emoji)
+        }
+    }
+
     private func actionsBar(_ post: FeedPost,
                             renderedItem: StoryItem,
                             scrollProxy: ScrollViewProxy) -> some View {
@@ -1532,6 +1527,27 @@ EngagementGlyph(
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
             .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
+            // **La palette, en SECOND geste** (décision porteur 2026-09-02).
+            // L'appui bref garde ❤️ et toute sa réconciliation optimiste ;
+            // l'appui long ouvre les six émojis de `MeeshyQuickReactions`, ceux
+            // que la story et la conversation servent déjà. Le serveur les
+            // acceptait depuis toujours — seule la vue les refusait (#4916).
+            .onLongPressGesture {
+                HapticFeedback.medium()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showsReactionPalette = true
+                }
+            }
+            .accessibilityAction(named: Text(String(localized: "reactions.more",
+                                                    defaultValue: "Plus de réactions", bundle: .main))) {
+                showsReactionPalette = true
+            }
+            .overlay(alignment: .topLeading) {
+                PostReactionPalette(isPresented: $showsReactionPalette,
+                                    onPick: { emoji in sendDetailReaction(emoji) },
+                                    style: theme.mode.isDark ? .dark : .light)
+                    .offset(y: -46)
+            }
 
             Spacer()
 
@@ -1700,15 +1716,23 @@ EngagementGlyph(
         let author: String
         let authorAvatarURL: String?
         let timestamp: Date
+        /// Langue d'origine du PORTEUR — repli du Prisme audio (#4926) quand le
+        /// média n'a pas encore de transcription. Portée ici parce que les deux
+        /// porteurs possibles l'ont (`FeedPost` et `RepostContent`) et que le
+        /// site de lecture ne sait pas lequel il tient : c'est très exactement
+        /// ce que ce type existe pour absorber.
+        let originalLanguage: String?
 
         init(post: FeedPost) {
             id = post.id; author = post.author
             authorAvatarURL = post.authorAvatarURL; timestamp = post.timestamp
+            originalLanguage = post.originalLanguage
         }
 
         init(repost: RepostContent) {
             id = repost.id; author = repost.author
             authorAvatarURL = repost.authorAvatarURL; timestamp = repost.timestamp
+            originalLanguage = repost.originalLanguage
         }
     }
 
@@ -1841,6 +1865,16 @@ EngagementGlyph(
                         accentColor: media.thumbnailColor,
                         transcription: media.transcription,
                         translatedAudios: media.translatedAudios,
+                        // Prisme AUDIO (#4926) — même élection que la carte du
+                        // fil : le même vocal ne peut pas se jouer dans deux
+                        // langues selon l'écran par lequel on l'ouvre.
+                        initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                            originalLanguage: SocialAudioTrack.originalLanguage(
+                                transcription: media.transcription,
+                                carrier: resolvedOwner?.originalLanguage
+                            ),
+                            translatedAudios: media.translatedAudios
+                        ),
                         onFullscreen: {
                             guard let post = displayPost else { return }
                             audioFullscreen = .fromFeed(

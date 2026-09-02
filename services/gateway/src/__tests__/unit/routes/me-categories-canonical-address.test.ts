@@ -287,7 +287,7 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     expect(categoriesEntry.module).toBe(meCategoriesRoutes);
   });
 
-  it('ROUTE_TABLE compte désormais 62 entrées (61 + `admin-share-links`, #3734)', () => {
+  it('ROUTE_TABLE compte désormais 63 entrées (62 + `social-events`, #4150)', () => {
     // Ce compte est SIGNALÉ à l'intégrateur, jamais régénéré ici :
     // `route-manifest.json` / `packages/shared/api/endpoints.ts` sont des
     // artefacts DÉRIVÉS, hors territoire de #4359 comme de #4349 — et
@@ -310,6 +310,6 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     // moyen de le déduire de la ligne qu'on édite. Suivi à ouvrir — soit ce
     // compte se lit depuis un site unique, soit cette assertion disparaît
     // d'ici, son récit d'adjacence n'ayant pas besoin d'un TOTAL.
-    expect(ROUTE_TABLE.length).toBe(62);
+    expect(ROUTE_TABLE.length).toBe(63);
   });
 });

@@ -596,13 +596,13 @@ describe('AttachmentGallery', () => {
   });
 
   describe('API Loading', () => {
-    it('loads attachments from API when not provided', async () => {
-      const { AttachmentService } = require('@/services/attachmentService');
-      AttachmentService.getConversationAttachments.mockResolvedValue({
-        success: true,
-        attachments: mockAttachments,
-      });
-
+    // Ce bloc n'assertait QUE l'appel — jamais son effet. C'est ce qui a laissé
+    // le chargement propre de la galerie inerte pendant toute sa vie (#4887,
+    // défaut 1) : le service rendait l'enveloppe brute de la route, donc
+    // `response.attachments` valait `undefined`, la garde ne passait pas,
+    // `setAttachments` n'était jamais appelé — et « le service a été appelé »
+    // restait vrai. Un témoin de chargement se mesure au PIXEL.
+    const renderNetworkLoaded = () =>
       render(
         <AttachmentGallery
           conversationId="conv-123"
@@ -612,6 +612,15 @@ describe('AttachmentGallery', () => {
         />
       );
 
+    it('loads attachments from API when not provided', async () => {
+      const { AttachmentService } = require('@/services/attachmentService');
+      AttachmentService.getConversationAttachments.mockResolvedValue({
+        success: true,
+        attachments: mockAttachments,
+      });
+
+      renderNetworkLoaded();
+
       await waitFor(() => {
         expect(AttachmentService.getConversationAttachments).toHaveBeenCalledWith(
           'conv-123',
@@ -619,6 +628,39 @@ describe('AttachmentGallery', () => {
           'test-token'
         );
       });
+    });
+
+    it('AFFICHE les pièces jointes que son propre appel a chargées', async () => {
+      const { AttachmentService } = require('@/services/attachmentService');
+      AttachmentService.getConversationAttachments.mockResolvedValue({
+        success: true,
+        attachments: mockAttachments,
+      });
+
+      renderNetworkLoaded();
+
+      // Le compteur, l'image et le panneau d'information — les trois surfaces
+      // que `setAttachments` alimente. Sans elles, « chargé » ne veut rien dire.
+      await waitFor(() => {
+        expect(screen.getByText('1 / 3')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.com/1.jpg');
+      expect(screen.getByText('First.jpg')).toBeInTheDocument();
+    });
+
+    it("reste sur l'état vide quand la charge ne porte aucune pièce", async () => {
+      const { AttachmentService } = require('@/services/attachmentService');
+      AttachmentService.getConversationAttachments.mockResolvedValue({
+        success: true,
+        attachments: [],
+      });
+
+      renderNetworkLoaded();
+
+      await waitFor(() => {
+        expect(screen.getByText('No image')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
   });
 

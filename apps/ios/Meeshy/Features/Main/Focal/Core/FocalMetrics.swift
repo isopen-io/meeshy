@@ -214,6 +214,15 @@ nonisolated public enum FocalMetrics {
     // MARK: - Médias
 
     /// `thread.media` — radius `16`.
+    /// **Le sticker d'une rangée FOCAL / SCRIPT / RIVIÈRE.**
+    ///
+    /// Plus petit que dans la bulle (160) : ces trois modes tiennent une
+    /// COLONNE de texte, où une carte de 160 pt écraserait la lecture. Le
+    /// dessin, lui, est le même atome — seule la stature change.
+    nonisolated public enum Sticker {
+        public static let side: CGFloat = 112
+    }
+
     nonisolated public enum Media {
         public static let radius: CGFloat = 16
     }

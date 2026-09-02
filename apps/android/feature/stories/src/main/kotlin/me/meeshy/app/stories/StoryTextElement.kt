@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
 
 /**
@@ -99,6 +100,16 @@ fun StoryTextStyle.typography(): StoryTextTypography = when (this) {
 }
 
 /**
+ * The EFFECT this composer's style PRESET carries (#4870). A style is a FONT and nothing
+ * else; what glows is the orthogonal [StoryTextEffect] axis. This composer has no effect
+ * control yet, so its "neon" preset — which the canvas shows glowing ([StoryTextTypography.glow])
+ * — publishes that glow on the axis, for the reader here, on the web and on iOS alike to see
+ * what the author saw. Retire this preset the day the composer gets its own effect control.
+ */
+fun StoryTextStyle.presetEffect(): StoryTextEffect =
+    if (typography().glow) StoryTextEffect.GLOW else StoryTextEffect.NONE
+
+/**
  * Pure, immutable model of one on-canvas text element of a story slide. Position
  * ([x]/[y]) is normalised to the canvas `0f..1f` (centre = `0.5, 0.5`), exactly as
  * iOS's `StoryTextObject`/`StoryTextPosition`, so it is resolution-independent and
@@ -196,6 +207,7 @@ data class StoryTextElement(
         backgroundStyle = background.toStyleWire(),
         borderColor = outline.color?.takeIf { outline.width > StoryTextOutline.NONE_WIDTH },
         borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
+        textEffect = style.presetEffect().wireOrNull,
         fadeIn = fade.inSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         fadeOut = fade.outSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),

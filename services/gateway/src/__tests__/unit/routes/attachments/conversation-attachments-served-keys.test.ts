@@ -4,30 +4,36 @@
  * L'issue porte `GET /conversations/:conversationId/attachments` comme servant
  * « `transcription` (texte + segments mot-à-mot) et `translations` (toutes
  * langues), systématiquement, pour jusqu'à 100 pièces ». La MESURE dit
- * autrement, et c'est le cœur de ce témoin : la route **les CHARGE** —
- * `AttachmentService.getConversationAttachments` les demande à MongoDB pour
- * chaque pièce de la page — et **n'en SERT aucune** : son schéma de réponse est
- * `messageAttachmentMinimalSchema`, sept clés, et `fast-json-stringify`
- * supprime tout ce qu'aucun schéma ne déclare.
+ * autrement, et c'est le cœur de ce témoin : la route **les CHARGEAIT** —
+ * `AttachmentService.getConversationAttachments` les demandait à MongoDB pour
+ * chaque pièce de la page — et **n'en SERVAIT aucune** : `fast-json-stringify`
+ * supprime tout ce qu'aucun schéma de réponse ne déclare.
  *
- * « Chargé » ≠ « servi ». Aucun client ne PEUT lire ces colonnes ici, quelle
- * que soit sa bonne volonté : le comptage des lecteurs rend zéro par
+ * « Chargé » ≠ « servi ». Aucun client ne POUVAIT lire ces colonnes ici, quelle
+ * que soit sa bonne volonté : le comptage des lecteurs rendait zéro par
  * CONSTRUCTION, avant même d'ouvrir un client. Le comptage l'a confirmé
  * indépendamment — web : `AttachmentGallery.tsx` via
  * `AttachmentService.getConversationAttachments`, qui ne mentionne ni l'une ni
  * l'autre ; iOS/SDK : `ConversationsEndpoint.byConversationIdAttachments` est
  * DÉCLARÉ et jamais appelé ; Android : aucun endpoint.
  *
+ * #4887 a soldé le travail mort que ce témoin avait rendu SÛR à retirer : le
+ * `select` de la liste est désormais `attachmentServiceRowSelect`, sans les
+ * deux colonnes lourdes. Ce témoin garde donc la moitié SERVIE de la
+ * garantie — ce que la route rend, quoi que son producteur lui remette ; sa
+ * jumelle `__tests__/unit/services/attachments/conversation-attachments-select.test.ts`
+ * garde la moitié DEMANDÉE, sur l'argument de `findMany`. Les deux sont
+ * nécessaires : un mock Prisma rend ce qu'on lui dit quel que soit le
+ * `select`, et un schéma de réponse ne dit rien de ce que la base lit.
+ *
  * Ce que ce témoin GARDE : le jeu de clés SERVI, exactement. Il tombe dans les
  * deux sens —
  *   - si le schéma de réponse est élargi (`messageAttachmentSchema` à la place
- *     du minimal), les colonnes lourdes repartent sur le fil et l'assertion de
- *     jeu EXACT rougit ;
- *   - si une clé du minimal disparaît, elle rougit aussi.
+ *     du schéma de liste), les colonnes lourdes repartent sur le fil et
+ *     l'assertion de jeu EXACT rougit ;
+ *   - si une clé du contrat disparaît, elle rougit aussi.
  * C'est le PRÉALABLE que #3909 nomme : déclarer le champ vient AVANT le
- * projeter. Tant que ce témoin tient, retirer les deux colonnes du `select`
- * de `AttachmentService` ne change RIEN au fil — c'est du travail mort, au
- * sens exact de #4177.
+ * projeter.
  *
  * `@meeshy/shared/types/api-schemas` n'est PAS mocké ici : c'est
  * `fast-json-stringify` qu'on mesure, donc la couche à traverser. (Le harnais
@@ -73,9 +79,23 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const CONVERSATION_ID = '507f1f77bcf86cd799439022';
 const ATT_ID = '507f1f77bcf86cd799439033';
 
-/** Le contrat SERVI par la liste — `messageAttachmentMinimalSchema`, à la clé près. */
+/**
+ * Le contrat SERVI par la liste — `conversationAttachmentListItemSchema`
+ * (routes/attachments/metadata.ts), à la clé près.
+ *
+ * Les SEPT premières viennent de `messageAttachmentMinimalSchema`, que le
+ * schéma local ÉPAND. Les SIX suivantes sont l'arbitrage #4887 (critère 2) :
+ * ce sont exactement les champs que `AttachmentGallery.tsx` rend, et qu'aucun
+ * schéma ne déclarait — panneau d'information vide par construction.
+ */
 const SERVED_KEYS = [
-  'duration', 'fileName', 'fileSize', 'fileUrl', 'id', 'mimeType', 'thumbnailUrl',
+  'createdAt', 'duration', 'fileName', 'fileSize', 'fileUrl', 'height', 'id',
+  'messageId', 'mimeType', 'originalName', 'thumbnailUrl', 'uploadedBy', 'width',
+] as const;
+
+/** L'arbitrage : les six champs que la galerie REND, et que la liste sert désormais. */
+const GALLERY_RENDERED_KEYS = [
+  'messageId', 'originalName', 'uploadedBy', 'createdAt', 'width', 'height',
 ] as const;
 
 /**
@@ -93,8 +113,8 @@ const SERVICE_ROW: Record<string, unknown> = {
   fileSize: 84213,
   fileUrl: 'https://cdn.example.com/note-vocale.m4a',
   thumbnailUrl: 'https://cdn.example.com/note-vocale.png',
-  width: undefined,
-  height: undefined,
+  width: 1920,
+  height: 1080,
   duration: 12480,
   bitrate: 64000,
   sampleRate: 48000,
@@ -173,43 +193,62 @@ async function servedAttachment(): Promise<Record<string, unknown>> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /conversations/:id/attachments — CHARGÉ ≠ SERVI (#4392)', () => {
-  it("le service rend transcription et translations PLEINES — la galerie n'en voit rien", async () => {
+  it("même une charge PLEINE de transcription et translations n'en laisse rien passer", async () => {
+    // Le service ne les charge plus (#4887, défaut 3), mais le contrat SERVI
+    // ne doit dépendre d'aucune discipline de producteur : la fixture les
+    // remet ici de force, et le sérialiseur doit les retirer quand même.
     const attachment = await servedAttachment();
 
-    // La charge remise par le service les porte…
+    // La charge remise au sérialiseur les porte…
     expect(SERVICE_ROW.transcription).toHaveProperty('segments');
     expect(Object.keys(SERVICE_ROW.translations as object)).toEqual(['en', 'es']);
-    // …et le sérialiseur les retire, faute d'être déclarées au schéma.
+    // …et il les retire, faute d'être déclarées au schéma.
     expect(attachment).not.toHaveProperty('transcription');
     expect(attachment).not.toHaveProperty('translations');
     expect(attachment).not.toHaveProperty('translatedAudios');
   });
 
-  it('sert EXACTEMENT les sept clés de `messageAttachmentMinimalSchema`', async () => {
+  it('sert EXACTEMENT les treize clés de `conversationAttachmentListItemSchema`', async () => {
     const attachment = await servedAttachment();
 
     expect(Object.keys(attachment).sort()).toEqual([...SERVED_KEYS]);
     expect(attachment).toEqual({
       id: ATT_ID,
+      messageId: '507f1f77bcf86cd799439044',
       fileName: 'note-vocale.m4a',
+      originalName: 'Note vocale.m4a',
       mimeType: 'audio/mp4',
       fileSize: 84213,
       fileUrl: 'https://cdn.example.com/note-vocale.m4a',
       thumbnailUrl: 'https://cdn.example.com/note-vocale.png',
+      width: 1920,
+      height: 1080,
       duration: 12480,
+      uploadedBy: USER_ID,
+      createdAt: '2026-09-01T10:00:00.000Z',
     });
   });
 
-  it("les colonnes que la galerie web RENDRAIT ne sont pas servies non plus — le constat, pas le correctif", async () => {
-    // `AttachmentGallery.tsx` lit `messageId`, `originalName`, `uploadedBy`,
-    // `createdAt`, `width`, `height` sur les pièces de CETTE route. Aucune
-    // n'est déclarée au schéma minimal : le panneau d'information de la
-    // galerie est vide par construction. Ce témoin le CONSTATE (dimension 13,
-    // complétude) ; l'élargir est une décision produit, hors de ce lot.
+  it('sert les six champs que la galerie REND — arbitrage #4887, critère 2', async () => {
+    // `AttachmentGallery.tsx` ne les AFFICHE pas seulement : deux d'entre eux
+    // portent une CAPACITÉ. `uploadedBy` décide si le bouton « supprimer »
+    // existe (`uploadedBy === currentUserId`), `messageId` est l'argument de
+    // « aller au message ». Sans eux, la galerie chargée par son propre appel
+    // n'aurait ni bouton de suppression pour son propriétaire, ni navigation —
+    // un panneau vide ET deux contrôles inertes.
+    //
+    // Rendre ces champs visibles OBLIGE à décider s'ils ont le droit de l'être
+    // (règle du cycle 84). Ils l'ont : la galerie est un SECOND LECTEUR des
+    // messages de la conversation, et le PREMIER — `GET /conversations/:id/
+    // messages`, dont `messageSchema.attachments` est `messageAttachmentSchema`
+    // — sert déjà les six au MÊME public, borné par les MÊMES exclusions
+    // (plancher de lien de partage, masquage personnel, tombstone). Le fil
+    // temps réel les sert aussi (`serializeAttachmentForSocket`). Aucune
+    // surface nouvelle n'est ouverte : c'est le même contenu, au même lecteur.
     const attachment = await servedAttachment();
 
-    for (const key of ['messageId', 'originalName', 'uploadedBy', 'createdAt', 'width', 'height']) {
-      expect(attachment).not.toHaveProperty(key);
+    for (const key of GALLERY_RENDERED_KEYS) {
+      expect(attachment).toHaveProperty(key);
     }
   });
 });

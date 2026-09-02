@@ -137,6 +137,8 @@ data class StoryTextObject(
     val backgroundStyle: StoryTextBackgroundStyle? = null,
     val borderColor: String? = null,
     val borderWidth: Double? = null,
+    /** The EFFECT axis (#4870) — [StoryTextEffect.wire]; absent ⇒ none. A string, like `textStyle`, so a newer client's value decodes. */
+    val textEffect: String? = null,
     val translations: Map<String, String>? = null,
     val sourceLanguage: String? = null,
     val startTime: Double? = null,

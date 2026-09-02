@@ -38,6 +38,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdParticipants(id: String)
     case byIdParticipantsByParticipantIdProfile(id: String, participantId: String)
     case byIdParticipantsByParticipantIdRights(id: String, participantId: String)
+    case byIdParticipantsByParticipantKey(id: String, participantKey: String)
     case byIdParticipantsByUserId(id: String, userId: String)
     case byIdParticipantsByUserIdBan(id: String, userId: String)
     case byIdParticipantsByUserIdRole(id: String, userId: String)
@@ -80,6 +81,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdParticipants(let id): return "/api/v1/conversations/\(id)/participants"
         case .byIdParticipantsByParticipantIdProfile(let id, let participantId): return "/api/v1/conversations/\(id)/participants/\(participantId)/profile"
         case .byIdParticipantsByParticipantIdRights(let id, let participantId): return "/api/v1/conversations/\(id)/participants/\(participantId)/rights"
+        case .byIdParticipantsByParticipantKey(let id, let participantKey): return "/api/v1/conversations/\(id)/participants/\(participantKey)"
         case .byIdParticipantsByUserId(let id, let userId): return "/api/v1/conversations/\(id)/participants/\(userId)"
         case .byIdParticipantsByUserIdBan(let id, let userId): return "/api/v1/conversations/\(id)/participants/\(userId)/ban"
         case .byIdParticipantsByUserIdRole(let id, let userId): return "/api/v1/conversations/\(id)/participants/\(userId)/role"

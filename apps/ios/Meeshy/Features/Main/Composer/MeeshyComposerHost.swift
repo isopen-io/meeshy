@@ -471,6 +471,20 @@ struct MeeshyComposerHost: View {
     /// posé sans rien fonder.
     @State var mediaRoleByURL: [URL: ComposerMediaRole] = [:]
 
+    /// **Les LÉGENDES, une par média** (#4890, directive porteur 2026-09-02 :
+    /// « chaque image doit avoir sa légende »).
+    ///
+    /// Elle n'existe qu'en profil POST : ailleurs le texte de la slide EST le
+    /// contenu de la publication et vit dans la slide. C'est
+    /// `ComposerSlideTextRole` qui tranche, et ce champ n'est écrit que par lui
+    /// — poser ici une seconde décision de rôle referait le recouvrement que le
+    /// lot vient de retirer.
+    ///
+    /// Clé : l'URL LOCALE du média, la seule qui existe pendant la composition
+    /// (l'id serveur n'est attribué qu'à l'upload) et celle sous laquelle le
+    /// meuble tient déjà ses médias.
+    @State var documentMediaCaptions: ComposerMediaCaptions = [:]
+
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois

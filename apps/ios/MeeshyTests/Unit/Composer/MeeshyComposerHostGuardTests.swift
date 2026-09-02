@@ -1193,9 +1193,26 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // est exigée, pas ses deux appels séparément : un `else` qui
         // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
-            branche.contains("case.document,.mood:ifselectedFormat==.story{publishStoryScene()}else{publishDocument()}"),
-            "… et sous les deux autres surfaces, UN chemin par format : la story par le canal de la "
-                + "scène (#4700), le document et le mood par le brouillon."
+            branche.contains("case.document,.mood:switchComposerPublishChannel.channel(for:selectedFormat)"),
+            "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
+                + "de formats écrite dans le corps du publieur."
+        )
+        // **Cette garde épinglait le défaut qu'elle avertissait de surveiller.**
+        //
+        // Sa forme précédente exigeait `ifselectedFormat==.story{…}else{…}`, en
+        // écrivant qu'« une condition qui glisserait sur `.reel` rougirait ».
+        // C'est exactement ce qui s'était produit : le réel tombait dans le
+        // `else`, descendait sur `DocumentComposerDoor` qui le refuse, et ne
+        // partait JAMAIS — flèche peinte, sans effet.
+        //
+        // > Une garde qui fige une CONDITION fige aussi ce que la condition
+        // > oublie. Épingler la règle (`ComposerPublishChannel`) plutôt que sa
+        // > forme laisse le `switch` exhaustif refuser de compiler quand un
+        // > cinquième format arrive — ce qu'aucune chaîne de `if` ne fait.
+        XCTAssertTrue(
+            branche.contains("case.unsupported:refuseUnsupportedFormat()"),
+            "Un format sans canal se REFUSE à voix haute. Le silence est ce qui a laissé le réel "
+                + "ne jamais partir, et un refus muet se relit comme une flèche cassée."
         )
         XCTAssertFalse(
             branche.contains("case.document,.mood:publishDocument()"),
