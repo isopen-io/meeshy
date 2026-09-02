@@ -200,7 +200,16 @@ NC='\033[0m'
 # 1184 (rouge) a 1182 (amelioration non enregistree) par un correctif dont
 # l'effet est ENTIEREMENT attribue : les deux erreurs retirees nommaient toutes
 # deux `ConversationPreferencesPayload` et le champ absent.
-readonly WEB_BASELINE=1180
+# 1180 -> 0 le 2026-09-02 : la dette est SOLDEE. Mesure du script lui-meme,
+# avec le TypeScript du depot, sur le tsconfig reel d'apps/web
+# (include `**/*.tsx`, `jsx: preserve`, `strict: true` — 2 084 fichiers), et
+# `.next/` exclu comme depuis toujours, ce qui rend le chiffre stable entre CI
+# et poste local (auto-test n°3).
+#
+# Le cliquet etait ROUGE non pour une regression mais pour une AMELIORATION NON
+# ENREGISTREE : il refuse de laisser une marge regagnee redevenir depensable.
+# L'ecrire ici est ce qui la verrouille.
+readonly WEB_BASELINE=0
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
