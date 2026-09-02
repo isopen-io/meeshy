@@ -21,6 +21,7 @@
     <string name="bubble_story_shares">%1$d compartilhamentos</string>
     <string name="bubble_image_description">Imagem</string>
     <string name="bubble_attachment_file_fallback">Arquivo</string>
+    <string name="bubble_file_open">Abrir arquivo</string>
     <string name="bubble_location_shared">Localização compartilhada</string>
     <string name="bubble_location_open">Abrir no mapa</string>
     <string name="live_location_sharing_by">%1$s está a partilhar a localização</string>

@@ -90,6 +90,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.verticalScroll
@@ -641,6 +642,9 @@ fun ChatScreen(
                                             onAudioClick = { audio ->
                                                 audio.url?.let { runCatching { uriHandler.openUri(it) } }
                                             },
+                                            onFileClick = { file ->
+                                                viewModel.onFileAttachmentOpen(bubble.messageId, file.attachmentId)
+                                            },
                                             onReplyPreviewClick = {
                                                 viewModel.onReplyPreviewTap(bubble.messageId)
                                             },
@@ -834,9 +838,21 @@ fun ChatScreen(
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onExploreLanguages = { viewModel.openLanguageExplorer(actionTarget.messageId) },
             onReport = { viewModel.openReport(actionTarget.messageId) },
+            onOpenFile = { viewModel.onFileAttachmentOpen(actionTarget.messageId) },
+            onShareFile = { viewModel.onFileAttachmentShare(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
         )
     }
+
+    FileAttachmentDownloadOverlay(
+        download = state.fileDownload,
+        onDismiss = viewModel::dismissFileDownload,
+        onRetry = { download ->
+            val attachmentId = download.attachmentId.takeIf { it.isNotBlank() }
+            if (download.openWhenDone) viewModel.onFileAttachmentOpen(download.messageId, attachmentId)
+            else viewModel.onFileAttachmentShare(download.messageId, attachmentId)
+        },
+    )
 
     if (showConversationSettings) {
         ConversationSettingsSheet(
@@ -2099,6 +2115,8 @@ private fun MessageActionsSheet(
     onToggleOriginal: () -> Unit,
     onExploreLanguages: () -> Unit,
     onReport: () -> Unit,
+    onOpenFile: () -> Unit,
+    onShareFile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -2113,6 +2131,7 @@ private fun MessageActionsSheet(
         canEdit = canEdit,
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
+        hasOpenableFile = !bubble.isDeleted && bubble.files.isNotEmpty(),
     )
     // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]
     // SSOT: a strong swipe up expands the compact action sheet into the full language
@@ -2207,6 +2226,22 @@ private fun MessageActionsSheet(
                         label = stringResource(R.string.chat_action_copy),
                         onClick = {
                             clipboard.setText(AnnotatedString(bubble.text))
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.OpenFile -> SheetAction(
+                        icon = Icons.Filled.AttachFile,
+                        label = stringResource(R.string.chat_action_open_file),
+                        onClick = {
+                            onOpenFile()
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.ShareFile -> SheetAction(
+                        icon = Icons.Filled.Share,
+                        label = stringResource(R.string.chat_action_share_file),
+                        onClick = {
+                            onShareFile()
                             onDismiss()
                         },
                     )

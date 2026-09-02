@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -90,6 +91,7 @@ import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.After
@@ -163,6 +165,13 @@ class ChatViewModelTest {
             justRun { emitTypingStop(any()) }
         }
 
+    private fun typingPresenceRelay(
+        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
+    ): TypingPresenceRelay =
+        mockk<TypingPresenceRelay> {
+            every { this@mockk.forcedOnline } returns forcedOnline
+        }
+
     private data class Harness(
         val vm: ChatViewModel,
         val repo: MessageRepository,
@@ -178,6 +187,7 @@ class ChatViewModelTest {
         val reportRepo: ReportRepository,
         val mediaQueue: MediaUploadQueue,
         val mentionSearch: MentionSearch,
+        val fileDownloader: FileAttachmentDownloader,
     )
 
     private fun viewModel(
@@ -203,6 +213,7 @@ class ChatViewModelTest {
         offline: Boolean = false,
         initialDraftArg: String? = null,
         socket: MessageSocketManager = socketManager(),
+        relay: TypingPresenceRelay = typingPresenceRelay(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -228,6 +239,8 @@ class ChatViewModelTest {
         val networkMonitor = InMemoryNetworkConditionMonitor(
             initial = if (offline) NetworkCondition.OFFLINE else NetworkCondition.WIFI,
         )
+        val fileDownloader = mockk<FileAttachmentDownloader>(relaxed = true)
+        every { fileDownloader.download(any(), any(), any()) } returns emptyFlow()
         val handle = SavedStateHandle(
             buildMap {
                 put(ChatViewModel.CONVERSATION_ID_ARG, "c1")
@@ -252,6 +265,7 @@ class ChatViewModelTest {
                 locallyHidden,
                 starred,
                 socket,
+                relay,
                 workManager,
                 MeeshyConfig(),
                 clock,
@@ -263,6 +277,7 @@ class ChatViewModelTest {
                 anonymousStore,
                 privacyStore,
                 networkMonitor,
+                fileDownloader,
                 handle,
             ),
             repo,
@@ -278,6 +293,7 @@ class ChatViewModelTest {
             reportRepo,
             mediaQueue,
             mentionSearch,
+            fileDownloader,
         )
     }
 
@@ -1476,6 +1492,23 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         userStatusFlow.emit(UserStatusEvent(userId = "u1", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)
+    }
+
+    @Test
+    fun headerPresence_reflects_a_forced_online_event_from_a_typing_frame() = runTest(dispatcher) {
+        val forcedOnlineFlow = MutableSharedFlow<UserStatusEvent>()
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = directConversation(),
+            relay = typingPresenceRelay(forcedOnline = forcedOnlineFlow),
+        )
+        advanceUntilIdle()
+
+        forcedOnlineFlow.emit(UserStatusEvent(userId = "u1", isOnline = true, lastActiveAt = null))
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.headerPresence(nowEpochMillis = 0L)).isEqualTo(PresenceState.ONLINE)
@@ -2882,6 +2915,187 @@ class ChatViewModelTest {
         h.vm.openImageViewer("m2", 1)
 
         assertThat(h.vm.state.value.imageViewer).isNull()
+    }
+
+    private fun fileMessage(id: String, fileUrl: String? = "docs/report.pdf") = synced(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = "$id-file",
+                    mimeType = "application/pdf",
+                    originalName = "report.pdf",
+                    fileUrl = fileUrl,
+                ),
+            ),
+        ),
+    )
+
+    private fun fileConversation(fileUrl: String? = "docs/report.pdf") = flowOf(
+        CacheResult.Fresh(listOf(fileMessage("m1", fileUrl)), ageMillis = 0),
+    )
+
+    @Test
+    fun opening_a_file_attachment_downloads_it_then_the_state_surfaces_progress() = runTest(dispatcher) {
+        val h = harness(fileConversation(), currentUser = me)
+        every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.InProgress(progressPercent = 40),
+        )
+        advanceUntilIdle()
+
+        h.vm.onFileAttachmentOpen("m1")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.fileDownload).isEqualTo(
+            FileAttachmentDownloadUiState(
+                messageId = "m1",
+                attachmentId = "m1-file",
+                fileName = "report.pdf",
+                state = FileAttachmentDownloadState.InProgress(progressPercent = 40),
+                openWhenDone = true,
+            ),
+        )
+    }
+
+    @Test
+    fun sharing_a_file_attachment_sets_openWhenDone_to_false() = runTest(dispatcher) {
+        val h = harness(fileConversation(), currentUser = me)
+        every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.InProgress(progressPercent = null),
+        )
+        advanceUntilIdle()
+
+        h.vm.onFileAttachmentShare("m1")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.fileDownload?.openWhenDone).isFalse()
+    }
+
+    @Test
+    fun opening_a_file_attachment_with_no_url_yet_surfaces_not_available_without_calling_the_downloader() =
+        runTest(dispatcher) {
+            val h = harness(fileConversation(fileUrl = null), currentUser = me)
+            advanceUntilIdle()
+
+            h.vm.onFileAttachmentOpen("m1")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.fileDownload?.state).isEqualTo(
+                FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NotAvailable),
+            )
+            verify(exactly = 0) { h.fileDownloader.download(any(), any(), any()) }
+        }
+
+    private fun twoFileMessage(id: String) = synced(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = "$id-contrat",
+                    mimeType = "application/pdf",
+                    originalName = "contrat.pdf",
+                    fileUrl = "docs/contrat.pdf",
+                ),
+                ApiMessageAttachment(
+                    id = "$id-annexe",
+                    mimeType = "application/pdf",
+                    originalName = "annexe.pdf",
+                    fileUrl = "docs/annexe.pdf",
+                ),
+            ),
+        ),
+    )
+
+    private fun twoFileConversation() = flowOf(
+        CacheResult.Fresh(listOf(twoFileMessage("m1")), ageMillis = 0),
+    )
+
+    @Test
+    fun tapping_the_second_file_row_of_a_multi_file_message_downloads_that_file_not_the_first() =
+        runTest(dispatcher) {
+            val h = harness(twoFileConversation(), currentUser = me)
+            every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+                FileAttachmentDownloadState.InProgress(progressPercent = null),
+            )
+            advanceUntilIdle()
+
+            h.vm.onFileAttachmentOpen("m1", attachmentId = "m1-annexe")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.fileDownload?.attachmentId).isEqualTo("m1-annexe")
+            assertThat(h.vm.state.value.fileDownload?.fileName).isEqualTo("annexe.pdf")
+        }
+
+    @Test
+    fun sharing_the_second_file_row_of_a_multi_file_message_shares_that_file_not_the_first() =
+        runTest(dispatcher) {
+            val h = harness(twoFileConversation(), currentUser = me)
+            every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+                FileAttachmentDownloadState.InProgress(progressPercent = null),
+            )
+            advanceUntilIdle()
+
+            h.vm.onFileAttachmentShare("m1", attachmentId = "m1-annexe")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.fileDownload?.attachmentId).isEqualTo("m1-annexe")
+            assertThat(h.vm.state.value.fileDownload?.openWhenDone).isFalse()
+        }
+
+    @Test
+    fun no_attachmentId_falls_back_to_the_first_file_row_for_the_message_actions_sheet() =
+        runTest(dispatcher) {
+            val h = harness(twoFileConversation(), currentUser = me)
+            every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+                FileAttachmentDownloadState.InProgress(progressPercent = null),
+            )
+            advanceUntilIdle()
+
+            h.vm.onFileAttachmentOpen("m1")
+            advanceUntilIdle()
+
+            assertThat(h.vm.state.value.fileDownload?.attachmentId).isEqualTo("m1-contrat")
+        }
+
+    @Test
+    fun reopening_an_already_downloaded_file_attachment_reuses_it_instead_of_downloading_again() =
+        runTest(dispatcher) {
+            val h = harness(fileConversation(), currentUser = me)
+            every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+                FileAttachmentDownloadState.Completed(localUri = "content://downloads/1", mimeType = "application/pdf"),
+            )
+            advanceUntilIdle()
+
+            h.vm.onFileAttachmentOpen("m1")
+            advanceUntilIdle()
+            h.vm.onFileAttachmentOpen("m1")
+            advanceUntilIdle()
+
+            verify(exactly = 1) { h.fileDownloader.download(any(), any(), any()) }
+            assertThat(h.vm.state.value.fileDownload?.state).isEqualTo(
+                FileAttachmentDownloadState.Completed(localUri = "content://downloads/1", mimeType = "application/pdf"),
+            )
+        }
+
+    @Test
+    fun dismissing_the_file_download_clears_it() = runTest(dispatcher) {
+        val h = harness(fileConversation(), currentUser = me)
+        every { h.fileDownloader.download(any(), any(), any()) } returns flowOf(
+            FileAttachmentDownloadState.InProgress(progressPercent = null),
+        )
+        advanceUntilIdle()
+        h.vm.onFileAttachmentOpen("m1")
+        advanceUntilIdle()
+
+        h.vm.dismissFileDownload()
+
+        assertThat(h.vm.state.value.fileDownload).isNull()
     }
 
     @Test

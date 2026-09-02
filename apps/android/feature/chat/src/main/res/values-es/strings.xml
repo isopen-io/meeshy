@@ -56,6 +56,16 @@
     <string name="chat_retry">Reintentar</string>
     <string name="chat_send_failed_retry">No enviado — toca para reintentar</string>
     <string name="chat_action_copy">Copiar</string>
+    <string name="chat_action_open_file">Abrir</string>
+    <string name="chat_action_share_file">Compartir</string>
+    <string name="chat_file_download_progress">Descargando %1$s… %2$d%%</string>
+    <string name="chat_file_download_progress_indeterminate">Descargando %1$s…</string>
+    <string name="chat_file_download_expired">Este archivo ya no está disponible.</string>
+    <string name="chat_file_download_not_available">Este archivo aún no está disponible.</string>
+    <string name="chat_file_download_failed_network">No se pudo descargar el archivo. Comprueba tu conexión.</string>
+    <string name="chat_file_download_failed_server">No se pudo descargar el archivo.</string>
+    <string name="chat_file_download_dismiss">Cerrar</string>
+    <string name="chat_file_open_failed">Ninguna aplicación puede abrir este archivo.</string>
     <string name="chat_action_reply">Responder</string>
     <string name="chat_action_forward">Reenviar</string>
     <string name="chat_forward_title">Reenviar a…</string>
