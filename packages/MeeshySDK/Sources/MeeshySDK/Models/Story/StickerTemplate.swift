@@ -95,6 +95,16 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case reaction
     case party
     case availability
+    /// Le second lot de thèmes (#4820, vers les 200) — ce qu'on mange, ce qu'on
+    /// fait, où l'on va, ce qu'on écoute, ce qu'on encourage, ce qu'on répond.
+    case food
+    case sport
+    case travel
+    case work
+    case music
+    case nature
+    case cheer
+    case answer
 }
 
 // MARK: - Sticker Template Slot

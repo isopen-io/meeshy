@@ -200,6 +200,14 @@ public struct StickerPickerView: View {
         case .reaction:     templateTab(family: .reaction)
         case .party:        templateTab(family: .party)
         case .availability: templateTab(family: .availability)
+        case .food: templateTab(family: .food)
+        case .sport: templateTab(family: .sport)
+        case .travel: templateTab(family: .travel)
+        case .work: templateTab(family: .work)
+        case .music: templateTab(family: .music)
+        case .nature: templateTab(family: .nature)
+        case .cheer: templateTab(family: .cheer)
+        case .answer: templateTab(family: .answer)
         case .time:    templateTab(family: .time)
         case .weather: templateTab(family: .weather)
         case .place:   placeTab
@@ -233,6 +241,22 @@ public struct StickerPickerView: View {
             return String(localized: "sticker.tab.party", defaultValue: "Fête", bundle: .module)
         case .availability:
             return String(localized: "sticker.tab.availability", defaultValue: "Dispo", bundle: .module)
+        case .food:
+            return String(localized: "sticker.tab.food", defaultValue: "Miam", bundle: .module)
+        case .sport:
+            return String(localized: "sticker.tab.sport", defaultValue: "Sport", bundle: .module)
+        case .travel:
+            return String(localized: "sticker.tab.travel", defaultValue: "Voyage", bundle: .module)
+        case .work:
+            return String(localized: "sticker.tab.work", defaultValue: "Boulot", bundle: .module)
+        case .music:
+            return String(localized: "sticker.tab.music", defaultValue: "Musique", bundle: .module)
+        case .nature:
+            return String(localized: "sticker.tab.nature", defaultValue: "Nature", bundle: .module)
+        case .cheer:
+            return String(localized: "sticker.tab.cheer", defaultValue: "Bravo", bundle: .module)
+        case .answer:
+            return String(localized: "sticker.tab.answer", defaultValue: "Réponses", bundle: .module)
         case .place:
             return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
         case .library:

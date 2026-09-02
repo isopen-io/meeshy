@@ -91,6 +91,16 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     case reaction
     case party
     case availability
+    /// Le second lot de thèmes (#4820) : nourriture, sport, voyage, travail,
+    /// musique, nature, encouragement, réponses.
+    case food
+    case sport
+    case travel
+    case work
+    case music
+    case nature
+    case cheer
+    case answer
     case time
     case weather
     case place
@@ -103,7 +113,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     /// que c'est le seul onglet dont le contenu appartient à l'utilisateur.
     public static let canonicalOrder: [StickerPaletteTab] = [
         .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction, .party,
-        .availability, .time, .weather, .place, .library,
+        .availability, .food, .sport, .travel, .work, .music, .nature, .cheer, .answer,
+        .time, .weather, .place, .library,
     ]
 
     /// La famille de gabarits que l'onglet montre — `nil` pour les deux onglets
@@ -119,6 +130,14 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .reaction:     return .reaction
         case .party:        return .party
         case .availability: return .availability
+        case .food: return .food
+        case .sport: return .sport
+        case .travel: return .travel
+        case .work: return .work
+        case .music: return .music
+        case .nature: return .nature
+        case .cheer: return .cheer
+        case .answer: return .answer
         case .time:         return .time
         case .weather:      return .weather
         case .place:   return .location
@@ -140,6 +159,14 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .reaction:     return "hand.thumbsup"
         case .party:        return "party.popper"
         case .availability: return "person.crop.circle.badge.checkmark"
+        case .food: return "fork.knife"
+        case .sport: return "figure.run"
+        case .travel: return "airplane"
+        case .work: return "briefcase"
+        case .music: return "music.note"
+        case .nature: return "leaf"
+        case .cheer: return "hands.clap"
+        case .answer: return "questionmark.bubble"
         case .time:    return "clock"
         case .weather: return "cloud.sun"
         case .place:   return "mappin.and.ellipse"
@@ -162,7 +189,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
             case .library: return hasLibrary
             case .place:   return hasNearbyPlaces
             case .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction,
-                 .party, .availability, .time, .weather:
+                 .party, .availability, .food, .sport, .travel, .work, .music, .nature,
+                 .cheer, .answer, .time, .weather:
                 return true
             }
         }

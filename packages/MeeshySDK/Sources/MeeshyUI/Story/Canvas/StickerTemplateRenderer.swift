@@ -166,6 +166,8 @@ public enum StickerTemplateRenderer {
             weatherDrawers, textDrawers,
             joyDrawers, surpriseDrawers, moodDrawers, greetingDrawers,
             reactionDrawers, partyDrawers, availabilityDrawers,
+            foodDrawers, sportDrawers, travelDrawers, workDrawers,
+            musicDrawers, natureDrawers, cheerDrawers, answerDrawers,
         ]
         return Dictionary(familles.joined().map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
     }()
