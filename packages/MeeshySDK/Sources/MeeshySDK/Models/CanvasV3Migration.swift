@@ -426,19 +426,32 @@ public extension CanvasV3 {
         // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
         // disparaît chez un lecteur qui ne rend que l'emoji.
         var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        // **Le GABARIT voyage, pas seulement son repli** (#4741).
+        //
+        // `wireEmoji` ci-dessus rend, pour un sticker à gabarit, l'emoji de
+        // REPLI du catalogue. Le fil portait donc soigneusement le repli d'une
+        // décoration qu'il ne portait pas : une pastille de lieu publiée
+        // revenait « 📍 », un cadre de cœurs « 💕 ». Le composer dessinait, le
+        // lecteur rendait un glyphe.
+        //
+        // > Un repli conservé sans la chose dont il est le repli n'est plus un
+        // > repli : c'est le contenu.
+        //
+        // Le repli RESTE émis — il sert le lecteur dont le build ne connaît pas
+        // ce `templateId` (une décoration plus récente que lui), qui verra un
+        // glyphe plutôt qu'un trou.
+        if let templateId = nonEmpty(sticker.templateId) {
+            payload["templateId"] = .string(templateId)
+            if !sticker.slots.isEmpty {
+                payload["slots"] = .object(sticker.slots.mapValues { CanvasJSONValue.string($0) })
+            }
+        }
         if let postMediaId = nonEmpty(sticker.postMediaId) {
             payload["postMediaId"] = .string(postMediaId)
         }
         if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
-        // **Le gabarit et ses valeurs figées PARTENT au fil** (#4819). Sans
-        // ces deux clés, une heure ou un cœur posés étaient publiés emoji
-        // seul — et iOS, relisant sa propre publication, voyait « 🕐 » à la
-        // place du cadran. Omis quand vides, comme `postMediaId` : un sticker
-        // emoji se réencode exactement comme avant.
-        if let templateId = nonEmpty(sticker.templateId) { payload["templateId"] = .string(templateId) }
-        if !sticker.slots.isEmpty {
-            payload["slots"] = .object(sticker.slots.mapValues(CanvasJSONValue.string))
-        }
+        // **Le mouvement voyage avec la décoration** (#4821) — une propriété de
+        // la charge, jamais un kind ; web et Android l'ignorent.
         if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
@@ -771,7 +784,9 @@ public extension StoryEffects {
     /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
     ///
     /// Un sticker GABARIT sans repli reçoit celui que son gabarit déclare — ou
-    /// le repli générique si ce binaire ne le connaît pas (#4819).
+    /// le repli générique si ce binaire ne le connaît pas (#4819, #4741) — `nil` ⇒ l'objet est REJETÉ, et
+    /// une décoration jetée pour un repli manquant serait perdue au lieu d'être
+    /// dégradée.
     private static func stickerEmoji(_ wire: String?, hasImage: Bool, templateId: String) -> String? {
         if let repli = nonEmpty(wire) { return repli }
         if !templateId.isEmpty {

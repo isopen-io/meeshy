@@ -85,13 +85,13 @@ jest.mock('../../../middleware/auth', () => ({
     return mockParticipantAuthMiddleware;
   },
 }));
-// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
-// et interroge le double Prisma de ce fichier : un mock de module complet le
-// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+// Seule la DÉCISION d'accès est doublée, sous ses DEUX formes depuis #4792 (noyau à
+// trois états + projection booléenne, `helpers/acces-conversation-double`). Le module
+// est PROLONGÉ : `resolveCallerParticipant` reste RÉEL sur le double Prisma du fichier.
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 jest.mock('../../../utils/response', () => ({
   sendSuccess: (...args: any[]) => mockSendSuccess(...args),
   sendBadRequest: (...args: any[]) => mockSendBadRequest(...args),

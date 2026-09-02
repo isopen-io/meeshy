@@ -649,6 +649,19 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Cast to `any` once to safely access error properties below.
       const err: any = error as any;
 
+      // Ce gestionnaire ne pose plus AUCUN champ que `errorResponseSchema` ne
+      // DÉCLARE (#4689). Il y posait `timestamp` et `statusCode` sur les deux
+      // branches typées, `details` sur deux des trois 413, `stack` sur le
+      // repli. `fast-json-stringify` ne supprime que là où un schéma EXISTE :
+      // une route qui déclarait consciencieusement son 4xx servait donc MOINS
+      // qu'une route qui ne déclarait rien — le geste vertueux était celui qui
+      // faisait perdre des champs, sur 595 déclarations de statut. Mesuré
+      // avant de retirer : aucun des trois clients ne lit `statusCode` ni
+      // `timestamp` dans un corps d'erreur, et le statut HTTP porte déjà
+      // l'information de `statusCode` pour tout le monde, y compris pour qui
+      // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
+      // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
+
       // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
       // `err.validation`. Sans cette branche il tombait dans le repli
       // générique et ressortait en « Internal Server Error / An unexpected
@@ -661,10 +674,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // par tout repli qui lit ce champ.
       const schemaRefusal = schemaValidationErrorResponse(error);
       if (schemaRefusal) {
-        return reply.code(schemaRefusal.statusCode).send({
-          ...schemaRefusal,
-          timestamp: new Date().toISOString()
-        });
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
       }
 
       // TOUTE la hiérarchie typée, en UNE branche (#4212).
@@ -687,23 +698,15 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // demande un témoin par sous-classe.
       const typed = typedErrorResponse(error);
       if (typed) {
-        return reply.code(typed.statusCode).send({
-          ...typed,
-          timestamp: new Date().toISOString()
-        });
+        const { statusCode: typeStatus, ...corpsType } = typed;
+        return reply.code(typeStatus).send(corpsType);
       }
 
       // Gestion des erreurs de limite de fichiers multipart
       if (err && err.code === 'FST_FILES_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`,
-          details: {
-            maxFiles: 30,
-            limit: 'Files limit reached'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
         });
       }
 
@@ -711,13 +714,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         return reply.code(413).send({
           error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`,
-          details: {
-            maxFileSize: '4 GB',
-            limit: 'File size exceeded'
-          },
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
         });
       }
 
@@ -725,9 +722,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (err && err.code === 'FST_PARTS_LIMIT') {
         return reply.code(413).send({
           error: 'Too Many Parts',
-          message: `Too many parts in the multipart request. Please reduce the number of elements.`,
-          statusCode: 413,
-          timestamp: new Date().toISOString()
+          message: `Too many parts in the multipart request. Please reduce the number of elements.`
         });
       }
 
@@ -735,10 +730,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       const statusCode = (err && err.statusCode) || 500;
       return reply.code(statusCode).send({
         error: 'Internal Server Error',
-        message: config.isDev ? (err && err.message) : 'An unexpected error occurred',
-        statusCode,
-        timestamp: new Date().toISOString(),
-        ...(config.isDev && { stack: err && err.stack })
+        message: config.isDev ? (err && err.message) : 'An unexpected error occurred'
       });
     });
 

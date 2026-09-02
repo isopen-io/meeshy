@@ -70,9 +70,24 @@ final class MediaCaptionOverlayLayoutGuardTests: XCTestCase {
             guard let bloc = corps(ancre, dans: code) else {
                 return XCTFail("`\(ancre)` introuvable.")
             }
-            guard let retrait = bloc.range(of: ".padding(.horizontal, horizontalInset)"),
+            // DEUX formes valides du même retrait, et la garde doit les
+            // reconnaître toutes deux — sans quoi elle rougit sur un
+            // changement qui respecte son intention :
+            //
+            //   `.padding(.horizontal, horizontalInset)`  — la légende repliée
+            //   `.padding(.leading, horizontalInset)`     — la dépliée, qui
+            //     dissocie ses deux bords pour laisser la place au rail
+            //     d'actions de la story (`expandedTrailingInset`, #4762).
+            //
+            // Ce que la garde protège n'est pas le LITTÉRAL mais l'ORDRE : un
+            // retrait posé APRÈS un `frame(maxWidth: .infinity)` élargit la vue
+            // au lieu de la creuser. Chercher une chaîne exacte là où la règle
+            // parle d'ordre, c'est se condamner à rougir sur du juste.
+            guard let retrait = bloc.range(of: ".padding(.horizontal, horizontalInset)")
+                    ?? bloc.range(of: ".padding(.leading, horizontalInset)"),
                   let cadre = bloc.range(of: ".frame(maxWidth: .infinity") else {
-                return XCTFail("Retrait ou cadre absent de `\(ancre)`.")
+                return XCTFail("Retrait horizontal ou cadre absent de `\(ancre)` — "
+                               + "la garde ne mesurerait rien.")
             }
             XCTAssertLessThan(
                 retrait.lowerBound, cadre.lowerBound,

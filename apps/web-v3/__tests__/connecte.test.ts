@@ -72,19 +72,94 @@ describe('la porte de la zone connectée', () => {
    * La traiter en panne ferait lire « le service ne répond pas » à qui doit
    * simplement se reconnecter — et le ferait RESTER là, sans issue.
    */
-  it.each([401, 403])('renvoie se connecter quand la passerelle refuse le jeton (%s)', async (statut) => {
+  it('renvoie se connecter quand la passerelle refuse le jeton (401)', async () => {
     const porte = serviteurDe(
       '/',
       () => 'jamais rendu',
       passerelle({
-        '/api/v1/auth/me': () => json({}, statut),
-        '/api/v1/conversations': () => json({}, statut),
+        '/api/v1/auth/me': () => json({}, 401),
+        '/api/v1/conversations': () => json({}, 401),
       }),
     );
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(302);
     expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+  });
+
+  /**
+   * LE FIL PORTE SA PROPRE LIGNE DE REFUS, et ce témoin est le seul qui puisse
+   * le prouver. Le témoin précédent met les DEUX routes en 401 : sa redirection
+   * peut venir de l'identité seule, donc il resterait vert si `conversations()`
+   * cessait de lire le statut. `/auth/me` est ici NOMINALE — c'est la forme
+   * qu'avait prise ce même témoin sous #4760, où une mutation l'avait d'abord
+   * trouvé VERT pour la mauvaise raison.
+   *
+   * Depuis #4789, `GET /conversations` rend `401 UNAUTHORIZED` pour une session
+   * absente ou morte (`sendUnauthorized`, `routes/conversations/core-list.ts`)
+   * là où il servait un 403. La ligne `status === 403` de `compte.ts`, écrite
+   * POUR ce défaut, est partie avec lui.
+   */
+  it('renvoie se connecter sur le 401 de /conversations, /auth/me étant nominale', async () => {
+    const porte = serviteurDe(
+      '/',
+      () => 'jamais rendu',
+      passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () => json({ success: false, code: 'UNAUTHORIZED' }, 401),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(302);
+    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+  });
+
+  /**
+   * ET LE 403 N'EST PLUS UNE SESSION EXPIRÉE — sur AUCUNE des deux routes.
+   * `GET /conversations` ne le sert plus et ne le DÉCLARE plus à son schéma de
+   * réponse (#4789) ; le remettre ici ferait lire « reconnecte-toi » à un refus
+   * de DROIT qu'une route voisine pourrait servir un jour. Un 403 y retombe
+   * donc dans l'illisible, comme n'importe quelle réponse que cet appelant ne
+   * sait pas lire — et l'écran de panne est DESSINÉ, jamais blanc.
+   */
+  it('ne prend plus le 403 de /conversations pour une session expirée', async () => {
+    const porte = serviteurDe(
+      '/',
+      () => 'jamais rendu',
+      passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () => json({}, 403),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(503);
+    expect(await reponse.text()).toContain('Le service ne répond pas');
+  });
+
+  /**
+   * `/auth/me`, elle, ne rend JAMAIS 403 : sa garde est montée en
+   * `allowAnonymous: true` (branche 403 inatteignable) et `handleGetMe`
+   * (`routes/me/get-me.ts:313`) refuse par `sendUnauthorized`. Son 403 était
+   * une branche morte ; retirée, un 403 y retombe dans l'illisible — et
+   * l'écran se sert quand même, comme pour n'importe quelle autre réponse que
+   * cet appelant ne sait pas lire.
+   */
+  it('ne prend PAS le 403 de /auth/me pour une session expirée', async () => {
+    const porte = serviteurDe(
+      '/',
+      (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
+      passerelle({
+        '/api/v1/auth/me': () => json({}, 403),
+        '/api/v1/conversations': () =>
+          json({ success: true, data: [CONVERSATION({})], pagination: { total: 1 } }),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(200);
+    expect(await reponse.text()).toContain('prenom=aucun n=1');
   });
 
   it('dessine la panne plutôt qu’une page blanche quand la passerelle se tait', async () => {

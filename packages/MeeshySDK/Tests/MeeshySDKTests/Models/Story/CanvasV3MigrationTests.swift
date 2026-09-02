@@ -282,6 +282,47 @@ struct CanvasV3MigrationTests {
         #expect(object(CanvasV3(migrating: effects), "st8")?.payload["anchorPoint"] == .string("topLeft"))
     }
 
+    // MARK: - Le GABARIT d'une décoration doit voyager (#4741)
+
+    /// **Une décoration posée dans le composer doit revenir décoration.**
+    ///
+    /// Le lot #4741 a introduit les stickers à GABARIT — pastille de lieu,
+    /// cadre de cœurs, ruban d'heure — dessinés en code plutôt que rendus comme
+    /// un glyphe. Le modèle les porte (`templateId`, `slots`), les trois moteurs
+    /// de rendu les dessinent… et le fil v3 ne les transportait pas.
+    ///
+    /// L'ironie est dans le commentaire de l'encodeur : « `wireEmoji`, jamais
+    /// `emoji` : un sticker image parti sans repli disparaît ». Il sérialisait
+    /// donc soigneusement le REPLI d'un gabarit qu'il ne sérialisait pas — et
+    /// une pastille de lieu revenait « 📍 », un cadre de cœurs « 💕 ».
+    ///
+    /// > Un repli conservé sans la chose dont il est le repli n'est plus un
+    /// > repli : c'est le contenu.
+    @Test func aTemplateSticker_carriesItsTemplateOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "locationStamp",
+                                               slots: ["title": "Tessalit", "subtitle": "Mali"],
+                                               zIndex: 3)]
+        let payload = try #require(object(CanvasV3(migrating: effects), "st-tpl")?.payload)
+        #expect(payload["templateId"] == .string("locationStamp"))
+    }
+
+    /// Et il doit REVENIR gabarit — l'aller sans le retour laisserait le fil
+    /// juste et le lecteur faux.
+    @Test func aTemplateSticker_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "loveHeartFrame",
+                                               slots: ["caption": "nous deux"],
+                                               zIndex: 3)]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let sticker = try #require(back.stickerObjects?.first)
+        #expect(sticker.templateId == "loveHeartFrame")
+        #expect(sticker.slots["caption"] == "nous deux")
+        #expect(sticker.kind == StoryStickerKind.template)
+    }
+
     // MARK: - O3 (jamais de cadre vide) et prédicat de version
 
     @Test func emptyRuntime_emitsNoScene() throws {

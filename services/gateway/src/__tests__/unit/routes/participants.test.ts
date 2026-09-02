@@ -1,8 +1,8 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: jest.fn<any>(),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>, jest.fn<any>()));
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),

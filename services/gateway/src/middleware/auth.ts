@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
-import { PermissionDeniedError } from '../errors/custom-errors';
+import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
@@ -850,7 +850,42 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 // ===== LEGACY COMPATIBILITY =====
 
-/** @deprecated Use getUserPermissions */
+/**
+ * DEUX REFUS STRUCTURELLEMENT DIFFÉRENTS, DEUX STATUTS (#4760).
+ *
+ * Cette garde rendait `403 PERMISSION_DENIED` pour l'ABSENCE de session comme
+ * pour un rôle trop bas. Le seul signal qui séparait les deux était la prose
+ * anglaise du `message` — « Authentication required » contre « Insufficient
+ * role ».
+ *
+ * CE QUE ÇA COÛTAIT, MESURÉ. `APIClient.mapUnauthorized`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift`) est le
+ * site UNIQUE qui décide qu'une réponse veut dire « ta session est morte », et
+ * il ne regarde QUE le 401 : `APIClient.swift:785` traduit tout 403 en
+ * `MeeshyError.forbidden`, « NOT an auth/session problem ». Un membre dont le
+ * JWT expirait en appelant une route gardée ici recevait donc 403, le SDK ne
+ * rafraîchissait rien, et le lecteur lisait « droits insuffisants » là où il
+ * fallait le reconnecter.
+ *
+ * ET LA PROSE N'ARRIVAIT MÊME PAS. `{ error: { code, message } }` est une
+ * forme IMBRIQUÉE que les 84 modules passant par `utils/response.ts`
+ * n'emploient pas : `sendError` pose `{ success, error, message, code }` À
+ * PLAT, et c'est cette forme-là que déclare `errorResponseSchema`
+ * (`error: { type: 'string' }`). Les cinq routes de `routes/maintenance.ts`
+ * déclarant `403: errorResponseSchema`, `fast-json-stringify` servait, MESURÉ :
+ *
+ *     {"success":false,"error":"[object Object]"}
+ *
+ * — le `code` supprimé, la phrase détruite. Brancher sur la prose était
+ * impossible parce qu'il n'y avait plus de prose. Les deux branches passent
+ * désormais par les aides partagées, seul producteur d'erreurs du gateway.
+ *
+ * `UNAUTHORIZED` n'est pas inventé : `ErrorCode.UNAUTHORIZED`
+ * (`packages/shared/types/errors.ts`) le déclare, `ErrorStatusMap` le mappe
+ * sur 401, et 49 des appels à `sendUnauthorized` du gateway le servent déjà.
+ *
+ * @deprecated Use getUserPermissions
+ */
 export function requireRole(allowedRoles: string | string[]) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
@@ -859,18 +894,20 @@ export function requireRole(allowedRoles: string | string[]) {
       const authContext = (request as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        throw new PermissionDeniedError('Authentication required');
+        sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+        return;
       }
 
       if (!roles.includes(authContext.registeredUser.role)) {
-        throw new PermissionDeniedError('Insufficient role');
-      }
-    } catch (error) {
-      if (error instanceof PermissionDeniedError) {
-        reply.code(403).send({ success: false, error: { code: error.code, message: error.message } });
+        sendForbidden(reply, 'Insufficient role', { code: 'PERMISSION_DENIED' });
         return;
       }
-      reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Insufficient permissions' } });
+    } catch {
+      // Les deux refus sortent par retour anticipé : ce `catch` ne rattrape
+      // plus un `throw` à nous, mais la LECTURE d'`authContext`, qu'un
+      // accesseur défaillant peut faire échouer. Fail-closed — un refus, jamais
+      // un laissez-passer — et le rôle reste le sujet, donc 403.
+      sendForbidden(reply, 'Insufficient permissions', { code: 'PERMISSION_DENIED' });
     }
   };
 }
@@ -879,16 +916,26 @@ export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
 export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
+/**
+ * LA MÊME DISTINCTION QUE `requireRole` ci-dessus (#4760). Pas de session ⇒
+ * 401 `UNAUTHORIZED` ; session valide mais e-mail non vérifié ⇒ 403
+ * `EMAIL_NOT_VERIFIED`. Le premier cas rendait ici `403 PERMISSION_DENIED`,
+ * c'est-à-dire le code d'un refus de DROIT pour une absence d'IDENTITÉ.
+ *
+ * Zéro appelant de production, mesuré : la garde n'est montée par aucune route
+ * du gateway. Elle est corrigée quand même — la laisser diverger ferait de la
+ * prochaine route qui la monte une régression prête à l'emploi.
+ */
 export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
   const authContext = (request as UnifiedAuthRequest).authContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Authentication required' } });
+    sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     return;
   }
 
   if (!authContext.registeredUser.emailVerifiedAt) {
-    reply.code(403).send({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email verification required' } });
+    sendForbidden(reply, 'Email verification required', { code: 'EMAIL_NOT_VERIFIED' });
     return;
   }
 }

@@ -72,6 +72,31 @@ public nonisolated enum MediaCaptionRule {
     }
 }
 
+/// **Une invite de légende doit se toucher, pas se viser** (#4762).
+///
+/// Mesuré au simulateur le 2026-09-02 : la cible de « voir plus » faisait
+/// **54 × 16 pt** — la moitié de la hauteur minimale de 44 pt qu'Apple exige
+/// (HIG, *Touch targets*). Trois essais de suite l'ont manquée, et sur la story
+/// un tap manqué ne fait pas RIEN : il tombe dans la couche de navigation et
+/// change de story. L'utilisateur perd sa lecture en essayant de lire plus.
+///
+/// > Une cible sous le minimum ne rend pas le geste « difficile », elle le rend
+/// > ALÉATOIRE — et sur une surface où le voisin agit, un raté n'est pas une
+/// > absence d'effet mais un effet FAUX.
+///
+/// L'agrandissement est INVISIBLE : le retrait qui étend la zone est annulé par
+/// un retrait négatif de même valeur, donc la mise en page ne bouge pas d'un
+/// point. Seul le doigt y gagne.
+private extension View {
+    func captionAffordanceHitArea() -> some View {
+        self.padding(.vertical, 14)      // 16 + 2 × 14 = 44
+            .padding(.horizontal, 10)
+            .contentShape(Rectangle())
+            .padding(.vertical, -14)
+            .padding(.horizontal, -10)
+    }
+}
+
 public struct MediaCaptionOverlay<TextBody: View>: View {
 
     /// **Le SEUIL et la TÊTE sont deux nombres, pas un** (directive 2026-08-30).
@@ -109,6 +134,30 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// Le même nombre sert les DEUX états : replier puis déplier ne doit pas
     /// faire sauter le texte latéralement.
     private let horizontalInset: CGFloat
+    /// **Jusqu'où la légende dépliée peut MONTER avant de défiler** (directive
+    /// porteur 2026-09-02) : « le texte doit rester sur sa position y initiale
+    /// et monter vers le haut plutôt, et permettre le défilement si trop long ».
+    ///
+    /// Sans borne, une légende longue remplissait tout le cadre et son ancre
+    /// descendait au bas de l'ÉCRAN — le texte changeait de place au lieu de
+    /// grandir. Avec elle, le bloc pousse vers le haut depuis là où il était,
+    /// s'arrête, et le reste défile.
+    private let maxExpandedHeight: CGFloat
+    /// **Ce que la légende dépliée doit LAISSER à sa droite** (#4762).
+    ///
+    /// Repliée, elle tient en quelques lignes basses et ne rencontre personne.
+    /// Dépliée, elle monte — et sur une story elle traverse le rail d'actions
+    /// (Envoyer, Vues, Partager, Enregistrer, Traductions), qui occupe la bande
+    /// droite sur presque toute la hauteur. Mesuré à l'écran : le texte passait
+    /// SOUS les icônes, les deux devenant illisibles.
+    ///
+    /// > Un bloc qui grandit ne rencontre pas les mêmes voisins que le bloc
+    /// > replié. Ce qui ne se chevauchait pas dans un état peut se chevaucher
+    /// > dans l'autre — la place se vérifie DÉPLIÉE, pas au repos.
+    ///
+    /// Zéro par défaut : le plein écran média n'a pas de rail latéral, et lui
+    /// imposer une marge droite lui ferait perdre de la largeur pour rien.
+    private let expandedTrailingInset: CGFloat
 
     /// **Ce que les surfaces partagent est la RÈGLE, pas le moteur de texte.**
     ///
@@ -128,6 +177,8 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
                 wordHead: Int = MediaCaptionOverlay.defaultWordHead,
                 horizontalInset: CGFloat = 20,
+                maxExpandedHeight: CGFloat = 420,
+                expandedTrailingInset: CGFloat = 0,
                 onToggle: @escaping () -> Void,
                 @ViewBuilder render: @escaping (String, CGFloat) -> TextBody) {
         self.caption = caption
@@ -135,6 +186,8 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         self.wordThreshold = wordThreshold
         self.wordHead = wordHead
         self.horizontalInset = horizontalInset
+        self.maxExpandedHeight = maxExpandedHeight
+        self.expandedTrailingInset = expandedTrailingInset
         self.onToggle = onToggle
         self.render = render
     }
@@ -167,10 +220,27 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     public var body: some View {
         if isExpanded {
             expandedCaption
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(expandedScrim)
+                // **Le dépliage MONTE** (directive porteur 2026-09-02) : « le
+                // dépliement doit être moderne et bien animé, monter vers le
+                // haut avec possibilité de scroll ».
+                //
+                // Le texte vient d'où il était — le bas — et s'élève vers la
+                // place qu'il prend. La transition asymétrique le fait revenir
+                // par le même chemin au repli : un aller-retour lisible plutôt
+                // qu'une apparition et une disparition sans rapport.
+                //
+                // Le défilement, lui, est déjà là : `expandedCaption` est une
+                // `ScrollView` ancrée en bas-gauche, dont le `minHeight` pousse
+                // une légende courte au bas de la fenêtre et laisse une longue
+                // la remplir puis défiler.
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity)))
         } else {
             collapsedCaption
+                .transition(.opacity)
         }
     }
 
@@ -196,6 +266,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                         .legibleOverCanvas()
                 }
                 .buttonStyle(.plain)
+                .captionAffordanceHitArea()
                 .accessibilityLabel(Self.seeMoreLabel)
                 .accessibilityHint(Self.seeMoreHint)
             }
@@ -222,8 +293,18 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// longue la remplit et défile. Un `Spacer` ne le ferait pas — dans une
     /// `ScrollView` la hauteur est non bornée, et il s'effondre.
     private var expandedCaption: some View {
-        GeometryReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
+        // **Il MONTE depuis sa place, il ne se replace pas.** L'ancienne forme
+        // enveloppait le contenu d'un `GeometryReader` + `minHeight:
+        // proxy.size.height` : la vue prenait alors TOUTE la hauteur offerte et
+        // son ancre glissait au bas de l'écran. Le texte semblait descendre au
+        // moment même où on demandait à en voir plus.
+        //
+        // Ici la `ScrollView` se dimensionne à son CONTENU, plafonnée à
+        // `maxExpandedHeight`. Courte, elle occupe peu et reste là où la
+        // repliée était ; longue, elle grandit vers le haut jusqu'au plafond,
+        // puis défile. L'hôte n'a plus à déplacer quoi que ce soit.
+        Group {
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 10) {
                     render(caption, 15)
                         .multilineTextAlignment(.leading)
@@ -237,14 +318,15 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                             .legibleOverCanvas()
                     }
                     .buttonStyle(.plain)
+                    .captionAffordanceHitArea()
                     .accessibilityLabel(Self.seeLessLabel)
                     .accessibilityHint(Self.seeLessHint)
                 }
-                .padding(.horizontal, horizontalInset)
-                .frame(maxWidth: .infinity,
-                       minHeight: proxy.size.height,
-                       alignment: .bottomLeading)
+                .padding(.leading, horizontalInset)
+                .padding(.trailing, horizontalInset + expandedTrailingInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxHeight: maxExpandedHeight)
         }
     }
 
@@ -344,12 +426,16 @@ public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
          wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
          wordHead: Int = MediaCaptionOverlay.defaultWordHead,
          horizontalInset: CGFloat = 20,
+         maxExpandedHeight: CGFloat = 420,
+         expandedTrailingInset: CGFloat = 0,
          onToggle: @escaping () -> Void) {
         self.init(caption: caption,
                   isExpanded: isExpanded,
                   wordThreshold: wordThreshold,
                   wordHead: wordHead,
                   horizontalInset: horizontalInset,
+                  maxExpandedHeight: maxExpandedHeight,
+                  expandedTrailingInset: expandedTrailingInset,
                   onToggle: onToggle,
                   render: { texte, taille in MediaCaptionPlainText(texte, size: taille) })
     }

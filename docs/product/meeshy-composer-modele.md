@@ -31,6 +31,26 @@ la *contient* pas à côté d'autre chose. Une publication est un profil et ses 
 — exactement les `ACTIVE_KINDS` du contrat partagé (`packages/shared/types/canvas-v3.ts:5`).
 Aucun kind neuf ne s'invente ici ; en ouvrir un est une décision de contrat.
 
+**Mais sept kinds DÉCLARÉS ne font pas sept cas d'objet, et c'est voulu**
+(mesuré le 2026-09-02) :
+
+| kind | ce qu'il est réellement |
+|---|---|
+| `text` · `media` · `sticker` · `place` · `audio` | **des objets** — les cinq cas de `MeeshySceneObject` |
+| `drawing` | **un CHAMP de la slide**, pas un objet : `StoryEffects.drawingStrokes: [StoryDrawingStroke]?`. Aucun site ne produit d'objet de ce kind |
+| `mention` | **déclaré, sans aucun producteur** — vérifié sur les trois clients et la passerelle |
+
+> **Ne pas « compléter » `MeeshySceneObject` à sept cas.** Deux d'entre eux
+> n'ont pas de charge à porter : le dessin vit ailleurs par construction (une
+> trace n'a ni ancre ni `zIndex` d'objet), la mention n'existe pas encore. Un
+> `case drawing` ajouté pour aligner un compte donnerait une famille vide que
+> chaque `switch` devrait traiter — et le compilateur, lui, ne dirait jamais
+> qu'elle est morte.
+
+La somme à cinq cas est donc **complète pour ce qui est objet**. Le chiffre à
+citer dépend de la question : *sept* kinds au contrat, *cinq* familles d'objets,
+*six* kinds ayant un producteur.
+
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
 Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
@@ -139,22 +159,6 @@ portent **aucun** `storyEffects` (#4756) — le chemin document perd la scène
 entière. #4756 n'est donc pas un confort : c'est le préalable de cette règle
 pour les profils P et R.
 
-### L'identité de ce qu'on reprend, et son faux jumeau
-
-Une publication qu'on **rouvre** (édition, brouillon repris) doit dire laquelle
-elle est. Cette identité vit **dans le brouillon**, pas à côté : c'est
-`onPublishDocument(draft)` qui décide « créer ou éditer », et une décision qui
-arrive par deux canaux diverge au premier site qui n'en câble qu'un. Un
-optionnel suffit et porte tout — `nil` ⇒ création, posé ⇒ reprise ; **pas de
-booléen d'accompagnement** (règle du dépôt sur les paires redondantes).
-
-> ⚠️ **`repostOfId` est déjà là, de forme IDENTIQUE et de sens OPPOSÉ.** Deux
-> `String?` voisins dont l'un dit « je DESCENDS de » (l'ancrage vers la source
-> qu'on republie) et l'autre « je SUIS » (la publication qu'on rouvre). Leur
-> doc-comment doit les opposer explicitement : confondus, le symptôme est une
-> ÉDITION qui publie un repost de son propre post — un défaut qui se relit comme
-> du code juste.
-
 ### Les trois obligations de la projection
 
 Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
@@ -174,6 +178,22 @@ Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
    (`ComposerScenePresence` compte ce que la scène contient, jamais ce qui l'a
    fait naître). Une forme qui ne connaît que deux états ne peut pas décrire ça,
    et c'est par cet état que le socle a été atteint sans publieur (#4751).
+
+### L'identité de ce qu'on reprend, et son faux jumeau
+
+Une publication qu'on **rouvre** (édition, brouillon repris) doit dire laquelle
+elle est. Cette identité vit **dans le brouillon**, pas à côté : c'est
+`onPublishDocument(draft)` qui décide « créer ou éditer », et une décision qui
+arrive par deux canaux diverge au premier site qui n'en câble qu'un. Un
+optionnel suffit et porte tout — `nil` ⇒ création, posé ⇒ reprise ; **pas de
+booléen d'accompagnement** (règle du dépôt sur les paires redondantes).
+
+> ⚠️ **`repostOfId` est déjà là, de forme IDENTIQUE et de sens OPPOSÉ.** Deux
+> `String?` voisins dont l'un dit « je DESCENDS de » (l'ancrage vers la source
+> qu'on republie) et l'autre « je SUIS » (la publication qu'on rouvre). Leur
+> doc-comment doit les opposer explicitement : confondus, le symptôme est une
+> ÉDITION qui publie un repost de son propre post — un défaut qui se relit comme
+> du code juste.
 
 ### Ce qu'il ne faut pas écrire
 
@@ -206,6 +226,22 @@ Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
 grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
 git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
 ```
+
+**Une divergence de NOM, et c'est celle que le § 1 met en garde d'éviter.**
+Le contrat nomme l'objet de scène **`place`** (`ACTIVE_KINDS`,
+`canvas-v3.ts:5`) ; la somme Swift le nomme **`location`**
+(`MeeshySceneObject.swift:60`). Or `location` est, dans le même langage et
+souvent dans le même fichier, le **lieu de la PUBLICATION** (`location:
+SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire exactement la
+paire que le tableau du § 1 sépare : *d'où l'on publie* contre *une pastille
+posée sur une scène*.
+
+> **Le seul mot que ce cas ne devait pas porter est celui qu'il porte.** La
+> confusion n'est pas hypothétique : le modèle l'a nommée avant qu'elle
+> existe dans le type, et un lecteur qui suit `place` depuis le contrat ne le
+> trouve nulle part côté Swift.
+
+Suivi : renommer le cas en `.place` — mécanique, mais sur l'API publique du SDK.
 
 **Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
 solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
@@ -329,6 +365,23 @@ fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux
 `MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
+
+**Le quatrième profil s'appelle `status` dans le CODE et « mood » dans la
+PROSE, et les deux sont justes** (relevé du 2026-09-02 : 372 « mood » contre
+181 « status » dans le seul répertoire du composer, parfois dans le même
+doc-comment).
+
+| où | le mot | pourquoi il ne bouge pas |
+|---|---|---|
+| type, fil, base | **`status`** | `ComposerFormat.status`, `PostType.STATUS` (`schema.prisma`) — le changer est une migration, pas un renommage |
+| produit, UI, prose | **« mood »** | c'est le mot que l'auteur lit et que la planche emploie (profil **M**) |
+
+Ce n'est donc **pas** une divergence à réduire, mais une frontière à tenir : un
+identifiant qui traverse le fil garde `status` ; une chaîne d'interface et un
+texte explicatif disent « mood ». Ce qu'il ne faut pas faire, et qui se voit
+déjà, c'est **mélanger les deux dans une même phrase** — un doc-comment qui
+nomme `removedFromStatus` « ce que le profil MOOD retire » oblige son lecteur à
+traduire, et la traduction n'est écrite nulle part.
 
 **« Meeshes » est un terme de communication COMMERCIALE, jamais un nom du modèle**
 (arbitrage porteur, 2026-09-01, #4757). Il désigne les publications de type story,
