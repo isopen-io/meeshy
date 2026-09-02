@@ -1,7 +1,16 @@
 {
  "source": "MeeshyWebV3.dc.html",
- "count": 37,
+ "count": 38,
  "vues": [
+  {
+   "id": "vitrine",
+   "label": "Vitrine",
+   "route": "/",
+   "group": "SITE",
+   "title": "",
+   "subtitle": "",
+   "png": "cible/vitrine.png"
+  },
   {
    "id": "linkRedirect",
    "label": "Ouverture du lien",
@@ -14,25 +23,25 @@
   {
    "id": "join",
    "label": "Rejoindre",
-   "route": "/chats/:lien",
+   "route": "/chat/:lien",
    "group": "ENTRÉE PUBLIQUE",
-   "title": "",
-   "subtitle": "",
+   "title": "Équipe Lagos",
+   "subtitle": "4 participants · fr ↔ en ↔ yo",
    "png": "cible/join.png"
   },
   {
    "id": "rights",
    "label": "Droits du lien",
-   "route": "/chats/:lien",
+   "route": "/chat/:lien",
    "group": "ENTRÉE PUBLIQUE",
-   "title": "",
-   "subtitle": "",
+   "title": "Équipe Lagos",
+   "subtitle": "Entré comme Tolu · anonyme",
    "png": "cible/rights.png"
   },
   {
    "id": "login",
    "label": "Se connecter",
-   "route": "/login?next=/l/:token",
+   "route": "/login?returnUrl=/chat/:lien",
    "group": "ENTRÉE PUBLIQUE",
    "title": "Se connecter",
    "subtitle": "Lien gardé de côté",
@@ -41,7 +50,7 @@
   {
    "id": "signup",
    "label": "Créer un compte",
-   "route": "/signup?next=/l/:token",
+   "route": "/signup?returnUrl=/chat/:lien",
    "group": "ENTRÉE PUBLIQUE",
    "title": "Créer un compte",
    "subtitle": "Lien gardé de côté",
@@ -62,7 +71,7 @@
    "route": "/",
    "group": "MEMBRE — PRINCIPAL",
    "title": "Bonjour Amina",
-   "subtitle": "Accueil connecté · meeshy.me/",
+   "subtitle": "Tableau de bord · meeshy.me/",
    "png": "cible/home.png"
   },
   {
@@ -77,7 +86,7 @@
   {
    "id": "thread",
    "label": "Équipe Lagos",
-   "route": "/chats/:identifiant",
+   "route": "/chats/:cle",
    "group": "MEMBRE — PRINCIPAL",
    "title": "Équipe Lagos",
    "subtitle": "4 en ligne",

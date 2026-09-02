@@ -1,10 +1,22 @@
 import type { NextConfig } from 'next';
 
+import { REECRITURES_DE_ZONE } from './scripts/lib/perimetre-de-zone.mjs';
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   assetPrefix: '/__v3',
   poweredByHeader: false,
   reactStrictMode: true,
+  /**
+   * Les actifs du temps réel sont joignables DANS la zone (`/__v3/rt/…`,
+   * conception § 12.4), mais aucune route de `app/` ne peut y vivre : Next
+   * ignore tout segment qui commence par `_`. La réécriture qui les y porte
+   * est déclarée UNE fois, dans `scripts/lib/perimetre-de-zone.mjs`, et le
+   * garde de la chaîne la lit au même endroit.
+   */
+  rewrites: async () => ({
+    beforeFiles: REECRITURES_DE_ZONE.map(({ source, destination }) => ({ source, destination })),
+  }),
   /**
    * Ce que `standalone` ne trace pas tout seul.
    *
@@ -41,7 +53,7 @@ const nextConfig: NextConfig = {
      * dix entrées sont donc composées à partir d'UNE liste, jamais recopiées.
      */
     ...Object.fromEntries(
-      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup', '/chats', '/chats/[cle]'].map((route) => [
+      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup', '/chats'].map((route) => [
         route,
         [
           './node_modules/@meeshy/design-tokens/tokens.css',
@@ -56,6 +68,28 @@ const nextConfig: NextConfig = {
       './node_modules/@meeshy/design-tokens/light.css',
       './node_modules/@meeshy/icons/sprite.svg',
     ],
+    /**
+     * Les DEUX portes du fil composent l'adresse HACHÉE des actifs du temps
+     * réel (§ 12.4) : elles LISENT le module compilé et socket.io-client pour
+     * en calculer l'empreinte, comme elles lisent la table et le sprite. Sans
+     * ces entrées, l'image servirait un fil dont le chargeur vise une adresse
+     * calculée sur un fichier absent — un 404 que seul le lecteur en
+     * production verrait.
+     */
+    ...Object.fromEntries(
+      ['/chats/[cle]', '/chat/[lien]'].map((route) => [
+        route,
+        [
+          './node_modules/@meeshy/design-tokens/tokens.css',
+          './node_modules/@meeshy/design-tokens/dark.css',
+          './node_modules/@meeshy/design-tokens/light.css',
+          './node_modules/@meeshy/icons/sprite.svg',
+          './.rt/participate.js',
+          './node_modules/socket.io-client/dist/socket.io.esm.min.js',
+        ],
+      ]),
+    ),
+    '/rt/[nom]': ['./.rt/participate.js', './node_modules/socket.io-client/dist/socket.io.esm.min.js'],
   },
 };
 

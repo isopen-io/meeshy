@@ -22,10 +22,39 @@
   "",
   "AJOUTER UNE VUE : une entrée `\"<id de vue>\": { \"<nom du jeton>\": \"<valeur>\" }`. Les",
   "jetons non déclarés restent REFUSÉS et NOMMÉS — c'est le comportement voulu, pas une",
-  "lacune à combler en masse."
+  "lacune à combler en masse.",
+  "",
+  "UN JETON PAR ÉTAT DE `/chat/:lien` (directive 2026-09-01, conception § 12.3). La même",
+  "adresse rend TROIS états décidés par le serveur ; deux sont des vues de la planche :",
+  "`join` = lien VIVANT sans session (état CHOIX), `rights` = lien REJOINT (état INVITÉ,",
+  "juste après la jonction). La valeur du jeton est ce que la passerelle de bouchon",
+  "(apps/web-v3/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
+  "`lien-vivant` / `jeton-expire` séparent déjà les deux vues de `/l/:token`. `thread` est",
+  "le fil du MEMBRE (`/chats/:cle`) ; le fil de l'INVITÉ est la vue `rights`, même module.",
+  "Ce qui sépare `vitrine` de `home` (toutes deux `/`) n'est pas un jeton mais une SESSION :",
+  "compare-rendu.js ne sait pas encore la déclarer — voir conception § 12.8."
  ],
  "jetons": {
-  "linkRedirect": { "token": "lien-vivant" },
-  "linkExpired": { "token": "jeton-expire" }
+  "linkRedirect": {
+   "token": "lien-vivant"
+  },
+  "linkExpired": {
+   "token": "jeton-expire"
+  },
+  "join": {
+   "lien": "lien-vivant"
+  },
+  "rights": {
+   "lien": "lien-rejoint"
+  },
+  "thread": {
+   "cle": "equipe-lagos"
+  },
+  "login": {
+   "lien": "lien-vivant"
+  },
+  "signup": {
+   "lien": "lien-vivant"
+  }
  }
 }

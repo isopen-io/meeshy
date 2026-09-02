@@ -66,6 +66,33 @@ export const ROUTEUR_V3 = 'frontend-v3';
 export const PREFIXE_DE_ZONE = '/__v3';
 export const ZONE_DACTIFS = `${PREFIXE_DE_ZONE}/_next`;
 
+// LA ZONE DU TEMPS RÉEL (conception § 12.4) : `participate.<hash>.js` et `socket.io.<hash>.js`,
+// servis par `app/rt/[nom]/route.ts` — et JOIGNABLES sous `/__v3/rt/` par une RÉÉCRITURE, parce
+// que Next ignore tout segment de `app/` qui commence par `_` (`next/dist/build/entries.js`,
+// `ignorePartFilter: (part) => part.startsWith('_')`) : `app/__v3/…` n'est pas une route, c'est
+// un dossier privé. La réécriture est déclarée ICI, une fois, et lue par `next.config.ts` (qui la
+// pose) comme par `scripts/check-v3-pipeline.mjs` (qui vérifie qu'elle atterrit sur une route
+// servie, et que la règle du routeur ne réclame `/__v3/rt/` qu'à ce titre). Une seconde
+// déclaration serait la jumelle qui laisse la règle réclamer un chemin mort.
+export const ZONE_DU_TEMPS_REEL = `${PREFIXE_DE_ZONE}/rt`;
+
+export const REECRITURES_DE_ZONE = Object.freeze([
+  Object.freeze({ source: `${ZONE_DU_TEMPS_REEL}/:nom`, destination: '/rt/:nom' }),
+]);
+
+// La forme ROUTE d'un motif de réécriture (`/rt/:nom` → `/rt/[nom]`) : celle sous laquelle
+// `scripts/check-v3-pipeline.mjs` inventorie ce que `app/` sert.
+export const routeDeReecriture = (motif) => motif.replace(/:([A-Za-z0-9_]+)/g, '[$1]');
+
+// Les chemins que la zone sert PAR réécriture, parmi les routes servies données — sous leur
+// forme route, pour entrer dans le même inventaire que `app/`.
+export const cheminsServisParReecriture = (routesServies) =>
+  Object.freeze(
+    REECRITURES_DE_ZONE.filter(({ destination }) =>
+      routesServies.includes(routeDeReecriture(destination)),
+    ).map(({ source }) => routeDeReecriture(source)),
+  );
+
 const CLE_DE_LA_REGLE = (routeur) => `traefik.http.routers.${routeur}.rule=`;
 
 // `Path` ET `PathPrefix` : les deux matchers que Traefik distingue sur un chemin, et la
@@ -152,7 +179,11 @@ export const perimetreDeNavigation = (compose) => {
     );
   }
 
-  return Object.freeze(reclames.filter(({ valeur }) => !valeur.startsWith(ZONE_DACTIFS)));
+  // Tout ce que la règle réclame SOUS le préfixe de zone est un ACTIF — les bundles
+  // (`/__v3/_next`) comme les modules du temps réel (`/__v3/rt/`) — jamais une page où un
+  // `<Link>` mènerait. Le filtre porte donc sur le préfixe de ZONE, pas sur la seule sous-zone
+  // des bundles : une sous-zone de plus ne doit pas faire apparaître une « navigation » fantôme.
+  return Object.freeze(reclames.filter(({ valeur }) => !valeur.startsWith(PREFIXE_DE_ZONE)));
 };
 
 export const litLePerimetre = (racineDuDepot) =>
