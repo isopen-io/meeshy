@@ -23515,7 +23515,7 @@ le fil. Elle levait au passage #4746 : un volet câblé par une session voisine,
 avec témoins verts, n'était jamais apparu parce que le flux story montait
 l'atelier.
 
-## Leçon 421 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
+## Leçon 422 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
 
 Deux témoins de `apps/web-v3/e2e/visual/v3-network-vitals.spec.ts` tenaient le
 critère de #4495 : un lien partagé s'ouvre en un aller-retour. Ils rougissaient
@@ -23642,3 +23642,43 @@ Cette leçon existait déjà en mémoire
 (`reference_a_sweep_by_label_misses_values_that_arrive_by_name`, écrite pour un
 champ atteint par un nom plutôt qu'un label) et je l'ai refaite sur un document
 au lieu d'un fichier de code. La forme est indifférente au support.
+
+## Leçon 423 — Deux sessions qui réparent la MÊME collision de numéro convergent sur le MÊME numéro, et la recréent
+
+Trois commits, dans cet ordre, tous justes pris un à un :
+
+1. `5cbe461fe1` — une session voisine pose les leçons **419** et **420** ;
+2. `55969bfc01` — elle voit la collision sur 419 et renumérote **sa** leçon en
+   **421**, « le garde du gateway repasse au vert » ;
+3. `c31ef7b425` — je vois la même collision sur 419, je renumérote **la mienne**
+   en **421**, garde verte chez moi.
+
+Résultat : `« 421 » : lignes 23518, 23571`. **La réparation a déplacé la
+collision sans la résoudre**, parce que les deux sessions ont appliqué la même
+règle — « prendre le prochain numéro libre » — sur deux vues du fichier qui ne
+se voyaient pas l'une l'autre.
+
+> Une règle d'allocation DÉTERMINISTE appliquée en parallèle par deux acteurs qui
+> ne se voient pas produit deux fois la même valeur. Ce n'est pas une erreur de
+> l'un des deux : c'est la règle qui est fausse dès qu'elle est concurrente.
+> « Le prochain libre » n'alloue rien — il DEVINE, et deux devins bien informés
+> devinent pareil.
+
+Et le détail qui rend le piège invisible : **chacune des deux sessions avait fait
+tourner la garde, et l'avait vue verte.** Elle l'était : sur l'arbre local, au
+moment de la mesure, il n'y avait plus qu'un seul 421. La garde ne ment pas, elle
+répond à la question qu'on lui pose — « ce fichier-ci a-t-il une collision ? » —
+et pas à celle qui compte : « ce fichier-ci, FUSIONNÉ AVEC CE QUE LES AUTRES ONT
+POUSSÉ, en a-t-il une ? »
+
+**La règle opératoire** : un numéro de leçon vit dans un espace de noms PARTAGÉ
+avec des sessions qu'on ne voit pas. On ne le choisit donc pas sur son propre
+arbre. Juste avant de pousser — après un `git fetch` frais et la fusion — on
+relit les numéros de `origin/dev` et on relance la garde sur l'état FUSIONNÉ.
+C'est la seule mesure qui porte sur l'objet réel.
+
+Cette leçon vaut au-delà des numéros de leçon : **tout identifiant qu'un humain
+ou un agent attribue à la main sans allocateur central** — un numéro de
+migration, une clé d'inventaire gelé, un port de test, un `data-task` de planche
+— se paie de la même façon. Le remède est toujours le même : mesurer sur l'état
+FUSIONNÉ, au dernier moment, plutôt que sur le sien au moment de l'écriture.
