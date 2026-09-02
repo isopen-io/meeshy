@@ -81,8 +81,11 @@ extension EnvironmentValues {
 /// que les doigts apprennent, non.
 public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     case emoji
+    /// Les MOTS de l'auteur dans un cadre (#4822).
+    case text
     case love
     case time
+    case weather
     case place
     case library
 
@@ -92,16 +95,18 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     /// qu'elles ne dépendent de rien ; « Mes stickers » ferme la marche parce
     /// que c'est le seul onglet dont le contenu appartient à l'utilisateur.
     public static let canonicalOrder: [StickerPaletteTab] = [
-        .emoji, .love, .time, .place, .library,
+        .emoji, .text, .love, .time, .weather, .place, .library,
     ]
 
     /// La famille de gabarits que l'onglet montre — `nil` pour les deux onglets
     /// qui ne montrent pas de gabarits.
     public var templateFamily: StickerTemplateFamily? {
         switch self {
-        case .love:  return .love
-        case .time:  return .time
-        case .place: return .location
+        case .text:    return .text
+        case .love:    return .love
+        case .time:    return .time
+        case .weather: return .weather
+        case .place:   return .location
         case .emoji, .library: return nil
         }
     }
@@ -111,8 +116,10 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     public var symbolName: String {
         switch self {
         case .emoji:   return "face.smiling"
+        case .text:    return "text.bubble"
         case .love:    return "heart"
         case .time:    return "clock"
+        case .weather: return "cloud.sun"
         case .place:   return "mappin.and.ellipse"
         case .library: return "square.stack"
         }
@@ -126,13 +133,13 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     ///   chercher les lieux alentour. Sans fournisseur, ouvrir un onglet vide
     ///   promettrait une capacité que le site de montage n'a pas.
     ///
-    /// Emoji, amour et heure ne dépendent de rien : ils sont toujours là.
+    /// Emoji, amour, heure et météo ne dépendent de rien : ils sont toujours là.
     public static func offered(hasLibrary: Bool, hasNearbyPlaces: Bool) -> [StickerPaletteTab] {
         canonicalOrder.filter { onglet in
             switch onglet {
             case .library: return hasLibrary
             case .place:   return hasNearbyPlaces
-            case .emoji, .love, .time: return true
+            case .emoji, .text, .love, .time, .weather: return true
             }
         }
     }

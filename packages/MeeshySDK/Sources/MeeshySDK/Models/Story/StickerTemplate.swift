@@ -80,6 +80,11 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case location
     case time
     case love
+    /// Le temps qu'il FAIT — soleil, pluie, neige (#4820).
+    case weather
+    /// Les MOTS de l'auteur, dans une bulle, un ruban, un néon (#4822) — la
+    /// seule famille dont un emplacement est de nature `.prose`.
+    case text
 }
 
 // MARK: - Sticker Template Slot

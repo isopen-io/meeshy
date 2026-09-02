@@ -17,7 +17,7 @@ final class StickerPaletteTests: XCTestCase {
     /// Ils sont toujours là.
     func test_threeTabs_neverDependOnAProvider() {
         let nu = StickerPaletteTab.offered(hasLibrary: false, hasNearbyPlaces: false)
-        XCTAssertEqual(nu, [.emoji, .love, .time])
+        XCTAssertEqual(nu, [.emoji, .text, .love, .time, .weather])
     }
 
     /// **Un outil non servi est ABSENT, jamais grisé.** Un onglet « Mes
@@ -46,12 +46,14 @@ final class StickerPaletteTests: XCTestCase {
     func test_offeredTabs_keepTheCanonicalOrder() {
         let tous = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: true)
         XCTAssertEqual(tous, StickerPaletteTab.canonicalOrder)
-        XCTAssertEqual(tous, [.emoji, .love, .time, .place, .library])
+        XCTAssertEqual(tous, [.emoji, .text, .love, .time, .weather, .place, .library])
     }
 
     func test_eachTab_mapsToTheRightTemplateFamily() {
         XCTAssertEqual(StickerPaletteTab.love.templateFamily, .love)
         XCTAssertEqual(StickerPaletteTab.time.templateFamily, .time)
+        XCTAssertEqual(StickerPaletteTab.weather.templateFamily, .weather)
+        XCTAssertEqual(StickerPaletteTab.text.templateFamily, .text)
         XCTAssertEqual(StickerPaletteTab.place.templateFamily, .location)
         XCTAssertNil(StickerPaletteTab.emoji.templateFamily)
         XCTAssertNil(StickerPaletteTab.library.templateFamily)

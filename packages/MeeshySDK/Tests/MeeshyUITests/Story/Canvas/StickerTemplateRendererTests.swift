@@ -43,6 +43,8 @@ final class StickerTemplateRendererTests: XCTestCase {
             return [StickerSlotFiller.dateSlot: "1 septembre 2026"]
         case .weather:
             return [:]
+        case .text:
+            return [StickerSlotFiller.textSlot: "Bon anniversaire"]
         }
     }
 
@@ -157,6 +159,39 @@ final class StickerTemplateRendererTests: XCTestCase {
             templateID: "venu.du.futur", slots: [:], metrics: mesuresSticker))
         XCTAssertNil(StickerTemplateRenderer.image(
             templateID: "venu.du.futur", slots: [:], metrics: mesuresSticker, screenScale: 2))
+    }
+
+    // MARK: - Les MOTS (#4822)
+
+    /// Deux textes ⇒ deux dessins ; un texte VIDE dessine encore quelque chose
+    /// (l'exemple), jamais une boîte nulle.
+    func test_textTemplates_drawTheAuthorsWords() throws {
+        for gabarit in StickerTemplateCatalog.templates(family: .text) {
+            let a = try XCTUnwrap(StickerTemplateRenderer.image(
+                templateID: gabarit.id, slots: [StickerSlotFiller.textSlot: "Coucou"],
+                metrics: mesuresSticker, screenScale: 2)?.0?.pngData())
+            let b = try XCTUnwrap(StickerTemplateRenderer.image(
+                templateID: gabarit.id, slots: [StickerSlotFiller.textSlot: "Bon anniversaire à toi"],
+                metrics: mesuresSticker, screenScale: 2)?.0?.pngData())
+            XCTAssertNotEqual(a, b, "\(gabarit.id) — deux textes rendent le même dessin")
+            let vide = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+                templateID: gabarit.id, slots: [:], metrics: mesuresSticker))
+            XCTAssertGreaterThan(vide.width, 0, gabarit.id)
+            XCTAssertGreaterThan(vide.height, 0, gabarit.id)
+        }
+    }
+
+    /// Une phrase LONGUE se plie : la largeur est bornée, la hauteur monte.
+    func test_textTemplates_wrapLongText() throws {
+        let court = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+            templateID: StickerTemplateCatalog.ID.textBadge,
+            slots: [StickerSlotFiller.textSlot: "Coucou"], metrics: mesuresSticker))
+        let long = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+            templateID: StickerTemplateCatalog.ID.textBadge,
+            slots: [StickerSlotFiller.textSlot: String(repeating: "des mots ", count: 12)],
+            metrics: mesuresSticker))
+        XCTAssertLessThan(long.width, mesuresSticker.fontSize * 9 + mesuresSticker.horizontalPadding * 2 + mesuresSticker.fontSize)
+        XCTAssertGreaterThan(long.height, court.height)
     }
 
     // MARK: - Le gel, vu depuis le DESSIN

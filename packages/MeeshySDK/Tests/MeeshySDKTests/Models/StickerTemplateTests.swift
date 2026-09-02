@@ -117,16 +117,19 @@ final class StickerTemplateTests: XCTestCase {
         }
     }
 
-    /// Le premier lot ne livre AUCUN emplacement de prose : le type existe pour
-    /// que la question du Prisme soit posée (#4721), pas pour être utilisé tout
-    /// de suite. Ce témoin tombera le jour où le premier gabarit de prose
-    /// arrive — et c'est exactement à ce moment qu'il faut relire le Prisme.
-    func test_catalog_firstLot_shipsNoProseSlot() {
-        let prose = StickerTemplateCatalog.all
-            .flatMap(\.slots)
-            .filter { $0.nature == .prose }
-        XCTAssertTrue(prose.isEmpty,
-                      "un emplacement de prose est arrivé — traiter #4721 avant de livrer")
+    /// **La PROSE existe, et elle n'existe QUE dans la famille Texte** (#4822).
+    /// Un emplacement de prose ailleurs ferait partir une heure ou un lieu à
+    /// la traduction ; une famille Texte sans prose n'aurait rien à dire.
+    func test_onlyTheTextFamily_carriesProseSlots() {
+        for gabarit in StickerTemplateCatalog.all {
+            let prose = gabarit.slots.filter { $0.nature == .prose }
+            if gabarit.family == .text {
+                XCTAssertEqual(prose.map(\.name), [StickerSlotFiller.textSlot], gabarit.id)
+            } else {
+                XCTAssertTrue(prose.isEmpty, "\(gabarit.id) — un emplacement de prose hors de la famille Texte")
+            }
+        }
+        XCTAssertFalse(StickerTemplateCatalog.templates(family: .text).isEmpty)
     }
 
     /// **`posedScale` d'un gabarit n'est PAS `StorySticker.posedScale`.**

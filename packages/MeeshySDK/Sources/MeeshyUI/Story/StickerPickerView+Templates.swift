@@ -15,8 +15,12 @@ extension StickerPickerView {
     /// Une grille de gabarits, chacun **rendu par le moteur qui dessinera sur
     /// la scène**. La vignette n'est donc pas une illustration de ce qu'on
     /// obtiendra : c'est ce qu'on obtiendra.
+    /// - Parameter enabled: `false` quand la grille MONTRE sans pouvoir POSER —
+    ///   l'onglet Texte sans mots tapés. Les vignettes restent visibles (elles
+    ///   disent ce que le cadre fera), mais ne vibrent pas sous le doigt pour
+    ///   rien (loi 4).
     @ViewBuilder
-    func templateTab(family: StickerTemplateFamily) -> some View {
+    func templateTab(family: StickerTemplateFamily, enabled: Bool = true) -> some View {
         let emplacements = slots(for: family)
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
@@ -31,6 +35,8 @@ extension StickerPickerView {
                                                side: Self.previewSide)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!enabled)
+                    .opacity(enabled ? 1 : 0.55)
                     .accessibilityLabel(Self.accessibilityLabel(for: gabarit, slots: emplacements))
                 }
             }
@@ -38,6 +44,38 @@ extension StickerPickerView {
             .padding(.vertical, 10)
         }
         .frame(maxHeight: 260)
+    }
+
+    // MARK: - Texte
+
+    /// Les mots que l'auteur a tapés, sans les blancs autour ; vides, la grille
+    /// montre l'exemple et ne pose rien.
+    var typedStickerTextTrimmed: String {
+        typedStickerText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// **Un champ EN TÊTE, la grille dessous, et les vignettes se redessinent
+    /// à la frappe** (loi 7) : l'auteur voit ses mots dans chaque cadre avant
+    /// de choisir. Trois gestes pour le cas nominal — ouvrir, écrire, taper.
+    @ViewBuilder
+    var textTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(String(localized: "sticker.text.placeholder",
+                             defaultValue: "Écrivez vos mots…", bundle: .module),
+                      text: $typedStickerText)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .textFieldStyle(.plain)
+                .submitLabel(.done)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 40)
+                .background(Capsule().fill(Color.primary.opacity(0.06)))
+                .overlay(Capsule().stroke(Color.primary.opacity(0.10), lineWidth: 1))
+                .padding(.horizontal, 12)
+                .accessibilityLabel(String(localized: "sticker.text.field.a11y",
+                                           defaultValue: "Texte de la décoration", bundle: .module))
+            templateTab(family: .text, enabled: !typedStickerTextTrimmed.isEmpty)
+        }
+        .padding(.top, 6)
     }
 
     /// **Ce qu'une décoration POSE dépend de sa famille, jamais de sa grille.**
@@ -54,6 +92,9 @@ extension StickerPickerView {
                       family: StickerTemplateFamily,
                       slots: [String: String]) {
         guard family == .location else {
+            // Sans mots, rien à poser : la grille est désactivée, ceci est la
+            // ceinture.
+            if family == .text, (slots[StickerSlotFiller.textSlot] ?? "").isEmpty { return }
             onTemplateSelected(gabarit, slots)
             return
         }
@@ -73,6 +114,8 @@ extension StickerPickerView {
         case .time:  return StickerSlotFiller.timeSlots(at: openedAt)
         case .love:  return StickerSlotFiller.dateSlots(at: openedAt)
         case .weather: return [:]
+        case .text:
+            return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
         case .location:
             guard let lieu = currentPlace else { return [:] }
             return StickerSlotFiller.placeSlots(for: lieu)
@@ -156,8 +199,9 @@ extension StickerPickerView {
     /// décore.
     static func accessibilityLabel(for template: StickerTemplate,
                                    slots: [String: String]) -> String {
+        // Une VALEUR (« 14:32 ») comme une PROSE (« Bon anniversaire ») se
+        // disent : les deux sont ce que la décoration montre.
         let valeurs = template.slots
-            .filter { $0.nature == .value }
             .compactMap { slots[$0.name] }
             .filter { !$0.isEmpty }
         let nom = templateName(template.id)
