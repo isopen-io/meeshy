@@ -1227,12 +1227,32 @@ struct StoryCardView: View {
     /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
+    ///
+    /// **Et il ne rend une légende que s'il y en a une** (#4502). Le `content`
+    /// d'une story a DEUX natures pour un seul nom : la légende de l'auteur, ou
+    /// l'index de recherche que la passerelle fabrique en concaténant les
+    /// objets texte d'une story qui n'en a pas. Rendu tel quel, cet index
+    /// affichait le texte du canvas une SECONDE fois, en légende, juste
+    /// dessous.
+    ///
+    /// La décision est prise sur l'ORIGINAL et le RÉSOLU est rendu — décider
+    /// sur le résolu ramènerait le doublon pour les seuls lecteurs d'une autre
+    /// langue, la passerelle composant aussi l'index dans chaque langue. Toute
+    /// la règle, son fail-safe compris, vit dans `StoryDerivedContent` (SDK) :
+    /// ce corps ne fait plus que lui poser la question.
     var currentStoryDescription: String? { // internal for cross-file extension access
-        guard let story = currentStory,
-              let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
-              !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return resolved
+        guard let story = currentStory else { return nil }
+        return StoryDerivedContent.caption(
+            original: story.content,
+            resolved: story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
+            // `\.text` est la BONNE clé : le décodeur du SDK normalise déjà
+            // l'alias legacy `content` vers `text` (`StoryTextObject.init(from:)`,
+            // « prefer new key, fall back to legacy »). Lire la mauvaise aurait
+            // vidé la comparaison — donc rendu « vraie légende » et laissé le
+            // doublon intact, sans que rien ne rougisse. Mesuré avant de poser
+            // cette ligne, sur demande de la session qui a écrit la règle.
+            overlayTexts: story.storyEffects?.textObjects.map(\.text) ?? []
+        )
     }
 
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.

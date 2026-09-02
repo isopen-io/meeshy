@@ -124,6 +124,42 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Une légende, pas l'index de recherche
+
+    /// **Le `content` d'une story a deux natures pour un seul nom** (#4502).
+    ///
+    /// La passerelle écrit dans `content` soit la légende de l'auteur, soit
+    /// l'index de recherche qu'elle fabrique en concaténant les objets texte
+    /// d'une story qui n'a pas de légende. Rendu tel quel, cet index affichait
+    /// le texte du canvas une SECONDE fois, juste dessous.
+    ///
+    /// > Une valeur qui a deux natures et un seul nom oblige chaque
+    /// > consommateur à redéduire sa provenance — et le premier qui oublie
+    /// > l'affiche deux fois. Le serveur produit l'index ET le moyen de le
+    /// > reconnaître ; seul le second ne traversait pas.
+    func test_laLegendeNestJamaisLIndexDeRecherche() throws {
+        let source = try Self.strippedSource(at: Self.canvasPath)
+        guard let range = source.range(of: "var currentStoryDescription: String? {") else {
+            throw GuardIsBlind(description: "`currentStoryDescription` introuvable")
+        }
+        let bloc = Self.braceBlock(in: source, from: range.lowerBound)
+        XCTAssertTrue(
+            bloc.contains("StoryDerivedContent.caption("),
+            "la description doit passer par la règle qui distingue légende et index dérivé (#4502)"
+        )
+        XCTAssertTrue(
+            bloc.contains("original: story.content"),
+            "la décision se prend sur l'ORIGINAL : la prendre sur le résolu ramènerait le doublon "
+                + "pour les seuls lecteurs d'une autre langue, la passerelle composant l'index dans "
+                + "chaque langue (#4502)"
+        )
+        XCTAssertTrue(
+            bloc.contains("textObjects.map(\\.text)"),
+            "les textes comparés viennent de `\\.text` — le décodeur SDK y normalise l'alias legacy "
+                + "`content`, et lire l'autre clé viderait la comparaison sans rien faire rougir"
+        )
+    }
+
     // MARK: - Lire ne doit pas faire tourner la story
 
     /// **Le corpus déplié est une `ScrollView` montée sous le drag du lecteur**
