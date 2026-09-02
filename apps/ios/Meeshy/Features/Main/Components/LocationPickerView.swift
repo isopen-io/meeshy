@@ -756,7 +756,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // `isGeocoding`/`addressString`, donc `objectWillChange` — SwiftUI exige
         // que ces émissions restent sur le main.
         geocodeTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             self?.reverseGeocode(coordinate)
         }

@@ -702,7 +702,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
         do {
             let since = lastSyncTimestamp
-            let sinceStr = ISO8601DateFormatter().string(from: since)
+            let sinceStr = since.formatted(.iso8601.time(includingFractionalSeconds: true))
             let queryItems = [
                 URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
                 URLQueryItem(name: "offset", value: "0"),
@@ -1087,7 +1087,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     await self.cache.conversations.update(for: "list") { conversations in
                         var updated = conversations
                         if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                            updated[idx].closedAt = ISO8601DateFormatter().date(from: event.closedAt)
+                            updated[idx].closedAt = (try? Date(event.closedAt, strategy: .iso8601.time(includingFractionalSeconds: true)))
+                                ?? (try? Date(event.closedAt, strategy: .iso8601))
                             updated[idx].closedBy = event.closedBy
                         }
                         return updated

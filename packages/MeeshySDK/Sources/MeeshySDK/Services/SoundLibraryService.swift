@@ -53,7 +53,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     public func mySounds(query: String? = nil, cursor: Date? = nil, limit: Int = 30) async throws -> SoundPage {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
+            items.append(URLQueryItem(name: "cursor", value: cursor.formatted(.iso8601.time(includingFractionalSeconds: true))))
         }
         let response: PaginatedSoundResponse = try await api.request(
             endpoint: "/sounds/mine", method: "GET", body: nil, queryItems: items
@@ -97,7 +97,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     public func posts(soundId: String, cursor: Date? = nil, limit: Int = 24) async throws -> SoundPostPage {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor {
-            items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
+            items.append(URLQueryItem(name: "cursor", value: cursor.formatted(.iso8601.time(includingFractionalSeconds: true))))
         }
         let response: PaginatedSoundPostResponse = try await api.request(
             endpoint: "/sounds/\(soundId)/posts", method: "GET", body: nil, queryItems: items
@@ -141,19 +141,7 @@ struct SoundPagination: Decodable {
 
     var nextCursorDate: Date? {
         guard let nextCursor else { return nil }
-        return soundCursorFormatter().date(from: nextCursor)
+        return (try? Date(nextCursor, strategy: .iso8601.time(includingFractionalSeconds: true)))
+            ?? (try? Date(nextCursor, strategy: .iso8601))
     }
-}
-
-/// Le gateway sérialise avec les millisecondes (`toISOString`) : sans
-/// `.withFractionalSeconds`, le curseur ne se décode pas et la pagination
-/// s'arrête silencieusement à la première page.
-///
-/// Construit à CHAQUE appel plutôt que mis en cache dans un `static let` :
-/// `ISO8601DateFormatter` n'est pas `Sendable`, et Swift 6 refuse un état
-/// global mutable partagé. Le coût est négligeable — un curseur par page.
-func soundCursorFormatter() -> ISO8601DateFormatter {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return f
 }

@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
-import { chromiumPath } from '../../scripts/lib/navigateur.cjs';
-
 // `navigateur.cjs` est le site UNIQUE de « où est Chromium » (conception § 9.2). Quand il ne
 // trouve rien, on ne recopie pas son chemin de repli ici : on laisse Playwright résoudre son
 // propre navigateur et échouer avec SON message, qui dit quoi installer.
 const executablePath = ((): string | undefined => {
   try {
+    const scriptPath = `${process.cwd()}/../../scripts/lib/navigateur.cjs`;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { chromiumPath } = require(scriptPath);
     return chromiumPath();
   } catch {
     return undefined;

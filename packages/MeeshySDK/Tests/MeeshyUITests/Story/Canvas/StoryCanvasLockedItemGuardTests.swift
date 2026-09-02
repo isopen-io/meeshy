@@ -188,7 +188,7 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
                 isLocked: false, isBackground: false,
                 sharesPlaneWithAnother: true, hasEditor: true,
                 canLeaveScene: true),
-            StoryCanvasContextAction.allCases
+            [.edit, .duplicate, .bringForward, .sendBackward, .leaveScene, .delete]
         )
     }
 
@@ -265,7 +265,8 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
 
         let titles = view.contextMenu(for: Self.freeId, kind: .text).children.map(\.title)
 
-        XCTAssertEqual(titles, StoryCanvasContextAction.allCases.map(\.title))
+        let expectedActions: [StoryCanvasContextAction] = [.edit, .duplicate, .bringForward, .sendBackward, .leaveScene, .delete]
+        XCTAssertEqual(titles, expectedActions.map(\.title))
     }
 
     /// Même si une entrée de menu était fabriquée ailleurs, le point de

@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "1.32.1",
+      "version": "1.33.0",
       "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
@@ -172,7 +172,7 @@
     },
     "packages/shared": {
       "name": "@meeshy/shared",
-      "version": "1.14.1",
+      "version": "1.15.0",
       "dependencies": {
         "@prisma/client": "^6.19.3",
         "zod": "^4.4.3",
@@ -190,7 +190,7 @@
     },
     "services/agent": {
       "name": "@meeshy/agent",
-      "version": "1.0.32",
+      "version": "1.0.33",
       "dependencies": {
         "@langchain/core": "^1.2.9",
         "@langchain/langgraph": "^1.4.12",
@@ -221,7 +221,7 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.32.1",
+      "version": "1.33.0",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
         "@fastify/helmet": "^13.0.2",
@@ -303,7 +303,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.31.1",
+      "version": "1.32.0",
     },
   },
   "overrides": {

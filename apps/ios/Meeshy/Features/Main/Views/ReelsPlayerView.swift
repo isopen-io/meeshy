@@ -150,7 +150,7 @@ struct ReelsPlayerView: View {
             // reel and scroll to the targeted comment. Brief delay so the reel is
             // on screen first (the reveal disc settles), then present.
             guard let cid = commentTargetId, !cid.isEmpty else { return }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(for: .milliseconds(450))
             let reel = seedPosts.first(where: { $0.id == startId }) ?? seedPosts.first ?? viewModel.reels.first
             if let reel {
                 pendingCommentTargetId = cid
