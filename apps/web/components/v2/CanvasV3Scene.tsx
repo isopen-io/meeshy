@@ -13,6 +13,7 @@ import {
 } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { cn } from '@/lib/utils';
+import { FLAT_TEXT_SHADOW, parseTextEffect, textEffectShadow } from '@/lib/story-text-effect';
 
 const SCENE_ASPECT_RATIO = '9 / 16';
 const STORY_DESIGN_WIDTH = 1080;
@@ -40,22 +41,25 @@ const POSED_MEDIA_WIDTH = '65%';
 
 const SYSTEM_SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 const ROUNDED_STACK = `"Arial Rounded MT Bold", "Avenir Next Rounded", ui-rounded, ${SYSTEM_SANS}`;
-const NEON_GLOW = '0 0 10px currentColor, 0 0 20px currentColor';
-const FLAT_SHADOW = '0 1px 4px rgba(0,0,0,0.5)';
 
 type TextStyleCss = {
   fontFamily: string;
   fontWeight: number;
   fontStyle?: 'italic';
-  textShadow?: string;
 };
 
 /// Table des 18 familles — mêmes noms et mêmes intentions que le résolveur iOS
 /// (`StoryTextFontResolver` / `storyFont(for:size:)`), polices web équivalentes
 /// avec repli système : la face iOS d'origine est citée par famille.
+///
+/// **Aucune famille ne brille par elle-même** (#4870) : « neon » est du
+/// système semibold arrondi, comme sur iOS où la story est composée. La lueur
+/// que cette table lui prêtait vit sur l'axe EFFET (`payload.textEffect`,
+/// `lib/story-text-effect.ts`) — un effet caché derrière un nom de police,
+/// différent selon le client, était exactement ce que l'axe vient fermer.
 const TEXT_STYLES: Record<string, TextStyleCss> = {
   bold: { fontFamily: SYSTEM_SANS, fontWeight: 800 },
-  neon: { fontFamily: ROUNDED_STACK, fontWeight: 600, textShadow: NEON_GLOW },
+  neon: { fontFamily: ROUNDED_STACK, fontWeight: 600 },
   typewriter: { fontFamily: 'Courier, "Courier New", monospace', fontWeight: 400 },
   handwriting: { fontFamily: '"Snell Roundhand", "Brush Script MT", cursive', fontWeight: 400 },
   classic: { fontFamily: 'Georgia, serif', fontWeight: 500 },
@@ -427,7 +431,7 @@ function TextObject({ o, anim, preferredLanguages }: ObjectRenderProps & { prefe
       style={{
         ...objectStyle(o, anim),
         ...style,
-        textShadow: style.textShadow ?? FLAT_SHADOW,
+        textShadow: textEffectShadow(parseTextEffect(o.payload.textEffect)) ?? FLAT_TEXT_SHADOW,
         fontSize: canvasV3TextFontSize(o.payload),
         color: hex(o.payload.textColor) ?? '#ffffff',
         textAlign: (str(o.payload.textAlign) as React.CSSProperties['textAlign']) ?? 'center',

@@ -148,8 +148,9 @@ struct ComposerLeadingRail: View {
                     // porteur « faire très attention aux décalages hors du
                     // viewport »).
                     //
-                    // Sept contrôleurs de texte plus la sortie font huit
-                    // entrées : `8 × 44 + 7 × 10 = 422 pt`, quand un écran de
+                    // Huit contrôleurs de texte (sept avant l'EFFET, #4870)
+                    // plus la sortie font neuf entrées : `9 × 44 + 8 × 10 =
+                    // 476 pt` — huit en faisaient déjà 422 — quand un écran de
                     // 393 pt en offre 373 une fois les marges retirées. Une
                     // `HStack` trop large n'est pas clippée par SwiftUI — elle
                     // DESSINE par-dessus les deux bords, moitié-moitié : mesuré

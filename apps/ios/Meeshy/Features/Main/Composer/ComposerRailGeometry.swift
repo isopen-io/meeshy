@@ -113,9 +113,10 @@ nonisolated enum ComposerRailGeometry {
 
     /// **La largeur qu'une rangée d'entrées REQUIERT**, cible tactile comprise.
     ///
-    /// `n × 44 + (n−1) × 10`. Pour les huit entrées de l'outil texte (sept
-    /// contrôleurs plus le `(x)`) : **422 pt**, quand un iPhone de 393 pt en
-    /// offre 373 une fois les marges retirées. Le débordement est ARITHMÉTIQUE,
+    /// `n × 44 + (n−1) × 10`. Pour les neuf entrées de l'outil texte (huit
+    /// contrôleurs depuis l'EFFET, #4870, plus le `(x)`) : **476 pt** — et déjà
+    /// 422 pt pour les huit d'avant — quand un iPhone de 393 pt en offre 373
+    /// une fois les marges retirées. Le débordement est ARITHMÉTIQUE,
     /// pas conditionnel — il ne dépend ni du contenu, ni de la locale, ni de la
     /// taille de texte.
     static func rowWidth(entries: Int, spacing: CGFloat = entrySpacing) -> CGFloat {

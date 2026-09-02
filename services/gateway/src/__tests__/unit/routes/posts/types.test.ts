@@ -242,6 +242,29 @@ describe('CreatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // ── L'axe EFFET d'un texte (#4870) ───────────────────────────────────────
+  //
+  // `textEffect` est LU par les trois clients ; il est borné ici comme
+  // `textStyle`, dont il est l'axe orthogonal. Le `.passthrough()` le
+  // laisserait passer sans borne — seul le garde-fou global de 256 KB
+  // l'arrêterait.
+
+  it('accepts a text object carrying a textEffect', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'STORY',
+      storyEffects: { textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'glow' }] },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('bounds textEffect like textStyle — a 65-character value is refused', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'STORY',
+      storyEffects: { textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'x'.repeat(65) }] },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts mediaAlt as a map of media id to alt text', () => {
     const result = CreatePostSchema.safeParse({
       type: 'POST',

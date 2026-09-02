@@ -28,8 +28,9 @@ import MeeshyUI
 ///
 /// ## Ce que « toutes affichées » veut dire ici
 ///
-/// Les sept outils de `TextEditTool` sont EMPILÉS, chacun sous son titre, sans
-/// bulle à déplier — plus un choix à faire avant de pouvoir choisir. Le style
+/// Les outils de `TextEditTool` — sept alors, huit depuis l'EFFET (#4870) —
+/// sont EMPILÉS, chacun sous son titre, sans bulle à déplier — plus un choix à
+/// faire avant de pouvoir choisir. Le style
 /// prend la forme du spécimen `2e` (le vrai texte sur son vrai fond, la grille
 /// des dix-huit) parce que c'est celle que la planche donne, et le TEMPS ferme
 /// la liste avec le plan 2D, qui montre la fenêtre au lieu de la décrire.
@@ -131,7 +132,7 @@ struct ComposerObjectEditorView: View {
     /// est ce qui rend le réglage lisible pendant qu'on le change ». Elle était
     /// vraie SUR LA SCÈNE, où le cadre désigne, parmi plusieurs objets, celui
     /// que le doigt saisit. Ici l'objet EST le sujet de l'écran : le titre le
-    /// nomme, les neuf sections le règlent, il n'y a rien dont le distinguer.
+    /// nomme, les dix sections le règlent, il n'y a rien dont le distinguer.
     /// Un signe qui n'apprend rien occupe la place de ce qui apprend.
     ///
     /// La justification est révoquée ICI plutôt qu'effacée : un commentaire qui
@@ -188,7 +189,7 @@ struct ComposerObjectEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     styleSection(binding)
-                    // Les six autres outils, dans l'ordre que la rangée du SDK
+                    // Les autres outils, dans l'ordre que la rangée du SDK
                     // a fixé — le même ordre que les bulles du rail, pour que
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
@@ -515,13 +516,15 @@ nonisolated enum ComposerObjectEditorCopy {
         // Sept des dix-huit sont des polices DÉGUISÉES en effets, et c'est ce
         // mélange de VOCABULAIRE — pas un mélange d'axes — que l'auteur voyait.
         //
-        // Les vrais effets ont déjà leurs sections, trois lignes plus bas :
-        // FOND, CADRE, CONTOUR. Ouvrir un axe « Effet » aujourd'hui créerait une
-        // section vide ; le jour où un style appliquera un effet, le témoin
-        // `test_laSectionDesPolices_neSAppellePlusSTYLE` tombera et rouvrira la
-        // question.
+        // **L'axe EFFET existe depuis #4870 — comme un CHAMP à part**
+        // (`textEffect` : lueur, ombre, relief), jamais comme un regroupement
+        // des dix-huit. C'est la section qui suit, deuxième de la liste parce
+        // que c'est la question que l'auteur se posait devant la grille. Une
+        // police reste une police ; ce qui brille est un autre choix.
         case .style:
             return String(localized: "composer.object.tool.style", defaultValue: "POLICE", bundle: .main)
+        case .effect:
+            return String(localized: "composer.object.tool.effect", defaultValue: "EFFET", bundle: .main)
         case .color:
             return String(localized: "composer.object.tool.color", defaultValue: "COULEUR", bundle: .main)
         case .align:

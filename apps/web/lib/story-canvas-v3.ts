@@ -18,6 +18,7 @@
  */
 
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
+import type { StoryTextEffect } from '@/lib/story-text-effect';
 
 export type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 
@@ -168,8 +169,19 @@ function rootTextObject(content: string, textStyle: TextStyle): UnrankedObjectV3
     anchor: { t: 'free', x: 0.5, y: 0.5 },
     plane: 'fg',
     transform: NEUTRAL_TRANSFORM,
-    payload: { text: content, textStyle },
+    payload: { text: content, textStyle, ...presetTextEffect(textStyle) },
   };
+}
+
+/// **Les quatre « styles » de ce composer sont des PRESETS** : une police ET,
+/// pour « neon », une lueur — c'est ce que `getTextStyleClasses('neon')` montre
+/// à l'auteur pendant qu'il tape. Depuis #4870 la lueur n'est plus un
+/// sous-entendu de la police chez les lecteurs : elle est l'axe EFFET, et ce
+/// preset l'ÉCRIT (`textEffect: 'glow'`) pour que ce que l'auteur a vu soit ce
+/// qui part — sur iOS aussi, qui n'a jamais fait briller « neon ». Le jour où
+/// ce composer aura son propre contrôle d'effet, ce preset se retire.
+function presetTextEffect(textStyle: TextStyle): { textEffect: StoryTextEffect } | Record<string, never> {
+  return textStyle === 'neon' ? { textEffect: 'glow' } : {};
 }
 
 function mediaObject(media: CanvasMediaSource): UnrankedObjectV3 {

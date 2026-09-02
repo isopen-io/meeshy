@@ -3103,6 +3103,53 @@
         }
       }
     },
+    "composer.object.tool.effect": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التأثير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFFEKT"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFFECT"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFECTO"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFFET"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFFETTO"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EFEITO"
+          }
+        }
+      }
+    },
     "composer.object.tool.frame": {
       "extractionState": "manual",
       "localizations": {

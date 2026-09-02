@@ -524,6 +524,7 @@ public extension CanvasV3 {
             ("textAlign", text.textAlign), ("textBg", text.textBg),
             ("fontWeight", text.fontWeight), ("frameShape", text.frameShape),
             ("frameBorderColor", text.frameBorderColor), ("borderColor", text.borderColor),
+            ("textEffect", text.textEffect),
             ("name", text.name), ("referenceUserId", text.referenceUserId),
         ]
         for (key, value) in strings {
@@ -718,6 +719,7 @@ public extension StoryEffects {
             frameBorderColor: object.payload.string("frameBorderColor"),
             borderColor: object.payload.string("borderColor"),
             borderWidth: object.payload.double("borderWidth"),
+            textEffect: object.payload.string("textEffect"),
             translations: object.payload.stringMap("translations"),
             sourceLanguage: object.locale,
             startTime: object.timing?.start,
