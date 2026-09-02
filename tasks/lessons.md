@@ -24502,6 +24502,19 @@ qui est UNE publication à plusieurs médias.
 > rattrape pas. Un correctif qui transforme « rien ne se passe » en « quelque
 > chose de faux se passe » est une régression, même quand il ferme l'issue.
 
+**La formulation qui nomme la nature** (session voisine, même jour) :
+
+> Ce qui compte n'est pas la probabilité de se tromper mais **QUI RATTRAPE
+> L'ERREUR**. Un geste qui n'aboutit pas se re-tente ; un geste qui aboutit trop
+> demande une suppression.
+
+Réversible contre irréversible — et c'est le MÊME discriminant que le fail-safe
+de `StoryDerivedContent` le matin même (« une garde qui hésite tombe du côté où
+l'on ne perd rien ») et que l'asymétrie de la leçon 440. Trois cas en une
+journée, sur trois couches. Ce n'est plus une leçon d'incident, c'est une règle
+de conception : **devant deux façons de se tromper, choisir celle que
+l'utilisateur peut défaire.**
+
 **Ce qui rend le cas exemplaire** : le commentaire du site avertissait
 exactement de ce piège — « router une surface et router sa PUBLICATION sont deux
 gestes ; le premier se voit à l'écran, le second ne se voit qu'à l'ARRIVÉE, sur
@@ -24540,3 +24553,14 @@ fois — racine iPhone et racine iPad — et les deux avaient déjà divergé (l
 porte le rappel de tap et l'identifiant d'accessibilité, l'autre non). Le
 troisième exemplaire n'a pas été écrit : c'est un modificateur, et la racine le
 consomme.
+
+**Deux précisions dues à la session voisine, qui a repris la mesure le jour
+même et trouvé SIX toasts dans le lecteur de story, dont QUATRE refus :**
+
+- **le modificateur va sur le point de MONTAGE, pas sur la vue qui lève le
+  toast** — sinon on le pose autant de fois qu'il y a de sites d'appel. Le
+  conteneur du lecteur couvre à lui seul la trail, une conversation et une
+  notification ;
+- **le témoin garde les DEUX moitiés du lien** : que l'hôte est monté, ET que la
+  surface lève encore des toasts. Un témoin qui n'assert que la présence du
+  modificateur protège une ligne devenue inutile sans savoir pourquoi.
