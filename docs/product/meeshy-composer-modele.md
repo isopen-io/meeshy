@@ -159,22 +159,6 @@ portent **aucun** `storyEffects` (#4756) — le chemin document perd la scène
 entière. #4756 n'est donc pas un confort : c'est le préalable de cette règle
 pour les profils P et R.
 
-### L'identité de ce qu'on reprend, et son faux jumeau
-
-Une publication qu'on **rouvre** (édition, brouillon repris) doit dire laquelle
-elle est. Cette identité vit **dans le brouillon**, pas à côté : c'est
-`onPublishDocument(draft)` qui décide « créer ou éditer », et une décision qui
-arrive par deux canaux diverge au premier site qui n'en câble qu'un. Un
-optionnel suffit et porte tout — `nil` ⇒ création, posé ⇒ reprise ; **pas de
-booléen d'accompagnement** (règle du dépôt sur les paires redondantes).
-
-> ⚠️ **`repostOfId` est déjà là, de forme IDENTIQUE et de sens OPPOSÉ.** Deux
-> `String?` voisins dont l'un dit « je DESCENDS de » (l'ancrage vers la source
-> qu'on republie) et l'autre « je SUIS » (la publication qu'on rouvre). Leur
-> doc-comment doit les opposer explicitement : confondus, le symptôme est une
-> ÉDITION qui publie un repost de son propre post — un défaut qui se relit comme
-> du code juste.
-
 ### Les trois obligations de la projection
 
 Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
@@ -194,6 +178,22 @@ Une projection explicite doit porter ce qu'une boucle ne pouvait pas porter :
    (`ComposerScenePresence` compte ce que la scène contient, jamais ce qui l'a
    fait naître). Une forme qui ne connaît que deux états ne peut pas décrire ça,
    et c'est par cet état que le socle a été atteint sans publieur (#4751).
+
+### L'identité de ce qu'on reprend, et son faux jumeau
+
+Une publication qu'on **rouvre** (édition, brouillon repris) doit dire laquelle
+elle est. Cette identité vit **dans le brouillon**, pas à côté : c'est
+`onPublishDocument(draft)` qui décide « créer ou éditer », et une décision qui
+arrive par deux canaux diverge au premier site qui n'en câble qu'un. Un
+optionnel suffit et porte tout — `nil` ⇒ création, posé ⇒ reprise ; **pas de
+booléen d'accompagnement** (règle du dépôt sur les paires redondantes).
+
+> ⚠️ **`repostOfId` est déjà là, de forme IDENTIQUE et de sens OPPOSÉ.** Deux
+> `String?` voisins dont l'un dit « je DESCENDS de » (l'ancrage vers la source
+> qu'on republie) et l'autre « je SUIS » (la publication qu'on rouvre). Leur
+> doc-comment doit les opposer explicitement : confondus, le symptôme est une
+> ÉDITION qui publie un repost de son propre post — un défaut qui se relit comme
+> du code juste.
 
 ### Ce qu'il ne faut pas écrire
 
