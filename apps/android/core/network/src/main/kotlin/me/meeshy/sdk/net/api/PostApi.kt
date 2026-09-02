@@ -163,6 +163,21 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * Geolocated discovery feed (`GET /social/posts?scope=nearby`) — the canonical
+     * surface (#4346), never the deprecated `/posts/nearby` alias
+     * (`services/gateway/src/routes/posts/nearby.ts`).
+     */
+    @GET("social/posts")
+    suspend fun getNearby(
+        @Query("scope") scope: String = "nearby",
+        @Query("lat") lat: Double,
+        @Query("lng") lng: Double,
+        @Query("radiusKm") radiusKm: Double,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
     @POST("posts")
     suspend fun create(@Body body: CreatePostRequest): ApiResponse<ApiPost>
 

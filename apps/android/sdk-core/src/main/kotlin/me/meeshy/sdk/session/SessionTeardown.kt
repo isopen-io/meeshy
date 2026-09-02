@@ -5,7 +5,9 @@ import kotlinx.coroutines.withContext
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
 
 /**
@@ -15,8 +17,13 @@ import me.meeshy.sdk.story.StoryComposerDraftStore
  * on-device stores are namespaced by userId, so a second account signing in on the
  * same device would otherwise inherit the previous account's cached conversations,
  * messages, stories, categories, unsent chat drafts, an in-progress story composer
- * draft, and — same reasoning as iOS's own `ConversationLockManager.resetForLogout` —
- * conversation-lock PINs.
+ * draft, conversation-lock PINs (same reasoning as iOS's own
+ * `ConversationLockManager.resetForLogout`) — and, in-memory, the previous
+ * account's friendship graph ([FriendshipCache]) and notifications
+ * ([NotificationRepository]): both are process-wide `@Singleton`s, so without an
+ * explicit clear here a second account signing in on the SAME process would see
+ * the first account's pending friend requests and unread notifications until it
+ * happened to revalidate them.
  *
  * [wipe] is called by [me.meeshy.sdk.auth.AuthRepository.logout] before the caller
  * treats the session as ended, so a subsequent login never races a still-running
@@ -35,6 +42,8 @@ public class DefaultSessionTeardown(
     private val conversationDraftStore: ConversationDraftStore,
     private val conversationLockStore: ConversationLockStore,
     private val storyComposerDraftStore: StoryComposerDraftStore,
+    private val friendshipCache: FriendshipCache,
+    private val notificationRepository: NotificationRepository,
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -44,5 +53,7 @@ public class DefaultSessionTeardown(
         conversationDraftStore.clearAll()
         conversationLockStore.resetForLogout()
         storyComposerDraftStore.clear()
+        friendshipCache.clear()
+        notificationRepository.clear()
     }
 }

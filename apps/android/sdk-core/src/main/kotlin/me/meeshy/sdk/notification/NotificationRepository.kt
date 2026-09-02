@@ -199,6 +199,19 @@ class NotificationRepository @Inject constructor(
         }
     }
 
+    /**
+     * Resets this per-process singleton to its cold-start state — called from
+     * [me.meeshy.sdk.session.SessionTeardown.wipe] on logout/account-switch so a
+     * second account signing in on the same device never inherits the previous
+     * account's cached notifications or unread count.
+     */
+    fun clear() {
+        _notificationsCache.value = null
+        _notificationsSyncedAt.value = null
+        _unreadCount.value = 0
+        _hasMore.value = false
+    }
+
     private companion object {
         const val PAGE_SIZE = 20
     }

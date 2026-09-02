@@ -217,6 +217,7 @@ class PostRepository @Inject constructor(
         const val FEED_PAGE_SIZE = 30
         const val BOOKMARKS_PAGE_SIZE = 20
         const val USER_POSTS_PAGE_SIZE = 20
+        const val NEARBY_PAGE_SIZE = 20
     }
 
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
@@ -320,6 +321,22 @@ class PostRepository @Inject constructor(
         limit: Int = USER_POSTS_PAGE_SIZE,
     ): NetworkResult<PostPage> =
         foldPostPage(rawApiCall { postApi.getUserPosts(userId, cursor, limit) })
+
+    /**
+     * A single cursor page of posts near ([lat], [lng]) within [radiusKm]
+     * (`GET /social/posts?scope=nearby`), carrying the `nextCursor`/`hasMore` watermark
+     * the same way [getBookmarksPage]/[getUserPostsPage] do. The Nearby screen owns the
+     * accumulation — there is no repository-level cache for this scope, since it is
+     * keyed by a coordinate rather than the signed-in user.
+     */
+    suspend fun getNearbyPage(
+        lat: Double,
+        lng: Double,
+        radiusKm: Double,
+        cursor: String? = null,
+        limit: Int = NEARBY_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getNearby(lat = lat, lng = lng, radiusKm = radiusKm, cursor = cursor, limit = limit) })
 
     /**
      * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]

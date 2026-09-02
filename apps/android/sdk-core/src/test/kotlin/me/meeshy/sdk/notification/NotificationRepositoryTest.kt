@@ -71,6 +71,21 @@ class NotificationRepositoryTest {
     }
 
     @Test
+    fun clear_resetsTheCacheAndTheUnreadCountToTheirColdStartState() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = true), unread = 1)
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+
+        repo.clear()
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+        assertThat(repo.hasMoreStream.value).isFalse()
+        repo.notificationsStream().test {
+            assertThat(awaitItem()).isEqualTo(CacheResult.Empty)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun prependLive_addsTheFreshNotificationAndBumpsUnreadCount() = runTest {
         val repo = seed(notification("old"), unread = 0)
 
