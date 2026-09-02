@@ -120,8 +120,28 @@ struct ComposerObjectEditorView: View {
     // MARK: - La scène, en grand
 
     /// L'objet reste SÉLECTIONNÉ tout du long : c'est la doctrine de `1c` — « un
-    /// seul objet à la fois », et le cadre qui l'encadre est ce qui rend le
-    /// réglage lisible pendant qu'on le change.
+    /// seul objet à la fois ».
+    ///
+    /// **Mais il n'est plus ENCADRÉ** (#4850, directive porteur 2026-09-02) :
+    ///
+    /// > « En plein ecran pourquoi mettre un cadre violet autour du texte, je
+    /// > trouve inutile... »
+    ///
+    /// Cette ligne portait la justification inverse — « le cadre qui l'encadre
+    /// est ce qui rend le réglage lisible pendant qu'on le change ». Elle était
+    /// vraie SUR LA SCÈNE, où le cadre désigne, parmi plusieurs objets, celui
+    /// que le doigt saisit. Ici l'objet EST le sujet de l'écran : le titre le
+    /// nomme, les neuf sections le règlent, il n'y a rien dont le distinguer.
+    /// Un signe qui n'apprend rien occupe la place de ce qui apprend.
+    ///
+    /// La justification est révoquée ICI plutôt qu'effacée : un commentaire qui
+    /// explique pourquoi le code fait quelque chose se relit comme une raison
+    /// de ne pas y toucher, et celui-ci décrivait une décision annulée.
+    ///
+    /// Mesuré avant de retirer : `selectedItemId` ne gouverne QUE le marqueur
+    /// (`StoryCanvasRepresentable` → `setSelectionMarker`). Il ne décide ni de
+    /// ce qui répond au doigt, ni de ce qui s'édite en ligne — le passer à
+    /// `nil` n'enlève donc aucun geste.
     private var scene: some View {
         EmbeddedSceneCanvas(
             slide: Binding(
@@ -151,7 +171,8 @@ struct ComposerObjectEditorView: View {
             // refermerait tout pendant qu'on règle un style. La sortie a son
             // geste : « Terminé », qui appelle `closeObjectEditor`.
             onInlineTextEditEnded: { _ in },
-            selectedItemId: objectId
+            // `nil` — voir le doc-comment : pas de cadre en plein écran (#4850).
+            selectedItemId: nil
         )
         .frame(maxWidth: .infinity)
         .layoutPriority(1)
@@ -483,8 +504,24 @@ nonisolated enum ComposerObjectEditorCopy {
     /// de 44 pt ; un titre de section a besoin d'un mot.
     static func tool(_ tool: TextEditTool) -> String {
         switch tool {
+        // **POLICE, pas STYLE** (#4850). La mesure a tranché contre les deux
+        // formes que la directive proposait : `StoryTextStyle` est un sélecteur
+        // de POLICE et rien d'autre — les dix-huit cas résolvent tous vers une
+        // famille, une graisse ou un design (`storyFont(for:size:)`,
+        // `StoryTextFontResolver.baseFont`), aucun n'applique d'effet.
+        //
+        // « Neon » ne brille pas : c'est du système semibold arrondi. « Tag » ne
+        // bombe pas : c'est MarkerFelt. « Affiche » est Avenir Next Condensed.
+        // Sept des dix-huit sont des polices DÉGUISÉES en effets, et c'est ce
+        // mélange de VOCABULAIRE — pas un mélange d'axes — que l'auteur voyait.
+        //
+        // Les vrais effets ont déjà leurs sections, trois lignes plus bas :
+        // FOND, CADRE, CONTOUR. Ouvrir un axe « Effet » aujourd'hui créerait une
+        // section vide ; le jour où un style appliquera un effet, le témoin
+        // `test_laSectionDesPolices_neSAppellePlusSTYLE` tombera et rouvrira la
+        // question.
         case .style:
-            return String(localized: "composer.object.tool.style", defaultValue: "STYLE", bundle: .main)
+            return String(localized: "composer.object.tool.style", defaultValue: "POLICE", bundle: .main)
         case .color:
             return String(localized: "composer.object.tool.color", defaultValue: "COULEUR", bundle: .main)
         case .align:
