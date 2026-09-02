@@ -6,6 +6,44 @@ import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
 
+/**
+ * « Ce blob est-il un document canvas ? » — LE site web de la question (#4774).
+ *
+ * Sens LECTURE, et c'est le seul sens que le web ait à porter : il RÉSOUT ce
+ * qu'il rend, il ne VALIDE rien. La validation vit côté passerelle
+ * (`CanvasV3Schema` + `isCanvasV3Exactly`, `services/gateway/src/services/
+ * posts/storyEffectsV3.ts`), où l'inverse est vrai — on n'écrit pas en base un
+ * rang qu'aucune garde ne sait relire. **Les deux prédicats ne peuvent pas
+ * fusionner : un lecteur qui se durcit rend le vide, un valideur qui se
+ * relâche grave l'incompris.**
+ *
+ * `v >= 3`, donc, jamais `v === 3` : un futur `v: 4` que la passerelle sert TEL
+ * QUEL à un client caps-3 (table O17) doit rester lu en v3. Le rétrograder sur
+ * la projection v1 ne dégrade pas le rendu — la forme v1 (`textObjects`,
+ * `background`…) n'existe pas dans un document v3+, donc la story tomberait
+ * au fond par défaut, sans texte, sans audio.
+ *
+ * Miroir des deux ponts natifs, qui posent la MÊME borne : iOS
+ * `StoryEffects.init(from:)` (`mark >= 3`) et Android
+ * `StoryEffectsWireSerializer` (`mark < 3` ⇒ legacy).
+ *
+ * Il rend un `boolean` NU, et c'est délibéré. Écrit sur place, le test
+ * narrowait l'appelant par effet de bord (`typeof effects?.v === 'number'`
+ * écarte `undefined`), et les quatre sites en vivaient. Trois prédicats de
+ * type ont été essayés pour le leur rendre — `Record<string, unknown>` rabat
+ * leurs propriétés déclarées sur `unknown` ; `object` et `T & object`
+ * collapsent la branche FAUSSE en `never`, rendant tout le rendu legacy de
+ * `StoryViewer` injoignable ; `{ v: number }` remplace le type de l'appelant
+ * au lieu de l'intersecter. **Aucun n'est vrai** : ce prédicat ne dit rien de
+ * la forme de son argument, il ne lit qu'une MARQUE. Les appelants portent
+ * donc leur `?.`, ce qui coûte six caractères et ne ment sur rien.
+ */
+export function isCanvasV3OrNewer(blob: unknown): boolean {
+  if (typeof blob !== 'object' || blob === null) return false;
+  const mark = (blob as { v?: unknown }).v;
+  return typeof mark === 'number' && mark >= 3;
+}
+
 // Résolution du bloc auteur affiché d'une story — SOURCE UNIQUE.
 // Délègue le nom à `getUserDisplayName` (displayName non-vide > username >
 // fallback) plutôt qu'un `??` brut qui laissait passer un displayName vide ou
@@ -325,7 +363,7 @@ export function backgroundSoundCredit(scenes: CanvasV3['scenes']): BackgroundSou
 // passent jamais par `postToStoryData` (elles gardent la forme `Post` telle
 // quelle) : sans ce résolveur, aucun appelant de ces deux surfaces n'avait
 // où lire `sound`/le crédit, et le badge B3.3-6 restait câblé à des props
-// mortes. Même garde `v >= 3` (constat 12) que `postToStoryData`, même
+// mortes. Même garde (`isCanvasV3OrNewer`) que `postToStoryData`, même
 // `backgroundSoundCredit` que `StoryViewer` — un seul extracteur de crédit
 // partagé par les 3 surfaces (carte, détail, plein écran), jamais deux
 // implémentations qui pourraient diverger.
@@ -333,21 +371,18 @@ export function postBackgroundSound(post: Post): { sound?: CanvasV3['sound']; me
   const effects = (post.storyEffects && typeof post.storyEffects === 'object')
     ? post.storyEffects as Record<string, unknown>
     : undefined;
-  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
-  const sound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
+  const isV3Shaped = isCanvasV3OrNewer(effects);
+  const sound = isV3Shaped && effects?.sound !== null && typeof effects?.sound === 'object'
     ? (effects.sound as CanvasV3['sound'])
     : undefined;
-  const scenes = isV3Shaped && Array.isArray(effects.scenes)
+  const scenes = isV3Shaped && Array.isArray(effects?.scenes)
     ? (effects.scenes as CanvasV3['scenes'])
     : [];
   return { sound, meta: backgroundSoundCredit(scenes) };
 }
 
-// Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
-// jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
-// caps-3 doit rester lu en v3, jamais retomber vide sur la projection v1.
 function v3Scenes(effects: Record<string, unknown> | undefined): Record<string, unknown>[] {
-  return typeof effects?.v === 'number' && effects.v >= 3 ? asObjectArray(effects.scenes) : [];
+  return isCanvasV3OrNewer(effects) ? asObjectArray(effects?.scenes) : [];
 }
 
 // Durée d'UNE slide, en millisecondes — miroir de `StorySlide
@@ -501,17 +536,17 @@ export function postToStoryData(post: Post): StoryData {
     : undefined;
 
   // Un blob v3 traverse le funnel INTACT. Reconstruit à clés FIXES, il perdait
-  // `v`, `scenes` et `sound` : la garde `v === 3` de `StoryViewer` restait
+  // `v`, `scenes` et `sound` : la garde de version de `StoryViewer` restait
   // fausse, `CanvasV3Scene` ne se montait jamais et la story revenait au fond
   // par défaut — sans son texte, sans son audio, sans son annonce de fond.
   // `postToStoryData` est l'entonnoir UNIQUE vers le viewer : ce qu'il jette
   // n'existe plus. Le contrat est validé à l'ÉCRITURE (gateway) ; la lecture
   // reste tolérante objet par objet.
-  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
-  const canvasScenes = isV3Shaped && Array.isArray(effects.scenes)
+  const isV3Shaped = isCanvasV3OrNewer(effects);
+  const canvasScenes = isV3Shaped && Array.isArray(effects?.scenes)
     ? withOriginLocale(effects.scenes as NonNullable<CanvasV3['scenes']>, post.originalLanguage ?? undefined)
     : undefined;
-  const backgroundSound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
+  const backgroundSound = isV3Shaped && effects?.sound !== null && typeof effects?.sound === 'object'
     ? (effects.sound as CanvasV3['sound'])
     : undefined;
 
