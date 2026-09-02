@@ -285,6 +285,7 @@ test.describe('la vue rights — ce que l’invité a le droit de faire, dit dan
     expect(porte.cheminsRecus().filter((c) => c === 'PATCH /api/v1/guest-sessions/me').length).toBe(battementsAuMontage);
 
     // Le battement suivant rend l'INSTANTANÉ du join (`canSendMessages: true`) : il ne doit RIEN rouvrir.
+    const jonctionsAvant = passerelle.socket.recus.filter((e) => e.evenement === 'conversation:join').length;
     await page.waitForTimeout(1_100);
     await occulte(page);
     await revele(page);
@@ -292,6 +293,21 @@ test.describe('la vue rights — ce que l’invité a le droit de faire, dit dan
     await expect(ferme).toBeVisible();
     await expect(page.locator('form.composeur')).toBeHidden();
     await expect(ecrire).toHaveClass(/refuse/);
+
+    /**
+     * ATTENDRE LA RE-JONCTION DE LA ROOM, PAS LE BATTEMENT. L'occultation ferme
+     * le socket (§ 8.5) ; la révélation le rouvre et RE-JOINT la conversation.
+     * Ces deux reprises sont indépendantes : le battement est un `PATCH` HTTP,
+     * la room est un `conversation:join` sur le socket. Émettre sur la foi du
+     * battement, c'est parler à une room que personne n'a encore rejointe —
+     * l'événement est perdu, et le composeur ne rouvre jamais. Mesuré : vert en
+     * local, rouge sur le runner, où la reconnexion perd la course (14 sondes,
+     * 5 s, `form.composeur` resté `hidden`). Le témoin attend donc le signal de
+     * ce qu'il va vraiment faire parler.
+     */
+    await expect
+      .poll(() => passerelle.socket.recus.filter((e) => e.evenement === 'conversation:join').length)
+      .toBeGreaterThan(jonctionsAvant);
 
     // L'hôte rend le droit : le composeur rouvre, le bandeau le dit.
     passerelle.hote.changeLesDroits({ canSendMessages: true });
