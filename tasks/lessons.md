@@ -24379,7 +24379,7 @@ Voisines : § 435 (une règle appliquée à une seule de ses dimensions),
 § 433 (ce qui s'énumère se périme — les numéros « 1. / 2. / 3. » des blocs du
 rail, faux dès qu'on déplace un bloc, ont été retirés dans le même lot).
 
-## Leçon 438 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
+## Leçon 439 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
 
 **Le fait (2026-09-02).** Le `content` d'une story est tantôt une légende
 d'auteur, tantôt un index de recherche que la passerelle dérive de la
@@ -24431,3 +24431,112 @@ reconstituable ⇒ le verdict est « vraie légende », donc on AFFICHE. Montrer
 doublon est laid ; taire la légende d'un auteur est une perte de contenu. *Une
 garde qui hésite tombe du côté où l'on ne perd rien* — formulation d'une
 session voisine, adoptée.
+
+## Leçon 440 — Un outil de détection se règle contre l'erreur qui n'a PAS de vérificateur
+
+**Le fait (2026-09-02, #4853).** En extrayant 309 lignes de `PostDetailView.swift`,
+j'ai balayé mécaniquement les membres privés dont le bloc dépendait, et ouvert les
+sept trouvés. Deux erreurs opposées ont suivi, et elles n'ont pas coûté la même
+chose :
+
+| erreur | qui l'attrape | coût réel |
+|---|---|---|
+| **faux négatif** — `DetailMediaAuthor`, type privé que mon motif `private (func\|var\|let)` ne pouvait pas voir | le **compilateur**, immédiatement | un cycle de build, ~2 min |
+| **faux positif** — `accentColor`, ouvert alors que ses deux occurrences étaient des ÉTIQUETTES d'argument (`accentColor: repost.authorColor`) | **rien** | l'encapsulation reste élargie, sans terme |
+
+> **Le compilateur est un vérificateur GRATUIT des faux négatifs, et il n'existe
+> aucun vérificateur des faux positifs.** Ouvrir un membre qui n'en avait pas
+> besoin ne produit ni erreur, ni avertissement, ni test rouge : le défaut
+> s'installe et personne ne le rencontrera jamais.
+
+**Ce que ça retourne.** « Ratisser large pour ne rien manquer » est le bon réglage
+quand les deux erreurs coûtent pareil — et le MAUVAIS dès qu'un vérificateur
+gratuit existe d'un seul côté. Ici il fallait régler contre les faux POSITIFS,
+c'est-à-dire accepter de manquer une dépendance et laisser le compilateur la
+rendre.
+
+**Le geste, généralisé** (formulation d'une session voisine, qui a vu plus loin
+que le cas) :
+
+> Avant de régler n'importe quel outil de détection — balayage, garde, linter,
+> heuristique — demander : **laquelle de mes deux erreurs a déjà un
+> vérificateur ?** Ici le compilateur ; ailleurs un test, un gate, un utilisateur
+> qui râle. **On règle contre celle qui n'en a pas.**
+
+**Corollaire pour nos gardes de source, dont ce dépôt écrit beaucoup** : une garde
+trop STRICTE rougit et se fait corriger le jour même ; une garde trop LÂCHE passe
+au vert pour toujours. C'est le même déséquilibre, et il justifie de préférer
+systématiquement la garde qui risque de rougir à tort. Voisine directe de la
+§ « les gardes NÉGATIVES meurent en silence » : une garde qui ne peut plus
+rougir a exactement le profil de coût du faux positif d'ici — invisible et
+définitive.
+
+**Et le détail technique qui a produit le faux positif, parce qu'il se rejouera** :
+dans un type, un membre s'atteint par `self` IMPLICITE, donc **sans point**.
+Mesuré sur ce lot : **0 dépendance sur 7** était atteinte par `.nom`. Un filtre
+« ne compter que `\.nom\b` ou `\bnom\s*\(` » — proposé de bonne foi pour réduire
+les faux positifs — en aurait trouvé 2 sur 7. Ce qui marche : **effacer les
+positions d'étiquette (`nom:` précédé de `(` ou `,`) AVANT de chercher le nom
+nu.** Il isole le seul faux positif et garde les six vraies.
+
+Dernière chose, sur la confiance qu'on accorde à un balayage : j'avais écrit qu'il
+« retrouve seul ce qui avait été trouvé à la main ». C'était vrai et **ça ne
+prouvait rien** — je lui avais donné un fichier où j'avais déjà appliqué la
+correction. Un outil ne se valide pas sur un cas qu'on a préparé pour lui. Même
+famille que le témoin qui doit TOMBER avant le correctif.
+
+## Leçon 441 — Un correctif VERT au gate peut publier du contenu FAUX : le simulateur n'est pas une formalité de fin, c'est la seule mesure qui voit l'ARRIVÉE
+
+**Le fait (2026-09-02).** Un Réel composé depuis le Feed ne partait jamais — la
+porte du document le refuse (à juste titre : son brouillon ne porte pas de
+slides), et seule la story avait été routée autour de ce refus. Le correctif
+tenait en deux lignes : donner au réel le canal de la scène, comme la story.
+
+**Gate vert. 383 témoins. Et au simulateur, un réel de deux photos a produit
+DEUX POSTS au lieu d'un** — ce canal publie un post *par slide*, sémantique
+juste pour une story dont chaque unité EST une publication, fausse pour un réel
+qui est UNE publication à plusieurs médias.
+
+> **Le silence d'avant était un défaut ; publier deux posts au lieu d'un en est
+> un PIRE, et d'une autre NATURE.** Un refus se rejoue ; un contenu publié ne se
+> rattrape pas. Un correctif qui transforme « rien ne se passe » en « quelque
+> chose de faux se passe » est une régression, même quand il ferme l'issue.
+
+**Ce qui rend le cas exemplaire** : le commentaire du site avertissait
+exactement de ce piège — « router une surface et router sa PUBLICATION sont deux
+gestes ; le premier se voit à l'écran, le second ne se voit qu'à l'ARRIVÉE, sur
+un contenu qu'on ne peut plus rattraper » — et je l'ai lu, cité dans l'issue, et
+suivi à moitié. **Lire l'avertissement ne dispense pas de faire la mesure qu'il
+prescrit.**
+
+La bonne réponse n'était donc pas le canal approchant mais un canal `unsupported`
+ÉCRIT, avec sa mesure en doc-comment et son témoin. *Un trou nommé vaut mieux
+qu'un trou comblé de travers* — et il disparaîtra avec le vrai canal, pas avant.
+
+## Leçon 442 — Un REFUS peut être parfaitement écrit et se lever DERRIÈRE l'écran
+
+Suite immédiate de la 441, trouvée en vérifiant son correctif. Le refus explicite
+que je venais d'ajouter n'apparaissait pas : le composer est un
+`fullScreenCover`, et l'hôte des toasts était un `.overlay` de la vue RACINE —
+donc dessous. **Tout toast levé depuis le composer était invisible** : la
+publication ratée, le micro refusé, l'envoi hors-ligne.
+
+Et le doc-comment du refus de la porte décrivait mot pour mot le symptôme que
+cette absence produit :
+
+> « Un refus qui se DIT. Rendre `false` sans rien dire laisserait l'auteur devant
+> une flèche qui semble ne rien faire — et il la presserait encore. »
+
+Le bon geste était fait, à la bonne place, avec la bonne raison écrite. La couche
+d'AFFICHAGE le rendait sans effet.
+
+> **La question « qui AFFICHE ce que je viens de produire ? » ne vaut pas que
+> pour un contenu — elle vaut pour un REFUS, une ERREUR, un ÉTAT.** C'est la
+> forme du cycle 122 du Prisme (« un correctif dont la valeur n'atteint aucun
+> lecteur n'a corrigé personne ») portée d'une traduction à un message d'échec.
+
+Corollaire de forme, mesuré dans le même lot : l'overlay était déjà écrit DEUX
+fois — racine iPhone et racine iPad — et les deux avaient déjà divergé (l'un
+porte le rappel de tap et l'identifiant d'accessibilité, l'autre non). Le
+troisième exemplaire n'a pas été écrit : c'est un modificateur, et la racine le
+consomme.
