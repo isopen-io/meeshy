@@ -200,7 +200,20 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// relèvement du budget ne les absout pas : la règle 3 demeure rouge tant que
     /// ces 165 lignes ne sont pas extraites (#4841). Un plafond qui se lève pour
     /// couvrir une croissance qu'il vient de refuser cesse d'être un cliquet.
-    private static let legacyLineCeiling = 67_879
+    ///
+    /// 2026-09-02 (fusion de la branche stickers, #4823) — 67 879 → 67 385 (−494).
+    /// Les 165 lignes impayées ci-dessus le sont : `StoryComposerBarView` a
+    /// quitté `StoryViewerView+Canvas.swift` (298 lignes), le saut vers un
+    /// message hors fenêtre a quitté `ConversationViewModel.swift` (152) et
+    /// l'état du composer `ConversationView.swift` (70) — trois découpes par
+    /// responsabilité faites AVANT d'ajouter aux hôtes, qui restent en dette.
+    /// Le nombre est REMESURÉ sur les 31 noms avec la méthode de
+    /// `lineCount(of:)` sur l'arbre fusionné, jamais soustrait.
+    ///
+    /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
+    /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
+    /// les 31 noms de l'arbre fusionné, jamais soustrait.
+    private static let legacyLineCeiling = 67_091
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

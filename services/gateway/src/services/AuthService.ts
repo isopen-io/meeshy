@@ -49,6 +49,7 @@ import {
   clearPendingTwoFactor,
 } from './auth/pending-two-factor';
 import { AUTH_USER_SELECT } from './auth/auth-user-projection';
+import { registrationLanguages } from './auth/registration-languages';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -69,6 +70,7 @@ export interface RegisterData {
   phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
   systemLanguage?: string;
   regionalLanguage?: string;
+  customDestinationLanguage?: string;
   phoneTransferToken?: string; // Token proving SMS verification for phone transfer
   skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
 }
@@ -606,6 +608,10 @@ export class AuthService {
       const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
+      // Les trois rangs du Prisme que l'inscription exprime, composés en UN site
+      // (#4682) : un rang qu'elle ne demande pas n'est pas écrit.
+      const languages = registrationLanguages(data);
+
       // Créer l'utilisateur avec les données normalisées et contexte d'inscription
       // Note: Si phoneOwnershipConflict, on a déjà fait un early return plus haut
       const user = await this.prisma.user.create({
@@ -628,8 +634,9 @@ export class AuthService {
           phoneCountryCode: phoneCountryCode,
           // Mark phone as verified at registration (allows phone-based password reset)
           phoneVerifiedAt: cleanPhoneNumber ? new Date() : null,
-          systemLanguage: data.systemLanguage || 'fr',
-          regionalLanguage: data.regionalLanguage || 'fr',
+          systemLanguage: languages.systemLanguage,
+          regionalLanguage: languages.regionalLanguage,
+          customDestinationLanguage: languages.customDestinationLanguage,
           displayName: normalizedDisplayName,
           isOnline: true,
           lastActiveAt: new Date(),
@@ -661,7 +668,9 @@ export class AuthService {
           verificationLink,
           verificationCode,
           expiryHours: tokenExpiryHours,
-          language: data.systemLanguage || 'fr'
+          // Le rang SERVI, pas `data.systemLanguage` : le premier e-mail d'un
+          // compte partait en français à qui n'avait renseigné que son rang 2.
+          language: languages.systemLanguage
         });
 
         if (emailResult.success) {

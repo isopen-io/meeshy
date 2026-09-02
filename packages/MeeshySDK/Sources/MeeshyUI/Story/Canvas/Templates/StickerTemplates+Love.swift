@@ -160,4 +160,24 @@ extension StickerTemplateRenderer {
                 at: CGPoint(x: xTexte, y: yHaut + l.tailleLibellé.height))
         }
     }
+
+    // MARK: - Le registre de la famille AMOUR
+
+    static let loveDrawers: [StickerTemplateDrawer] = [
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.loveHeartFrame,
+            name: { String(localized: "sticker.template.love.heartFrame", defaultValue: "Cœur", bundle: .module) },
+            measure: { _, m in Self.heartFrameSize(metrics: m) },
+            draw: { _, m, échelle in Self.heartFrameImage(metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.loveDoubleHeart,
+            name: { String(localized: "sticker.template.love.doubleHeart", defaultValue: "Deux cœurs", bundle: .module) },
+            measure: { _, m in Self.doubleHeartSize(metrics: m) },
+            draw: { _, m, échelle in Self.doubleHeartImage(metrics: m, screenScale: échelle) }),
+        StickerTemplateDrawer(
+            id: StickerTemplateCatalog.ID.loveSince,
+            name: { String(localized: "sticker.template.love.sinceName", defaultValue: "Depuis le", bundle: .module) },
+            measure: { s, m in Self.sinceSize(slots: s, metrics: m) },
+            draw: { s, m, échelle in Self.sinceImage(slots: s, metrics: m, screenScale: échelle) }),
+    ]
 }

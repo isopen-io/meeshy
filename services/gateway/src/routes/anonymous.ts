@@ -520,6 +520,14 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           properties: {
             ...errorResponseSchema.properties,
             message: { type: 'string', description: 'Link expired, inactive, or max uses reached' },
+            // #4829 — un client qui range la session invitée PAR LIEN (cookie
+            // `meeshy_guest_<linkId>`, conception v3 § 6.3.E) a besoin du
+            // `linkId` CANONIQUE pour retrouver sa place sur ce lien précisément
+            // clos/échu/plein — le battement ne connaît pas `maxUses` (§ 6.3.B).
+            // `sendError` étale `details` à la RACINE (`utils/response.ts`) ;
+            // cette déclaration est ce qui empêche `fast-json-stringify` de le
+            // retirer en silence (`additionalProperties: false` par défaut).
+            linkId: { type: 'string', description: 'Canonical shareLink.linkId (mshy_...) of the refused link' },
           }
         },
         500: errorResponseSchema
@@ -600,16 +608,22 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
 
       // Verifications de base
+      //
+      // #4829 — chacun des trois refus porte `details: { linkId }` : `sendError`
+      // étale `details` à la RACINE (`utils/response.ts`), et le champ ne
+      // survivrait pas à `fast-json-stringify` sans la déclaration ajoutée au
+      // schéma 410 ci-dessus. `shareLink.linkId` est déjà chargé par
+      // `anonymousLinkPreviewSelect` — aucun `select` à étendre.
       if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif', details: { linkId: shareLink.linkId } });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
+        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire', details: { linkId: shareLink.linkId } });
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
+        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation', details: { linkId: shareLink.linkId } });
       }
 
       // Recuperer les statistiques de la conversation

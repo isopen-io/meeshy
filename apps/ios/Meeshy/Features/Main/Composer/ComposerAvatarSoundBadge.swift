@@ -95,7 +95,7 @@ struct ComposerAvatarSoundBadge: View {
     private var capsule: some View {
         HStack(spacing: 7) {
             Image(systemName: "music.note")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundStyle(tint)
 
             // **L'onde ne se peint QUE pour un enregistrement** (directive

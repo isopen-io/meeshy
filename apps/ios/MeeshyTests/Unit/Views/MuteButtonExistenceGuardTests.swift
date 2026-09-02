@@ -41,6 +41,26 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         try MyStoriesSourceCorpus.text(of: relativePath)
     }
 
+    /// **L'unité de `PostDetailView`, jamais deux fichiers nommés** (2026-09-02).
+    ///
+    /// Trois gardes lisaient `PostDetailView.swift` + `PostDetailView+Canvas.swift`
+    /// en dur, parce qu'au #4086 le chemin NATIF avait suivi la section canvas
+    /// et le chemin REPUBLICATION était resté chez l'hôte. Une liste de parties
+    /// se périme au premier découpage, et se périme en rouge sur un code juste :
+    /// `598ba11f` (dev, 2026-09-02) a sorti le post CITÉ dans
+    /// `PostDetailView+RepostEmbed.swift`, et les gardes qui comptaient deux
+    /// sites câblés n'en voyaient plus qu'un — un rouge honnête, mais qui
+    /// désignait le mauvais coupable et invitait à recâbler ce qui l'était déjà.
+    ///
+    /// Le balayage est celui d'`AppSourceGuard.unitURLs` (glob
+    /// `PostDetailView+*.swift`, jamais une liste), dépouillé par le MÊME
+    /// stripper que `source(_:)` pour que les deux lectures se comparent.
+    private func postDetailUnit() throws -> String {
+        try AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/PostDetailView.swift")
+            .map { MyStoriesSourceCorpus.strippingComments(try String(contentsOf: $0, encoding: .utf8)) }
+            .joined(separator: "\n")
+    }
+
     /// Le bloc de code entre deux marqueurs (le second exclu). `end == nil`
     /// borne jusqu'à la fin du fichier.
     private func block(from start: String, to end: String?, in text: String) -> String {
@@ -216,12 +236,12 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// story, RF3) passent par le même état local.
     func test_postDetailView_canvasSites_wireToLocalMuteState() throws {
         // #4086 — le chemin NATIF a suivi la section canvas dans son propre
-        // fichier ; le chemin republication est resté chez l'hôte. Compter sur
-        // un seul des deux ferait dire à cette garde « un site câblé » là où
-        // il y en a bien deux — un rouge honnête, mais qui désigne le mauvais
-        // coupable et invite à recâbler ce qui l'est déjà.
-        let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
-            + source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+        // fichier ; le chemin republication a suivi le post CITÉ dans le sien
+        // (`598ba11f`, 2026-09-02). Compter sur une partie de l'unité ferait
+        // dire à cette garde « un site câblé » là où il y en a bien deux — un
+        // rouge honnête, mais qui désigne le mauvais coupable et invite à
+        // recâbler ce qui l'est déjà. D'où l'UNITÉ, et jamais des noms.
+        let text = try postDetailUnit()
         let wiredOccurrences = text.components(separatedBy: "mute: isCanvasMuted").count - 1
         XCTAssertEqual(
             wiredOccurrences, 2,
@@ -350,22 +370,34 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// Les DEUX chemins de rendu passent par le point de décision unique.
     /// Le chemin republication l'a rejoint ici : il appelait
     /// `storyCanvasContainer` en direct, sans garde.
+    ///
+    /// Le chemin REPUBLICATION est reconnu par sa BRANCHE (`if isStoryRepost {`),
+    /// jamais par le fichier qui la porte (2026-09-02) : elle vivait chez l'hôte,
+    /// elle vit dans `PostDetailView+RepostEmbed.swift` depuis `598ba11f`, et la
+    /// garde n'a pas à savoir où elle vivra demain — seulement qu'elle passe par
+    /// le point de décision, et que celui-ci n'a que DEUX appelants.
     func test_bothCanvasPaths_goThroughTheSingleDecisionPoint() throws {
         let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
-        let host = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+        let unit = try postDetailUnit()
+        let decisionPoint = "storyCanvasOrPlaceholder(renderedItem: renderedItem)"
 
         XCTAssertTrue(
             canvas.contains("BackgroundSoundBadge.canvasHasContent(renderedItem)"),
             "Le point de décision doit consulter la règle partagée, jamais la réécrire."
         )
         XCTAssertTrue(
-            canvas.contains("storyCanvasOrPlaceholder(renderedItem: renderedItem)"),
+            canvas.contains(decisionPoint),
             "Le chemin NATIF doit passer par le point de décision."
         )
         XCTAssertTrue(
-            host.contains("storyCanvasOrPlaceholder(renderedItem: renderedItem)"),
+            block(from: "if isStoryRepost {", to: "} else if", in: unit).contains(decisionPoint),
             "Le chemin REPUBLICATION doit passer par le MÊME point de décision — " +
             "sans lui, une source expirée rend un rectangle noir sous un bouton de son."
+        )
+        XCTAssertEqual(
+            unit.components(separatedBy: decisionPoint).count - 1, 2,
+            "Le point de décision a DEUX appelants — natif et republication — et " +
+            "aucun troisième site n'a à rendre un canvas story dans le détail."
         )
     }
 
@@ -377,8 +409,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// garde négative restée sur un seul fichier passerait au vert en ne
     /// regardant plus rien.
     func test_theEmptinessRule_isNeverRewrittenOutsideItsSite() throws {
-        let sites = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
-            + source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+        let sites = try postDetailUnit()
 
         for rewrite in ["storyEffects == nil && renderedItem.media.isEmpty",
                         "renderedItem.storyEffects != nil || !renderedItem.media.isEmpty"] {
@@ -398,6 +429,11 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift").count, 1_000)
         XCTAssertGreaterThan(
             try source("Meeshy/Features/Main/Views/PostDetailView.swift").count, 50_000)
+        XCTAssertGreaterThanOrEqual(
+            AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/PostDetailView.swift").count, 2,
+            "L'unité doit voir l'hôte ET ses extensions — un glob qui ne rend que " +
+            "l'hôte laisserait les deux gardes ci-dessus compter sur une moitié.")
+        XCTAssertGreaterThan(try postDetailUnit().count, 50_000)
     }
 
     /// POST qui reposte un POST (pas une story) : ni storyCanvasSection ni

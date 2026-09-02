@@ -19,7 +19,7 @@ import {
   composeStoryContentForLanguage,
   isContentDerivedFromTextObjects,
 } from './storyContentComposition';
-import { isCanvasV3, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
+import { isCanvasV3OrNewer, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -92,7 +92,12 @@ export class StoryTextObjectTranslationService {
       // (le contrat du trigger avec le translator) ; la persistance, elle,
       // cible l'objet par SON ID dans sa scène — une scène contient aussi des
       // objets non-texte, l'index plat n'y est pas un index d'objet.
-      const docIsV3 = isCanvasV3(post.storyEffects);
+      // #4774 — le sens LECTURE : un document d'un rang SUPERIEUR range ses
+      // textes comme un v3, donc il se persiste comme un v3. Sous le predicat
+      // STRICT, il repartait par le chemin v1 et GRAVAIT
+      // `storyEffects.textObjects.$i.translations.$lang` dans un document qui
+      // n'a pas de `textObjects` — une corruption, pas un affichage manquant.
+      const docIsV3 = isCanvasV3OrNewer(post.storyEffects);
       const targetObjectId = docIsV3
         ? storyTranslatableTexts(post.storyEffects)?.[textObjectIndex]?.id
         : undefined;

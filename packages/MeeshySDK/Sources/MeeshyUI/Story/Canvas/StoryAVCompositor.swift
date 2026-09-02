@@ -192,6 +192,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          mediaFrameProvider: { media, _ in
                                              overlayFrames[media.id]
                                          },
+                                         stickerImageURLs: instruction.stickerImageURLs,
                                          watermark: instruction.watermark,
                                          brandUnderlay: introFrame,
                                          storyOpacity: storyAlpha,
@@ -245,6 +246,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      cache: StoryRendererCache,
                                      backdropCapture: any BackdropCapturing,
                                      mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
+                                     stickerImageURLs: [String: URL] = [:],
                                      watermark: StoryExportWatermark? = nil,
                                      brandUnderlay: CVPixelBuffer? = nil,
                                      storyOpacity: CGFloat = 1,
@@ -271,18 +273,23 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                                       mode: .play,
                                                       languages: languages)
 
-            // Foreground layer tree (text/media/stickers/drawing).
+            // Foreground layer tree (text/media/stickers/drawing). Les bitmaps
+            // des stickers IMAGE arrivent par un lecteur SYNCHRONE : la couche
+            // les pose au build, avant `layer.render(in:)` — une tâche les
+            // poserait après, sur une frame déjà encodée (#4852).
             let tree = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: time,
                                             mode: .play,
                                             languages: languages,
+                                            imageCache: stickerImageCache(for: stickerImageURLs),
                                             cache: cache,
                                             backdropProvider: { frame in
                                                 backdropCapture.cropRegion(frame)
                                             },
                                             mediaFrameProvider: mediaFrameProvider,
-                                            contentsScale: 1.0)
+                                            contentsScale: 1.0,
+                                            reduceMotion: false)
 
             // Opening transition — only visible during the first
             // `StoryRenderer.slideTransitionDuration`. The live canvas uses
@@ -537,6 +544,38 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     @MainActor
     private static var backgroundImageMemo: (key: String, image: UIImage)?
 
+    /// Bitmaps des stickers IMAGE, décodés une fois par jeu d'adresses.
+    ///
+    /// Même contrat que `backgroundImageMemo` : appelé à CHAQUE frame, mémoïsé
+    /// sur son entrée — le jeu d'adresses est constant pour toute la session
+    /// d'export, donc une seule entrée suffit, remplacée dès que l'entrée change.
+    /// Même contrepartie assumée : le dernier jeu de bitmaps reste retenu
+    /// jusqu'à l'export suivant.
+    @MainActor
+    private static var stickerImagesMemo: (urls: [String: URL], reader: ComposerImageCacheReader)?
+
+    /// Le lecteur SYNCHRONE des bitmaps de stickers pour une session d'export.
+    ///
+    /// Les adresses sont attendues LOCALES, keyées par `postMediaId` — la voie
+    /// du fond (`resolveBackgroundImage`) : `StoryExporter` rapatrie les assets
+    /// AVANT la composition, parce qu'ici on est sur le main actor, en
+    /// synchrone, une fois par frame. Un fichier qui ne charge pas est omis :
+    /// la couche peint alors son repli 🖼️, jamais un trou. `nil` quand la
+    /// story n'adresse aucun sticker image, pour que le rendu des autres
+    /// stories reste celui d'avant.
+    @MainActor
+    internal static func stickerImageCache(for stickerImageURLs: [String: URL]) -> ImageCacheReader? {
+        guard !stickerImageURLs.isEmpty else { return nil }
+        if let memo = stickerImagesMemo, memo.urls == stickerImageURLs { return memo.reader }
+        let images = stickerImageURLs.reduce(into: [String: UIImage]()) { result, entry in
+            guard let image = UIImage(contentsOfFile: entry.value.path) else { return }
+            result[entry.key] = image
+        }
+        let reader = ComposerImageCacheReader(images: images, version: 0)
+        stickerImagesMemo = (stickerImageURLs, reader)
+        return reader
+    }
+
     /// Resolves the bitmap for a slide whose background is an image.
     ///
     /// Priorité IDENTIQUE à celle de `StoryRenderer.renderBackground` : l'entrée
@@ -727,6 +766,13 @@ public final class StoryCompositionInstruction: NSObject,
     /// Fenêtres de fondu, en temps de COMPOSITION.
     public let introFade: CMTimeRange?
     public let outroFade: CMTimeRange?
+    /// Adresses LOCALES des bitmaps des stickers IMAGE de la slide, keyées par
+    /// `postMediaId` (#4852). Un `StorySticker` ne porte pas d'URL — seulement
+    /// l'id de son `PostMedia` — et le compositor n'a ni la liste des médias ni
+    /// le droit de télécharger : c'est à `StoryExporter` de les rapatrier avant
+    /// la composition, comme il le fait pour `mediaURL`. Vide = les stickers
+    /// image sortent sous leur repli 🖼️.
+    public let stickerImageURLs: [String: URL]
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     /// Pistes que ce segment consomme RÉELLEMENT.
@@ -750,8 +796,10 @@ public final class StoryCompositionInstruction: NSObject,
                             outroTrackID: CMPersistentTrackID? = nil,
                             introFade: CMTimeRange? = nil,
                             outroFade: CMTimeRange? = nil,
-                            requiredSourceTrackIDs: [NSValue]? = nil) {
+                            requiredSourceTrackIDs: [NSValue]? = nil,
+                            stickerImageURLs: [String: URL] = [:]) {
         self.requiredSourceTrackIDs = requiredSourceTrackIDs
+        self.stickerImageURLs = stickerImageURLs
         self.slide = slide
         self.languages = languages
         self.timeRange = timeRange
