@@ -51,6 +51,34 @@ La somme à cinq cas est donc **complète pour ce qui est objet**. Le chiffre à
 citer dépend de la question : *sept* kinds au contrat, *cinq* familles d'objets,
 *six* kinds ayant un producteur.
 
+#### Ce que la directive « à gauche en Story » ne dit PAS (2026-09-02)
+
+Le porteur a fait passer **lieu · hashtag · mention · corpus de texte** au rail
+GAUCHE en profil **S**, « afin de fixer chaque position à chaque story » (#4893).
+Le rail gauche étant celui de ce qu'on POSE sur la scène, la question suit toute
+seule : ces quatre-là deviennent-ils des objets de scène ?
+
+**Deux le sont déjà** (`text`, `place`). Pour les deux autres, le contrat a
+répondu, et il a répondu DIFFÉREMMENT — c'est l'asymétrie qu'il faut connaître
+avant d'ouvrir le sujet :
+
+| | statut au contrat | ce que coûterait « objet posable » |
+|---|---|---|
+| `mention` | **ACTIF** (`ACTIVE_KINDS`) — le fil l'accepte déjà | cas Swift + producteur + lecteur + charge. **Contrat inchangé** |
+| `hashtag` | **RÉSERVÉ** (`RESERVED_KINDS`, « nomenclature connue, REFUSÉS en v1 ») | idem **+ déplacer la clé de `RESERVED` vers `ACTIVE`** — une décision de contrat |
+
+> **Une place dans un rail n'est pas une promesse de positionnement.** Livrer la
+> place (le rail les montre, leur porte ouvre le sélecteur de la publication) est
+> conforme au modèle tel qu'il est ; livrer la pastille posable demande d'abord
+> de renverser une décision ÉCRITE — `CanvasV3Migration` dit d'une mention
+> qu'elle est « une MÉTADONNÉE, pas un objet ». Tant que cette phrase est là,
+> elle gagne.
+
+Le filet existe déjà si la décision tombe un jour : un client dont le build
+ignore un kind ne casse pas — `case .reserved(let raw)` le conserve à
+l'aller-retour et l'inscrit dans `unpaintableKinds`, donc le lecteur SAIT qu'il
+peint une scène amputée. C'est le producteur qui manquerait, jamais le filet.
+
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
 Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
