@@ -1764,6 +1764,13 @@ struct StoryCardView: View {
                     // sa propre colonne (directive porteur 2026-09-01).
                     MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
                                         horizontalInset: 20,
+                                        // Le rail d'actions occupe la bande droite
+                                        // (x ≈ 318 → 386 sur un écran de 402).
+                                        // Repliée la légende ne l'atteint pas ;
+                                        // dépliée elle monte sous lui. Mesuré à
+                                        // l'écran : texte et icônes superposés,
+                                        // les deux illisibles.
+                                        expandedTrailingInset: 68,
                                         onToggle: onCaptionExpansionToggled)
                 }
                 // **La légende tient la colonne du CANVAS, pas celle de l'hôte**

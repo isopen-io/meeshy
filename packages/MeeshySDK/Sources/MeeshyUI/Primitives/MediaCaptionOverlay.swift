@@ -143,6 +143,21 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// grandir. Avec elle, le bloc pousse vers le haut depuis là où il était,
     /// s'arrête, et le reste défile.
     private let maxExpandedHeight: CGFloat
+    /// **Ce que la légende dépliée doit LAISSER à sa droite** (#4762).
+    ///
+    /// Repliée, elle tient en quelques lignes basses et ne rencontre personne.
+    /// Dépliée, elle monte — et sur une story elle traverse le rail d'actions
+    /// (Envoyer, Vues, Partager, Enregistrer, Traductions), qui occupe la bande
+    /// droite sur presque toute la hauteur. Mesuré à l'écran : le texte passait
+    /// SOUS les icônes, les deux devenant illisibles.
+    ///
+    /// > Un bloc qui grandit ne rencontre pas les mêmes voisins que le bloc
+    /// > replié. Ce qui ne se chevauchait pas dans un état peut se chevaucher
+    /// > dans l'autre — la place se vérifie DÉPLIÉE, pas au repos.
+    ///
+    /// Zéro par défaut : le plein écran média n'a pas de rail latéral, et lui
+    /// imposer une marge droite lui ferait perdre de la largeur pour rien.
+    private let expandedTrailingInset: CGFloat
 
     /// **Ce que les surfaces partagent est la RÈGLE, pas le moteur de texte.**
     ///
@@ -163,6 +178,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 wordHead: Int = MediaCaptionOverlay.defaultWordHead,
                 horizontalInset: CGFloat = 20,
                 maxExpandedHeight: CGFloat = 420,
+                expandedTrailingInset: CGFloat = 0,
                 onToggle: @escaping () -> Void,
                 @ViewBuilder render: @escaping (String, CGFloat) -> TextBody) {
         self.caption = caption
@@ -171,6 +187,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         self.wordHead = wordHead
         self.horizontalInset = horizontalInset
         self.maxExpandedHeight = maxExpandedHeight
+        self.expandedTrailingInset = expandedTrailingInset
         self.onToggle = onToggle
         self.render = render
     }
@@ -305,7 +322,8 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                     .accessibilityLabel(Self.seeLessLabel)
                     .accessibilityHint(Self.seeLessHint)
                 }
-                .padding(.horizontal, horizontalInset)
+                .padding(.leading, horizontalInset)
+                .padding(.trailing, horizontalInset + expandedTrailingInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: maxExpandedHeight)
@@ -408,12 +426,16 @@ public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
          wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,
          wordHead: Int = MediaCaptionOverlay.defaultWordHead,
          horizontalInset: CGFloat = 20,
+         maxExpandedHeight: CGFloat = 420,
+         expandedTrailingInset: CGFloat = 0,
          onToggle: @escaping () -> Void) {
         self.init(caption: caption,
                   isExpanded: isExpanded,
                   wordThreshold: wordThreshold,
                   wordHead: wordHead,
                   horizontalInset: horizontalInset,
+                  maxExpandedHeight: maxExpandedHeight,
+                  expandedTrailingInset: expandedTrailingInset,
                   onToggle: onToggle,
                   render: { texte, taille in MediaCaptionPlainText(texte, size: taille) })
     }
