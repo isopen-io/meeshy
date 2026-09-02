@@ -15,28 +15,38 @@ import { baseDeLaPasserelle } from './links';
  * confondre ferait lire « une erreur est survenue » à qui doit simplement se
  * reconnecter.
  *
- * SUR CES DEUX ROUTES, UN 403 VEUT AUSSI DIRE « RECONNECTE-TOI ». La sémantique
- * de manuel — 401 « le jeton ne vaut plus », 403 « il vaut, mais pas pour ceci »
- * — ne décrit PAS cette passerelle. `middleware/auth.ts:886` rend
- * `403 PERMISSION_DENIED` avec le message « Authentication required » dès qu'il
- * n'y a pas d'authentification valide, et c'est le cas nominal d'une session
- * expirée sur `/auth/me`, qui n'exige aucune permission particulière.
+ * LES DEUX ROUTES NE RÉPONDENT PAS PAREIL À LA MÊME SESSION MORTE, et cet
+ * appelant traite chacune selon ce qu'elle rend — MESURÉ, pas déduit d'une
+ * sémantique de manuel.
  *
- * Traiter ce 403 en panne enferme le lecteur : il lit « le service ne répond
- * pas » alors qu'il doit simplement se reconnecter, et rien sur l'écran ne l'y
- * mène. Le témoin `it.each([401, 403])` de `__tests__/connecte.test.ts` dit
- * exactement cela, et il a raison.
+ * Le motif écrit ici auparavant était FAUX. Il invoquait
+ * `middleware/auth.ts:886`, « qui rend `403 PERMISSION_DENIED` avec le message
+ * Authentication required ». Cette ligne est `requireEmailVerification` : une
+ * garde que **zéro route du gateway ne monte** (mesuré). Elle ne décrivait ni
+ * `/auth/me` ni `/conversations`, et #4760 lui a de toute façon fait rendre 401.
  *
- * LA CRAINTE DE LA BOUCLE EST RÉELLE, mais elle vise un AUTRE 403 :
- * `auth.ts:873` rend le même code pour « Insufficient permissions » — un lecteur
- * authentifié à qui il manque un droit. Renvoyer celui-là au login bouclerait.
- * Les deux sont indiscernables par le client : `PERMISSION_DENIED` désigne les
- * deux. C'est un défaut de la passerelle, pas de cet appelant, et il est nommé
- * dans une issue à part.
+ *   - **`/auth/me` ⇒ 401, jamais 403.** Sa garde est
+ *     `createUnifiedAuthMiddleware(…, { requireAuth: true, allowAnonymous:
+ *     true })` (`routes/auth/magic-link.ts`), dont la branche 403
+ *     (`REGISTERED_USER_REQUIRED`) est inatteignable sous `allowAnonymous:
+ *     true` ; et son handler `handleGetMe` (`routes/me/get-me.ts:313`) refuse
+ *     par `sendUnauthorized`. Le 403 est ici une branche MORTE : il est retiré.
  *
- * L'arbitrage tient à la ROUTE, pas au statut : `/auth/me` et `/conversations`
- * ne demandent aucun droit particulier, donc leur 403 ne peut pas être un refus
- * de permission — il ne reste que « pas authentifié ».
+ *   - **`/conversations` ⇒ 403 pour la MÊME session morte.** Sa garde est
+ *     `optionalAuth` (`requireAuth: false`), qui ne refuse rien ; c'est le
+ *     handler qui tranche, et il le fait par
+ *     `sendForbidden(reply, 'Authentication required to access conversations')`
+ *     — `routes/conversations/core-list.ts:93`. Un 403 y est donc bel et bien
+ *     une session expirée, et le retirer enfermerait le lecteur dans l'écran
+ *     de panne. Il RESTE.
+ *
+ * Ce 403-là est le même défaut que #4760 — un refus d'IDENTITÉ servi au statut
+ * d'un refus de DROIT — sur un site que #4760 n'a pas touché. Il n'est pas
+ * théorique : `AuthExpiryInterceptor`
+ * (`apps/android/core/network/…/AuthExpiryInterceptor.kt:43`) porte 403 dans
+ * ses `EXPIRY_CODES` en citant cette phrase exacte. Le jour où `core-list.ts:93`
+ * passera à `sendUnauthorized`, la ligne 403 ci-dessous disparaît avec lui —
+ * et son témoin de `__tests__/connecte.test.ts` dit lequel des deux la tient.
  */
 
 export type Recuperateur = (url: string, options: RequestInit) => Promise<Response>;
@@ -158,7 +168,7 @@ export const moi = async ({
   const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_MOI}`, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
 
   const enveloppe = objet(await reponse.json().catch(() => null));
   if (enveloppe?.success !== true) return { genre: 'panne' };
@@ -199,6 +209,9 @@ export const conversations = async ({
   const reponse = await demande(url, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
+  // 403 : `core-list.ts:93` sert ce statut pour une session ABSENTE (voir
+  // l'en-tête du module). Le retirer ici ferait lire « le service ne répond
+  // pas » à qui doit se reconnecter.
   if (reponse.status === 401 || reponse.status === 403) return { genre: 'session-expiree' };
 
   const corps = await reponse.json().catch(() => null);

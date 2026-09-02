@@ -23515,7 +23515,7 @@ le fil. Elle levait au passage #4746 : un volet câblé par une session voisine,
 avec témoins verts, n'était jamais apparu parce que le flux story montait
 l'atelier.
 
-## Leçon 421 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
+## Leçon 422 — Un témoin qui remonte une chaîne d'UN cran mesure la LONGUEUR de la chaîne, pas son propre sujet
 
 Deux témoins de `apps/web-v3/e2e/visual/v3-network-vitals.spec.ts` tenaient le
 critère de #4495 : un lien partagé s'ouvre en un aller-retour. Ils rougissaient
@@ -23642,3 +23642,150 @@ Cette leçon existait déjà en mémoire
 (`reference_a_sweep_by_label_misses_values_that_arrive_by_name`, écrite pour un
 champ atteint par un nom plutôt qu'un label) et je l'ai refaite sur un document
 au lieu d'un fichier de code. La forme est indifférente au support.
+
+## Leçon 423 — Deux sessions qui réparent la MÊME collision de numéro convergent sur le MÊME numéro, et la recréent
+
+Trois commits, dans cet ordre, tous justes pris un à un :
+
+1. `5cbe461fe1` — une session voisine pose les leçons **419** et **420** ;
+2. `55969bfc01` — elle voit la collision sur 419 et renumérote **sa** leçon en
+   **421**, « le garde du gateway repasse au vert » ;
+3. `c31ef7b425` — je vois la même collision sur 419, je renumérote **la mienne**
+   en **421**, garde verte chez moi.
+
+Résultat : `« 421 » : lignes 23518, 23571`. **La réparation a déplacé la
+collision sans la résoudre**, parce que les deux sessions ont appliqué la même
+règle — « prendre le prochain numéro libre » — sur deux vues du fichier qui ne
+se voyaient pas l'une l'autre.
+
+> Une règle d'allocation DÉTERMINISTE appliquée en parallèle par deux acteurs qui
+> ne se voient pas produit deux fois la même valeur. Ce n'est pas une erreur de
+> l'un des deux : c'est la règle qui est fausse dès qu'elle est concurrente.
+> « Le prochain libre » n'alloue rien — il DEVINE, et deux devins bien informés
+> devinent pareil.
+
+Et le détail qui rend le piège invisible : **chacune des deux sessions avait fait
+tourner la garde, et l'avait vue verte.** Elle l'était : sur l'arbre local, au
+moment de la mesure, il n'y avait plus qu'un seul 421. La garde ne ment pas, elle
+répond à la question qu'on lui pose — « ce fichier-ci a-t-il une collision ? » —
+et pas à celle qui compte : « ce fichier-ci, FUSIONNÉ AVEC CE QUE LES AUTRES ONT
+POUSSÉ, en a-t-il une ? »
+
+**La règle opératoire** : un numéro de leçon vit dans un espace de noms PARTAGÉ
+avec des sessions qu'on ne voit pas. On ne le choisit donc pas sur son propre
+arbre. Juste avant de pousser — après un `git fetch` frais et la fusion — on
+relit les numéros de `origin/dev` et on relance la garde sur l'état FUSIONNÉ.
+C'est la seule mesure qui porte sur l'objet réel.
+
+Cette leçon vaut au-delà des numéros de leçon : **tout identifiant qu'un humain
+ou un agent attribue à la main sans allocateur central** — un numéro de
+migration, une clé d'inventaire gelé, un port de test, un `data-task` de planche
+— se paie de la même façon. Le remède est toujours le même : mesurer sur l'état
+FUSIONNÉ, au dernier moment, plutôt que sur le sien au moment de l'écriture.
+
+## Leçon 424 — Un contrôle rendu, câblé, et sous une couche qui prend TOUS les touchers : la sixième nature d'un contrôle qui ment
+
+**Le fait (2026-09-02).** L'invite « voir plus » de la légende d'une story était
+rendue, correctement positionnée, câblée à son `onToggle`, et son témoin passait.
+Trois taps sur sa cible ont fait **naviguer le lecteur d'une story à l'autre**.
+Aucun n'a déplié.
+
+La cause n'est ni dans le bouton ni dans son câblage : `StoryGestureOverlayView`
+(« Layer 6 ») est montée ligne 1841 du même `ZStack` là où la légende l'est ligne
+1745 — donc AU-DESSUS. C'est un `Color.clear` + `contentShape(Rectangle())` sur
+tout le cadre, avec un `DragGesture(minimumDistance: 0)` qui reconnaît dès le
+touch-down.
+
+> **Un contrôle correctement rendu, correctement câblé, sous une couche qui prend
+> tous les touchers, est INERTE — et rien ne rougit : la couche de gestes fait
+> exactement son travail.**
+
+C'est une **sixième** nature, distincte des cinq déjà répertoriées (inerte, non
+alimenté, contrat mort, repli menteur, mauvaise granularité) : ici **tout est
+juste sauf l'ORDRE**. Aucune inspection du composant ne peut la voir — il faut
+regarder ses VOISINS dans la pile.
+
+**Le corollaire de dimension, mesuré dans la foulée.** La cible faisait
+**54 × 16 pt**, la moitié du minimum HIG. Et l'effet d'un raté n'est pas neutre :
+
+> **Un contrôle sous-dimensionné DANS une couche qui en recouvre une autre ne
+> rate pas son action : il en déclenche une DIFFÉRENTE.** C'est pire qu'un no-op,
+> et aucun test de cible tactile ne le voit — il mesure la taille, pas ce qu'il y
+> a dessous.
+
+**Le geste.** Devant un contrôle qui « ne répond pas » : avant de relire son
+câblage, chercher ce qui est monté APRÈS lui dans le même conteneur. Et si le
+tap déclenche autre chose au lieu de ne rien faire, c'est la signature — un
+no-op accuserait le câblage, un effet étranger accuse la pile.
+
+Le relèvement (`zIndex`) n'est sûr que si la couche relevée ne prend le doigt que
+là où elle agit. `MediaCaptionOverlay` le documente : sa forme repliée ne pose
+aucun `contentShape` sur son fond.
+
+## Leçon 425 — Un bloc qui GRANDIT ne rencontre pas les mêmes voisins : la place se vérifie DÉPLIÉE
+
+**Le fait.** La légende dépliée d'une story, testée sur un corpus de 580 mots,
+passait **sous le rail d'actions** (Envoyer, Vues, Partager, Enregistrer,
+Traductions) — texte et icônes superposés, les deux illisibles. Repliée, elle
+tient en quelques lignes basses et ne rencontre personne.
+
+> **Ce qui ne se chevauche pas dans un état peut se chevaucher dans l'autre.**
+
+**Pourquoi aucun témoin ne pouvait l'attraper.** Les cinq témoins écrits ce
+soir-là interrogent la règle de repli, la colonne, la teinte, l'opacité — des
+propriétés de la légende SEULE. Le chevauchement est une propriété du
+**VOISINAGE**, et il n'existe que dans un des deux états. Un test unitaire sur un
+composant ne peut par construction rien en dire.
+
+**Le geste.** Tout contrôle à deux états se photographie dans les DEUX, sur le
+contenu qui pousse l'état ouvert à son maximum — un texte court ne fait pas
+tomber la règle, il tient quel que soit le voisinage. Et quand la place manque,
+la marge se déclare par l'HÔTE (qui connaît son rail) plutôt que dans le
+composant partagé : ici `expandedTrailingInset` vaut ZÉRO par défaut, parce que
+le plein écran média n'a pas de rail et qu'une marge lui coûterait de la largeur
+pour rien.
+
+**Corollaire de mécanisme, du même lot.** Pour dégager le texte de la scène, la
+première implémentation posait un `.blur()` sur le canvas. Le porteur a corrigé :
+
+> **Un voile AJOUTE une couche que personne n'a demandée ; effacer en RÉVÈLE une
+> qui était déjà juste.**
+
+Le lecteur montait déjà, sous la scène, un fond dérivé du ThumbHash de la slide
+(là pour le démarrage à froid). Baisser l'opacité de la scène le découvre : moins
+cher pour la machine, et plus honnête pour l'œil — le fond révélé est vraiment
+celui de CETTE story, pas un gris générique.
+
+## Leçon 426 — Trois mesures fausses en une nuit, et les trois par un filtre que j'avais choisi moi-même
+
+**Les faits (2026-09-01/02), dans l'ordre.**
+
+1. **« La story n'a aucune scène. »** `curl` sans `X-Canvas-Caps: 3` — le gateway
+   OMET `storyEffects` pour un client qui ne déclare pas la capacité (règle 5 de
+   `negotiateWireStoryEffects`). Un `curl` nu EST un vieux client.
+2. **« Le fil ne porte aucune géométrie. »** Mon relevé lisait `o['x']` et
+   `o['scale']` ; le format v3 range la géométrie sous `transform: {…}` et
+   `anchor: {t,x,y}`. `None` partout, et j'ai cru à un fil appauvri.
+3. **« Deux couleurs sur une seule ligne. »** J'avais échantillonné le bouton
+   `⋯`, à l'autre bout de la carte. Le défaut de contraste était réel ; mon
+   témoin visuel ne le prouvait pas.
+
+Et un quatrième, de raisonnement : `437,7 ≈ 491,3 × 0,88` — une coïncidence à
+trois chiffres significatifs prise pour une chaîne causale, alors que la
+géométrie ne lisait pas cette largeur-là.
+
+> **Une absence mesurée à travers une négociation, une projection ou un
+> échantillon n'est pas une absence : c'est le silence du filtre que j'ai
+> choisi.** Et le filtre est invisible dans le résultat — un `None` ne dit jamais
+> s'il vient du monde ou de la requête.
+
+**Le geste.** Avant de conclure à une absence, énoncer le filtre traversé et le
+faire varier : le même appel AVEC l'en-tête, le même relevé sur les clés BRUTES,
+le même échantillon décalé de vingt points. Si l'absence survit aux trois, elle
+est du monde.
+
+**Ce qui a fini par trancher** là où huit recherches de motifs avaient échoué :
+l'arbre d'accessibilité, qui rend des CADRES mesurés plutôt que des noms
+espérés. Il a donné en un appel ce que le grep ne savait pas nommer — mais il
+ment aussi (il décrit parfois une vue montée et non affichée), donc il se croise
+avec les pixels. Les deux d'accord, alors seulement c'est un fait.
