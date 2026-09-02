@@ -84,7 +84,14 @@ final class StoryRendererStickerBitmapTests: XCTestCase {
         let source = try String(contentsOf: ComposerSourceGuard.packageRoot
                                     .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift"),
                                 encoding: .utf8)
-        let branche = try XCTUnwrap(Self.blockBody(after: "if let sticker = item as? StorySticker {", in: source),
+        // L'ancre se cherche DANS `renderItem` : la post-passe d'animation, plus
+        // haut dans le fichier, porte la même phrase (`} else if let sticker =
+        // item as? StorySticker {`) et ne configure aucune couche — une
+        // recherche depuis le début du fichier tombait sur elle.
+        let renderItem = try XCTUnwrap(source.range(of: "func renderItem("),
+                                       "`renderItem` est introuvable dans StoryRenderer.")
+        let corps = String(source[renderItem.upperBound...])
+        let branche = try XCTUnwrap(Self.blockBody(after: "if let sticker = item as? StorySticker {", in: corps),
                                     "La branche sticker de `renderItem` est introuvable.")
         XCTAssertTrue(branche.contains("imageCache: imageCache"),
                       "La couche sticker doit recevoir le lecteur d'images, comme la couche média.")
