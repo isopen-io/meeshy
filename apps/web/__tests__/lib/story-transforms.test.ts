@@ -158,6 +158,23 @@ describe('postToStoryData', () => {
     expect(result.storyEffects).toBeUndefined();
   });
 
+  /// L'axe EFFET (#4870) traverse le parseur des overlays ; une valeur
+  /// inconnue vaut « aucun » (parité `parsedTextEffect` iOS), jamais une erreur.
+  it('carries a text overlay textEffect, and drops an unknown one', () => {
+    const post = createPost({
+      storyEffects: {
+        textObjects: [
+          { id: 't1', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'glow' },
+          { id: 't2', text: 'Demain', x: 0.5, y: 0.7, textEffect: 'effect-from-the-future' },
+        ],
+      },
+    });
+    const overlays = postToStoryData(post).storyEffects?.textObjects;
+
+    expect(overlays?.[0].textEffect).toBe('glow');
+    expect(overlays?.[1].textEffect).toBeUndefined();
+  });
+
   it('maps first image media to mediaUrl/mediaType', () => {
     const post = createPost({
       media: [{ id: 'm1', mimeType: 'image/png', fileUrl: 'https://image.png', order: 0, thumbnailUrl: null }],

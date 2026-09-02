@@ -419,4 +419,25 @@ class StoryTextElementTest {
         assertThat(StoryTextElement(id = "e1", text = "مرحبا").baseDirection)
             .isEqualTo(StoryTextDirection.RTL)
     }
+
+    // --- effect preset (#4870) ---
+
+    /**
+     * A style is a FONT; the glow this composer shows under "neon" is published on the
+     * EFFECT axis so the reader — here, on the web, on iOS — sees what the author saw.
+     */
+    @Test
+    fun `toTextObject publishes the glow of the NEON preset on the effect axis`() {
+        val wire = StoryTextElement(id = "e1", text = "Salut", style = StoryTextStyle.NEON)
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.textEffect).isEqualTo("glow")
+    }
+
+    @Test
+    fun `toTextObject publishes no effect for a style that does not glow`() {
+        StoryTextStyle.entries.filter { it != StoryTextStyle.NEON }.forEach { style ->
+            val wire = StoryTextElement(id = "e1", text = "Salut", style = style).toTextObject(sourceLanguage = "fr")
+            assertThat(wire.textEffect).isNull()
+        }
+    }
 }

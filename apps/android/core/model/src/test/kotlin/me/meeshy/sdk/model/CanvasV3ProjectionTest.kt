@@ -287,4 +287,26 @@ class CanvasV3ProjectionTest {
         assertThat(sticker.emoji).isEqualTo("🎉")
         assertThat(sticker.hasImage).isFalse()
     }
+
+    /**
+     * L'axe EFFET (#4870) est une clé du `payload`, permissif par contrat : la
+     * projection la relit sur le modèle v1 — sinon un texte composé sur iOS
+     * perdrait sa lueur en traversant le pont, sans qu'aucune erreur ne le dise.
+     */
+    @Test
+    fun `l'effet d'un texte v3 traverse la projection`() {
+        val document = """
+            {"v": 3, "scenes": [{"id": "s1", "objects": [{
+              "id": "t1", "kind": "text",
+              "anchor": {"t": "free", "x": 0.5, "y": 0.5},
+              "plane": "fg", "z": 0,
+              "transform": {"scale": 1.0, "rotation": 0.0, "opacity": 1.0},
+              "payload": {"text": "Bonjour", "textEffect": "relief"}
+            }]}]}
+        """.trimIndent()
+        val effects = json.decodeFromString(StoryEffectsWireSerializer, document)
+        val text = effects.textObjects.single()
+        assertThat(text.textEffect).isEqualTo("relief")
+        assertThat(StoryTextEffect.fromWire(text.textEffect)).isEqualTo(StoryTextEffect.RELIEF)
+    }
 }
