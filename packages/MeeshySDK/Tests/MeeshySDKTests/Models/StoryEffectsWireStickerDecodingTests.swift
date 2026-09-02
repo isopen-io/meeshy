@@ -83,4 +83,31 @@ final class StoryEffectsWireStickerDecodingTests: XCTestCase {
         XCTAssertEqual(premier.scale, 0.45, accuracy: 0.001)
         XCTAssertEqual(premier.baseSize, 140, accuracy: 0.001)
     }
+
+    // MARK: - Le maillon suivant : du fil jusqu'à la slide que le LECTEUR rend
+
+    /// **Les stickers arrivent jusqu'à la slide du lecteur.**
+    ///
+    /// `StoryReaderRepresentable` ne rend pas un `StoryItem` : il rend le
+    /// produit de `toRenderableSlide(preferredLanguages:)`. Cette fonction
+    /// RECOMPOSE `effects` — elle hydrate les durées média, réécrit les URL
+    /// audio, élit un fond legacy. Autant d'occasions de reconstruire un
+    /// `StoryEffects` en oubliant une famille au passage.
+    ///
+    /// Les stickers n'y sont touchés par aucune de ces branches, et c'est
+    /// précisément pourquoi ce témoin existe : ce qu'aucune ligne ne modifie
+    /// est ce qu'aucune ligne ne protège. Une future branche qui reconstruirait
+    /// `effects` champ par champ les perdrait en silence — le canvas serait
+    /// vide sans qu'aucun décodage, aucun dessinateur ni aucun inventaire
+    /// n'ait cessé d'être juste.
+    func test_lesStickers_atteignentLaSlideDuLecteur() throws {
+        let item = StoryItem(id: "story-sonde", content: "sonde", storyEffects: try effets())
+
+        let slide = item.toRenderableSlide(preferredLanguages: ["fr"])
+
+        XCTAssertEqual(slide.effects.stickerObjects?.count, 3,
+                       "La slide rendue par le lecteur a perdu les stickers du fil.")
+        XCTAssertEqual(slide.effects.stickerObjects?.first?.templateId, "location.compass")
+        XCTAssertEqual(slide.effects.stickerObjects?.first?.slots["placeName"], "Le Marais")
+    }
 }
