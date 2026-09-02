@@ -27,7 +27,6 @@
  * @jest-environment node
  */
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { EventEmitter } from 'events';
 
 // ---------------------------------------------------------------------------
 // socket.io mock — __state closure (works around ts-jest hoisting limits)
@@ -421,6 +420,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 // Import under test (after all mocks are set up)
 // ---------------------------------------------------------------------------
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
+import { makeTranslationService, makePrisma, makeContractMessage, CONVERSATION_ID } from './helpers/message-new-parity-fixtures';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   declaredConversationUpdatedFields,
@@ -431,85 +431,11 @@ import {
 // Harnais
 // ---------------------------------------------------------------------------
 
-function makeTranslationService() {
-  return Object.assign(new EventEmitter(), {
-    initialize: jest.fn().mockResolvedValue(undefined),
-    healthCheck: jest.fn().mockResolvedValue(true),
-    close: jest.fn().mockResolvedValue(undefined),
-    getStats: jest.fn().mockReturnValue({ messages: 0, translationRequests: 0 }),
-    getZmqClient: jest.fn().mockReturnValue(null),
-    getTranslation: jest.fn().mockResolvedValue(null),
-    handleNewMessage: jest.fn().mockResolvedValue(undefined),
-  });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makePrisma(): any {
-  const fn = () => jest.fn() as any;
-  return {
-    conversation: { findUnique: fn().mockResolvedValue(null) },
-    message: { findUnique: fn().mockResolvedValue(null), findFirst: fn().mockResolvedValue(null) },
-    // `broadcastNewMessage` consulte le post cité quand `storyReplyToId` est
-    // posé sans snapshot. Sans cette table le double lèverait un TypeError
-    // avalé par le `try` du broadcast — donc aucune émission, donc un témoin
-    // qui tombe pour la mauvaise raison.
-    post: { findUnique: fn().mockResolvedValue(null) },
-    messageAttachment: { findUnique: fn().mockResolvedValue(null) },
-    participant: {
-      findMany: fn().mockResolvedValue([]),
-      findFirst: fn().mockResolvedValue(null),
-      findUnique: fn().mockResolvedValue(null),
-    },
-    user: { findUnique: fn().mockResolvedValue(null), findMany: fn().mockResolvedValue([]) },
-  };
-}
-
+// Les fabriques pures vivent dans `helpers/message-new-parity-fixtures.ts`
+// (découpe du 2026-09-02, cliquet #4531) ; seul `getIoState` reste ici, parce
+// qu'il lit l'état des doubles `jest.mock` de CE fichier.
 function getIoState() {
   return (jest.requireMock('socket.io') as any).__state;
-}
-
-const CONVERSATION_ID = 'conv-123456789012';
-
-/**
- * Message de référence : il porte UNE valeur de chaque famille du contrat de
- * fil, pour qu'aucun producteur ne puisse rester vert en omettant une famille
- * entière. `content` est VIDE parce que c'est ce que `MessageProcessor` écrit
- * pour un message chiffré (`content: isEncrypted ? '' : …`) — le texte vit
- * dans `encryptedContent`, et un destinataire qui ne reçoit pas l'enveloppe
- * E2EE reçoit donc une bulle VIDE, pas un message dégradé.
- */
-function makeContractMessage(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'msg-123456789012',
-    conversationId: CONVERSATION_ID,
-    senderId: 'sender-participantId',
-    content: '',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    createdAt: new Date('2026-08-22T10:00:00.000Z'),
-    updatedAt: new Date('2026-08-22T10:00:00.000Z'),
-    translations: [],
-    attachments: [],
-    validatedMentions: [],
-    sender: {
-      id: 'sender-participantId',
-      userId: 'sender-userId',
-      displayName: 'Alice',
-      avatar: null,
-      type: 'member',
-      user: { id: 'sender-userId', username: 'alice', firstName: 'Ali', lastName: 'Ce', avatar: null },
-    },
-    isEncrypted: true,
-    encryptionMode: 'e2ee',
-    encryptedContent: 'Y2lwaGVydGV4dA==',
-    encryptionMetadata: { iv: 'aXY=', authTag: 'dGFn' },
-    isViewOnce: true,
-    maxViewOnceCount: 3,
-    forwardedFromId: 'msg-forwarded-source',
-    forwardedFromConversationId: 'conv-forwarded-source',
-    storyReplyToId: 'post-999999999999',
-    ...overrides,
-  } as any;
 }
 
 describe('message:new — les DEUX producteurs disent la même chose du même message', () => {
