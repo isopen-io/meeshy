@@ -49,6 +49,50 @@ final class MessageRecordTests: XCTestCase {
                        "Une position affichee en ligne puis perdue au relaunch viole le principe Cache-First.")
     }
 
+    /// Jumeau du témoin `location` ci-dessus (#4823) : le sticker d'une bulle
+    /// affichée en ligne doit survivre au relaunch, et la règle « non rendable
+    /// ⇒ absent » s'applique aussi à la relecture du cache.
+    func test_messageRecord_roundTripsStickerThroughTheCache() throws {
+        let sticker = MessageSticker(templateId: "love.heartFrame",
+                                     slots: ["caption": "Toi"],
+                                     animation: .heartbeat,
+                                     emoji: "❤️")
+        var record = MessageRecordFactory.make(localId: "m_sticker")
+        record.stickerJson = String(data: try JSONEncoder().encode(sticker), encoding: .utf8)
+
+        let message = record.toMessage(currentUserId: "user_me")
+        XCTAssertEqual(message.sticker, sticker,
+                       "Un sticker affiche en ligne puis perdu au relaunch viole le principe Cache-First.")
+    }
+
+    func test_messageRecord_emptyStickerJsonReadsAsAbsent() throws {
+        var record = MessageRecordFactory.make(localId: "m_sticker_vide")
+        record.stickerJson = #"{"slots":{"caption":"Toi"}}"#
+
+        XCTAssertNil(record.toMessage(currentUserId: "user_me").sticker,
+                     "un sticker sans templateId ni emoji n'a rien a peindre : il vaut absent")
+    }
+
+    /// La migration `messages_sticker` est enregistrée EN DERNIER : une base
+    /// déjà migrée jusqu'à `messages_join_notice` doit accepter la colonne
+    /// sans rejouer les précédentes, et la colonne doit faire l'aller-retour.
+    func test_grdb_stickerJsonColumn_isAdditiveAndPersists() throws {
+        let dbQueue = try DatabaseQueue()
+        var partial = DatabaseMigrator()
+        MessageDatabaseMigrations.registerAll(in: &partial)
+        try partial.migrate(dbQueue, upTo: "messages_join_notice")
+
+        XCTAssertNoThrow(try MessageDatabaseMigrations.runAll(on: dbQueue))
+        let columns = try dbQueue.read { try $0.columns(in: "messages").map(\.name) }
+        XCTAssertTrue(columns.contains("stickerJson"))
+
+        var record = MessageRecordFactory.make(localId: "m_sticker_db")
+        record.stickerJson = #"{"emoji":"❤️"}"#
+        try dbQueue.write { db in try record.insert(db) }
+        let fetched = try dbQueue.read { db in try MessageRecord.fetchOne(db, key: "m_sticker_db") }
+        XCTAssertEqual(fetched?.stickerJson, #"{"emoji":"❤️"}"#)
+    }
+
     func test_grdb_allFieldsPersist() throws {
         let dbQueue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: dbQueue)

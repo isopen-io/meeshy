@@ -61,18 +61,22 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     /// est parti sans interlude (résolution absente ou passée la borne de
     /// `StoryPhotoSaveService.introTimeout`).
     private(set) var lastIntro: StoryExportIntroContent?
+    /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
+    private(set) var lastStickerImageSources: [String: String] = [:]
 
     func prepareExport(
         slide: StorySlide,
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
+        stickerImageSources: [String: String],
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
         lastLanguages = languages
         lastIntro = intro
+        lastStickerImageSources = stickerImageSources
         for fraction in progressScript { onProgress?(fraction) }
 
         switch outcome {
@@ -129,6 +133,8 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
     private(set) var cleanupCallCount = 0
     private(set) var lastCleanupURL: URL?
     private(set) var lastBakedURL: URL?
+    /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
+    private(set) var lastStickerImageSources: [String: String] = [:]
 
     var pendingCount: Int { pendingCalls.count }
 
@@ -137,10 +143,12 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
+        stickerImageSources: [String: String],
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
-        await withCheckedContinuation { continuation in
+        lastStickerImageSources = stickerImageSources
+        return await withCheckedContinuation { continuation in
             pendingCalls.append(PendingCall(onProgress: onProgress, continuation: continuation))
         }
     }
@@ -336,6 +344,27 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
     }
 
     // MARK: Succès
+
+    /// #4852 — un sticker IMAGE ne porte que le `postMediaId` de son média ;
+    /// c'est ce service, seul à tenir la slide ET `story.media`, qui apparie
+    /// les deux et remet l'index au bake. Sans lui, Photos recevait 🖼️.
+    func test_save_pairsStickerImagesWithStoryMedia_andThreadsThemToExporter() async {
+        let (sut, exporter, _, _) = makeSUT()
+        let effects = StoryEffects(stickerObjects: [StorySticker(emoji: "", postMediaId: "pm-sticker"),
+                                                    StorySticker(emoji: "🔥")])
+        let story = StoryItem(id: "story-\(UUID().uuidString)",
+                              content: "Hello",
+                              media: [FeedMedia(id: "pm-sticker", type: .image,
+                                                url: "https://cdn.meeshy.test/sticker.png")],
+                              storyEffects: effects)
+
+        sut.save(story: story)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertEqual(exporter.lastStickerImageSources,
+                       ["pm-sticker": "https://cdn.meeshy.test/sticker.png"])
+    }
 
     func test_save_success_writesToPhotosThenClearsJob() async {
         let (sut, exporter, photos, toasts) = makeSUT()

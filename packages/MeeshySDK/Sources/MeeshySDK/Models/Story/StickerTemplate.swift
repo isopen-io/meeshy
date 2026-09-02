@@ -47,16 +47,24 @@ public struct StickerTemplate: Identifiable, Equatable, Sendable {
     /// contenu. Le poser à 2,2 le ferait déborder de la scène.
     public let posedScale: Double
 
+    /// **Le mouvement avec lequel CE gabarit se pose** (#4821) — `nil` = il se
+    /// pose immobile. Un cœur qui bat se pose battant : la complexité est dans
+    /// le code, l'auteur n'a rien à régler. Copié dans `StorySticker.animation`
+    /// à la pose, où l'auteur peut ensuite l'ôter.
+    public let animation: StickerAnimation?
+
     public init(id: String,
                 family: StickerTemplateFamily,
                 slots: [StickerTemplateSlot] = [],
                 fallbackEmoji: String,
-                posedScale: Double) {
+                posedScale: Double,
+                animation: StickerAnimation? = nil) {
         self.id = id
         self.family = family
         self.slots = slots
         self.fallbackEmoji = fallbackEmoji
         self.posedScale = posedScale
+        self.animation = animation
     }
 }
 
@@ -72,6 +80,21 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case location
     case time
     case love
+    /// Le temps qu'il FAIT — soleil, pluie, neige (#4820).
+    case weather
+    /// Les MOTS de l'auteur, dans une bulle, un ruban, un néon (#4822) — la
+    /// seule famille dont un emplacement est de nature `.prose`.
+    case text
+    /// Les ÉMOTIONS et les mots de tous les jours (#4820) — joie, stupeur,
+    /// humeur, salutations, réactions, fête, disponibilité. Des THÈMES de
+    /// palette, jamais des natures de scène.
+    case joy
+    case surprise
+    case mood
+    case greeting
+    case reaction
+    case party
+    case availability
 }
 
 // MARK: - Sticker Template Slot

@@ -87,6 +87,11 @@ export const SendMessageBodySchema = z.object({
   // services/location/sharedPlace.ts). Validation stricte déléguée à
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
   location: z.unknown().optional(),
+  // Sticker (#4823) — même doctrine que `location` : champ dédié, jamais un
+  // `metadata` brut. Validation stricte déléguée à `parseMessageSticker`,
+  // appelé côté `MessageProcessor.saveMessage`. Un sticker seul rend aussi
+  // le corps non vide : la décoration EST le contenu du message.
+  sticker: z.unknown().optional(),
 }).refine(
   (data) =>
     (data.content?.trim().length ?? 0) > 0 ||
@@ -94,7 +99,8 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.forwardedFromId) ||
     Boolean(data.copyAttachmentsFromMessageId) ||
     Boolean(data.encryptedContent) ||
-    Boolean(data.location),
+    Boolean(data.location) ||
+    Boolean(data.sticker),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 ).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 
@@ -161,6 +167,11 @@ export function registerSendMessageRoute(
             type: 'object',
             additionalProperties: true,
             description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+          },
+          sticker: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Sticker (templateId?, slots?, animation?, emoji?) — validé serveur (parseMessageSticker), servi hissé depuis metadata.sticker',
           }
         }
       },
@@ -216,7 +227,8 @@ export function registerSendMessageRoute(
         isViewOnce,
         maxViewOnceCount,
         mentionedUserIds,
-        location
+        location,
+        sticker
       } = bodyResult.data as SendMessageBody;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
@@ -310,9 +322,11 @@ export function registerSendMessageRoute(
         effectFlags,
         isViewOnce,
         maxViewOnceCount,
-        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
-        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        // Lieu partagé et sticker — champs dédiés transmis tels quels ; validés
+        // et écrits dans `metadata.location` / `metadata.sticker` par
+        // `MessageProcessor.saveMessage`.
         location,
+        sticker,
         // Le FAIT du chiffrement, c'est la présence du chiffré — pas un booléen
         // posé à côté. Gater sur `isEncrypted` perdait dans les DEUX sens : un
         // chiffré sans le drapeau était jeté (alors que le `.refine()` ci-dessus

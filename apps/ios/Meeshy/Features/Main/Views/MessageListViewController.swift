@@ -682,7 +682,7 @@ final class MessageListViewController: UIViewController {
         applyTopInsetToViews()
         configureDataSource()
         observeStore()
-        startSeenTracking()
+        syncThreadQuiescence()
         // Apply the initial snapshot from whatever the store already holds.
         // The store's `messagesDidChange` PassthroughSubject is fire-and-forget:
         // any emission that happened before this VC subscribed is lost. The

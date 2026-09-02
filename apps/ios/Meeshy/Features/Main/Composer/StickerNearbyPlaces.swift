@@ -93,6 +93,12 @@ enum StickerNearbyPlaces {
         private var suite: ((CLLocationCoordinate2D?) -> Void)?
         private var moi: OneShotFix?
 
+        /// Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une deinit
+        /// synthétisée est ISOLÉE et double-libère sur iOS 26.1 (SE-0466,
+        /// `MainActorDeinitSourceGuardTests`). Un corps vide n'a rien à
+        /// toucher : la libération redevient non isolée.
+        nonisolated deinit {}
+
         init(_ suite: @escaping (CLLocationCoordinate2D?) -> Void) {
             self.suite = suite
             super.init()

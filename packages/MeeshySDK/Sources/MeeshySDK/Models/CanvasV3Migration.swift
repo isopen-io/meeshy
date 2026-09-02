@@ -460,6 +460,9 @@ public extension CanvasV3 {
             payload["postMediaId"] = .string(postMediaId)
         }
         if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
+        // **Le mouvement voyage avec la décoration** (#4821) — une propriété de
+        // la charge, jamais un kind ; web et Android l'ignorent.
+        if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -763,24 +766,18 @@ public extension StoryEffects {
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
         let postMediaId = object.payload.string("postMediaId") ?? ""
+        let templateId = object.payload.string("templateId") ?? ""
         guard let emoji = stickerEmoji(object.payload.string("emoji"),
                                        hasImage: !postMediaId.isEmpty,
-                                       hasTemplate: !(object.payload.string("templateId") ?? "").isEmpty)
-        else { return nil }
-        // Symétrique de `stickerPayload` : sans ces deux clés, une décoration
-        // revenait `.emoji` et se rendait comme son repli.
-        let templateId = object.payload.string("templateId") ?? ""
-        var slots: [String: String] = [:]
-        for (clef, valeur) in (object.payload.object("slots") ?? [:]) {
-            if case .string(let texte) = valeur { slots[clef] = texte }
-        }
+                                       templateId: templateId) else { return nil }
         return StorySticker(
             id: object.id,
             emoji: emoji,
             postMediaId: postMediaId,
             provider: object.payload.string("provider"),
             templateId: templateId,
-            slots: slots,
+            slots: object.payload.stringMap("slots") ?? [:],
+            animation: object.payload.string("animation").flatMap(StickerAnimation.init(rawValue:)),
             sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
@@ -795,14 +792,18 @@ public extension StoryEffects {
 
     /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
     /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
-    /// `nil` ⇒ l'objet est REJETÉ. Un gabarit doit donc y survivre même sans
-    /// emoji : `wireEmoji` en émet un, mais un document écrit par un autre
-    /// client pourrait n'en porter aucun — et une décoration jetée pour un
-    /// repli manquant serait perdue au lieu d'être dégradée (#4741).
-    private static func stickerEmoji(_ wire: String?, hasImage: Bool, hasTemplate: Bool) -> String? {
-        if hasImage { return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji }
-        if hasTemplate { return wire ?? "" }
-        return wire
+    ///
+    /// Un sticker GABARIT sans repli reçoit celui que son gabarit déclare — ou
+    /// le repli générique si ce binaire ne le connaît pas (#4819, #4741) — `nil` ⇒ l'objet est REJETÉ, et
+    /// une décoration jetée pour un repli manquant serait perdue au lieu d'être
+    /// dégradée.
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool, templateId: String) -> String? {
+        if let repli = nonEmpty(wire) { return repli }
+        if !templateId.isEmpty {
+            return StickerTemplateCatalog.fallbackEmoji(forTemplateID: templateId)
+                ?? StorySticker.imageFallbackEmoji
+        }
+        return hasImage ? StorySticker.imageFallbackEmoji : wire
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {

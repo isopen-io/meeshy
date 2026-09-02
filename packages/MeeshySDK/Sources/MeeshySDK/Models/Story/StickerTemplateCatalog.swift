@@ -40,8 +40,18 @@ public enum StickerTemplateCatalog {
     /// L'ordre est celui de la PALETTE, écrit en toutes lettres : l'ordre de
     /// déclaration peut bouger sans que personne le décide, la position que les
     /// doigts apprennent, non. Même raison que `ComposerRailDoor.canonicalRail`.
-    public static let all: [StickerTemplate] = [
-        // — Lieu ————————————————————————————————————————————————————
+    ///
+    /// **Une famille, un fichier** (#4820) : `location`, `time` et `love`
+    /// vivent ici — les premières —, chaque famille suivante dans son
+    /// `StickerTemplateCatalog+<Famille>.swift`, sous le budget de lignes.
+    public static let all: [StickerTemplate] =
+        location + locationMore
+        + time + timeExtra
+        + love + loveExtra
+        + weather + text
+        + joy + surprise + mood + greeting + reaction + party + availability
+
+    public static let location: [StickerTemplate] = [
         StickerTemplate(id: ID.locationPill,
                         family: .location,
                         slots: placeSlots,
@@ -72,8 +82,9 @@ public enum StickerTemplateCatalog {
                         slots: placeSlots,
                         fallbackEmoji: "\u{1F4CD}",
                         posedScale: 1.0),
+    ]
 
-        // — Heure ———————————————————————————————————————————————————
+    public static let time: [StickerTemplate] = [
         StickerTemplate(id: ID.timeDigital,
                         family: .time,
                         slots: timeSlots,
@@ -89,8 +100,9 @@ public enum StickerTemplateCatalog {
                         slots: timeSlots,
                         fallbackEmoji: "\u{1F550}",
                         posedScale: 1.0),
+    ]
 
-        // — Amour ———————————————————————————————————————————————————
+    public static let love: [StickerTemplate] = [
         // Aucun emplacement de texte libre : l'auteur a déjà l'outil texte pour
         // les mots, et un emplacement de PROSE ouvrirait la question du Prisme
         // (#4721) que ce lot ne traite pas. `love.since` porte une DATE, qui
@@ -102,11 +114,13 @@ public enum StickerTemplateCatalog {
         StickerTemplate(id: ID.loveHeartFrame,
                         family: .love,
                         fallbackEmoji: "\u{2764}\u{FE0F}",
-                        posedScale: 1.4),
+                        posedScale: 1.4,
+                        animation: .heartbeat),
         StickerTemplate(id: ID.loveDoubleHeart,
                         family: .love,
                         fallbackEmoji: "\u{1F495}",
-                        posedScale: 1.4),
+                        posedScale: 1.4,
+                        animation: .float),
         StickerTemplate(id: ID.loveSince,
                         family: .love,
                         slots: [StickerTemplateSlot(name: StickerSlotFiller.dateSlot,

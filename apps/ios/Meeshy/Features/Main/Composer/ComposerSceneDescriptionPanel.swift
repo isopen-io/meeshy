@@ -59,7 +59,7 @@ struct ComposerSceneDescriptionPanel: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: Self.chevronSymbol(isCollapsed: isCollapsed))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
@@ -104,7 +104,7 @@ struct ComposerSceneDescriptionPanel: View {
     private var lecture: some View {
         Button(action: onEdit) {
             Text(text.isEmpty ? placeholder : text)
-                .font(.system(size: 14, design: .rounded))
+                .font(MeeshyFont.relative(14, design: .rounded))
                 .foregroundStyle(text.isEmpty ? .secondary : .primary)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)

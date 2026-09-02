@@ -107,6 +107,13 @@ final class StoryExportShareViewModel: ObservableObject {
         guard phase != .exporting && phase != .sharing else { return }
         let langs: [String] = selectedLanguage.map { [$0] } ?? []
         let slide = story.toRenderableSlide(preferredLanguages: langs)
+        // Images des stickers (#4852) : `toRenderableSlide` hydrate l'URL des
+        // audios depuis `story.media`, mais un `StorySticker` ne porte pas
+        // d'URL — l'export peignait 🖼️. C'est ICI, seul point qui tient à la
+        // fois la slide et `story.media`, que l'index `postMediaId → adresse`
+        // se construit ; le bake le rapatrie comme un média de premier plan.
+        let stickerImageSources = StoryExporter.stickerImageSources(
+            for: slide.effects.stickerObjects, media: story.media)
 
         // Universal export — toutes les stories peuvent être bakées en
         // MP4 (texte/sticker/image static OU vidéo/audio/keyframes
@@ -146,6 +153,7 @@ final class StoryExportShareViewModel: ObservableObject {
                 languages: langs,
                 watermark: watermark,
                 intro: intro,
+                stickerImageSources: stickerImageSources,
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },

@@ -38,13 +38,41 @@ final class StickerTemplateRendererTests: XCTestCase {
         case .time:
             return [StickerSlotFiller.timeSlot: "14:32",
                     StickerSlotFiller.hourSlot: "14",
-                    StickerSlotFiller.minuteSlot: "32"]
+                    StickerSlotFiller.minuteSlot: "32",
+                    StickerSlotFiller.dateSlot: "1 septembre 2026"]
         case .love:
             return [StickerSlotFiller.dateSlot: "1 septembre 2026"]
+        case .weather:
+            return [:]
+        case .text:
+            return [StickerSlotFiller.textSlot: "Bon anniversaire"]
+        case .joy, .surprise, .mood, .greeting, .reaction, .party, .availability:
+            return [:]
         }
     }
 
     // MARK: - La garde qui relie le CATALOGUE au DESSIN
+
+    /// **Le registre et le catalogue sont deux listes du MÊME ensemble**
+    /// (#4820). Un gabarit catalogué sans dessinateur rendrait son repli ; un
+    /// dessinateur sans gabarit serait du code mort que rien n'atteint.
+    func test_everyDrawer_hasItsTemplate_andEveryTemplate_itsDrawer() {
+        let catalogués = Set(StickerTemplateCatalog.all.map(\.id))
+        let dessinables = StickerTemplateRenderer.drawableTemplateIDs
+        XCTAssertEqual(catalogués.subtracting(dessinables), [],
+                       "gabarits catalogués sans dessinateur")
+        XCTAssertEqual(dessinables.subtracting(catalogués), [],
+                       "dessinateurs sans gabarit au catalogue")
+    }
+
+    /// Chaque dessinateur porte le NOM que la palette et VoiceOver disent —
+    /// et il n'est jamais le libellé générique réservé à l'inconnu.
+    func test_everyDrawer_namesItself() {
+        for gabarit in StickerTemplateCatalog.all {
+            let nom = StickerTemplateRenderer.drawer(for: gabarit.id)?.name() ?? ""
+            XCTAssertFalse(nom.isEmpty, "\(gabarit.id) — dessinateur sans nom")
+        }
+    }
 
     /// **Un gabarit CATALOGUÉ doit être DESSINÉ.**
     ///
@@ -108,7 +136,8 @@ final class StickerTemplateRendererTests: XCTestCase {
             }
             rendus[gabarit.id] = png
         }
-        XCTAssertEqual(rendus.count, 6, "six pastilles de lieu attendues")
+        XCTAssertEqual(rendus.count, StickerTemplateCatalog.templates(family: .location).count,
+                       "chaque pastille de lieu cataloguée doit se dessiner")
     }
 
     /// Et elles ne se distinguent pas seulement par leur contenu : leurs
@@ -133,6 +162,39 @@ final class StickerTemplateRendererTests: XCTestCase {
             templateID: "venu.du.futur", slots: [:], metrics: mesuresSticker))
         XCTAssertNil(StickerTemplateRenderer.image(
             templateID: "venu.du.futur", slots: [:], metrics: mesuresSticker, screenScale: 2))
+    }
+
+    // MARK: - Les MOTS (#4822)
+
+    /// Deux textes ⇒ deux dessins ; un texte VIDE dessine encore quelque chose
+    /// (l'exemple), jamais une boîte nulle.
+    func test_textTemplates_drawTheAuthorsWords() throws {
+        for gabarit in StickerTemplateCatalog.templates(family: .text) {
+            let a = try XCTUnwrap(StickerTemplateRenderer.image(
+                templateID: gabarit.id, slots: [StickerSlotFiller.textSlot: "Coucou"],
+                metrics: mesuresSticker, screenScale: 2)?.0?.pngData())
+            let b = try XCTUnwrap(StickerTemplateRenderer.image(
+                templateID: gabarit.id, slots: [StickerSlotFiller.textSlot: "Bon anniversaire à toi"],
+                metrics: mesuresSticker, screenScale: 2)?.0?.pngData())
+            XCTAssertNotEqual(a, b, "\(gabarit.id) — deux textes rendent le même dessin")
+            let vide = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+                templateID: gabarit.id, slots: [:], metrics: mesuresSticker))
+            XCTAssertGreaterThan(vide.width, 0, gabarit.id)
+            XCTAssertGreaterThan(vide.height, 0, gabarit.id)
+        }
+    }
+
+    /// Une phrase LONGUE se plie : la largeur est bornée, la hauteur monte.
+    func test_textTemplates_wrapLongText() throws {
+        let court = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+            templateID: StickerTemplateCatalog.ID.textBadge,
+            slots: [StickerSlotFiller.textSlot: "Coucou"], metrics: mesuresSticker))
+        let long = try XCTUnwrap(StickerTemplateRenderer.measuredSize(
+            templateID: StickerTemplateCatalog.ID.textBadge,
+            slots: [StickerSlotFiller.textSlot: String(repeating: "des mots ", count: 12)],
+            metrics: mesuresSticker))
+        XCTAssertLessThan(long.width, mesuresSticker.fontSize * 9 + mesuresSticker.horizontalPadding * 2 + mesuresSticker.fontSize)
+        XCTAssertGreaterThan(long.height, court.height)
     }
 
     // MARK: - Le gel, vu depuis le DESSIN

@@ -60,6 +60,9 @@ public struct StickerPickerView: View {
     /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
     /// l'horloge à chaque rendu ferait bouger les vignettes sous le doigt.
     @State var openedAt: Date = .distantPast
+    /// Les mots que l'auteur tape dans l'onglet Texte (#4822) — les vignettes
+    /// se redessinent à la frappe (loi 7), et la pose les fige.
+    @State var typedStickerText: String = ""
 
     public init(onStickerSelected: @escaping (String) -> Void,
                 onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void,
@@ -188,8 +191,17 @@ public struct StickerPickerView: View {
     private var tabContent: some View {
         switch selectedTab {
         case .emoji:   emojiTab
+        case .text:    textTab
         case .love:    templateTab(family: .love)
+        case .joy:          templateTab(family: .joy)
+        case .surprise:     templateTab(family: .surprise)
+        case .mood:         templateTab(family: .mood)
+        case .greeting:     templateTab(family: .greeting)
+        case .reaction:     templateTab(family: .reaction)
+        case .party:        templateTab(family: .party)
+        case .availability: templateTab(family: .availability)
         case .time:    templateTab(family: .time)
+        case .weather: templateTab(family: .weather)
         case .place:   placeTab
         case .library: libraryTab
         }
@@ -199,10 +211,28 @@ public struct StickerPickerView: View {
         switch onglet {
         case .emoji:
             return String(localized: "sticker.tab.emoji", defaultValue: "Emoji", bundle: .module)
+        case .text:
+            return String(localized: "sticker.tab.text", defaultValue: "Texte", bundle: .module)
         case .love:
             return String(localized: "sticker.tab.love", defaultValue: "Amour", bundle: .module)
         case .time:
             return String(localized: "sticker.tab.time", defaultValue: "Heure", bundle: .module)
+        case .weather:
+            return String(localized: "sticker.tab.weather", defaultValue: "Météo", bundle: .module)
+        case .joy:
+            return String(localized: "sticker.tab.joy", defaultValue: "Joie", bundle: .module)
+        case .surprise:
+            return String(localized: "sticker.tab.surprise", defaultValue: "Stupeur", bundle: .module)
+        case .mood:
+            return String(localized: "sticker.tab.mood", defaultValue: "Humeur", bundle: .module)
+        case .greeting:
+            return String(localized: "sticker.tab.greeting", defaultValue: "Salut", bundle: .module)
+        case .reaction:
+            return String(localized: "sticker.tab.reaction", defaultValue: "Réactions", bundle: .module)
+        case .party:
+            return String(localized: "sticker.tab.party", defaultValue: "Fête", bundle: .module)
+        case .availability:
+            return String(localized: "sticker.tab.availability", defaultValue: "Dispo", bundle: .module)
         case .place:
             return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
         case .library:

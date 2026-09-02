@@ -48,6 +48,9 @@ export * from './affiliate.js';
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
+// Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
+export * from './message-sticker.js';
+
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
 // V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment

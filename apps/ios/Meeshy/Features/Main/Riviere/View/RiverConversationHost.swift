@@ -111,6 +111,13 @@ struct RiverConversationHost: View {
     private final class ContentsMemo {
         var key: RiverConversationMapping.ContentsKey?
         var value: [RiverBubbleContent] = []
+
+        /// Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une deinit
+        /// synthétisée est ISOLÉE et double-libère sur iOS 26.1 quand SwiftUI
+        /// démonte la vue hors tâche (SE-0466,
+        /// `MainActorDeinitSourceGuardTests`). Un corps vide n'a rien à
+        /// toucher : la libération redevient non isolée.
+        nonisolated deinit {}
     }
 
     @State private var memo = ContentsMemo()
