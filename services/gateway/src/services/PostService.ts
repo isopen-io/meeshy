@@ -26,7 +26,7 @@ import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/po
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
-import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
+import { composeStoryContent, isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
@@ -394,15 +394,34 @@ export class PostService {
     const textObjects = storyTranslatableTexts(data.storyEffects);
 
     if (textObjects?.length) {
-      const searchContent = composeStoryContent(textObjects);
-
-      if (searchContent && !data.content) {
-        await this.prisma.post.update({
-          where: { id: post.id },
-          data: { content: searchContent },
-        });
-      }
-
+      // **LA RECOPIE EST RETIRÉE** (directive porteur 2026-08-30, #4502).
+      //
+      // Ce bloc écrivait ici :
+      //
+      //     const searchContent = composeStoryContent(textObjects);
+      //     if (searchContent && !data.content) {
+      //       await this.prisma.post.update({ … data: { content: searchContent } });
+      //     }
+      //
+      // > « C'est le texte de scène recopié, et c'est ce que je ne veux pas !
+      // > Il ne faut plus recopier le texte de scène pour mettre dans le
+      // > contenu ! Pour la notification on peut récolter les textes de scène
+      // > si le contenu est vide, mais sinon on référence le contenu réel. »
+      //
+      // Le symptôme était visible chez les TROIS lecteurs : le texte de la
+      // scène rendu deux fois — l'objet sur le canvas, et sa copie en légende.
+      // Aucun client ne faisait rien de faux ; ils rendaient fidèlement un
+      // contenu qui n'aurait pas dû être écrit.
+      //
+      // Ce qui dépendait de cette écriture dérive désormais À LA DEMANDE, par
+      // `postSignalText` — l'aperçu de la notification d'ami et l'extraction
+      // des hashtags, tous deux dans `routes/posts/core.ts`. Le relevé complet
+      // des consommateurs est dans le commentaire de #4502 ; le seul qui perde
+      // quelque chose est la recherche d'ADMINISTRATION, qui cherchait dans
+      // `content` — une story d'overlays n'y est plus trouvable par son texte.
+      //
+      // La traduction des overlays, elle, n'a jamais dépendu du `content` : elle
+      // lit les `textObjects`, juste en dessous.
       this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch((err: unknown) => {
         log.error('triggerStoryTextObjectTranslation failed', err instanceof Error ? err : new Error(String(err)));
       });
@@ -1221,13 +1240,33 @@ export class PostService {
       if (!languageChanged) {
         updateData.translations = {};
       }
-      // Keep the search index in sync when the composition carries the text
-      // (same rule as createPost: content mirrors the textObjects).
-      if (data.content === undefined && editedTextObjects?.length) {
-        const searchContent = composeStoryContent(editedTextObjects);
-        if (searchContent) {
-          updateData.content = searchContent;
-        }
+      // **LA RECOPIE EST RETIRÉE ICI AUSSI** (directive porteur 2026-08-30, #4502).
+      //
+      // Ce bloc REJOUAIT la recopie de `createPost`, et son commentaire le
+      // disait — « same rule as createPost: content mirrors the textObjects ».
+      // Ne retirer que la création aurait laissé le défaut atteignable par
+      // l'ÉDITION : un texte de scène modifié serait revenu occuper le
+      // `content`, et la seconde publication du même auteur aurait réaffiché le
+      // doublon que la première n'a plus.
+      //
+      // > Une règle qui s'applique à une DONNÉE ne s'énumère pas par ce qui la
+      // > PRODUIT : il faut énumérer ce qui la RÉÉCRIT. Une copie dénormalisée a
+      // > deux moments, et le second est écrit par quelqu'un qui croit mettre à
+      // > jour un texte.
+      //
+      // **Et l'édition NETTOIE l'index périmé des stories d'avant.** Une story
+      // publiée avant ce lot porte l'index dans son `content` ; l'éditer sans
+      // rien faire y laisserait l'index de l'ANCIEN texte de scène — pire que
+      // le doublon, puisque le miroir client (`StoryDerivedContent`) compare le
+      // contenu aux textes COURANTS et conclurait « vraie légende ».
+      //
+      // Le test porte sur les textes d'AVANT l'édition, seuls capables de dire
+      // si ce `content` était leur dérivé. Une légende écrite par l'auteur ne
+      // leur est pas égale, donc elle survit — la garde ne détruit que ce
+      // qu'elle reconnaît.
+      if (data.content === undefined
+          && isContentDerivedFromTextObjects(post.content, storyTranslatableTexts(post.storyEffects))) {
+        updateData.content = null;
       }
     }
 

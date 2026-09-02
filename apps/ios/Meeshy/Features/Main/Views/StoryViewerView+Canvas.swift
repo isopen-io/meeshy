@@ -1227,12 +1227,32 @@ struct StoryCardView: View {
     /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
     /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
     /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
+    ///
+    /// **Et il ne rend une légende que s'il y en a une** (#4502). Le `content`
+    /// d'une story a DEUX natures pour un seul nom : la légende de l'auteur, ou
+    /// l'index de recherche que la passerelle fabrique en concaténant les
+    /// objets texte d'une story qui n'en a pas. Rendu tel quel, cet index
+    /// affichait le texte du canvas une SECONDE fois, en légende, juste
+    /// dessous.
+    ///
+    /// La décision est prise sur l'ORIGINAL et le RÉSOLU est rendu — décider
+    /// sur le résolu ramènerait le doublon pour les seuls lecteurs d'une autre
+    /// langue, la passerelle composant aussi l'index dans chaque langue. Toute
+    /// la règle, son fail-safe compris, vit dans `StoryDerivedContent` (SDK) :
+    /// ce corps ne fait plus que lui poser la question.
     var currentStoryDescription: String? { // internal for cross-file extension access
-        guard let story = currentStory,
-              let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
-              !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-        return resolved
+        guard let story = currentStory else { return nil }
+        return StoryDerivedContent.caption(
+            original: story.content,
+            resolved: story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
+            // `\.text` est la BONNE clé : le décodeur du SDK normalise déjà
+            // l'alias legacy `content` vers `text` (`StoryTextObject.init(from:)`,
+            // « prefer new key, fall back to legacy »). Lire la mauvaise aurait
+            // vidé la comparaison — donc rendu « vraie légende » et laissé le
+            // doublon intact, sans que rien ne rougisse. Mesuré avant de poser
+            // cette ligne, sur demande de la session qui a écrit la règle.
+            overlayTexts: story.storyEffects?.textObjects.map(\.text) ?? []
+        )
     }
 
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
@@ -1724,50 +1744,11 @@ struct StoryCardView: View {
                 }
             }
 
-            // === Voice caption overlay (transcription voix) ===
-            if let transcription = currentVoiceCaption {
-                VStack {
-                    Spacer()
-                    Text(transcription)
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black.opacity(0.55))
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, topInset + 130)
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            voiceCaptionLayer
 
             captionLayer(geometry: geometry)
 
-            // === Background audio badge ===
-            //
-            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
-            // FOND (directive user 2026-07-30) : depuis que le header affiche la
-            // note musicale suivie de l'onde animée, ce chip répétait la même
-            // information au milieu de l'image. Les chips du canvas restent
-            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
-            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
-            //
-            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
-            // morceau et crédite son auteur — une attribution que le header, qui
-            // ne dit que la présence, ne porte pas.
-            if let audio = currentStory?.backgroundAudio {
-                VStack {
-                    Spacer()
-                    backgroundAudioBadge(audio: audio)
-                        .padding(.bottom, topInset + 165)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .allowsHitTesting(false)
-            }
+            backgroundAudioLayer
 
             // === Translation indicator (Prisme Linguistique — discret) ===
             // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
@@ -2490,30 +2471,6 @@ struct StoryCardView: View {
 
     // MARK: - Background Audio Badge
 
-    private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(11, weight: .semibold))
-            Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if let uploader = audio.uploaderName {
-                Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
-                    .opacity(0.7)
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
-    }
 
     // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
     // retiré du canvas (directive user 2026-07-30) : le header du reader porte

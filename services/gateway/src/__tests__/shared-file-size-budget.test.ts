@@ -168,7 +168,7 @@ import {
 
 const RACINE = join(__dirname, '..', '..', '..', '..', 'packages', 'shared');
 
-/** Le plafond des cliquets frères (#4284, #4426, #4531), plus strict que la directive (1100). */
+/** Le plafond des cliquets frères (#4284, #4426, #4531), plus strict que la directive (1200 depuis le 2026-09-02). */
 const MAX_LINES = 1000;
 
 /**

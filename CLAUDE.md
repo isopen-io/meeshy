@@ -248,7 +248,7 @@ Each increment leaves the codebase in a working state.
 - No comments - code should be self-documenting
 - Prefer options objects over positional parameters
 - Use array methods (`map`, `filter`, `reduce`) over loops
-- **Budget de taille : 800–1100 lignes par fichier (directive 2026-08-28).** Un fichier qui dépasse se DÉCOUPE — par responsabilité, pas par tranche arbitraire : une extension par surface, un type par fichier, les sous-vues chez elles. Ajouter à un fichier déjà hors budget est interdit : on extrait d'abord, on ajoute ensuite. Le budget vaut pour les sources écrites à la main (Swift, TS, Python) — pas pour le code généré ni les dépendances.
+- **Budget de taille : 1000–1200 lignes par fichier (directive 2026-09-02, qui relâche le 800–1100 du 2026-08-28).** Le plafond DUR est 1200 ; 1000 est le seuil au-delà duquel un découpage se justifie sans se discuter. Le relâchement ne dispense de rien d'autre : un fichier déjà hors budget reste interdit d'ajout, et une dette héritée ne se solde pas en montant le plafond. Un fichier qui dépasse se DÉCOUPE — par responsabilité, pas par tranche arbitraire : une extension par surface, un type par fichier, les sous-vues chez elles. Ajouter à un fichier déjà hors budget est interdit : on extrait d'abord, on ajoute ensuite. Le budget vaut pour les sources écrites à la main (Swift, TS, Python) — pas pour le code généré ni les dépendances.
 - **No redundant boolean + timestamp pairs** - a nullable `DateTime?` field is sufficient: `null` = false, non-null = true with timestamp. Never add a separate boolean (e.g. use `deletedAt: DateTime?` NOT `isDeleted: Boolean` + `deletedAt: DateTime?`)
 
 ### Preferred Tools

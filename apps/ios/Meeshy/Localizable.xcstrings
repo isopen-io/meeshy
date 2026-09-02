@@ -3203,43 +3203,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النمط"
+            "value": "الخط"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "STIL"
+            "value": "SCHRIFTART"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "STYLE"
+            "value": "FONT"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "ESTILO"
+            "value": "FUENTE"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "STYLE"
+            "value": "POLICE"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "STILE"
+            "value": "CARATTERE"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "ESTILO"
+            "value": "FONTE"
           }
         }
       }

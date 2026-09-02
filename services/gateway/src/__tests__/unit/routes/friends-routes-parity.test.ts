@@ -3,7 +3,7 @@
  * `routes/directory/friend-requests.ts` (#4283).
  *
  * Fichier SÉPARÉ de `friends-routes.test.ts` (déjà à 1141 lignes, hors budget
- * — § CLAUDE.md « Budget de taille : 800–1100 lignes »). La règle interdit
+ * — § CLAUDE.md « Budget de taille : 1000–1200 lignes »). La règle interdit
  * d'AJOUTER à un fichier déjà hors budget ; ces témoins vivent donc ici,
  * avec leur propre harnais minimal plutôt que de faire grossir l'existant.
  *

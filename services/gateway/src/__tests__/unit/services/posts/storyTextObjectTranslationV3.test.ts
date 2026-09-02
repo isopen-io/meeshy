@@ -292,7 +292,17 @@ describe('PostService.createPost — déclenchement pour un doc v3', () => {
     );
   });
 
-  it('fills the search index (Post.content) from the v3 texts', async () => {
+  /**
+   * **INVERSÉ le 2026-09-02** (#4502). Il assertait `content === 'Bonjour'` —
+   * la recopie, que la directive porteur du 2026-08-30 a révoquée. Retourné
+   * plutôt que supprimé : une propriété révoquée sans témoin revient par le
+   * premier lot qui trouve la recopie commode.
+   *
+   * Le cas v3 vaut d'être gardé à part : c'est la forme que produit le composer
+   * v3, donc toutes les stories NEUVES — un retour de la recopie s'y verrait en
+   * premier.
+   */
+  it('n’écrit AUCUN content dérivé des textes v3 (#4502)', async () => {
     const prisma = buildPrisma();
 
     await makePostService(prisma).createPost(
@@ -303,6 +313,6 @@ describe('PostService.createPost — déclenchement pour un doc v3', () => {
     const contentWrite = prisma.post.update.mock.calls
       .map((c) => c[0] as { data?: { content?: string } })
       .find((arg) => arg?.data?.content !== undefined);
-    expect(contentWrite?.data?.content).toBe('Bonjour');
+    expect(contentWrite).toBeUndefined();
   });
 });
