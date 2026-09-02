@@ -643,6 +643,21 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     expect((socketPayload.sender as Record<string, unknown>).username).toBe('Invité');
   });
 
+  it('le sticker (#4823) voyage par les DEUX transports, hissé depuis `metadata.sticker`', async () => {
+    // Le hoist vit dans `buildMessageNewPayload`, pas chez les producteurs :
+    // `location` a montré ce que coûte un hoist recopié par transport. iOS
+    // rend la décoration animée depuis ce champ ; sans lui sur l'un des deux
+    // chemins, la moitié des destinataires ne verrait que le PNG de repli.
+    const sticker = { templateId: 'love.heart', slots: { caption: 'Toi' }, animation: 'heartbeat', emoji: '❤️' };
+    const message = makeContractMessage({ metadata: { sticker } });
+
+    const socketPayload = await payloadFromSocketPath(message);
+    const restPayload = await payloadFromRestPath(message);
+
+    expect(socketPayload.sticker).toEqual(sticker);
+    expect(restPayload.sticker).toEqual(sticker);
+  });
+
   it('les DEUX producteurs déclarent le MÊME jeu de clés de contrat', async () => {
     // Le cliquet de la famille : il tombe le jour où un producteur gagne un
     // champ que l'autre n'a pas, quelle que soit la famille — y compris une

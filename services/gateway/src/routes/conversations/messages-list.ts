@@ -14,6 +14,7 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   applyHistoryFloor,
@@ -613,6 +614,10 @@ export function registerMessagesListRoute(
       for (const m of mappedMessages) {
         const place = sharedPlaceFromMetadata(m.metadata);
         if (place) m.location = place;
+        // Sticker (#4823) — même hoist, même raison : iOS rend la décoration
+        // animée depuis `sticker`, le PNG joint n'est que le repli.
+        const sticker = stickerFromMetadata(m.metadata);
+        if (sticker) m.sticker = sticker;
       }
 
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
