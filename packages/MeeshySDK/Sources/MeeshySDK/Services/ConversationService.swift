@@ -284,7 +284,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     ) async throws -> Date? {
         let iso = historyVisibleFrom
             .map { Self.historyGrantFloor(for: $0) }
-            .map { $0.formatted(.iso8601.time(includingFractionalSeconds: true)) }
+            .map { $0.formatted(.iso8601) }
         let response: APIResponse<ParticipantHistoryGrantUpdateResult> = try await api.patch(
             endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
             body: HistoryGrantBody(historyVisibleFrom: iso)
