@@ -10,7 +10,7 @@ export const meta = {
     { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'opus' },
     { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code', model: 'sonnet' },
     { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte', model: 'opus' },
-    { title: 'Revue', detail: 'sonnet prend en defaut la surface, fable attaque la conception', model: 'opus' },
+    { title: 'Revue', detail: 'sonnet prend en defaut la surface, opus attaque la conception', model: 'opus' },
     { title: 'Gates', detail: 'ordre, tsc, lint, tests, build + budget, conformite visuelle, axe — corriger, jamais contourner', model: 'sonnet' },
     { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'opus' },
     { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'opus' },
@@ -71,7 +71,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
                                critere_de_fin, dimensions visees, corps d'issue.
 5. ${D}/cible/<vue_id>.png     la capture CIBLE de chaque ecran — regarde-la (outil Read).
 6. ${REPO}/CLAUDE.md           TDD non negociable, TypeScript strict sans 'any', immuabilite,
-                               budget 800-1100 lignes par fichier, UNE source de verite,
+                               budget 1000-1200 lignes par fichier, UNE source de verite,
                                Instant App Principles, Prisme Linguistique, treize dimensions.
 7. ${REPO}/tasks/lessons.md    les 40 dernieres lecons (tail -400) — le depot a deja paye ces erreurs.
 8. Le code EXISTANT de ${V3} : app/route.ts, app/enveloppe/*, app/connecte/*, app/vitrine/*,
@@ -176,7 +176,7 @@ REGLES DE LA V3, non negociables :
 
 INTERDITS :
 - inventer un chiffre (poids, version, mesure) : ecris « a mesurer » ou mesure-le ;
-- ajouter a un fichier deja hors budget (800-1100 lignes) : on extrait d'abord ;
+- ajouter a un fichier deja hors budget (1000-1200 lignes, plafond DUR 1200) : on extrait d'abord ;
 - ecrire une JUMELLE (seconde source de verite pour une donnee qui en a une) ;
 - toucher a l'ordre a la main : \`node ${D}/ordre-des-ecrans.js\` le recalcule ;
 - desactiver un test, baisser un seuil, poser un ignore pour passer un gate ;
@@ -240,6 +240,41 @@ ROUTES — COMPLEMENT (2026-09-01, apres le lancement du tour) :
   mesure aujourd'hui en rouge : « une seule requete avant la 302, et un seul saut »). Le site du
   mapping est \`app/(public)/l/[token]/destination.ts\` ; la cible de \`/chat/:lien\` repond 200 en
   etat CHOIX a un lecteur sans session, jamais une redirection de plus.
+`
+
+// ---------------------------------------------------------------------------
+// LES DECISIONS DU PORTEUR — tranchees en cours de tour, elles PRIMENT sur la
+// matrice, sur la conception et sur le cadrage qui les a soulevees
+// ---------------------------------------------------------------------------
+
+const DIRECTIVES = `
+DECISIONS DU PORTEUR PRISES EN COURS DE TOUR — elles PRIMENT sur matrice.json, sur la conception
+et sur le cadrage qui les a soulevees. Ne les rediscute pas : applique-les.
+
+1. STORY (/stories/:id) ET COMMENTS (/post/:id) SE LIVRENT AU LECTEUR CONNECTE, PAS A L'ANONYME
+   (tranche le 2026-09-02, question posee par le cadrage du tour 2).
+   Le cadrage a etabli que \`GET /posts/:postId\` (services/gateway/src/routes/posts/core.ts:460)
+   et \`GET /posts/:postId/comments\` (routes/posts/comments.ts:63) sont en \`requiredAuth\`, ce qui
+   fermait la lecture SANS COMPTE de ces deux ecrans. Le porteur a choisi de SE CONFORMER a la
+   passerelle telle qu'elle est : AUCUN diff serveur, aucune issue gateway demandant d'ouvrir ces
+   routes, aucune bascule \`optionalAuth\`, aucun contournement.
+   Ce que cela veut dire, concretement :
+   - l'audience de ces deux ecrans est \`connecte\`, pas \`anonyme\` — corrige-la dans matrice.json
+     et dans vues.json, et dis-le dans la conception (le § 11 question 1 est TRANCHE : « la v3 sert
+     ces deux contenus au lecteur connecte ; ouvrir les routes est une decision reportee »);
+   - un visiteur SANS session qui ouvre l'un de ces liens recoit un ecran qui l'INVITE a se
+     connecter — pas une erreur, pas une page blanche, pas un 404 : le meme soin que l'etat CHOIX
+     de /chat/:lien, avec \`?returnUrl=\` vers l'adresse demandee, et les metadonnees OG servies
+     depuis ce que la passerelle donne SANS creance (si elle ne donne rien, aucune metadonnee
+     inventee) ;
+   - les criteres de fin qui exigeaient « Playwright SANS session » se reecrivent en « Playwright
+     AVEC session » pour le contenu, PLUS un temoin qui prouve que le visiteur sans session voit
+     l'invitation et que RIEN du contenu ne part avant la connexion (aucun appel de post ni de
+     commentaires emis dans cet etat) ;
+   - le role premier reste OUVERT la ou il l'est deja : /chat/:lien et /l/:token, livres au tour 1,
+     ne changent pas d'un octet ;
+   - la decision d'ouvrir un jour ces deux routes ENSEMBLE reste une issue \`decision-produit\` a
+     ouvrir, jamais un travail de ce tour.
 `
 
 
@@ -775,7 +810,7 @@ ${travaux.map(ligneDeTravail).join('\n')}`,
 
     const phare = PHARES.has(t.cle)
     const fait = await agent(`${SOCLE}
-${PASSERELLE}${CHARTE}${phare ? PHARE : ''}
+${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
 TA MISSION — LIVRER ce travail, en TDD, en ENTIER.
 
 TRAVAIL : ${t.titre_issue}
@@ -814,7 +849,7 @@ sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute cont
     phase('Revue')
     const revues = await parallel([
       () => agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 Tu RELIS le travail qui vient d'etre fait et ta consigne est de LE PRENDRE EN DEFAUT, sur la
 SURFACE : tu ne le reecris pas, tu constates (git diff, git status, fichiers), tu prouves, tu
 proposes le correctif.
@@ -841,7 +876,7 @@ ${fait || '(aucun rapport rendu)'}`,
         { label: `revue-surface:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'sonnet', effort: 'high' }),
 
       () => agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 Tu es un ingenieur staff HOSTILE a ce travail. Tu attaques la CONCEPTION et ce qui a ete OUBLIE —
 pas la surface (un autre relecteur s'en charge en parallele).
 
@@ -881,7 +916,7 @@ ${fait || '(aucun rapport rendu)'}`,
 
     const recette = phare
       ? await agent(`${SOCLE}
-${PASSERELLE}${PHARE}
+${PASSERELLE}${DIRECTIVES}${PHARE}
 TU ES LE RECETTEUR de l'ecran phare « ${t.titre_issue} ». Tu ne lis pas seulement le code : tu
 FAIS TOURNER l'ecran au navigateur (\`cd ${V3} && bun run build && bun run start\` en arriere-plan,
 la passerelle de bouchon et le bouchon socket de e2e/visual/lib/, Chromium de /opt/pw-browsers,
@@ -911,7 +946,7 @@ ${fait || '(aucun rapport rendu)'}`,
       phase('Implementer')
       log(`${t.cle} : ${aCorriger.length} defauts non mineurs a corriger (passe ${passe})`)
       const correction = await agent(`${SOCLE}
-${PASSERELLE}${CHARTE}${phare ? PHARE : ''}
+${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
 TA MISSION — CORRIGER les defauts que la revue croisee a trouves sur « ${t.titre_issue} ».
 
 Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve
@@ -929,7 +964,7 @@ pourquoi, les commandes rejouees et leurs sorties).`,
       if (passe === 1 && correction && correction.corriges > 0) {
         phase('Revue')
         const contre = await agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 CONTRE-REVUE. Des defauts ont ete corriges sur « ${t.titre_issue} ». Verifie que CHAQUE correction
 est reelle (git diff) et n'a rien casse, et que chaque refutation est fondee. Ne rends que ce qui
 reste BLOQUANT ou MAJEUR — un defaut resolu ne se recopie pas.
@@ -959,7 +994,7 @@ ${court(correction, 6000)}`,
   let gates = null
   for (let passe = 1; passe <= 3; passe += 1) {
     gates = await agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 TA MISSION — FAIRE PASSER LES GATES, et CORRIGER ce qui est rouge (passe ${passe}/3).
 
 Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
@@ -1000,7 +1035,7 @@ TRAVAUX DE CE TOUR : ${travaux.map((t) => t.cle).join(', ')}`,
     phase('Implementer')
     log(`Gates rouges (${rouges.map((g) => g.nom).join(', ')}) — correction de fond, passe ${passe}`)
     await agent(`${SOCLE}
-${PASSERELLE}${CHARTE}
+${PASSERELLE}${DIRECTIVES}${CHARTE}
 TA MISSION — CORRIGER A LA RACINE les gates restes rouges apres la passe ${passe}. Un gate rouge
 est un BUG du lot : trouve la cause, corrige, garde le test. Interdit : desactiver, ignorer, baisser
 un seuil, retirer un ecran pour passer.
@@ -1018,7 +1053,7 @@ Rends ce que tu as corrige, avec les commandes rejouees et leurs sorties.`,
   phase('Documenter')
   // -------------------------------------------------------------------------
   const documentation = await agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 TA MISSION — FAIRE DIRE AUX DOCUMENTS DE DESIGN CE QUI A ETE CONSTRUIT. La phase Concevoir a
 ecrit la CIBLE avant le code ; le code a pu s'en ecarter (une contradiction tranchee, un chemin
 d'actif, un jeton ajoute, un etat de plus). Les documents doivent decrire la v3 telle qu'elle EST,
@@ -1112,7 +1147,7 @@ ${(documentation || '').slice(0, 3000)}`,
   phase('Completude')
   // -------------------------------------------------------------------------
   const completude = await agent(`${SOCLE}
-${PASSERELLE}
+${PASSERELLE}${DIRECTIVES}
 TU ES LE CRITIQUE DE COMPLETUDE. Le tour ${tour} vient de livrer : ${resultats.map((r) => r.cle).join(', ')}.
 Ta question : QU'EST-CE QUI MANQUE ENCORE, et dans quel ordre le prochain tour doit-il le prendre ?
 

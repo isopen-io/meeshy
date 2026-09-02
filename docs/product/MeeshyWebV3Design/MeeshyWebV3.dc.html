@@ -27,13 +27,15 @@
 <div style="flex:1;min-height:0;overflow-y:auto;position:relative">
 
 <!-- LA VITRINE — `/` pour un visiteur (directive 2026-09-01). Contenu du legacy repris mot pour
-     mot (apps/web-v3/app/vitrine/contenu.ts) ; forme de la charte « clarté rurale » : héros à
-     gros CTA (56 / 52 px), atouts en cartes, mission, appel final, pied. Aucune image, aucune
-     police web, aucun script : le HTML porte sa feuille et ses glyphes. -->
+     mot (apps/web-v3/app/vitrine/contenu.ts) ; forme de la charte retenue au 2026-09-02
+     (« app-moderne », conception § 12.5) : héros à gros CTA (56 / 52 px), atouts en cartes,
+     mission, appel final, pied. Le héros porte l'UNIQUE dégradé du produit (règle 31 : deux
+     jetons voisins, un seul sélecteur) ; ailleurs, aucun. Aucune image, aucune police web,
+     aucun script : le HTML porte sa feuille et ses glyphes. -->
 <sc-if value="{{ isVitrine }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 18px 28px;display:flex;flex-direction:column;gap:32px">
 <div style="display:flex;align-items:center;gap:10px;padding:2px 0 0"><span style="width:32px;height:32px;border-radius:12px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center"><i class="ph ph-chat-circle" style="font-size:20px;line-height:1"></i></span><span style="font:700 20px var(--font-body);color:var(--color-text)">Meeshy</span></div>
-<div style="display:flex;flex-direction:column;gap:16px;padding:20px 16px 24px;border-radius:16px;background:rgba(129,140,248,.12)">
+<div style="display:flex;flex-direction:column;gap:16px;padding:20px 16px 24px;border-radius:16px;background:linear-gradient(180deg,rgba(129,140,248,.16),var(--color-surface))">
 <span style="align-self:flex-start;height:32px;padding:0 12px;border-radius:9999px;border:1px solid var(--meeshy-p);color:var(--meeshy-p);font:600 12px var(--font-body);display:inline-flex;align-items:center;gap:6px"><i class="ph ph-translate" style="font-size:14px;line-height:1"></i>Traduction en temps réel</span>
 <div style="font:700 34px/1.15 var(--font-body);color:var(--color-text);letter-spacing:-.01em">Communiquez sans <em style="font-style:normal;color:var(--meeshy-p)">barrières linguistiques</em></div>
 <p style="margin:0;font:400 17px/1.6 var(--font-body);color:var(--color-neutral-400)">Meeshy traduit vos conversations en temps réel, vous permettant de discuter avec n’importe qui, dans n’importe quelle langue.</p>
@@ -85,8 +87,11 @@
 <div onClick="{{ openCreateLink }}" style="margin-top:10px;height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-plus" style="font-size:20px;line-height:1"></i>Nouveau lien de partage</div>
 </div>
 <div>
+<!-- État vide (charte règle 19) : le pointillé est le SEUL trait qui dit « il n'y a rien ici » —
+     il porte donc seul son sens et tient 3:1 (règle 12), d'où un contour de contrôle, jamais un
+     filet de carte. -->
 <div style="font:600 11.5px var(--font-body);color:var(--color-neutral-600);letter-spacing:.08em;margin-bottom:10px">COMMUNAUTÉS</div>
-<div style="border:1px dashed var(--color-neutral-900);border-radius:18px;padding:18px;text-align:center"><p style="margin:0 0 12px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-400)">Vous n'êtes dans aucune communauté.</p><div onClick="{{ goCommunities }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-users-three" style="font-size:20px;line-height:1"></i>Créer une communauté</div></div>
+<div style="border:2px dashed var(--color-neutral-800);border-radius:18px;padding:18px;text-align:center"><p style="margin:0 0 12px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-400)">Vous n'êtes dans aucune communauté.</p><div onClick="{{ goCommunities }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-users-three" style="font-size:20px;line-height:1"></i>Créer une communauté</div></div>
 </div>
 </div>
 </sc-if>
@@ -115,7 +120,10 @@
 
 <!-- Le fil — servi à DEUX adresses par le MÊME module de vue : `/chats/:cle` (membre) et
      `/chat/:lien` (invité). `rights` est l'ÉTAT du fil juste après la jonction : le bandeau des
-     droits obtenus, replié d'un tap (<details>), au-dessus des messages. -->
+     droits obtenus, replié d'un tap (<details>), PREMIER bloc sous l'en-tête, AU-DESSUS des
+     puces (charte règle 28 — cet écran est l'autorité de cet ordre). Ce que la capture fixe est
+     l'ORDRE et le CONTENU du bandeau, jamais sa HAUTEUR : au-delà de 34dvh, l'implémentation
+     l'ouvre sur son seul <summary> plutôt que de cacher la conversation (§ 12.5 règle 28). -->
 <sc-if value="{{ isThreadLike }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:12px">
 <sc-if value="{{ isRights }}" hint-placeholder-val="{{ true }}">
@@ -536,8 +544,10 @@
 </div>
 </sc-if>
 
-<!-- Actions flottantes (charte règle 6) : droite 56 px primaire, gauche 52 px contour ;
-     pas de barre d'onglets ; aucune ombre — chacune est un <a href> vers une route SERVIE. -->
+<!-- Actions flottantes (charte du 2026-09-02, règle 7) : droite 56 px primaire, gauche 52 px
+     contour ; pas de barre d'onglets ; aucune ombre — chacune est un <a href> vers une route
+     SERVIE. Les deux ronds restent aux DEUX coins et l'écran réserve sous sa dernière ligne la
+     bande qu'ils occupent : au repos, aucun élément fixe ne couvre un CONTRÔLE (règle 7 b/c). -->
 <sc-if value="{{ showFabs }}" hint-placeholder-val="{{ true }}">
 <div onClick="{{ tapFeeds }}" style="position:absolute;left:18px;bottom:30px;width:52px;height:52px;border-radius:9999px;background:var(--color-surface);border:2px solid var(--color-neutral-800);display:flex;align-items:center;justify-content:center;color:var(--meeshy-p);cursor:pointer" style-hover="border-color:var(--meeshy-p)"><i class="ph ph-squares-four" style="font-size:24px;line-height:1"></i></div>
 <div onClick="{{ toggleMember }}" style="position:absolute;right:18px;bottom:30px;width:56px;height:56px;border-radius:9999px;background:var(--meeshy-p);display:flex;align-items:center;justify-content:center;color:var(--color-bg);cursor:pointer"><i class="ph {{ memberIcon }}" style="font-size:26px;line-height:1"></i></div>
