@@ -58,6 +58,9 @@ export interface SendMessageBody {
   // Lieu partagé — champ dédié, jamais un `metadata` brut. Validé et écrit
   // dans `metadata.location` par `MessageProcessor.saveMessage`.
   location?: unknown;
+  // Sticker — même doctrine que `location` (#4823). Validé par
+  // `parseMessageSticker` et écrit dans `metadata.sticker`.
+  sticker?: unknown;
 }
 
 export interface MessagesQuery {

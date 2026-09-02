@@ -51,6 +51,24 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     /// L'encastrement — le modificateur qui crée les deux couloirs.
     private let inset = ".padding(.horizontal,ComposerRailGeometry.sceneInset("
 
+    /// Les deux poses de rail, telles que `7b412fab` (2026-09-01, « les deux
+    /// rails s'ancrent au bas du DESSIN, plus au bas de la frame ») les écrit :
+    /// chaque overlay enveloppe son rail dans `ancreAuDessin(_:alignment:)`, qui
+    /// retire par le bas ce que le 9:16 laisse vide sous la carte. **Cela ne
+    /// change rien à ce que ces témoins mesurent** — `ancreAuDessin` ne touche
+    /// qu'au bas ; le repère HORIZONTAL du rail reste celui de la vue sur
+    /// laquelle l'overlay est posé, donc l'ordre overlay / encastrement décide
+    /// toujours seul si le rail tombe dans le couloir ou sur la scène. Les
+    /// ancres se re-pointent (2026-09-02) sur la forme actuelle, l'affirmation
+    /// reste : le rail est monté APRÈS `sceneInset`.
+    ///
+    /// Elles nomment l'enveloppe, et non seulement l'alignement : un rail qui
+    /// quitterait `ancreAuDessin` reviendrait s'asseoir au bas de la FRAME, le
+    /// défaut que `7b412fab` corrige, et une ancre réduite à `.bottomLeading){`
+    /// ne le verrait pas.
+    private let poseRailGauche = ".overlay(alignment:.bottomLeading){ancreAuDessin(floatingRail,alignment:.bottomLeading)}"
+    private let poseRailDroit = ".overlay(alignment:.bottomTrailing){ancreAuDessin("
+
     /// **Le témoin qui se retourne sur le défaut d'origine.**
     ///
     /// Un overlay posé AVANT le padding a pour repère la vue NUE : son
@@ -61,9 +79,9 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         guard let posePadding = code.range(of: inset)?.lowerBound else {
             return XCTFail("L'encastrement est introuvable — la garde doit être re-pointée.")
         }
-        guard let poseRail = code.range(of: ".overlay(alignment:.bottomLeading){floatingRail}")?.lowerBound else {
-            return XCTFail("Le rail *leading* n'est plus monté en `.bottomLeading` — "
-                           + "s'il a changé d'ancre, cette garde doit dire laquelle.")
+        guard let poseRail = code.range(of: poseRailGauche)?.lowerBound else {
+            return XCTFail("Le rail *leading* n'est plus monté en `.bottomLeading` via "
+                           + "`ancreAuDessin` — s'il a changé d'ancre, cette garde doit dire laquelle.")
         }
         XCTAssertTrue(posePadding < poseRail,
             "Le rail *leading* est monté AVANT l'encastrement : son repère exclut les "
@@ -77,7 +95,7 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
     func test_leRailDroit_estMonteApresLEncastrement_lui_aussi() throws {
         let code = compact(try sceneSurface())
         guard let posePadding = code.range(of: inset)?.lowerBound,
-              let poseRail = code.range(of: ".overlay(alignment:.bottomTrailing){")?.lowerBound else {
+              let poseRail = code.range(of: poseRailDroit)?.lowerBound else {
             return XCTFail("Les ancres du rail *trailing* ont changé — re-pointer la garde.")
         }
         XCTAssertTrue(posePadding < poseRail)

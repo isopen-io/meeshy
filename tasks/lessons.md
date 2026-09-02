@@ -24737,3 +24737,62 @@ Voisines : § 433 (ce qui s'énumère se périme, ce qui se dérive tient) — m
 asymétrie entre ce qu'on déclare et ce qui s'exécute ; § 440 (un outil de
 détection se règle contre l'erreur qui n'a pas de vérificateur) — ici
 l'interdiction ÉTAIT l'erreur sans vérificateur.
+
+## Leçon 442 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+
+**Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
+ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
+avait été FORKÉE de `dev`, fusionnait `origin/dev` à chaque étape, et que le
+porteur voulait `dev`. Il l'a dit à mi-course (« merge dans dev pas dans
+main ! »). Coût avant la correction : Trivy comparait les alertes à la
+dernière analyse de `main` (plus ancienne que `dev`, donc des alertes
+« nouvelles » qui n'en étaient pas), le corps de la PR annonçait « demande
+porteur : merger sur main », et le point de contrôle horaire portait « base
+main » dans son propre prompt — trois artefacts à corriger pour une
+donnée.
+
+> **La base d'une PR se lit à l'endroit d'où la branche est PARTIE**, et à
+> ce que le porteur a dit — jamais au défaut du dépôt. Une branche qui
+> fusionne `dev` à chaque tour a déjà répondu à la question. Et la base
+> n'est pas qu'un champ de la PR : tout ce qui la NOMME (corps, routine de
+> contrôle, commentaire d'issue) est à changer dans le même mouvement, sinon
+> l'un des trois continue de dire l'ancienne.
+
+Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
+base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
+n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
+
+## Leçon 443 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+
+**Ce qui s'est passé.** Deux fois dans la même session, un lot vert
+localement a rougi la CI quarante minutes plus tard sur un cliquet de
+taille que personne n'avait relu avant d'écrire :
+
+1. `FileSizeBudgetGuardTests` (iOS, `apps/ios/Meeshy`) : le cumul des
+   fichiers de la dette héritée dépassait déjà son plafond sur `dev`
+   (#4841 — 177 lignes) ; tout ajout à un hôte en dette aggravait un rouge
+   préexistant, invisible parce que la suite iOS ne tourne sur une PR que
+   si le sujet du commit le demande (« run test »).
+2. `gateway-test-file-size-budget.test.ts` (#4531, SUITES du gateway) :
+   `message-new-producer-parity.test.ts` était gelé à **1 000 lignes
+   exactement** dans `DETTE_HERITEE`. Un agent y a ajouté un témoin de
+   quinze lignes — le bon témoin, au bon endroit — et la règle 3 (« le
+   cumul hors budget ne remonte pas ») a rougi.
+
+> **Avant d'écrire dans un fichier, mesurer ce fichier contre le cliquet de
+> SA cible** — il y en a au moins trois dans ce dépôt (prod iOS, prod
+> gateway #4426, suites gateway #4531), chacun avec sa liste gelée et sa
+> convention de comptage. Un fichier de la liste dont la taille du jour
+> ÉGALE le nombre gelé n'a aucune marge : la seule façon d'y ajouter est
+> d'en SORTIR une responsabilité d'abord, dans le même commit.
+
+Et quand une fusion de `dev` arrive, **relancer les cliquets localement
+sur l'arbre fusionné** : `dev` peut être rouge par décision (#4841 laissait
+165 lignes impayées, à dessein), et la fusion importe ce rouge. Ici les
+découpes de la branche l'ont payé — mais seulement parce que la mesure a
+été REFAITE sur l'arbre fusionné, pas déduite des deux plafonds.
+
+Le motif commun aux deux morsures : la garde vivait dans une suite que
+l'agent qui écrivait n'a pas lue, parce qu'elle ne nomme pas le fichier
+qu'il modifiait — elle nomme une LISTE où il figure. Chercher « qui me
+mesure ? » (grep du nom de fichier dans les tests) avant « où j'ajoute ? ».

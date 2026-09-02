@@ -190,7 +190,7 @@ class ConversationViewModel: ObservableObject {
     /// message meant for logs, not end users — it is swapped for a generic
     /// localized message. Every other error keeps its `localizedDescription`
     /// (already user-facing: `AuthError`, `NetworkError`, `MessageError`, ...).
-    private func userFacingMessage(for error: Error) -> String {
+    func userFacingMessage(for error: Error) -> String {
         if let meeshyError = error as? MeeshyError, case .server = meeshyError {
             return String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
         }
@@ -802,8 +802,8 @@ class ConversationViewModel: ObservableObject {
     private let isDirect: Bool
     private let participantUserId: String?
     private let initialUnreadCount: Int
-    private let limit = 30
-    private var nextMessageCursor: String?
+    let limit = 30
+    var nextMessageCursor: String?
     private var cancellables = Set<AnyCancellable>()
     private var messagesPersistCancellable: AnyCancellable?
     /// Subscription that mirrors `MessageStore.messagesDidChange` into the
@@ -835,13 +835,13 @@ class ConversationViewModel: ObservableObject {
     /// Actor for optimistic inserts and state-machine transitions.
     private(set) var messagePersistence: MessagePersistenceActor
     private var lastOlderPaginationTime: Date = .distantPast
-    private var lastNewerPaginationTime: Date = .distantPast
-    private static let paginationDebounceInterval: TimeInterval = 0.3
-    private static let paginationRetryCount: Int = 3
+    var lastNewerPaginationTime: Date = .distantPast
+    static let paginationDebounceInterval: TimeInterval = 0.3
+    static let paginationRetryCount: Int = 3
     private static let paginationRetryDelay: UInt64 = 500_000_000
 
     private let authManager: AuthManaging
-    private let messageService: MessageServiceProviding
+    let messageService: MessageServiceProviding
     private let conversationService: ConversationServiceProviding
     private let reactionService: ReactionServiceProviding
     private let reportService: ReportServiceProviding
@@ -2379,8 +2379,18 @@ class ConversationViewModel: ObservableObject {
         return MediaKindLabel.summary(kind, bundle: bundle, locale: locale)
     }
 
+    /// Colonne `stickerJson` du record OPTIMISTE (#4823) — même mécanique que
+    /// `locationJson` : écrite EN BASE, pas seulement dans le `Message` en
+    /// mémoire, sinon une écriture GRDB concurrente (`messagesDidChange`) ou
+    /// un relaunch rendrait une bulle sticker muette jusqu'à l'écho serveur.
+    private static func stickerJson(_ sticker: MessageSticker?, id: String) -> String? {
+        sticker
+            .flatMap { JSONEncoder().encodeOrLog($0, field: "stickerJson", id: id) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+    }
+
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         // Garde partagé avec le composer (`SendEligibility`) : un message
@@ -2465,7 +2475,8 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
                 attachmentKinds: offlineKinds,
-                location: location
+                location: location,
+                sticker: sticker
             )
             // Lieu partagé encodé pour la colonne `locationJson` du record
             // optimiste : une écriture GRDB concurrente déclenche
@@ -2489,7 +2500,8 @@ class ConversationViewModel: ObservableObject {
                 updatedAt: Date(),
                 deliveryStatus: .sending,
                 isMe: true,
-                location: location
+                location: location,
+                sticker: sticker
             )
             // Persist offline message to GRDB; store observation surfaces the row
             // automatically — no direct messages.append needed.
@@ -2524,7 +2536,8 @@ class ConversationViewModel: ObservableObject {
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
-                locationJson: offlineLocationJson
+                locationJson: offlineLocationJson,
+                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId)
             )
 
             // `insertOptimistic` is a synchronous actor-isolated throw (no
@@ -2671,7 +2684,8 @@ class ConversationViewModel: ObservableObject {
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
-                locationJson: optimisticLocationJson
+                locationJson: optimisticLocationJson,
+                stickerJson: Self.stickerJson(sticker, id: tempId)
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
@@ -2754,7 +2768,8 @@ class ConversationViewModel: ObservableObject {
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId,
-                location: location
+                location: location,
+                sticker: sticker
             )
 
             // WebSocket-first send (re-enabled 2026-06-11). On a persistent
@@ -2880,7 +2895,8 @@ class ConversationViewModel: ObservableObject {
                     originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId,
-                    location: location
+                    location: location,
+                    sticker: sticker
                 )
                 await recordSendAttempt(
                     tempId,
@@ -2924,7 +2940,8 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
                 attachmentKinds: retryKinds,
-                location: location
+                location: location,
+                sticker: sticker
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
@@ -3137,7 +3154,8 @@ class ConversationViewModel: ObservableObject {
         replyToId: String?,
         storyReplyToId: String? = nil,
         replyReference: ReplyReference? = nil,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        sticker: MessageSticker? = nil
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
@@ -3181,7 +3199,8 @@ class ConversationViewModel: ObservableObject {
             cachedLastLineWidth: nil, cachedLineCount: nil,
             cachedTimestampInline: nil,
             layoutVersion: 0, layoutMaxWidth: nil,
-            changeVersion: 0
+            changeVersion: 0,
+            stickerJson: Self.stickerJson(sticker, id: tempId)
         )
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
@@ -4036,187 +4055,9 @@ class ConversationViewModel: ObservableObject {
         searchHasMore = false
     }
 
-    // MARK: - Jump to Message (load messages around a specific message)
-
-    func loadMessagesAround(messageId: String) async {
-        do {
-            let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
-            )
-
-            // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
-
-            // Switch the store window to be centered on the target message.
-            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
-                ?? response.data.last?.createdAt
-                ?? Date()
-            await messageStore.loadWindow(around: targetDate)
-
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
-            nextMessageCursor = response.cursorPagination?.nextCursor
-            // Fallback optimiste pour les gateways qui strippaient
-            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
-            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
-            // la refermera proprement sur une page vide.
-            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-            hasNewerMessages = response.hasNewer ?? false
-            isInJumpedState = true
-        } catch {
-            self.error = userFacingMessage(for: error)
-        }
-    }
-
-    /// Outcome of `jumpToQuotedMessage`.
-    enum JumpResult {
-        /// The message was already present in the local store — caller should
-        /// perform an instant scroll + highlight.
-        case foundLocally
-        /// The message was fetched from the server and loaded into the store.
-        /// Caller should scroll + highlight after the snapshot settles.
-        case loadedFromServer
-        /// The message could not be found (deleted, not accessible, network error).
-        case notFound
-    }
-
-    /// High-level "jump to a quoted message" flow called when the user taps
-    /// a reply reference. If the message is already in the local store's
-    /// snapshot, returns `.foundLocally` immediately. Otherwise sets
-    /// `isSearchingQuotedMessage = true` (driving the pulsing scroll-button
-    /// indicator), fetches from the server via `loadMessagesAround`, and
-    /// returns `.loadedFromServer` or `.notFound`.
-    func jumpToQuotedMessage(messageId: String) async -> JumpResult {
-        // Fast path: message is already visible — instant scroll
-        if messageStore.messages.contains(where: {
-            $0.localId == messageId || $0.serverId == messageId
-        }) {
-            return .foundLocally
-        }
-
-        // Slow path: need to fetch from server
-        isSearchingQuotedMessage = true
-        quotedMessageSearchTarget = messageId
-
-        defer {
-            isSearchingQuotedMessage = false
-            quotedMessageSearchTarget = nil
-        }
-
-        do {
-            let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
-            )
-
-            // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
-
-            // Check if the target message was in the response
-            let found = response.data.contains(where: { $0.id == messageId })
-            guard found else { return .notFound }
-
-            // Switch the store window to be centered on the target message.
-            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
-                ?? response.data.last?.createdAt
-                ?? Date()
-            await messageStore.loadWindow(around: targetDate)
-
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
-            nextMessageCursor = response.cursorPagination?.nextCursor
-            // Fallback optimiste pour les gateways qui strippaient
-            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
-            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
-            // la refermera proprement sur une page vide.
-            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-            hasNewerMessages = response.hasNewer ?? false
-            isInJumpedState = true
-
-            // Small delay to let the diffable datasource apply the new snapshot
-            // before the caller triggers scroll — otherwise the index path
-            // won't exist yet.
-            try? await Task.sleep(for: .milliseconds(150))
-
-            return .loadedFromServer
-        } catch {
-            Logger.messages.error("[JumpToQuoted] Failed to load messages around \(messageId): \(error.localizedDescription)")
-            return .notFound
-        }
-    }
-
-    func loadNewerMessages() async {
-        guard isInJumpedState, hasNewerMessages, !isLoadingNewer, !isProgrammaticScroll else { return }
-        guard let lastMsg = messages.last else { return }
-
-        // Debounce: ignore calls that arrive too soon after the last one
-        let now = Date()
-        guard now.timeIntervalSince(lastNewerPaginationTime) >= Self.paginationDebounceInterval else { return }
-        lastNewerPaginationTime = now
-
-        isLoadingNewer = true
-
-        var lastError: Error?
-        for attempt in 1...Self.paginationRetryCount {
-            do {
-                let response = try await messageService.listAround(
-                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true, includeTranslations: true
-                )
-
-                // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
-                // fires automatically and the store refreshes its window — no direct
-                // messages mutation needed.
-                try? await messagePersistence.upsertFromAPIMessages(response.data)
-                extractAttachmentTranscriptions(from: response.data)
-                extractTextTranslations(from: response.data)
-
-                hasNewerMessages = response.hasNewer ?? false
-                if !hasNewerMessages {
-                    isInJumpedState = false
-                }
-                lastError = nil
-                break
-            } catch {
-                lastError = error
-                if attempt < Self.paginationRetryCount {
-                    Logger.messages.warning("loadNewerMessages attempt \(attempt) failed, retrying: \(error.localizedDescription)")
-                    try? await Task.sleep(for: .milliseconds(500))
-                }
-            }
-        }
-
-        if let lastError {
-            Logger.messages.error("loadNewerMessages failed after \(Self.paginationRetryCount) attempts: \(lastError.localizedDescription)")
-        }
-
-        isLoadingNewer = false
-    }
-
-    func returnToLatest() async {
-        guard isInJumpedState else { return }
-
-        isInJumpedState = false
-        hasNewerMessages = false
-        // Also clear any active in-conversation search state so the results
-        // banner / filter never linger after returning to the latest window.
-        currentSearchQuery = nil
-        stateStore.currentSearchQuery = nil
-        searchResults = []
-        stateStore.searchResults = []
-        searchHasMore = false
-
-        // Restore the latest window from GRDB; the store observation surfaces
-        // the updated messages slice automatically — no snapshot-restore needed.
-        await messageStore.restoreLatestWindow()
-
-        // nextMessageCursor will be lazily re-fetched on the next loadOlderMessages
-        // call; hasOlderMessages defaults to true until corrected by the first page.
-        nextMessageCursor = nil
-        hasOlderMessages = true
-    }
-
     // MARK: - Extract Text Translations from REST Responses
 
-    private func extractTextTranslations(from apiMessages: [APIMessage]) {
+    func extractTextTranslations(from apiMessages: [APIMessage]) {
         let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
         for msg in apiMessages {
             guard let translations = msg.translations, !translations.isEmpty else { continue }
@@ -4652,7 +4493,7 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Extract Transcription/Translation Data from REST Responses
 
-    private func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
+    func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
         for msg in apiMessages {
             for att in msg.attachments ?? [] {
                 if let t = att.transcription {

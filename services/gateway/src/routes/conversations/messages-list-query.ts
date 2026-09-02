@@ -17,6 +17,7 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -618,7 +619,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
           // — sans lui, une citation d'un message géolocalisé n'affiche
           // jamais sa position, même si la liste principale la restitue.
-          mappedMessage.replyTo = hoistLocationOnto({
+          mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             sender: replySender ? {
@@ -627,7 +628,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          });
+          }));
         }
 
         return mappedMessage;
@@ -730,6 +731,7 @@ export async function enrichForwardedMessagesForList(
               // pas celle de `msg` lui-même — sans elle, un message transféré
               // géolocalisé n'affiche jamais sa position dans l'aperçu.
               const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
+              const forwardedSticker = stickerFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -743,6 +745,7 @@ export async function enrichForwardedMessagesForList(
                 } : null,
                 attachments: original.attachments,
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
+                ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };
             }
           }

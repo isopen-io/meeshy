@@ -84,6 +84,26 @@ final class StoryExportShareViewModelTests: XCTestCase {
         sut.finishSharing(success: true)
     }
 
+    /// #4852 — un sticker IMAGE ne porte que le `postMediaId` de son média ;
+    /// c'est le VM, seul à tenir la slide ET `story.media`, qui apparie les
+    /// deux et remet l'index au bake. Sans lui, l'export peignait 🖼️.
+    func test_startExport_pairsStickerImagesWithStoryMedia_andThreadsThemToExporter() async {
+        let (sut, exporter) = makeSUT(behavior: .success)
+        let sticker = StorySticker(emoji: "", postMediaId: "pm-sticker")
+        let effects = StoryEffects(stickerObjects: [sticker, StorySticker(emoji: "🔥")])
+        let story = StoryItem(id: "story-\(UUID().uuidString)",
+                              content: "Hello",
+                              media: [FeedMedia(id: "pm-sticker", type: .image,
+                                                url: "https://cdn.meeshy.test/sticker.png")],
+                              storyEffects: effects)
+
+        await sut.startExport(story: story)
+
+        XCTAssertEqual(exporter.lastStickerImageSources,
+                       ["pm-sticker": "https://cdn.meeshy.test/sticker.png"])
+        sut.finishSharing(success: true)
+    }
+
     func test_startExport_staticStory_callsExporterAndStoresURL() async {
         // Universal export contract : static stories (texte/sticker/image
         // sans animation) doivent aussi être bakables. Le compositor
@@ -184,6 +204,8 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     private(set) var lastLanguages: [String] = []
     /// Identité transmise au préambule de marque — `nil` = export sans intro.
     private(set) var lastIntro: StoryExportIntroContent?
+    /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
+    private(set) var lastStickerImageSources: [String: String] = [:]
     private(set) var lastCleanupURL: URL? = nil
     private(set) var lastBakedURL: URL? = nil
     let behavior: Behavior
@@ -195,12 +217,14 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
+        stickerImageSources: [String: String],
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
         lastLanguages = languages
         lastIntro = intro
+        lastStickerImageSources = stickerImageSources
 
         switch behavior {
         case .success:

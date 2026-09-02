@@ -220,7 +220,10 @@ extension OutboxDispatcher {
                     clientMessageId: item.clientMessageId,
                     // Lieu partagé rejoué au renvoi — le canal socket porte la
                     // même clé `location` que le corps REST.
-                    location: item.location
+                    location: item.location,
+                    // Sticker (#4823) : le PNG remonté repart avec ce qu'il
+                    // représente, sinon le destinataire reçoit une image muette.
+                    sticker: item.sticker
                 )
                 guard let ack else {
                     throw NSError(
@@ -312,7 +315,8 @@ extension OutboxDispatcher {
                     clientMessageId: item.clientMessageId,
                     // Lieu partagé rejoué au renvoi — même clé `location` que
                     // le corps REST.
-                    location: item.location
+                    location: item.location,
+                    sticker: item.sticker
                 )
                 guard let ack else {
                     throw NSError(
@@ -352,7 +356,10 @@ extension OutboxDispatcher {
                 // Lieu partagé rejoué au renvoi, comme pour un post et un
                 // commentaire : clé top-level `location`, omise quand nil.
                 location: item.location,
-                copyAttachmentsFromMessageId: copyAttachmentsFromMessageId
+                copyAttachmentsFromMessageId: copyAttachmentsFromMessageId,
+                // Sticker (#4823) rejoué sous la même clé `sticker` que
+                // l'envoi direct — omis quand nil.
+                sticker: item.sticker
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
