@@ -6,15 +6,15 @@ export const meta = {
     "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat, fil temps reel), puis l'ordre calcule de ordre.md. Args : { branche, focus, plafond, tours, sans_issues }.",
   phases: [
     { title: 'Cadrer', detail: "mesurer ce qui existe, lire l'ordre calcule et les issues, choisir les travaux du tour", model: 'sonnet' },
-    { title: 'Charte', detail: 'trois directions de style en concurrence, un juge, UNE charte opposable', model: 'fable' },
-    { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'fable' },
+    { title: 'Charte', detail: 'trois directions de style en concurrence, un juge, UNE charte opposable', model: 'opus' },
+    { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'opus' },
     { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code', model: 'sonnet' },
     { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte', model: 'opus' },
-    { title: 'Revue', detail: 'sonnet prend en defaut la surface, fable attaque la conception', model: 'fable' },
+    { title: 'Revue', detail: 'sonnet prend en defaut la surface, fable attaque la conception', model: 'opus' },
     { title: 'Gates', detail: 'ordre, tsc, lint, tests, build + budget, conformite visuelle, axe — corriger, jamais contourner', model: 'sonnet' },
     { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'opus' },
     { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'opus' },
-    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour", model: 'fable' },
+    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour", model: 'opus' },
   ],
 }
 
@@ -574,7 +574,7 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
       },
       {
         nom: 'app-moderne',
-        modele: 'fable',
+        modele: 'opus',
         angle: "L'APPLICATION MODERNE que l'on a envie de rouvrir : cartes a filet fin, surfaces en couches (color-mix sur les jetons), degrades tres discrets sur les heros, glyphes du sprite comme ponctuation, gros boutons arrondis, micro-hierarchie par le poids et la taille — et TOUJOURS sous le budget (aucune police web, aucune image, aucun JS).",
       },
       {
@@ -642,7 +642,7 @@ Ecris-la dans ${dossierDeTravail}/charte/CHARTE.md et rends-la aussi dans le cha
 
 LES PROPOSITIONS :
 ${court(propositions, 12000)}`,
-      { label: 'charte:juge', phase: 'Charte', schema: JUGEMENT, model: 'fable', effort: 'max' })
+      { label: 'charte:juge', phase: 'Charte', schema: JUGEMENT, model: 'opus', effort: 'max' })
 
     charteRetenue = jugement
     log(`Charte retenue : ${jugement ? jugement.retenue : '(aucune — le juge n a rien rendu)'}`)
@@ -715,7 +715,7 @@ mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
 
 Ne commit PAS. Rends le rapport, les fichiers touches, les vues ajoutees (id, route, png), le rc de
 l'ordre, et les contradictions tranchees.`,
-    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: 'fable', effort: 'high' })
+    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: 'opus', effort: 'high' })
 
   if (conception && conception.ordre_rc !== 0) {
     log(`ATTENTION : ordre-des-ecrans.js rend rc=${conception.ordre_rc} — la phase Gates devra le remettre a 0`)
@@ -808,7 +808,7 @@ METHODE, dans cet ordre :
 
 Rends un rapport texte : ce que tu as fait, les fichiers touches, les commandes lancees et leurs
 sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute contradiction trouvee.`,
-      { label: `livrer:${t.cle}`, phase: 'Implementer', model: phare ? 'fable' : 'opus', effort: phare ? 'max' : 'high' })
+      { label: `livrer:${t.cle}`, phase: 'Implementer', model: 'opus', effort: phare ? 'max' : 'high' })
 
     // ------------------------------------------------------------------ Revue
     phase('Revue')
@@ -874,7 +874,7 @@ CRITERE DE FIN : ${t.critere_de_fin}
 
 RAPPORT DE L'IMPLEMENTEUR :
 ${fait || '(aucun rapport rendu)'}`,
-        { label: `revue-conception:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'fable', effort: 'high' }),
+        { label: `revue-conception:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'opus', effort: 'high' }),
     ])
 
     const [revueS, revueO] = revues
@@ -897,7 +897,7 @@ Pose tes captures dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les.
 
 RAPPORT DE L'IMPLEMENTEUR :
 ${fait || '(aucun rapport rendu)'}`,
-        { label: `recette:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'fable', effort: 'max' })
+        { label: `recette:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'opus', effort: 'max' })
       : null
 
     let aCorriger = [
@@ -923,7 +923,7 @@ ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d
 
 Rends : corriges (nombre), refutes (nombre), rapport (ce qui a ete corrige, ce qui a ete refute et
 pourquoi, les commandes rejouees et leurs sorties).`,
-        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: phare ? 'fable' : 'opus', effort: phare ? 'max' : 'high' })
+        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: 'opus', effort: phare ? 'max' : 'high' })
       corrections.push(correction)
 
       if (passe === 1 && correction && correction.corriges > 0) {
@@ -1131,7 +1131,7 @@ Ta question : QU'EST-CE QUI MANQUE ENCORE, et dans quel ordre le prochain tour d
 
 RAPPORTS DE LIVRAISON :
 ${court(livraison, 4000)}`,
-    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: 'fable', effort: 'high' })
+    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: 'opus', effort: 'high' })
 
   resultatsDesTours.push({
     tour,
