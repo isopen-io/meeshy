@@ -100,6 +100,11 @@ public enum StickerTemplateFamily: String, CaseIterable, Sendable {
     case nature
     case cheer
     case answer
+    /// Le troisième lot (#4820) — ce qu'on mange, ce qu'on court. Deux thèmes
+    /// que la famille DISPONIBILITÉ frôle sans les dire : « en pause » est un
+    /// état, un café est une invitation.
+    case food
+    case sport
 }
 
 // MARK: - Sticker Template Slot

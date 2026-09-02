@@ -65,7 +65,7 @@ public enum StickerTemplateCatalog {
     /// gabarit porte son sens entier.
     private static let thématiques: [StickerTemplate] =
         joy + surprise + mood + greeting + reaction + party + availability
-        + nature + cheer + answer
+        + nature + cheer + answer + food + sport
 
     public static let location: [StickerTemplate] = [
         StickerTemplate(id: ID.locationPill,

@@ -95,6 +95,9 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     case nature
     case cheer
     case answer
+    /// Le troisième lot (#4820) : ce qu'on mange, ce qu'on court.
+    case food
+    case sport
     case time
     case weather
     case place
@@ -107,7 +110,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
     /// que c'est le seul onglet dont le contenu appartient à l'utilisateur.
     public static let canonicalOrder: [StickerPaletteTab] = [
         .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction, .party,
-        .availability, .cheer, .answer, .nature, .time, .weather, .place, .library,
+        .availability, .cheer, .answer, .nature, .food, .sport,
+        .time, .weather, .place, .library,
     ]
 
     /// La famille de gabarits que l'onglet montre — `nil` pour les deux onglets
@@ -126,6 +130,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .nature: return .nature
         case .cheer: return .cheer
         case .answer: return .answer
+        case .food: return .food
+        case .sport: return .sport
         case .time:         return .time
         case .weather:      return .weather
         case .place:   return .location
@@ -150,6 +156,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
         case .nature: return "leaf"
         case .cheer: return "hands.clap"
         case .answer: return "questionmark.bubble"
+        case .food: return "fork.knife"
+        case .sport: return "figure.run"
         case .time:    return "clock"
         case .weather: return "cloud.sun"
         case .place:   return "mappin.and.ellipse"
@@ -172,7 +180,8 @@ public enum StickerPaletteTab: String, CaseIterable, Identifiable, Sendable {
             case .library: return hasLibrary
             case .place:   return hasNearbyPlaces
             case .emoji, .text, .love, .joy, .surprise, .mood, .greeting, .reaction,
-                 .party, .availability, .nature, .cheer, .answer, .time, .weather:
+                 .party, .availability, .nature, .cheer, .answer, .food, .sport,
+                 .time, .weather:
                 return true
             }
         }
