@@ -802,8 +802,54 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
+    /// **LE site unique où une porte d'ingestion écrit dans
+    /// `documentLocalMedia` — et il marque le rail AVANT d'écrire** (#4879).
+    ///
+    /// ## Le défaut qu'il ferme
+    ///
+    /// Une photo ajoutée par le rail de la scène n'y arrivait jamais. Elle était
+    /// pourtant bien ingérée — la surface Post la montrait — et apparaissait
+    /// après un aller-retour de format. Reproduit deux fois au simulateur.
+    ///
+    /// `syncPostMediaIntoSlides` est branchée sur `documentLocalMedia` et lit
+    /// `railPosedMediaURLs` pour choisir la porte du média. Les quatre sites
+    /// d'ingestion ÉCRIVAIENT d'abord et marquaient ensuite : au moment où
+    /// l'observateur tournait, l'ensemble était encore vide. Le média était donc
+    /// classé « rangée du document » — une slide à lui — au lieu d'être posé sur
+    /// la scène courante.
+    ///
+    /// Le verdict est DÉFINITIF : la boucle ne considère que les médias sans
+    /// rôle (`mediaRoleByURL[url] == nil`). Un rôle mal attribué ne se rejoue
+    /// jamais, et c'est pourquoi le symptôme survivait à tout rafraîchissement.
+    ///
+    /// > **Un drapeau consommé APRÈS l'observateur qui le lit ne vaut rien** —
+    /// > et il échoue du côté silencieux : ni erreur, ni journal, un média
+    /// > correctement ingéré rangé au mauvais endroit.
+    ///
+    /// ## Deux propriétés, et la seconde n'est pas cosmétique
+    ///
+    /// **Un seul écrivain** : tant que quatre sites écrivaient, l'ordre était une
+    /// discipline ; il est désormais une propriété, et un cinquième site ne peut
+    /// plus le rejouer.
+    ///
+    /// **Une seule notification** : les boucles appelaient `append` par item,
+    /// donc rejouaient la dérivation autant de fois qu'il y avait de fichiers,
+    /// chaque fois sur un état différent — la place d'un média dépendait de son
+    /// RANG dans la sélection.
+    ///
+    /// `medias` vide ⇒ rien, pas même la consommation du drapeau : une
+    /// ingestion qui n'a rien produit ne doit pas déclarer que le rail a servi.
+    func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
+        guard !medias.isEmpty else { return }
+        consumeRailPosing(medias.map(\.url))
+        documentLocalMedia.append(contentsOf: medias)
+    }
+
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
-        var posees: [URL] = []
+        // Les médias sont ACCUMULÉS puis remis en une fois à
+        // `ingestIntoDocument` : écrire dans la boucle rejouait la dérivation à
+        // chaque item, sur un état différent (#4879).
+        var medias: [ComposerDocumentMedia] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let declaredType = item.supportedContentTypes.first
@@ -813,14 +859,13 @@ extension MeeshyComposerHost {
             guard (try? data.write(to: url)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(url)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 
@@ -893,16 +938,14 @@ extension MeeshyComposerHost {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
-            consumeRailPosing([url])
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg")])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: "video/quicktime",
                 durationMs: duration
-            ))
-            consumeRailPosing([url])
+            )])
         }
         HapticFeedback.light()
     }
@@ -940,7 +983,9 @@ extension MeeshyComposerHost {
             await ingestSoundFiles(urls)
             return
         }
-        var posees: [URL] = []
+        // Même accumulation que la photothèque (#4879) : marquer le rail avant
+        // d'écrire, et n'écrire qu'une fois.
+        var medias: [ComposerDocumentMedia] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -950,14 +995,13 @@ extension MeeshyComposerHost {
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: destination,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(destination)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 
