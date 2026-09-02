@@ -77,7 +77,7 @@
 <sc-for list="{{ recent }}" as="c" hint-placeholder-count="2">
 <div onClick="{{ c.open }}" style="background:var(--color-surface);border:1px solid var(--color-neutral-900);border-radius:18px;padding:14px;display:flex;gap:13px;align-items:center;cursor:pointer;margin-bottom:10px" style-hover="border-color:var(--color-neutral-700)">
 <div style="width:46px;height:46px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font:600 16px var(--font-body);flex:none;color:var(--color-bg);background:{{ c.color }}">{{ c.initials }}</div>
-<div style="flex:1;min-width:0"><div style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</div><div style="margin-top:2px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.preview }}</div></div>
+<div style="flex:1;min-width:0"><div style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</div><div style="margin-top:2px;display:flex;align-items:center;gap:6px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;white-space:nowrap"><span onClick="{{ openLang }}" style="display:{{ c.prisme }};align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>{{ c.lang }}</span><span style="overflow:hidden;text-overflow:ellipsis">{{ c.preview }}</span></div></div>
 </div>
 </sc-for>
 </div>
@@ -111,7 +111,7 @@
 <sc-for list="{{ chats }}" as="c" hint-placeholder-count="3">
 <div onClick="{{ c.open }}" style="display:flex;gap:13px;padding:13px 2px;align-items:center;cursor:pointer;border-bottom:1px solid var(--color-neutral-900)">
 <div style="width:46px;height:46px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font:600 16px var(--font-body);flex:none;color:var(--color-bg);background:{{ c.color }}">{{ c.initials }}</div>
-<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</span><span style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ c.time }}</span></div><div style="margin-top:2px;display:flex;align-items:center;gap:6px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;white-space:nowrap"><span style="flex:none;font:600 11px var(--font-body);letter-spacing:.06em;color:var(--meeshy-p);border:1px solid var(--color-neutral-800);border-radius:6px;padding:0 5px">{{ c.lang }}</span><span style="overflow:hidden;text-overflow:ellipsis">{{ c.preview }}</span></div></div>
+<div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 16px var(--font-body);color:var(--color-text)">{{ c.name }}</span><span style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ c.time }}</span></div><div style="margin-top:2px;display:flex;align-items:center;gap:6px;font:400 14px var(--font-body);color:var(--color-neutral-400);overflow:hidden;white-space:nowrap"><span onClick="{{ openLang }}" style="display:{{ c.prisme }};align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>{{ c.lang }}</span><span style="overflow:hidden;text-overflow:ellipsis">{{ c.preview }}</span></div></div>
 </div>
 </sc-for>
 </div>
@@ -126,11 +126,14 @@
      l'ouvre sur son seul <summary> plutôt que de cacher la conversation (§ 12.5 règle 28). -->
 <sc-if value="{{ isThreadLike }}" hint-placeholder-val="{{ true }}">
 <div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:12px">
+<!-- Le bandeau des droits porte UNE LIGNE PAR DROIT, sans sous-ligne (charte § 12.5 règle 29) :
+     les sous-lignes se lisent AVANT d'entrer, dans l'accordéon de la modale, et les répéter ici
+     poussait le bandeau au-delà de 34dvh — il mangeait la conversation qu'on vient lire. -->
 <sc-if value="{{ isRights }}" hint-placeholder-val="{{ true }}">
 <div style="border-radius:16px;background:var(--color-surface);border-left:4px solid #34D399;border-top:1px solid var(--color-neutral-900);border-right:1px solid var(--color-neutral-900);border-bottom:1px solid var(--color-neutral-900);padding:12px 14px;display:flex;flex-direction:column;gap:8px">
 <div onClick="{{ openThread }}" style="display:flex;align-items:center;gap:11px;min-height:44px;cursor:pointer"><i class="ph ph-check-circle" style="font-size:24px;line-height:1;color:#34D399;flex:none"></i><div style="flex:1;min-width:0"><div style="font:600 15px var(--font-body);color:var(--color-text)">Bienvenue Tolu — vous êtes entré en anonyme</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">Voilà ce que ce lien vous ouvre dans Équipe Lagos</div></div><i class="ph ph-caret-down" style="font-size:16px;line-height:1;color:var(--color-neutral-500)"></i></div>
 <sc-for list="{{ rights }}" as="r" hint-placeholder-count="4">
-<div style="display:flex;gap:12px;padding:8px 0 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:{{ r.color }};flex:none;margin-top:2px"></i><div><div style="font:600 14px var(--font-body);color:{{ r.tone }}">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
+<div style="display:flex;align-items:center;gap:12px;min-height:34px;padding:2px 0 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:{{ r.color }};flex:none"></i><div style="font:600 14px var(--font-body);color:{{ r.tone }};min-width:0">{{ r.title }}</div></div>
 </sc-for>
 </div>
 </sc-if>
@@ -139,12 +142,12 @@
 <div onClick="{{ goMedia }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--color-neutral-800);color:var(--color-neutral-400);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-image" style="font-size:16px;line-height:1"></i>Médias</div>
 </div>
 <sc-for list="{{ messages }}" as="m" hint-placeholder-count="5">
-<div style="display:flex;gap:11px;opacity:{{ m.opacity }}">
+<div style="display:flex;gap:11px">
 <div style="width:34px;height:34px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font:600 13px var(--font-body);flex:none;color:var(--color-bg);background:{{ m.color }}">{{ m.initials }}</div>
 <div style="flex:1;min-width:0">
 <div onClick="{{ openProfile }}" style="font:600 14.5px var(--font-body);color:var(--color-text);cursor:pointer">{{ m.name }} <span style="font-weight:400;color:var(--color-neutral-600)">{{ m.tag }}</span></div>
 <div style="margin-top:4px;font:400 {{ m.size }}px/1.5 var(--font-body);color:var(--color-text)">{{ m.text }}</div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>{{ m.flags }}<span style="margin-left:auto">{{ m.time }}</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span onClick="{{ openLang }}" style="display:{{ m.prisme }};align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>{{ m.origine }}</span><span style="margin-left:auto">{{ m.time }}</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
 </div>
 </div>
 </sc-for>
@@ -327,7 +330,7 @@
 <div onClick="{{ goMedia }}" style="height:180px;display:flex;align-items:center;justify-content:center;color:var(--color-neutral-600);cursor:pointer"><i class="ph ph-image" style="font-size:30px;line-height:1"></i></div>
 <div style="padding:9px 12px;font:400 14.5px/1.45 var(--font-body);color:var(--color-text)">Le tableau final de la revue.</div>
 </div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇬🇧 🇫🇷<span style="margin-left:auto">12:06</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span onClick="{{ openLang }}" style="display:inline-flex;align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>EN</span><span style="margin-left:auto">12:06</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
 </div>
 </div>
 
@@ -340,7 +343,7 @@
 <span style="position:absolute;bottom:10px;left:12px;height:22px;padding:0 9px;border-radius:9999px;background:rgba(0,0,0,.55);color:#fff;font:600 11.5px var(--font-body);display:flex;align-items:center">0:42 · 3,1 Mo</span>
 <span style="position:absolute;bottom:10px;right:12px;height:22px;padding:0 9px;border-radius:9999px;background:rgba(0,0,0,.55);color:#fff;font:600 11.5px var(--font-body);display:flex;align-items:center">Sous-titres fr</span>
 </div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇪🇸 🇫🇷<span style="margin-left:auto">12:08</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--color-neutral-600)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span onClick="{{ openLang }}" style="display:inline-flex;align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>ES</span><span style="margin-left:auto">12:08</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--color-neutral-600)"></i></div>
 </div>
 </div>
 
@@ -353,7 +356,7 @@
 <div style="flex:1;min-width:0"><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,var(--meeshy-p) 34%,var(--color-neutral-800) 34%)"></div><div style="margin-top:6px;font:500 11.5px var(--font-body);color:var(--color-neutral-600)">0:07 / 0:21 · 96 Ko</div></div>
 </div>
 <div onClick="{{ openLang }}" style="margin-top:6px;border-left:2px solid var(--meeshy-p);padding-left:10px;font:400 14px/1.5 var(--font-body);color:var(--color-neutral-400);cursor:pointer">« J'apporte les chiffres de mars, tout est prêt. »<div style="margin-top:3px;font:500 11.5px var(--font-body);color:var(--meeshy-p)">Transcrit du yoruba · lire en français</div></div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇳🇬 🇫🇷<span style="margin-left:auto">12:10</span><i class="ph ph-check" style="font-size:14px;line-height:1;color:var(--color-neutral-600)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span onClick="{{ openLang }}" style="display:inline-flex;align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>YO</span><span style="margin-left:auto">12:10</span><i class="ph ph-check" style="font-size:14px;line-height:1;color:var(--color-neutral-600)"></i></div>
 </div>
 </div>
 
@@ -363,7 +366,7 @@
 <div style="font:600 14.5px var(--font-body);color:var(--color-text)">Sara Kim</div>
 <div style="margin-top:4px;display:flex;align-items:center;gap:6px;font:500 11.5px var(--font-body);color:var(--color-neutral-600)"><i class="ph ph-arrow-bend-up-right" style="font-size:14px;line-height:1"></i>Transféré depuis Diaspora FR-EN</div>
 <div style="margin-top:5px;font:400 15px/1.5 var(--font-body);color:var(--color-text)">Le glossaire partagé a été mis à jour hier soir.</div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇰🇷 🇫🇷<span style="margin-left:auto">12:14</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span onClick="{{ openLang }}" style="display:inline-flex;align-items:center;gap:4px;flex:none;height:19px;padding:0 6px;border-radius:6px;border:1px solid var(--color-neutral-800);color:var(--meeshy-p);font:600 11px var(--font-body);letter-spacing:.06em;cursor:pointer"><i class="ph ph-translate" style="font-size:13px;line-height:1"></i>KO</span><span style="margin-left:auto">12:14</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
 </div>
 </div>
 
@@ -376,7 +379,7 @@
 <div style="margin-top:2px;font:400 13px/1.4 var(--font-body);color:var(--color-neutral-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Le tableau final de la revue.</div>
 </div>
 <div style="margin-top:6px;font:400 15px/1.5 var(--font-body);color:var(--color-text)">Je le mets dans le dossier de mars.</div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇫🇷 🇬🇧<span style="margin-left:auto">12:16</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span style="margin-left:auto">12:16</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
 </div>
 </div>
 
@@ -388,7 +391,7 @@
 <div onClick="{{ goStory }}" style="width:52px;border-radius:10px;background:linear-gradient(160deg,#2a2140,#141522);border:1px solid var(--color-neutral-800);display:flex;align-items:center;justify-content:center;color:var(--color-neutral-500);flex:none;cursor:pointer"><i class="ph ph-sparkle" style="font-size:18px;line-height:1"></i></div>
 <div style="flex:1;min-width:0"><div style="font:500 11.5px var(--font-body);color:var(--color-neutral-600)">A répondu à votre story</div><div style="margin-top:4px;font:400 15px/1.45 var(--font-body);color:var(--color-text)">Superbe, c'était où ?</div></div>
 </div>
-<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><i onClick="{{ openLang }}" class="ph ph-translate" style="font-size:15px;line-height:1;color:var(--meeshy-p);cursor:pointer"></i>🇫🇷<span style="margin-left:auto">12:20</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span style="margin-left:auto">12:20</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
 </div>
 </div>
 
@@ -609,10 +612,14 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 const P = '#818CF8', BG = '#161826';
+// `lang` est la langue d'ORIGINE du dernier message, et la pastille ne se rend QUE lorsque
+// `resolvePrismTranslation()` sert une traduction (charte § 12.5 règle 30). « Support produit »
+// parle déjà français à une lectrice francophone : rien à annoncer, donc pas de pastille — et
+// c'est cette ligne-là qui porte le témoin de rang, qu'un rang 1 ne peut pas faire tomber.
 const CHATS = [
-  { id: 'marta', initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', lang: 'ES', preview: 'Merci, je t’envoie le fichier', time: 'hier' },
-  { id: 'demo', initials: 'SD', color: '#75798c', name: 'Salon démo', lang: 'EN', preview: 'Tolu a rejoint la conversation', time: 'hier' },
-  { id: 'support', initials: 'SP', color: '#10B981', name: 'Support produit', lang: 'FR', preview: 'Appel audio manqué', time: 'lun.' },
+  { id: 'marta', initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', lang: 'ES', prisme: 'inline-flex', preview: 'Merci, je t’envoie le fichier', time: 'hier' },
+  { id: 'demo', initials: 'SD', color: '#75798c', name: 'Salon démo', lang: 'EN', prisme: 'inline-flex', preview: 'Tolu a rejoint la conversation', time: 'hier' },
+  { id: 'support', initials: 'SP', color: '#10B981', name: 'Support produit', lang: '', prisme: 'none', preview: 'Appel audio manqué', time: 'lun.' },
 ];
 const FORMATS = [
   { id: 'post', label: 'Post', icon: 'ph-article' },
@@ -845,7 +852,7 @@ const EXITS = {
 };
 
 class Component extends DCLogic {
-  state = { screen: 'home', stack: [], sheet: null, mode: 'focal', detailKey: null, format: 'post', mood: '☕', rightsOpen: false, commentSrc: 'post' };
+  state = { screen: 'home', stack: [], sheet: null, detailKey: null, format: 'post', mood: '☕', rightsOpen: false, commentSrc: 'post' };
 
   go = (screen) => this.setState((s) => ({ screen, sheet: null, stack: [...s.stack, s.screen] }));
   goDetail = (key) => this.setState((s) => ({ screen: 'detail', detailKey: key, sheet: null, stack: [...s.stack, s.screen] }));
@@ -981,11 +988,19 @@ class Component extends DCLogic {
     };
     const cs = COMMENT_SETS[src];
 
+    // Le Prisme, tel que la charte du 2026-09-02 l'arrête (§ 12.5 règle 30) : la lectrice est
+    // FRANCOPHONE, donc chaque ligne est servie en français, et la pastille dit la langue
+    // d'ORIGINE en capitales — jamais un drapeau (un drapeau dit un PAYS). Une ligne déjà
+    // écrite dans la langue de la lectrice n'a AUCUNE traduction à annoncer :
+    // `resolvePrismTranslation()` y rend null, donc pas de pastille (`prisme: 'none'`) — c'est
+    // le témoin de la règle, et il ne peut s'écrire que sur une telle ligne.
+    // Aucune ligne n'est atténuée : `opacity` n'est pas un état (règle 34), et le texte d'un
+    // message prend l'encre PLEINE (règle 18).
     const messages = [
-      { initials: 'IB', color: '#10B981', name: 'Ibrahim', tag: '', text: 'On se cale à 15 h pour la revue ?', flags: '🇬🇧 🇫🇷', time: '12:01', opacity: s.mode === 'focal' ? '.45' : '1', size: 15 },
-      { initials: '👻', color: '#292b31', name: 'Tolu', tag: 'anonyme', text: "Ça me va. J'apporte les chiffres de mars.", flags: '🇳🇬 🇫🇷', time: '12:03', opacity: '1', size: s.mode === 'focal' ? 17 : 15 },
-      { initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', tag: '', text: 'Perfecto, lo reviso esta tarde.', flags: '🇪🇸 🇫🇷', time: '12:03', opacity: s.mode === 'focal' ? '.45' : '1', size: 15 },
-      { initials: 'AD', color: P, name: 'Vous', tag: '', text: 'Parfait, je crée le lien pour Marta.', flags: '🇫🇷 🇬🇧', time: '12:04', opacity: s.mode === 'focal' ? '.45' : '1', size: 15 },
+      { initials: 'IB', color: '#10B981', name: 'Ibrahim', tag: '', text: 'On se cale à 15 h pour la revue ?', origine: 'EN', prisme: 'inline-flex', time: '12:01', size: 15 },
+      { initials: '👻', color: '#292b31', name: 'Tolu', tag: 'anonyme', text: "Ça me va. J'apporte les chiffres de mars.", origine: 'YO', prisme: 'inline-flex', time: '12:03', size: 15 },
+      { initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', tag: '', text: 'Parfait, je le relis cet après-midi.', origine: 'ES', prisme: 'inline-flex', time: '12:03', size: 15 },
+      { initials: 'AD', color: P, name: 'Vous', tag: '', text: 'Parfait, je crée le lien pour Marta.', origine: '', prisme: 'none', time: '12:04', size: 15 },
     ];
 
     const rows = list
@@ -1077,7 +1092,10 @@ class Component extends DCLogic {
       title: title || 'Meeshy',
       titleUpper: (title || 'Meeshy').toUpperCase(),
       subtitle,
-      canBack: s.stack.length > 0,
+      // Un chevron de retour dont la destination est la route affichée n'a AUCUN effet
+      // (charte § 12.5 règle 11). `/` est la racine : ni la vitrine ni le tableau de bord
+      // n'ont d'écran d'où l'on vient, quelle que soit la pile du prototype.
+      canBack: s.stack.length > 0 && screen !== 'home' && screen !== 'vitrine',
       back: this.back,
       showNav: !isVitrine && !isReels && !isJoin && !isStory && !isCall,
       hasHeaderAction: !!(list && list.action),
@@ -1172,9 +1190,13 @@ class Component extends DCLogic {
         ? DETAILS.notification.groups.map((g) => ({ title: g.title, rows: g.rows.map((r) => this.toggleRow(r)) }))
         : groups,
       rows,
+      // Même Marta, même message, même lectrice que dans `/chats` (const CHATS) : l'aperçu s'y
+      // sert déjà traduit, avec sa pastille ES. La planche se contredisait elle-même ; la charte
+      // (§ 12.5 règle 30) dit lequel des deux a raison. La ligne d'Équipe Lagos n'annonce aucune
+      // langue : son dernier message est déjà en français (`resolvePrismTranslation()` → null).
       recent: [
-        { initials: 'ÉL', color: '#6366F1', name: 'Équipe Lagos', preview: 'Ibrahim : On se cale à 15 h ?', open: () => this.go('thread') },
-        { initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', preview: 'Gracias, te mando el archivo', open: () => this.go('thread') },
+        { initials: 'ÉL', color: '#6366F1', name: 'Équipe Lagos', lang: '', prisme: 'none', preview: 'Ibrahim : On se cale à 15 h ?', open: () => this.go('thread') },
+        { initials: 'MR', color: '#F59E0B', name: 'Marta Ruiz', lang: 'ES', prisme: 'inline-flex', preview: 'Merci, je t’envoie le fichier', open: () => this.go('thread') },
       ],
       chats: CHATS.map((c) => ({ ...c, open: () => this.go('thread') })),
       langueAffichee: 'Français',
@@ -1194,9 +1216,6 @@ class Component extends DCLogic {
       isMood: s.format === 'status',
       isDoc: s.format !== 'status',
       moods: MOOD_EMOJIS.map((e) => ({ emoji: e, bg: e === s.mood ? 'rgba(129,140,248,.14)' : 'var(--color-surface)', ring: e === s.mood ? '0 0 0 2px ' + P : 'none', pick: () => this.setState({ mood: e === s.mood ? '' : e }) })),
-
-      modeBadge: s.mode === 'focal' ? 'AUTO · Focal' : 'Script',
-      cycleMode: () => this.setState((st) => ({ mode: st.mode === 'focal' ? 'script' : 'focal' })),
 
       showComposerBar: isThread || isRights || screen === 'rich',
       showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',

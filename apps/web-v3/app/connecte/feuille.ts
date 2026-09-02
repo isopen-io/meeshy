@@ -42,6 +42,7 @@ export const FEUILLE_CONNECTEE = compacte(`
 .bonjour{padding-top:var(--space-6)}
 .bonjour h1{margin:0 0 var(--space-2);font-size:var(--text-3xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
 .bonjour p{margin:0;max-width:var(--measure);color:var(--color-text-muted)}
+.bonjour p+p{margin-top:var(--space-3)}
 
 .chiffres{display:grid;gap:var(--space-3);margin:var(--space-6) 0 0;padding:0;list-style:none;grid-template-columns:1fr 1fr}
 .chiffres li{padding:var(--space-4);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
