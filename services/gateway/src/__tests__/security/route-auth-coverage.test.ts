@@ -413,6 +413,24 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // balayage. Ne retire pas ce témoin en croyant qu'il fait doublon.
   { method: 'GET', url: '/api/v1/social/posts', why: 'optionalAuth ; scope=author/community publics par conception, les six autres rendent 401 (prouvé par unit/routes/posts/social-posts-scope.test.ts)' },
   { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme, PostService.recordAnonymousOpen filtre explicitement au PUBLIC" },
+  {
+    method: 'POST',
+    url: '/api/v1/social/events',
+    why:
+      "point d'ingestion UNIQUE de la télémétrie de lecture (#4150). S1 par CONCEPTION : le " +
+      "critère 4 exige que la variante ANONYME soit la MÊME route — un visiteur sans compte " +
+      "compte l'ouverture d'un contenu public, comme le faisait déjà " +
+      "POST /posts/:postId/anonymous-view juste au-dessus, dont elle est le successeur. " +
+      "Ce qu'un anonyme peut faire y est doublement borné, et pas par le seul fait d'être " +
+      "accepté : son audience est PUBLIC-seul (buildViewerVisibilityFilter(prisma, undefined), " +
+      "la même source de vérité que recordAnonymousOpen), et les seuls TYPES d'événement " +
+      "qu'il peut produire sont énumérés par TYPES_ANONYMES — une vue, rien d'autre ; " +
+      "impression, téléchargement et session d'engagement écrivent une ligne PORTANT une " +
+      "identité, et sortent en 403. Le 400 que voit ce balayage est le refus d'un appelant " +
+      "sans jeton de session : sans lui, il n'a aucune identité de seau, et son débit " +
+      "retomberait sur l'unique repli — exactement le seau partagé que ce lot ferme. " +
+      "Débit : 10/min par (sessionToken, postId) pour un visiteur, 30/min par compte sinon.",
+  },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4
   //     réel (pas l'ObjectId de l'attachment), anti-path-traversal vérifié ---

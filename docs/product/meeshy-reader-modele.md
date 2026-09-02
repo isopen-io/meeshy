@@ -135,13 +135,59 @@ cohérent avec la projection** : ce qui est parti en N objets se lit en N objets
 > pas une affaire de vue. Tant qu'elle n'existe pas, tout regroupement à la
 > lecture serait une heuristique, donc un endroit où deux clients divergeront.
 
+## 4 bis. Les TROIS lecteurs, mesurés (2026-09-02)
+
+Le § 5 disait, à la première écriture de ce document, que les lecteurs web et
+Android n'étaient pas mesurés et qu'il ne fallait pas lire ce silence comme une
+conformité. Mesure faite le jour même — et le silence ne l'était pas.
+
+**La charge est ouverte partout**, donc rien ne se perd au décodage : contrat
+`z.record(z.string(), z.unknown())`, Swift `[String: CanvasJSONValue]`, Android
+`JsonObject`, web objet nu. Aucun lecteur ne REFUSE une clé qu'il ne connaît pas.
+
+**Mais ce que chacun LIT diverge, et davantage qu'on ne l'imaginerait :**
+
+| lecteur | clés de charge lues |
+|---|---|
+| Android (`CanvasV3Projection.kt`) | **38** |
+| web (`story-canvas-v3.ts` + `CanvasV3Scene.tsx`) | **24** |
+| **en commun** | **18** |
+
+Vingt clés qu'Android rend et que le web ignore — dont les **fondus**
+(`fadeIn`/`fadeOut`), le **filtre de scène** (`filter`, `filterIntensity`), le
+cadre d'un texte (`borderColor`, `borderWidth`, `backgroundStyle`), la police
+(`fontFamily`) et les pivots (`anchor`, `anchorPoint`). Et l'objet **`place`**,
+que le web peint (`CanvasV3Scene.tsx:806`) et dont **Android n'a aucun modèle**
+(#4912) — son propre code le dit : « `StoryLocationObject` (no Android model
+yet) ».
+
+> **Trois lecteurs, un moteur — mais un seul moteur PAR PLATEFORME.** La loi 6
+> unit le composer et les viewers *d'une même plateforme* ; elle ne dit rien de
+> ce que deux plateformes rendent du même document. C'est une lecture qu'il faut
+> se refuser : « trois chromes, un moteur » parle des trois SURFACES d'iOS, pas
+> des trois clients.
+
+Ce que ces écarts ne sont PAS : un défaut de transport. Le fil porte tout, et
+chaque écart est un rendu non écrit — donc réparable côté lecteur seul, sans
+toucher au contrat. Ce qu'ils sont : une promesse de fidélité qui n'a jamais été
+formulée, donc jamais tenue ni démentie. Les deux dettes nommées à ce jour sont
+#4911 (les gabarits ne se peignent que sur iOS — repli DÉCLARÉ) et #4912 (le
+lieu ne se peint pas du tout sur Android — absence MUETTE), et elles ne sont pas
+de même nature : un repli dit la même chose en moins bien, une absence ne dit
+rien.
+
 ## 5. Ce que ce document ne couvre pas
 
 - **Le rendu lui-même** (`StoryCanvasUIView`, les couches, les dessinateurs) —
   c'est de l'implémentation, elle a ses doc-comments.
 - **Le Prisme Linguistique à la lecture** — sa loi vit au `CLAUDE.md` racine, qui
   énumère ses quatre familles de résolveurs et reste l'autorité.
-- **Le lecteur web et Android** — ce document décrit la doctrine et l'état iOS
-  mesuré. Les deux autres surfaces la suivent ou s'en écartent ; le dire
-  demanderait de les mesurer, et personne ne l'a fait à cette date. **Ne pas lire
-  ce silence comme une conformité.**
+- **Le RENDU détaillé du web et d'Android.** Ce qu'ils LISENT est mesuré au
+  § 4 bis (2026-09-02) ; comment ils le peignent ne l'est pas. Un lecteur peut
+  lire une clé et la rendre mal — la mesure des clés borne le possible, elle ne
+  prouve aucune fidélité.
+- **Les surfaces de lecture web et Android** — ce document nomme les trois
+  chromes d'iOS (§ 3). Les deux autres plateformes ont les leurs, et personne
+  n'a vérifié qu'elles se correspondent. **Ne pas lire ce silence comme une
+  conformité** — c'est la phrase qui figurait ici pour les clés de charge, et la
+  mesure du § 4 bis lui a donné raison : 38 clés contre 24, dont 18 communes.
