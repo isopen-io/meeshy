@@ -25,13 +25,29 @@ import XCTest
 /// - les opérations géométriques (miroir horizontal) ;
 /// - les symboles bidirectionnels (`arrow.left.and.right` pour une durée) et
 ///   l'icône « code » `chevron.left.forwardslash.chevron.right`.
+///
+/// **L'exemption vaut pour les CHEVRONS autant que pour les flèches**
+/// (2026-09-02). Elle ne s'appliquait qu'au test des flèches, parce que seules
+/// des flèches habitaient alors les timelines. `MeeshyAudioTrimmer` (SDK) pose
+/// depuis un `chevron.left` / `chevron.right` sur une poignée sortie du champ :
+/// la flèche dit DE QUEL CÔTÉ de la bande visible la borne est partie, et une
+/// bande de temps coule de gauche à droite quelle que soit la langue — un
+/// `chevron.backward` s'y retournerait en arabe et désignerait le mauvais bord.
+/// C'est exactement la géométrie que `directionalByDesign` reconnaît aux
+/// `arrow.*` ; le symbole change, pas la raison. La liste est partagée, pas
+/// dédoublée : deux listes pour une même exemption divergeraient au premier
+/// fichier ajouté.
 final class RightToLeftLayoutGuardTests: XCTestCase {
 
-    /// Fichiers dont les flèches décrivent une timeline ou une géométrie.
+    /// Fichiers dont les flèches ET les chevrons décrivent une timeline ou une
+    /// géométrie — jamais une direction de lecture.
     private static let directionalByDesign: Set<String> = [
         "VideoEditorToolPanels.swift",
         "ClipTimingBar.swift",
         "MeeshyImageEditorView.swift",
+        // Poignées du trimmer audio : la pointe désigne le bord de la bande
+        // par lequel la borne est sortie (2026-09-02).
+        "MeeshyAudioTrimmer.swift",
     ]
 
     private func repoRoot() -> URL {
@@ -74,7 +90,7 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
 
     func test_aucunChevronNomméParUnCôtéPhysique() {
         var offenders: [String] = []
-        for url in swiftSources() {
+        for url in swiftSources() where !Self.directionalByDesign.contains(url.lastPathComponent) {
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             let code = strippingComments(raw)
             // La chaîne complète entre guillemets : l'icône « code »
@@ -88,9 +104,29 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
             offenders.isEmpty,
             """
             Ces symboles pointent vers un côté physique et ne se retournent pas \
-            en arabe. Utiliser "chevron.forward" / "chevron.backward" :
+            en arabe. Utiliser "chevron.forward" / "chevron.backward", ou inscrire \
+            le fichier dans `directionalByDesign` si le chevron décrit une \
+            timeline ou une géométrie :
             \(offenders.joined(separator: "\n"))
             """
+        )
+    }
+
+    /// **Une exemption qu'aucun témoin ne nomme se lit comme un oubli.** Le
+    /// trimmer est entré dans `directionalByDesign` pour UN motif précis — ses
+    /// poignées hors champ. Le jour où ce motif disparaît (poignées toujours
+    /// dans le champ, ou symbole remplacé), l'exemption doit partir avec lui :
+    /// sinon un `chevron.right` de NAVIGATION ajouté plus tard dans ce fichier
+    /// passerait la garde en silence.
+    func test_lExemptionDuTrimmer_couvreUnChevronQuiExisteEncore() throws {
+        let trimmer = try XCTUnwrap(
+            swiftSources().first { $0.lastPathComponent == "MeeshyAudioTrimmer.swift" },
+            "`MeeshyAudioTrimmer.swift` a disparu du balayage : retirer son exemption de `directionalByDesign`"
+        )
+        let code = strippingComments(try String(contentsOf: trimmer, encoding: .utf8))
+        XCTAssertTrue(
+            code.contains("\"chevron.left\"") && code.contains("\"chevron.right\""),
+            "Le trimmer ne porte plus ses chevrons de poignée : l'exemption n'a plus d'objet, la retirer"
         )
     }
 
