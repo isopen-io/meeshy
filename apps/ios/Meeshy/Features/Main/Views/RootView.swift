@@ -1244,10 +1244,14 @@ struct RootView: View {
             // so cold-launch deep links and warm-launch push taps land on
             // the same screen for the same id.
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerCoordinator.present(StoryViewerRequest(
-                    id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
-                ))
+                // Le `postId` VOYAGE : il a servi à trouver le groupe, il doit
+                // encore désigner la story. Sans lui — et avec
+                // `startAtFirstUnviewed: true` — le lecteur s'ouvrait sur le bon
+                // groupe à une AUTRE story, ce qui fait mentir tout lien partagé
+                // (#4903, mesuré au simulateur). L'aval savait déjà s'en servir.
+                storyViewerCoordinator.present(
+                    .targetingStory(postId: postId,
+                                    inGroup: storyViewModel.storyGroups[groupIdx].id))
             } else {
                 router.push(.postDetail(postId))
             }
