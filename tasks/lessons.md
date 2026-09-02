@@ -23789,3 +23789,117 @@ l'arbre d'accessibilité, qui rend des CADRES mesurés plutôt que des noms
 espérés. Il a donné en un appel ce que le grep ne savait pas nommer — mais il
 ment aussi (il décrit parfois une vue montée et non affichée), donc il se croise
 avec les pixels. Les deux d'accord, alors seulement c'est un fait.
+
+## Leçon 427 — Un compteur qui lit du texte colorisé compte ZÉRO, et le dit comme un succès
+
+2026-09-02. `scripts/check-type-debt.sh` comptait les erreurs de types du web
+par `grep -E 'error TS[0-9]+'` sur la sortie de `tsc`. Or `tsc` colorise dès que
+`FORCE_COLOR` est posé — le cas dans toute session d'agent et sur bien des
+terminaux — et les séquences ANSI s'insèrent **entre** les deux mots du motif :
+
+```
+^[[91merror^[[0m^[[90m TS2322:
+```
+
+Le motif ne matche plus rien. Même arbre, même commit : **0** avec couleur,
+**1194** sans. Reproduit sur une fixture à deux erreurs : 0 / 2.
+
+**Le coût n'est pas le chiffre faux, c'est ce que le chiffre faux DÉCLENCHE.**
+Le cliquet, voyant 0 sous une baseline de 1180, imprime « écrire
+`readonly WEB_BASELINE=0` » — et j'ai obéi. Gate bloquant, CI rouge, revert par
+une session voisine.
+
+> **Un outil qui se trompe en silence est gênant ; un outil qui se trompe et
+> PRESCRIT est dangereux.** Avant d'appliquer ce qu'un script recommande, se
+> demander d'où vient le nombre sur lequel il fonde sa recommandation.
+
+### La garde existait, et ne pouvait pas la voir
+
+L'auto-test du script attend 2 erreurs sur une fixture fautive : avec la
+couleur il en aurait compté 0 et serait tombé. Mais il n'est lancé que par la
+CI (`--self-test && …`), où `FORCE_COLOR` n'est pas posé.
+
+> **Une garde qui n'attrape le défaut que dans l'environnement où le défaut ne
+> se produit pas ne le trouvera jamais.** Elle est verte partout, pour deux
+> raisons opposées : en CI parce que tout va bien, en local parce que personne
+> ne la lance. Quand un outil a un `--self-test`, le lancer AVANT de croire sa
+> mesure, surtout sur un poste qui n'est pas celui de la CI.
+
+### Ce qui l'a démasqué
+
+Une session voisine a répondu à mon hypothèse par **ses propres chiffres**
+(1194, avec la répartition par fichier) au lieu de me croire. C'est la
+contradiction chiffrée qui a tué l'explication fausse — que j'avais publiée en
+la présentant comme hypothèse, avec son test décisif, ce qui l'a rendue
+réfutable en dix minutes.
+
+### Parade
+- `--pretty false` sur toute invocation de `tsc` dont on parse la sortie ;
+- plus généralement : **un parseur de sortie d'outil désactive la couleur à la
+  source**, il ne la nettoie pas après coup (`sed`/`perl` d'anti-ANSI est un
+  pansement qui oublie le prochain outil).
+
+
+## Leçon 428 — Le MOT qu'on peut toucher est l'angle mort de la règle des 44 pt
+
+**Le fait (2026-09-02).** L'invite « voir plus » de la légende partagée faisait
+**54 × 16 pt** — la moitié de la hauteur minimale d'Apple. Trois taps de suite
+l'ont manquée, et sur une story un tap manqué tombe dans la couche de navigation
+et **change de story**.
+
+Le même soir, à trois fichiers de là, le bouton muet du lecteur de réel porte
+`minWidth: 44, minHeight: 44` depuis l'origine. Le muet du plein écran aussi.
+Les boutons de rail aussi.
+
+> **Le dépôt CONNAÎT la règle. Elle s'applique là où le contrôle est une ICÔNE,
+> et se perd là où il est un MOT.**
+
+**Pourquoi.** Une cible tactile se pense naturellement autour d'un glyphe : on
+dessine un carré, on y centre une icône, la taille est une décision explicite.
+Un texte cliquable, lui, prend la taille de ses caractères — personne n'a
+« choisi » 16 pt de haut, c'est la hauteur de la police. La règle n'est pas
+violée, elle n'est jamais **convoquée**.
+
+**Le geste.** Chercher les cibles tactiles par ce qu'elles CONTIENNENT, pas par
+ce qu'elles font : tout `Button` dont le label est un `Text` sans `frame`
+explicite est suspect. L'agrandissement se fait sans déplacer un pixel —
+
+```swift
+.padding(.vertical, 14)      // 16 + 2 × 14 = 44
+.contentShape(Rectangle())
+.padding(.vertical, -14)     // annule le décalage visuel
+```
+
+**Le corollaire qui rend l'affaire grave** (leçon 424) : sous une couche qui
+capte les touchers, une cible sous-dimensionnée ne rate pas son action, elle en
+déclenche une AUTRE. Un test de cible tactile mesure la taille et ne regarde
+jamais ce qu'il y a dessous — les deux défauts se composent, et aucun des deux
+outils ne voit le produit des deux.
+
+## Leçon 429 — Vérifier UN consommateur d'un composant partagé, c'est n'en vérifier aucun
+
+**Le fait.** J'ai modifié `MediaCaptionOverlay` quatre fois dans la nuit — cible
+tactile, ancrage, plafond de hauteur, transition, marge droite. Je l'ai vérifié
+à chaque fois sur la STORY, parce que c'était la surface du défaut d'origine.
+
+Le composant a **trois** hôtes : la story, le plein écran média, le lecteur de
+réel. Les deux autres héritaient de tout, sans que je les regarde — et l'un
+d'eux, le réel, appartenait à une autre session la veille encore.
+
+> **Le rayon d'une modification est celui du composant, jamais celui du défaut
+> qui l'a motivée.** Un correctif ciblé sur une surface est une modification de
+> TOUTES ses surfaces dès qu'il descend dans le partagé.
+
+**Ce que la vérification a rendu** (faite après coup, ce qui est déjà trop tard
+mais mieux que jamais) : le réel est intact — sa légende rend à `x=16, w=209`,
+dégagée du rail à `x=326`. Et il l'est pour une raison STRUCTURELLE que je
+n'avais pas mesurée avant de changer : il dispose légende et rail dans un
+`HStack`, quand la story les superpose dans un `ZStack`. C'est ce qui l'a
+protégé du chevauchement que j'ai dû corriger sur la story — pas ma prudence.
+
+**Le geste.** Avant de modifier un composant partagé, énumérer ses hôtes
+(`grep` du nom du type, hors tests) et écrire, pour chacun, ce que le changement
+lui fait. Les paramètres à défaut NEUTRE sont l'outil de cette discipline :
+`expandedTrailingInset: 0` et `tint: .white` laissent les autres hôtes
+strictement inchangés, et rendent la question « qui d'autre ? » vérifiable au
+lieu d'être promise.

@@ -259,7 +259,20 @@ require_repo_tsc() {
 count_type_errors() {
   local package_dir="$1"
   local output
-  output="$( (cd "$package_dir" && "$TSC" --noEmit 2>&1) || true )"
+  # `--pretty false` n'est PAS cosmetique : c'est ce qui rend ce compte fiable.
+  #
+  # Avec la sortie coloree (tsc colorise des que `FORCE_COLOR` est pose — le cas
+  # dans toute session d'agent, et sur bien des terminaux), des sequences ANSI
+  # s'inserent ENTRE « error » et « TS2322 » :
+  #     ^[[91merror^[[0m^[[90m TS2322:
+  # Le motif `error TS[0-9]+` ci-dessous ne matche alors RIEN, et la fonction
+  # rend 0 sur un package qui porte 1194 erreurs. Mesure du 2026-09-02 : meme
+  # arbre, 0 avec couleur, 1194 sans.
+  #
+  # Un cliquet qui rend 0 ne se contente pas de se tromper : il IMPRIME
+  # « ecrire readonly WEB_BASELINE=0 », et l'operateur qui obeit verrouille une
+  # fin qui n'existe pas. C'est arrive (commit f0f9fb2b92, revert 08055479a3).
+  output="$( (cd "$package_dir" && "$TSC" --noEmit --pretty false 2>&1) || true )"
   printf '%s\n' "$output" \
     | { grep -E 'error TS[0-9]+' || true; } \
     | { grep -vE '^\.next/' || true; } \
