@@ -25583,3 +25583,119 @@ chercher la FORME rate les autres formes du même fait.** Mon relevé cherchait
 `.constant(0)` et comptait trois sites ; deux de plus passaient un littéral à un
 appel direct — dont le DÉCODEUR. Cinq au total. La question était « qui élit une
 scène ? » ; j'avais cherché « qui passe un binding constant ? ».
+
+## Leçon 468 — Quatre rouges qui ne sont pas des tests rouges, et leurs quatre discriminants
+
+Catalogue construit à trois sessions en une soirée, chacune ayant perdu du temps
+sur au moins un des quatre. Ils se ressemblent tous à l'arrivée — `** TEST
+FAILED **`, `RC=65` — et aucun ne dit ce qu'il est.
+
+| le rouge | ce qui le distingue |
+|---|---|
+| **verrou `build.db`** — deux `xcodebuild` au même endroit | la ligne `database is locked` dans le journal de CETTE tentative. Zéro test exécuté |
+| **bundle périmé rejoué** — `test-without-building` après un build échoué | le build qui PRÉCÈDE a échoué ; les chiffres sont plausibles et datent du passé |
+| **WIP voisin non committé** | `git status --porcelain <f>` rend ` M`, et `git show HEAD:<f>` compile là où l'arbre ne compile pas |
+| **compteur de retry accumulé** | le refus est daté d'une tentative ANTÉRIEURE |
+
+Les trois premiers trompent sur la CAUSE. Le quatrième, formulé par la session
+voisine après s'être trompée elle-même, trompe sur le NOMBRE — donc sur la seule
+question qui décide de la suite : *est-ce que ça se reproduit ?* Sa boucle
+cherchait `database is locked` dans un journal ACCUMULÉ (`>>`), si bien qu'un
+seul refus classait « refusées » les dix tentatives, **y compris celle qui avait
+réellement compilé et trouvé un défaut**.
+
+> **Un instrument qui accumule son propre passé mesure son passé.** La parade
+> coûte une ligne : un fichier par tentative, concaténé APRÈS le verdict.
+
+Je suis tombé dans la même trappe dans l'autre sens, et elle vaut d'être dite :
+ma boucle attendait `TEST_RC=` dans un journal qu'une nouvelle tentative allait
+TRONQUER. Entre le lancement et la troncature, la condition lisait le verdict de
+la tentative PRÉCÉDENTE et sortait aussitôt — j'ai conclu « run exécuté » sur un
+run qui commençait. **Une condition d'attente doit porter sur une valeur que la
+chose attendue est seule à pouvoir écrire.**
+
+## Leçon 469 — Une garde qui ferme un chemin ferme tout ce qui PASSAIT par ce chemin
+
+`ComposerSoundColumn.opensEditor` refuse d'ouvrir l'éditeur pour un son
+EMPRUNTÉ, et le motif est juste : rouvrir passe par « Création audio », qui rend
+un FICHIER, ce qui détacherait la piste de son `soundId` — donc du crédit de son
+auteur. La garde est écrite, testée, motivée.
+
+Ce que personne n'avait vu, moi compris jusqu'à la vérification simulateur :
+**le RETRAIT passe par la même porte.** `deleteEditedSound` vit dans la feuille
+« et nulle part ailleurs », par une décision explicite (#4696 : « trois boutons
+dispersés auraient été trois lois »). Pas de bouton ⇒ pas de feuille ⇒ pas de
+retrait. Un son de fond emprunté ne peut donc plus être retiré d'une slide —
+seulement remplacé, c'est-à-dire qu'on n'en perd un qu'en en posant un autre.
+
+> **La question à poser à une garde n'est pas « refuse-t-elle la bonne chose ? »
+> mais « qu'est-ce qui empruntait la même porte ? »** Une doctrine du SITE
+> UNIQUE — juste par ailleurs — transforme mécaniquement toute fermeture en
+> fermeture de TOUT ce qui converge là.
+
+C'est la forme du cycle 125 vue depuis l'autre bord : là, une protection laissait
+partir ce qui voyageait à côté du texte gardé ; ici, une protection retient ce
+qui voyageait avec le geste refusé. Dans les deux cas le défaut est dans le
+VOISINAGE de la règle, jamais dans la règle.
+
+Et il ne s'est vu que parce que #4918 a rendu la trace VISIBLE : la pastille se
+déclare `GenericElement` et non `Button` à l'arbre d'accessibilité, ce qui PROUVE
+que `onTap` est nul. **Un manque sans surface ne se signale pas** — le retrait
+était déjà impossible sur la surface document, depuis des semaines, sans témoin.
+Suivi : #4930.
+
+## Leçon 470 — L'arbitrage qu'une issue déclare « à trancher » peut être DÉJÀ tranché, ailleurs
+
+#4918 proposait trois places pour la trace d'un son de fond et concluait : « entre
+(1) et (2), c'est un arbitrage de disposition que la planche ou le porteur doit
+rendre ». J'allais le demander. Deux des trois étaient fermées par des lois déjà
+écrites dans le dépôt :
+
+- la **(2), entrée du rail gauche**, par `ComposerRailLevel.appearsOnCanvas`,
+  dont le doc-comment dit que cette question « et elle seule » décide du côté où
+  une porte se pose. Un son ne se voit pas sur la toile ;
+- la **(1) lue comme un calque sur la scène**, par `apps/ios/CLAUDE.md` § 1 —
+  « aucun contrôle ne se pose SUR la scène » — dont la loi 6 donne la raison : un
+  contrôle posé sur la scène fait mentir l'aperçu sur le rendu final. Un son de
+  fond en est le cas d'école, puisqu'il ne produit AUCUN pixel.
+
+Il ne restait qu'une place, et elle n'avait pas besoin d'un arbitrage : le
+COULOIR du plateau, au niveau SLIDE de l'escalier que le bas de l'écran descend
+déjà.
+
+> **Avant de faire trancher un arbitrage, chercher s'il l'a été.** Une issue est
+> écrite depuis SON sujet ; les lois qui la gouvernent sont écrites ailleurs, et
+> ne se citent pas elles-mêmes. Le coût de l'omission n'est pas seulement une
+> question de trop — c'est un aller-retour avec le porteur, et le risque qu'il
+> tranche CONTRE une règle qu'on ne lui a pas montrée.
+
+Corollaire vérifié dans le même lot : une session voisine était bloquée depuis
+des heures sur « pourquoi mon overlay ne peint-il pas au-dessus du canvas ? ».
+La réponse n'était pas technique. Elle n'avait pas le droit de le peindre.
+
+## Leçon 471 — Une cible tactile INVISIBLE qui en recouvre une VISIBLE n'apprend pas une erreur, elle apprend une fausse RÈGLE
+
+Dix tentatives perdues à atteindre le composer de story au simulateur. Je tapais
+le `+` au centre de sa cible ; l'app ouvrait le Feed. J'ai cru à un mauvais
+calcul de coordonnées, puis à un simulateur coincé, puis j'ai lu les frames :
+
+    Feed          {{19.25, 125.25}, {53.5, 53.5}}   → x 19,25 … 72,75
+    Add a story   {{14.75, 136.75}, {36.5, 36.5}}   → x 14,75 … 51,25
+
+`Add a story` est CONTENU dans `Feed` sauf une bande de **4,5 pt**. Un tap à
+(17, 155) ouvre le composer ; à (33, 155), le Feed. La géométrie explique le
+comportement au pixel près.
+
+`Feed` n'a aucun glyphe à cet endroit : c'est une zone tactile invisible posée
+sur la rangée de stories. L'auteur voit un `+`, tape dessus, arrive sur le Feed —
+et n'a **aucun moyen de savoir qu'il a raté une cible**, puisqu'il n'y avait rien
+à rater. Il en conclut que « le + ouvre le Feed », et cesse de chercher la porte.
+
+> Un recouvrement de cibles ne se voit sur AUCUNE capture, et l'œil ne le
+> soupçonne pas : les deux boutons ont l'air distincts. Il ne se lit qu'aux
+> FRAMES. Devant un contrôle qui « ne répond pas », lire les frames avant de
+> mettre en cause le geste, l'outil ou l'appareil.
+
+Suivi : #4931. Et la note de méthode : mon propre repli — viser les pixels d'une
+capture — est ce qui a coûté les dix tentatives. Un utilitaire qui tape par
+LIBELLÉ, en lisant l'arbre, les aurait toutes évitées.
