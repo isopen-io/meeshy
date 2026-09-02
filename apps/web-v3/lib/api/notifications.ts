@@ -3,6 +3,8 @@ import { DELAI_DE_REPONSE_MS } from './passerelle';
 
 import type { Recuperateur } from './compte';
 
+export type { Recuperateur };
+
 /**
  * CE QUE L'ÉCRAN DES NOTIFICATIONS DEMANDE À LA PASSERELLE.
  *
@@ -177,4 +179,37 @@ export const boiteDuLecteur = async ({
     nonLues: entier(enveloppe.unreadCount),
     total: entier(pagination?.total),
   };
+};
+
+/**
+ * `POST /notifications/read-all` — l'action de l'écran.
+ *
+ * Elle rend une ISSUE, pas un booléen : les trois cas de la porte sont les
+ * mêmes qu'en lecture, et les confondre ferait afficher « une erreur est
+ * survenue » à qui doit simplement se reconnecter. C'est la même loi que
+ * `lib/api/compte.ts`, et elle vaut aussi pour ce qui ÉCRIT.
+ *
+ * Le corps de la réponse porte `count` (le nombre de lignes marquées) : on ne
+ * le lit pas, parce que rien ne l'affiche. Le jour où l'écran dira « 12
+ * marquées comme lues », il se lira ici — pas dans un second appel.
+ */
+export type IssueDeLecture = 'faite' | 'session-expiree' | 'panne';
+
+export const toutMarquerLu = async ({
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDeLecture> => {
+  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_NOTIFICATIONS}/read-all`;
+  const reponse = await demande(url, jeton, recuperer, { method: 'POST' });
+
+  if (reponse === null) return 'panne';
+  if (reponse.status === 401) return 'session-expiree';
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  return enveloppe?.success === true ? 'faite' : 'panne';
 };
