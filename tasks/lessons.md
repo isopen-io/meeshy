@@ -24740,7 +24740,7 @@ résultat vide), « ces deux choses divergent » (citer les deux côtés, élém
 élément). Le coût est de quelques lignes ; le bénéfice est le seul contrôle
 gratuit qu'on ait de ce côté-là de l'asymétrie.
 
-## Leçon 444 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
+## Leçon 446 — Entre une INTERDICTION et un MÉCANISME, le mécanisme gagne, et il gagne en silence
 
 **Le fait (2026-09-02).** Ma consigne permanente de boucle le dit à chaque
 réveil, en gras : « **Tu ne fermes JAMAIS une issue** — la session d'intégration
@@ -24809,7 +24809,7 @@ asymétrie entre ce qu'on déclare et ce qui s'exécute ; § 440 (un outil de
 détection se règle contre l'erreur qui n'a pas de vérificateur) — ici
 l'interdiction ÉTAIT l'erreur sans vérificateur.
 
-## Leçon 442 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
+## Leçon 447 — La branche CIBLE d'une PR est une donnée de commande, jamais une convention par défaut
 
 **Ce qui s'est passé (2026-09-02, chantier stickers).** La PR #4826 a été
 ouverte sur `main` — la cible par défaut du dépôt — alors que la branche
@@ -24833,7 +24833,7 @@ Corollaire mesuré : la comparaison de sécurité (Trivy « new alerts vs
 base ») dépend de la base. Une PR rouge sur ce check avec une base fausse
 n'a RIEN à corriger dans le code — changer la base l'a rendue neutre.
 
-## Leçon 443 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
+## Leçon 448 — Il y a UN cliquet de taille PAR CIBLE, et un fichier gelé à sa taille exacte est un fichier qu'on ne touche pas
 
 **Ce qui s'est passé.** Deux fois dans la même session, un lot vert
 localement a rougi la CI quarante minutes plus tard sur un cliquet de
