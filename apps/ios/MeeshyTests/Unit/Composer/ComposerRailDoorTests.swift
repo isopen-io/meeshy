@@ -1509,17 +1509,40 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
                         + "que l'atelier possède (leçon 336).")
     }
 
-    /// Le texte parcourt le SIEN — style, couleur, alignement, fond, cadrage,
-    /// contour, langue. Et le panneau d'OPTIONS, lui, vient du SDK en entier.
+    /// Le texte parcourt le SIEN — police, effet, couleur, alignement, fond,
+    /// cadrage, contour, langue. Et le panneau d'OPTIONS, lui, vient du SDK en
+    /// entier.
     func test_leTexte_monteLesOutilsDeLAtelier() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
         let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(source.contains("TextEditTool.allCases.map"))
+        XCTAssertTrue(source.contains("TextEditTool.all.map"),
+                      "Le rail lit `TextEditTool.all` — l'ordre APPRIS par les doigts — jamais "
+                      + "`allCases`, dont l'ordre porte la sérialisation (#4870).")
+        XCTAssertFalse(source.contains("TextEditTool.allCases.map"))
         XCTAssertTrue(compact(try hostSource()).contains("MeeshyToolOptionsPanel(viewModel:viewModel)"),
                       "Les options — palette, glissière, 18 styles — viennent du SDK, pas d'une bande maison.")
+    }
+
+    /// **Le rail partage l'ORDRE de la rangée** (#4870). `TextEditTool.all` et
+    /// `allCases` coïncidaient jusqu'à l'EFFET — ajouté en QUEUE de l'énuméré
+    /// (la sérialisation) et DEUXIÈME sur la rangée (les doigts). Un rail qui
+    /// lirait `allCases` mettrait l'EFFET en dernier ici et en deuxième sur la
+    /// rangée flottante et dans l'éditeur plein écran : trois surfaces, deux
+    /// ordres, pour le même outil. Revue adverse du lot, 2026-09-02.
+    @MainActor
+    func test_leTexte_monteSesOutilsDansLOrdreDeLaRangee() {
+        guard case .tool(let controls) = ComposerRailMode.resolve(drawing: false,
+                                                                  textEditing: true,
+                                                                  expandedDrawingTool: nil,
+                                                                  expandedTextTool: nil,
+                                                                  doors: []) else {
+            return XCTFail("le mode texte doit rendre des contrôleurs")
+        }
+        XCTAssertEqual(controls.map(\.id), TextEditTool.all.map { "text.\($0.rawValue)" })
+        XCTAssertEqual(controls.map(\.id).dropFirst().first, "text.effect")
     }
 
     /// **Poser un texte OUVRE son éditeur, dans le même geste.** Une coquille

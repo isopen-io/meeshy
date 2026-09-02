@@ -246,6 +246,18 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(a?.payload.postMediaId).toBe('64b0000000000000000000aa');
   });
 
+  /// L'axe EFFET (#4870) traverse la conversion par le `...rest` du texte —
+  /// ce témoin épingle qu'aucune énumération de clés ne vienne un jour le
+  /// retenir, comme `postMediaId` l'a été pour le sticker.
+  it('text effect travels into the v3 payload', () => {
+    const doc = convertV1ToV3({
+      background: '#000000',
+      textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'shadow' }],
+    });
+    const t = doc.scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.payload.textEffect).toBe('shadow');
+  });
+
   it('text translations survive into the payload (Prisme par objet, C6)', () => {
     const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
     expect((t?.payload.translations as Record<string, string>)?.en).toBe('Hi');

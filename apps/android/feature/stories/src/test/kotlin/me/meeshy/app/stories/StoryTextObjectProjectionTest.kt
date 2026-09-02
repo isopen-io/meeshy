@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryTextEffect
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTextBackgroundStyle
 import org.junit.Test
@@ -227,5 +228,23 @@ class StoryTextObjectProjectionTest {
         val wire = StoryTextObject(id = "t", text = "Hello", textBg = "112233")
         val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
         assertThat(view.background).isEqualTo(StoryTextBackground.Solid(hex = "112233"))
+    }
+
+    // --- effect (#4870) ---
+
+    @Test
+    fun `project carries the text effect, and an absent one is NONE`() {
+        val glowing = StoryTextObject(id = "t", text = "Hi", textEffect = "glow")
+        assertThat(StoryTextObjectProjection.project(glowing, preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.GLOW)
+        assertThat(StoryTextObjectProjection.project(textObject(), preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.NONE)
+    }
+
+    @Test
+    fun `project decays an unknown effect to NONE rather than failing the slide`() {
+        val future = StoryTextObject(id = "t", text = "Hi", textEffect = "effect-from-the-future")
+        assertThat(StoryTextObjectProjection.project(future, preferredLanguages = emptyList()).effect)
+            .isEqualTo(StoryTextEffect.NONE)
     }
 }
