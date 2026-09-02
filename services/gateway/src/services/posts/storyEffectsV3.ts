@@ -301,6 +301,12 @@ export function convertV1ToV3(
       ...(typeof a.duration === 'number' ? { duration: a.duration } : {}),
       ...(typeof a.fadeIn === 'number' ? { fadeIn: a.fadeIn } : {}),
       ...(typeof a.fadeOut === 'number' ? { fadeOut: a.fadeOut } : {}),
+      // La FORME D'ONDE d'une note vocale (~80 nombres) : sans elle, le
+      // `guard !samples.isEmpty` du lecteur ne dessine RIEN — une bande vide
+      // sous la puce. Parité avec le pont Swift, qui l'emet depuis le meme lot.
+      ...(Array.isArray(a.waveformSamples) && a.waveformSamples.length > 0
+        ? { waveformSamples: a.waveformSamples }
+        : {}),
     };
     objects.push(o);
   }
