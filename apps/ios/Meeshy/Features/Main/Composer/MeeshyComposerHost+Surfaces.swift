@@ -321,6 +321,7 @@ extension MeeshyComposerHost {
             localMedia: headerTileMedia,
             selectedMediaURL: selectedSlideMediaURL,
             selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            format: selectedFormat,
             formatFan: mountsFormatFan
                 && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
                 ? AnyView(formatChip) : nil,

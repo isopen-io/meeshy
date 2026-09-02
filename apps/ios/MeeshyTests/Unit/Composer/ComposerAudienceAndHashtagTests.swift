@@ -163,10 +163,13 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
     /// Elle est de niveau PUBLICATION, donc elle vit dans la ligne canonique du
     /// bas — un hashtag classe ce qui part, il n'apparaît pas sur la scène.
     func test_leHashtag_appartientALaPublication_doncALaLigneCanonique() {
-        XCTAssertEqual(ComposerRailDoor.hashtag.level, .publication)
-        XCTAssertFalse(ComposerRailDoor.hashtag.level.appearsOnCanvas)
-        XCTAssertTrue(ComposerSceneFloatingRail.lowRow(from: [.hashtag]).contains(.hashtag))
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: [.hashtag]).contains(.hashtag))
+        // **Hors Story** : depuis #4893 le hashtag se POSE sur la scène d'une
+        // story (il y a une position fixée par story) et ne qualifie la
+        // publication que sur les autres formats.
+        XCTAssertEqual(ComposerRailDoor.hashtag.level(for: .post), .publication)
+        XCTAssertFalse(ComposerRailDoor.hashtag.level(for: .post).appearsOnCanvas)
+        XCTAssertTrue(ComposerSceneFloatingRail.lowRow(from: [.hashtag], format: .post).contains(.hashtag))
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: [.hashtag], format: .post).contains(.hashtag))
     }
 
     /// Elle a sa place dans l'ordre appris par les doigts, à côté de la mention
