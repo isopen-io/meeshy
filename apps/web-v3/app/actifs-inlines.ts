@@ -64,3 +64,25 @@ const SYMBOLE = (nom: string): RegExp =>
 
 export const glypheDuSprite = (nom: string): string =>
   SYMBOLE(nom).exec(lisLActif('icons', 'sprite.svg'))?.[1] ?? '';
+
+/**
+ * LE GLYPHE TEL QU'UN DOCUMENT LE PORTE — le site unique de cette forme.
+ *
+ * Il vivait dans `app/(public)/l/[token]/document.ts`, où il n'avait qu'un
+ * consommateur ; la vitrine en est le second (une tuile de marque, une pastille
+ * de héros, neuf tuiles d'atouts). Le recopier aurait fabriqué deux façons
+ * d'inliner un tracé, dont l'une aurait perdu `fill="currentColor"` le jour où
+ * quelqu'un l'aurait raccourcie.
+ *
+ * `fill="currentColor"` est porté par le `<symbol>` du sprite, PAS par ses
+ * tracés : l'extraire sans le reposer ici rend un glyphe NOIR sur fond sombre —
+ * invisible. C'est le seul niveau qu'un clone de `<use>` emporte, et c'est
+ * aussi celui qui manque quand on n'inline que l'intérieur.
+ *
+ * `aria-hidden` est la bonne annonce dans TOUS les emplois de la v3 : un glyphe
+ * y ponctue un libellé déjà écrit à côté de lui (charte règle 23). Un
+ * `role="img"` sans texte ferait lire « image » à un lecteur d'écran, ce qui est
+ * pire que le silence.
+ */
+export const svgDuSprite = (nom: string): string =>
+  `<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">${glypheDuSprite(nom)}</svg>`;

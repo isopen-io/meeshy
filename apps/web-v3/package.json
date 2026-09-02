@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3300",
     "dev:https": "node scripts/dev-https.mjs -p 3300",
-    "build": "next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
+    "build": "node scripts/build-participate.mjs && next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
     "start": "next start -p 3300 -H 0.0.0.0",
     "lint": "eslint . && node scripts/check-jetons.mjs",
     "type-check": "tsc --noEmit",
@@ -16,6 +16,8 @@
     "clean": "rm -rf .next node_modules",
     "baseline": "node scripts/baseline.mjs",
     "test:a11y": "playwright test e2e/visual/v3-a11y.spec.ts",
+    "test:cibles": "playwright test e2e/visual/v3-cibles.spec.ts",
+    "test:fil-a11y": "playwright test e2e/visual/v3-fil-a11y.spec.ts",
     "test:lifecycle": "playwright test e2e/visual/v3-lifecycle.spec.ts",
     "test:pages": "npm run e2e -- --project=pages",
     "test:chaines": "npm run e2e -- --project=chaines"
@@ -26,13 +28,14 @@
     "@meeshy/shared": "workspace:*",
     "next": "15.5.23",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "socket.io-client": "4.8.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.6",
-    "@playwright/test": "^1.62.1",
     "@next/eslint-plugin-next": "15.5.23",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
@@ -53,6 +56,7 @@
     "jest": "^30.4.2",
     "jest-axe": "^11.0.0",
     "jest-environment-jsdom": "^30.4.1",
+    "socket.io": "^4.8.3",
     "typescript": "^6.0.3"
   }
 }

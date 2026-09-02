@@ -1,9 +1,16 @@
-import { tableDeJetons } from '@/app/actifs-inlines';
+import { svgDuSprite, tableDeJetons } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe, SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { THEME_PAR_DEFAUT, themeScriptSource } from '@/app/theme-script';
 
-import { MARQUE, PIED, RETOUR, type Lien } from './contenu';
+import {
+  GLYPHE_DE_LA_MARQUE,
+  MARQUE,
+  PIED,
+  REPERE_DU_PIED,
+  RETOUR,
+  type Lien,
+} from './contenu';
 import { FEUILLE_DU_CHROME } from './feuille';
 
 /**
@@ -42,14 +49,14 @@ export const lienDeChrome = ({ libelle, href }: Lien): string =>
  */
 const enTete = (retour: boolean): string =>
   '<header class="marque">' +
-  `<a href="/"><span class="jeton" aria-hidden="true"></span>${echappe(MARQUE)}</a>` +
+  `<a href="/"><span class="tuile" aria-hidden="true">${svgDuSprite(GLYPHE_DE_LA_MARQUE)}</span>${echappe(MARQUE)}</a>` +
   (retour ? `<a class="retour" href="/">${echappe(RETOUR)}</a>` : '') +
   '</header>';
 
 const pied = (): string =>
   '<footer class="pied">' +
   `<p class="devise">${echappe(PIED.devise)}</p>` +
-  `<nav aria-label="${echappe(MARQUE)}">${PIED.liens.map(lienDeChrome).join('')}</nav>` +
+  `<nav aria-label="${echappe(REPERE_DU_PIED)}">${PIED.liens.map(lienDeChrome).join('')}</nav>` +
   `<p class="droits">${echappe(PIED.droits)}</p>` +
   '</footer>';
 
@@ -62,15 +69,24 @@ export type ParametresDuDocument = {
   readonly retour: boolean;
 };
 
-export const documentDuSite = ({
-  titre,
-  description,
-  feuille,
-  corps,
-  retour,
-}: ParametresDuDocument): string =>
-  '<!doctype html>' +
-  `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
+export type ParametresDeTete = {
+  readonly titre: string;
+  readonly description: string;
+  readonly feuille: string;
+  /** `index, follow` pour le site ; `noindex, nofollow` pour ce qui appartient à un lecteur. */
+  readonly robots?: string;
+};
+
+/**
+ * LA TÊTE DE TOUT DOCUMENT COMPOSÉ À LA MAIN — le site unique de sa forme.
+ *
+ * Le fil (`app/connecte/fil-vue.ts`) n'a ni marque ni pied : il est un écran
+ * plein, avec son en-tête collant et son composeur. Il partage pourtant avec
+ * les pages du site tout ce qui vit dans `<head>` — la vue, l'icône vide, le
+ * script du thème, la table de jetons et le socle. Le recopier là-bas aurait
+ * fait deux têtes qui dérivent au premier `<meta>` ajouté.
+ */
+export const teteDuDocument = ({ titre, description, feuille, robots = 'index, follow' }: ParametresDeTete): string =>
   '<head>' +
   '<meta charset="utf-8"/>' +
   '<meta name="viewport" content="width=device-width, initial-scale=1"/>' +
@@ -81,14 +97,25 @@ export const documentDuSite = ({
   `<script>${themeScriptSource}</script>` +
   `<title>${echappe(titre)}</title>` +
   `<meta name="description" content="${echappe(description)}"/>` +
-  '<meta name="robots" content="index, follow"/>' +
+  `<meta name="robots" content="${echappe(robots)}"/>` +
   '<meta property="og:type" content="website"/>' +
   `<meta property="og:site_name" content="${echappe(MARQUE)}"/>` +
   `<meta property="og:title" content="${echappe(titre)}"/>` +
   `<meta property="og:description" content="${echappe(description)}"/>` +
   '<meta name="twitter:card" content="summary"/>' +
   `<style>${tableDeJetons()}${SOCLE_DU_DOCUMENT}${FEUILLE_DU_CHROME}${feuille}</style>` +
-  '</head>' +
+  '</head>';
+
+export const documentDuSite = ({
+  titre,
+  description,
+  feuille,
+  corps,
+  retour,
+}: ParametresDuDocument): string =>
+  '<!doctype html>' +
+  `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
+  teteDuDocument({ titre, description, feuille }) +
   '<body>' +
   '<div class="enveloppe">' +
   enTete(retour) +

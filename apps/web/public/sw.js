@@ -90,6 +90,10 @@ function log(...args) {
 // meme titre : la v3 y sert desormais la liste des conversations du lecteur, et
 // un shell mis en cache par le worker y montrerait celles de la session
 // PRECEDENTE — le pire des defauts que ce cache puisse produire.
+// `/chat` (au singulier) est la porte de l'INVITE — `/chat/:lien`, conception
+// § 12.3 — servie par la v3 avec un formulaire sans JavaScript ; il entre ici
+// AVANT le routeur (§ 4.4 bis), sinon le shell legacy de `/chat/[id]` sorti du
+// cache recouvrirait la modale de choix chez tout visiteur revenant.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -102,6 +106,7 @@ const V3_ZONE_PREFIXES = [
   '/login',
   '/signup',
   '/chats',
+  '/chat',
 ];
 
 function belongsToV3Zone(pathname) {

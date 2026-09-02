@@ -40,6 +40,41 @@ const UTILISATEUR = { id: 'u1', username: 'atabeth', role: 'USER', displayName: 
 
 const porteQuiRend = (issue: Issue) => porteDe(CONNEXION, async () => issue);
 
+describe('la provenance d’un formulaire d’accès (app/provenance.ts)', () => {
+  it.each([
+    ['/login', CONNEXION],
+    ['/signup', INSCRIPTION],
+  ])('%s refuse 403 un formulaire venu d’un autre site, sans le soumettre', async (chemin, ecran) => {
+    let soumis = 0;
+    const porte = porteDe(ecran, async () => {
+      soumis += 1;
+      return { genre: 'session', session: { jeton: 'JWT.abc', jetonDeSession: 'sess-1', utilisateur: UTILISATEUR } };
+    });
+    const reponse = await porte.POST(
+      new Request(`https://meeshy.me${chemin}`, {
+        method: 'POST',
+        body: new URLSearchParams({ identifiant: 'a', motDePasse: 'b', prenom: 'p', nom: 'n', courriel: 'c@d.e' }),
+        headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' },
+      }),
+    );
+    expect(reponse.status).toBe(403);
+    expect(soumis).toBe(0);
+    expect(reponse.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('laisse passer le formulaire de Meeshy', async () => {
+    const porte = porteDe(CONNEXION, async () => ({ genre: 'session', session: { jeton: 'JWT.abc', jetonDeSession: 'sess-1', utilisateur: UTILISATEUR } }));
+    const reponse = await porte.POST(
+      new Request('https://meeshy.me/login', {
+        method: 'POST',
+        body: new URLSearchParams({ identifiant: 'a', motDePasse: 'b' }),
+        headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://meeshy.me', 'sec-fetch-site': 'same-origin' },
+      }),
+    );
+    expect(reponse.status).not.toBe(403);
+  });
+});
+
 const SESSION: Issue = {
   genre: 'session',
   session: { jeton: 'JWT.abc', jetonDeSession: 'sess-1', utilisateur: UTILISATEUR },
@@ -257,8 +292,89 @@ describe('les deux écrans d’accès', () => {
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('barrières linguistiques');
-    // La vitrine servie ICI depend d'un cookie : elle ne se met plus en cache.
-    expect(reponse.headers.get('cache-control')).toBe('no-store, private');
+    // La vitrine servie ICI dépend d'un cookie : elle se REVALIDE, elle ne se
+    // resert jamais sans demander. `no-store` faisait repayer 21 Ko à chaque
+    // retour — sur l'écran même qui vante la légèreté en zone rurale.
+    expect(reponse.headers.get('cache-control')).toBe('private, no-cache');
+    expect(reponse.headers.get('etag')).toMatch(/^"[0-9a-f]{16,}"$/);
+  });
+
+  /**
+   * LA SECONDE VISITE NE REPAIE PAS LE DOCUMENT.
+   *
+   * `no-store` interdisait au navigateur de GARDER la vitrine : retour arrière
+   * depuis `/login`, seconde visite, reprise après coupure — 21 Ko à chaque
+   * fois, sans validateur, donc sans 304 possible. Le document est STATIQUE par
+   * processus : son étiquette se calcule une fois et se compare pour rien.
+   *
+   * `no-cache` n'est pas `no-store` : le navigateur garde l'entité et
+   * REVALIDE — c'est ce qui rend l'économie compatible avec la correction, la
+   * requête de revalidation repassant par le cookie.
+   */
+  it('rend 304 sans corps quand le visiteur revient avec l’étiquette qu’on lui a donnée', async () => {
+    const premiere = await RACINE(new Request('https://meeshy.me/'));
+    const etiquette = premiere.headers.get('etag');
+    if (etiquette === null) throw new Error('la vitrine ne porte pas d’étiquette');
+
+    const seconde = await RACINE(
+      new Request('https://meeshy.me/', { headers: { 'if-none-match': etiquette } }),
+    );
+
+    expect(seconde.status).toBe(304);
+    expect(await seconde.text()).toBe('');
+    expect(seconde.headers.get('etag')).toBe(etiquette);
+    expect(seconde.headers.get('cache-control')).toBe('private, no-cache');
+  });
+
+  /**
+   * L'ÉTIQUETTE EST STABLE — sans quoi aucune revalidation n'aboutirait jamais,
+   * et le 304 ci-dessus serait un accident du même appel.
+   */
+  it('sert la MÊME étiquette d’un appel à l’autre', async () => {
+    const [a, b] = await Promise.all([
+      RACINE(new Request('https://meeshy.me/')),
+      RACINE(new Request('https://meeshy.me/')),
+    ]);
+
+    expect(a.headers.get('etag')).toBe(b.headers.get('etag'));
+  });
+
+  /**
+   * LA CORRECTION PRIME SUR L'ÉCONOMIE. C'est l'objection d'origine à la mise en
+   * cache de `/` — un lecteur qui vient de se connecter retombant sur « Créer un
+   * compte » — et elle se tient : un descripteur de session fait BRANCHER avant
+   * toute comparaison d'étiquette. Un 304 servi ici aurait resservi la vitrine à
+   * un lecteur connecté.
+   */
+  it('ne rend jamais 304 à un lecteur qui porte un descripteur de session', async () => {
+    const etiquette = (await RACINE(new Request('https://meeshy.me/'))).headers.get('etag');
+    const reponse = await RACINE(
+      new Request('https://meeshy.me/', {
+        headers: { cookie: `${COOKIE_DE_SESSION}=abc`, 'if-none-match': etiquette ?? '' },
+      }),
+    );
+
+    expect(reponse.status).toBe(302);
+  });
+
+  /**
+   * `If-None-Match` est une LISTE, et un intermédiaire peut affaiblir
+   * l'étiquette (`W/"…"`). Une comparaison par égalité stricte de l'en-tête
+   * entier rendrait 200 sur les deux formes — c'est-à-dire une revalidation qui
+   * n'économise jamais rien, indiscernable d'un cache qui marche.
+   */
+  it.each([
+    ['une liste', (e: string) => `"autre-chose", ${e}`],
+    ['une étiquette affaiblie', (e: string) => `W/${e}`],
+  ])('reconnaît son étiquette dans %s', async (_cas, forme) => {
+    const etiquette = (await RACINE(new Request('https://meeshy.me/'))).headers.get('etag');
+    if (etiquette === null) throw new Error('la vitrine ne porte pas d’étiquette');
+
+    const reponse = await RACINE(
+      new Request('https://meeshy.me/', { headers: { 'if-none-match': forme(etiquette) } }),
+    );
+
+    expect(reponse.status).toBe(304);
   });
 
   // MARK: — les miroirs sont des miroirs

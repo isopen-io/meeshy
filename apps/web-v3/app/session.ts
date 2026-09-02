@@ -1,4 +1,4 @@
-import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from './authentification/remise';
+import { COOKIE_DE_JETON, COOKIE_DE_SESSION, valeurDuCookie } from '@/lib/api/cookies';
 
 /**
  * CE QUE LE SERVEUR SAIT D'UN LECTEUR — deux cookies, et rien d'autre.
@@ -21,32 +21,11 @@ import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from './authentification/remise';
  * se connecter. Le second ne peut pas : il est opposé à la passerelle.
  */
 
-const valeurDuCookie = (requete: Request, nom: string): string | null => {
-  const entete = requete.headers.get('cookie');
-  if (entete === null) return null;
-
-  const prefixe = `${nom}=`;
-  const morceau = entete
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(prefixe));
-
-  if (morceau === undefined) return null;
-
-  const valeur = morceau.slice(prefixe.length);
-  if (valeur === '') return null;
-
-  try {
-    return decodeURIComponent(valeur);
-  } catch {
-    // Un pourcent isolé fait jeter `decodeURIComponent`. La valeur brute reste
-    // servie : c'est à la passerelle de refuser un jeton qui n'en est pas un.
-    return valeur;
-  }
-};
+const valeurDeLaRequete = (requete: Request, nom: string): string | null =>
+  valeurDuCookie(requete.headers.get('cookie'), nom);
 
 export const aUneSession = (requete: Request): boolean =>
-  valeurDuCookie(requete, COOKIE_DE_SESSION) !== null;
+  valeurDeLaRequete(requete, COOKIE_DE_SESSION) !== null;
 
 export const jetonDuLecteur = (requete: Request): string | null =>
-  valeurDuCookie(requete, COOKIE_DE_JETON);
+  valeurDeLaRequete(requete, COOKIE_DE_JETON);

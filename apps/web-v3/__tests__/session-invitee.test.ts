@@ -42,12 +42,16 @@
  *     formes rangeraient DEUX entrées pour une seule place, et le témoin le
  *     prouve sur les deux portes : le 201 du `join` et l'aperçu du lien.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
 import { canalDuLien } from '../lib/realtime/lifecycle';
 import {
   cleDeLien,
   cleDuLien,
   effaceSession,
   estLaCleDu,
+  jetonsDesCookies,
   lienDeLaCle,
   lireSession,
   poseSession,
@@ -55,6 +59,40 @@ import {
   type CleDeLien,
   type SessionInvitee,
 } from '../lib/api/guest-session';
+
+/**
+ * LE TYPE MARQUÉ N'EST HABITÉ QUE PAR SA FABRIQUE. `route.ts` promouvait un
+ * segment d'adresse en `CleDeLien` (`segment as CleDeLien`) pour peindre un
+ * lien clos — exactement l'assertion que le type existe pour interdire, et
+ * c'est elle qui rendait « lagos-q1 » en titre d'écran. Le code de production
+ * n'écrit `as CleDeLien` qu'à UN endroit : la fabrique.
+ */
+const RACINE = join(__dirname, '..');
+const DOSSIERS_DE_PRODUCTION = ['app', 'lib', 'components', 'scripts'] as const;
+
+const sourcesDeProduction = (): readonly string[] =>
+  DOSSIERS_DE_PRODUCTION.flatMap((dossier) => {
+    try {
+      return readdirSync(join(RACINE, dossier), { recursive: true, withFileTypes: true })
+        .filter((entree) => entree.isFile() && /\.(ts|tsx|mts|cts)$/.test(entree.name) && !entree.name.endsWith('.d.ts'))
+        .map((entree) => join(entree.parentPath ?? entree.path, entree.name));
+    } catch {
+      return [];
+    }
+  });
+
+describe('le type marqué n’est habité que par sa fabrique', () => {
+  it('trouve bien du code à garder', () => {
+    expect(sourcesDeProduction().length).toBeGreaterThan(20);
+  });
+
+  it("n'écrit `as CleDeLien` nulle part hors de lib/api/guest-session.ts", () => {
+    const coupables = sourcesDeProduction()
+      .filter((chemin) => /\bas CleDeLien\b/.test(readFileSync(chemin, 'utf8')))
+      .map((chemin) => relative(RACINE, chemin));
+    expect(coupables).toEqual([join('lib', 'api', 'guest-session.ts')]);
+  });
+});
 
 /** La seule fabrique autorisée, dépliée pour la lisibilité des témoins. */
 const lienDe = (linkId: string): CleDeLien => {
@@ -230,6 +268,27 @@ describe('la clé de lien est celle que le SERVEUR sert', () => {
     expect(cleDeLien(servi)).toBeNull();
   });
 
+});
+
+/**
+ * Les jetons que le NAVIGATEUR présente — la valeur de chaque cookie
+ * `meeshy_guest_<lien>`, sans que le nom soit promu en clé : la place se
+ * reconnaît auprès du serveur (`reconnais`, `lib/api/invite.ts`).
+ */
+describe('les jetons invités portés par un en-tête Cookie', () => {
+  it('rend la valeur de chaque cookie de place, décodée, une fois chacune, dans l’ordre', () => {
+    expect(jetonsDesCookies('meeshy_session=x; meeshy_guest_mshy_a=S1; meeshy_auth=J; meeshy_guest_mshy_b=S%202; meeshy_guest_mshy_c=S1')).toEqual(['S1', 'S 2']);
+  });
+
+  it('ignore un cookie de place sans valeur, sans signe égal, ou un en-tête absent', () => {
+    expect(jetonsDesCookies('meeshy_guest_mshy_a=; meeshy_guest_mshy_b; theme=dark')).toEqual([]);
+    expect(jetonsDesCookies(null)).toEqual([]);
+    expect(jetonsDesCookies('')).toEqual([]);
+  });
+
+  it('ne compte que le préfixe EXACT de la place — meeshy_guest, jamais meeshy_guestbook', () => {
+    expect(jetonsDesCookies('meeshy_guestbook=x; meeshy_guest_mshy_a=S1')).toEqual(['S1']);
+  });
 });
 
 describe('poser, lire, effacer une session invitée', () => {

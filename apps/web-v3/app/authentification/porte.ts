@@ -1,3 +1,4 @@
+import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import {
   connexion,
   inscription,
@@ -68,6 +69,8 @@ export const porteDe = (ecran: Ecran, soumets: Soumission) => ({
     ),
 
   POST: async (requete: Request): Promise<Response> => {
+    // Un formulaire d'accès soumis depuis un autre site n'est pas le lecteur qui se connecte (`app/provenance.ts`).
+    if (origineEtrangere(requete)) return refusDOrigine(requete);
     const formulaire = await requete.formData().catch(() => null);
     if (formulaire === null) {
       return rendLEcran(
