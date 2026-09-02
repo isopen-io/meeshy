@@ -207,9 +207,25 @@ export const porteDeLHote = (etat: EtatDuFilDeBouchon): PorteDeLHote => ({
   },
 });
 
+/** Un fil ANNEXE : une seconde conversation, adressable par son identifiant, servie en LECTURE seule. */
+export type FilAnnexe = {
+  readonly id: string;
+  readonly titre: string;
+  readonly membres: number;
+  readonly messages: readonly MessageServi[];
+};
+
 export type EtatDuFilDeBouchon = {
   readonly conversationId: string;
   readonly titre: string;
+  /**
+   * Les conversations AUTRES que celle du lecteur, par identifiant — ce que
+   * `GET /conversations/:id` et `GET /conversations/:id/messages` servent quand
+   * l'adresse en nomme une. La passerelle réelle route évidemment par
+   * identifiant ; le bouchon l'ignorait, si bien qu'une vue déclarant son
+   * propre jeton de conversation n'avait aucune donnée derrière.
+   */
+  readonly filsAnnexes: ReadonlyMap<string, FilAnnexe>;
   readonly placesActives: Set<string>;
   /** La ligne du lien que le battement ET la liste relisent — l'état que `serveurs.ts` règle. */
   readonly lien: {
@@ -540,6 +556,23 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
     const identite = etat.creanceDe(requete);
     if (identite === null) {
       erreur(401, 'UNAUTHORIZED', 'Authentification requise');
+      return true;
+    }
+    // Une conversation ANNEXE se lit par son identifiant, comme la passerelle le
+    // fait — et seulement en lecture : elle n'a ni lien, ni place, ni socket.
+    const annexe = etat.filsAnnexes.get(fil[1] ?? '');
+    if (annexe !== undefined && methode === 'GET') {
+      const tri = [...annexe.messages].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      json(
+        fil[2] === undefined
+          ? { success: true, data: { id: annexe.id, identifier: annexe.id, title: annexe.titre, type: 'group', memberCount: annexe.membres, participants: [], unreadCount: 0 } }
+          : {
+              success: true,
+              data: tri,
+              pagination: { total: tri.length, offset: 0, limit: tri.length, hasMore: false },
+              cursorPagination: { limit: tri.length, hasMore: false, nextCursor: null },
+            },
+      );
       return true;
     }
     // `messages-list.ts:270-278` — la ligne du LIEN du participant ferme la

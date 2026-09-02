@@ -54,6 +54,34 @@ describe('le poids d’un fichier', () => {
   });
 });
 
+/**
+ * LA FORME D'UNE PIÈCE — `lib/api/formes.ts`, lu par la ligne servie, par le
+ * peintre, par `lib/api/fil.ts` (« quel genre a une piste traduite ») et par
+ * `lib/poids.ts` (« quel genre a une durée »). Déclarée `const` NON exportée
+ * dans `fil-lignes.ts`, elle n'était la table que du rendu SERVI : les quatre
+ * autres sites réécrivaient la règle en comparaisons littérales de genre, et le
+ * même message avait deux formes selon son chemin d'arrivée (issue #4835).
+ */
+describe('la forme d’une pièce jointe', () => {
+  const LECTEURS = [LIGNES, PEINTRE, 'lib/api/fil.ts', 'lib/poids.ts'];
+
+  it('a un seul site, lib/api/formes.ts, lu par les quatre surfaces', () => {
+    expect(source('lib/api/formes.ts')).toMatch(/export const FORME_PAR_GENRE\b/);
+    LECTEURS.forEach((chemin) => {
+      expect(source(chemin)).toMatch(/from '(@\/lib\/api\/formes|\.\/formes|\.\/api\/formes)'/);
+    });
+  });
+
+  it('n’est réécrite nulle part en comparaisons littérales de genre', () => {
+    LECTEURS.filter((chemin) => chemin !== 'lib/api/formes.ts').forEach((chemin) => {
+      const code = source(chemin)
+        .replace(/\/\*\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*/g, '');
+      expect(code).not.toMatch(/(?:genre|mimeType)\s*[!=]==\s*'(?:audio|video|image|fichier)'/);
+    });
+  });
+});
+
 describe('le battement de bail', () => {
   it('a un seul site, lib/api/invite.ts — le module de participation appelle rafraichis, jamais un chemin', () => {
     const participation = source(PARTICIPATION);

@@ -30,7 +30,7 @@ La planche `MeeshyWebV3.dc.html` porte **38 ecrans**, chacun avec sa route web.
 | Chats | `/chats` | Chats | ![chats](cible/chats.png) |
 | Équipe Lagos | `/chats/:cle` | Équipe Lagos | ![thread](cible/thread.png) |
 | Types de messages | `/chats/:id` | Types de messages | ![rich](cible/rich.png) |
-| Médias partagés | `/chats/:id/medias` | Médias partagés | ![media](cible/media.png) |
+| Médias partagés | `/chats/:cle/medias` | Médias partagés | ![media](cible/media.png) |
 | Recherche | `/search` | Recherche | ![search](cible/search.png) |
 
 ## APPELS

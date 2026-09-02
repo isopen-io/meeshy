@@ -1,3 +1,6 @@
+import type { Citation } from '@/lib/api/citations';
+import { MENTION_SUPPRIMEE } from '@/lib/api/fil';
+
 /**
  * LA COPIE DU FIL — ce que l'écran DIT, hors de ce qu'il compose. Une phrase
  * qui vit ici se relit d'un coup ; une phrase enfouie dans un gabarit se
@@ -40,7 +43,7 @@ export const FIL = {
   original: 'Voir l’original',
   traduitDepuis: 'Traduit depuis cette langue',
   modifie: 'modifié',
-  supprime: 'Ce message a été supprimé',
+  supprime: MENTION_SUPPRIMEE,
   protege: 'Message protégé',
   accuse: { envoye: 'Envoyé', recu: 'Reçu', lu: 'Lu' },
   enAttente: 'Envoi en cours',
@@ -56,7 +59,39 @@ export const FIL = {
   hier: 'Hier',
   piece: 'Pièce jointe',
   transcription: 'Transcription',
-  telecharger: 'Télécharger',
+  /**
+   * CE QU'UN VOCAL OU UNE VIDÉO ANNONCE quand sa transcription est SERVIE dans
+   * une autre langue que celle où elle a été faite — le CODE des deux langues,
+   * comme la pastille `.langue` (charte règle 23 : jamais un drapeau).
+   *
+   * Elle remplace « Sous-titres fr », qui PROMETTAIT une piste de sous-titres
+   * que le lecteur ne portait pas : la passerelle n'expose aucun WebVTT, et
+   * fabriquer des minutages serait inventer. Le Prisme était ANNONCÉ sans être
+   * APPLIQUÉ (cycle 123) ; il est désormais DIT tel qu'il est servi, et le
+   * transcrit se lit juste dessous.
+   */
+  transcrit: (origine: string, servie: string): string => `Transcrit du ${origine} · lire en ${servie}`,
+  /**
+   * LE GESTE D'UN BLOC DE PIÈCE, avec ce que la pièce annonce — le nom
+   * accessible que la cible porte. La composition vit ICI, avec les deux
+   * phrases : écrite dans la ligne servie ET dans le peintre, elle aurait
+   * divergé au premier séparateur.
+   */
+  lire: (nom: string, meta = ''): string => (meta === '' ? `Lire ${nom}` : `Lire ${nom} · ${meta}`),
+  citations: 'Ce que ce message cite',
+  reponseA: (qui: string): string => `En réponse à ${qui}`,
+  reponseAUnMessage: 'En réponse à un message',
+  transfertDepuis: (source: string): string => `Transféré depuis ${source}`,
+  transfert: 'Message transféré',
+  reponseALaPublication: (quoi: string): string => `A répondu à ${quoi}`,
+  /** Les deux formes d'une publication citée : la MIENNE, et celle d'un autre — jamais une contraction à deviner. */
+  publication: {
+    mienne: { humeur: 'votre humeur', story: 'votre story', reel: 'votre reel', publication: 'votre publication' },
+    autre: { humeur: 'une humeur', story: 'une story', reel: 'un reel', publication: 'une publication' },
+  },
+  deQui: (qui: string): string => ` de ${qui}`,
+  /** Le geste d'un bloc qui se TÉLÉCHARGE — nommé dans la cible, parce qu'elle ouvre un onglet. */
+  telecharger: (nom: string, meta = ''): string => (meta === '' ? `Télécharger ${nom}` : `Télécharger ${nom} · ${meta}`),
   ecrire: 'Écrire un message',
   ecrireEn: (langue: string): string => `Écrire en ${langue}…`,
   envoyer: 'Envoyer',
@@ -74,6 +109,28 @@ export const FIL = {
   choisirUneReaction: 'Choisir une réaction',
   fermer: 'Fermer',
 } as const;
+
+/**
+ * LE LIBELLÉ D'UNE CITATION — une table, deux lecteurs : le serveur qui rend la
+ * ligne (`app/connecte/fil-lignes.ts`) et le module qui la peint en direct
+ * (`lib/realtime/fil-peinture.ts`). Écrit deux fois, « Transféré depuis » et
+ * « A répondu à votre story » auraient divergé au premier correctif — c'est la
+ * jumelle que la charte interdit, et c'est ce que `LIBELLES` avait déjà coûté
+ * une fois au fil.
+ */
+export const libelleDeCitation = (citation: Citation): string => {
+  if (citation.genre === 'transfert') {
+    return citation.source === null ? FIL.transfert : FIL.transfertDepuis(citation.source);
+  }
+  if (citation.genre === 'reponse') {
+    return citation.source === null ? FIL.reponseAUnMessage : FIL.reponseA(citation.source);
+  }
+  const sorte = citation.sorte ?? 'publication';
+  const quoi = citation.pourMoi
+    ? FIL.publication.mienne[sorte]
+    : FIL.publication.autre[sorte] + (citation.source === null ? '' : FIL.deQui(citation.source));
+  return FIL.reponseALaPublication(quoi);
+};
 
 /** Les six réactions offertes par la palette — celles que les trois clients proposent en premier. */
 export const EMOJIS_DE_LA_PALETTE = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;

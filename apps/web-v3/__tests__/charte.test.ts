@@ -9,6 +9,7 @@ import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -51,6 +52,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/feuille.ts', source: FEUILLE_CONNECTEE },
   { nom: 'app/connecte/fil-feuille.ts', source: FEUILLE_DU_FIL },
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
+  { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -112,6 +114,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/feuille.ts',
       'app/connecte/fil-feuille.ts',
       'app/(public)/chat/[lien]/choix-feuille.ts',
+      'app/connecte/medias-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -198,6 +201,7 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'connecté', source: CHROME + FEUILLE_CONNECTEE },
     { nom: 'fil', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
+    { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
@@ -370,11 +374,14 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // pastille `.langue`. Le nom d'un auteur, un filet, un fond de ligne ne
     // prennent JAMAIS l'accent.
     '.fil-tete .retour', // le cliquable — chevron de retour
+    '.fil-tete .medias', // le cliquable — la galerie des médias, à un tap du fil
     '.puce', // le cliquable — puce du Prisme
     '.ligne .accuse', // l'accusé de mes messages, comme le compte de non-lus
     '.langue', // la pastille de langue
     '.original summary', // le cliquable — « Voir l'original »
-    '.pieces .fichier', // le cliquable — une pièce jointe
+    '.pieces .media', // le cliquable — une pièce jointe, sur son affiche
+    '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
+    '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
@@ -385,6 +392,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // retour dit le sien. Rien d'autre n'y prend l'accent : le nom du lien, la
     // citation et les champs restent sur l'encre.
     '.feuille .droits summary>svg', // le cliquable — l'accordéon des droits
+    // La galerie (`cible/media.png`) : la puce ACTIVE d'un filtre est un
+    // contrôle SÉLECTIONNÉ — comme l'accusé ou la réaction qui est la mienne,
+    // elle prend l'accent en FOND —, et l'original d'un transcrit y est le même
+    // cliquable que dans le fil.
+    '.puces.filtres .puce[aria-current]',
+    '.lecteurs .transcrit-original summary',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

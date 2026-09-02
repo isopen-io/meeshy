@@ -8,9 +8,11 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
 import type { ActifsTempsReel } from '@/lib/actifs-rt';
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
+import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
 import { BANDEAUX, FIL, INTROUVABLE } from '@/lib/contenu/fil';
+import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
@@ -144,6 +146,17 @@ const retour = (porte: Porte): string =>
     ? `<a class="retour" href="/chats" aria-label="${echappe(FIL.retour)}">${svgDuSprite('ph-caret-left')}</a>`
     : `<a class="retour" href="/" aria-label="${echappe(FIL.retourAccueil)}">${svgDuSprite('ph-caret-left')}</a>`;
 
+/**
+ * LA GALERIE DES MÉDIAS EST À UN TAP DU FIL — et seulement chez le MEMBRE.
+ * `/chats/:cle/medias` est servie ; `/chat/:lien/medias` ne l'est pas, la
+ * directive du porteur fermant tout `/chat/:lien/…`. La charte règle 7 tranche
+ * le reste : chez l'invité, le contrôle n'est pas rendu plutôt que rendu inerte.
+ */
+const versLesMedias = (porte: Porte): string =>
+  porte.genre !== 'membre'
+    ? ''
+    : `<a class="medias" href="${echappe(adresseDesMedias(porte.cle))}" aria-label="${echappe(MEDIAS.titre)}">${svgDuSprite('ph-stack')}</a>`;
+
 const enLigne = (fil: Fil): number => fil.presence.presents.length;
 
 /** Le sous-titre en TEXTE — la description du document, et la ligne de l'invité. */
@@ -176,6 +189,7 @@ const enTete = (etat: EtatDuFil): string =>
   '<header class="fil-tete">' +
   retour(etat.porte) +
   `<div class="titre"><h1>${echappe(etat.fil.titre)}</h1><p class="sous">${sousTitreHtml(etat)}</p></div>` +
+  versLesMedias(etat.porte) +
   // Le point d'ÉTAT du § 7 : plein quand le socket est là, creux sinon. Sans
   // JavaScript il n'y a pas de socket, et le point reste creux — ce qui est vrai.
   '<span class="etat" data-etat="inconnu" aria-live="polite"><span class="point"></span><span class="hors-ecran"></span></span>' +
@@ -505,21 +519,31 @@ export const corpsDuFil = (etat: EtatDuFil, { inerte = false }: { readonly inert
   (inerte ? '' : gabaritDeLigne(adresseDeLaPorte(etat.porte))) +
   '</main>';
 
-/** Le document PLEIN ÉCRAN — sans marque ni pied, avec la tête que tout le site partage. */
+/**
+ * Le document PLEIN ÉCRAN — sans marque ni pied, avec la tête que tout le site
+ * partage. `feuille` vaut celle du fil par défaut ; la galerie des médias
+ * (`app/connecte/medias-vue.ts`) y ajoute la sienne, parce qu'elle est le
+ * SECOND écran plein de la zone connectée et qu'elle réemploie l'en-tête, les
+ * puces et le lecteur du fil. Un second squelette recopié ici aurait fait deux
+ * `<head>` qui dérivent au premier `<meta>` ajouté — la raison même pour
+ * laquelle `teteDuDocument` a été remontée.
+ */
 export const documentPleinEcran = ({
   titre,
   description,
   corps,
   script = '',
+  feuille = FEUILLE,
 }: {
   readonly titre: string;
   readonly description: string;
   readonly corps: string;
   readonly script?: string;
+  readonly feuille?: string;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
-  teteDuDocument({ titre, description, feuille: FEUILLE, robots: 'noindex, nofollow' }) +
+  teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
   `<body>${corps}${script}</body>` +
   '</html>';
 

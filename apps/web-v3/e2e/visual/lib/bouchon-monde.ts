@@ -26,6 +26,26 @@ export const CONVERSATION_DU_LECTEUR = {
   membres: 12,
   nonLus: 3,
 } as const;
+/**
+ * LE SECOND FIL DU BOUCHON — celui que la vue `rich` adresse.
+ *
+ * `vues.json` déclare `rich` sur `/chats/:id`, une route DISTINCTE du
+ * `/chats/:cle` de `thread` : les deux vues ne sont pas en collision, elles
+ * n'avaient simplement aucune DONNÉE derrière leur jeton. Les six formes
+ * étaient bien construites (`messagesRiches`), mais raccordées à la
+ * conversation UNIQUE que le spec sert dans son instance éphémère — jamais à
+ * une conversation adressable par un identifiant propre dans la passerelle
+ * PARTAGÉE que `compare-rendu.js` interroge.
+ *
+ * Le titre et le sous-titre sont ceux de la cible (`cible/rich.png`, index
+ * `vues.json`) : la conformité se mesure sur ce que l'écran REND.
+ */
+export const CONVERSATION_RICHE = {
+  id: 'fil-riche',
+  titre: 'Types de messages',
+  membres: 4,
+} as const;
+
 export const IDENTIFIANT_DU_LIEN_PARTAGE = 'lagos-q1';
 export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
 /** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */
@@ -118,3 +138,167 @@ export const messagesInitiaux = (conversationId: string): MessageServi[] => [
 
 /** Les deux pouces servis sur m3 (`thread.png`) — Ibrahim et Marta, jamais le lecteur : la pastille n'est pas la sienne. */
 export const REACTIONS_INITIALES = { m3: { '👍': ['p-ibrahim', 'p-marta'] } } as const;
+
+/**
+ * LES SIX FORMES QUE `cible/rich.png` DESSINE — image, vidéo, audio, transfert,
+ * réponse, story —, servies par les MÊMES routes que le reste du fil : c'est le
+ * même écran (`/chats/:cle`, `app/connecte/fil-vue.ts`), avec des messages qui
+ * portent et citent davantage. Un spec les ajoute par `ajouteUnMessage`.
+ *
+ * Chaque champ est celui que la passerelle sert, pris dans son émetteur :
+ *
+ *   • `attachments[]` — `attachmentMediaSelect` (`services/attachments/
+ *     attachmentIncludes.ts:69-103`) : `fileUrl` RELATIF, `mimeType`,
+ *     `fileSize`, `duration` (ms), `transcription` `{ text, language }` et
+ *     `translations` — la carte `langue → { transcription, url }` que
+ *     `cleanAttachmentsForApi` sert telle quelle (`messages-list-query.ts:101-127`) ;
+ *   • `replyTo` — `messages-list-query.ts:262` (`include_replies` vaut
+ *     `true` par défaut) : `id`, `content`, `originalLanguage`, `sender` aplati ;
+ *   • `forwardedFromId` + `forwardedFromConversation` — l'enrichissement
+ *     (`:643-762`), servi seulement quand la réciprocité de la source
+ *     l'autorise ;
+ *   • `postReplyTo` — le snapshot figé du post cité (`buildPostReplyTo`,
+ *     `services/messaging/postReplySnapshot.ts:73`), hissé en champ de
+ *     premier niveau (`messages-list-query.ts:768-790`).
+ */
+export const PISTE_TRADUITE = '/api/v1/attachments/file/2026/vocal-fr.m4a';
+
+export const messagesRiches = (conversationId: string): MessageServi[] => [
+  {
+    ...chargeDeMessage({
+      id: 'r1',
+      conversationId,
+      senderId: PAIR_ANGLOPHONE.id,
+      content: 'The final review board.',
+      originalLanguage: 'en',
+      sender: { id: 'p-ibrahim', displayName: PAIR_ANGLOPHONE.nom, userId: PAIR_ANGLOPHONE.id },
+      translations: [{ language: 'fr', content: 'Le tableau final de la revue.' }],
+      attachments: [
+        {
+          id: 'ar1',
+          fileUrl: '/api/v1/attachments/file/2026/tableau.jpg',
+          originalName: 'tableau.jpg',
+          mimeType: 'image/jpeg',
+          fileSize: 430_080,
+          width: 1200,
+          height: 900,
+        },
+      ],
+      createdAt: ilYA(24),
+    }),
+    senderParticipantId: 'p-ibrahim',
+    deliveredCount: 3,
+    readCount: 3,
+  },
+  {
+    ...chargeDeMessage({
+      id: 'r2',
+      conversationId,
+      senderId: PAIR_HISPANOPHONE.id,
+      content: '',
+      originalLanguage: 'es',
+      sender: { id: 'p-marta', displayName: PAIR_HISPANOPHONE.nom, userId: PAIR_HISPANOPHONE.id },
+      attachments: [
+        {
+          id: 'ar2',
+          fileUrl: '/api/v1/attachments/file/2026/revue.mp4',
+          originalName: 'revue.mp4',
+          mimeType: 'video/mp4',
+          fileSize: 3_100_000,
+          duration: 42_000,
+          transcription: { text: 'Repasamos las cifras de marzo.', language: 'es' },
+          translations: { fr: { transcription: 'On repasse les chiffres de mars.' } },
+        },
+      ],
+      createdAt: ilYA(22),
+    }),
+    senderParticipantId: 'p-marta',
+  },
+  {
+    ...chargeDeMessage({
+      id: 'r3',
+      conversationId,
+      senderId: INVITE.id,
+      content: '',
+      originalLanguage: 'yo',
+      sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
+      attachments: [
+        {
+          id: 'ar3',
+          fileUrl: '/api/v1/attachments/file/2026/vocal.m4a',
+          originalName: 'vocal.m4a',
+          mimeType: 'audio/mp4',
+          fileSize: 96_000,
+          duration: 21_000,
+          transcription: { text: 'Mo n mú àwọn nọ́mbà oṣù Kẹta.', language: 'yo' },
+          translations: { fr: { transcription: 'J’apporte les chiffres de mars, tout est prêt.', url: PISTE_TRADUITE } },
+        },
+      ],
+      createdAt: ilYA(20),
+    }),
+    senderParticipantId: INVITE.id,
+  },
+  {
+    ...chargeDeMessage({
+      id: 'r4',
+      conversationId,
+      senderId: PAIR_ANGLOPHONE.id,
+      content: 'Le glossaire partagé a été mis à jour hier soir.',
+      originalLanguage: 'fr',
+      sender: { id: 'p-ibrahim', displayName: PAIR_ANGLOPHONE.nom, userId: PAIR_ANGLOPHONE.id },
+      createdAt: ilYA(18),
+    }),
+    senderParticipantId: 'p-ibrahim',
+    forwardedFromId: 'x1',
+    forwardedFromConversationId: 'c-diaspora',
+    forwardedFromConversation: { id: 'c-diaspora', title: 'Diaspora FR-EN', identifier: 'diaspora', type: 'group', avatar: null },
+  },
+  {
+    ...chargeDeMessage({
+      id: 'r5',
+      conversationId,
+      senderId: MEMBRE.id,
+      content: 'Je le mets dans le dossier de mars.',
+      originalLanguage: 'fr',
+      sender: { id: 'p-amina', displayName: MEMBRE.nom, userId: MEMBRE.id },
+      createdAt: ilYA(16),
+    }),
+    senderParticipantId: 'p-amina',
+    replyToId: 'r1',
+    replyTo: {
+      id: 'r1',
+      content: 'The final review board.',
+      originalLanguage: 'en',
+      createdAt: ilYA(24),
+      sender: { id: 'p-ibrahim', displayName: PAIR_ANGLOPHONE.nom, userId: PAIR_ANGLOPHONE.id },
+    },
+    deliveredCount: 3,
+    readCount: 3,
+  },
+  {
+    ...chargeDeMessage({
+      id: 'r6',
+      conversationId,
+      senderId: PAIR_HISPANOPHONE.id,
+      content: 'Superbe, c’était où ?',
+      originalLanguage: 'fr',
+      sender: { id: 'p-marta', displayName: PAIR_HISPANOPHONE.nom, userId: PAIR_HISPANOPHONE.id },
+      createdAt: ilYA(14),
+    }),
+    senderParticipantId: 'p-marta',
+    storyReplyToId: 'st1',
+    postReplyTo: {
+      id: 'st1',
+      type: 'STORY',
+      moodEmoji: null,
+      previewText: 'Trois graphiques, deux surprises.',
+      thumbnailUrl: null,
+      reactionCount: 4,
+      commentCount: 1,
+      shareCount: 0,
+      createdAt: ilYA(180),
+      authorId: MEMBRE.id,
+      authorName: MEMBRE.nom,
+    },
+  },
+];

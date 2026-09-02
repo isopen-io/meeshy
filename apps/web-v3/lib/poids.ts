@@ -9,6 +9,8 @@
  * jumelle que la charte interdit.
  */
 
+import { seLit, type GenreDePiece } from './api/formes';
+
 const UNITES = ['o', 'Ko', 'Mo', 'Go'] as const;
 
 export const poids = (octets: number | null): string => {
@@ -30,14 +32,19 @@ export const duree = (ms: number | null): string => {
  * a une, son poids toujours —, écrit UNE fois : la ligne servie et le clone
  * peint disaient deux choses différentes d'un même vocal (l'une la durée et le
  * poids, l'autre le poids seul).
+ *
+ * QUELS genres ont une durée n'est pas jugé ici : c'est `seLit`
+ * (`lib/api/formes.ts`), la table qui dit déjà quel bloc chaque genre demande.
+ * Écrit `genre === 'audio' || genre === 'video'`, ce module était la quatrième
+ * écriture de la même règle — et celle qu'on aurait oublié de changer.
  */
 export const metaDePiece = ({
   genre,
   dureeMs,
   octets,
 }: {
-  readonly genre: string;
+  readonly genre: GenreDePiece;
   readonly dureeMs: number | null;
   readonly octets: number | null;
 }): string =>
-  [genre === 'audio' || genre === 'video' ? duree(dureeMs) : '', poids(octets)].filter((morceau) => morceau !== '').join(' · ');
+  [seLit(genre) ? duree(dureeMs) : '', poids(octets)].filter((morceau) => morceau !== '').join(' · ');
