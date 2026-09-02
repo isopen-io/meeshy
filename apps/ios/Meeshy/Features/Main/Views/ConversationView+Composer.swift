@@ -26,7 +26,7 @@ extension ConversationView {
     // récursion runtime se répartit sur plusieurs appels bornés au lieu d'un
     // seul appel non borné.
     var themedComposer: AnyView {
-        AnyView(composerEditingCovers(composerPickersAndSheets(composerCore)))
+        AnyView(composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore))))
     }
 
     /// Accent RÉSOLU du composer : substitué (éphémère → rouge d'alerte, flou →
@@ -144,6 +144,9 @@ extension ConversationView {
                     composerState.showTextEmojiPicker.toggle()
                 }
             },
+            // Tuile « Sticker » (#4823) : la palette monte en feuille ; ce
+            // qu'elle rend part comme un MESSAGE (`ConversationView+Sticker`).
+            onRequestStickerPicker: { composerState.showStickerPicker = true },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
@@ -210,6 +213,42 @@ extension ConversationView {
         }
         .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
+        }
+    }
+
+    /// Maillon dédié de la chaîne (voir garde anti-débordement sur
+    /// `themedComposer`) : la palette de stickers (#4823). Un maillon à part
+    /// plutôt qu'un huitième modificateur sur le précédent — chaque maillon
+    /// garde son propre accesseur de type opaque, borné.
+    ///
+    /// La feuille se FERME au choix : dans une conversation un sticker est un
+    /// message à part entière, pas une décoration qu'on empile sur une scène.
+    /// Les trois injecteurs sont ceux du composer de story
+    /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
+    /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
+    /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
+    /// l'onglet « Lieu » est absent (loi 4, jamais grisé).
+    private func composerStickerSheet<Content: View>(_ content: Content) -> some View {
+        content
+        .sheet(isPresented: $composerState.showStickerPicker) {
+            StickerPickerView(onStickerSelected: { emoji in
+                composerState.showStickerPicker = false
+                sendEmojiSticker(emoji)
+            }, onLibraryStickerSelected: { item in
+                composerState.showStickerPicker = false
+                sendLibrarySticker(item)
+            }, onTemplateSelected: { gabarit, emplacements in
+                composerState.showStickerPicker = false
+                sendTemplateSticker(gabarit, slots: emplacements)
+            }, onLocationTemplateSelected: { lieu, gabarit in
+                composerState.showStickerPicker = false
+                sendLocationTemplateSticker(place: lieu, template: gabarit)
+            })
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
+            .stickerNearbyPlacesProvided()
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 

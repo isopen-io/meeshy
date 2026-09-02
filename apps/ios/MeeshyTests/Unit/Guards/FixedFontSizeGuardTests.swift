@@ -242,7 +242,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
-        "Features/Main/Views/StoryViewerView+Canvas.swift",
+        // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
+        // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
+        // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas
+        // pour son propre fichier (dette de taille). La population ne bouge pas
+        // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
+        // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
+        "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
         // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
         // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues

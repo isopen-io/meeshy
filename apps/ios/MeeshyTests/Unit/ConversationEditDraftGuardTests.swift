@@ -29,7 +29,12 @@ final class ConversationEditDraftGuardTests: XCTestCase {
     /// ajouté ; `AppSourceGuard.unit` globe `Type+*.swift` et survit au
     /// découpage (leçon 347).
     private func source(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/" + relativePath))
+        // L'état du composer vit dans `ConversationComposerState.swift` depuis
+        // le 2026-09-02 : un compagnon sans le nom du type, que le glob ne voit
+        // pas — l'unité de l'écran le nomme.
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/" + relativePath,
+            alsoIncluding: AppSourceGuard.conversationViewCompanions))
     }
 
     private func body(of anchor: String, in code: String) -> String? {

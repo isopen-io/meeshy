@@ -127,7 +127,7 @@ struct ComposerHashtagSheet: View {
                                                  ? MeeshyColors.hashtagColor(isDark: true)
                                                  : .white.opacity(0.85))
                             Image(systemName: posees ? "xmark" : "plus")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
                         .padding(.horizontal, 11)
@@ -149,6 +149,23 @@ struct ComposerHashtagSheet: View {
 
 /// Les mots du sélecteur. Hors du `body` — une chaîne composée dans une vue est
 /// hors de portée d'un témoin, et c'est du vocabulaire produit.
+extension ComposerHashtagSheet {
+
+    /// **La feuille sait d'où viennent ses suggestions ; le meuble, non.**
+    ///
+    /// `MeeshyComposerHost` ne doit nommer aucun service — la garde
+    /// `test_host_opensNoSecondPublicationPath` prend `PostService` pour le
+    /// témoin d'un second chemin de publication, et une lecture « inoffensive »
+    /// dans l'unité du meuble y ressemblerait à s'y méprendre. Le fournisseur
+    /// vit donc chez le seul consommateur des tendances.
+    ///
+    /// L'échec est SILENCIEUX et rend une liste vide : c'est l'état nominal de
+    /// la feuille (hors-ligne, aucune tendance), jamais un chargement éternel.
+    static func loadTrending(limit: Int = 20) async -> [APIHashtag] {
+        (try? await PostService.shared.getTrendingHashtags(limit: limit)) ?? []
+    }
+}
+
 nonisolated enum ComposerHashtagCopy {
 
     static var placeholder: String {
