@@ -74,6 +74,15 @@ export interface MessagesQuery {
   // server-side. Il ne l'était pas : ouvrir un fil chargeait les 50 derniers
   // messages de la conversation ENTIÈRE.
   replyToId?: string;
+  // #4340 — la SOUS-COLLECTION lue : 'timeline' (défaut) | 'thread' | 'pinned' |
+  // 'search'. Comme `replyToId` avant elle, une clé absente de ce type ET du
+  // schéma de route est retirée en silence par AJV (`removeAdditional`) avant
+  // que le handler ne s'exécute : les trois vont ensemble, ou aucune n'arrive.
+  view?: string;
+  /** Requis par `view=thread` — synonyme de `replyToId`, qui reste accepté. */
+  parentId?: string;
+  /** Requis par `view=search` — cherché dans le contenu ET les traductions. */
+  q?: string;
   include_reactions?: string;
   include_translations?: string;
   include_status?: string;

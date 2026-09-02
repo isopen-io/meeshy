@@ -42,11 +42,16 @@ import type {
   ConversationParams,
   MessagesQuery
 } from './types';
-import { sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
+import {
+  MESSAGES_VIEW_QUERY_PROPERTIES,
+  resolveCollectionView,
+  resolveSearchMessageIds
+} from './messages-list-views';
 import {
   buildAfterWatermarkClause,
   buildMessageListSelect,
@@ -109,7 +114,8 @@ export function registerMessagesListRoute(
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Accepté pour compatibilité, sans effet. Les accusés NOMINATIFS par participant ne sont pas servis par cette liste — `messageSchema` ne les déclare pas, donc fast-json-stringify les a toujours retirés, et les charger revenait à payer une relation par page pour un tableau jeté. Les coches se peignent avec les compteurs agrégés déjà présents sur chaque message (deliveredCount / readCount / recipientCount), qui appliquent le gate showReadReceipts. Pour le détail nominatif, utiliser GET /conversations/:id/statuses, qui applique ce même gate.' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
-          languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' }
+          languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' },
+          ...MESSAGES_VIEW_QUERY_PROPERTIES
         }
       },
       response: {
@@ -165,6 +171,7 @@ export function registerMessagesListRoute(
             }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
         500: errorResponseSchema
@@ -183,6 +190,9 @@ export function registerMessagesListRoute(
         after,
         around,
         replyToId,
+        view,
+        parentId,
+        q,
         include_translations: includeTranslationsStr = 'true',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
@@ -315,25 +325,32 @@ export function registerMessagesListRoute(
       const personalHiding = await personalHidingPromise;
       timings.personalHiding = performance.now() - t0;
 
+      // #4340 — la SOUS-COLLECTION lue. Résolue APRÈS toutes les portes
+      // (appartenance, lien de partage échu) : un refus de VALIDATION ne se
+      // sert jamais avant un refus de DROIT, sans quoi les quatre vues
+      // n'auraient plus le même ordre de gardes — ce que ce lot promet
+      // précisément.
+      //
+      // `?replyToId=` (#4177) reste le moyen historique de demander le fil d'un
+      // message : il désigne la MÊME sous-collection que `view=thread`, et
+      // `resolveCollectionView` en fait un `predicate` identique.
+      // `ThreadRepliesLoader.swift` l'envoie en production ; il n'y a rien à
+      // migrer côté client.
+      const vue = resolveCollectionView({ view, parentId, replyToId, q });
+      if (vue.genre === 'refus') {
+        return sendBadRequest(reply, vue.message, { code: 'INVALID_VIEW' });
+      }
+
       // Construire la requête avec pagination
       const whereClause: any = {
         conversationId: conversationId, // Utiliser l'ID résolu
-        deletedAt: null
+        deletedAt: null,
+        // Le prédicat de la vue s'AJOUTE, il ne remplace rien — et il est posé
+        // à l'identique sur le COUNT plus bas : un prédicat appliqué à la page
+        // et pas au total est le défaut que #4177 a corrigé pour `replyToId`,
+        // où `hasMore` promettait des pages qu'aucune requête ne pouvait servir.
+        ...vue.predicate
       };
-
-      // Fil de réponses (#4177) : filtrage CÔTÉ SERVEUR de `?replyToId=`, qui
-      // n'existait ni dans ce schéma ni dans `MessagesQuery` avant ce
-      // correctif — AJV (`removeAdditional`, réglage par défaut de Fastify)
-      // retirait le paramètre de `request.query` AVANT que ce handler ne
-      // s'exécute. `ThreadRepliesLoader.swift` l'envoie depuis toujours en
-      // expliquant, dans son doc-comment, que « the gateway filters
-      // server-side » : c'était faux jusqu'ici. Ouvrir un fil de réponses sur
-      // iOS chargeait en réalité les 50 derniers messages de LA CONVERSATION
-      // ENTIÈRE, filtrés après-coup côté client — le chemin le plus chaud du
-      // produit rendait la mauvaise collection.
-      if (replyToId) {
-        whereClause.replyToId = replyToId;
-      }
 
       // Apply history restriction if share link disallows viewing history
       if (historyStartDate) {
@@ -371,8 +388,15 @@ export function registerMessagesListRoute(
 
 
       // Handle "around" mode: load messages around a specific message
+      //
+      // #4340 — honoré pour la chronologie et le fil seulement (`allowsAround`).
+      // La fenêtre construit une liste d'identifiants sans connaître le prédicat
+      // de la vue : sur `view=pinned` elle remplirait ses deux moitiés de
+      // messages non épinglés puis les perdrait au filtrage — une fenêtre qui
+      // rend moins que demandé sans le dire — et sur `view=search` elle
+      // écraserait la case `id` que la recherche occupe déjà.
       let isAroundMode = false;
-      if (around && !before) {
+      if (around && !before && vue.allowsAround) {
         isAroundMode = true;
         // La cible n'entre dans la fenêtre que si elle est LISIBLE : sous le
         // plancher, `around` se comporte comme un id inconnu.
@@ -426,6 +450,28 @@ export function registerMessagesListRoute(
         }
       }
 
+      // #4340 — `view=search` : le prédicat n'est PAS exprimable en une clause
+      // Prisma (`Message.translations` est une carte Mongo qu'aucun opérateur ne
+      // fouille), donc il se résout en amont, en un ensemble d'identifiants —
+      // exactement la case `id: { in: [...] }` que le mode `around` occupe déjà.
+      // Les deux requêtes de résolution reçoivent `whereClause`, donc le
+      // plancher ET le curseur ; le masquage personnel leur est appliqué chez
+      // elles. C'est là que se joue la garde : la recherche rend un message par
+      // son CONTENU, donc en connaître un mot suffit à atteindre un historique
+      // qu'on n'a pas le droit de lire.
+      const searchTerm = vue.searchTerm;
+      const searchMode = searchTerm !== undefined;
+      if (searchTerm !== undefined) {
+        whereClause.id = {
+          in: await resolveSearchMessageIds(prisma, {
+            base: whereClause,
+            hiding: personalHiding,
+            term: searchTerm,
+            wanted: offset + limit + 1
+          })
+        };
+      }
+
       const messageSelect: any = buildMessageListSelect({ includeTranslations, includeReplies });
 
       // ===== OPTIMISATION: Exécuter les requêtes en parallèle =====
@@ -437,16 +483,20 @@ export function registerMessagesListRoute(
 
       const [totalCount, messages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination) - skip when using cursor, around, or forward watermark
-        (before || isAroundMode || afterMode)
+        (before || isAroundMode || afterMode || searchMode)
           ? Promise.resolve(0)
           : prisma.message.count({
               where: applyPersonalHistoryHiding(
                 applyHistoryFloor(
-                  // Même filtre de fil que la page (#4177) : sans lui, le
-                  // total d'un `?replyToId=` comptait TOUTE la conversation
-                  // au lieu des seules réponses — `hasMore` aurait promis des
-                  // pages de plus qu'aucune requête suivante ne peut servir.
-                  { conversationId: conversationId, deletedAt: null, ...(replyToId ? { replyToId } : {}) },
+                  // Même prédicat de vue que la page (#4177, généralisé par
+                  // #4340) : sans lui, le total d'un `?replyToId=` comptait
+                  // TOUTE la conversation au lieu des seules réponses —
+                  // `hasMore` aurait promis des pages de plus qu'aucune
+                  // requête suivante ne peut servir. Vaut identiquement pour
+                  // `view=pinned`. La recherche, elle, ne compte pas : son
+                  // ensemble est déjà borné, et `GET .../messages/search` ne
+                  // sert pas non plus de `pagination`.
+                  { conversationId: conversationId, deletedAt: null, ...vue.predicate },
                   historyStartDate
                 ),
                 personalHiding
@@ -459,14 +509,16 @@ export function registerMessagesListRoute(
           // Forward watermark backfill returns oldest-after-watermark first so
           // the client can advance its high-water mark contiguously; all other
           // modes return newest-first.
-          orderBy: { createdAt: afterMode ? 'asc' : 'desc' },
+          // `view=pinned` se lit par DATE D'ÉPINGLE, comme
+          // `GET .../pinned-messages` — jamais par date d'écriture.
+          orderBy: afterMode ? { createdAt: 'asc' } : vue.orderBy,
           // Cursor reads (before / after): fetch limit+1 to MEASURE hasMore
           // without an extra COUNT query. The probe row is trimmed before
           // returning to the client. `after` was sized to `limit` and inferred
           // hasMore from `length === limit`, which cannot tell an exactly-full
           // FINAL page from a truncated one — every backfill that landed on the
           // boundary claimed more and cost the client a round trip to disprove.
-          take: (before || isAroundMode || afterMode) ? limit + 1 : limit,
+          take: (before || isAroundMode || afterMode || searchMode) ? limit + 1 : limit,
           skip: (before || isAroundMode || afterMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
@@ -644,7 +696,7 @@ export function registerMessagesListRoute(
       // Construire les métadonnées de cursor pagination
       // Cursor reads (before / after) fetched limit+1 rows. More than `limit`
       // back means the probe row exists and there IS more; trim it away.
-      const isProbedRead = Boolean(before) || afterMode;
+      const isProbedRead = Boolean(before) || afterMode || searchMode;
       let cursorHasMore: boolean;
       if (isProbedRead && messages.length > limit) {
         cursorHasMore = true;
@@ -696,7 +748,7 @@ export function registerMessagesListRoute(
         }
       };
 
-      if (!before && !isAroundMode && !afterMode) {
+      if (!before && !isAroundMode && !afterMode && !searchMode) {
         responsePayload.pagination = buildPaginationMeta(totalCount, offset, limit, messages.length);
       }
 
@@ -745,6 +797,9 @@ export function registerMessagesListRoute(
       logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
         durationMs: Math.round(timings.total),
         messageCount: messages.length,
+        // #4340 — la vue servie : sans elle, quatre sous-collections aux profils
+        // de coût très différents se confondent dans la même ligne de journal.
+        view: vue.view,
         limit,
         offset,
         before: before || null,
