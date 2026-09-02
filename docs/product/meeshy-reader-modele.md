@@ -61,7 +61,7 @@ C'est la ligne de partage la plus importante du modèle de lecture, et elle est
 | | le composer écrit | le player rend |
 |---|---|---|
 | unité | une `MeeshyPublication` → N `MeeshySlide` | **UNE** `MeeshyScene` |
-| qui regroupe | le publieur (§ 1 bis du modèle du composer : N posts, un par unité) | **l'HÔTE**, jamais le player |
+| qui regroupe | le publieur, **selon le PROFIL** (§ 1 bis du modèle du composer) | **l'HÔTE**, jamais le player |
 
 Le player ne sait rien d'une publication, d'une suite de slides, ni d'une
 progression. Il peint **un document, une fois**. La pagination d'un viewer
@@ -122,13 +122,37 @@ dans le MÊME commit que l'œil.
 
 ## 4. Ce que le lecteur reçoit de la PROJECTION
 
-Le § 1 bis du modèle du composer arbitre l'écriture : une publication multi-unités
-part en **N posts, un par unité**. La question symétrique — *le lecteur
-regroupe-t-il ?* — a une réponse mesurée : **non, et personne ne le lui demande.**
+Le § 1 bis du modèle du composer arbitre l'écriture, et **la cardinalité dépend
+du PROFIL** — c'est le point qu'il ne faut surtout pas généraliser :
 
-Le player rend une scène (§ 2) ; l'hôte rend une liste. Il n'existe aujourd'hui
-aucun site qui recompose N posts en une publication à la lecture, et **c'est
-cohérent avec la projection** : ce qui est parti en N objets se lit en N objets.
+| profil | M scènes composées | ce qui est publié |
+|---|---|---|
+| **S** (story) | N | **N stories**, une par scène |
+| **P** (post) · **R** (réel) | M | **UN seul** post / réel, portant ses **M scènes** |
+
+La question symétrique — *le lecteur regroupe-t-il ?* — a donc **deux** réponses :
+
+- **pour une story, non**, et personne ne le lui demande : ce qui est parti en N
+  objets se lit en N objets. Mesuré : aucun site ne recompose N posts à la
+  lecture, et **aucune clé de groupe n'existe sur le fil** (`publicationId`,
+  `groupId`, `batchId` : zéro occurrence). Le regroupement n'est pas seulement
+  absent — il est impossible ;
+- **pour un post ou un réel, la question ne se pose pas** : l'unité publiée porte
+  déjà ses M scènes, il n'y a rien à regrouper. Ce que le lecteur doit savoir
+  faire est l'inverse — **paginer À L'INTÉRIEUR d'une unité.**
+
+> **Le lecteur ne regroupe jamais. Mais selon le profil, il doit soit LISTER des
+> unités, soit PAGINER dans une seule.** Les deux se ressemblent à l'écran et
+> n'ont rien de commun en amont : l'une est une file d'objets du fil, l'autre une
+> navigation dans un document.
+
+**Ce que le code porte déjà pour la seconde** : `MeeshyScenePlayer` prend un
+`sceneIndex: Binding<Int>`, et `StoryEffects(rendering:sceneIndex:)` sait lire
+une scène par index. Le côté LECTURE est prêt pour M scènes — c'est l'ÉCRITURE
+qui ne sait pas encore les produire, le pont rendant `scenes: [scene]`, un seul
+élément, toujours (#4770, troisième préalable). **Ne pas lire ce non-exercice
+comme une absence de besoin** : c'est l'arbitrage porteur qui le demande, et le
+binding existe pour lui.
 
 > Si un jour le lecteur doit RE-grouper ce que la projection a séparé, il lui
 > faudra une clé de groupe sur le fil — et cette clé est une décision de contrat,
