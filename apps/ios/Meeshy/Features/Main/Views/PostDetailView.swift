@@ -630,7 +630,23 @@ struct PostDetailView: View {
                 .padding()
         }
 
-        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
+        // **`hasMoreComments` vaut « je ne sais pas encore », pas « il y en a
+        // plus ».** Il est initialisé à `true` À DESSEIN — sans quoi la
+        // pagination se bloquerait pour la session (cf. `loadMoreComments`) —
+        // mais cet état d'IGNORANCE affichait « Charger plus » sous un
+        // « Commentaires (0) », mesuré au simulateur le 2026-09-02. Un bouton
+        // qui propose de charger ce qui n'existe pas est un contrôle sans
+        // matière (loi 4).
+        //
+        // > Un booléen initialisé à `true` pour ne rien bloquer porte DEUX sens
+        // > — « inconnu » et « oui » — et l'affichage lit toujours le second.
+        // > Ce qui manque n'est pas une garde de plus : c'est que le tri-état
+        // > ait été écrasé en booléen à sa déclaration.
+        //
+        // La liste VIDE tranche sans toucher à la pagination : « charger PLUS »
+        // n'a de sens qu'après un premier lot. Le chargement initial est
+        // automatique, donc une liste vide après lui signifie zéro.
+        if viewModel.hasMoreComments && !viewModel.isLoadingComments && !viewModel.comments.isEmpty {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
