@@ -462,13 +462,33 @@ final class CameraModel: NSObject, ObservableObject {
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
+    /// **Peut-on demander un enregistrement à AVFoundation ?** La question est
+    /// posée à `CameraRecordingReadiness`, et elle est POSÉE — c'est tout le
+    /// lot : `startRecording(to:recordingDelegate:)` lève une exception
+    /// Objective-C quand la connexion vidéo manque, et une exception ObjC ne se
+    /// rattrape pas en Swift. Il n'y a pas de « gérer l'erreur » ici, seulement
+    /// de la prévention.
+    private var videoRecordingIsPossible: Bool {
+        let connection = videoOutput.connection(with: .video)
+        return CameraRecordingReadiness.mayStartRecording(
+            sessionIsRunning: session.isRunning,
+            hasVideoConnection: connection != nil,
+            connectionIsActive: connection?.isActive ?? false,
+            connectionIsEnabled: connection?.isEnabled ?? false
+        )
+    }
+
     func startRecording() {
         recordedSegmentURLs = []
         isSwitchingCameraDuringRecording = false
         pendingSwitchPosition = nil
         pendingStopRequested = false
         recordingDuration = 0
-        startSegment()
+        // **Le chrono ne part QU'APRÈS le segment.** L'ordre est la moitié de
+        // la garde : démarrer le minuteur d'abord ferait courir une durée sur
+        // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
+        // indicateur rouge et son compteur qui monte.
+        guard startSegment() else { return }
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -479,11 +499,41 @@ final class CameraModel: NSObject, ObservableObject {
     /// Starts (or restarts, after a mid-recording camera switch) recording to a
     /// fresh temp file. Does not touch `recordingDuration`/`recordingTimer` so a
     /// segment restart is invisible to the recording-duration UI.
-    private func startSegment() {
+    ///
+    /// **Rend son verdict** : `false` ⇒ AVFoundation n'aurait pas pu écrire, et
+    /// l'appelant doit en tenir compte plutôt que de laisser l'écran croire
+    /// qu'il filme.
+    @discardableResult
+    private func startSegment() -> Bool {
+        guard videoRecordingIsPossible else {
+            Logger.media.error("Video recording refused: no active/enabled capture connection")
+            return false
+        }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
+        return true
+    }
+
+    /// **La sortie d'un enregistrement qui n'écrira rien.**
+    ///
+    /// Elle est NOMMÉE, et pas repliée dans un `return` muet, parce qu'elle
+    /// laisse l'écran dans un état qu'il faut décrire : plus d'indicateur, plus
+    /// de chrono, et les segments déjà pris rendus au système de fichiers. Un
+    /// refus silencieux garderait `isRecordingVideo` à vrai — l'utilisateur
+    /// verrait le point rouge d'une vidéo que personne n'écrit.
+    private func endRecordingWithoutOutput() {
+        isSwitchingCameraDuringRecording = false
+        isRecordingVideo = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        for segment in recordedSegmentURLs {
+            FileManager.default.removeItemLogging(at: segment,
+                                                  context: "discarded recording segment",
+                                                  logger: .media)
+        }
+        recordedSegmentURLs = []
     }
 
     /// Ends the recording. If a camera switch is mid-flight, the stop is queued
@@ -532,8 +582,11 @@ final class CameraModel: NSObject, ObservableObject {
             if pendingStopRequested {
                 pendingStopRequested = false
                 videoOutput.stopRecording()
-            } else {
-                startSegment()
+            } else if !startSegment() {
+                // La connexion a disparu PENDANT la bascule — un cas que le
+                // changement de caméra rend possible par construction. Sans ce
+                // repli, l'enregistrement continuait « en cours » sans sortie.
+                endRecordingWithoutOutput()
             }
             return
         }
