@@ -924,10 +924,43 @@ extension MeeshyComposerHost {
     /// descriptions ». Ce que la loi 9 / B1 protégeait (un seul contenu,
     /// aller-retour scène ↔ document) valait tant que la description ÉTAIT le
     /// texte du post ; cette prémisse est révoquée, la loi la suit.
+    /// **Le champ écrit ce que son RÔLE désigne** (#4890) — et le rôle vient du
+    /// FORMAT, jamais de ce site.
+    ///
+    /// `docs/product/meeshy-composer-modele.md` § 3 : en Story et en Réel le
+    /// texte de la slide EST le contenu de la publication ; en Post c'est la
+    /// **légende du média** de cette slide, et le `content` du post a son propre
+    /// logement. Le document nommait déjà ce champ comme le site fautif —
+    /// « juste en S/R et faux en P » — pendant que le code écrivait
+    /// `currentSlide.content` dans les deux cas.
+    ///
+    /// > **Un nom qui vaut pour deux rôles ne fait pas rougir quand on sert le
+    /// > mauvais.** C'est pourquoi la décision n'est plus prise ici sous le mot
+    /// > « description » : `ComposerSlideTextRole` la porte, une fois.
     var sceneDescriptionBinding: Binding<String> {
         Binding(
-            get: { viewModel.currentSlide.content ?? "" },
-            set: { viewModel.applyContentText($0) }
+            get: {
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    return viewModel.currentSlide.content ?? ""
+                case .caption:
+                    // Sans média sur la slide courante, il n'y a pas de légende
+                    // à lire — et surtout aucune raison de retomber sur le
+                    // contenu, qui appartient au post et non à ce média.
+                    guard let media = selectedSlideMediaURL else { return "" }
+                    return documentMediaCaptions[media] ?? ""
+                }
+            },
+            set: { texte in
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    viewModel.applyContentText(texte)
+                case .caption:
+                    ComposerSlideTextRole.applyCaption(texte,
+                                                       to: selectedSlideMediaURL,
+                                                       in: &documentMediaCaptions)
+                }
+            }
         )
     }
     // MARK: - Le mood
