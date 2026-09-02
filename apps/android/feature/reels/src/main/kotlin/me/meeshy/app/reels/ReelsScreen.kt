@@ -80,6 +80,9 @@ fun ReelsScreen(
     // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
     var muted by rememberSaveable { mutableStateOf(true) }
     val shareContext = LocalContext.current
+    // Commentaires en feuille superposee (issue #4815) : le lecteur ne quitte jamais
+    // l'ecran, la video du reel visible continue de jouer sous la feuille.
+    var commentsReelId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(seed) { viewModel.load(seed) }
 
@@ -142,7 +145,7 @@ fun ReelsScreen(
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },
-                            onComments = { onOpenPost(reel.id) },
+                            onComments = { commentsReelId = reel.id },
                             onRepost = { viewModel.repost(reel.id) },
                             onBookmark = { viewModel.toggleBookmark(reel.id) },
                             onShare = {
@@ -187,6 +190,21 @@ fun ReelsScreen(
                 tint = MeeshyPalette.White,
             )
         }
+    }
+
+    val openCommentsReelId = commentsReelId
+    if (openCommentsReelId != null) {
+        ReelCommentsSheet(
+            reelId = openCommentsReelId,
+            onDismiss = { commentsReelId = null },
+            onOpenPost = {
+                commentsReelId = null
+                onOpenPost(openCommentsReelId)
+            },
+            // The reel row's own server-known total, so the sheet's title never regresses
+            // to "how many are loaded on screen" (a page-capped undercount).
+            initialCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
+        )
     }
 }
 

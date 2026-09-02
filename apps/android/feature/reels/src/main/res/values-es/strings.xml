@@ -9,4 +9,14 @@
     <string name="reels_bookmark">Guardar</string>
     <string name="reels_unbookmark">Quitar de guardados</string>
     <string name="reels_share">Compartir</string>
+    <string name="reels_comments_title">Comentarios</string>
+    <string name="reels_comments_count">%1$d comentarios</string>
+    <string name="reels_comments_empty_title">Aún no hay comentarios</string>
+    <string name="reels_comments_empty_subtitle">Sé el primero en comentar.</string>
+    <string name="reels_comments_loading">Cargando comentarios…</string>
+    <string name="reels_comments_error">No se pudieron cargar los comentarios</string>
+    <string name="reels_comments_input_hint">Añade un comentario…</string>
+    <string name="reels_comments_send">Enviar</string>
+    <string name="reels_comments_failed">Error: toca para reintentar</string>
+    <string name="reels_comments_view_post">Ver publicación</string>
 </resources>
