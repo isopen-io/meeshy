@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -273,6 +275,7 @@ fun CallScreen(
                 onHangUp = viewModel::hangUp,
                 onToggleMute = viewModel::toggleMute,
                 onToggleCamera = viewModel::toggleCamera,
+                onToggleSpeaker = viewModel::toggleSpeaker,
                 onClose = {
                     viewModel.dismiss()
                     onClose()
@@ -437,6 +440,7 @@ private fun CallControls(
     onHangUp: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
+    onToggleSpeaker: () -> Unit,
     onClose: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -452,6 +456,13 @@ private fun CallControls(
                 offIcon = Icons.Filled.MicOff,
                 contentDescription = stringResource(R.string.call_action_mute),
                 onClick = onToggleMute,
+            )
+            CallToggleButton(
+                on = state.isSpeakerOn,
+                onIcon = Icons.Filled.VolumeUp,
+                offIcon = Icons.Filled.VolumeOff,
+                contentDescription = stringResource(R.string.call_action_speaker),
+                onClick = onToggleSpeaker,
             )
             if (state.isVideoCall) {
                 CallToggleButton(

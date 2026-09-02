@@ -315,7 +315,10 @@ class CallViewModel @Inject constructor(
     fun start(config: CallConfig) {
         if (!callState.canStart) return
         this.config = config
-        this.media = CallMedia(isCameraOn = config.isVideo)
+        // Parity iOS `CallManager` (`isSpeaker = isVideo`): a video call defaults to
+        // the loudspeaker, an audio call to the earpiece — [WebRtcCallCoordinator]
+        // applies the same default to AudioManager once media opens.
+        this.media = CallMedia(isCameraOn = config.isVideo, isSpeakerOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
         this.connectionQuality = null
@@ -370,7 +373,7 @@ class CallViewModel @Inject constructor(
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
                 is CallJoinResult.Success -> coordinator.startIncoming(
                     viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
-                    ::onMediaConnected, ::onMediaStalled,
+                    ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
                 )
                 is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
             }
@@ -402,6 +405,17 @@ class CallViewModel @Inject constructor(
         publish()
         coordinator.setMuted(media.isMuted)
         emitIfIdentified { signalManager.emitToggleAudio(it, enabled = !media.isMuted) }
+    }
+
+    /**
+     * Toggle the speaker/earpiece audio route. Purely local — unlike mute/camera
+     * there is no `call:media-toggled` counterpart, since the peer's audio path is
+     * unaffected by which of *our* speakers we listen on.
+     */
+    fun toggleSpeaker() {
+        media = media.copy(isSpeakerOn = !media.isSpeakerOn)
+        publish()
+        coordinator.setSpeakerEnabled(media.isSpeakerOn)
     }
 
     /** Video tracks + EGL context for [CallScreen]'s renderers (video calls only). */
