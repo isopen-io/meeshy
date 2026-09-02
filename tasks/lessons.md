@@ -23839,3 +23839,67 @@ réfutable en dix minutes.
   source**, il ne la nettoie pas après coup (`sed`/`perl` d'anti-ANSI est un
   pansement qui oublie le prochain outil).
 
+
+## Leçon 428 — Le MOT qu'on peut toucher est l'angle mort de la règle des 44 pt
+
+**Le fait (2026-09-02).** L'invite « voir plus » de la légende partagée faisait
+**54 × 16 pt** — la moitié de la hauteur minimale d'Apple. Trois taps de suite
+l'ont manquée, et sur une story un tap manqué tombe dans la couche de navigation
+et **change de story**.
+
+Le même soir, à trois fichiers de là, le bouton muet du lecteur de réel porte
+`minWidth: 44, minHeight: 44` depuis l'origine. Le muet du plein écran aussi.
+Les boutons de rail aussi.
+
+> **Le dépôt CONNAÎT la règle. Elle s'applique là où le contrôle est une ICÔNE,
+> et se perd là où il est un MOT.**
+
+**Pourquoi.** Une cible tactile se pense naturellement autour d'un glyphe : on
+dessine un carré, on y centre une icône, la taille est une décision explicite.
+Un texte cliquable, lui, prend la taille de ses caractères — personne n'a
+« choisi » 16 pt de haut, c'est la hauteur de la police. La règle n'est pas
+violée, elle n'est jamais **convoquée**.
+
+**Le geste.** Chercher les cibles tactiles par ce qu'elles CONTIENNENT, pas par
+ce qu'elles font : tout `Button` dont le label est un `Text` sans `frame`
+explicite est suspect. L'agrandissement se fait sans déplacer un pixel —
+
+```swift
+.padding(.vertical, 14)      // 16 + 2 × 14 = 44
+.contentShape(Rectangle())
+.padding(.vertical, -14)     // annule le décalage visuel
+```
+
+**Le corollaire qui rend l'affaire grave** (leçon 424) : sous une couche qui
+capte les touchers, une cible sous-dimensionnée ne rate pas son action, elle en
+déclenche une AUTRE. Un test de cible tactile mesure la taille et ne regarde
+jamais ce qu'il y a dessous — les deux défauts se composent, et aucun des deux
+outils ne voit le produit des deux.
+
+## Leçon 429 — Vérifier UN consommateur d'un composant partagé, c'est n'en vérifier aucun
+
+**Le fait.** J'ai modifié `MediaCaptionOverlay` quatre fois dans la nuit — cible
+tactile, ancrage, plafond de hauteur, transition, marge droite. Je l'ai vérifié
+à chaque fois sur la STORY, parce que c'était la surface du défaut d'origine.
+
+Le composant a **trois** hôtes : la story, le plein écran média, le lecteur de
+réel. Les deux autres héritaient de tout, sans que je les regarde — et l'un
+d'eux, le réel, appartenait à une autre session la veille encore.
+
+> **Le rayon d'une modification est celui du composant, jamais celui du défaut
+> qui l'a motivée.** Un correctif ciblé sur une surface est une modification de
+> TOUTES ses surfaces dès qu'il descend dans le partagé.
+
+**Ce que la vérification a rendu** (faite après coup, ce qui est déjà trop tard
+mais mieux que jamais) : le réel est intact — sa légende rend à `x=16, w=209`,
+dégagée du rail à `x=326`. Et il l'est pour une raison STRUCTURELLE que je
+n'avais pas mesurée avant de changer : il dispose légende et rail dans un
+`HStack`, quand la story les superpose dans un `ZStack`. C'est ce qui l'a
+protégé du chevauchement que j'ai dû corriger sur la story — pas ma prudence.
+
+**Le geste.** Avant de modifier un composant partagé, énumérer ses hôtes
+(`grep` du nom du type, hors tests) et écrire, pour chacun, ce que le changement
+lui fait. Les paramètres à défaut NEUTRE sont l'outil de cette discipline :
+`expandedTrailingInset: 0` et `tint: .white` laissent les autres hôtes
+strictement inchangés, et rendent la question « qui d'autre ? » vérifiable au
+lieu d'être promise.
