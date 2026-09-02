@@ -24144,6 +24144,24 @@ sens ne se retourne pas toute seule ; elle protège de la lecture qu'on vient de
 payer, pas de sa symétrique. **Quand on écrit une règle du type « X ne dit pas
 Y », se demander tout de suite : dit-il non-Y ?**
 
+**La forme générale, et pourquoi elle se rejouera.** Ce n'est pas une étourderie
+locale : c'est un signal qu'on DISQUALIFIE pour une lecture et qu'on QUALIFIE
+aussitôt pour la lecture inverse.
+
+> **Disqualifier une lecture d'un signal ne le qualifie pas pour son contraire.**
+> Apprendre que `optional()` ne prouve pas « pas de temps » ne lui fait pas
+> prouver « le champ voyage ». Il reste MUET — et un signal muet le reste dans
+> les deux sens.
+
+Une session voisine, arrivée au même endroit par un autre axe le même jour, le
+formule d'un cran plus haut, et les deux versions se valent : *une règle énoncée
+sans énumérer ses dimensions n'est relue que sur celle qui l'a fait naître.*
+Chez elle, « un bloc qui grandit ne rencontre pas les mêmes voisins » n'avait
+servi qu'à la PLACE, laissant les touchers, le Z et les gestes (leçon 435). Ici,
+« qui lit ce champ ? » ne ramène jamais l'éditeur ni le convertisseur — puisque
+justement ils ne le lisent pas. **Dans les deux cas la règle est juste, citée, et
+protège un quart de ce qu'elle couvre.**
+
 **Corollaire de méthode, payé dans le même tour.** J'ai d'abord écrit dans #4840
 que le cercle « avait été brisé en trois sommets ». Le message du commit disait
 SIX, avec sa table. J'avais compté les sommets que je voyais depuis mon point
