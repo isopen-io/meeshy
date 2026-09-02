@@ -68,8 +68,26 @@ enum ConversationStickerRendering {
             : base
         guard let rendu = StickerTemplateRenderer.image(templateID: templateID, slots: slots,
                                                         metrics: metrics, screenScale: renderScale),
-              rendu.1.width > 0, rendu.1.height > 0 else { return nil }
-        return rendu.0
+              let image = rendu.0, rendu.1.width > 0, rendu.1.height > 0 else { return nil }
+        return fitted(image, size: rendu.1, maxSide: templateMaxSide)
+    }
+
+    /// La mesure d'un cartouche n'est pas strictement proportionnelle au corps
+    /// (marges fixes, pliage du texte) : réduire le corps du même rapport laisse
+    /// parfois quelques points au-dessus du plafond. Le plafond se GARANTIT
+    /// donc sur l'image rendue, par une réduction proportionnelle finale — un
+    /// PNG de sticker n'a aucune raison de dépasser le côté visé.
+    static func fitted(_ image: UIImage, size: CGSize, maxSide: CGFloat) -> UIImage {
+        let plusLong = max(size.width, size.height)
+        guard plusLong > maxSide else { return image }
+        let ratio = maxSide / plusLong
+        let cible = CGSize(width: (size.width * ratio).rounded(.down), height: (size.height * ratio).rounded(.down))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = renderScale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: cible, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: cible))
+        }
     }
 
     /// Les emplacements d'un gabarit de LIEU — même dépouillement que la

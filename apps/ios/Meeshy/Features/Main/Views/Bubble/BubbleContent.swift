@@ -264,7 +264,7 @@ nonisolated struct BubbleContent: Equatable {
     /// de la bulle standard — sans chrome, comme un emoji libre.
     ///
     /// `var … = nil` et non `let` : l'init memberwise sert encore une dizaine
-    /// de témoins (`Unit/Focal/*`) qui énumèrent chaque champ ; une valeur par
+    /// de témoins (`Unit/Focal/…`) qui énumèrent chaque champ ; une valeur par
     /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
     var sticker: Sticker? = nil
 
