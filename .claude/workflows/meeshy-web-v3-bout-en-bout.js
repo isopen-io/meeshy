@@ -1069,7 +1069,7 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    titre en francais qui dit le RESULTAT (\`feat(web-v3): …\`, \`docs(design): …\`), un corps qui dit
    CE QUI ETAIT CASSE ou absent et POURQUOI la forme retenue, \`Closes #<n>\` par issue livree
    (JAMAIS \`Closes #0\`), et en fin de message :
-   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
    N'ecris aucun nom de modele ailleurs dans le message.
 3. \`git push -u origin ${BRANCHE}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
    Sur rejet non-reseau (non fast-forward) : \`git pull --rebase origin ${BRANCHE}\` puis rejoue
