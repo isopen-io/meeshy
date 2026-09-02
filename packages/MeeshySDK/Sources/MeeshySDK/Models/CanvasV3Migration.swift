@@ -274,6 +274,16 @@ public extension CanvasV3 {
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
             if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
+            // **Le gabarit qui DÉCORE la pastille** (#4717) doit voyager (#4832).
+            // Omis quand `nil` — toute pastille publiée avant ce lot se réencode
+            // alors octet pour octet, et son repli reste celui que
+            // `StoryLocationLayer` applique déjà.
+            //
+            // Ce champ est le FRÈRE de `templateId` sur un sticker, avec une
+            // relation différente : un sticker EST son gabarit, un lieu en est
+            // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
+            // délibérés — ne pas les unifier.
+            if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
@@ -804,7 +814,8 @@ public extension StoryEffects {
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
-            sourceLanguage: object.locale)
+            sourceLanguage: object.locale,
+            styleId: nonEmpty(object.payload.string("styleId")))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {
