@@ -200,16 +200,36 @@ NC='\033[0m'
 # 1184 (rouge) a 1182 (amelioration non enregistree) par un correctif dont
 # l'effet est ENTIEREMENT attribue : les deux erreurs retirees nommaient toutes
 # deux `ConversationPreferencesPayload` et le champ absent.
-# 1180 -> 0 le 2026-09-02 : la dette est SOLDEE. Mesure du script lui-meme,
-# avec le TypeScript du depot, sur le tsconfig reel d'apps/web
-# (include `**/*.tsx`, `jsx: preserve`, `strict: true` — 2 084 fichiers), et
-# `.next/` exclu comme depuis toujours, ce qui rend le chiffre stable entre CI
-# et poste local (auto-test n°3).
+# 0 -> 1180 le 2026-09-02, et il faut dire POURQUOI cette valeur revient.
 #
-# Le cliquet etait ROUGE non pour une regression mais pour une AMELIORATION NON
-# ENREGISTREE : il refuse de laisser une marge regagnee redevenir depensable.
-# L'ecrire ici est ce qui la verrouille.
-readonly WEB_BASELINE=0
+# Une session voisine a pose `WEB_BASELINE=0` en ecrivant « la dette est
+# SOLDEE ». Elle ne l'est pas, et deux mesures independantes le disent :
+#
+#   • la CI (run 33579177839, job « Quality (bun) ») rend
+#     « RÉGRESSION : 1180 erreurs de types, baseline 0 (+1180) » ;
+#   • ce script, relance ici sur l'arbre FUSIONNE, rend le meme 1180.
+#
+# Et le detail qui tranche : la liste des fichiers les plus touches est
+# identique, au fichier et au compte pres, a celle relevee dans #4690 des heures
+# plus tot — 66 AgentConfigDialog.test.tsx, 42 use-audio-translation.test.ts,
+# 37 MarkdownMessage.tsx, 35 message-formatting.tsx, 32 page.test.tsx. Ce sont
+# les MEMES 1180 erreurs, pas un lot qui aurait ete solde puis reintroduit.
+#
+# CE QUE CET EPISODE APPREND, et qui vaut pour tout cliquet fonde sur un COMPTE :
+# **zero est la seule valeur qu'un compte peut rendre pour deux raisons
+# opposees** — « tout passe » et « rien n'a ete compile » sont indistinguables
+# dans un entier. L'auto-test qui precede la mesure prouve que le HARNAIS
+# fonctionne (il compte 2 sur un paquet fautif, 0 sur un paquet sain) ; il ne
+# prouve pas que la CIBLE a ete compilee. Un zero sur `apps/web` doit donc etre
+# corrobore par autre chose que lui-meme : le nombre de fichiers vus, ou la
+# disparition effective des entetes de la liste ci-dessus.
+#
+# La remarque de fond de cette session reste JUSTE et est conservee : ce cliquet
+# echoue aussi quand il y a MOINS d'erreurs que la baseline sans que la baseline
+# ait ete abaissee — il refuse qu'une marge regagnee redevienne depensable. Mais
+# une amelioration s'enregistre a sa valeur MESUREE, jamais a zero : ecrire zero
+# n'enregistre pas un progres, il affirme une fin.
+readonly WEB_BASELINE=1180
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
