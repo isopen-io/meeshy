@@ -53,14 +53,20 @@ extension StickerTemplateRenderer {
                                                      metrics: metrics)
         return StickerTemplateDrawing.rasterize(size: l.taille, screenScale: screenScale) {
             let cadre = CGRect(origin: .zero, size: l.taille)
+            // Le liseré se trace SUR le chemin : posé au bord exact du raster,
+            // sa moitié extérieure serait rognée et le trait paraîtrait deux
+            // fois plus fin que celui des autres familles. On rentre la forme
+            // d'un demi-trait — la mesure, elle, ne bouge pas.
+            let trait = max(1, metrics.fontSize * 0.05)
+            let assise = cadre.insetBy(dx: trait / 2, dy: trait / 2)
             let forme: UIBezierPath
             switch carte.silhouette {
-            case .pill: forme = StickerTemplateDrawing.pillPath(in: cadre)
-            case .card: forme = UIBezierPath(roundedRect: cadre, cornerRadius: l.taille.height * 0.30)
+            case .pill: forme = StickerTemplateDrawing.pillPath(in: assise)
+            case .card: forme = UIBezierPath(roundedRect: assise, cornerRadius: assise.height * 0.30)
             }
             StickerTemplateDrawing.fill(forme, gradientFrom: carte.haut, to: carte.bas, in: cadre)
             carte.liseré.setStroke()
-            forme.lineWidth = max(1, metrics.fontSize * 0.05)
+            forme.lineWidth = trait
             forme.stroke()
             carte.icône(CGRect(x: metrics.horizontalPadding, y: cadre.midY - l.glyphe / 2,
                                width: l.glyphe, height: l.glyphe))
@@ -111,6 +117,31 @@ extension StickerTemplateRenderer {
         let épaisseur = max(1, r.width * 0.17)
         stroke([CGPoint(x: 0.24, y: 0.24), CGPoint(x: 0.76, y: 0.76)], in: r, width: épaisseur, color: color)
         stroke([CGPoint(x: 0.76, y: 0.24), CGPoint(x: 0.24, y: 0.76)], in: r, width: épaisseur, color: color)
+    }
+
+    /// Le geste « OK » — l'anneau du pouce et de l'index, trois doigts levés
+    /// derrière. TRACÉ, comme la coche et la croix : un emoji emprunté à la
+    /// table du système change de dessin d'une version d'iOS à l'autre, et une
+    /// décoration doit se rendre pareil sur iOS 16 et sur iOS 26. C'est la
+    /// règle que les vingt-neuf autres gabarits de ce lot suivent ; celui-ci
+    /// l'a violée le temps d'une relecture.
+    @MainActor
+    private static func okRing(in r: CGRect, color: UIColor) {
+        let côté = min(r.width, r.height)
+        let trait = max(1, côté * 0.12)
+        let anneau = CGRect(x: r.minX + r.width * 0.04, y: r.minY + r.height * 0.42,
+                            width: côté * 0.48, height: côté * 0.48)
+        let cercle = UIBezierPath(ovalIn: anneau.insetBy(dx: trait / 2, dy: trait / 2))
+        cercle.lineWidth = trait
+        color.setStroke()
+        cercle.stroke()
+        // Trois doigts, le majeur le plus haut — le geste se lit à la
+        // silhouette, jamais au détail.
+        let doigts: [(CGFloat, CGFloat)] = [(0.58, 0.16), (0.74, 0.06), (0.90, 0.20)]
+        for (x, sommet) in doigts {
+            stroke([CGPoint(x: x, y: 0.62), CGPoint(x: x, y: sommet)],
+                   in: r, width: trait, color: color)
+        }
     }
 
     /// Le tilde de l'hésitation — une vague en deux courbes, qui monte puis
@@ -208,7 +239,7 @@ extension StickerTemplateRenderer {
             haut: StickerTemplatePalette.surface, bas: StickerTemplatePalette.surface,
             liseré: StickerTemplatePalette.accent.withAlphaComponent(0.55),
             texte: StickerTemplatePalette.label,
-            icône: { r in StickerTemplateDrawing.drawEmoji("\u{1F44C}", in: r) }),
+            icône: { r in Self.okRing(in: r, color: StickerTemplatePalette.accent) }),
         AnswerCard(
             id: StickerTemplateCatalog.ID.answerNever,
             name: { String(localized: "sticker.template.answer.never", defaultValue: "Jamais", bundle: .module) },

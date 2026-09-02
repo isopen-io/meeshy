@@ -229,7 +229,8 @@ extension StickerTemplateRenderer {
     }
 
     /// Un pan de ruban : un rectangle qui pend sous la bande, entaillé en V
-    /// au bas. `gauche` dit de quel côté il pend.
+    /// au bas. Le côté se choisit par `x` — les deux pans partagent le même
+    /// tracé, l'appelant les pose.
     private static func cheerRibbonTail(x: CGFloat, y: CGFloat, size: CGSize) -> UIBezierPath {
         let pan = UIBezierPath()
         pan.move(to: CGPoint(x: x, y: y))

@@ -227,19 +227,19 @@ extension StickerTemplateRenderer {
         String(localized: "sticker.template.nature.cat.caption", defaultValue: "Miaou", bundle: .module)
     }
 
-    private struct BubbleLayout {
+    private struct MeowBubbleLayout {
         let légende: String
         let cartouche: StickerTemplateDrawing.CaptionLayout
         let queue: CGFloat
     }
 
     @MainActor
-    private static func catLayout(metrics: StickerTemplateMetrics) -> BubbleLayout {
+    private static func catLayout(metrics: StickerTemplateMetrics) -> MeowBubbleLayout {
         let légende = catCaption
         let queue = ceil(metrics.verticalPadding * 1.3)
         let cartouche = StickerTemplateDrawing.captionLayout(caption: légende, glyph: .custom,
                                                              metrics: metrics, extraHeight: queue)
-        return BubbleLayout(légende: légende, cartouche: cartouche, queue: queue)
+        return MeowBubbleLayout(légende: légende, cartouche: cartouche, queue: queue)
     }
 
     /// Une tête de chat — un disque, deux oreilles, les yeux, le nez, six
