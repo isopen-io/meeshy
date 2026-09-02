@@ -72,19 +72,70 @@ describe('la porte de la zone connectée', () => {
    * La traiter en panne ferait lire « le service ne répond pas » à qui doit
    * simplement se reconnecter — et le ferait RESTER là, sans issue.
    */
-  it.each([401, 403])('renvoie se connecter quand la passerelle refuse le jeton (%s)', async (statut) => {
+  it('renvoie se connecter quand la passerelle refuse le jeton (401)', async () => {
     const porte = serviteurDe(
       '/',
       () => 'jamais rendu',
       passerelle({
-        '/api/v1/auth/me': () => json({}, statut),
-        '/api/v1/conversations': () => json({}, statut),
+        '/api/v1/auth/me': () => json({}, 401),
+        '/api/v1/conversations': () => json({}, 401),
       }),
     );
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(302);
     expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+  });
+
+  /**
+   * LES DEUX ROUTES NE RÉPONDENT PAS PAREIL À LA MÊME SESSION MORTE (#4760), et
+   * c'est LA raison pour laquelle `compte.ts` ne les traite pas pareil. Ce
+   * témoin fixe l'asymétrie, pour qu'un futur « nettoyage » du 403 ne puisse
+   * pas la supprimer sans rougir.
+   *
+   * `/conversations` sert un 403 pour une session ABSENTE — `sendForbidden` en
+   * clair dans `routes/conversations/core-list.ts:93`, sa garde `optionalAuth`
+   * ne refusant rien. Ce 403 DOIT donc renvoyer se connecter.
+   */
+  it('renvoie se connecter sur le 403 de /conversations — core-list.ts:93 le sert pour une session absente', async () => {
+    const porte = serviteurDe(
+      '/',
+      () => 'jamais rendu',
+      // `/auth/me` NOMINALE : sans cela le 401 de l'identité provoquerait à lui
+      // seul la redirection, et le témoin passerait sans rien dire du 403.
+      passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () => json({}, 403),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(302);
+    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2F');
+  });
+
+  /**
+   * `/auth/me`, elle, ne rend JAMAIS 403 : sa garde est montée en
+   * `allowAnonymous: true` (branche 403 inatteignable) et `handleGetMe`
+   * (`routes/me/get-me.ts:313`) refuse par `sendUnauthorized`. Son 403 était
+   * une branche morte ; retirée, un 403 y retombe dans l'illisible — et
+   * l'écran se sert quand même, comme pour n'importe quelle autre réponse que
+   * cet appelant ne sait pas lire.
+   */
+  it('ne prend PAS le 403 de /auth/me pour une session expirée', async () => {
+    const porte = serviteurDe(
+      '/',
+      (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
+      passerelle({
+        '/api/v1/auth/me': () => json({}, 403),
+        '/api/v1/conversations': () =>
+          json({ success: true, data: [CONVERSATION({})], pagination: { total: 1 } }),
+      }),
+    );
+    const reponse = await porte(requete('/', AVEC_JETON));
+
+    expect(reponse.status).toBe(200);
+    expect(await reponse.text()).toContain('prenom=aucun n=1');
   });
 
   it('dessine la panne plutôt qu’une page blanche quand la passerelle se tait', async () => {
