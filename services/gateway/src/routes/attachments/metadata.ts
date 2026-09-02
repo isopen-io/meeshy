@@ -23,6 +23,65 @@ import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../ser
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
+/**
+ * Le contrat SERVI par `GET /conversations/:conversationId/attachments`.
+ *
+ * Il ÉPAND `messageAttachmentMinimalSchema` — il ne le remplace pas : le
+ * minimal reste la base, et tout champ qu'il gagnera arrivera ici sans que
+ * personne ait à y penser. (Un double partiel d'un schéma partagé perd en
+ * silence tout ce que le schéma GAGNE — cf. `services/gateway/CLAUDE.md`,
+ * cycles 91/93/104. La règle vaut pour la production autant que pour un
+ * harnais.)
+ *
+ * POURQUOI ICI ET PAS DANS LE MINIMAL PARTAGÉ (#4887, critère 2). Le grain
+ * juste est celui qui CHARGE : cette liste est le seul consommateur du minimal
+ * dans tout le dépôt, et six champs de plus n'ont aucune raison d'atterrir sur
+ * les réponses d'un futur appelant qui, lui, n'en veut pas. « Le schéma
+ * partagé ne grossit pas pour deux appelants » — a fortiori pour un seul.
+ *
+ * LES SIX CHAMPS, ET POURQUOI ILS SONT SERVIS. `AttachmentGallery.tsx` rend
+ * `messageId`, `originalName`, `uploadedBy`, `createdAt`, `width` et `height`.
+ * Deux d'entre eux ne sont pas décoratifs : `uploadedBy` décide si le bouton
+ * « supprimer » EXISTE (`uploadedBy === currentUserId`), et `messageId` est
+ * l'argument de « aller au message ». Aucun n'étant déclaré, `fast-json-
+ * stringify` les supprimait tous : panneau d'information vide, bouton de
+ * suppression jamais rendu, navigation cassée.
+ *
+ * L'alternative — retirer ces champs de la galerie — reviendrait à supprimer
+ * la navigation vers le message, la suppression par son propriétaire, le nom
+ * du fichier, sa date et ses dimensions. On ne renonce pas à cinq affordances
+ * pour éviter six lignes de schéma.
+ *
+ * ET ILS ONT LE DROIT D'ÊTRE VUS (règle du cycle 84 : rendre une donnée
+ * visible oblige à décider, dans le MÊME lot, si elle a le droit de l'être).
+ * La galerie est un SECOND LECTEUR des messages de la conversation ; le
+ * PREMIER — `GET /conversations/:id/messages`, dont `messageSchema.attachments`
+ * est `messageAttachmentSchema` — sert déjà les six au même lecteur, borné par
+ * les mêmes exclusions (plancher de lien de partage, masquage personnel,
+ * tombstone `deletedAt`), et le fil temps réel les sert aussi
+ * (`serializeAttachmentForSocket`). Le lot n'ouvre donc aucune surface : il
+ * rend au second lecteur ce que le premier rendait déjà.
+ *
+ * CE QUI N'ENTRE PAS : `transcription` et `translations`. Elles ne sont plus
+ * chargées du tout (#4887, défaut 3) — le retrait se fait au `select`, jamais
+ * par un élargissement du schéma. La distinction liste / détail établie par
+ * #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
+ * `messageAttachmentSchema`) reste le seul à les servir.
+ */
+const conversationAttachmentListItemSchema = {
+  ...messageAttachmentMinimalSchema,
+  description: 'Attachment data served to the conversation gallery',
+  properties: {
+    ...messageAttachmentMinimalSchema.properties,
+    messageId: { type: 'string', nullable: true, description: 'Message this attachment belongs to — target of « go to message »' },
+    originalName: { type: 'string', description: 'Original filename, as displayed' },
+    uploadedBy: { type: 'string', description: 'Uploader id — gates the delete affordance' },
+    createdAt: { type: 'string', description: 'Upload date (ISO 8601)' },
+    width: { type: 'number', nullable: true, description: 'Image/video width (px)' },
+    height: { type: 'number', nullable: true, description: 'Image/video height (px)' },
+  },
+} as const;
+
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
   authRequired: any,
@@ -209,40 +268,37 @@ export async function registerMetadataRoutes(
    * Récupère les attachments d'une conversation (support authentifiés ET anonymes)
    *
    * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
-   * prochain lot n'ait pas à reposer la question »).
+   * prochain lot n'ait pas à reposer la question » ; #4887, critères 2 et 3).
    *
-   * SERVI : les SEPT clés de `messageAttachmentMinimalSchema` — `id`,
-   * `fileName`, `mimeType`, `fileSize`, `fileUrl`, `thumbnailUrl`, `duration`.
-   * Et rien d'autre : `fast-json-stringify` supprime toute clé qu'aucun schéma
-   * ne déclare.
+   * SERVI : les TREIZE clés de `conversationAttachmentListItemSchema` (voir son
+   * doc-comment) — les sept de `messageAttachmentMinimalSchema` qu'il épand,
+   * plus les six que la galerie REND. Et rien d'autre : `fast-json-stringify`
+   * supprime toute clé qu'aucun schéma ne déclare.
    *
-   * CHARGÉ ET JAMAIS SERVI : `AttachmentService.getConversationAttachments`
-   * demande à MongoDB `transcription` (texte + segments mot-à-mot) ET
-   * `translations` (toutes les langues) pour chaque pièce de la page — jusqu'à
-   * 100 — et le sérialiseur les jette. L'issue #4392 les portait comme
-   * « servies systématiquement » ; la mesure dit CHARGÉES, jamais servies.
-   * Le comptage des lecteurs rend donc zéro par CONSTRUCTION, et il rend zéro
-   * aussi en balayant les clients : web —
-   * `apps/web/components/attachments/AttachmentGallery.tsx` via
-   * `AttachmentService.getConversationAttachments`, qui ne cite ni l'une ni
-   * l'autre ; iOS/SDK — `ConversationsEndpoint.byConversationIdAttachments`
+   * NI CHARGÉ NI SERVI : `transcription` et `translations`. #4392 avait mesuré
+   * que `AttachmentService.getConversationAttachments` les demandait à MongoDB
+   * pour chaque pièce de la page — jusqu'à 100 — et que le sérialiseur les
+   * jetait ; l'issue #4392 les portait comme « servies systématiquement », la
+   * mesure disait CHARGÉES, jamais servies. Le comptage des lecteurs rendait
+   * zéro par CONSTRUCTION, et zéro aussi en balayant les clients : web —
+   * `apps/web/components/attachments/AttachmentGallery.tsx`, qui ne cite ni
+   * l'une ni l'autre ; iOS/SDK — `ConversationsEndpoint.byConversationIdAttachments`
    * est DÉCLARÉ et jamais appelé ; Android — aucun endpoint.
    *
-   * Le retrait de ces deux colonnes du `select` ne changerait donc RIEN au fil :
-   * c'est du travail mort au sens exact de #4177, et il se fait dans le
-   * SERVICE (`services/attachments/AttachmentService.ts`, `select` de
-   * `getConversationAttachments`), hors du territoire de ce lot. Le témoin
-   * `__tests__/unit/routes/attachments/conversation-attachments-served-keys.test.ts`
-   * gèle le jeu de clés servi et rougit si quelqu'un élargit le schéma sans
-   * décider ce que la galerie a le droit de voir (règle du cycle 84 : rendre
-   * une donnée visible oblige à décider, dans le même lot, si elle a le droit
-   * de l'être).
+   * #4887 a soldé ce travail mort au sens exact de #4177 : le service lit
+   * désormais `attachmentServiceRowSelect` (27 colonnes, sans les deux
+   * lourdes) et rend un `Attachment`. Le retrait s'est fait au `select`,
+   * JAMAIS par un élargissement du schéma — la distinction liste / détail
+   * établie par #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
+   * `messageAttachmentSchema`) reste le seul à servir ces deux colonnes.
    *
-   * PAS TRANCHÉ ICI (critère 2, décision produit) : la galerie web REND
-   * `messageId`, `originalName`, `uploadedBy`, `createdAt`, `width` et
-   * `height`, qu'aucun schéma ne déclare — son panneau d'information est donc
-   * vide par construction. Élargir le minimal est une décision, pas un
-   * nettoyage.
+   * Deux témoins gardent l'ensemble, et ils gardent deux choses différentes :
+   * `__tests__/unit/routes/attachments/conversation-attachments-served-keys.test.ts`
+   * gèle le jeu de clés SERVI (la réponse), et
+   * `__tests__/unit/services/attachments/conversation-attachments-select.test.ts`
+   * gèle les colonnes DEMANDÉES (la requête) — un double Prisma rend ce qu'on
+   * lui dit quel que soit le `select`, donc seul l'argument passé à `findMany`
+   * peut attester d'un retrait de colonne.
    */
   fastify.get(
     '/conversations/:conversationId/attachments',
@@ -296,7 +352,7 @@ export async function registerMetadataRoutes(
                 properties: {
                   attachments: {
                     type: 'array',
-                    items: messageAttachmentMinimalSchema
+                    items: conversationAttachmentListItemSchema
                   }
                 }
               }
