@@ -6,6 +6,7 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES, MAX_ITEMS_PER_COLLECTION } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 
 /**
  * Collection `conversations` de `/sync` (issue #4171, critère 1) — même forme
@@ -52,6 +53,27 @@ export const syncConversationSelect = Prisma.validator<Prisma.ConversationSelect
 });
 
 type SyncConversation = Prisma.ConversationGetPayload<{ select: typeof syncConversationSelect }>;
+
+/**
+ * Ce que `?fields=conversations.…` peut nommer (#4173) — relevé
+ * MÉCANIQUEMENT depuis le select, comme le schéma de réponse juste en dessous.
+ */
+export const SYNC_CONVERSATION_SERVED_FIELDS = Object.keys(syncConversationSelect) as readonly string[];
+
+/**
+ * Trois colonnes épinglées, pour la MÉCANIQUE de la page seulement : `id` +
+ * `updatedAt` portent le keyset `(updatedAt, id)`, `createdAt` décide du
+ * partage `added` / `modified`. Aucune n'est une garde de confidentialité ici —
+ * la RLS de cette collection est un `where`, pas un champ.
+ */
+export const syncConversationPlan: ColumnPlan<typeof syncConversationSelect> = {
+  full: syncConversationSelect,
+  pinned: ['id', 'createdAt', 'updatedAt'],
+};
+
+/** `id` seul survit à la projection dans la ligne servie : sans lui, le client
+ *  ne sait pas quelle entrée de sa liste il met à jour. */
+const SYNC_CONVERSATION_SERVED_PINNED = ['id'] as const;
 
 /** Clés relevées mécaniquement depuis `syncConversationSelect` — aucune ligne
  *  de plus, aucune de moins. */
@@ -174,8 +196,11 @@ export async function syncConversations(opts: {
   cap: number;
   scope?: string;
   cursor?: SyncCursor;
+  /** `?fields=conversations.…` déjà analysé — `null` ⇒ le profil par défaut. */
+  fields?: FieldSet;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
+  const fields = opts.fields ?? null;
 
   const membership = await resolveSyncMembership({ prisma, identity, scope });
 
@@ -218,7 +243,7 @@ export async function syncConversations(opts: {
           }
         : { updatedAt: { gt: sinceDate } }),
     },
-    select: syncConversationSelect,
+    select: selectForFields(syncConversationPlan, fields),
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
@@ -229,8 +254,10 @@ export async function syncConversations(opts: {
   const changedPage = budgeted.page;
   const changedTruncated = capTruncated || budgeted.truncated;
 
-  const added = changedPage.filter((c) => c.createdAt > sinceDate) as unknown as Record<string, unknown>[];
-  const modified = changedPage.filter((c) => c.createdAt <= sinceDate) as unknown as Record<string, unknown>[];
+  const servir = (c: SyncConversation): Record<string, unknown> =>
+    restrictFields(c as unknown as Record<string, unknown>, fields, SYNC_CONVERSATION_SERVED_PINNED);
+  const added = changedPage.filter((c) => c.createdAt > sinceDate).map(servir);
+  const modified = changedPage.filter((c) => c.createdAt <= sinceDate).map(servir);
 
   const lastChanged = changedPage[changedPage.length - 1] as SyncConversation | undefined;
   const cKey: CursorKey | undefined = lastChanged

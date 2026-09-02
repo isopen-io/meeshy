@@ -71,6 +71,12 @@ const v1Doc = () => ({
   textObjects: [{ id: 'a', text: 'Bonjour', sourceLanguage: 'fr' }],
 });
 
+/** Doc d'un rang SUPÉRIEUR, DÉRIVÉ du v3 pour qu'il ne puisse pas en diverger
+ *  (#4774). Au rang 3, `v === 3` et `v >= 3` rendent le même verdict — un
+ *  témoin posé là ne peut pas tomber. C'est au rang 4 que les deux prédicats
+ *  se séparent, et c'est le seul endroit où ce défaut se voit. */
+const v4Doc = () => ({ ...v3Doc(), v: 4 });
+
 // ─── translationSetPath (résolveur pur, à sec) ───────────────────────────────
 
 describe('translationSetPath — résolveur de chemin v3 par id', () => {
@@ -172,6 +178,32 @@ describe('StoryTextObjectTranslationService.handleTranslationCompleted — persi
 
     const setFields = setFieldsOf(prisma);
     expect(setFields['storyEffects.scenes.0.objects.1.payload.translations.en']).toBe('Hello');
+    expect(
+      Object.keys(setFields).filter((k) => k.startsWith('storyEffects.textObjects.')),
+    ).toEqual([]);
+  });
+
+  it("doc d'un rang SUPÉRIEUR : le $set vise SA scène, il ne grave pas une forme v1 dans un document v3+ (#4774)", async () => {
+    const { service, prisma } = makeTranslationService({
+      authorId: USER_ID,
+      visibility: 'PRIVATE',
+      visibilityUserIds: [],
+      content: 'Bonjour',
+      storyEffects: v4Doc(),
+    });
+
+    await service.handleTranslationCompleted({
+      postId: POST_ID,
+      textObjectIndex: 0,
+      translations: { en: 'Hello' },
+    });
+
+    const setFields = setFieldsOf(prisma);
+    expect(setFields['storyEffects.scenes.0.objects.1.payload.translations.en']).toBe('Hello');
+    // Le point du témoin : sous le prédicat STRICT, ce document repartait par
+    // le chemin v1 et GRAVAIT `storyEffects.textObjects.0.translations.en` dans
+    // un document qui n'a pas de `textObjects`. Une corruption, pas un affichage
+    // manquant — et aucun lecteur ne relit jamais ce champ orphelin.
     expect(
       Object.keys(setFields).filter((k) => k.startsWith('storyEffects.textObjects.')),
     ).toEqual([]);

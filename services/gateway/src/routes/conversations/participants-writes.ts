@@ -516,6 +516,22 @@ export function registerParticipantWriteRoutes(
                         type: 'string',
                         enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found'],
                         description: 'What happened to THIS identifier'
+                      },
+                      // Produit par `admitOneParticipant`, porté par
+                      // `ParticipantAdmissionVerdict`, asserté par
+                      // `participants-batch-add.test.ts` — et pourtant nommé
+                      // par AUCUN schéma : fast-json-stringify le retirait de
+                      // chaque réponse. L'aîné le « prouvait » parce qu'il
+                      // attestait l'objet POSÉ, du bon côté du sérialiseur.
+                      // C'est le miroir exact du `participant` déclaré sans
+                      // producteur retiré au-dessus : ici un producteur sans
+                      // déclaration. Absent d'un refus — un refus n'a pas de
+                      // ligne à nommer. Mesuré par
+                      // `participants-batch-served-body.test.ts`, qui lit
+                      // l'octet servi.
+                      participantId: {
+                        type: 'string',
+                        description: 'The Participant row written for THIS identifier (admissions only)'
                       }
                     }
                   }

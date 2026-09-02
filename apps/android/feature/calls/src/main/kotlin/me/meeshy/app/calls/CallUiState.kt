@@ -39,12 +39,15 @@ enum class CallStatus {
 
 /**
  * Local media intent that rides *alongside* the call phase, never inside the
- * FSM (parity with iOS `CallManager`, where mute/camera are independent of
- * `CallState`). [isCameraOn] is only meaningful for a video call.
+ * FSM (parity with iOS `CallManager`, where mute/camera/speaker are independent
+ * of `CallState`). [isCameraOn] is only meaningful for a video call. [isSpeakerOn]
+ * is local audio routing only — it is never signalled to the peer (parity iOS
+ * `CallManager.isSpeaker`, no `call:media-toggled` counterpart).
  */
 data class CallMedia(
     val isMuted: Boolean = false,
     val isCameraOn: Boolean = true,
+    val isSpeakerOn: Boolean = false,
 )
 
 /**
@@ -90,6 +93,7 @@ data class CallUiState(
     val isVideoCall: Boolean,
     val isMuted: Boolean,
     val isCameraOn: Boolean,
+    val isSpeakerOn: Boolean,
     val endReason: CallEndReason?,
     val reconnectAttempt: Int,
     /**
@@ -214,6 +218,7 @@ object CallPresenter {
             isVideoCall = config.isVideo,
             isMuted = media.isMuted,
             isCameraOn = config.isVideo && media.isCameraOn,
+            isSpeakerOn = media.isSpeakerOn,
             endReason = (state as? CallState.Ended)?.reason,
             reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
             durationLabel = durationLabelFor(status, elapsedSeconds),

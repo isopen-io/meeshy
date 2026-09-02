@@ -7,9 +7,11 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import me.meeshy.core.database.dao.BlockedUserDao
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.FriendDao
+import me.meeshy.core.database.dao.FriendRequestDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
@@ -79,6 +81,14 @@ internal object DatabaseModule {
     @Provides
     fun providesTusUploadCheckpointDao(database: MeeshyDatabase): TusUploadCheckpointDao =
         database.tusUploadCheckpointDao()
+
+    @Provides
+    fun providesFriendRequestDao(database: MeeshyDatabase): FriendRequestDao =
+        database.friendRequestDao()
+
+    @Provides
+    fun providesBlockedUserDao(database: MeeshyDatabase): BlockedUserDao =
+        database.blockedUserDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

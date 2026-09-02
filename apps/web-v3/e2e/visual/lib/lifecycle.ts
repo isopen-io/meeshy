@@ -99,7 +99,11 @@ export const rapporteRequetesInterdites = (
 export const BATTEMENT = {
   periodeMs: 5 * 60_000,
   fenetreDeRecetteMs: 10 * 60_000,
-  chemin: '/anonymous/refresh',
+  // `PATCH /guest-sessions/me` (`routes/conversations/link-admission.ts:775-777`),
+  // qui REMPLACE `POST /anonymous/refresh` — l'adaptateur déprécié que la
+  // passerelle garde pour les clients d'avant (#4167 critère 4). Un gate qui
+  // compterait l'ancien chemin ne verrait plus aucun battement, et dirait vert.
+  chemin: '/guest-sessions/me',
 } as const;
 
 export const estBattement = (entree: EntreeDeJournal): boolean =>
@@ -176,12 +180,12 @@ export const verdictDeBattement = ({
 
 // LA RECETTE DU § 6.5, et l'état RÉEL de sa couverture.
 //
-// Les six cas C→H ont besoin d'un ÉCRAN pour avoir un sujet — ils arrivent avec `thread` (L2, une
-// conversation anonyme, un lien, un jeton). Ce que cet instrument porte AUJOURD'HUI, c'est la
-// ligne anti-régression et la moitié « un seul porteur » du cas E, sur un scénario FABRIQUÉ. La
-// table le dit plutôt que de le taire : un instrument qui laisserait croire qu'il porte les six
-// rendrait un vert sur cinq cas que personne n'a joués.
-export type StatutDeCas = 'fabriqué' | 'à porter';
+// Les six cas C→H ont eu besoin d'un ÉCRAN pour avoir un sujet : il est arrivé — `thread`, à sa
+// porte d'invité (`/chat/:lien`, état INVITÉ) — et `v3-lifecycle.spec.ts` les joue sur lui, sur
+// la chaîne réelle (serveur de la v3 + passerelle de bouchon + bouchon socket), à côté du
+// scénario fabriqué qui reste le témoin de contrôle de la ligne anti-régression et du RAPPORT de
+// battement. La table le dit, cas par cas, en nommant le témoin qui le porte.
+export type StatutDeCas = 'fabriqué' | 'à porter' | 'porté';
 
 export type CasDeRecette = {
   readonly id: string;
@@ -195,43 +199,43 @@ export const CAS_DE_RECETTE: readonly CasDeRecette[] = [
     id: 'C',
     enonce:
       "basculer d'application 10 min puis revenir ⇒ conversation ouverte, aucune modale, aucun re-join, et le premier message reçu pendant l'absence apparaît",
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas C)',
   },
   {
     id: 'D',
     enonce:
-      'couper le réseau 5 min, envoyer 2 messages hors-ligne, revenir ⇒ les 2 partent dans l’ordre, hasGap peint son séparateur, le jeton est le même',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+      'couper le réseau 5 min, envoyer 2 messages hors-ligne, revenir ⇒ les 2 partent dans l’ordre, GET /sync rattrape depuis le curseur sans trou (la passerelle n’en mesure aucun pour une session anonyme, routes/sync/index.ts:274-279 — le séparateur hasGap est gagé côté membre par v3-fil.spec.ts), le jeton est le même',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas D)',
   },
   {
     id: 'E',
     enonce:
       'deux onglets sur le même lien, fermer l’un ⇒ l’autre continue d’émettre et de recevoir ; une seule requête de battement observée sur 10 min',
-    statut: 'fabriqué',
-    porteurAttendu: 'écran thread (L2) pour la fermeture d’onglet ; le battement est déjà gagé ici',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas E) ; le rapport de battement reste gagé par le scénario fabriqué',
   },
   {
     id: 'F',
     enonce:
       'forcer isActive:false en base ⇒ bandeau + bouton, la lecture reste, AUCUN POST /anonymous/join observé sans clic',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas F)',
   },
   {
     id: 'G',
     enonce:
       'désactiver le lien pendant la lecture ⇒ composeur fermé avec sa raison, contenu lu conservé, file annulée et visible',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas G)',
   },
   {
     id: 'H',
     enonce:
       'fermer l’onglet ⇒ zéro POST /anonymous/leave observé ; la place se libère après N minutes',
-    statut: 'à porter',
-    porteurAttendu: 'écran thread (L2)',
+    statut: 'porté',
+    porteurAttendu: 'v3-lifecycle.spec.ts § « § 6.5 — les six cas sur l’écran thread » (cas H)',
   },
   {
     id: 'anti-régression',
@@ -244,6 +248,9 @@ export const CAS_DE_RECETTE: readonly CasDeRecette[] = [
 
 export const casAPorter = (): readonly CasDeRecette[] =>
   CAS_DE_RECETTE.filter((cas) => cas.statut === 'à porter');
+
+export const casPortes = (): readonly CasDeRecette[] =>
+  CAS_DE_RECETTE.filter((cas) => cas.statut === 'porté');
 
 // LE SCÉNARIO FABRIQUÉ — le sujet sans lequel l'instrument ne peut pas se prouver.
 //

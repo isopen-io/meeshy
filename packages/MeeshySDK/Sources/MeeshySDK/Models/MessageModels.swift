@@ -446,6 +446,13 @@ public struct APIMessage: Sendable {
     /// ci-dessous, pour rester source-compatible avec le memberwise init déjà
     /// utilisé par les tests existants sans devoir y ajouter ce paramètre.
     public var location: SharedPlace? = nil
+    /// Sticker porté par le message (#4823), hissé par le gateway depuis
+    /// `metadata.sticker` sur ses deux producteurs (REST et `message:new`) ;
+    /// repli sur l'enveloppe `metadata` pour une charge qui ne le hisse pas.
+    /// Toujours RENDABLE quand non nil (`MessageSticker.ifRenderable`) — un
+    /// sticker vide sur le fil vaut absence. Même patron `var`/`= nil` que
+    /// `location` pour garder l'init memberwise source-compatible.
+    public var sticker: MessageSticker? = nil
     public let isEncrypted: Bool?
     public let encryptionMode: String?
     public let createdAt: Date
@@ -498,7 +505,7 @@ extension APIMessage: Decodable {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location, sticker
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
@@ -516,6 +523,14 @@ extension APIMessage: Decodable {
     /// whole message decode.
     private struct MessageMetadataEnvelope: Decodable {
         let trackingLinks: [TrackedLink]?
+    }
+
+    /// Enveloppe SÉPARÉE pour `metadata.sticker` : deux lectures tolérantes
+    /// de la même clé plutôt qu'une, pour qu'un `sticker` malformé ne fasse
+    /// pas perdre `trackingLinks` (et réciproquement) — chaque champ tombe
+    /// seul.
+    private struct MessageStickerEnvelope: Decodable {
+        let sticker: MessageSticker?
     }
 
     public init(from decoder: Decoder) throws {
@@ -550,6 +565,13 @@ extension APIMessage: Decodable {
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
+        // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
+        // inattendue laisse le champ nil sans faire tomber le message — et un
+        // sticker non rendable vaut absence (règle de `MessageSticker`).
+        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
+        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
+        sticker = rootSticker?.ifRenderable ?? metadataSticker?.ifRenderable
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -641,8 +663,14 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// `docs/superpowers/plans/2026-08-19-forward-reach.md` Task 5.
     /// L'encodage synthétisé omet les optionnels nil.
     public var copyAttachmentsFromMessageId: String?
+    /// Sticker du message (#4823) — clé JSON `sticker`, que le gateway range
+    /// sous `metadata.sticker` et ressert hissée. Le PNG rendu voyage à part,
+    /// en pièce jointe image ordinaire (`attachmentIds`). L'encodage
+    /// synthétisé omet les optionnels nil : un `sticker` nil n'apparaît PAS
+    /// dans le corps envoyé.
+    public var sticker: MessageSticker?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -653,6 +681,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.location = location
         self.copyAttachmentsFromMessageId = copyAttachmentsFromMessageId
+        self.sticker = sticker
     }
 }
 
@@ -942,6 +971,7 @@ extension APIMessage {
             recipientCount: recipientCount ?? 0,
             callSummary: callSummary,
             joinNotice: joinNotice,
+            sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )
     }

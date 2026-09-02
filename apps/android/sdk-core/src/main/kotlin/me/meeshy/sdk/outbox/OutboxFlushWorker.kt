@@ -40,6 +40,7 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.PublishMediaWriteBack
 import me.meeshy.sdk.user.UserRepository
@@ -73,6 +74,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val friendshipCache: FriendshipCache,
     private val userRepository: UserRepository,
     private val sessionRepository: SessionRepository,
+    private val postRepository: PostRepository,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -103,6 +105,12 @@ class OutboxFlushWorker @AssistedInject constructor(
                         runCatching { json.decodeFromString<PinPayload>(row.payload) }
                             .getOrNull()
                             ?.let { messageRepository.refresh(it.conversationId) }
+                    // A hard-exhausted like/bookmark rolls the optimistic flip back to
+                    // the state it was in before this row was enqueued.
+                    OutboxKind.LIKE_POST -> postRepository.rollbackLike(row.targetId, liked = false)
+                    OutboxKind.UNLIKE_POST -> postRepository.rollbackLike(row.targetId, liked = true)
+                    OutboxKind.BOOKMARK_POST -> postRepository.rollbackBookmark(row.targetId, bookmarked = false)
+                    OutboxKind.UNBOOKMARK_POST -> postRepository.rollbackBookmark(row.targetId, bookmarked = true)
                     else -> Unit
                 }
             },
@@ -298,6 +306,30 @@ class OutboxFlushWorker @AssistedInject constructor(
             val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
                 .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
             when (apiCall { messageApi.unpin(payload.conversationId, row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.LIKE_POST to MutationSender { row ->
+            when (apiCall { postApi.like(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNLIKE_POST to MutationSender { row ->
+            when (apiCall { postApi.unlike(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.BOOKMARK_POST to MutationSender { row ->
+            when (apiCall { postApi.bookmark(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNBOOKMARK_POST to MutationSender { row ->
+            when (apiCall { postApi.removeBookmark(row.targetId) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }

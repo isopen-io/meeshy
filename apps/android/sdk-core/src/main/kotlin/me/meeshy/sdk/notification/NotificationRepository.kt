@@ -89,6 +89,83 @@ class NotificationRepository @Inject constructor(
         if (!notification.state.isRead) _unreadCount.update { it + 1 }
     }
 
+    /**
+     * A `notification:read` arriving on the socket — from ANOTHER device, or the echo of this
+     * device's OWN [markAsRead] (the gateway broadcasts to every socket in `ROOMS.user`,
+     * originator included) — applies the read state to the shared cache. A row already read
+     * (this device's own optimistic mutation already landed, or a duplicate delivery) is a
+     * no-op, so the echo case never double-decrements [unreadCountStream].
+     */
+    fun applyRead(notificationId: String) {
+        val current = _notificationsCache.value ?: return
+        val wasUnread = current.firstOrNull { it.id == notificationId }?.state?.isRead == false
+        if (!wasUnread) return
+        _notificationsCache.value = current.map {
+            if (it.id == notificationId) it.copy(state = it.state.copy(isRead = true)) else it
+        }
+        _unreadCount.update { (it - 1).coerceAtLeast(0) }
+    }
+
+    /**
+     * `notification:read-bulk` — a bulk mark-as-read the gateway applied via `updateMany`/
+     * `$runCommandRaw`, which returns no ids to enumerate; the event instead announces the
+     * PREDICATE it applied, replayed here through the shared, single-source-of-truth
+     * [notificationMatchesReadBulkScope] (a local reimplementation would risk marking a
+     * different row set than the server did). [unreadCountStream] is deliberately left
+     * untouched: this cache is a partial (paginated) view, so it matches fewer rows than the
+     * server marked — decrementing from this predicate would make the badge drift.
+     * `notification:counts`, emitted right after by the gateway, is what corrects it — mirrors
+     * web's `handleNotificationReadBulk`.
+     */
+    fun applyReadBulk(scope: NotificationReadBulkScope) {
+        val current = _notificationsCache.value ?: return
+        val touched = current.any { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
+        if (!touched) return
+        _notificationsCache.value = current.map {
+            if (!it.state.isRead && notificationMatchesReadBulkScope(scope, it)) {
+                it.copy(state = it.state.copy(isRead = true))
+            } else {
+                it
+            }
+        }
+    }
+
+    /**
+     * A `notification:deleted` arriving on the socket — from another device, or the echo of
+     * this device's own [delete] — removes the row from the shared cache. Mirrors [applyRead]'s
+     * echo-safety: a row already absent (this device's own optimistic removal already landed)
+     * is a no-op.
+     */
+    fun applyDeleted(notificationId: String) {
+        val current = _notificationsCache.value ?: return
+        val existing = current.firstOrNull { it.id == notificationId } ?: return
+        _notificationsCache.value = current.filterNot { it.id == notificationId }
+        if (!existing.state.isRead) _unreadCount.update { (it - 1).coerceAtLeast(0) }
+    }
+
+    /**
+     * `notification:deleted-bulk` — symmetric of [applyReadBulk] on the PURGE side, replayed
+     * through the shared [notificationMatchesDeletedBulkScope]. [unreadCountStream] is not a
+     * precaution here but a CONSEQUENCE of the predicate: every row the gateway purges this way
+     * was already read (`deleteMany({ isRead: true })`), so it was never counted in `unread`.
+     */
+    fun applyDeletedBulk(scope: NotificationDeletedBulkScope) {
+        val current = _notificationsCache.value ?: return
+        val touched = current.any { notificationMatchesDeletedBulkScope(scope, it) }
+        if (!touched) return
+        _notificationsCache.value = current.filterNot { notificationMatchesDeletedBulkScope(scope, it) }
+    }
+
+    /**
+     * `notification:counts` — the gateway's server-authoritative resync, emitted after every
+     * notification mutation (this device's or another's). Without it the badge only corrects
+     * on the next full refetch; [applyReadBulk]/[applyDeletedBulk] both rely on it for exactly
+     * that correction, since their own partial cache cannot recompute the true unread count.
+     */
+    fun applyCounts(unread: Int) {
+        _unreadCount.value = unread
+    }
+
     suspend fun list(
         offset: Int = 0,
         limit: Int = 20,
@@ -123,7 +200,13 @@ class NotificationRepository @Inject constructor(
     suspend fun unreadCount(): NetworkResult<Int> =
         rawApiCall { notificationApi.unreadCount().count }
 
-    /** Optimistic: flips `isRead` in the shared cache before the network call, rolls back on failure. */
+    /**
+     * Optimistic: flips `isRead` in the shared cache before the network call, rolls back on
+     * failure. The rollback is TARGETED — it remaps whichever list is current at that point,
+     * flipping only [notificationId] back to unread — never a wholesale restore of the
+     * pre-mutation snapshot, which would also clobber any [applyRead]/[applyDeleted]/
+     * [prependLive] arrival that landed on the cache while this call was in flight.
+     */
     suspend fun markAsRead(notificationId: String): NetworkResult<ApiNotification> {
         val previous = _notificationsCache.value
         val wasUnread = previous?.firstOrNull { it.id == notificationId }?.state?.isRead == false
@@ -134,23 +217,43 @@ class NotificationRepository @Inject constructor(
 
         val result = apiCall { notificationApi.markAsRead(notificationId) }
         if (result is NetworkResult.Failure) {
-            _notificationsCache.value = previous
+            _notificationsCache.update { current ->
+                current?.map {
+                    if (it.id == notificationId) it.copy(state = it.state.copy(isRead = false)) else it
+                }
+            }
             if (wasUnread) _unreadCount.update { it + 1 }
         }
         return result
     }
 
-    /** Optimistic: flips every `isRead` in the shared cache before the network call, rolls back on failure. */
+    /**
+     * Optimistic: flips every `isRead` in the shared cache before the network call, rolls back
+     * on failure. The rollback is TARGETED to the ids that were unread BEFORE this call (never
+     * a wholesale restore of the pre-mutation snapshot — see [markAsRead]'s doc-comment), and
+     * only reverts rows still `isRead` when the failure lands, so a concurrent [applyDeleted]
+     * removal or a genuine [applyRead] confirmation for one of those ids is never undone.
+     * [unreadCountStream] is corrected by the DELTA actually reverted, not a captured absolute
+     * value that could itself be stale by the time the failure lands.
+     */
     suspend fun markAllAsRead(): NetworkResult<Int> {
         val previous = _notificationsCache.value
-        val previousUnreadCount = _unreadCount.value
+        val previouslyUnreadIds = previous.orEmpty()
+            .filter { !it.state.isRead }
+            .mapTo(HashSet()) { it.id }
         _notificationsCache.value = previous?.map { it.copy(state = it.state.copy(isRead = true)) }
         _unreadCount.value = 0
 
         val result = rawApiCall { notificationApi.markAllAsRead().count ?: 0 }
         if (result is NetworkResult.Failure) {
-            _notificationsCache.value = previous
-            _unreadCount.value = previousUnreadCount
+            val current = _notificationsCache.value
+            val revertedIds = current.orEmpty()
+                .filter { it.id in previouslyUnreadIds && it.state.isRead }
+                .mapTo(HashSet()) { it.id }
+            _notificationsCache.value = current?.map {
+                if (it.id in revertedIds) it.copy(state = it.state.copy(isRead = false)) else it
+            }
+            _unreadCount.update { it + revertedIds.size }
         }
         return result
     }
@@ -159,17 +262,26 @@ class NotificationRepository @Inject constructor(
      * Optimistic: removes the row from the shared cache before the network call, rolls back
      * on failure. A deleted row that was unread also decrements [unreadCountStream] — mirrors
      * [markAsRead]'s exact optimistic-mutation shape. Port of iOS `NotificationRowView`'s
-     * trailing swipe / `NotificationListViewModel.deleteNotification`.
+     * trailing swipe / `NotificationListViewModel.deleteNotification`. The rollback is
+     * TARGETED — it reinserts only the removed row into whichever list is current at that
+     * point (deduped by id, like [prependLive]), never a wholesale restore of the pre-mutation
+     * snapshot.
      */
     suspend fun delete(notificationId: String): NetworkResult<Unit> {
         val previous = _notificationsCache.value
-        val wasUnread = previous?.firstOrNull { it.id == notificationId }?.state?.isRead == false
+        val removed = previous?.firstOrNull { it.id == notificationId }
+        val wasUnread = removed?.state?.isRead == false
         _notificationsCache.value = previous?.filterNot { it.id == notificationId }
         if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
 
         val result = apiCall { notificationApi.delete(notificationId) }
         if (result is NetworkResult.Failure) {
-            _notificationsCache.value = previous
+            if (removed != null) {
+                _notificationsCache.update { current ->
+                    val list = current.orEmpty()
+                    if (list.any { it.id == notificationId }) list else listOf(removed) + list
+                }
+            }
             if (wasUnread) _unreadCount.update { it + 1 }
         }
         return result
@@ -197,6 +309,19 @@ class NotificationRepository @Inject constructor(
         if (countResult is NetworkResult.Success) {
             _unreadCount.value = countResult.data
         }
+    }
+
+    /**
+     * Resets this per-process singleton to its cold-start state — called from
+     * [me.meeshy.sdk.session.SessionTeardown.wipe] on logout/account-switch so a
+     * second account signing in on the same device never inherits the previous
+     * account's cached notifications or unread count.
+     */
+    fun clear() {
+        _notificationsCache.value = null
+        _notificationsSyncedAt.value = null
+        _unreadCount.value = 0
+        _hasMore.value = false
     }
 
     private companion object {

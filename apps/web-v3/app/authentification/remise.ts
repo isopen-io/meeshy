@@ -1,4 +1,5 @@
 import type { DeuxiemeFacteur, Session } from '@/lib/api/authentification';
+import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/lib/api/cookies';
 
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
@@ -63,7 +64,7 @@ export const CLES_DEUXIEME_FACTEUR = {
 /** L'écran de vérification du legacy. Il franchit la zone, comme `/forgot-password`. */
 export const ECRAN_DEUXIEME_FACTEUR = '/auth/verify-2fa';
 
-export const COOKIE_DE_SESSION = 'meeshy_session';
+export { COOKIE_DE_SESSION };
 
 /**
  * LE JETON, EN COOKIE — ce qui rend la zone connectée RENDABLE PAR LE SERVEUR.
@@ -86,7 +87,7 @@ export const COOKIE_DE_SESSION = 'meeshy_session';
  * le retient sur toute requête de sous-ressource venue d'un autre site et sur
  * tout POST inter-site ; la v3 ne s'en sert que pour RENDRE, jamais pour agir.
  */
-export const COOKIE_DE_JETON = 'meeshy_auth';
+export { COOKIE_DE_JETON };
 
 /**
  * MIROIR EXACT de `AuthManagerService.setSessionCookie`

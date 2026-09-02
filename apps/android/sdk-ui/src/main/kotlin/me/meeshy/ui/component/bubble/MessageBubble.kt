@@ -88,6 +88,7 @@ public fun MessageBubble(
     onImageClick: ((Int) -> Unit)? = null,
     onLocationClick: ((BubbleLocation) -> Unit)? = null,
     onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    onFileClick: ((BubbleFile) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     onFlagTap: ((String) -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
@@ -261,6 +262,8 @@ public fun MessageBubble(
                     BubbleFileRow(
                         file = file,
                         onColor = onColor,
+                        onClick = onFileClick?.takeIf { !file.url.isNullOrBlank() }
+                            ?.let { { it(file) } },
                         modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                     )
                 }
@@ -681,12 +684,21 @@ private fun imageAspectRatio(image: BubbleImage): Float {
 private fun BubbleFileRow(
     file: BubbleFile,
     onColor: Color,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val openLabel = stringResource(R.string.bubble_file_open)
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = openLabel
+                }
+            }
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),

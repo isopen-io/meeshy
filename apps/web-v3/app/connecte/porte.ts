@@ -1,8 +1,10 @@
 import {
   conversations,
+  liensDuLecteur,
   moi,
   type Conversation,
   type Lecteur,
+  type LiensDuLecteur,
   type Recuperateur,
 } from '@/lib/api/compte';
 
@@ -25,9 +27,14 @@ import { documentDePanne, documentDesChats, documentDuTableau } from './vue';
  *   3. **A-t-elle répondu ?** Non ⇒ l'écran de panne, DESSINÉ. Un écran blanc
  *      et un écran d'erreur ne coûtent pas le même effort au lecteur.
  *
- * LES DEUX APPELS PARTENT ENSEMBLE. `/auth/me` et `/conversations` ne dépendent
- * pas l'un de l'autre : les enchaîner doublerait la latence du seul
- * aller-retour que cette page paie.
+ * LES APPELS PARTENT ENSEMBLE. `/auth/me`, `/conversations` et — pour le
+ * tableau de bord seul — `/links` ne dépendent pas les uns des autres : les
+ * enchaîner multiplierait la latence du seul aller-retour que cette page paie.
+ *
+ * `avecLiens` n'est pas un réglage d'affichage mais une décision de COÛT : la
+ * liste des conversations ne rend aucune section « Mes liens », et lui faire
+ * payer un troisième appel sur une 3G rurale serait une lenteur — c'est-à-dire
+ * un bug, pas une dette.
  */
 
 const CACHE_PRIVE = 'no-store, private';
@@ -57,6 +64,7 @@ export type Charge = {
   readonly lecteur: Lecteur | null;
   readonly conversations: readonly Conversation[];
   readonly total: number;
+  readonly liens: LiensDuLecteur;
 };
 
 export type Ecran = (charge: Charge, maintenant: number) => string;
@@ -67,14 +75,27 @@ export type Ecran = (charge: Charge, maintenant: number) => string;
  * Elle n'est jamais fournie en production — la valeur par défaut est `fetch`.
  */
 export const serviteurDe =
-  (chemin: string, ecran: Ecran, recuperer?: Recuperateur) =>
+  ({
+    chemin,
+    ecran,
+    avecLiens = false,
+    recuperer,
+  }: {
+    readonly chemin: string;
+    readonly ecran: Ecran;
+    readonly avecLiens?: boolean;
+    readonly recuperer?: Recuperateur;
+  }) =>
   async (requete: Request): Promise<Response> => {
     const jeton = jetonDuLecteur(requete);
     if (jeton === null) return versLaConnexion(chemin);
 
-    const [identite, fil] = await Promise.all([
+    const [identite, fil, liens] = await Promise.all([
       moi({ jeton, recuperer }),
       conversations({ jeton, recuperer }),
+      avecLiens
+        ? liensDuLecteur({ jeton, recuperer })
+        : Promise.resolve<LiensDuLecteur>({ genre: 'indisponible' }),
     ]);
 
     if (identite.genre === 'session-expiree' || fil.genre === 'session-expiree') {
@@ -88,16 +109,21 @@ export const serviteurDe =
           lecteur: identite.genre === 'lecteur' ? identite.lecteur : null,
           conversations: fil.conversations,
           total: fil.total,
+          liens,
         },
         Date.now(),
       ),
     );
   };
 
-export const TABLEAU = serviteurDe('/', (charge, maintenant) =>
-  documentDuTableau({ ...charge, maintenant }),
-);
+export const TABLEAU = serviteurDe({
+  chemin: '/',
+  avecLiens: true,
+  ecran: (charge, maintenant) => documentDuTableau({ ...charge, maintenant }),
+});
 
-export const LISTE_DES_CHATS = serviteurDe('/chats', (charge, maintenant) =>
-  documentDesChats({ conversations: charge.conversations, maintenant }),
-);
+export const LISTE_DES_CHATS = serviteurDe({
+  chemin: '/chats',
+  ecran: (charge, maintenant) =>
+    documentDesChats({ conversations: charge.conversations, maintenant }),
+});

@@ -514,3 +514,78 @@ describe('le fichier budgets.json du dépôt', () => {
     });
   });
 });
+
+/**
+ * LE CRITÈRE DE FIN DE `home` — « `CallManager` absent du layout connecté
+ * (assertion sur `app-build-manifest.json`) ».
+ *
+ * Un composant P2 ne gouverne pas un gate P1 : `CallManager` (pile WebRTC,
+ * 1350 lignes dans `apps/web`) monté dans le layout ferait payer sa pile à
+ * CHAQUE écran connecté, y compris le tableau de bord qui n'appelle personne.
+ *
+ * La question ne se pose pas à un `grep` d'imports — un module peut entrer par
+ * un barrel, une réexportation ou une dépendance transitive sans qu'aucun
+ * fichier de `app/` ne le nomme. Elle se pose au MANIFESTE : ce qui n'est dans
+ * aucun chunk expédié n'est monté nulle part. La liste est NOMMÉE, jamais
+ * heuristique — un gate qui rougirait sur « call » attraperait `recall`,
+ * `caller`, et finirait désarmé.
+ */
+describe('les modules interdits d’expédition', () => {
+  it('rougit quand un chunk expédié porte un module de la liste', () => {
+    const rapport = composeRapport({
+      entrees: lireEntrees(
+        '{"pages":{"/(connected)/page":["static/chunks/components_calls_CallManager_tsx.js"]}}',
+      ),
+      groupes: [groupe('(connected)', ['/page'])],
+      tailleGzip: () => 0,
+      interdits: ['CallManager'],
+    });
+
+    expect(rapport.anomalies.join('\n')).toContain('CallManager');
+    expect(verdict(rapport)).toBe(2);
+  });
+
+  it('ne rougit pas sur un module VOISIN dont le nom contient celui de l’interdit', () => {
+    const rapport = composeRapport({
+      entrees: lireEntrees(
+        '{"pages":{"/(connected)/page":["static/chunks/calls_CallManagerHooks_tsx.js"]}}',
+      ),
+      groupes: [groupe('(connected)', ['/page'])],
+      tailleGzip: () => 0,
+      interdits: ['CallManager'],
+    });
+
+    expect(rapport.anomalies).toEqual([]);
+  });
+
+  /**
+   * Le manifeste RÉEL de la v3, quand il existe. Il n'est pas construit par
+   * `bun run test` — mais `bun run build` appelle ce même gate sur ce même
+   * fichier, et c'est là que l'assertion mord vraiment. Ici, elle dit ce qu'elle
+   * a pu lire, et se NOMME quand elle n'a rien lu.
+   */
+  it('n’expédie aucun module interdit dans le manifeste construit', () => {
+    const manifeste = join(__dirname, '..', '.next', 'app-build-manifest.json');
+    const source = (() => {
+      try {
+        return readFileSync(manifeste, 'utf8');
+      } catch {
+        return null;
+      }
+    })();
+
+    if (source === null) {
+      expect('manifeste absent — `bun run build` le construit et y applique le même gate').toBeTruthy();
+      return;
+    }
+
+    const rapport = composeRapport({
+      entrees: lireEntrees(source),
+      groupes: [groupe('(public)', ['/*']), groupe('(connected)', ['/page', '/chats/*'])],
+      tailleGzip: () => 0,
+      interdits: ['CallManager'],
+    });
+
+    expect(rapport.anomalies.filter((a) => a.includes('CallManager'))).toEqual([]);
+  });
+});

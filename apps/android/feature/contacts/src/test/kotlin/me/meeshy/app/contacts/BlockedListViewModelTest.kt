@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.friend.BlockRepository
+import me.meeshy.sdk.friend.BlockedListRepository
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -38,11 +39,15 @@ class BlockedListViewModelTest {
     }
 
     private val repository: BlockRepository = mockk(relaxed = true)
+    private val listRepository: BlockedListRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
 
     private fun user(id: String, username: String = id) = BlockedUser(id = id, username = username)
 
-    private fun viewModel() = BlockedListViewModel(repository, workManager)
+    private fun viewModel(cached: List<BlockedUser>? = null): BlockedListViewModel {
+        coEvery { listRepository.cachedSnapshot() } returns cached
+        return BlockedListViewModel(repository, listRepository, workManager)
+    }
 
     @Test
     fun `load populates the list and settles`() = runTest {
@@ -180,5 +185,94 @@ class BlockedListViewModelTest {
         vm.dismissError()
 
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    // --- cache-first (issue #4817) -------------------------------------------
+
+    @Test
+    fun `paints the cached blocklist instantly before the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<List<BlockedUser>>>()
+        coEvery { repository.listBlocked() } coAnswers { gate.await() }
+        val vm = viewModel(cached = listOf(user("cachedBlocked")))
+
+        vm.load()
+
+        // The Room cache painted at once; the network fetch is still suspended, so
+        // there is no cold spinner while a stale-but-present blocklist is on screen.
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("cachedBlocked")
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.showSkeleton).isFalse()
+
+        gate.complete(NetworkResult.Success(listOf(user("networkBlocked"))))
+
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("networkBlocked")
+    }
+
+    @Test
+    fun `a cold empty cache shows the skeleton until the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<List<BlockedUser>>>()
+        coEvery { repository.listBlocked() } coAnswers { gate.await() }
+        val vm = viewModel(cached = null)
+
+        vm.load()
+
+        assertThat(vm.state.value.blocked).isEmpty()
+        assertThat(vm.state.value.showSkeleton).isTrue()
+
+        gate.complete(NetworkResult.Success(emptyList()))
+
+        assertThat(vm.state.value.showSkeleton).isFalse()
+    }
+
+    @Test
+    fun `keeps the cached blocklist and shows no error when the refresh fails`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Failure(ApiError("offline"))
+        val vm = viewModel(cached = listOf(user("alice"), user("bob")))
+
+        vm.load()
+
+        assertThat(vm.state.value.blocked.map { it.id }).containsExactly("alice", "bob").inOrder()
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.isLoading).isFalse()
+    }
+
+    @Test
+    fun `persists the fetched blocklist after a successful load`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+        val vm = viewModel()
+
+        vm.load()
+
+        coVerify {
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+        }
+    }
+
+    @Test
+    fun `unblock writes the pruned blocklist through to the cache`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+        coEvery { repository.setBlockedDurably("u1", false) } returns "cmid1"
+        val vm = viewModel()
+        vm.load()
+
+        vm.unblock("u1")
+
+        coVerify {
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u2") })
+        }
+    }
+
+    @Test
+    fun `a failed enqueue re-persists the restored blocklist`() = runTest {
+        coEvery { repository.listBlocked() } returns NetworkResult.Success(listOf(user("u1"), user("u2")))
+        coEvery { repository.setBlockedDurably("u1", false) } throws RuntimeException("nope")
+        val vm = viewModel()
+        vm.load()
+
+        vm.unblock("u1")
+
+        coVerify {
+            listRepository.persist(match { it.map(BlockedUser::id) == listOf("u1", "u2") })
+        }
     }
 }

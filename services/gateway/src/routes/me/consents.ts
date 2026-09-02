@@ -462,7 +462,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       } catch (error) {
         if (error instanceof z.ZodError) {
           // #4487 — `issues`, étalé à la racine par `details`, et déclaré
-          // par `badRequestResponseSchema` (ligne 400 de la route).
+          // par `badRequestResponseSchema`, monté sur le 400 de cette route.
           //
           // `details` est étalé à la RACINE de l'enveloppe, et
           // `fast-json-stringify` retire toute propriété que le schéma de

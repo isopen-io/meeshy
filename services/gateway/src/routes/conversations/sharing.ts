@@ -741,13 +741,34 @@ export function registerSharingRoutes(
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
-      // Vérifier que l'inviteur a les permissions pour inviter
+      // #4557 — **MODERATOR, le même plancher que `POST …/participants`.**
+      //
+      // Cette porte exigeait ADMIN pour un geste dont l'autre se contente d'un
+      // modérateur, alors que les deux produisent la MÊME ligne : ni l'une ni
+      // l'autre ne crée d'invitation EN ATTENTE — elles écrivent un
+      // `Participant` immédiatement ACTIF, `role: 'member'`, avec la table
+      // `NEW_MEMBER_PERMISSIONS` du site unique (#4174), par le même
+      // `resolveConversationEntry`. « Inviter » nomme ici un ajout direct.
+      //
+      // Le rang plus haut ne retenait donc rien : un modérateur à qui cette
+      // porte refusait quelqu'un l'ajoutait par l'autre, dans la seconde, avec
+      // les mêmes droits et un éventail de diffusion PLUS complet. C'était une
+      // incohérence (dimension 6), pas une protection.
+      //
+      // L'alignement se fait vers le BAS, seul sens non régressif : monter
+      // `participants` à ADMIN retirerait aux modérateurs une capacité VIVANTE
+      // — les trois clients passent par cette porte-là — pour fermer une porte
+      // que plus aucun client n'appelle. Le plancher LUI-MÊME (un modérateur
+      // peut-il ajouter ?) est inchangé ; le déplacer serait une décision
+      // produit. Gardé par `conversation-new-member-rights-parity.test.ts`,
+      // qui COMPARE les deux portes — un témoin posé sur une seule ne pourrait
+      // pas rougir d'une redivergence.
       const canInvite = actorHasMinimumRole(
         {
           conversationRole: inviterMember.role,
           platformRole: authContext.registeredUser.role,
         },
-        MemberRole.ADMIN,
+        MemberRole.MODERATOR,
       );
 
       if (!canInvite) {

@@ -648,4 +648,48 @@ class StoryComposerDraftTest {
         assertThat(draft.text).isEqualTo("keep me")
         assertThat(draft.visibility).isEqualTo(StoryVisibility.FRIENDS)
     }
+
+    // --- drawing strokes ---
+
+    private fun drawnStroke(id: String = "s1") =
+        me.meeshy.sdk.model.StoryDrawingStroke(id = id, colorHex = "FFFFFF", width = 6.0)
+
+    @Test
+    fun `a drawing-only draft can publish`() {
+        assertThat(StoryComposerDraft(text = "", strokes = listOf(drawnStroke())).canPublish).isTrue()
+    }
+
+    @Test
+    fun `toCreateStoryRequest serialises strokes onto storyEffects drawingStrokes`() {
+        val stroke = drawnStroke()
+        val request = StoryComposerDraft(text = "", strokes = listOf(stroke))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.drawingStrokes).containsExactly(stroke)
+    }
+
+    @Test
+    fun `a drawing-only draft still produces a storyEffects payload`() {
+        val request = StoryComposerDraft(text = "", strokes = listOf(drawnStroke()))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.content).isNull()
+        assertThat(request.storyEffects).isNotNull()
+    }
+
+    @Test
+    fun `no stroke leaves the storyEffects drawingStrokes null`() {
+        val request = StoryComposerDraft(textElements = listOf(StoryTextElement(id = "e1", text = "hi")))
+            .toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.drawingStrokes).isNull()
+    }
+
+    @Test
+    fun `a caption-only draft leaves storyEffects null even though drawingStrokes is checked`() {
+        val request = StoryComposerDraft(text = "hello").toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.storyEffects).isNull()
+    }
 }

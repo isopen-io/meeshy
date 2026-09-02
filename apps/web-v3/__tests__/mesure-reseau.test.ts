@@ -364,8 +364,10 @@ describe('le budgets.json du dépôt, côté réseau', () => {
 describe("l'agent que la mesure sert à la page", () => {
   const navigateurDeSonde = () => {
     const contextes: { readonly userAgent?: string }[] = [];
+    const poses: { name: string; value: string; url: string }[] = [];
     return {
       contextes,
+      poses,
       navigateur: {
         newContext: async (options: Record<string, unknown>) => {
           contextes.push(options as { readonly userAgent?: string });
@@ -378,12 +380,45 @@ describe("l'agent que la mesure sert à la page", () => {
               send: async () => undefined,
               on: () => undefined,
             }),
+            addCookies: async (cookies: readonly { name: string; value: string; url: string }[]) => {
+              poses.push(...cookies);
+            },
             close: async () => undefined,
           };
         },
       },
     };
   };
+
+  /**
+   * `/` sert DEUX écrans selon ce que le lecteur porte (§ 12.2) : la vitrine
+   * sans cookie, le tableau de bord avec. Sans cette option, un gate posé sur
+   * l'écran connecté mesurerait l'écran public — vert sur une page jamais
+   * visitée. Le § 12.6 la réclame nommément, « à porter dans le commit de home ».
+   */
+  it('pose les cookies du lecteur AVANT la navigation, quand l’appelant en donne', async () => {
+    const { navigateur, poses } = navigateurDeSonde();
+
+    await mesurePage({
+      url: 'https://exemple/',
+      commande: COMMANDE,
+      navigateur,
+      cookies: [
+        { name: 'meeshy_session', value: 'x', url: 'https://exemple' },
+        { name: 'meeshy_auth', value: 'JWT.xyz', url: 'https://exemple' },
+      ],
+    });
+
+    expect(poses.map((cookie) => cookie.name)).toEqual(['meeshy_session', 'meeshy_auth']);
+  });
+
+  it('ne demande aucun cookie au navigateur quand l’appelant n’en donne pas', async () => {
+    const { navigateur, poses } = navigateurDeSonde();
+
+    await mesurePage({ url: 'https://exemple/', commande: COMMANDE, navigateur });
+
+    expect(poses).toEqual([]);
+  });
 
   it("sert l'iPhone du § 8.3 par défaut — les plafonds sont exprimés sur un téléphone", async () => {
     const { navigateur, contextes } = navigateurDeSonde();

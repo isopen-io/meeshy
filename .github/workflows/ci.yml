@@ -274,6 +274,19 @@ jobs:
       - name: CI build-order guard
         run: node scripts/check-ci-build-order.mjs --self-test && node scripts/check-ci-build-order.mjs
 
+      # Même placement, même raison : la surface est le DÉPÔT — ici le fichier
+      # de workflow lui-même. Le garde confronte les jobs DÉCLARÉS de `ci.yml`
+      # aux deux listes écrites à la main dont vit son résumé (le `needs:` de
+      # l'agrégateur, et les lignes de son tableau). Il ferme #4860 : `chaines-v3`
+      # — un gate écrit exprès — ne figurait dans aucune des deux, et
+      # `test-python`, rallumé au sprint 0.3, y était annoncé « disabled » par
+      # un mot écrit à la main pendant qu'il consommait un runner à chaque
+      # poussée. L'agrégateur est reconnu par ce qu'il FAIT (`if: always()` +
+      # écriture dans `$GITHUB_STEP_SUMMARY`), jamais par son nom : le renommer
+      # ne doit pas éteindre le garde en silence.
+      - name: CI summary coverage guard
+        run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
+
       # Même raison de placement que les trois gardes ci-dessus : l'invariant
       # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
       # et sur les deux modèles d'environnement — la surface est le DÉPÔT.
@@ -409,6 +422,26 @@ jobs:
         run: |
           cd apps/web-v3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:a11y
+
+      # Les DEUX autres suites de PAGE (`SUITES_DE_PAGE`, playwright.config.ts) —
+      # les cibles tactiles de la charte (§ 12.5 règles 4 et 6) et axe sur la
+      # page VIVANTE du fil, module de participation greffé — étaient déclarées
+      # et jamais lancées : `test:chaines` les ignore par construction
+      # (`testIgnore`), et aucun job ne les nommait. Quatrième fois que la leçon
+      # se paie ici ; `scripts/check-v3-pipeline.mjs` (« toute suite e2e de la
+      # v3 est LANCÉE ») les rougissait, et le rapport de l'écran ne le disait
+      # pas. Elles vivent dans CE job parce qu'elles mesurent une PAGE servie
+      # par le `webServer` de la config — et que les cibles sont un gate
+      # d'accessibilité (WCAG 2.5.8), pas un gate de chaîne.
+      - name: Gate cibles — 0 cible sous 44 px, action primaire à 56
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:cibles
+
+      - name: Gate axe — la page VIVANTE du fil, module de participation greffé
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:fil-a11y
 
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
       # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
@@ -737,8 +770,18 @@ jobs:
 
   # ===========================================================================
   # TEST: Python Tests with Coverage
-  # DISABLED: Downloads ML models that fill up GitHub runner disk
-  # Specific tests (audio-pipeline, tts-stt, voice-api) run in dedicated jobs
+  #
+  # RALLUME au sprint 0.3 (`if: true` ci-dessous), et ce bloc a porté
+  # « DISABLED: Downloads ML models that fill up GitHub runner disk » pendant
+  # tout ce temps — trois lignes au-dessus du `if` qui le contredisait. Le
+  # commentaire disait une raison technique précise et plausible, ce qui le
+  # rendait crédible ; c'est ce qui a laissé le résumé annoncer « disabled »
+  # pour un job qui consomme un runner à chaque poussée (#4860).
+  #
+  # Ce qui a rendu le rallumage possible : la découpe par marqueur CPU-only et
+  # un seuil de référence, qui évitent le téléchargement des modèles lourds.
+  # Les suites spécifiques (audio-pipeline, tts-stt, voice-api) gardent leurs
+  # jobs dédiés.
   # ===========================================================================
   test-python:
     name: Test Python (translator)
@@ -1649,7 +1692,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, a11y-v3, lifecycle-v3, test, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, a11y-v3, lifecycle-v3, chaines-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -1663,8 +1706,9 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | disabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY

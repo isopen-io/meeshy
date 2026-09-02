@@ -1,53 +1,96 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
 /**
- * La feuille de la zone CONNECTÉE — le tableau de bord et la liste des
- * conversations, qui partagent une grille de cartes et une liste à filets.
+ * La feuille de la zone CONNECTÉE — le tableau de bord, la liste des
+ * conversations et le cadre du fil, qui partagent un vocabulaire : des CARTES
+ * pour ce qu'on reprend, des LIGNES pour ce qu'on parcourt, et une carte VIDE
+ * dessinée pour ce qui manque.
  *
- * Ce qui la rend « v3 » est ce qui rend la vitrine v3 : un accent unique, des
- * cartes à filet fin sur `--color-surface` sans ombre portée, la hiérarchie des
- * jetons `--text-*`, et les libellés qui QUALIFIENT en petites capitales
- * espacées. La différence avec les pages institutionnelles tient à une chose :
- * ici, les cartes portent des CHIFFRES, donc la valeur domine et son libellé
- * s'efface.
+ * CE QUE LA CHARTE Y A CHANGÉ (conception § 12.5, directive du 2026-09-01) —
+ * « les pages EXISTANTES de la v3 sont TERNES : il faut les STYLISER, sans les
+ * alourdir » :
  *
- * `.hors-ecran` porte le mot qui MANQUE à l'œil. La pastille de non-lus est un
- * nombre nu : à l'œil, le contexte le dit ; à la voix, « 3 » ne dit rien. Elle
- * n'est pas cachée par `display:none`, qui la retirerait aussi de la voix — le
- * découpage la sort du flux en la laissant lisible.
+ * 1. **Les espacements viennent des neuf pas de la table** (règles 1 et 8). Ils
+ *    étaient en pixels littéraux — `48px 0 8px` de salutation, `14px` de
+ *    gouttière, `20px` de carte, `32px`, `40px`, `10px`, `6px`, `2px` — c'est-à-
+ *    dire une échelle inventée par écran, la seconde table du corollaire 2 sous
+ *    un autre nom. Une carte de tableau de bord et une carte de vitrine se
+ *    lisent sur le même écran d'un lecteur qui vient de se connecter.
+ * 2. **`--color-neutral-900` a cédé la place à `--color-border-strong`**
+ *    (règle 10). Un filet se déclare par son RÔLE : prendre un cran de la rampe
+ *    neutre marche dans le schéma où on l'a regardé et se retourne dans l'autre.
+ *    Et la distinction filet ≠ contour est désormais PORTÉE : une carte
+ *    d'information prend le filet fin, une carte CLIQUABLE prend le contour de
+ *    `--color-border-interactive`. C'est l'élément qui décide, pas une classe de
+ *    plus — `li.carte` informe, `a.carte` se clique.
+ * 3. **L'avatar dit QUI, sur les quatre teintes de la table** (règle 11). La
+ *    pastille était peinte à l'accent, dilué en `color-mix` : toutes les
+ *    conversations avaient la même couleur, donc la couleur ne disait rien, et
+ *    elle prenait l'accent que la règle 13 réserve à cinq emplois.
+ * 4. **L'état vide est DESSINÉ** (règle 18) : contour pointillé, glyphe de
+ *    40 px, titre, phrase — et une action primaire seulement là où elle a un
+ *    EFFET. C'était un bloc de texte centré dans une carte pleine, qui se lisait
+ *    comme du contenu.
+ * 5. **Les titres de section QUALIFIENT** : petites capitales espacées, comme
+ *    « REPRENDRE » et « MES LIENS » de la cible `home.png`. Le `--text-2xl` du
+ *    chrome faisait de chaque intertitre un second `h1`.
  *
- * Aucune COULEUR écrite (§ 3.2 corollaire 2) ; espacement en pixels littéraux,
- * la table servie ne portant aucun jeton `--space-*`.
+ * Aucune COULEUR et aucun PIXEL ne sont écrits (§ 3.2 corollaire 2, charte
+ * règle 1). Témoin : `__tests__/charte.test.ts`.
  */
 export const FEUILLE_CONNECTEE = compacte(`
-.bonjour{padding:48px 0 8px}
-.bonjour h1{margin:0 0 10px;font-size:var(--text-3xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
-.bonjour p{margin:0;color:var(--color-text-muted);line-height:var(--leading-relaxed)}
+.bonjour{padding-top:var(--space-6)}
+.bonjour h1{margin:0 0 var(--space-2);font-size:var(--text-3xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
+.bonjour p{margin:0;max-width:var(--measure);color:var(--color-text-muted)}
 
-.chiffres{display:grid;gap:14px;margin:32px 0 0;padding:0;list-style:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.chiffres li{border:1px solid var(--color-neutral-900);border-radius:var(--radius-lg);padding:20px;background:var(--color-surface)}
-.chiffres .valeur{display:block;font-size:var(--text-4xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
-.chiffres .quoi{display:block;margin-top:6px;font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-.chiffres .precision{display:block;margin-top:2px;font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-subtle)}
+.chiffres{display:grid;gap:var(--space-3);margin:var(--space-6) 0 0;padding:0;list-style:none;grid-template-columns:1fr 1fr}
+.chiffres li{padding:var(--space-4);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
+.chiffres .valeur{display:block;font-size:var(--text-3xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
+.chiffres .quoi{display:block;margin-top:var(--space-1);font-size:var(--text-base);font-weight:var(--font-weight-medium)}
+.chiffres .precision{display:block;font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-subtle)}
 
-.acces{margin-top:40px}
-.acces nav{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
+.section{margin-top:var(--space-7)}
+.section .tete{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);min-height:var(--target-min)}
+.section h2{margin:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}
 
-.fil{margin-top:40px}
-.fil .tete{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
-.fil .tete a{font-size:var(--text-sm);color:var(--color-primary)}
-.fil ul{margin:16px 0 0;padding:0;list-style:none;border-top:1px solid var(--color-neutral-900)}
-.fil li{border-bottom:1px solid var(--color-neutral-900)}
-.fil a.ligne{display:flex;align-items:center;gap:14px;padding:16px 4px;min-height:64px;text-decoration:none;color:inherit}
-.fil .pastille{flex:none;width:40px;height:40px;border-radius:var(--radius-pill);display:grid;place-items:center;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);background:color-mix(in srgb,var(--color-primary) 16%,transparent);color:var(--color-primary)}
+.cartes{display:grid;gap:var(--space-3);margin:var(--space-3) 0 0;padding:0;list-style:none}
+.carte{display:flex;align-items:center;gap:var(--space-4);min-height:var(--row-height);padding:var(--space-4);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface);color:inherit;text-decoration:none}
+a.carte{border-width:var(--stroke-strong);border-color:var(--color-border-interactive);transition:background-color 120ms,border-color 120ms}
+a.carte:hover{background:var(--color-tint-primary)}
+.carte .corps{flex:1;min-width:0}
+.carte .nom{display:block;font-weight:var(--font-weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carte .meta{display:block;margin-top:var(--space-1);font-size:var(--text-base);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carte .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-md);background:var(--color-tint-primary)}
+.carte .tuile svg{width:var(--glyph);height:var(--glyph)}
+
+.avatar{display:grid;place-items:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-pill);font-size:var(--text-base);font-weight:var(--font-weight-semibold);color:var(--color-on-avatar)}
+.avatar.t1{background:var(--color-avatar-1)}
+.avatar.t2{background:var(--color-avatar-2)}
+.avatar.t3{background:var(--color-avatar-3)}
+.avatar.t4{background:var(--color-avatar-4)}
+
+.compte{flex:none;display:grid;place-items:center;min-width:var(--space-6);height:var(--space-6);padding:0 var(--space-2);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-semibold);background:var(--color-primary);color:var(--color-on-primary)}
+
+.carte-vide{margin-top:var(--space-3);padding:var(--space-5);border:var(--stroke-strong) dashed var(--color-border-strong);border-radius:var(--radius-lg);text-align:center}
+.carte-vide svg{width:var(--glyph-large);height:var(--glyph-large);color:var(--color-text-muted)}
+.carte-vide h3{margin:var(--space-2) 0 var(--space-1);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
+.carte-vide p{margin:0 auto;max-width:var(--measure);color:var(--color-text-muted)}
+.carte-vide .action{margin-top:var(--space-5)}
+
+.acces{margin-top:var(--space-7)}
+.acces nav{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-4)}
+.acces nav form{flex:1 1 100%;margin:0}
+
+.fil{margin-top:var(--space-7)}
+.fil ul{margin:var(--space-3) 0 0;padding:0;list-style:none;border-top:var(--stroke-hair) solid var(--color-border-strong)}
+.fil li{border-bottom:var(--stroke-hair) solid var(--color-border-strong)}
+.fil a.ligne{display:flex;align-items:center;gap:var(--space-4);min-height:var(--row-height);padding:var(--space-2) 0;text-decoration:none;color:inherit}
 .fil .corps{flex:1;min-width:0}
 .fil .nom{display:block;font-weight:var(--font-weight-medium);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fil .meta{display:block;margin-top:2px;font-size:var(--text-xs);color:var(--color-text-subtle)}
-.fil .compte{flex:none;min-width:24px;height:24px;padding:0 8px;border-radius:var(--radius-pill);display:grid;place-items:center;font-size:var(--text-xs);font-weight:var(--font-weight-semibold);background:var(--color-primary);color:var(--color-on-primary)}
-.fil .quand{flex:none;font-size:var(--text-xs);color:var(--color-text-subtle)}
+.fil .meta{display:block;margin-top:var(--space-1);font-size:var(--text-sm);color:var(--color-text-subtle)}
 
-
-.vide{margin-top:32px;border:1px solid var(--color-neutral-900);border-radius:var(--radius-lg);background:var(--color-surface);padding:32px;text-align:center}
-.vide h2{margin:0 0 8px;font-size:var(--text-lg);font-weight:var(--font-weight-semibold)}
-.vide p{margin:0 auto 22px;max-width:44ch;color:var(--color-text-muted);line-height:var(--leading-relaxed)}
+@media (min-width:600px){
+.cartes{grid-template-columns:1fr 1fr}
+.carte-vide .action{width:auto}
+}
 `);

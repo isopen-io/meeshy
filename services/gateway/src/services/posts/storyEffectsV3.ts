@@ -1,8 +1,53 @@
 import type { CanvasV3, SceneV3, ObjectV3, AudioVariantV3 } from '@meeshy/shared/types/canvas-v3';
 
-export function isCanvasV3(blob: unknown): blob is CanvasV3 {
+/**
+ * ÉCRITURE / VALIDATION — « ce blob est-il EXACTEMENT la v3 que je sais
+ * valider ? » (#4774)
+ *
+ * `CanvasV3Schema` décrit la v3, pas la v4 : accepter à l'écriture un rang que
+ * l'on ne sait pas valider revient à persister un document dont AUCUNE garde
+ * n'a lu la forme. Ce prédicat existe donc à part de `isCanvasV3OrNewer`, et
+ * les deux ne peuvent pas fusionner : **on lit avec tolérance ce que l'on
+ * refuse d'écrire sans l'avoir validé** — un lecteur qui se durcit rend un
+ * écran vide, un valideur qui se relâche grave en base ce qu'il n'a pas
+ * compris.
+ *
+ * Le rang 3 ne les distingue PAS (leçon 261) : le seul témoin qui les sépare
+ * se pose sur un rang supérieur (`storyEffectsV3.versionSense.test.ts`).
+ */
+export function isCanvasV3Exactly(blob: unknown): blob is CanvasV3 {
   return typeof blob === 'object' && blob !== null && (blob as { v?: unknown }).v === 3;
 }
+
+/**
+ * LECTURE / RENDU — « ce blob est-il un document canvas, fût-il plus récent
+ * que moi ? » (#4774)
+ *
+ * Un `v: 4` servi TEL QUEL à un client caps-3 (table O17) doit continuer d'être
+ * LU comme un canvas : le rétrograder sur la branche v1 ne rend pas un rendu
+ * dégradé, il rend le VIDE — la forme v1 (`textObjects`, `background`…) est
+ * absente d'un document v3+. Miroir exact des deux ponts natifs
+ * (`StoryModels.swift` `mark >= 3`, `StoryEffectsWireSerializer.kt` `mark < 3`)
+ * et du web (`isCanvasV3OrNewer`, `apps/web/lib/story-transforms.ts`).
+ *
+ * Le rétrécissement vers `CanvasV3` est DÉLIBÉRÉMENT optimiste : un document
+ * d'un rang supérieur se lit champ par champ à travers la lentille v3, ce qui
+ * EST la tolérance au futur. La sévérité, elle, vit chez `isCanvasV3Exactly`.
+ */
+export function isCanvasV3OrNewer(blob: unknown): blob is CanvasV3 {
+  if (typeof blob !== 'object' || blob === null) return false;
+  const mark = (blob as { v?: unknown }).v;
+  return typeof mark === 'number' && mark >= 3;
+}
+
+/**
+ * @deprecated Alias historique d'`isCanvasV3Exactly`, conservé pour les deux
+ * importateurs hors territoire de ce lot : `routes/posts/core.ts`
+ * (`rejectNonV3StoryEffects` — sens ÉCRITURE, l'alias y est JUSTE) et
+ * `StoryTextObjectTranslationService.ts` (`docIsV3` — sens LECTURE, l'alias y
+ * est FAUX ; suivi #4774). Aucun site neuf ne l'appelle : on nomme son sens.
+ */
+export const isCanvasV3 = isCanvasV3Exactly;
 
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
@@ -11,6 +56,12 @@ const SCENE_ASPECT = 9 / 16;
 
 function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
+}
+
+function isStringMap(v: unknown): v is Record<string, string> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
+    && Object.keys(v as Record<string, unknown>).length > 0;
 }
 
 function isPivot(v: unknown): v is { x: number; y: number } {
@@ -159,15 +210,22 @@ export function convertV1ToV3(
     // le build ne connaît pas ce `templateId`, qui verra un glyphe plutôt qu'un
     // trou. Mais un repli conservé SANS la chose dont il est le repli n'est
     // plus un repli — c'est le contenu.
+    //
+    // Deux correctifs parallèles (#4741 sur dev, #4819 sur la branche stickers)
+    // ont recopié ces clés le même jour ; la fusion garde la forme la plus
+    // STRICTE : `slots` n'est transporté que si toutes ses valeurs sont des
+    // chaînes (`isStringMap`) — un emplacement numérique ne rendrait rien et
+    // ferait mentir le type `[String: String]` du client. `animation` et
+    // `duration` (#4821) voyagent au même titre.
     o.payload = {
       emoji: st.emoji,
       ...(str(st.templateId) ? { templateId: st.templateId } : {}),
-      ...(st.slots && typeof st.slots === 'object' && !Array.isArray(st.slots)
-        ? { slots: st.slots }
-        : {}),
+      ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
+      ...(str(st.animation) ? { animation: st.animation } : {}),
       ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
       ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
+      ...(typeof st.duration === 'number' ? { duration: st.duration } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
       ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
       ...(typeof st.fadeOut === 'number' ? { fadeOut: st.fadeOut } : {}),
@@ -332,6 +390,10 @@ export function convertV1ToV3(
  * scène. La propriété du média reste jugée par `claimableMediaWhere`
  * (PostService) — jamais dupliquée ici : cette fonction ne juge que
  * l'appartenance. Blob non-v3 ⇒ [] (l'archive v1 n'est pas concernée).
+ *
+ * Prédicat de LECTURE (#4774) : la garde ÉNUMÈRE un document, elle ne le
+ * valide pas. La tolérance ne peut qu'AJOUTER des références à réclamer — un
+ * rang inconnu lu strictement ferait échapper tout son canvas au claim.
  */
 const CLAIM_BEARING_KINDS: ReadonlySet<string> = new Set(['sticker', 'media']);
 const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
@@ -340,7 +402,7 @@ export function unclaimedCanvasMediaIds(
   blob: unknown,
   claimedMediaIds: readonly string[]
 ): string[] {
-  if (!isCanvasV3(blob)) return [];
+  if (!isCanvasV3OrNewer(blob)) return [];
   const claimed = new Set(claimedMediaIds);
   const unclaimed: string[] = [];
   for (const scene of asArray((blob as { scenes?: unknown }).scenes)) {
@@ -380,8 +442,14 @@ export type StoryTranslatableText = {
   [key: string]: unknown;
 };
 
+/**
+ * Prédicat de LECTURE (#4774) — un document d'un rang supérieur porte ses
+ * textes là où la v3 les porte (`scenes[].objects[kind=text]`), jamais dans la
+ * forme v1. Le lire strictement le ferait retomber sur `textObjects`, absent :
+ * zéro texte traduit sur un document qui en a.
+ */
 export function storyTranslatableTexts(blob: unknown): StoryTranslatableText[] | undefined {
-  if (isCanvasV3(blob)) {
+  if (isCanvasV3OrNewer(blob)) {
     const texts = asArray((blob as { scenes?: unknown }).scenes)
       .flatMap((scene) => asArray(scene.objects))
       .filter((object) => object.kind === 'text')
@@ -411,8 +479,14 @@ export function storyTranslatableTexts(blob: unknown): StoryTranslatableText[] |
   return Array.isArray(textObjects) ? (textObjects as StoryTranslatableText[]) : undefined;
 }
 
+/**
+ * Prédicat de LECTURE (#4774) — et c'est ici que le rendre strict coûterait le
+ * plus cher : sans chemin v3, l'appelant retombe sur le chemin v1
+ * (`storyEffects.textObjects.$i.…`) et GRAVE une forme v1 dans un document
+ * v3+. Un `$set` Mongo ne demande pas la permission au document qu'il modifie.
+ */
 export function translationSetPath(blob: unknown, objectId: string, lang: string): string | null {
-  if (!isCanvasV3(blob)) return null;
+  if (!isCanvasV3OrNewer(blob)) return null;
   const scenes = asArray((blob as { scenes?: unknown }).scenes);
   for (let s = 0; s < scenes.length; s++) {
     const o = asArray(scenes[s].objects).findIndex((object) => object.id === objectId);
@@ -421,9 +495,15 @@ export function translationSetPath(blob: unknown, objectId: string, lang: string
   return null;
 }
 
+/**
+ * Prédicat de LECTURE (#4774) — « c'est déjà un document canvas, ne le
+ * convertis pas ». Le lire strictement enverrait un rang supérieur au
+ * convertisseur v1→v3, qui n'y trouverait AUCUNE clé v1 et rendrait une
+ * coquille : le serveur retirerait ce que le client savait afficher.
+ */
 export function convertStoryEffectsForWire(effects: unknown): unknown {
   if (effects == null) return effects;
-  if (isCanvasV3(effects)) return effects;
+  if (isCanvasV3OrNewer(effects)) return effects;
   if (typeof effects !== 'object') return effects;
   try {
     return convertV1ToV3(effects as Record<string, unknown>);
@@ -456,9 +536,10 @@ export type WireForm = 'as-is' | 'convert' | 'sentinel';
  * La table O17 (spec §C3 rév. 7), pure :
  * v1 + sans caps ⇒ tel quel (restitution garantie) ; v1 + caps ≥ 3 ⇒ converti
  * si `CANVAS_V3_READ` armé, sinon v1 ; v3-natif + caps ≥ 3 ⇒ v3 ; v3-natif +
- * sans caps ⇒ sentinelle. Le prédicat v3-natif est la MARQUE (`v >= 3`),
- * jamais la validité du schéma : un blob marqué mais invalide part tel quel
- * aux clients capables (rendu best-effort) et en sentinelle aux autres.
+ * sans caps ⇒ sentinelle. Le prédicat v3-natif est la MARQUE
+ * (`isCanvasV3OrNewer`, sens LECTURE — #4774), jamais la validité du schéma :
+ * un blob marqué mais invalide part tel quel aux clients capables (rendu
+ * best-effort) et en sentinelle aux autres.
  */
 export function resolveWireForm(
   blob: unknown,
@@ -466,8 +547,7 @@ export function resolveWireForm(
   readArmed: boolean
 ): WireForm {
   if (blob == null || typeof blob !== 'object') return 'as-is';
-  const mark = (blob as { v?: unknown }).v;
-  const isV3Native = typeof mark === 'number' && mark >= 3;
+  const isV3Native = isCanvasV3OrNewer(blob);
   if (caps !== undefined && caps >= 3) {
     if (isV3Native) return 'as-is';
     return readArmed ? 'convert' : 'as-is';

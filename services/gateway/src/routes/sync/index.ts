@@ -9,12 +9,13 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { decodeSyncCursor, type SyncCursor } from './cursor';
 import { resolveSyncIdentity } from './identity';
-import { SUPPORTED_COLLECTIONS, MAX_ITEMS_PER_COLLECTION, GAP_THRESHOLD } from './budget';
-import { syncMessages, syncMessageCollectionSchema } from './messages';
-import { syncConversations, syncConversationCollectionSchema } from './conversations';
-import { syncReactions, syncReactionCollectionSchema } from './reactions';
-import { syncParticipants, syncParticipantCollectionSchema } from './participants';
+import { SUPPORTED_COLLECTIONS, MAX_ITEMS_PER_COLLECTION, GAP_THRESHOLD, type SyncCollectionName } from './budget';
+import { syncMessages, syncMessageCollectionSchema, SYNC_MESSAGE_SERVED_FIELDS } from './messages';
+import { syncConversations, syncConversationCollectionSchema, SYNC_CONVERSATION_SERVED_FIELDS } from './conversations';
+import { syncReactions, syncReactionCollectionSchema, SYNC_REACTION_SERVED_FIELDS } from './reactions';
+import { syncParticipants, syncParticipantCollectionSchema, SYNC_PARTICIPANT_SERVED_FIELDS } from './participants';
 import type { SyncCollectionResult } from './schema-shared';
+import { parseStrictTokenList, parseScopedFieldList, type FieldSet } from '../../utils/sparse-fieldset';
 
 /**
  * SyncEngine unifié (spec §7) — endpoint delta `/sync` read-only.
@@ -82,7 +83,47 @@ export const syncQuerySchema = z.object({
   // `utils/object-id.ts` — jamais une regex recomposée localement.
   scope: z.string().refine((v) => isValidMongoId(v), { message: 'Invalid scope ID format' }).optional(),
   cursor: z.string().optional(),
+  /**
+   * `?fields=collection.champ,…` (#4173). AUCUN `default` — Fastify n'applique
+   * pas AJV ici (la validation est Zod), mais la règle du dépôt vaut pour les
+   * deux : un défaut ÉCRIT la valeur, et le gestionnaire ne pourrait plus
+   * distinguer « absent » de « demandé ». L'absence VAUT le profil par défaut,
+   * et elle appartient au gestionnaire.
+   */
+  fields: z.string().optional(),
 });
+
+/**
+ * Le vocabulaire FERMÉ de `?fields=`, une entrée par collection (#4173).
+ *
+ * Il vit ICI, chez l'orchestrateur, et pas dans `budget.ts` avec les autres
+ * constantes partagées : les quatre listes appartiennent aux quatre modules de
+ * collection (chacune est déclarée À CÔTÉ du `select` qu'elle projette, comme
+ * `utils/sparse-fieldset.ts` le prescrit), et `budget.ts` est importé PAR ces
+ * modules — l'y poser fermerait un cycle.
+ */
+const SYNC_FIELD_VOCABULARY: Readonly<Record<SyncCollectionName, readonly string[]>> = {
+  conversations: SYNC_CONVERSATION_SERVED_FIELDS,
+  messages: SYNC_MESSAGE_SERVED_FIELDS,
+  reactions: SYNC_REACTION_SERVED_FIELDS,
+  participants: SYNC_PARTICIPANT_SERVED_FIELDS,
+};
+
+/**
+ * La projection sous la forme que l'ETag doit hasher.
+ *
+ * TRIÉE aux deux niveaux : une projection est un ENSEMBLE, pas une liste, et
+ * `?fields=messages.id,messages.content` désigne exactement la même page que
+ * son miroir. Sans le tri, deux appels identiques rendraient deux validateurs
+ * différents et aucun 304 ne pourrait jamais tomber.
+ */
+function projectionForETag(byScope: ReadonlyMap<string, FieldSet>): Record<string, readonly string[]> {
+  return Object.fromEntries(
+    [...byScope.entries()]
+      .map(([portee, champs]) => [portee, [...(champs ?? [])].sort()] as const)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
 
 const syncErrorResponseSchema = {
   type: 'object',
@@ -193,7 +234,7 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
 
   fastify.get('/sync', {
     schema: {
-      description: 'Delta sync — conversations, messages, reactions, participants (added / modified / deleted depuis `since`)',
+      description: 'Delta sync — conversations, messages, reactions, participants (added / modified / deleted depuis `since`). `?fields=collection.champ,…` restreint la projection PAR COLLECTION (liste blanche fermée ; un nom non déclaré rend 400). Absent = le profil par défaut de chaque collection.',
       tags: ['sync'],
       summary: 'Delta sync',
       response: {
@@ -215,18 +256,58 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
         error: { code: 'INVALID_QUERY', message: parsed.error.issues[0]?.message ?? 'Invalid query' },
       });
     }
-    const { since, collections, seq, limit, scope, cursor } = parsed.data;
+    const { since, collections, seq, limit, scope, cursor, fields } = parsed.data;
 
-    const requested = collections.split(',').map((c) => c.trim()).filter(Boolean);
-    const unknown = requested.filter(
-      (c) => !(SUPPORTED_COLLECTIONS as readonly string[]).includes(c),
-    );
-    if (unknown.length > 0) {
+    // Le DÉCOUPAGE de `collections=` passe par la loi partagée
+    // (`utils/sparse-fieldset.ts`, #4356/#4173) plutôt que par un `split` écrit
+    // ici : c'est un vocabulaire FERMÉ à jeton unique, exactement ce que
+    // `parseStrictTokenList` tient. Le refus et son code sont INCHANGÉS.
+    const collectionsDemandees = parseStrictTokenList(collections, SUPPORTED_COLLECTIONS);
+    if (collectionsDemandees.ok === false) {
       return reply.status(400).send({
         success: false,
-        error: { code: 'UNSUPPORTED_COLLECTION', message: `Unsupported collections: ${unknown.join(', ')}` },
+        error: {
+          code: 'UNSUPPORTED_COLLECTION',
+          message: `Unsupported collections: ${collectionsDemandees.unknown.join(', ')}`,
+        },
       });
     }
+    const requested: readonly string[] = collectionsDemandees.tokens;
+
+    /**
+     * `?fields=` est résolu AVANT toute lecture, et refusé avant elle : une
+     * projection qu'on ne peut pas honorer ne doit pas coûter une requête
+     * (#4173, critère 1).
+     *
+     * Les TROIS refus ne se réparent pas de la même façon, d'où trois codes :
+     * un jeton sans portée ne peut même pas être rangé, une portée inconnue
+     * rend son second niveau ininterprétable, un champ inconnu est la faute la
+     * plus fine. Le quatrième — une portée VALIDE mais absente de
+     * `collections=` — est une CONTRADICTION entre deux paramètres, refusée
+     * plutôt qu'arbitrée : aucun arbitrage n'est celui que l'appelant voulait
+     * (même posture que `?categories=`/`?fields=` des préférences).
+     */
+    const projection = parseScopedFieldList(fields, SYNC_FIELD_VOCABULARY);
+    if (projection.ok === false) {
+      const { kind, tokens } = projection.failure;
+      const refus = {
+        unscoped: { code: 'UNSCOPED_FIELD', message: `Fields must name their collection: ${tokens.join(', ')}` },
+        'unknown-scope': { code: 'UNSUPPORTED_COLLECTION', message: `Unsupported collections: ${tokens.join(', ')}` },
+        'unknown-field': { code: 'UNKNOWN_FIELD', message: `Unknown field(s): ${tokens.join(', ')}` },
+      }[kind];
+      return reply.status(400).send({ success: false, error: refus });
+    }
+    const horsPerimetre = [...projection.byScope.keys()].filter((c) => !requested.includes(c));
+    if (horsPerimetre.length > 0) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'FIELD_OUTSIDE_COLLECTIONS',
+          message: `Fields name collections absent from collections: ${horsPerimetre.join(', ')}`,
+        },
+      });
+    }
+    const champsDe = (collection: SyncCollectionName): FieldSet => projection.byScope.get(collection) ?? null;
 
     // Décodage strict du cursor (opaque) AVANT toute requête — un token corrompu
     // est un bug client, on le surface en 400 plutôt que de repartir de zéro.
@@ -286,22 +367,22 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     if (requested.includes('conversations')) {
       collectionsResult.conversations = hasGap
         ? emptyOnGap
-        : await syncConversations({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor });
+        : await syncConversations({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('conversations') });
     }
     if (requested.includes('messages')) {
       collectionsResult.messages = hasGap
         ? emptyOnGap
-        : await syncMessages({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor });
+        : await syncMessages({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('messages') });
     }
     if (requested.includes('reactions')) {
       collectionsResult.reactions = hasGap
         ? emptyOnGap
-        : await syncReactions({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor });
+        : await syncReactions({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('reactions') });
     }
     if (requested.includes('participants')) {
       collectionsResult.participants = hasGap
         ? emptyOnGap
-        : await syncParticipants({ prisma, identity, authContext, sinceDate, cap, scope, cursor: syncCursor });
+        : await syncParticipants({ prisma, identity, authContext, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('participants') });
     }
 
     const hasMore = Object.values(collectionsResult).some((c) => c.truncated === true);
@@ -347,7 +428,21 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     // construction entre deux jeux différents, y compris quand les DEUX
     // rendent une page vide (les clés de premier niveau diffèrent). Preuve :
     // `__tests__/unit/routes/sync-etag-and-validation.test.ts`.
-    const etag = computeETag({ userId: authContext.userId, checkpointSeq, collections: collectionsResult, hasGap });
+    const etag = computeETag({
+      userId: authContext.userId,
+      checkpointSeq,
+      collections: collectionsResult,
+      // La PROJECTION entre EXPLICITEMENT dans la clé (#4173, critère 6), et
+      // pas par le contenu servi. Le contenu suffisait pour `collections` —
+      // ses clés de premier niveau diffèrent même sur deux pages vides — mais
+      // pas ici : deux projections différentes d'une page VIDE rendent le MÊME
+      // `collectionsResult` mot pour mot, donc le même hash. Un 304 servirait
+      // alors à un appelant qui vient de changer de projection le validateur
+      // d'une autre — « il se présente comme une synchronisation réussie »,
+      // le défaut que #4171 nomme comme pire que l'absence de cache.
+      fields: projectionForETag(projection.byScope),
+      hasGap,
+    });
     reply.header('Cache-Control', 'no-store');
     reply.header('ETag', etag);
     if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) {

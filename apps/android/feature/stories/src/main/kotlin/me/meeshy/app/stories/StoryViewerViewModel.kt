@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
@@ -211,6 +212,14 @@ data class StorySlideView(
      * story that is not a repost — the header then shows only the author's name.
      */
     val repostAttribution: StoryRepostAttribution? = null,
+    /**
+     * The author's freehand drawing (`storyEffects.drawingStrokes`), rendered read-only
+     * on top of [foregroundMedia]/[textObjects] by [StoryDrawingLayer] — a drawing-only
+     * slide (no other publishable content) would otherwise reach the reader as a bare
+     * background: the composer already lets it publish ([StorySlideDeck.publishableSlides]),
+     * so the viewer must be able to show what was drawn.
+     */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
 )
 
 /**
@@ -806,6 +815,7 @@ class StoryViewerViewModel @Inject constructor(
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
+            strokes = storyEffects?.drawingStrokes.orEmpty(),
         )
     }
 

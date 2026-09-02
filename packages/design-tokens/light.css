@@ -50,6 +50,11 @@
   --color-primary-softer: #818cf8;
   --color-on-primary: #ffffff;
 
+  /* Voir dark.css : l'anneau prend l'encre du schéma, le contre-anneau le plan
+     le plus éloigné d'elle — ici le plus clair, en sombre le plus enfoncé. */
+  --color-focus: var(--color-text);
+  --color-focus-contra: var(--color-surface-raised);
+
   --color-success: #047857;
   --color-success-soft: #10b981;
   /* #b45309 rendait 4,14:1 sur `--color-bg-sunken` : assombri d'un cran. */
@@ -69,6 +74,19 @@
   --color-presence-away: #b45309;
   --color-presence-idle: #6b7280;
   --color-presence-offline: #6b7280;
+
+
+  /* LES QUATRE VOILES (charte § 12.5 règles 11 et 17) — un fond d'état, jamais
+     une couleur d'état à pleine force sous du texte. Ils vivent dans les DEUX
+     schémas et non dans tokens.css parce qu'ils se calculent SUR
+     `--color-surface`, dont la luminance change avec le schéma : un voile posé
+     hors schéma serait clair sur fond sombre. La teinte primaire pèse 12 % (elle
+     habille le héros de la vitrine et les tuiles de la charte), les trois états
+     10 % (ils portent un bandeau, pas une surface). */
+  --color-tint-primary: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --color-tint-success: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  --color-tint-warning: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  --color-tint-danger: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
 
   --color-overlay: rgb(13 14 22 / 0.45);
 
