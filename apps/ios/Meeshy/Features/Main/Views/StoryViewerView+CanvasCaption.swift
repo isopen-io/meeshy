@@ -2,8 +2,9 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La légende d'une story : son montage, et les deux couches qui l'entourent**
-/// (#4831).
+/// **Ce que le lecteur de story POSE au-dessus de la scène** — la légende et
+/// son montage, les deux couches qui l'entourent, la transcription d'un vocal,
+/// l'attribution d'une piste de bibliothèque (#4831, #4841).
 ///
 /// Tout ce qui la concerne vit ici, y compris sa condition de montage —
 /// `StoryViewerView+Canvas.swift` dépasse largement le budget de 800–1100 lignes
@@ -149,6 +150,92 @@ extension StoryCardView {
             // Dépliée, son voile PREND les touchers — et c'est voulu : on lit.
             .zIndex(60)
         }
+    }
+
+    /// **La transcription d'un vocal, l'autre texte posé sur la scène.**
+    ///
+    /// Elle vit à côté de la légende parce qu'elle en est l'EXCLUSIVE : le
+    /// montage de la légende est gaté sur `currentVoiceCaption == nil`, et les
+    /// deux occupent la même bande basse. Les lire côte à côte rend cette
+    /// exclusion évidente ; séparées de cent lignes, elle se déduisait.
+    @ViewBuilder
+    var voiceCaptionLayer: some View {
+        // === Voice caption overlay (transcription voix) ===
+        if let transcription = currentVoiceCaption {
+            VStack {
+                Spacer()
+                Text(transcription)
+                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.black.opacity(0.55))
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, topInset + 130)
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
+    }
+
+    /// **La carte d'une piste de BIBLIOTHÈQUE — une attribution, pas un
+    /// contrôle.**
+    ///
+    /// Troisième chose que le canvas pose au-dessus de la scène et que ce
+    /// fichier réunit : elle titre le morceau et crédite son auteur. Elle est
+    /// `allowsHitTesting(false)` — c'est du texte, pas une action.
+    @ViewBuilder
+    var backgroundAudioLayer: some View {
+        // === Background audio badge ===
+        //
+        // Le canvas ne porte plus de chip « note + onde » pour l'audio de
+        // FOND (directive user 2026-07-30) : depuis que le header affiche la
+        // note musicale suivie de l'onde animée, ce chip répétait la même
+        // information au milieu de l'image. Les chips du canvas restent
+        // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
+        // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
+        //
+        // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
+        // morceau et crédite son auteur — une attribution que le header, qui
+        // ne dit que la présence, ne porte pas.
+        if let audio = currentStory?.backgroundAudio {
+            VStack {
+                Spacer()
+                backgroundAudioBadge(audio: audio)
+                    .padding(.bottom, topInset + 165)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .allowsHitTesting(false)
+        }
+    }
+
+    func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .font(MeeshyFont.relative(11, weight: .semibold))
+            Text(audio.title)
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let uploader = audio.uploaderName {
+                Text("· \(uploader)")
+                    .font(MeeshyFont.relative(11))
+                    .opacity(0.7)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+        )
     }
 
     /// **Le vide au-dessus du corpus ramène le texte en tête.**

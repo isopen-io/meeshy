@@ -1744,50 +1744,11 @@ struct StoryCardView: View {
                 }
             }
 
-            // === Voice caption overlay (transcription voix) ===
-            if let transcription = currentVoiceCaption {
-                VStack {
-                    Spacer()
-                    Text(transcription)
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black.opacity(0.55))
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, topInset + 130)
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            voiceCaptionLayer
 
             captionLayer(geometry: geometry)
 
-            // === Background audio badge ===
-            //
-            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
-            // FOND (directive user 2026-07-30) : depuis que le header affiche la
-            // note musicale suivie de l'onde animée, ce chip répétait la même
-            // information au milieu de l'image. Les chips du canvas restent
-            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
-            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
-            //
-            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
-            // morceau et crédite son auteur — une attribution que le header, qui
-            // ne dit que la présence, ne porte pas.
-            if let audio = currentStory?.backgroundAudio {
-                VStack {
-                    Spacer()
-                    backgroundAudioBadge(audio: audio)
-                        .padding(.bottom, topInset + 165)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .allowsHitTesting(false)
-            }
+            backgroundAudioLayer
 
             // === Translation indicator (Prisme Linguistique — discret) ===
             // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
@@ -2510,30 +2471,6 @@ struct StoryCardView: View {
 
     // MARK: - Background Audio Badge
 
-    private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(11, weight: .semibold))
-            Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if let uploader = audio.uploaderName {
-                Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
-                    .opacity(0.7)
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
-    }
 
     // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
     // retiré du canvas (directive user 2026-07-30) : le header du reader porte
