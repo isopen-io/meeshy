@@ -6,6 +6,7 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 
 /**
  * Collection `reactions` de `/sync` (issue #4171, critère 1) — même forme que
@@ -50,15 +51,51 @@ export const syncReactionSelect = Prisma.validator<Prisma.ReactionSelect>()({
 
 type SyncReactionRow = Prisma.ReactionGetPayload<{ select: typeof syncReactionSelect }>;
 
+/**
+ * Ce que `?fields=reactions.…` peut nommer (#4173).
+ *
+ * Le vocabulaire est celui de la ligne SERVIE, pas des colonnes : `conversationId`
+ * n'est pas une colonne de `Reaction` — il vient de la relation `message`, que
+ * le plan ci-dessous déclare comme SON coût. C'est exactement la distinction que
+ * `ColumnPlan.columns` porte, et la raison pour laquelle un vocabulaire relevé
+ * mécaniquement sur le `select` aurait été FAUX ici.
+ */
+export const SYNC_REACTION_SERVED_FIELDS = [
+  'id',
+  'messageId',
+  'conversationId',
+  'participantId',
+  'emoji',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+export const syncReactionPlan: ColumnPlan<typeof syncReactionSelect> = {
+  full: syncReactionSelect,
+  // `id` + `updatedAt` portent le keyset ; `createdAt` décide added/modified.
+  pinned: ['id', 'createdAt', 'updatedAt'],
+  columns: {
+    conversationId: ['message'],
+  },
+};
+
+/** `id` et `messageId` — sans le second, une réaction servie ne dit pas à quel
+ *  message elle s'accroche, ce qui la rend inapplicable côté client. */
+const SYNC_REACTION_SERVED_PINNED = ['id', 'messageId'] as const;
+
 function serializeSyncReaction(row: SyncReactionRow): Record<string, unknown> {
+  // Chaque champ est lu en OPTIONNEL : depuis #4173 la ligne peut n'avoir été
+  // chargée que sur une partie de ses colonnes, et la relation `message` n'est
+  // ouverte que si `conversationId` a été demandé.
+  const brut = row as Partial<SyncReactionRow>;
   return {
     id: row.id,
-    messageId: row.messageId,
-    conversationId: row.message.conversationId,
-    participantId: row.participantId,
-    emoji: row.emoji,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    messageId: brut.messageId,
+    conversationId: brut.message?.conversationId,
+    participantId: brut.participantId,
+    emoji: brut.emoji,
+    createdAt: brut.createdAt,
+    updatedAt: brut.updatedAt,
   };
 }
 
@@ -84,8 +121,11 @@ export async function syncReactions(opts: {
   cap: number;
   scope?: string;
   cursor?: SyncCursor;
+  /** `?fields=reactions.…` déjà analysé — `null` ⇒ le profil par défaut. */
+  fields?: FieldSet;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
+  const fields = opts.fields ?? null;
 
   const membership = await resolveSyncMembership({ prisma, identity, scope });
   if (membership.conversationIds.length === 0) {
@@ -114,7 +154,7 @@ export async function syncReactions(opts: {
           }
         : { updatedAt: { gt: sinceDate } }),
     },
-    select: syncReactionSelect,
+    select: selectForFields(syncReactionPlan, fields),
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
@@ -129,8 +169,10 @@ export async function syncReactions(opts: {
   const deliveredRows = budgeted.page;
   const truncated = capTruncated || budgeted.truncated || membership.droppedCount > 0;
 
-  const added = deliveredRows.filter((r) => r.createdAt > sinceDate).map(serializeSyncReaction);
-  const modified = deliveredRows.filter((r) => r.createdAt <= sinceDate).map(serializeSyncReaction);
+  const servir = (r: SyncReactionRow): Record<string, unknown> =>
+    restrictFields(serializeSyncReaction(r), fields, SYNC_REACTION_SERVED_PINNED);
+  const added = deliveredRows.filter((r) => r.createdAt > sinceDate).map(servir);
+  const modified = deliveredRows.filter((r) => r.createdAt <= sinceDate).map(servir);
 
   const lastDelivered = deliveredRows[deliveredRows.length - 1];
   const cKey: CursorKey | undefined = lastDelivered

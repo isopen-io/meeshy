@@ -344,6 +344,48 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun showPreviewOffHidesTheBannerContent() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = false))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isTrue()
+        assertThat(banner?.presentation?.body).isNull()
+    }
+
+    @Test
+    fun showPreviewOnLeavesTheBannerContentVisible() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = true))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isFalse()
+        assertThat(banner?.presentation?.body).isEqualTo("Dinner at 8?")
+    }
+
+    @Test
     fun dismissClearsTheCurrentBanner() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()

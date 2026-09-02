@@ -153,12 +153,32 @@ interface PostApi {
 
     /**
      * Vertical full-screen reel thread (`GET /posts/feed/reels`). With [seed] (a
-     * reel touched in the Feed) the gateway returns an affinity thread starting at
-     * that reel; without a seed it returns the default reel feed.
+     * reel touched in the Feed) the gateway returns a DISCOVERY thread ranked by
+     * affinity to that reel — the seed itself is EXCLUDED from every page ("already
+     * shown by the client, entry point of the thread": `PostFeedService.getReels`),
+     * so a caller that wants the seed visible keeps showing its own copy of it.
+     * Without a seed it returns the seedless "for you" thread. [seed] should be
+     * repeated on every subsequent page (not just the first) so the gateway keeps
+     * excluding it — see [me.meeshy.sdk.post.PostRepository.getReelsPage].
      */
     @GET("posts/feed/reels")
     suspend fun getReels(
         @Query("seed") seed: String? = null,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
+    /**
+     * Geolocated discovery feed (`GET /social/posts?scope=nearby`) — the canonical
+     * surface (#4346), never the deprecated `/posts/nearby` alias
+     * (`services/gateway/src/routes/posts/nearby.ts`).
+     */
+    @GET("social/posts")
+    suspend fun getNearby(
+        @Query("scope") scope: String = "nearby",
+        @Query("lat") lat: Double,
+        @Query("lng") lng: Double,
+        @Query("radiusKm") radiusKm: Double,
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>

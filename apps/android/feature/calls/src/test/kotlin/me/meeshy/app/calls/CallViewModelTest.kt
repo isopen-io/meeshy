@@ -285,6 +285,34 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `an outgoing video call starts with the speaker on, an audio call with it off`() = runTest {
+        val videoVm = vm()
+        videoVm.start(outgoingVideo)
+        assertThat(videoVm.state.value.isSpeakerOn).isTrue()
+
+        val audioVm = vm()
+        audioVm.start(incomingAudio)
+        assertThat(audioVm.state.value.isSpeakerOn).isFalse()
+    }
+
+    @Test
+    fun `toggling the speaker flips the media intent and routes the coordinator, with no peer signal`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        assertThat(vm.state.value.isSpeakerOn).isFalse()
+
+        vm.toggleSpeaker()
+        assertThat(vm.state.value.isSpeakerOn).isTrue()
+        verify(exactly = 1) { coordinator.setSpeakerEnabled(true) }
+
+        vm.toggleSpeaker()
+        assertThat(vm.state.value.isSpeakerOn).isFalse()
+        verify(exactly = 1) { coordinator.setSpeakerEnabled(false) }
+
+        verify(exactly = 0) { signalManager.emitToggleAudio(any(), any()) }
+    }
+
+    @Test
     fun `a video call starts with the camera on and can be toggled off`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)

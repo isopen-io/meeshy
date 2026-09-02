@@ -207,6 +207,42 @@ export async function registerMetadataRoutes(
   /**
    * GET /conversations/:conversationId/attachments
    * Récupère les attachments d'une conversation (support authentifiés ET anonymes)
+   *
+   * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
+   * prochain lot n'ait pas à reposer la question »).
+   *
+   * SERVI : les SEPT clés de `messageAttachmentMinimalSchema` — `id`,
+   * `fileName`, `mimeType`, `fileSize`, `fileUrl`, `thumbnailUrl`, `duration`.
+   * Et rien d'autre : `fast-json-stringify` supprime toute clé qu'aucun schéma
+   * ne déclare.
+   *
+   * CHARGÉ ET JAMAIS SERVI : `AttachmentService.getConversationAttachments`
+   * demande à MongoDB `transcription` (texte + segments mot-à-mot) ET
+   * `translations` (toutes les langues) pour chaque pièce de la page — jusqu'à
+   * 100 — et le sérialiseur les jette. L'issue #4392 les portait comme
+   * « servies systématiquement » ; la mesure dit CHARGÉES, jamais servies.
+   * Le comptage des lecteurs rend donc zéro par CONSTRUCTION, et il rend zéro
+   * aussi en balayant les clients : web —
+   * `apps/web/components/attachments/AttachmentGallery.tsx` via
+   * `AttachmentService.getConversationAttachments`, qui ne cite ni l'une ni
+   * l'autre ; iOS/SDK — `ConversationsEndpoint.byConversationIdAttachments`
+   * est DÉCLARÉ et jamais appelé ; Android — aucun endpoint.
+   *
+   * Le retrait de ces deux colonnes du `select` ne changerait donc RIEN au fil :
+   * c'est du travail mort au sens exact de #4177, et il se fait dans le
+   * SERVICE (`services/attachments/AttachmentService.ts`, `select` de
+   * `getConversationAttachments`), hors du territoire de ce lot. Le témoin
+   * `__tests__/unit/routes/attachments/conversation-attachments-served-keys.test.ts`
+   * gèle le jeu de clés servi et rougit si quelqu'un élargit le schéma sans
+   * décider ce que la galerie a le droit de voir (règle du cycle 84 : rendre
+   * une donnée visible oblige à décider, dans le même lot, si elle a le droit
+   * de l'être).
+   *
+   * PAS TRANCHÉ ICI (critère 2, décision produit) : la galerie web REND
+   * `messageId`, `originalName`, `uploadedBy`, `createdAt`, `width` et
+   * `height`, qu'aucun schéma ne déclare — son panneau d'information est donc
+   * vide par construction. Élargir le minimal est une décision, pas un
+   * nettoyage.
    */
   fastify.get(
     '/conversations/:conversationId/attachments',

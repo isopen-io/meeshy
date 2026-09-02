@@ -2261,6 +2261,118 @@ class StoryComposerViewModelTest {
         assertThat(request.captured.content).isNull()
     }
 
+    // --- drawing ---
+
+    private fun points(vararg xy: Double) =
+        xy.toList().chunked(2).map { (x, y) -> me.meeshy.sdk.model.StoryDrawingStrokePoint(x, y) }
+
+    @Test
+    fun `onEnterDrawingMode activates drawing, closes the band and clears element selections`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onEnterDrawingMode()
+
+        val state = vm.state.value
+        assertThat(state.isDrawingActive).isTrue()
+        assertThat(state.band).isEqualTo(ComposerBandState.Hidden)
+        assertThat(state.selectedTextElementId).isNull()
+        assertThat(state.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `onExitDrawingMode deactivates drawing`() = runTest {
+        val vm = viewModel()
+        vm.onEnterDrawingMode()
+
+        vm.onExitDrawingMode()
+
+        assertThat(vm.state.value.isDrawingActive).isFalse()
+    }
+
+    @Test
+    fun `onStrokeCaptured commits a stroke with the current pen colour and width`() = runTest {
+        val vm = viewModel()
+        vm.onDrawColorSelected("00FF00")
+        vm.onDrawWidthSelected(28.0)
+
+        vm.onStrokeCaptured(points(0.0, 0.0, 10.0, 10.0))
+
+        val stroke = vm.state.value.selectedSlideStrokes.single()
+        assertThat(stroke.colorHex).isEqualTo("00FF00")
+        assertThat(stroke.width).isEqualTo(28.0)
+        assertThat(stroke.points).hasSize(2)
+        assertThat(vm.state.value.canPublish).isTrue()
+    }
+
+    @Test
+    fun `onStrokeCaptured drops a stroke of fewer than two points`() = runTest {
+        val vm = viewModel()
+
+        vm.onStrokeCaptured(points(1.0, 1.0))
+        vm.onStrokeCaptured(emptyList())
+
+        assertThat(vm.state.value.selectedSlideStrokes).isEmpty()
+    }
+
+    @Test
+    fun `each captured stroke gets a fresh id and strokes accumulate in draw order`() = runTest {
+        val vm = viewModel()
+
+        vm.onStrokeCaptured(points(0.0, 0.0, 1.0, 1.0))
+        vm.onStrokeCaptured(points(2.0, 2.0, 3.0, 3.0))
+
+        val ids = vm.state.value.selectedSlideStrokes.map { it.id }
+        assertThat(ids).hasSize(2)
+        assertThat(ids[0]).isNotEqualTo(ids[1])
+    }
+
+    @Test
+    fun `onDrawUndo removes the last drawn stroke`() = runTest {
+        val vm = viewModel()
+        vm.onStrokeCaptured(points(0.0, 0.0, 1.0, 1.0))
+        vm.onStrokeCaptured(points(2.0, 2.0, 3.0, 3.0))
+
+        vm.onDrawUndo()
+
+        assertThat(vm.state.value.selectedSlideStrokes).hasSize(1)
+        assertThat(vm.state.value.drawingBoard.canRedo).isTrue()
+    }
+
+    @Test
+    fun `onDrawUndo with nothing drawn is a no-op`() = runTest {
+        val vm = viewModel()
+        vm.onDrawUndo()
+        assertThat(vm.state.value.selectedSlideStrokes).isEmpty()
+    }
+
+    @Test
+    fun `switching slides isolates strokes and resets the drawing board's redo stack`() = runTest {
+        val vm = viewModel()
+        vm.onStrokeCaptured(points(0.0, 0.0, 1.0, 1.0))
+        vm.onDrawUndo() // redo now holds the stroke on the first slide
+
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.selectedSlideStrokes).isEmpty()
+        assertThat(vm.state.value.drawingBoard.canRedo).isFalse()
+    }
+
+    @Test
+    fun `publish carries the slide's strokes into the wire request`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onStrokeCaptured(points(0.0, 0.0, 1.0, 1.0))
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.drawingStrokes).hasSize(1)
+        assertThat(request.captured.content).isNull()
+    }
+
     @Test
     fun `onSlideDurationChange pins the selected slide's duration through the public state`() = runTest {
         val vm = viewModel()

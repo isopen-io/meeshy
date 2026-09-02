@@ -39,6 +39,16 @@ sealed interface StoryDraftPersist {
  * unrepresentable content — has been **retired** rather than left as a constant-false dead
  * branch: [resolve] always projects a snapshot and decides purely on whether it is
  * [StoryComposerDraftSnapshot.isWorthRestoring] and changed.
+ *
+ * One dimension is *not yet* full-fidelity: [StorySlide.strokes] (the drawing tool's
+ * freehand layer) has no counterpart on [StoryDraftSlideSnapshot] — that type lives in
+ * `:core:model`, outside this module. A drawn stroke therefore survives a slide switch,
+ * a config change, and publish (it rides `StoryEffects.drawingStrokes`), but not a
+ * composer close/reopen or process death — it is silently dropped on restore rather than
+ * corrupting anything. [deckIsPristine] still treats a slide carrying strokes as touched,
+ * so a late-resolving restore can never clobber an in-progress drawing. Closing the gap
+ * needs a `strokes` field on `StoryDraftSlideSnapshot`/`StoryComposerDraftSnapshot`
+ * (`:core:model`) plus the two mirror functions below.
  */
 object StoryComposerAutosave {
 
@@ -46,9 +56,14 @@ object StoryComposerAutosave {
      * The persistence action for the current composer [deck] / [visibility] / [repostOfId],
      * given the [previous] stored draft. Rules, in order:
      *
-     * - **No restorable content** (no slide carries a caption, media, or a publishable text
-     *   element / sticker) → [StoryDraftPersist.Clear] over a stored draft, else
-     *   [StoryDraftPersist.None].
+     * - **No restorable content, but a slide carries [StorySlide.strokes]** (a drawing —
+     *   content that exists but that [StoryComposerDraftSnapshot] cannot yet represent, see
+     *   the class doc) → [StoryDraftPersist.None]. A stroke-only deck must never resolve to
+     *   [StoryDraftPersist.Clear]: that would erase whatever [previous] draft is already
+     *   stored to make room for a snapshot that, structurally, has nothing to save.
+     * - **No restorable content at all** (no slide carries a caption, media, a publishable
+     *   text element / sticker, *or* a stroke) → [StoryDraftPersist.Clear] over a stored
+     *   draft, else [StoryDraftPersist.None].
      * - **Restorable content, unchanged** from [previous] → [StoryDraftPersist.None].
      * - **Restorable content, changed** → [StoryDraftPersist.Save] with a fresh snapshot
      *   stamped [nowIso].
@@ -61,7 +76,10 @@ object StoryComposerAutosave {
         previous: StoryComposerDraftSnapshot?,
     ): StoryDraftPersist {
         val snapshot = deck.toDraftSnapshot(visibility, repostOfId, nowIso)
-        if (!snapshot.isWorthRestoring) return purgeOrNone(previous)
+        if (!snapshot.isWorthRestoring) {
+            val hasUnrepresentableContent = deck.slides.any { it.strokes.isNotEmpty() }
+            return if (hasUnrepresentableContent) StoryDraftPersist.None else purgeOrNone(previous)
+        }
         if (previous != null && previous.sameContentAs(snapshot)) return StoryDraftPersist.None
         return StoryDraftPersist.Save(snapshot)
     }
@@ -94,7 +112,7 @@ object StoryComposerAutosave {
             deck.slides.all {
                 it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
                     it.background == null && it.backgroundMediaId == null &&
-                    it.elements.isEmpty() && it.stickers.isEmpty()
+                    it.elements.isEmpty() && it.stickers.isEmpty() && it.strokes.isEmpty()
             }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
