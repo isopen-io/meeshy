@@ -247,6 +247,30 @@ public struct EmbeddedSceneCanvas: View {
             // borné à la carte, et le dessin ne recevait plus rien. Mesuré à
             // l'écran — aucun trait, sur une surface pourtant active.
             .allowsHitTesting(canvasOverlay == nil)
+            // **Le badge de sélection se DIT** (2026-09-02).
+            //
+            // Il est peint DANS le canvas UIKit — `StoryComposerCanvasView` le
+            // rend en couche, au-dessus de l'objet encadré. Mesuré à l'écran :
+            // « TEXT · FG PLANE · z 1 » est parfaitement lisible, et
+            // TOTALEMENT absent de l'arbre d'accessibilité.
+            //
+            // > Un texte peint par UIKit sous un hôte SwiftUI ne rejoint aucun
+            // > arbre : il n'est ni un `Text`, ni un élément d'accessibilité,
+            // > et rien ne rougit. La seule façon de s'en apercevoir est de
+            // > comparer ce que l'ŒIL reçoit à ce que `describe-all` rend —
+            // > deux relevés du même écran qui ne disent pas la même chose.
+            //
+            // Ce que son absence coûtait : le badge est la SEULE chose qui dise
+            // quel objet est sélectionné. Sans lui, un lecteur d'écran entend
+            // « STYLE · CLASSIC », « SIZE 96 » — des réglages sans sujet. Il
+            // règle la taille de quelque chose qu'on ne lui a pas nommé.
+            //
+            // La valeur est portée par `accessibilityValue` et non par un
+            // `Text` caché : le badge n'est pas un contrôle, c'est l'ÉTAT du
+            // canvas. VoiceOver l'annonce alors avec l'élément qu'il qualifie,
+            // au lieu d'en faire une halte de plus dans le balayage.
+            .accessibilityElement(children: .contain)
+            .accessibilityValue(selectionBadge.map(Text.init) ?? Text(verbatim: ""))
             .frame(width: reference.width, height: reference.height)
             .scaleEffect(scale, anchor: .center)
             .frame(width: fit.width, height: fit.height)
