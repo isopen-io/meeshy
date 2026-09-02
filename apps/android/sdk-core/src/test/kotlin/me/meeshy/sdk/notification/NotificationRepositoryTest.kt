@@ -11,6 +11,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MarkReadResponse
+import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.UnreadCountResponse
@@ -27,9 +28,16 @@ class NotificationRepositoryTest {
 
     private val api: NotificationApi = mockk(relaxed = true)
 
-    private fun notification(id: String, isRead: Boolean = false) = ApiNotification(
+    private fun notification(
+        id: String,
+        isRead: Boolean = false,
+        type: String = "new_message",
+        conversationId: String? = null,
+    ) = ApiNotification(
         id = id,
+        type = type,
         state = NotificationState(isRead = isRead, createdAt = "2026-08-17T00:00:00.000Z"),
+        context = conversationId?.let { NotificationContext(conversationId = it) },
     )
 
     private fun List<ApiNotification>.get(id: String) = first { it.id == id }
@@ -224,6 +232,64 @@ class NotificationRepositoryTest {
         }
     }
 
+    // --- Targeted rollback (realtime-data correctif) — a whole-snapshot rollback would clobber
+    // any server-confirmed arrival landing on the shared cache while the failing call is in
+    // flight; these pin the rollback to the single id/predicate the failed call itself owns. ---
+
+    @Test
+    fun markAsRead_rollbackDoesNotClobberANotificationThatArrivedWhileTheCallWasInFlight() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+        coEvery { api.markAsRead("n1") } coAnswers {
+            repo.prependLive(notification("n11", isRead = false))
+            throw IOException("offline")
+        }
+
+        repo.markAsRead("n1")
+
+        repo.notificationsStream().test {
+            val items = awaitItem().notifications()
+            assertThat(items.map { it.id }).containsExactly("n11", "n1")
+            assertThat(items.get("n1").state.isRead).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(repo.unreadCountStream.value).isEqualTo(2)
+    }
+
+    @Test
+    fun delete_rollbackDoesNotResurrectARowDeletedByAnotherDeviceWhileTheCallWasInFlight() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = false), unread = 2)
+        coEvery { api.delete("n1") } coAnswers {
+            repo.applyDeleted("n2")
+            throw IOException("offline")
+        }
+
+        repo.delete("n1")
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun markAllAsRead_rollbackDoesNotRevertARowDeletedWhileTheCallWasInFlight() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = false), unread = 2)
+        coEvery { api.markAllAsRead() } coAnswers {
+            repo.applyDeleted("n2")
+            throw IOException("offline")
+        }
+
+        repo.markAllAsRead()
+
+        repo.notificationsStream().test {
+            val items = awaitItem().notifications()
+            assertThat(items.map { it.id }).containsExactly("n1")
+            assertThat(items.get("n1").state.isRead).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+    }
+
     // --- Pagination (feature-parity §M "still open" — port of iOS NotificationListViewModel.loadMore) ---
 
     @Test
@@ -313,5 +379,148 @@ class NotificationRepositoryTest {
             assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1")
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // --- Notification sync family (issue notif-sync) — realtime apply* from the socket ---
+
+    @Test
+    fun applyRead_flipsTheRowAndDecrementsUnreadCount() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+
+        repo.applyRead("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().get("n1").state.isRead).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyRead_onAnAlreadyReadRowIsANoOp() = runTest {
+        // Covers the echo of this device's OWN markAsRead: the optimistic mutation already
+        // landed, so the socket echo must not double-decrement unreadCountStream.
+        val repo = seed(notification("n1", isRead = true), unread = 0)
+
+        repo.applyRead("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    @Test
+    fun applyRead_forAnIdOutsideTheCacheIsANoOp() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+
+        repo.applyRead("missing")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+    }
+
+    @Test
+    fun applyReadBulk_withAnAllScopeMarksEveryUnreadRow() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = false), unread = 2)
+
+        repo.applyReadBulk(NotificationReadBulkScope(kind = "all"))
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().all { it.state.isRead }).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyReadBulk_withAContextScopeMarksOnlyTheMatchingConversation() = runTest {
+        val repo = seed(
+            notification("n1", isRead = false, conversationId = "c1"),
+            notification("n2", isRead = false, conversationId = "c2"),
+            unread = 2,
+        )
+
+        repo.applyReadBulk(NotificationReadBulkScope(kind = "context", contextKey = "conversationId", contextValue = "c1"))
+
+        repo.notificationsStream().test {
+            val items = awaitItem().notifications()
+            assertThat(items.get("n1").state.isRead).isTrue()
+            assertThat(items.get("n2").state.isRead).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyReadBulk_neverTouchesUnreadCountStream() = runTest {
+        // The cache is a PARTIAL (paginated) view — decrementing from a bulk predicate would
+        // make the badge drift. notification:counts, emitted right after, is authoritative.
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+
+        repo.applyReadBulk(NotificationReadBulkScope(kind = "all"))
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+    }
+
+    @Test
+    fun applyDeleted_removesTheRowAndDecrementsUnreadCountForAnUnreadNotification() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = true), unread = 1)
+
+        repo.applyDeleted("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n2")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyDeleted_forAnAlreadyReadNotificationLeavesUnreadCountUntouched() = runTest {
+        val repo = seed(notification("n1", isRead = true), unread = 0)
+
+        repo.applyDeleted("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    @Test
+    fun applyDeleted_forAnIdOutsideTheCacheIsANoOp() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+
+        repo.applyDeleted("missing")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyDeletedBulk_removesOnlyAlreadyReadRows() = runTest {
+        val repo = seed(notification("n1", isRead = true), notification("n2", isRead = false), unread = 1)
+
+        repo.applyDeletedBulk(NotificationDeletedBulkScope(kind = "read"))
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n2")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyDeletedBulk_neverTouchesUnreadCountStream() = runTest {
+        // A consequence of the predicate, not a precaution: every purged row was already read,
+        // so it was never counted in unread.
+        val repo = seed(notification("n1", isRead = true), unread = 0)
+
+        repo.applyDeletedBulk(NotificationDeletedBulkScope(kind = "read"))
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+    }
+
+    @Test
+    fun applyCounts_setsUnreadCountStreamToTheServerValue() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+
+        repo.applyCounts(unread = 7)
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(7)
     }
 }

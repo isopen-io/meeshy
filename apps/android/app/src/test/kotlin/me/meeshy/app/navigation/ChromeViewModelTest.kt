@@ -20,8 +20,10 @@ import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.NotificationCountsSocketEvent
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -44,13 +46,17 @@ class ChromeViewModelTest {
     private val sessionRepository: SessionRepository = mockk(relaxed = true)
     private val notificationRepository: NotificationRepository = mockk(relaxed = true)
     private val friendRepository: FriendRepository = mockk(relaxed = true)
+    private val notificationCounts = MutableSharedFlow<NotificationCountsSocketEvent>()
+    private val messageSocketManager: MessageSocketManager = mockk(relaxed = true) {
+        every { notificationCounts } returns this@ChromeViewModelTest.notificationCounts
+    }
 
     private fun viewModel(cache: FriendshipCache = FriendshipCache()): ChromeViewModel {
         coEvery { friendRepository.receivedRequests(any(), any()) } returns NetworkResult.Success(emptyList())
         coEvery { friendRepository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
         every { notificationRepository.notificationsStream(any(), any()) } returns
             MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache)
+        return ChromeViewModel(sessionRepository, notificationRepository, friendRepository, cache, messageSocketManager)
     }
 
     @Test
@@ -127,6 +133,15 @@ class ChromeViewModelTest {
         // dans un sens. `any()` sur ce parametre ne l'aurait jamais attrape.
         coVerify(exactly = 1) { friendRepository.receivedRequests(offset = 0, limit = 100) }
         coVerify(exactly = 1) { friendRepository.sentRequests(offset = 0, limit = 100) }
+    }
+
+    @Test
+    fun `a socket notification counts event reaches the repository without any notifications screen ever being open`() = runTest {
+        viewModel()
+
+        notificationCounts.emit(NotificationCountsSocketEvent(unread = 5, total = 20))
+
+        verify(exactly = 1) { notificationRepository.applyCounts(5) }
     }
 
     @Test
