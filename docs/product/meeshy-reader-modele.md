@@ -116,10 +116,26 @@ représentable à `:1045`/`:1107`.
 
 ### La scène 0 est figée PARTOUT, et c'est une décision que personne n'a écrite
 
-`MeeshyScenePlayer` prend un `sceneIndex: Binding<Int>` — il SAIT paginer. Or les
-**trois** sites de montage passent `.constant(0)` (`StoryViewerView+Canvas:1035`
-et `:1091`, `FeedPostCard:365`), et le balayage ne trouve **aucun** `@State` ni
-`$sceneIndex` dans le dépôt : **aucun hôte ne pilote l'index.**
+`MeeshyScenePlayer` prend un `sceneIndex: Binding<Int>` — il SAIT paginer. Or
+**cinq** sites élisent la scène 0, et aucun `@State` ni `$sceneIndex` n'existe
+dans le dépôt : **aucun hôte ne pilote l'index.**
+
+| site | forme |
+|---|---|
+| `StoryViewerView+Canvas:1035` et `:1091` | `sceneIndex: .constant(0)` |
+| `FeedPostCard:365` | `sceneIndex: .constant(0)` |
+| **`StoryModels:1171`** — `StoryEffects.init(from decoder:)` | littéral `0`, **en dur** |
+| `StoryDraftStore:810` | littéral `0`, en dur |
+
+Les deux derniers ne passent par aucun `Binding` : un balayage qui cherche
+`.constant(0)` les rate, et l'un d'eux est sur le chemin d'ÉCRITURE (le store de
+brouillons), pas de lecture.
+
+**Nuance qui évite d'en faire une perte** : le décodeur retient le document
+ENTIER — `canvasV3 = document`, la ligne suivante. Ce qui est réduit à la scène 0
+est la **projection runtime** en `StoryEffects`, jamais la donnée. Une scène 1
+survivrait donc au décodage et à la sauvegarde d'un brouillon ; elle ne serait
+simplement peinte par personne.
 
 La lecture n'est donc prête pour M scènes qu'au niveau du TYPE. Chaque hôte a
 déjà tranché « scène 0 », trois fois, en silence — pour la vignette de fil c'est
