@@ -19,7 +19,7 @@ public final class ContactMatchService: ContactMatchServiceProviding, @unchecked
 
     public func match(_ request: ContactMatchRequest) async throws -> ContactMatchResponse {
         let response: APIResponse<ContactMatchResponse> = try await api.post(
-            endpoint: "/users/me/contacts/match", body: request
+            UsersEndpoint.meContactsMatch, body: request
         )
         return response.data
     }

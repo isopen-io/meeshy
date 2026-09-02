@@ -217,6 +217,24 @@ struct MeeshyComposerHost: View {
     /// forme que les cinq autres écrans qui montent `AudienceUserPickerView`.
     @State var audiencePickerMode: PostVisibility?
 
+    /// **Le sélecteur de personnes demandé DEPUIS la feuille d'audience**
+    /// (#4636). Même mécanisme que `pendingFileImport`, et pour la même raison :
+    /// le picker est monté sous la feuille, donc il ne peut pas s'ouvrir tant
+    /// qu'elle occupe le présentateur. Sans cette intention, choisir
+    /// « Seulement… » dans la feuille n'ouvrirait RIEN — le défaut exact que
+    /// #4632 vient de fermer sur la porte du son.
+    @State var pendingAudiencePicker: PostVisibility?
+
+    /// Les tendances SUGGÉRÉES au sélecteur de hashtags. Vide est un état
+    /// nominal (hors-ligne, aucune tendance) : le champ de saisie suffit, donc
+    /// rien n'attend ce chargement.
+    @State var trendingHashtags: [APIHashtag] = []
+
+    /// **L'objet OUVERT dans l'éditeur plein écran** (#4634). Distinct de
+    /// `selectedSceneItemId`, qui répond à une autre question : celui-là est
+    /// SÉLECTIONNÉ sur la scène, celui-ci est en cours d'ÉDITION.
+    @State var editedObject: ComposerEditedObject?
+
     /// Les personnes que ce mood nomme sans que son texte le dise. Le meuble
     /// les porte ; la RÈGLE de ce qu'on en déclare au serveur est
     /// `ComposerMoodPolicy.declared` (`nil` et jamais `[]`, loi 3).
@@ -257,6 +275,76 @@ struct MeeshyComposerHost: View {
     /// « l'auteur n'a rien dit » — la règle automatique s'applique alors mot
     /// pour mot, et c'est ce qui garantit qu'aucun geste existant ne change.
     @State var chosenSoundRole: ComposerAudioRole?
+    /// **Le placement choisi dans la feuille de création audio** (#4657).
+    ///
+    /// NON optionnel, contrairement à `chosenSoundRole` : la feuille l'affiche
+    /// toujours, donc il y a toujours une valeur montrée. Ce sont les deux
+    /// ENTRÉES qui le posent — « Vocal » ⇒ premier plan, « Ajouter un son » ⇒
+    /// fond — et l'auteur en change dans la feuille. Un défaut arbitraire ici
+    /// contredirait le bouton qu'il vient de presser.
+    @State var chosenSoundPlacement: ComposerAudioRole = .background
+
+    /// **Le viseur promis par la porte a-t-il déjà été ouvert ?** (#4751)
+    ///
+    /// `.task` peut rejouer — au retour d'un cover, à une recomposition de
+    /// l'arbre — et un second viseur posé par-dessus le premier serait un
+    /// écran que rien ne referme. La garde vit ICI et non dans la règle :
+    /// `armsCameraOnAppear` est pure et doit rendre la même réponse à chaque
+    /// appel, ce qui est correct pour une règle et faux pour une garde
+    /// d'unicité.
+    @State var hasArmedOpeningCamera = false
+
+    /// **Le son que la feuille rouvre pour l'ÉDITER** (directive porteur
+    /// 2026-09-01). `nil` ⇒ la feuille s'ouvre vierge, sur l'enregistreur ;
+    /// posé ⇒ elle s'ouvre sur ce son, prêt à être rogné, re-transcrit ou
+    /// replacé. C'est ce champ qui distingue « ajouter » de « modifier », et
+    /// c'est aussi lui qui dit à `applyCreatedAudio` quelle entrée REMPLACER —
+    /// sans quoi éditer un son en aurait posé un second à côté du premier.
+    @State var editedForegroundSound: ComposerForegroundSound?
+
+    /// **Le son de FOND que la feuille rouvre** (#4668) — l'identifiant de
+    /// l'objet de scène, pas le son lui-même.
+    ///
+    /// Un identifiant plutôt qu'une copie parce que c'est lui qu'il faudra
+    /// SUPPRIMER au retour : une copie prise à l'ouverture désignerait un objet
+    /// que le canvas a pu déplacer, renommer ou ré-empiler entre-temps, et le
+    /// remplacement viserait à côté.
+    ///
+    /// Les deux champs sont exclusifs — on n'édite qu'un son à la fois — et
+    /// chaque entrée efface l'autre. Un type somme les rendrait exclusifs par
+    /// construction ; il coûterait ici plus cher qu'il ne rapporte, les deux
+    /// n'étant lus qu'en un seul endroit (`editedSoundTrack`).
+    @State var editedBackgroundSoundId: String?
+
+    /// **L'IDENTITÉ de la feuille « Création audio »** (#4684).
+    ///
+    /// `.sheet(item: $presentedPortal)` reconstruit son contenu quand l'ITEM
+    /// change. Deux ouvertures successives portent la même valeur — `.sound` —
+    /// donc SwiftUI est en droit de RÉUTILISER la vue, et avec elle tout son
+    /// `@State` : la piste enregistrée, la phase, le son emprunté. Une feuille
+    /// périmée se re-présente alors sur un son qu'elle n'édite pas.
+    ///
+    /// Observé une fois à la vérification simulateur du 2026-09-01, et
+    /// destructeur : rouvrir un son de FOND montrait le commutateur sur
+    /// « Contenu de publication », et valider déplaçait le son sans rien dire.
+    /// L'indice qui l'a nommé est visuel — la feuille rendait la carte
+    /// d'APRÈS-ENREGISTREMENT au lieu de celle de réouverture.
+    ///
+    /// Un identifiant neuf par ouverture rend la réutilisation impossible :
+    /// c'est une garantie de STRUCTURE, là où « n'oublie pas de remettre l'état
+    /// à zéro » est une consigne que le prochain site d'appel ne lira pas.
+    /// **La pastille audio du CANVAS qu'on rouvre** (#4671).
+    ///
+    /// Un troisième contexte d'édition, et il fallait le distinguer des deux
+    /// autres : une pastille posée sur la scène n'est ni le fond de la slide ni
+    /// une pièce jointe du post. Le commutateur de placement n'a que ces deux
+    /// moitiés — l'offrir ici laisserait l'auteur DÉPLACER son objet en croyant
+    /// le rogner, et sans troisième valeur il ne pourrait jamais le remettre.
+    /// La feuille s'ouvre donc SANS commutateur, et le résultat remplace la
+    /// pastille à sa place.
+    @State var editedSceneChipId: String?
+
+    @State var soundSheetSession = UUID()
 
 
     @State var showsMediaSourceChooser = false
@@ -338,6 +426,21 @@ struct MeeshyComposerHost: View {
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
 
+    /// **Ce que l'importateur ouvert va rapporter** (#4632). Le meuble n'a qu'UN
+    /// `.fileImporter` — deux sélecteurs frères rejoueraient le conflit de
+    /// présentation que `ComposerSoundHandoff` documente. C'est donc l'intention
+    /// qui change, jamais le sélecteur : son filtre de types ET la destination
+    /// du résultat en découlent.
+    @State var fileImportIntent: ComposerFileImportIntent = .media
+
+    /// **L'import demandé PENDANT qu'une feuille est montée.**
+    ///
+    /// Un sélecteur système ne peut pas paraître tant qu'un portail occupe le
+    /// présentateur. L'intention est donc retenue ici, le portail fermé, et
+    /// l'importateur ouvert à la fermeture EFFECTIVE (`onDismiss`) — jamais dans
+    /// la même transaction, où iOS l'ignorerait en silence.
+    @State var pendingFileImport = false
+
 
     /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
     /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
@@ -356,6 +459,31 @@ struct MeeshyComposerHost: View {
     /// disparaît. Reconstruire les slides à chaque changement aurait jeté au
     /// passage tout ce que l'auteur a composé DESSUS.
     @State var slideIdByMediaURL: [URL: String] = [:]
+
+    /// **Le RÔLE de chaque média posé — fond ou premier plan** (#4724).
+    ///
+    /// Sa jumelle `slideIdByMediaURL` ci-dessus ne connaît que les FONDS : c'est
+    /// sa définition, et c'est ce qui en fait la liste des tuiles. Il fallait
+    /// donc une seconde mémoire pour les autres, et elle porte deux charges à la
+    /// fois : dire ce qu'un média est devenu, et servir de garde d'idempotence
+    /// (« ce média a DÉJÀ été posé ») — rôle que l'index des fondations tenait
+    /// avant ce lot, et qu'il ne peut plus tenir depuis qu'un média peut être
+    /// posé sans rien fonder.
+    @State var mediaRoleByURL: [URL: ComposerMediaRole] = [:]
+
+    /// **Les LÉGENDES, une par média** (#4890, directive porteur 2026-09-02 :
+    /// « chaque image doit avoir sa légende »).
+    ///
+    /// Elle n'existe qu'en profil POST : ailleurs le texte de la slide EST le
+    /// contenu de la publication et vit dans la slide. C'est
+    /// `ComposerSlideTextRole` qui tranche, et ce champ n'est écrit que par lui
+    /// — poser ici une seconde décision de rôle referait le recouvrement que le
+    /// lot vient de retirer.
+    ///
+    /// Clé : l'URL LOCALE du média, la seule qui existe pendant la composition
+    /// (l'id serveur n'est attribué qu'à l'upload) et celle sous laquelle le
+    /// meuble tient déjà ses médias.
+    @State var documentMediaCaptions: ComposerMediaCaptions = [:]
 
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
@@ -378,7 +506,8 @@ struct MeeshyComposerHost: View {
     /// unique. Garder l'id en plus serait un état MORT, qui masquerait une
     /// lecture morte le jour où un lot suivant croirait s'en servir.
     @State var selectedSceneItemKind: StoryCanvasUIView.CanvasItemKind?
-    /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
+
+   /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
     /// JETAIT (`{ _, kind in … }`). Le kind suffisait à l'inspecteur, qui ne
     /// sert qu'un contrôle par famille ; le rail *trailing* offre des actions
     /// qui dépendent de CET objet — verrouillé ? au fond ? seul de son plan ? —
@@ -407,6 +536,13 @@ struct MeeshyComposerHost: View {
     /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
+
+    /// **Le repli du volet de description** (#4742).
+    ///
+    /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
+    /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
+    /// Déplié par défaut — la description existe pour être relue.
+    @State var sceneDescriptionCollapsed = false
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
@@ -459,7 +595,14 @@ struct MeeshyComposerHost: View {
     /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
     /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
     /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
-    @State var documentTranscription: MobileTranscriptionPayload?
+    /// **Une transcription PAR FICHIER** (#4672).
+    ///
+    /// C'était UNE valeur, écrasée à chaque retour de la feuille. Avec deux
+    /// vocaux, la seconde effaçait la première : une seule carte s'affichait,
+    /// et le premier son partait quand même à la publication, muet et
+    /// invisible. La clé est l'URL du fichier — le seul handle que
+    /// `documentLocalMedia` et la feuille partagent.
+    @State var documentTranscriptions: [URL: MobileTranscriptionPayload] = [:]
 
     init(
         intent: ComposerIntent,
@@ -474,7 +617,14 @@ struct MeeshyComposerHost: View {
     ) {
         self.intent = intent
         self.initialVisibility = initialVisibility
-        self.draftId = draftId
+        // **La PORTE peut porter le brouillon** (#4611). `draftId` était le
+        // seul chemin d'adoption, et `ComposerOrigin.draft(id:)` transportait à
+        // côté un identifiant que personne ne lisait — deux moitiés d'une même
+        // intention, jamais reliées. Le paramètre garde la priorité : un
+        // appelant qui le passe EXPLICITEMENT sait ce qu'il fait, là où la
+        // graine de la porte est un défaut.
+        let repris = draftId ?? intent.origin.resumedDraftId
+        self.draftId = repris
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPublishDocument = onPublishDocument
         self.moodSeed = moodSeed
@@ -497,7 +647,7 @@ struct MeeshyComposerHost: View {
         } else {
             composer = StoryComposerViewModel()
         }
-        if let draftId { composer.adoptDraft(id: draftId) }
+        if let repris { composer.adoptDraft(id: repris) }
         _viewModel = StateObject(wrappedValue: composer)
 
         let ouverture = ComposerProfile.profile(
@@ -532,23 +682,6 @@ struct MeeshyComposerHost: View {
         PlateauTint(rawValue: storedTint) ?? .defaultTint
     }
 
-    /// L'éventail RESPIRE : il est recalculé à chaque passe de rendu sur la
-    /// composition du moment. Poser deux images puis en retirer une retire le
-    /// réel de l'offre — c'est ce que V1 avait écrit et débranché.
-    ///
-    /// **B3 (#3926) — il respire sur les DEUX compositions.** Le média peut
-    /// vivre dans le document (`documentLocalMedia`, avant la bascule) OU dans
-    /// l'atelier (`currentEffects`, après que B1 l'y a porté). L'éventail doit
-    /// offrir RÉEL dans les deux états — sur le document, c'est
-    /// `documentComposesReel` qui qualifie, exactement le gate que le sélecteur
-    /// de destination retiré lisait déjà. Sans le premier terme, le fan
-    /// n'offrirait jamais RÉEL tant qu'on n'a pas déjà basculé — l'offre
-    /// arriverait trop tard pour servir à basculer.
-    var reelGate: Bool {
-        documentComposesReel
-            || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
-    }
-
     /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne (#4035).**
     ///
     /// Un TOGGLE, et c'est ce qui le rend utilisable : rien de sélectionné et
@@ -561,211 +694,6 @@ struct MeeshyComposerHost: View {
             currentSelection: selectedSceneItemKind,
             backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
         )
-    }
-
-    /// **#4030 — le gate du mood, nourri de la MÊME composition que celui du
-    /// réel.** Le mood est une carte SANS scène et SANS média : il ne regarde
-    /// donc pas `currentEffects` objet par objet comme le fait le réel, mais
-    /// les deux faits que le meuble tient déjà — ce que l'auteur a ingéré
-    /// (`documentLocalMedia`) et si une scène existe (`documentHasScene`, qui
-    /// couvre autant le fond de couleur que les médias montés en slides).
-    ///
-    /// `moodEmoji` entre dans le prédicat pour la raison écrite sur
-    /// `ComposerMoodGate` : sans lui, effacer sa phrase pour la réécrire
-    /// retirerait le format sous les doigts de l'auteur.
-    var moodGate: Bool {
-        ComposerMoodGate.compositionQualifiesAsMood(
-            text: documentText,
-            hasMedia: !documentLocalMedia.isEmpty,
-            hasScene: documentHasScene,
-            moodEmoji: moodEmoji
-        )
-    }
-
-    var profile: ComposerProfile {
-        ComposerProfile.profile(
-            for: intent.origin,
-            compositionQualifiesAsReel: reelGate,
-            compositionQualifiesAsMood: moodGate
-        )
-    }
-
-    /// Le format qui GOUVERNE — surface montée et type publié.
-    ///
-    /// Il n'est pas `currentFormat` : l'offre respire (le réel n'est offert que
-    /// tant que la composition qualifie), et retirer une image sous une
-    /// sélection `.reel` laisserait le meuble sur un format que la porte
-    /// n'offre plus. `resolvedSelection` le ramène au premier format offert,
-    /// qui est toujours celui de la porte (invariant de C1). C'est la règle
-    /// écrite avec l'éventail, et jusqu'ici jamais exercée hors de son test.
-    var selectedFormat: ComposerFormat {
-        ComposerFormatFanPolicy.resolvedSelection(
-            current: currentFormat,
-            offeredFormats: profile.offeredFormats
-        )
-    }
-
-    /// Ce que l'éventail écrit. La LECTURE passe par la règle de repli, sinon
-    /// un éventail dont l'offre vient de se refermer ne marquerait plus aucun
-    /// chip ; l'ÉCRITURE va droit au champ, parce qu'un tap ne vise jamais
-    /// qu'un format offert.
-    var formatSelection: Binding<ComposerFormat> {
-        Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })
-    }
-
-    /// La surface MONTÉE — l'unique lecture de la règle de routage dans ce
-    /// fichier. Le corps la consomme pour choisir sa vue, le chrome pour savoir
-    /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
-    /// lectures de la même expression auraient été trois occasions de diverger.
-    var mountedSurface: ComposerSurfaceKind {
-        // B3 (#3926) — STORY et RÉEL montent la scène par le ROUTAGE
-        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`), une
-        // destination du socle que l'éventail écrit (`selectedFormat`) — c'est
-        // ce qui fait de l'éventail le seul sélecteur.
-        //
-        // **Choisir une couleur de fond ne bascule PLUS ici (#3939, retour
-        // porteur 2026-08-27).** L'ancienne règle F2 (`ComposerSceneActivation`,
-        // supprimée) faisait naître la scène 9:16 PLEIN ÉCRAN dès qu'un fond
-        // était choisi — remplacement de route surprenant, pas demandé :
-        // l'auteur reste sur l'écran document qu'il a ouvert. `documentBackground`
-        // continue d'être posé (utile à l'atelier une fois qu'il s'incrustera),
-        // mais ne route plus vers `.scene` seul. Voir #3939 pour l'incrustation
-        // du canvas DANS l'écran document, restant à livrer.
-        return ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
-    }
-
-    /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue deux
-    /// fois : passée à l'atelier pour qu'il assemble ou non sa rangée haute, et
-    /// lue ici pour que le socle peigne ou non les mêmes zones.
-    ///
-    /// **Ce fut une CONSTANTE `.atelier`, et le lot 4 l'a rendue calculée** —
-    /// pas par confort : les deux blocages qui l'imposaient sont des blocages de
-    /// la SCÈNE, et une constante qui les faisait valoir pour les trois surfaces
-    /// était une constante mal placée.
-    ///
-    /// (1) **L'audience de l'atelier n'est pas atteignable d'ici.**
-    /// `StoryComposerView.visibility` est un `@State` PRIVÉ, semé à la
-    /// construction par `initialVisibility`, dont `visibilityMenu` est l'unique
-    /// écrivain. Le socle a beau savoir choisir une audience depuis le lot 4.9,
-    /// il écrit `composerVisibility`, que l'atelier ne lit jamais : céder le
-    /// chrome sous la scène retirerait `visibilityMenu` et laisserait l'auteur
-    /// devant un sélecteur qui ne gouverne rien. **Condition de levée, côté
-    /// SDK** : que l'atelier accepte une audience en `@Binding` plutôt qu'en
-    /// graine.
-    ///
-    /// (2) **L'aperçu de l'atelier porte des médias que le meuble ne voit pas.**
-    /// `preloadedImages/VideoURLs/AudioURLs` sont `internal` à `MeeshyUI` ; un
-    /// œil peint ici rendrait une scène amputée des médias LOCAUX, ce
-    /// qu'interdit la loi 6. Le socle n'en peint plus aucun depuis le lot 4.9 —
-    /// pour une raison voisine mais DISTINCTE, qu'il ne faut pas confondre :
-    /// sous ses deux surfaces il n'y a pas de canvas du tout, pas même amputé.
-    ///
-    /// Sous le document et sous le mood, **il n'y a pas d'atelier** : aucune de
-    /// ces deux raisons n'a d'objet. La règle qui tranche est
-    /// `ComposerChromeOwnership`, éprouvable sans monter une vue ; ce qui suit
-    /// n'en est que la lecture.
-    ///
-    /// **Ce que la bascule NE lève PAS, et qu'il ne faut pas lire comme acquis** :
-    /// la scène reste sur `.atelier`, et ses deux conditions de levée sont
-    /// intactes — une audience de l'atelier PILOTABLE depuis le meuble, et un
-    /// aperçu qui porte les médias préchargés. Elles se remplissent côté SDK,
-    /// jamais depuis ce fichier.
-    var chromeOwner: ComposerChromeOwner {
-        ComposerChromeOwnership.owner(for: mountedSurface)
-    }
-
-    /// Les zones que le socle peint sous la surface montée. Une RÈGLE, jamais un
-    /// `if` écrit dans le corps : une condition posée dans un `body` est
-    /// invisible aux tests, et c'est ainsi qu'une règle produit se met à exister
-    /// en deux exemplaires.
-    var paintedSocleZones: [ComposerTopBarControl] {
-        ComposerChromeOwnership.socleZones(
-            for: mountedSurface,
-            // L'œil n'a d'objet que s'il y a une scène à montrer — c'est la
-            // condition que le doc-comment de `socleZones` avait écrite en
-            // 2026-08-24 comme prix de son retour, et elle se vérifie ICI,
-            // jamais dans le corps du socle.
-            documentHasScene: documentHasScene,
-            // Sous la SCÈNE, l'œil n'existe que si l'atelier l'a armé (#4135).
-            atelierOffersPreview: publishTrigger.offersPreview
-        )
-    }
-
-    /// **OÙ le plateau — donc l'éventail — a le droit de se peindre.**
-    ///
-    /// Une RÈGLE nommée, jamais une expression écrite dans le `body` : une
-    /// condition posée là est invisible aux tests, et c'est ainsi qu'une règle
-    /// produit se met à exister en deux exemplaires.
-    ///
-    /// **La loi 5 impose de surcroît que rien dans le `body` ne conditionne
-    /// l'affichage sur la PORTE, et il faut lire ce que cela interdit
-    /// exactement.** Ce n'est pas « ne rien lire qui vienne de la porte » : le
-    /// PROFIL vient d'elle, et `mountedSurface` comme `offeredAudiences` le
-    /// remontent aussi. Ce qui est interdit est de tester son IDENTITÉ — un
-    /// `if profile` / `if origin` écrit ici, ce que
-    /// `test_theSocleYieldsToTheAtelier_andNeverToTheDoor` refuse en toutes
-    /// lettres. Cette propriété ne lit que des CAPACITÉS — la surface montée,
-    /// l'ouverture, l'offre —, si bien que deux portes aux mêmes capacités y
-    /// obtiennent la même réponse. C'est cela, la loi 5.
-    ///
-    /// Jusqu'au lot 4.7, le plateau était monté par `composerSurface` : la SCÈNE
-    /// seule le portait, et le chip « Post » d'une republication de mood
-    /// n'existait sur aucun écran. Le descendre en bloc aurait livré le défaut
-    /// symétrique sous `.feedComposer`. `ComposerFormatFanPlacement` est ce qui
-    /// sépare les deux cas — et c'est une règle, non un accident de montage.
-    ///
-    /// **Elle lit les DEUX règles de l'éventail, et leur CONJONCTION n'est pas
-    /// écrite ici.** Le plateau ne porte plus qu'une chose ; sans le test de
-    /// VISIBILITÉ, une création de mood (`.moodChip`, qui n'offre qu'un format)
-    /// monterait une rangée VIDE — un `HStack` réduit à ses 16 points de
-    /// remplissage vertical, en haut d'un écran livré. Loi 4 : ce qui n'a rien à
-    /// montrer est absent, pas transparent. La scène, elle, n'en change pas :
-    /// sa seule porte de production (`.storyTray`) offre toujours au moins deux
-    /// formats.
-    ///
-    /// Le `&&` a d'abord été écrit ICI, et c'était la même faute d'un cran plus
-    /// haut : la composition EST la règle, et posée dans une propriété privée
-    /// elle n'était exercée par aucune assertion. Mutation mesurée — remplacer
-    /// ce `&&` par un `||` laissait passer les quatre gardes de source qui
-    /// l'entouraient. `ComposerFormatFanPlacement.mounts` la porte désormais, et
-    /// cette propriété n'est plus que sa LECTURE.
-    var mountsFormatFan: Bool {
-        ComposerFormatFanPlacement.mounts(
-            surface: mountedSurface,
-            opening: profile.opensWith,
-            offeredFormats: profile.offeredFormats
-        )
-    }
-
-    /// **La RANGÉE du plateau le peint-elle ?** — `mountsFormatFan` dit QUE
-    /// l'éventail est servi, `place` dit OÙ, et cette propriété joint les deux.
-    ///
-    /// La jonction est ici, dans une propriété NOMMÉE, jamais dans le `body` :
-    /// une condition écrite dans un `body` est invisible aux tests, et c'est
-    /// exactement la faute que la note ci-dessus raconte avoir déjà commise un
-    /// cran plus haut. Sa jumelle vit au site d'appel de la surface document
-    /// (`place == .documentHeader`), et l'exhaustivité du `switch` de `place`
-    /// interdit qu'elles soient vraies ensemble.
-    var paintsFormatFan: Bool {
-        mountsFormatFan
-            && ComposerFormatFanPlacement.place(for: mountedSurface) == .plateauRow
-    }
-
-    /// **Les audiences que le meuble a le droit de proposer**, lues UNE fois et
-    /// remises telles quelles à ses deux formes de sélecteur — le menu du socle
-    /// et le ruban du mood.
-    ///
-    /// Les deux formes existent à dessein (une rangée n'accueille pas six chips)
-    /// et ne sont jamais peintes ensemble. Mais deux OFFRES pour un même réglage
-    /// seraient un plafond posé d'un côté seulement, et c'est très exactement le
-    /// défaut que ce lot referme : le raisonnement sur le plafond d'une
-    /// republication était écrit dans `ComposerIntent` pendant que le ruban
-    /// déjà peint, sur le seul chemin vivant en production, offrait les six.
-    ///
-    /// C'est la PORTE qui répond, jamais la surface : elle seule sait si l'on
-    /// republie (`ComposerOrigin.repostedPostId`).
-    var offeredAudiences: [PostVisibility] {
-        ComposerAudienceOffer.offered(for: intent.origin)
     }
 
     var body: some View {
@@ -857,9 +785,39 @@ struct MeeshyComposerHost: View {
         // Basculer vers Post après avoir composé ailleurs doit rattraper la
         // dérivation : sans ça, un média ingéré en Story puis ramené en Post
         // n'aurait jamais sa slide (loi 9 — le contenu est PRÉSERVÉ).
-        .adaptiveOnChange(of: selectedFormat) { _, _ in
+        .adaptiveOnChange(of: selectedFormat, initial: true) { _, _ in
             syncPostMediaIntoSlides()
+            // La première unité d'histoire naît AVEC le format, jamais au
+            // premier geste : le canvas d'une story se montre vide, et un rail
+            // sans aucune unité n'aurait pas de voisine à côté de qui poser la
+            // suivante. `initial: true` couvre les portes qui ouvrent DÉJÀ en
+            // story (reprise d'un brouillon de story, tiroir des stories).
+            seedStoryCanvasIfNeeded()
         }
+        // **La porte qui a promis un VISEUR l'ouvre** (#4751). `.cameraReady`
+        // a quitté l'exemption qui l'envoyait à l'atelier ; sans cette ligne,
+        // « Créer une story » ouvrirait le meuble sur une scène vide et la
+        // porte la plus visible du Feed cesserait de tenir ce que son nom
+        // annonce.
+        //
+        // `armOpeningCameraIfPromised` est le site UNIQUE : la règle décide,
+        // le meuble exécute, et un `guard` d'idempotence tient la promesse à
+        // UNE ouverture — un `.task` peut rejouer, et un second viseur
+        // par-dessus le premier serait un écran que rien ne referme.
+        .task { armOpeningCameraIfPromised() }
+    }
+
+    /// Ouvre le viseur que la porte a promis, une fois.
+    ///
+    /// **Idempotent par un état du meuble, pas par la règle** : la règle est
+    /// pure et rend la même réponse à chaque appel, ce qui est correct pour
+    /// elle et faux comme garde. C'est l'HÔTE qui sait s'il a déjà ouvert.
+    func armOpeningCameraIfPromised() {
+        guard !hasArmedOpeningCamera,
+              ComposerSurfaceRouting.armsCameraOnAppear(opening: profile.opensWith)
+        else { return }
+        hasArmedOpeningCamera = true
+        presentMediaIntake(.camera)
     }
 
     /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
@@ -908,145 +866,6 @@ struct MeeshyComposerHost: View {
     ///
     /// Le `switch` est exhaustif : une cinquième vue casse la compilation ici,
     /// avant de pouvoir diverger en silence.
-    /// **Les PORTAILS d'ingestion appartiennent au MEUBLE, jamais à une
-    /// surface** (#4120).
-    ///
-    /// Ils vécurent attachés à l'expression `documentSurface` — et le
-    /// doc-comment du bloc affirmait déjà la bonne règle sans que le code la
-    /// tienne : « trois sélecteurs montés ICI, **sur le meuble**, jamais dans
-    /// `ComposerDocumentSurface` ». « Ici » désignait la surface, pas le meuble,
-    /// et la différence n'a coûté RIEN tant qu'il n'y eut qu'une vue à monter.
-    ///
-    /// #4070 en a monté quatre. Les quatre portes du rail *leading* posaient
-    /// alors `showsPhotoPicker = true` / `showsLocationPicker` /
-    /// `showsAudioComposer` / `showsReferencePicker` **sans qu'aucune vue à
-    /// l'écran ne les lise** : chaque maillon correct, et la chaîne ne
-    /// transportait personne.
-    ///
-    /// La règle est donc géographique, et c'est ce qui la rend gardable : un
-    /// portail se monte **au-dessus de l'aiguillage**, là où les quatre vues
-    /// passent. `ComposerIntakePortalsTests` en tient l'INVENTAIRE — tout
-    /// `@State private var shows…` du meuble doit avoir son lecteur ici, sans
-    /// quoi le contrôle qui l'écrit est inerte sur trois surfaces sur quatre.
-    ///
-    /// Le contrôle de découvrabilité y est aussi, et pour la même raison : un
-    /// lieu posé depuis la scène doit pouvoir se retirer.
-    var surfaceWithIntakePortals: some View {
-        surface
-        // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
-        // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
-        // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
-        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
-        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
-        // et des notices — bien plus large qu'une capsule, il ne doit
-        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
-        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
-        // != nil` seul : l'audience compte autant que le lieu.
-        .safeAreaInset(edge: .bottom) {
-            // **#4034 — le composant se monte sur le LIEU, plus sur l'opt-in.**
-            // Il était gaté par `documentOffersNearbyDiscoverability` (lieu ET
-            // audience publique) à l'époque où le nom du lieu vivait ailleurs,
-            // dans un chip de la rangée d'outils. Ce chip est retiré — l'info
-            // vit dans l'entête du composant —, si bien que garder l'ancienne
-            // garde aurait fait DISPARAÎTRE de l'écran le lieu d'un post privé,
-            // avec le seul moyen de le retirer. La découvrabilité, elle, reste
-            // gouvernée par sa règle : c'est `offersDiscoverability` qui la
-            // porte À L'INTÉRIEUR du composant.
-            if let place = documentLocation {
-                NearbyDiscoverabilityControl(
-                    choice: $documentDiscoverability,
-                    accentColor: MeeshyColors.brandPrimaryHex,
-                    placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address),
-                    offersDiscoverability: documentOffersNearbyDiscoverability,
-                    onRemovePlace: { documentLocation = nil }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-            }
-        }
-        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
-                            isPresented: $showsMediaSourceChooser,
-                            titleVisibility: .visible) {
-            // Les boutons SORTENT de la règle : les écrire à la main ferait de
-            // ce bloc une seconde liste, que `allowsCapture` cesserait de
-            // gouverner au premier oubli.
-            ForEach(ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture),
-                    id: \.self) { source in
-                Button(ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))) {
-                    presentMediaIntake(source)
-                }
-            }
-            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
-        }
-        // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
-        // sur la surface qui l'affiche. Un instantané pris seulement pendant
-        // que la scène est montée perdrait tout ce que le document a posé
-        // avant elle — un fond choisi, un média attaché —, si bien que le
-        // premier « annuler » sauterait par-dessus les gestes que l'auteur
-        // vient de faire. Ce qui est SCÈNE-seul, c'est le CONTRÔLE, pas la
-        // collecte.
-        //
-        // `historyTrigger` est déjà débouncé côté SDK ; la dédup du store fait
-        // qu'un cycle sans changement réel des slides est un no-op.
-        .onReceive(viewModel.historyTrigger) { _ in
-            viewModel.pushHistorySnapshot()
-        }
-        // La trajectoire part de l'état d'OUVERTURE : sans ce premier
-        // instantané, le plus ancien « annuler » ramènerait au premier geste
-        // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
-        // tout défaire.
-        .task { viewModel.seedHistory() }
-        // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
-        // acceptés que la bande du document, par la même source. Deux
-        // chargements auraient donné deux listes à faire diverger, et deux
-        // moments où « aucun ami » se lit différemment.
-        .task { sceneMentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
-        // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
-        // ici disait « montés ICI, sur le meuble, jamais dans
-        // `ComposerDocumentSurface` » — et « ici » désignait l'expression
-        // `documentSurface`. La phrase était juste, le placement ne l'était
-        // pas : c'est ce demi-pas qui a rendu les quatre portes du rail
-        // inertes (#4120). Ils sont désormais où la phrase les mettait.
-        // **LA feuille du meuble — une seule, et c'est le correctif de #4467.**
-        //
-        // Le `switch` est exhaustif : un neuvième portail ne compile pas tant
-        // qu'il n'a pas dit ce qu'il montre. C'est la même discipline que les
-        // portes du rail, appliquée à la présentation — et elle remplace huit
-        // modificateurs que rien n'empêchait de s'activer ensemble.
-        .sheet(item: $presentedPortal) { portail in
-            switch portail {
-            case .location:     documentLocationPickerSheet
-            case .audio:        documentAudioComposerSheet
-            case .emoji:        emojiPickerSheet
-            case .sticker:      stickerPickerSheet
-            case .sound:        composerSoundSheet
-            case .soundLibrary: soundLibrarySheet
-            case .reference:    referencePickerSheet
-            case .language:     documentLanguagePickerSheet
-            case .camera:       documentCameraSheet
-            }
-        }
-        .photosPicker(
-            isPresented: $showsPhotoPicker,
-            selection: $pickedPhotoLibraryItems,
-            maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
-        )
-        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
-            guard !items.isEmpty else { return }
-            let picked = items
-            pickedPhotoLibraryItems = []
-            Task { await ingestPhotoLibraryItems(picked) }
-        }
-        .fileImporter(
-            isPresented: $showsFileImporter,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            Task { await ingestFileImporterResult(result) }
-        }
-    }
 
     /// **La vue réellement MONTÉE** — et c'est elle, jamais le kind de surface,
     /// qui répond à « y a-t-il une scène à l'écran ? ».
@@ -1056,8 +875,47 @@ struct MeeshyComposerHost: View {
     /// place : ça compilait, et ça ne pouvait jamais rendre vrai, la scène
     /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
     /// endroit ne peut pas être lue de travers ailleurs.
+    /// **Le prédicat de PRÉSENCE de la scène — un seul, pour la vue ET pour sa
+    /// branche** (#4513).
+    ///
+    /// Il existait en DEUX exemplaires, et la bascule de #4513 les a fait
+    /// diverger visiblement : `mountedComposerView` lisait `showsCanvas(...)`
+    /// (vrai pour une story, même vide — une story EST ses canvas), tandis que
+    /// `ComposerDocumentSurface(showsScene:)` recevait `documentHasScene` (faux
+    /// tant que rien n'est posé, la slide semée ne comptant pas comme matière).
+    ///
+    /// Tant que `.document + hasScene` montait `ComposerSceneSurface`, l'écart
+    /// ne se voyait pas : la scène était peinte par l'autre vue. Depuis que le
+    /// document la porte lui-même, la story ouverte n'avait plus AUCUN canvas —
+    /// la vue disait « il y a une scène », sa branche disait « non ».
+    ///
+    /// > Deux prédicats qui répondent à la même question restent d'accord tant
+    /// > qu'un seul est consulté. C'est le jour où le second est branché que
+    /// > l'écart devient un écran vide — et aucun témoin ne rougit, puisque
+    /// > chacun est juste séparément.
+    ///
+    /// Mesuré au simulateur, pas au gate : 263 témoins verts au-dessus de cette
+    /// régression.
+    var sceneIsPresent: Bool {
+        ComposerStoryCanvas.showsCanvas(format: selectedFormat,
+                                        documentHasScene: documentHasScene)
+    }
+
     var mountedComposerView: ComposerMountedView {
-        ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene)
+        ComposerMountedView.mounted(
+            surface: mountedSurface,
+            // **Une story a toujours son canvas** (directive porteur
+            // 2026-09-01). `documentHasScene` demande « y a-t-il de la matière
+            // à cadrer ? », la bonne question pour un post dont la scène est
+            // une incrustation optionnelle. Une story EST ses canvas : lui
+            // poser le prédicat du post la laisserait sur l'écran document tant
+            // qu'elle est vide — au moment précis où elle en a besoin.
+            //
+            // La substitution se fait ICI et pas dans `documentHasScene`, dont
+            // le MOOD est l'autre lecteur : y injecter le format ferait décider
+            // l'offre de formats par le format déjà choisi.
+            hasScene: sceneIsPresent
+        )
     }
 
     @ViewBuilder

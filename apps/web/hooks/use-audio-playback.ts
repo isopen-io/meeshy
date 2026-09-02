@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
-import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+import type { CurrentUserAttachmentConsumption } from '@meeshy/shared/types/attachment';
 import MediaManager from '@/utils/media-manager';
+import { useMediaConsumptionReporter } from '@/hooks/use-media-consumption-reporter';
 
 /**
  * AudioManager - Gestionnaire global pour coordonner la lecture audio
@@ -33,6 +34,17 @@ interface UseAudioPlaybackOptions {
   attachmentDuration?: number;
   mimeType?: string;
   isOwnMessage?: boolean;
+  /**
+   * La langue de la piste jouée, quand le lecteur en propose plusieurs (#3913).
+   * Elle part au serveur avec le rapport, et son changement le CLÔT.
+   */
+  consumedLanguage?: string | null;
+  /**
+   * Ce que le serveur sait déjà de cette écoute (#3909) — position et
+   * complétion. Servi par `GET /conversations/:id/messages` depuis toujours ;
+   * `apps/web` n'en avait aucune occurrence.
+   */
+  consumption?: CurrentUserAttachmentConsumption | null;
 }
 
 interface UseAudioPlaybackReturn {
@@ -74,6 +86,8 @@ export function useAudioPlayback({
   attachmentDuration,
   mimeType,
   isOwnMessage = false,
+  consumedLanguage,
+  consumption,
 }: UseAudioPlaybackOptions): UseAudioPlaybackReturn {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -87,29 +101,35 @@ export function useAudioPlayback({
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const playStartTimeRef = useRef<number | null>(null);
   const hasTrackedCompletionRef = useRef(false);
 
-  const trackConsumption = useCallback((complete: boolean) => {
-    // L'écoute de l'AUTEUR compte aussi (user 2026-08-18 : « remonter les
-    // lectures de l'audio même si c'est l'auteur qui le lit ») — parité
-    // iOS, dont le report n'a jamais eu de gate auteur. `isOwnMessage`
-    // reste une prop de style, plus un filtre de comptage.
-    const audio = audioRef.current;
-    const playPositionMs = audio ? Math.round(audio.currentTime * 1000) : 0;
-    const durationMs = audio ? Math.round(audio.duration * 1000) : 0;
-    apiService.post(API_ENDPOINTS.attachments.byAttachmentIdStatus(attachmentId), {
-      action: 'listened',
-      playPositionMs,
-      durationMs: isFinite(durationMs) ? durationMs : 0,
-      complete,
-    }).catch(() => {});
-  }, [attachmentId]);
+  // DÉCLARÉ EN PREMIER, et ce n'est pas cosmétique : React exécute les
+  // nettoyages d'effets dans l'ordre de déclaration, et l'effet de chargement
+  // ci-dessous finit par `removeAttribute('src')` + `load()`, ce qui remet
+  // `currentTime` à 0. Un rapport de clôture posé après lui rapporterait 0 à
+  // chaque démontage — ponctuel, et faux.
+  //
+  // L'écoute de l'AUTEUR compte aussi (user 2026-08-18 : « remonter les
+  // lectures de l'audio même si c'est l'auteur qui le lit ») — parité iOS, dont
+  // le report n'a jamais eu de gate auteur. `isOwnMessage` reste une prop de
+  // style, plus un filtre de comptage.
+  const { noteStarted, noteSeek, report, resumeSeconds } = useMediaConsumptionReporter({
+    attachmentId,
+    kind: 'audio',
+    mediaRef: audioRef,
+    trackKey: audioUrl,
+    consumedLanguage,
+    consumption,
+  });
+
+  // Lu par ref dans l'effet de chargement : la reprise ne doit pas RELANCER un
+  // téléchargement, et l'effet ne doit pas non plus capturer une valeur périmée.
+  const resumeSecondsRef = useRef(resumeSeconds);
+  resumeSecondsRef.current = resumeSeconds;
 
   // Reset tracking refs when attachment changes
   useEffect(() => {
     hasTrackedCompletionRef.current = false;
-    playStartTimeRef.current = null;
   }, [attachmentId]);
 
   // Charger l'audio via apiService
@@ -180,7 +200,15 @@ export function useAudioPlayback({
 
         if (audioRef.current) {
           audioRef.current.load();
-          audioRef.current.currentTime = 0; // Forcer le reset du temps après le chargement
+          // #3909 — la position servie par le serveur reprend la main sur le
+          // zéro. `currentUserConsumption` existait depuis toujours dans la
+          // réponse des messages, et `apps/web` n'en avait AUCUNE occurrence :
+          // rouvrir un vocal repartait du début, même sur le même onglet après
+          // un simple rechargement. Le navigateur borne lui-même à la durée
+          // réelle, qui peut différer sur une piste traduite.
+          const reprise = resumeSecondsRef.current;
+          audioRef.current.currentTime = reprise ?? 0;
+          setCurrentTime(reprise ?? 0);
         }
 
         setIsLoading(false);
@@ -287,10 +315,12 @@ export function useAudioPlayback({
 
     try {
       if (isPlaying) {
-        const listenedMs = playStartTimeRef.current ? Date.now() - playStartTimeRef.current : 0;
-        playStartTimeRef.current = null;
-        if (listenedMs >= 3000 && !hasTrackedCompletionRef.current) {
-          trackConsumption(false);
+        // Le seuil « ≥ 3 s » a disparu avec le passage au tracker (#3913) :
+        // c'est exactement la perte structurelle que son doc-comment décrit —
+        // un vocal d'une seconde n'était JAMAIS remonté. `report` se tait de
+        // lui-même quand il n'a rien à dire, ce qui est la bonne garde.
+        if (!hasTrackedCompletionRef.current) {
+          report({ complete: false, endedBy: 'pause' });
         }
         audioRef.current.pause();
         setIsPlaying(false);
@@ -312,7 +342,7 @@ export function useAudioPlayback({
         }
 
         await audioRef.current.play();
-        playStartTimeRef.current = Date.now();
+        noteStarted();
         setIsPlaying(true);
         setIsLoading(false);
       }
@@ -329,7 +359,7 @@ export function useAudioPlayback({
         setErrorMessage('Erreur de lecture audio');
       }
     }
-  }, [objectUrl, isPlaying, trackConsumption]);
+  }, [objectUrl, isPlaying, report, noteStarted]);
 
   // Handler pour récupérer la durée
   const tryToGetDuration = useCallback(() => {
@@ -357,13 +387,13 @@ export function useAudioPlayback({
     setIsPlaying(false);
     if (!hasTrackedCompletionRef.current) {
       hasTrackedCompletionRef.current = true;
-      trackConsumption(true);
+      report({ complete: true, endedBy: 'completed' });
     }
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       setCurrentTime(0);
     }
-  }, [trackConsumption]);
+  }, [report]);
 
   const handleAudioError = useCallback((e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
     const audio = e.currentTarget;
@@ -389,19 +419,21 @@ export function useAudioPlayback({
 
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
-    setCurrentTime(time);
     if (audioRef.current) {
+      noteSeek(audioRef.current.currentTime, time);
       audioRef.current.currentTime = time;
     }
-  }, []);
+    setCurrentTime(time);
+  }, [noteSeek]);
 
   const handleSeekToTime = useCallback((timeInSeconds: number) => {
     if (audioRef.current && isFinite(timeInSeconds) && timeInSeconds >= 0) {
       const clampedTime = Math.min(timeInSeconds, duration || 0);
+      noteSeek(audioRef.current.currentTime, clampedTime);
       audioRef.current.currentTime = clampedTime;
       setCurrentTime(clampedTime);
     }
-  }, [duration]);
+  }, [duration, noteSeek]);
 
   // Écouter les événements audio (pause et timeupdate)
   useEffect(() => {

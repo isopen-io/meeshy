@@ -1,9 +1,37 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { FlatCompat } from '@eslint/eslintrc';
 
-const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+import { frontiereDeZone } from './eslint/frontiere-de-zone.mjs';
+import { litLePerimetreSiPresent } from './scripts/lib/perimetre-de-zone.mjs';
+
+const ICI = dirname(fileURLToPath(import.meta.url));
+
+const compat = new FlatCompat({ baseDirectory: ICI });
+
+// Le périmètre de NAVIGATION servi par la v3, lu au seul endroit qui le décide : la règle Traefik
+// du routeur `frontend-v3`. Il grandit à chaque étape du § 4.9 — la config n'en tient aucune
+// copie. « Navigation » n'est pas un synonyme de « réclamé » : `/__v3/_next` est la zone d'ACTIFS
+// (`assetPrefix`), pas une route qu'un humain visite, et la confondre avec une route faisait
+// conseiller `<Link>` sur une URL de bundle. Aujourd'hui, ce périmètre est donc VIDE — c'est
+// exactement ce que dit l'étape 1 : « zéro trafic humain, seuls ses bundles sont joignables ».
+// `null` quand le compose est hors du contexte — le cas de l'image Docker, dont l'étage builder
+// ne copie que `apps/web-v3/`. `next build` charge cette config : sans ce repli, sa passe de lint
+// rendait « ⨯ ESLint: ENOENT … docker-compose.prod.yml » et ne lintait RIEN, tout en sortant en
+// RC=0 (mesuré). Le contrat de `__tests__/workspace-contract.test.ts` — « le build ne masque
+// aucune erreur ESLint » — était alors tenu sur le papier et VIDE dans l'image.
+const PERIMETRE_V3 = litLePerimetreSiPresent(join(ICI, '..', '..'));
+
+// `@next/next/no-html-link-for-pages` est écrit pour une application Next UNIQUE : tout chemin
+// qu'un routeur Next sert lui paraît joignable côté client, donc tout `<a>` vers ce chemin lui
+// paraît fautif. Dans une ZONE, c'est faux dans les deux sens — et coûteux dans un seul. La règle
+// pousse vers `<Link>` précisément là où `<Link>` est cassé : `/` est servi par le legacy jusqu'à
+// l'étape 7 du § 4.9, et la navigation client de la v3 ne l'atteindra jamais. Le lot L-0.5 avait
+// contourné en retirant le lien de `not-found.tsx` — un 404 sans issue. Elle est remplacée par
+// les deux règles de `eslint/frontiere-de-zone.mjs`, qui posent la MÊME question en tenant compte
+// de la frontière : ce que la v3 sert, et ce qu'elle ne sert pas.
+const REGLE_ECRITE_POUR_UNE_ZONE_UNIQUE = '@next/next/no-html-link-for-pages';
 
 const SPRITE_ONLY = "La v3 n'utilise que le sprite Phosphor de packages/icons.";
 const ONE_THEME_ENGINE = 'Le thème de la v3 a un seul moteur : app/theme-script.tsx.';
@@ -33,6 +61,19 @@ const restrictedImportPatterns = forbiddenModules.map(({ root, message }) => ({
   group: [root, `${root}/**`],
   message,
 }));
+
+// Le temps réel de PARTICIPATION (§ 3.2 corollaire 1, § 12.4) n'entre dans un
+// document que par `await import()` d'une adresse hachée, APRÈS le premier
+// pixel — jamais par un import statique, qui ferait entrer le socket dans le
+// chunk d'un écran et rendrait le chemin sans JavaScript dépendant de lui.
+// `app/` compose des documents ; `participate` n'y a aucune place. Et
+// `socket.io-client` n'a qu'UN importateur : le module lui-même, dynamiquement.
+const PARTICIPATION_DYNAMIQUE =
+  "Le module de participation (lib/realtime/participate.ts) se charge par `await import()` d'une adresse servie (`lib/actifs-rt.ts`), après le premier pixel — jamais par un import statique (§ 12.4).";
+const restrictedParticipationPatterns = [
+  { group: ['**/realtime/participate', '**/realtime/participate.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['socket.io-client', 'socket.io-client/**'], message: PARTICIPATION_DYNAMIQUE },
+];
 
 // Les sept événements du cycle de vie (§ 6.2) n'ont qu'UN point d'écoute :
 // `lib/realtime/lifecycle.ts`. Un écran qui les attache lui-même se
@@ -121,17 +162,34 @@ const restrictedLifecycleSyntax = [
 const zoneDuCycleDeVie = ['app/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}'];
 
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
+  // `.rt/` est la SORTIE de `scripts/build-participate.mjs` (le module compilé), pas une source.
+  { ignores: ['.next/**', '.rt/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   // `no-restricted-syntax` porte UN nom : le dernier bloc qui s'applique à un
   // fichier remplace les précédents, il ne s'y ajoute pas. Les adieux sont donc
   // répétés dans les trois blocs — c'est ce qui les rend inévitables, y compris
   // là où le reste de la règle est levé.
   {
+    plugins: { zone: frontiereDeZone },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-restricted-imports': ['error', { patterns: restrictedImportPatterns }],
+      'no-restricted-imports': ['error', { patterns: [...restrictedImportPatterns, ...restrictedParticipationPatterns] }],
       'no-restricted-syntax': ['error', ...syntaxeDesAdieux],
+      [REGLE_ECRITE_POUR_UNE_ZONE_UNIQUE]: 'off',
+      // Les deux règles de zone ne s'arment QUE si le périmètre a pu être lu. Sans lui, elles
+      // n'ont aucun verdict à rendre : un périmètre VIDE est une affirmation (« la v3 ne sert
+      // aucune route humaine ») qui, appliquée par défaut, rendrait fautif tout `<Link>` de
+      // l'application à l'étape 7 du § 4.9 — celle où `<Link>` devient universel. Se taire est
+      // ici la seule lecture juste, et elle ne coûte rien : le lieu d'APPLICATION de ces règles
+      // est la CI, qui a le dépôt entier (`ci.yml`, « Lint (apps/web-v3 — blocking) »), jamais
+      // le build de l'image. Tout le RESTE du lint continue de s'appliquer là-bas — c'est ce que
+      // le contrat « le build ne masque aucune erreur ESLint » veut vraiment dire.
+      ...(PERIMETRE_V3 === null
+        ? {}
+        : {
+            'zone/lien-sortant-en-navigation-client': ['error', { perimetre: PERIMETRE_V3 }],
+            'zone/lien-interne-en-rechargement': ['warn', { perimetre: PERIMETRE_V3 }],
+          }),
     },
   },
   {

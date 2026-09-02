@@ -1,4 +1,5 @@
 import CoreGraphics
+import MeeshyUI
 
 /// **La géométrie des deux rails, et la largeur qu'ils laissent à la scène**
 /// (#4061, planche rév. 27 § P4).
@@ -70,4 +71,77 @@ nonisolated enum ComposerRailGeometry {
     static func sceneWidth(usableWidth: CGFloat, railsShown: Bool) -> CGFloat {
         max(0, usableWidth - 2 * sceneInset(railsShown: railsShown))
     }
+
+    /// **Ce qui sépare le bas de la FRAME du bas du DESSIN** (#4119).
+    ///
+    /// La carte est figée à son ratio et se CENTRE dans la hauteur qu'on lui
+    /// donne (`EmbeddedSceneCanvas` : `frame(maxHeight: .infinity)` puis
+    /// `aspectFitSize`). Les deux rails, posés en `.overlay(alignment:
+    /// .bottom…)`, s'ancraient donc au bas de la frame — soit **sous** la
+    /// composition, d'un écart qui vaut la moitié de la hauteur perdue et qui
+    /// GRANDIT avec le ratio : nul en 9:16 plein, maximal en paysage.
+    ///
+    /// > Un rail qui suit la frame et non la composition n'est pas « un peu
+    /// > plus bas » : il cesse de dire à quoi il s'applique. En paysage, les
+    /// > portes se retrouvent en face de rien.
+    ///
+    /// **Le ratio est DÉJÀ connu de la vue** — la correction ne passe donc par
+    /// aucune hauteur codée en dur, ce que le critère de fin de #4119 interdit
+    /// explicitement.
+    ///
+    /// - Parameter overlay: la taille de la vue sur laquelle l'overlay se pose.
+    ///   C'est celle de la vue PADDÉE : elle inclut les deux couloirs, que la
+    ///   carte n'a pas. D'où le second paramètre — sans lui, le `fit` serait
+    ///   calculé sur une largeur que la carte n'occupe jamais, et l'inset
+    ///   rendrait une valeur juste par accident en portrait seulement.
+    /// - Parameter horizontalInset: l'encastrement par côté (`sceneInset`).
+    static func sceneBottomInset(overlay: CGSize,
+                                 ratio: CGFloat,
+                                 horizontalInset: CGFloat) -> CGFloat {
+        let carte = CGSize(width: max(0, overlay.width - 2 * horizontalInset),
+                           height: overlay.height)
+        let dessin = CanvasGeometry.aspectFitSize(in: carte, ratio: ratio)
+        return max(0, (overlay.height - dessin.height) / 2)
+    }
+
+    // MARK: - Ce qu'une rangée REQUIERT, et ce qui déborde
+
+    /// L'écart entre deux entrées d'un rail. Lu par la vue ET par la règle : un
+    /// littéral recopié dans l'une des deux rendrait la mesure fausse sans que
+    /// rien ne rougisse.
+    static let entrySpacing: CGFloat = 10
+
+    /// **La largeur qu'une rangée d'entrées REQUIERT**, cible tactile comprise.
+    ///
+    /// `n × 44 + (n−1) × 10`. Pour les neuf entrées de l'outil texte (huit
+    /// contrôleurs depuis l'EFFET, #4870, plus le `(x)`) : **476 pt** — et déjà
+    /// 422 pt pour les huit d'avant — quand un iPhone de 393 pt en offre 373
+    /// une fois les marges retirées. Le débordement est ARITHMÉTIQUE,
+    /// pas conditionnel — il ne dépend ni du contenu, ni de la locale, ni de la
+    /// taille de texte.
+    static func rowWidth(entries: Int, spacing: CGFloat = entrySpacing) -> CGFloat {
+        guard entries > 0 else { return 0 }
+        return CGFloat(entries) * railWidth + CGFloat(entries - 1) * spacing
+    }
+
+    /// Ce qui dépasse d'une largeur disponible ; `0` ⇒ la rangée tient.
+    ///
+    /// **Le débordement est SYMÉTRIQUE, et c'est ce qui le rend reconnaissable
+    /// à l'œil** : une `HStack` trop large n'est pas clippée par SwiftUI — elle
+    /// dessine par-dessus les deux bords, moitié-moitié. Un contrôle coupé d'un
+    /// seul côté est mal aligné ; coupé également des deux, il est trop large.
+    static func rowOverflow(entries: Int, available: CGFloat) -> CGFloat {
+        max(0, rowWidth(entries: entries) - available)
+    }
+
+    /// La largeur réellement offerte à une rangée sur un écran donné, marges
+    /// extérieures retirées.
+    static func availableRowWidth(screenWidth: CGFloat) -> CGFloat {
+        max(0, screenWidth - 2 * outerMargin)
+    }
+
+    /// Le plus étroit iPhone que l'app supporte — iPhone SE, plancher iOS 16.
+    /// Une rangée se mesure LÀ, jamais sur l'appareil de développement : le
+    /// débordement du 2026-08-31 a été vu sur 393 pt, il commençait à 375.
+    static let narrowestSupportedScreenWidth: CGFloat = 375
 }

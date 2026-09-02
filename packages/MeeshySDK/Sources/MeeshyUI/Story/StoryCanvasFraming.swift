@@ -100,6 +100,35 @@ public nonisolated enum StoryCanvasFraming {
         (isFullscreenSession || !chromeVisible) ? .free : .carded
     }
 
+    /// **La colonne d'une légende : celle du CANVAS, jamais celle du conteneur.**
+    ///
+    /// Une légende posée sur une scène est un commentaire de CETTE scène ; elle
+    /// s'aligne donc sur ses bords, comme la ligne d'auteur d'une carte de réel.
+    /// Le conteneur qui l'héberge peut être plus large — le lecteur de stories
+    /// déborde volontairement le viewport pour sa pagination — et un
+    /// `frame(maxWidth: .infinity)` y résout la largeur du CONTENEUR.
+    ///
+    /// Mesuré au simulateur le 2026-09-02 (#4762) : conteneur de 491,3 pt à
+    /// x = −44,7 sur un écran de 402 pt, légende à `horizontalInset` 20 ⇒ elle
+    /// commençait à **−24,7 pt**, hors écran, et « The latest apps » s'affichait
+    /// « e latest apps ». La mesure a rendu −24,8.
+    ///
+    /// > L'ordre `padding` puis `frame` était déjà juste. Ce qui débordait
+    /// > n'était pas la vue, c'était la largeur qu'on lui PROPOSAIT — et une
+    /// > vue ne peut pas se défendre d'un conteneur trop large.
+    ///
+    /// - Parameters:
+    ///   - viewport: la taille offerte à l'hôte (souvent plus large que la scène).
+    ///   - ratio: le ratio du canvas (9:16 en portrait, 16:9 pour un fond paysage).
+    ///   - scale: l'échelle de présentation rendue par `resolve` — la carte est
+    ///     peinte à `scale`, la légende doit suivre le même rétrécissement.
+    public static func captionColumnWidth(viewport: CGSize,
+                                          ratio: CGFloat,
+                                          scale: CGFloat) -> CGFloat {
+        let fit = CanvasGeometry.aspectFitSize(in: viewport, ratio: ratio)
+        return max(0, fit.width * max(scale, 0))
+    }
+
     public static func resolve(_ input: Input) -> Result {
         guard input.state == .carded else { return .identity }
         let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)

@@ -282,6 +282,179 @@ struct CanvasV3MigrationTests {
         #expect(object(CanvasV3(migrating: effects), "st8")?.payload["anchorPoint"] == .string("topLeft"))
     }
 
+    // MARK: - Le GABARIT d'une décoration doit voyager (#4741)
+
+    /// **Une décoration posée dans le composer doit revenir décoration.**
+    ///
+    /// Le lot #4741 a introduit les stickers à GABARIT — pastille de lieu,
+    /// cadre de cœurs, ruban d'heure — dessinés en code plutôt que rendus comme
+    /// un glyphe. Le modèle les porte (`templateId`, `slots`), les trois moteurs
+    /// de rendu les dessinent… et le fil v3 ne les transportait pas.
+    ///
+    /// L'ironie est dans le commentaire de l'encodeur : « `wireEmoji`, jamais
+    /// `emoji` : un sticker image parti sans repli disparaît ». Il sérialisait
+    /// donc soigneusement le REPLI d'un gabarit qu'il ne sérialisait pas — et
+    /// une pastille de lieu revenait « 📍 », un cadre de cœurs « 💕 ».
+    ///
+    /// > Un repli conservé sans la chose dont il est le repli n'est plus un
+    /// > repli : c'est le contenu.
+    @Test func aTemplateSticker_carriesItsTemplateOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "locationStamp",
+                                               slots: ["title": "Tessalit", "subtitle": "Mali"],
+                                               zIndex: 3)]
+        let payload = try #require(object(CanvasV3(migrating: effects), "st-tpl")?.payload)
+        #expect(payload["templateId"] == .string("locationStamp"))
+    }
+
+    /// Et il doit REVENIR gabarit — l'aller sans le retour laisserait le fil
+    /// juste et le lecteur faux.
+    @Test func aTemplateSticker_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st-tpl", emoji: "",
+                                               templateId: "loveHeartFrame",
+                                               slots: ["caption": "nous deux"],
+                                               zIndex: 3)]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let sticker = try #require(back.stickerObjects?.first)
+        #expect(sticker.templateId == "loveHeartFrame")
+        #expect(sticker.slots["caption"] == "nous deux")
+        #expect(sticker.kind == StoryStickerKind.template)
+    }
+
+    // MARK: - Le GABARIT d'une PASTILLE DE LIEU doit voyager aussi (#4832)
+
+    /// **Même piège, TROISIÈME morsure — sur le frère du champ ci-dessus.**
+    ///
+    /// Le lot #4717 a donné un gabarit à la pastille de lieu : `styleId` nomme
+    /// le gabarit qui la DÉCORE (timbre, boussole, enseigne…). Le composer
+    /// l'offre, le rendu l'honore — et l'aller v1→v3 ne l'émettait pas, trente
+    /// lignes au-dessus du sticker qu'on venait de réparer.
+    ///
+    /// **Le témoin s'écrit sur un gabarit AUTRE que `location.pill`.** Ce
+    /// dernier est le repli d'un `styleId` absent : sur lui, la règle juste et
+    /// le champ perdu rendent le même verdict, et le témoin ne peut pas tomber.
+    @Test func aStyledPlace_carriesItsTemplateOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"),
+                                                       styleId: "location.stamp")]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["styleId"] == .string("location.stamp"))
+    }
+
+    /// Et il doit REVENIR gabarit : l'aller sans le retour laisse le fil juste
+    /// et le lecteur faux. Ce retour gouverne aussi la reprise d'un BROUILLON —
+    /// `StoryEffects.encode(to:)` passe toujours par le pont v3.
+    @Test func aStyledPlace_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"),
+                                                       styleId: "location.compass")]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.styleId == "location.compass")
+        #expect(lieu.place.name == "Tessalit")
+    }
+
+    /// Une pastille SANS gabarit — toute pastille publiée avant #4717 — n'émet
+    /// aucune clé : elle se réencode octet pour octet, et son repli reste celui
+    /// que `StoryLocationLayer` applique déjà.
+    @Test func aPlaceWithoutStyle_emitsNoStyleKey() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [StoryLocationObject(id: "pl-1",
+                                                       place: .init(latitude: 20.20, longitude: 1.01,
+                                                                    name: "Tessalit"))]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["styleId"] == nil)
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        #expect(back.locationObjects.first?.styleId == nil)
+    }
+
+    // MARK: - La FENÊTRE TEMPORELLE d'une pastille de lieu voyage (#4840)
+
+    /// **Même piège, QUATRIÈME morsure — sur l'ENVELOPPE, pas sur la charge.**
+    ///
+    /// #4832 a réparé `styleId` cinq lignes plus bas dans cette même branche, en
+    /// posant la question « qu'est-ce qui part À CÔTÉ de ce que je viens de
+    /// corriger ? » — mais à la CHARGE seule. L'enveloppe attendait juste
+    /// au-dessus : `timing: timingV3(start: nil, …)`, le `nil` écrit en dur.
+    ///
+    /// Le lot #4591 avait pourtant donné les quatre champs au modèle, et
+    /// diagnostiqué qu'on lisait `timing: optional()` comme « cette famille n'a
+    /// pas de temps ». Il a ensuite lu la même option comme la preuve que le
+    /// champ VOYAGE :
+    ///
+    /// > `optional()` ne dit ni qu'une famille n'a pas de temps, ni qu'un
+    /// > producteur en émet. Il ne dit RIEN du producteur — il faut aller le lire.
+    @Test func aTimedPlace_carriesItsStartOnTheWire() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4)]
+        let objet = try #require(object(CanvasV3(migrating: effects), "pl-1"))
+        #expect(objet.timing?.start == 2)
+    }
+
+    /// `duration` / `fadeIn` / `fadeOut` voyagent dans la CHARGE, exactement
+    /// comme sur le sticker — que `TimelineClipKind` déclare de la même
+    /// famille temporelle que le lieu (« startTime / duration / fadeIn /
+    /// fadeOut, pas de keyframes »).
+    @Test func aTimedPlace_carriesItsWindowInThePayload() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4,
+                                              fadeIn: 0.25, fadeOut: 0.5)]
+        let payload = try #require(object(CanvasV3(migrating: effects), "pl-1")?.payload)
+        #expect(payload["duration"] == .number(4))
+        #expect(payload["fadeIn"] == .number(0.25))
+        #expect(payload["fadeOut"] == .number(0.5))
+    }
+
+    /// Et la fenêtre doit REVENIR : l'aller sans le retour laisse le fil juste
+    /// et l'auteur volé. Ce retour gouverne aussi la reprise d'un BROUILLON —
+    /// `StoryEffects.encode(to:)` passe toujours par le pont v3, donc une
+    /// fenêtre posée puis sauvegardée serait perdue au rechargement.
+    @Test func aTimedPlace_survivesTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace(start: 2, duration: 4,
+                                              fadeIn: 0.25, fadeOut: 0.5)]
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.startTime == 2)
+        #expect(lieu.duration == 4)
+        #expect(lieu.fadeIn == 0.25)
+        #expect(lieu.fadeOut == 0.5)
+        #expect(lieu.place.name == "Tessalit")
+    }
+
+    /// Une pastille SANS fenêtre — toute pastille posée avant ce lot — n'émet
+    /// aucune des quatre clés et se réencode octet pour octet. Sa barre reste
+    /// le FANTÔME que `Plan2DLayout.bar(...)` rend déjà pour
+    /// `start == nil && duration == nil` : rien ne fabrique un début à zéro.
+    @Test func aPlaceWithoutAWindow_emitsNoTimingKey() throws {
+        var effects = StoryEffects()
+        effects.locationObjects = [timedPlace()]
+        let objet = try #require(object(CanvasV3(migrating: effects), "pl-1"))
+        #expect(objet.timing?.start == nil)
+        #expect(objet.payload["duration"] == nil)
+        #expect(objet.payload["fadeIn"] == nil)
+        #expect(objet.payload["fadeOut"] == nil)
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+        let lieu = try #require(back.locationObjects.first)
+        #expect(lieu.startTime == nil)
+        #expect(lieu.duration == nil)
+    }
+
+    private func timedPlace(start: Double? = nil, duration: Double? = nil,
+                            fadeIn: Double? = nil, fadeOut: Double? = nil) -> StoryLocationObject {
+        StoryLocationObject(id: "pl-1",
+                            place: SharedPlace(latitude: 20.20, longitude: 1.01,
+                                               name: "Tessalit"),
+                            startTime: start, duration: duration,
+                            fadeIn: fadeIn, fadeOut: fadeOut)
+    }
+
     // MARK: - O3 (jamais de cadre vide) et prédicat de version
 
     @Test func emptyRuntime_emitsNoScene() throws {
@@ -311,6 +484,57 @@ struct CanvasV3MigrationTests {
         let re = try JSONDecoder().decode(CanvasV3.self, from: JSONEncoder().encode(document))
         #expect(re == document)
         #expect(re.scenes[0].objects[0].kind == .reserved("interactive"))
+    }
+
+    // MARK: - La rupture se DIT au lecteur (vue `2j`, #4088)
+
+    /// **Un kind que ce build ne sait pas peindre laisse une TRACE.**
+    ///
+    /// Le décodeur le garde en `.reserved(raw)` ; la conversion le saute. Sans
+    /// le mémo, le lecteur recevait une scène AMPUTÉE et n'avait aucun moyen de
+    /// le savoir — il peignait ce qui restait comme si c'était la composition
+    /// de l'auteur.
+    @Test func unKindInconnu_laisseUneTraceQueLeLecteurPeutLire() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"o","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(effets.carriesUnpaintableContent)
+        #expect(effets.unpaintableKinds == ["poll"])
+    }
+
+    /// **Une MENTION n'est pas une rupture.** C'est un kind CONNU que la scène
+    /// ne peint délibérément pas — une mention est une métadonnée. Les
+    /// confondre ferait paraître la sentinelle sur toute story qui cite
+    /// quelqu'un, c'est-à-dire précisément sur les stories les plus ordinaires.
+    @Test func uneMention_neDeclencheJamaisLaSentinelle() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"m","kind":"mention","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(!effets.carriesUnpaintableContent)
+        #expect(effets.unpaintableKinds.isEmpty)
+    }
+
+    /// Une scène entièrement peignable ne porte aucune trace : la sentinelle ne
+    /// doit jamais s'interposer devant une story que ce build sait rendre.
+    @Test func uneSceneEntierementPeignable_neDeclencheRien() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"t","kind":"text","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"text":"Bonjour"}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(!effets.carriesUnpaintableContent)
+    }
+
+    /// Deux objets du MÊME kind inconnu ne le nomment qu'une fois, et deux
+    /// kinds distincts sortent triés — la liste sert un message, pas un
+    /// comptage.
+    @Test func lesKindsInconnus_sontUniquesEtTries() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s","objects":[{"id":"a","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},{"id":"b","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},{"id":"c","kind":"gif3d","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+
+        #expect(effets.unpaintableKinds == ["gif3d", "poll"])
     }
 
     // MARK: - Rattrapage de revue B8b — le son vit au DOCUMENT

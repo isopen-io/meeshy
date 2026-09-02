@@ -5,6 +5,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { listArchetypes } from '@meeshy/shared/agent/archetypes';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
@@ -20,6 +21,143 @@ import {
   paginatedArrayResponse,
 } from './agent-shared';
 
+/**
+ * Nombre d'utilisateurs CONTRÔLÉS distincts, agrégé côté MongoDB (#4465).
+ *
+ * `GET /stats` faisait un `findMany({ select: { userId }, distinct: ['userId'] })`
+ * sur TOUTE la table `AgentUserRole` (aucun `where`, aucun `take`) pour n'en
+ * garder que `.length`. Un comptage UNIQUE n'a rien à combiner (contrainte 1
+ * de #4465, à l'inverse de `scanLogsStatsPipeline` ci-dessous) : `$group` par
+ * `userId` puis `$count` rend UN document — jamais une ligne par utilisateur
+ * contrôlé.
+ *
+ * `$count` ne produit AUCUN document quand son entrée est vide — pas
+ * `{ total: 0 }` — le site d'appel replie donc sur 0 lui-même.
+ */
+function distinctControlledUsersPipeline(): Prisma.InputJsonValue[] {
+  return [
+    { $group: { _id: '$userId' } },
+    { $count: 'total' },
+  ] as unknown as Prisma.InputJsonValue[];
+}
+
+type DistinctCountRow = { readonly total: number };
+
+function extendedJsonDate(date: Date) {
+  return { $date: date.toISOString() };
+}
+
+/**
+ * Clé de seau (jour ou semaine, UTC) pour `AgentScanLog.startedAt`.
+ *
+ * `$dateTrunc` retrouve exactement le découpage que faisait la version JS
+ * (`weekStart.setDate(weekStart.getDate() - weekStart.getDay())` — le
+ * dimanche de la semaine) sans reposer sur le fuseau du PROCESS : le
+ * découpage jour utilisait déjà `toISOString()` (UTC pur), et le découpage
+ * semaine dépendait du fuseau LOCAL — UTC en production/CI (ni le Dockerfile
+ * ni docker-compose.{prod,staging}.yml ne fixent `TZ`, seuls dev/local le
+ * forcent à Europe/Paris — même lecture que `tendancesMessagesPipeline` dans
+ * `admin/messages.ts`, #4465).
+ */
+function scanLogsBucketKeyExpr(bucket: string): Prisma.InputJsonValue {
+  const troncature = bucket === 'week'
+    ? { $dateTrunc: { date: '$startedAt', unit: 'week', timezone: 'UTC', startOfWeek: 'sunday' } }
+    : { $dateTrunc: { date: '$startedAt', unit: 'day', timezone: 'UTC' } };
+  return { $dateToString: { format: '%Y-%m-%d', date: troncature, timezone: 'UTC' } } as unknown as Prisma.InputJsonValue;
+}
+
+type ScanLogBucketRow = {
+  readonly _id: string;
+  readonly scans: number;
+  readonly messagesSent: number;
+  readonly reactionsSent: number;
+  readonly costUsd: number;
+  readonly configChanges: number;
+  readonly conversations: number;
+  readonly users: number;
+};
+
+type ScanLogOutcomeRow = {
+  readonly _id: { readonly bucket: string; readonly outcome: string };
+  readonly count: number;
+};
+
+type ScanLogsStatsFacet = {
+  readonly buckets?: ReadonlyArray<ScanLogBucketRow>;
+  readonly outcomes?: ReadonlyArray<ScanLogOutcomeRow>;
+};
+
+/**
+ * Seaux de scan (#4465) — DEUX grains de repli sur le MÊME `$match`, combinés
+ * en un document par `$facet` :
+ *
+ * - `buckets` : par SEAU seul — comptes et sommes additifs, plus deux
+ *   comptes DISTINCTS (conversations, utilisateurs via `userIdsUsed`, un
+ *   champ TABLEAU replié par `$addToSet` + `$reduce`/`$setUnion` — jamais un
+ *   `$unwind`, qui gonflerait les accumulateurs additifs du MÊME groupe).
+ * - `outcomes` : par {SEAU, issue} — la répartition par issue a besoin de
+ *   cette maille plus fine, qu'`AgentScanLog.outcome` (chaîne libre, pas un
+ *   enum Prisma) interdit de coder en sommes conditionnelles fixes.
+ *
+ * Ce n'est PAS le `$facet` MODULO de `tendancesMessagesPipeline`
+ * (`admin/messages.ts`) plaqué par mimétisme (contrainte 1 de #4465) : l'axe
+ * temporel ici est un partitionnement CONTIGU (jour/semaine), pas un
+ * repliement qui revient à chaque période. Le `$facet` se justifie autrement
+ * — les DEUX facets NE PEUVENT PAS partager un `$group`, parce que sommer les
+ * comptes distincts de `buckets` À TRAVERS les sous-groupes d'`outcomes`
+ * surcompterait une conversation ayant des scans de plusieurs issues le même
+ * jour.
+ */
+function scanLogsStatsPipeline(options: {
+  readonly since: Date;
+  readonly bucket: string;
+  readonly conversationId?: string;
+}): Prisma.InputJsonValue[] {
+  const match: Record<string, unknown> = { startedAt: { $gte: extendedJsonDate(options.since) } };
+  if (options.conversationId) match.conversationId = { $oid: options.conversationId };
+  const bucketKey = scanLogsBucketKeyExpr(options.bucket);
+
+  return [
+    { $match: match },
+    {
+      $facet: {
+        buckets: [
+          {
+            $group: {
+              _id: bucketKey,
+              scans: { $sum: 1 },
+              messagesSent: { $sum: '$messagesSent' },
+              reactionsSent: { $sum: '$reactionsSent' },
+              costUsd: { $sum: '$estimatedCostUsd' },
+              configChanges: { $sum: { $cond: [{ $ne: ['$configChangedAt', null] }, 1, 0] } },
+              conversationsSet: { $addToSet: '$conversationId' },
+              userIdArrays: { $addToSet: '$userIdsUsed' },
+            },
+          },
+          {
+            $project: {
+              _id: 1, scans: 1, messagesSent: 1, reactionsSent: 1, costUsd: 1, configChanges: 1,
+              conversations: { $size: '$conversationsSet' },
+              users: {
+                $size: {
+                  $reduce: {
+                    input: '$userIdArrays',
+                    initialValue: [],
+                    in: { $setUnion: ['$$value', '$$this'] },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        outcomes: [
+          { $group: { _id: { bucket: bucketKey, outcome: '$outcome' }, count: { $sum: 1 } } },
+        ],
+      },
+    },
+  ] as unknown as Prisma.InputJsonValue[];
+}
+
 export function registerAgentObservabilityRoutes(fastify: FastifyInstance): void {
   // GET /stats
   fastify.get('/stats', {
@@ -33,16 +171,19 @@ export function registerAgentObservabilityRoutes(fastify: FastifyInstance): void
     },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const [configsCount, activeCount, rolesCount, uniqueControlledUsers, analyticsAgg] = await Promise.all([
+      const [configsCount, activeCount, rolesCount, controlledUsersRows, analyticsAgg] = await Promise.all([
         fastify.prisma.agentConfig.count(),
         fastify.prisma.agentConfig.count({ where: { enabled: true } }),
         fastify.prisma.agentUserRole.count(),
-        fastify.prisma.agentUserRole.findMany({ select: { userId: true }, distinct: ['userId'] }),
+        fastify.prisma.agentUserRole.aggregateRaw({
+          pipeline: distinctControlledUsersPipeline(),
+        }) as unknown as Promise<ReadonlyArray<DistinctCountRow>>,
         fastify.prisma.agentAnalytic.aggregate({
           _sum: { messagesSent: true, totalWordsSent: true },
           _avg: { avgConfidence: true },
         }),
       ]);
+      const totalControlledUsers = controlledUsersRows[0]?.total ?? 0;
 
       const recentAnalytics = await fastify.prisma.agentAnalytic.findMany({
         where: { lastResponseAt: { not: null } },
@@ -58,7 +199,7 @@ export function registerAgentObservabilityRoutes(fastify: FastifyInstance): void
         activeConfigs: activeCount,
         totalRoles: rolesCount,
         totalArchetypes: listArchetypes().length,
-        totalControlledUsers: uniqueControlledUsers.length,
+        totalControlledUsers,
         totalMessagesSent: analyticsAgg._sum.messagesSent ?? 0,
         totalWordsSent: analyticsAgg._sum.totalWordsSent ?? 0,
         avgConfidence: analyticsAgg._avg.avgConfidence ?? 0,
@@ -243,7 +384,15 @@ export function registerAgentObservabilityRoutes(fastify: FastifyInstance): void
         type: 'object',
         properties: {
           conversationId: { type: 'string' },
-          months: { type: 'integer', default: 6 },
+          // #4465 — aucune borne n'existait : `months` restait un entier
+          // libre alors que le seul appelant connu (`ScanHistoryChart.tsx`,
+          // web) plafonne à 6. `scanLogsStatsPipeline` (ci-dessus) rend la
+          // lecture BORNÉE À UNE REQUÊTE quel que soit `months` — la
+          // N-requêtes-non-bornées de la contrainte 2 ne s'applique donc pas
+          // ici —, mais Mongo balaie toujours `months` de lignes pour les
+          // replier : `maximum: 24` (deux ans) referme la fenêtre plutôt que
+          // de la laisser reposer sur le seul comportement du client.
+          months: { type: 'integer', default: 6, minimum: 1, maximum: 24 },
           bucket: { type: 'string', default: 'day' },
         },
       },
@@ -259,59 +408,37 @@ export function registerAgentObservabilityRoutes(fastify: FastifyInstance): void
       const since = new Date();
       since.setMonth(since.getMonth() - months);
 
-      const where: Record<string, unknown> = { startedAt: { gte: since } };
-      if (conversationId) where.conversationId = conversationId;
+      // Seaux + répartition par issue — UNE agrégation MongoDB (#4465, voir
+      // le doc-comment de `scanLogsStatsPipeline` ci-dessus).
+      const facets = await fastify.prisma.agentScanLog.aggregateRaw({
+        pipeline: scanLogsStatsPipeline({ since, bucket, conversationId }),
+      }) as unknown as ReadonlyArray<ScanLogsStatsFacet>;
+      const facet: ScanLogsStatsFacet = facets[0] ?? {};
 
-      const logs = await fastify.prisma.agentScanLog.findMany({
-        where,
-        select: {
-          startedAt: true, conversationId: true, outcome: true,
-          messagesSent: true, reactionsSent: true, userIdsUsed: true,
-          estimatedCostUsd: true, configChangedAt: true,
-        },
-        orderBy: { startedAt: 'asc' },
-      });
-
-      const buckets = new Map<string, {
-        date: string; scans: number; conversations: Set<string>; users: Set<string>;
-        messagesSent: number; reactionsSent: number; costUsd: number;
-        configChanges: number; outcomes: Record<string, number>;
-      }>();
-
-      for (const log of logs) {
-        const d = log.startedAt;
-        let key: string;
-        if (bucket === 'week') {
-          const weekStart = new Date(d);
-          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-          key = weekStart.toISOString().slice(0, 10);
-        } else {
-          key = d.toISOString().slice(0, 10);
-        }
-
-        let b = buckets.get(key);
-        if (!b) {
-          b = { date: key, scans: 0, conversations: new Set(), users: new Set(), messagesSent: 0, reactionsSent: 0, costUsd: 0, configChanges: 0, outcomes: {} };
-          buckets.set(key, b);
-        }
-        b.scans++;
-        b.conversations.add(log.conversationId);
-        for (const uid of log.userIdsUsed) b.users.add(uid);
-        b.messagesSent += log.messagesSent;
-        b.reactionsSent += log.reactionsSent;
-        b.costUsd += log.estimatedCostUsd;
-        if (log.configChangedAt) b.configChanges++;
-        b.outcomes[log.outcome] = (b.outcomes[log.outcome] ?? 0) + 1;
+      const outcomesParSeau = new Map<string, Record<string, number>>();
+      for (const ligne of facet.outcomes ?? []) {
+        const carte = outcomesParSeau.get(ligne._id.bucket) ?? {};
+        carte[ligne._id.outcome] = ligne.count;
+        outcomesParSeau.set(ligne._id.bucket, carte);
       }
 
-      const data = [...buckets.values()].map(b => ({
-        date: b.date, scans: b.scans, conversations: b.conversations.size,
-        users: b.users.size, messagesSent: b.messagesSent, reactionsSent: b.reactionsSent,
-        costUsd: Math.round(b.costUsd * 10000) / 10000, configChanges: b.configChanges,
-        outcomes: b.outcomes,
-      }));
+      const data = (facet.buckets ?? [])
+        .map(b => ({
+          date: b._id,
+          scans: b.scans,
+          conversations: b.conversations,
+          users: b.users,
+          messagesSent: b.messagesSent,
+          reactionsSent: b.reactionsSent,
+          costUsd: Math.round(b.costUsd * 10000) / 10000,
+          configChanges: b.configChanges,
+          outcomes: outcomesParSeau.get(b._id) ?? {},
+        }))
+        .sort((a, c) => a.date.localeCompare(c.date));
 
-      return sendSuccess(reply, { buckets: data, totalLogs: logs.length, since: since.toISOString() });
+      const totalLogs = data.reduce((total, b) => total + b.scans, 0);
+
+      return sendSuccess(reply, { buckets: data, totalLogs, since: since.toISOString() });
     } catch (error) {
       logError(fastify.log, 'Error fetching scan stats:', error);
       return sendInternalError(reply, 'Erreur serveur');

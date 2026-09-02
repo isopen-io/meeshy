@@ -37,7 +37,10 @@ final class ComposerIngestWiringParityTests: XCTestCase {
         "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
         "Meeshy/Features/Main/Views/PostDetailView.swift",
         "Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+        // 2026-09-02 — `StoryComposerBarView` a quitté `StoryViewerView+Canvas.swift`
+        // (dette de taille) pour son propre fichier ; l'hôte suit le SITE qui
+        // instancie `UniversalComposerBar`, pas le nom historique du fichier.
+        "Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
     ]
 
     func test_universalComposerBarHosts_allWireOnIngest() throws {

@@ -108,7 +108,7 @@ final class StoryVoiceRecorderSourceChipsTests: XCTestCase {
     func test_theRecorderMountsTheChipsOnlyOutsideARecording() throws {
         // La feuille d'enregistrement est UNIFIÉE (stories + posts/réels) depuis
         // 2026-08-13 : elle vit dans `MeeshyUI/Media`, la garde la suit.
-        let code = try ComposerSourceGuard.source("../Media/UnifiedAudioRecorderSheet.swift")
+        let code = try ComposerSourceGuard.source("../Media/AudioRecorderSheet.swift")
         let gated = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "if !recorder.isRecording", in: code),
             "Le gate hors-enregistrement des chips a disparu.")

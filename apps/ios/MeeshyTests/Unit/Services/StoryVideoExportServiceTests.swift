@@ -163,6 +163,46 @@ final class StoryVideoExportServiceTests: XCTestCase {
         if let url { sut.cleanupExport(at: url) }
     }
 
+    /// #4852 — l'index des images de stickers traverse le service jusqu'au
+    /// bake, sans quoi le compositor n'a rien à décoder et peint 🖼️.
+    func test_prepareExport_threadsStickerImageSourcesToExporter() async {
+        let (sut, exporter) = makeSUT(exporterBehavior: .success)
+        let sources = ["pm-sticker": "https://cdn.meeshy.test/sticker.png"]
+
+        let url = await sut.prepareExport(
+            slide: makeStaticSlide(),
+            languages: [],
+            stickerImageSources: sources,
+            onProgress: nil,
+            onPhaseChange: nil
+        )
+
+        XCTAssertEqual(exporter.lastStickerImageSources, sources)
+
+        if let url { sut.cleanupExport(at: url) }
+    }
+
+    /// Le relais SANS index (forme courte du protocole, celle de « Enregistrer
+    /// dans Photos ») part avec un index vide — jamais avec un index périmé.
+    func test_prepareExport_withoutStickerImageSources_threadsEmptyIndex() async {
+        let (sut, exporter) = makeSUT(exporterBehavior: .success)
+        let service: StoryVideoExportServiceProviding = sut
+
+        let url = await service.prepareExport(
+            slide: makeStaticSlide(),
+            languages: [],
+            watermark: nil,
+            intro: nil,
+            onProgress: nil,
+            onPhaseChange: nil
+        )
+
+        XCTAssertEqual(exporter.exportCallCount, 1)
+        XCTAssertTrue(exporter.lastStickerImageSources.isEmpty)
+
+        if let url { sut.cleanupExport(at: url) }
+    }
+
     // MARK: - 2. Fallback
 
     func test_prepareExport_exportFailure_returnsNil() async {
@@ -369,6 +409,7 @@ final class RealMP4StubExporter: StoryExporting, @unchecked Sendable {
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
+        stickerImageSources: [String: String],
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         let image = UIGraphicsImageRenderer(size: size, format: {
@@ -423,6 +464,9 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
     /// qu'ignoré : sans lui, un test ne pourrait pas distinguer « le plan est
     /// transmis à l'exporteur » de « le plan est perdu en route ».
     private var _lastBranding: StoryExportBranding.Plan?
+    /// Index `postMediaId → adresse` des stickers image reçu au dernier appel
+    /// (#4852) — enregistré pour la même raison que `_lastBranding`.
+    private var _lastStickerImageSources: [String: String] = [:]
     let behavior: Behavior
 
     init(behavior: Behavior) {
@@ -449,12 +493,18 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         return _lastBranding
     }
 
+    var lastStickerImageSources: [String: String] {
+        lock.lock(); defer { lock.unlock() }
+        return _lastStickerImageSources
+    }
+
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
         branding: StoryExportBranding.Plan?,
+        stickerImageSources: [String: String],
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         lock.withLock {
@@ -462,6 +512,7 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
             _lastOutputURL = outputURL
             _lastLanguages = languages
             _lastBranding = branding
+            _lastStickerImageSources = stickerImageSources
         }
 
         switch behavior {

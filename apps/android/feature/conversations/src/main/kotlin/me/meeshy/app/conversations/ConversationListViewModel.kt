@@ -45,6 +45,7 @@ import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.story.StoryRepository
@@ -239,6 +240,7 @@ class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageRepository: MessageRepository,
     private val messageSocketManager: MessageSocketManager,
+    private val typingPresenceRelay: TypingPresenceRelay,
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
@@ -511,6 +513,11 @@ class ConversationListViewModel @Inject constructor(
     private fun observePresence() {
         viewModelScope.launch {
             messageSocketManager.userStatus.collect { event ->
+                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
+            }
+        }
+        viewModelScope.launch {
+            typingPresenceRelay.forcedOnline.collect { event ->
                 _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
             }
         }

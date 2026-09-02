@@ -274,13 +274,39 @@ public extension CanvasV3 {
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
             if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
+            // **Le gabarit qui DÉCORE la pastille** (#4717) doit voyager (#4832).
+            // Omis quand `nil` — toute pastille publiée avant ce lot se réencode
+            // alors octet pour octet, et son repli reste celui que
+            // `StoryLocationLayer` applique déjà.
+            //
+            // Ce champ est le FRÈRE de `templateId` sur un sticker, avec une
+            // relation différente : un sticker EST son gabarit, un lieu en est
+            // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
+            // délibérés — ne pas les unifier.
+            if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
+            // **La FENÊTRE TEMPORELLE voyage** (#4840) — quatrième morsure du
+            // même piège, sur l'ENVELOPPE cette fois. #4832 a réparé `styleId`
+            // trois lignes plus haut en demandant « qu'est-ce qui part À CÔTÉ de
+            // ce que je viens de corriger ? », mais à la CHARGE seule : le
+            // `start: nil` de `timingV3` attendait juste en dessous, écrit en dur.
+            //
+            // Les trois autres clés suivent le sticker à la lettre — c'est la
+            // MÊME famille temporelle (`TimelineClipKind.place`). Omises quand
+            // `nil`, donc toute pastille posée avant ce lot se réencode octet
+            // pour octet, et sa barre reste le FANTÔME que la timeline rend
+            // pour une fenêtre absente (le type qui le dessine vit dans `MeeshyUI` —
+            // le nommer ici ferait fuir le plan dans la cible core, et une garde
+            // le refuse à juste titre).
+            if let duration = location.duration { payload["duration"] = .number(duration) }
+            if let fadeIn = location.fadeIn { payload["fadeIn"] = .number(fadeIn) }
+            if let fadeOut = location.fadeOut { payload["fadeOut"] = .number(fadeOut) }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
                                     plane: .fg,
                                     z: effects.wireZ(location.id, location.zIndex, fallback),
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
-                                    timing: timingV3(start: nil,
+                                    timing: timingV3(start: location.startTime,
                                                      end: effects.wireTimingEnd?[location.id],
                                                      keyframes: nil),
                                     locale: nonEmpty(location.sourceLanguage),
@@ -295,7 +321,25 @@ public extension CanvasV3 {
                                                        x: Double(audio.x), y: Double(audio.y)),
                                     plane: .content,
                                     z: effects.wireZ(audio.id, audio.zIndex, fallback),
-                                    transform: TransformV3(),
+                                    // **La puce de son se PINCE et se TOURNE** —
+                                    // `updateScale` / `updateRotation`
+                                    // (`StoryCanvasUIView+Manipulation.swift`) les
+                                    // écrivent pour les CINQ familles, audio compris.
+                                    // Un `TransformV3()` par défaut jetait les deux :
+                                    // chaque lecteur voyait la puce à l'échelle 1,
+                                    // sans angle. Trouvé par le témoin d'exhaustivité
+                                    // (#4833) à son premier tour, sur la seule famille
+                                    // que personne n'avait regardée.
+                                    // `TransformV3` ne sait pas dire « absent » :
+                                    // le défaut du décodeur EST la valeur neutre
+                                    // des deux côtés, donc `nil` s'émet en 1 / 0 et
+                                    // se relit en `nil`. Une puce jamais pincée se
+                                    // réencode ainsi octet pour octet, et un auteur
+                                    // qui pose exactement 1,0 obtient `nil` — les
+                                    // deux rendent le même pixel.
+                                    transform: TransformV3(scale: audio.scale ?? 1,
+                                                           rotation: audio.rotation ?? 0,
+                                                           opacity: 1),
                                     timing: timingV3(start: audio.startTime.map(exactDouble),
                                                      end: effects.wireTimingEnd?[audio.id],
                                                      keyframes: audio.keyframes),
@@ -426,10 +470,33 @@ public extension CanvasV3 {
         // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
         // disparaît chez un lecteur qui ne rend que l'emoji.
         var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        // **Le GABARIT voyage, pas seulement son repli** (#4741).
+        //
+        // `wireEmoji` ci-dessus rend, pour un sticker à gabarit, l'emoji de
+        // REPLI du catalogue. Le fil portait donc soigneusement le repli d'une
+        // décoration qu'il ne portait pas : une pastille de lieu publiée
+        // revenait « 📍 », un cadre de cœurs « 💕 ». Le composer dessinait, le
+        // lecteur rendait un glyphe.
+        //
+        // > Un repli conservé sans la chose dont il est le repli n'est plus un
+        // > repli : c'est le contenu.
+        //
+        // Le repli RESTE émis — il sert le lecteur dont le build ne connaît pas
+        // ce `templateId` (une décoration plus récente que lui), qui verra un
+        // glyphe plutôt qu'un trou.
+        if let templateId = nonEmpty(sticker.templateId) {
+            payload["templateId"] = .string(templateId)
+            if !sticker.slots.isEmpty {
+                payload["slots"] = .object(sticker.slots.mapValues { CanvasJSONValue.string($0) })
+            }
+        }
         if let postMediaId = nonEmpty(sticker.postMediaId) {
             payload["postMediaId"] = .string(postMediaId)
         }
         if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
+        // **Le mouvement voyage avec la décoration** (#4821) — une propriété de
+        // la charge, jamais un kind ; web et Android l'ignorent.
+        if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -463,6 +530,19 @@ public extension CanvasV3 {
         }
         if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
+        // **La forme d'onde d'une note vocale** — ~80 échantillons figés à la
+        // composition (`StoryModels.swift`), que `StoryAudioPlayerView` peint
+        // barre par barre. Sans eux, son `guard !samples.isEmpty else { return }`
+        // ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
+        // vocale posée sur la scène. Quatre-vingts nombres pour ne pas servir un
+        // trou — le calcul n'a pas besoin d'être long.
+        //
+        // Omis quand le tableau est vide : une piste EMPRUNTÉE n'en porte pas
+        // (`StoryAudioIdentity.showsWaveform` ne peint que l'enregistrement), et
+        // son objet se réencode alors octet pour octet.
+        if !audio.waveformSamples.isEmpty {
+            payload["waveformSamples"] = .array(audio.waveformSamples.map { .number(exactDouble($0)) })
+        }
         if let isBackground = audio.isBackground { payload["isBackground"] = .bool(isBackground) }
         if let loop = audio.loop { payload["loop"] = .bool(loop) }
         if let duration = audio.duration { payload["duration"] = .number(exactDouble(duration)) }
@@ -491,6 +571,7 @@ public extension CanvasV3 {
             ("textAlign", text.textAlign), ("textBg", text.textBg),
             ("fontWeight", text.fontWeight), ("frameShape", text.frameShape),
             ("frameBorderColor", text.frameBorderColor), ("borderColor", text.borderColor),
+            ("textEffect", text.textEffect),
             ("name", text.name), ("referenceUserId", text.referenceUserId),
         ]
         for (key, value) in strings {
@@ -544,6 +625,7 @@ public extension StoryEffects {
         var locations: [StoryLocationObject] = []
         var audios: [StoryAudioPlayerObject] = []
         var bandEdges: [String: ObjectAnchor.Edge] = [:]
+        var unpaintable: [String] = []
         var timingEnds: [String: Double] = [:]
         var anchorPoints: [String: String] = [:]
 
@@ -585,7 +667,18 @@ public extension StoryEffects {
                 drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
                                                  from: object.payload.array("strokes"))
                 drawingData = object.payload.string("data").flatMap { Data(base64Encoded: $0) }
-            case .mention, .reserved:
+            case .mention:
+                // Kind CONNU que la scène ne peint pas : une mention est une
+                // métadonnée, pas un objet. Ne JAMAIS le compter comme une
+                // rupture — la sentinelle rougirait sur toute story qui cite
+                // quelqu'un.
+                continue
+            case .reserved(let raw):
+                // **Un kind d'un document plus récent que ce build** (#4088).
+                // Le décodeur l'a gardé ; la conversion ne sait pas le loger.
+                // Sans ce mémo, le lecteur peindrait la scène AMPUTÉE comme si
+                // c'était la composition de l'auteur.
+                unpaintable.append(raw)
                 continue
             }
         }
@@ -595,6 +688,7 @@ public extension StoryEffects {
         mediaObjects = medias.isEmpty ? nil : medias
         stickerObjects = stickerFamily.isEmpty ? nil : stickerFamily
         audioPlayerObjects = audios.isEmpty ? nil : audios
+        wireUnpaintableKinds = unpaintable.isEmpty ? nil : Array(Set(unpaintable)).sorted()
         wireBandEdge = bandEdges.isEmpty ? nil : bandEdges
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
@@ -672,6 +766,7 @@ public extension StoryEffects {
             frameBorderColor: object.payload.string("frameBorderColor"),
             borderColor: object.payload.string("borderColor"),
             borderWidth: object.payload.double("borderWidth"),
+            textEffect: object.payload.string("textEffect"),
             translations: object.payload.stringMap("translations"),
             sourceLanguage: object.locale,
             startTime: object.timing?.start,
@@ -720,13 +815,18 @@ public extension StoryEffects {
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
         let postMediaId = object.payload.string("postMediaId") ?? ""
+        let templateId = object.payload.string("templateId") ?? ""
         guard let emoji = stickerEmoji(object.payload.string("emoji"),
-                                       hasImage: !postMediaId.isEmpty) else { return nil }
+                                       hasImage: !postMediaId.isEmpty,
+                                       templateId: templateId) else { return nil }
         return StorySticker(
             id: object.id,
             emoji: emoji,
             postMediaId: postMediaId,
             provider: object.payload.string("provider"),
+            templateId: templateId,
+            slots: object.payload.stringMap("slots") ?? [:],
+            animation: object.payload.string("animation").flatMap(StickerAnimation.init(rawValue:)),
             sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
@@ -741,9 +841,18 @@ public extension StoryEffects {
 
     /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
     /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
-    private static func stickerEmoji(_ wire: String?, hasImage: Bool) -> String? {
-        guard hasImage else { return wire }
-        return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji
+    ///
+    /// Un sticker GABARIT sans repli reçoit celui que son gabarit déclare — ou
+    /// le repli générique si ce binaire ne le connaît pas (#4819, #4741) — `nil` ⇒ l'objet est REJETÉ, et
+    /// une décoration jetée pour un repli manquant serait perdue au lieu d'être
+    /// dégradée.
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool, templateId: String) -> String? {
+        if let repli = nonEmpty(wire) { return repli }
+        if !templateId.isEmpty {
+            return StickerTemplateCatalog.fallbackEmoji(forTemplateID: templateId)
+                ?? StorySticker.imageFallbackEmoji
+        }
+        return hasImage ? StorySticker.imageFallbackEmoji : wire
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {
@@ -755,7 +864,12 @@ public extension StoryEffects {
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
             anchor: pivotPoint(object.payload),
-            sourceLanguage: object.locale)
+            sourceLanguage: object.locale,
+            styleId: nonEmpty(object.payload.string("styleId")),
+            startTime: object.timing?.start,
+            duration: object.payload.double("duration"),
+            fadeIn: object.payload.double("fadeIn"),
+            fadeOut: object.payload.double("fadeOut"))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {
@@ -765,6 +879,8 @@ public extension StoryEffects {
             placement: object.payload.string("placement") ?? "overlay",
             x: CGFloat(position.x), y: CGFloat(position.y),
             volume: object.payload.double("volume").map { Float($0) } ?? 1,
+            waveformSamples: object.payload.array("waveformSamples")?
+                .compactMap { if case .number(let v) = $0 { return Float(v) } else { return nil } } ?? [],
             isBackground: object.payload.bool("isBackground"),
             backgroundAudioVariants: decodeWireArray(StoryAudioVariant.self,
                                                      from: object.payload.array("variants")),
@@ -780,6 +896,8 @@ public extension StoryEffects {
             soundId: object.payload.string("soundId"),
             soundAuthorUsername: object.payload.string("soundAuthorUsername"))
         audio.zIndex = object.z
+        audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
+        audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation
         audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         audio.sourceStart = object.payload.double("sourceStart")
         audio.sourceEnd = object.payload.double("sourceEnd")

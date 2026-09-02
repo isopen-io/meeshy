@@ -71,20 +71,63 @@ struct ConversationListQuickActions: View, Equatable {
         /// redeviennent des tuiles ordinaires.
         nonisolated static let heroes: [Action] = [.findMembers, .myContacts, .myAffiliates]
 
-        nonisolated static func tiles(isEmptyState: Bool) -> [Action] {
-            isEmptyState ? allCases.filter { !heroes.contains($0) } : allCases
+        nonisolated static func tiles(showsHeroes: Bool) -> [Action] {
+            showsHeroes ? allCases.filter { !heroes.contains($0) } : allCases
         }
+    }
+
+    /// **Combien de temps l'app aide-t-elle à DÉMARRER ?** (directive porteur
+    /// 2026-09-01)
+    ///
+    /// > « Les trois lignes ci-dessus de cet empty state doivent toujours
+    /// > s'afficher tant qu'on n'a pas plus de 10 conversations dans sa
+    /// > liste ! »
+    ///
+    /// Les trois grands boutons — chercher des membres, retrouver ses contacts,
+    /// voir ses affiliations — ne répondaient qu'à « la liste est VIDE ». Or ce
+    /// n'est pas le vide qui appelle de l'aide, c'est le DÉMARRAGE : une liste
+    /// d'une seule conversation en a autant besoin qu'une liste de zéro, et les
+    /// reléguer en petites tuiles dès le premier message envoyé retire l'aide
+    /// exactement au moment où elle commence à servir.
+    ///
+    /// > « Vide » et « qui démarre » se ressemblent tant qu'on n'a jamais
+    /// > franchi la première ligne. C'est le seuil qui distingue les deux, et
+    /// > un booléen ne peut pas le porter.
+    ///
+    /// **Le seuil est INCLUSIF** : « pas PLUS de 10 » ⇒ dix conversations
+    /// gardent les héros, la onzième les range.
+    nonisolated static let heroThreshold = 10
+
+    nonisolated static func showsHeroes(conversationCount: Int) -> Bool {
+        conversationCount <= heroThreshold
     }
 
     let isDark: Bool
     /// Vrai quand la liste est VIDE : le titre le dit, sinon le bloc se
     /// présente comme la suite naturelle de la liste.
     var isEmptyState: Bool = false
+    /// Le nombre de conversations de la liste — il décide des HÉROS
+    /// (`showsHeroes`), là où `isEmptyState` ne décide plus que du TITRE. Deux
+    /// questions distinctes : « la liste est-elle vide ? » et « l'auteur
+    /// démarre-t-il ? ». Les confondre est ce que la directive du 2026-09-01
+    /// défait.
+    ///
+    /// **C'est le compte BRUT qui entre ici, pas le compte affiché.** Le site
+    /// de montage passe `conversationViewModel.conversations` — la liste
+    /// complète — et non `groupedConversations`, qui est filtrée par la
+    /// recherche et par la pastille de section. « Combien de conversations
+    /// ai-je ? » ne dépend pas du filtre en cours : sinon activer « Non lus »
+    /// ferait réapparaître les boutons de démarrage à quelqu'un qui a deux
+    /// cents conversations.
+    var conversationCount: Int = 0
     var minHeight: CGFloat = 0
+
+    var showsHeroes: Bool { Self.showsHeroes(conversationCount: conversationCount) }
     var onAction: (Action) -> Void = { _ in }
 
     static func == (lhs: ConversationListQuickActions, rhs: ConversationListQuickActions) -> Bool {
-        lhs.isDark == rhs.isDark && lhs.isEmptyState == rhs.isEmptyState && lhs.minHeight == rhs.minHeight
+        lhs.isDark == rhs.isDark && lhs.isEmptyState == rhs.isEmptyState
+            && lhs.conversationCount == rhs.conversationCount && lhs.minHeight == rhs.minHeight
     }
 
     private static let columns = [GridItem(.flexible(), spacing: MeeshySpacing.sm), GridItem(.flexible(), spacing: MeeshySpacing.sm), GridItem(.flexible(), spacing: MeeshySpacing.sm)]
@@ -111,7 +154,7 @@ struct ConversationListQuickActions: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if isEmptyState {
+            if showsHeroes {
                 VStack(spacing: MeeshySpacing.sm) {
                     ForEach(Action.heroes, id: \.self) { action in
                         hero(action)
@@ -120,7 +163,7 @@ struct ConversationListQuickActions: View, Equatable {
             }
 
             LazyVGrid(columns: Self.columns, spacing: MeeshySpacing.sm) {
-                ForEach(Action.tiles(isEmptyState: isEmptyState), id: \.self) { action in
+                ForEach(Action.tiles(showsHeroes: showsHeroes), id: \.self) { action in
                     tile(action)
                 }
             }

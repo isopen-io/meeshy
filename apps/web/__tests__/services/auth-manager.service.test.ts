@@ -76,7 +76,7 @@ describe('AuthManager.registerOnTokensUpdated', () => {
     const cb = jest.fn();
     const unsubscribe = authManager.registerOnTokensUpdated(cb);
 
-    authManager.updateTokens('refreshed-token');
+    authManager.updateTokens({ authToken: 'refreshed-token' });
 
     expect(cb).toHaveBeenCalledTimes(1);
     unsubscribe();
@@ -89,7 +89,7 @@ describe('AuthManager.registerOnTokensUpdated', () => {
       seen.push(authManager.getAuthToken());
     });
 
-    authManager.updateTokens('refreshed-token');
+    authManager.updateTokens({ authToken: 'refreshed-token' });
 
     expect(seen).toEqual(['refreshed-token']);
     unsubscribe();
@@ -100,7 +100,7 @@ describe('AuthManager.registerOnTokensUpdated', () => {
     const unsubscribe = authManager.registerOnTokensUpdated(cb);
     unsubscribe();
 
-    authManager.updateTokens('refreshed-token');
+    authManager.updateTokens({ authToken: 'refreshed-token' });
 
     expect(cb).not.toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe('AuthManager.registerOnTokensUpdated', () => {
     const unsubBad = authManager.registerOnTokensUpdated(bad);
     const unsubGood = authManager.registerOnTokensUpdated(good);
 
-    expect(() => authManager.updateTokens('refreshed-token')).not.toThrow();
+    expect(() => authManager.updateTokens({ authToken: 'refreshed-token' })).not.toThrow();
     expect(good).toHaveBeenCalled();
     unsubBad();
     unsubGood();
@@ -221,25 +221,25 @@ describe('AuthManager.updateUser', () => {
 
 describe('AuthManager.updateTokens', () => {
   it('updates auth token', () => {
-    authManager.updateTokens('new-access');
+    authManager.updateTokens({ authToken: 'new-access' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('new-access');
   });
 
-  // Le 2e créneau (`refreshToken`) reste ACCEPTÉ positionnellement mais n'a
-  // plus de clé de stockage dédiée (#4405, étape 3 — même raison que
-  // `setCredentials`). Une valeur qui y transite n'atterrit nulle part.
-  it('no longer persists anything for the (now inert) second positional slot', () => {
-    authManager.updateTokens('tok', 'legacy-value-that-must-be-dropped');
+  // Le champ `refreshToken` reste ACCEPTÉ (nommé, #4491) mais n'a plus de clé
+  // de stockage dédiée (#4405, étape 3 — même raison que `setCredentials`).
+  // Une valeur qui y transite n'atterrit nulle part.
+  it('no longer persists anything for the (now inert) refreshToken field', () => {
+    authManager.updateTokens({ authToken: 'tok', refreshToken: 'legacy-value-that-must-be-dropped' });
     expect(storedKeys().sort()).toEqual([AUTH_STORAGE_KEYS.AUTH_TOKEN].sort());
   });
 
   it('updates session token when provided', () => {
-    authManager.updateTokens('tok', undefined, 'new-session');
+    authManager.updateTokens({ authToken: 'tok', sessionToken: 'new-session' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('new-session');
   });
 
   it('skips optional session token when not provided', () => {
-    authManager.updateTokens('tok');
+    authManager.updateTokens({ authToken: 'tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBeNull();
   });
 });

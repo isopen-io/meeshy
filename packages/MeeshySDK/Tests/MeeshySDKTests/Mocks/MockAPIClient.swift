@@ -72,11 +72,15 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     // MARK: - APIClientProviding
 
     func request<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         method: String,
         body: Data?,
         queryItems: [URLQueryItem]?
     ) async throws -> T {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
@@ -90,12 +94,16 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     /// can assert on explicit headers (`X-Client-Mutation-Id`, an explicit
     /// `Authorization` override) instead of silently losing them.
     func requestWithHeaders<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         method: String,
         body: Data?,
         queryItems: [URLQueryItem]?,
         headers: [String: String]?
     ) async throws -> T {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems, headers: headers)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
@@ -106,25 +114,37 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     }
 
     func paginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         cursor: String?,
         limit: Int
     ) async throws -> PaginatedAPIResponse<[T]> {
-        return try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
+        return try await request(typedEndpoint, method: "GET", body: nil, queryItems: nil)
     }
 
     func offsetPaginatedRequest<T: Decodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         offset: Int,
         limit: Int
     ) async throws -> OffsetPaginatedAPIResponse<[T]> {
-        return try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
+        return try await request(typedEndpoint, method: "GET", body: nil, queryItems: nil)
     }
 
     func post<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: "POST", encodableBody: body)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
@@ -135,9 +155,13 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     }
 
     func put<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: "PUT", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
@@ -147,9 +171,13 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     }
 
     func patch<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: "PATCH", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
@@ -158,14 +186,22 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         return result
     }
 
-    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
-        return try await request(endpoint: endpoint, method: "DELETE", body: nil, queryItems: nil)
+    func delete(_ typedEndpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
+        return try await request(typedEndpoint, method: "DELETE", body: nil, queryItems: nil)
     }
 
     func delete<T: Decodable, U: Encodable>(
-        endpoint: String,
+        _ typedEndpoint: any MeeshyEndpoint,
         body: U
     ) async throws -> APIResponse<T> {
+        // La table de stubs reste indexée par CHEMIN : un double n'a pas de
+        // réseau, il a une table, et le chemin est la clé que les témoins
+        // écrivent déjà. `legacyPath(for:)` la donne (#4282).
+        let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: "DELETE", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {

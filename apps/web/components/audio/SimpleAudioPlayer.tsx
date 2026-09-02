@@ -132,6 +132,13 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     attachmentDuration: currentAudioDuration ?? (attachment.duration ? attachment.duration / 1000 : undefined),
     mimeType: attachment.mimeType,
     isOwnMessage,
+    // #3913 — la langue de la piste JOUÉE part avec le rapport, et son
+    // changement le clôt : la portion écoutée avant une bascule de langue
+    // n'est plus perdue.
+    consumedLanguage: selectedLanguage,
+    // #3909 — ce que le serveur sait déjà de cette écoute. Servi depuis
+    // toujours par `GET /conversations/:id/messages`, et jamais lu.
+    consumption: attachment.currentUserConsumption,
   });
 
   // Hook d'analyse des effets
@@ -346,6 +353,9 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     attachmentDuration,
     mimeType: attachment.mimeType,
     isOwnMessage,
+    // Le lecteur COMPACT ne propose pas de piste traduite : il n'a pas de
+    // langue à déclarer, mais il a la même position à reprendre (#3909).
+    consumption: attachment.currentUserConsumption,
   });
 
   return (

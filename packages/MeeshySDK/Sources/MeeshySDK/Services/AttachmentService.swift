@@ -24,7 +24,7 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
     public func requestTranscription(attachmentId: String, force: Bool = false) async throws {
         let bodyData = try JSONEncoder().encode(TranscribeRequest(force: force))
         let _: SimpleAPIResponse = try await api.request(
-            endpoint: "/attachments/\(attachmentId)/transcribe",
+            AttachmentsEndpoint.byAttachmentIdTranscribe(attachmentId: attachmentId),
             method: "POST",
             body: bodyData
         )
@@ -32,14 +32,14 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
 
     public func getStatusDetails(attachmentId: String) async throws -> [AttachmentStatusUser] {
         let response: OffsetPaginatedAPIResponse<[AttachmentStatusUser]> = try await api.request(
-            endpoint: "/attachments/\(attachmentId)/status-details"
+            AttachmentsEndpoint.byAttachmentIdStatusDetails(attachmentId: attachmentId)
         )
         return response.data
     }
 
     public func delete(attachmentId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/attachments/\(attachmentId)"
+            AttachmentsEndpoint.byAttachmentId(attachmentId: attachmentId)
         )
     }
 
@@ -63,7 +63,7 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
         )
         do {
             let response: APIResponse<AttachmentTranslateResponse> = try await api.post(
-                endpoint: "/attachments/\(attachmentId)/translate",
+                AttachmentsEndpoint.byAttachmentIdTranslate(attachmentId: attachmentId),
                 body: request
             )
             return response.data

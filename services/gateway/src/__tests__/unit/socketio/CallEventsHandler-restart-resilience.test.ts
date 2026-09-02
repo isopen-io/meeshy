@@ -65,7 +65,12 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
-  isValidationFailure: jest.fn((r) => !r.success),
+  // Annoté sur la forme réelle (`SocketValidationResult<T>`, middleware/validation.ts)
+  // plutôt que laissé inférer : sans contexte le paramètre d'un jest.fn() dans une
+  // factory jest.mock() retombe sur `unknown`, et `r.success` y est un TS2339.
+  // L'annotation de type est effacée à la compilation — aucune référence hors
+  // portée n'atteint le runtime de la factory.
+  isValidationFailure: jest.fn((r: SocketValidationResult<unknown>) => !r.success),
 }));
 
 jest.mock('../../../utils/socket-rate-limiter', () => ({
@@ -100,7 +105,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
-import { validateSocketEvent } from '../../../middleware/validation';
+import { validateSocketEvent, type SocketValidationResult } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallEndReason } from '@meeshy/shared/prisma/client';
 
@@ -435,7 +440,11 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
 
     it('swallows a DB error during the grace-expiry re-check (no crash, no end)', async () => {
       const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
-      (prisma.callParticipant.findUnique as jest.Mock).mockRejectedValue(new Error('DB down'));
+      // `jest.Mock` sans générique retombe sur `UnknownFunction` : `mockRejectedValue`
+      // y attend alors un paramètre `never`. `jest.Mock<any>` est l'idiome déjà en
+      // place dans tout le dépôt pour ce même re-cast d'une méthode Prisma typée
+      // (MaintenanceService.test.ts, AffiliateTrackingService.test.ts, etc.).
+      (prisma.callParticipant.findUnique as jest.Mock<any>).mockRejectedValue(new Error('DB down'));
       const { handlers } = setup({ prisma });
 
       await handlers['disconnect']();

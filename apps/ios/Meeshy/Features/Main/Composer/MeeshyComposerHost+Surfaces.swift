@@ -48,6 +48,10 @@ extension MeeshyComposerHost {
         .storyRecentCameraRollProvided()
         .storyPasteProvided()
         .storyStickerLibraryProvided()
+        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
+        // quand l'autorisation de localisation est refusée : c'est l'injecteur
+        // qui le décide, pas la feuille.
+        .stickerNearbyPlacesProvided()
         // **Les deux accessoires de la rangée haute de l'atelier** (#4124). Le
         // SDK expose deux emplacements ; ce qu'on y met reste app-side — le chip
         // lit l'éventail et la mémoire de format, l'icône ouvre un éditeur dont
@@ -78,6 +82,21 @@ extension MeeshyComposerHost {
         // l'aurait rangée parmi ce qui QUALIFIE la publication, où elle n'est
         // pas.
         .storyComposerToolRowLeadingAccessory { atelierDescriptionButton }
+        // **Le volet de description, sous la scène de l'ATELIER** (#4742).
+        //
+        // Il est aussi monté par `ComposerSceneSurface` (la scène incrustée
+        // d'un post). Deux surfaces, un seul volet : c'est la même propriété
+        // qui les sert, et elles ne peuvent donc pas montrer deux descriptions
+        // différentes du même texte.
+        //
+        // La leçon coûte d'être dite : ce volet a d'abord été monté SEULEMENT
+        // dans `ComposerSceneSurface`, et il n'a jamais paru — une story se
+        // compose dans l'ATELIER, que ce flux monte à la place. Un composant
+        // écrit, câblé et invisible parce qu'il est posé sur la surface que
+        // l'écran n'affiche pas.
+        .storyComposerBelowCanvasAccessory {
+            if let volet = sceneDescriptionPanel { volet }
+        }
         // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
         // cadrage), exactement comme il le fait déjà devant une band. `0` quand
@@ -273,7 +292,17 @@ extension MeeshyComposerHost {
            sceneMentionBox.controller.activeQuery != nil,
            !sceneMentionBox.controller.suggestions.isEmpty,
            let objet = viewModel.currentEffects.textObjects.first(where: { $0.id == id }) {
-            AnyView(
+            // **`return` — sans lui, cette bande était CONSTRUITE puis JETÉE.**
+            // La propriété rend `AnyView?` ; une expression nue dans un `if`
+            // n'est pas la valeur de retour d'un accesseur à corps multiple, et
+            // le `return nil` du bas gagnait TOUJOURS. La suggestion `@` du
+            // texte de scène n'a donc jamais pu paraître, sur aucun chemin.
+            //
+            // Le compilateur le disait — « result of 'AnyView' initializer is
+            // unused » — et un avertissement noyé dans un build vert ne se lit
+            // pas. C'est la loi 4 dans sa forme la plus coûteuse : le contrôle
+            // est écrit, testé de l'œil, et sans effet.
+            return AnyView(
                 ComposerMentionStrip(
                     controller: sceneMentionBox.controller,
                     currentText: objet.text,
@@ -289,9 +318,10 @@ extension MeeshyComposerHost {
 
     var sceneSurface: some View {
         ComposerSceneSurface(
-            localMedia: documentLocalMedia,
+            localMedia: headerTileMedia,
             selectedMediaURL: selectedSlideMediaURL,
             selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            format: selectedFormat,
             formatFan: mountsFormatFan
                 && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
                 ? AnyView(formatChip) : nil,
@@ -316,6 +346,42 @@ extension MeeshyComposerHost {
             onItemTapped: { id, kind in
                 selectedSceneItemId = id
                 selectedSceneItemKind = kind
+                // **« Toucher le chips sur le canvas ouvre la vue de création
+                // audio »** (directive porteur 2026-09-01, #4671) — le mot est
+                // TOUCHER, donc le tap simple, pas le double-tap réservé aux
+                // éditeurs dédiés. La sélection est posée d'abord : si le son
+                // refuse de s'ouvrir (emprunté, ou fichier local inconnu), le
+                // geste reste une sélection franche plutôt qu'un tap sans effet.
+                if kind == .audio { editSceneSound(id) }
+            },
+            // **« Modifier » ouvre l'édition EN LIGNE du texte** (#4074, vue
+            // `1d`). Le meuble câble déjà les trois entrées de cette édition
+            // (`editingTextId`, `onInlineTextChanged`, `onInlineTextEditEnded`)
+            // — il ne manquait que la porte qui y mène depuis l'appui long.
+            //
+            // Le `switch` est exhaustif pour que l'ajout d'un éditeur MÉDIA
+            // (#4082) oblige à passer ici ET à élargir `editableSceneKinds` :
+            // servir l'un sans l'autre rendrait « Modifier » offert et inerte
+            // sur un média, exactement le défaut que ce lot ferme.
+            onItemEdit: { id, kind in
+                switch kind {
+                case .text:
+                    // **Le MÊME site que la création** (#4634) : `openObjectEditor`
+                    // est la seule façon d'éditer un texte, quelle que soit la
+                    // porte. Recopier ici les trois lignes qu'il contient était
+                    // exactement ce qui faisait diverger les deux chemins.
+                    openObjectEditor(id)
+                    HapticFeedback.medium()
+                case .audio:
+                    // **Toucher une pastille audio ouvre « Création audio » SUR
+                    // ce son** (#4671, directive porteur 2026-09-01). Le même
+                    // écran que les deux autres surfaces qui portent un son :
+                    // une seconde vue d'édition aurait divergé au premier
+                    // réglage.
+                    editSceneSound(id)
+                case .media, .sticker, .location:
+                    break
+                }
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             // Les portes que CE meuble sert — l'ensemble vit dans
@@ -391,6 +457,36 @@ extension MeeshyComposerHost {
             // La frame `[+]` — elle agit sur la PUBLICATION, pas sur un objet,
             // d'où sa place tout en haut du rail et son séparateur.
             onAddSlide: { viewModel.addSlide(); HapticFeedback.light() },
+            // **L'historique a quitté le socle** (#4586). La question posée est
+            // la MÊME que celle que le socle posait — `ComposerHistoryService`
+            // reste le juge unique de « cet écran sert-il l'historique ? » — et
+            // seule la place change. `nil` quand il n'y a rien à défaire :
+            // absent, jamais grisé.
+            onUndo: composerServesHistory && viewModel.canUndoGlobal
+                ? { performHistoryUndo() } : nil,
+            onRedo: composerServesHistory && viewModel.canRedoGlobal
+                ? { performHistoryRedo() } : nil,
+            // **L'inspecteur de l'objet sélectionné** (#4073, vue `1c`). La
+            // résolution par kind vit dans la RÈGLE, pas ici : le meuble ne
+            // tient qu'un id, c'est la slide qui sait de quel type il est.
+            objectChips: sceneObjectChips,
+            // **Le jeton ENCADRÉ, et le geste qui l'encadre** (#4073). Le
+            // contrat les portait depuis la livraison et AUCUN hôte ne les
+            // remplissait : six capsules qui s'annonçaient `.isButton` à
+            // VoiceOver, vibraient sous le doigt, et n'ouvraient rien. Suivre
+            // une donnée jusqu'à son consommateur s'arrête un cran trop tôt —
+            // il faut la suivre jusqu'au PIXEL, et demander ce que le doigt
+            // OBTIENT.
+            activeObjectChipId: ComposerObjectChips.activeChipId(
+                chips: sceneObjectChips, openedBand: requestedSceneBand),
+            onObjectChip: { id in handleObjectChip(id) },
+            // **Ce que le canvas ENCADRE** (#4073). Le meuble tient déjà l'id
+            // de l'objet sélectionné pour les jetons et pour le rail — le lui
+            // faire descendre jusqu'au canvas est ce qui manquait pour que
+            // « un seul objet à la fois » se VOIE.
+            selectedItemId: selectedSceneItemId,
+            selectionBadge: ComposerObjectChips.badge(forSelected: selectedSceneItemId,
+                                                      in: viewModel.currentSlide),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -399,11 +495,10 @@ extension MeeshyComposerHost {
             // remplir** (#4082) : l'objet selectionne doit avoir une source a
             // rogner. Sinon la bande serait ouvrable sur du vide, ce que la
             // regle `opened(_:served:)` existe pour interdire.
-            band: ComposerSceneBand.opened(
-                requestedSceneBand,
-                served: ComposerSceneCapabilities.bands(
-                    canTrimSelection: trimmableSelection != nil)),
+            band: ComposerSceneBand.opened(requestedSceneBand,
+                                           served: openableSceneBands),
             bandTimelineContent: composerTrimBand,
+            bandTextStylesContent: composerTextStylesBand,
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
@@ -446,18 +541,49 @@ extension MeeshyComposerHost {
             },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
-            onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
+            //
+            // **Sauf quand l'éditeur PLEIN ÉCRAN est monté** (#4634, défaut
+            // mesuré au simulateur le 2026-09-01). Présenter un
+            // `fullScreenCover` fait perdre le premier répondant au canvas de
+            // CETTE surface, qui annonce donc une fin de saisie qu'aucun doigt
+            // n'a demandée — et `exitTextEditingMode` supprime alors la coquille
+            // encore vide que la porte TEXTE vient de poser. L'éditeur
+            // s'ouvrait sur un objet DÉJÀ détruit : aucune section, aucun
+            // clavier, et « Terminé » ne rendait rien.
+            //
+            // > Un événement de PRÉSENTATION ressemble, au bout du câble, à un
+            // > geste de l'utilisateur. La garde ne porte donc pas sur ce que
+            // > l'événement DIT, mais sur qui possède l'édition à cet instant :
+            // > tant que l'écran plein est monté, c'est lui, et la surface du
+            // > dessous n'a pas à conclure quoi que ce soit.
+            onInlineTextEditEnded: { _ in
+                guard editedObject == nil else { return }
+                viewModel.exitTextEditingMode()
+            },
             // **La bande n'existe que pendant l'édition ET avec des personnes à
             // proposer.** Gater sur la seule requête peindrait une bande de
             // verre vide quand aucun ami accepté ne correspond — un état
             // NOMINAL, pas une erreur.
             mentionStrip: sceneMentionStrip,
+            descriptionPanel: sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
             drawingSurface: viewModel.isDrawingActive
                 ? AnyView(MeeshyDrawingSurface(viewModel: viewModel))
                 : nil,
+            // **#4918 — le son de fond laisse enfin une trace sur la SCÈNE.**
+            //
+            // La valeur est celle que la surface document sert depuis #4657 :
+            // même résolveur, même loi, même capsule. Elle n'avait qu'un
+            // consommateur, et la surface qu'une STORY monte n'était pas lui —
+            // un fond posé sur une story jouait donc sans que rien ne le dise.
+            //
+            // Il ne manquait ni composant, ni modèle, ni règle : seulement ce
+            // câblage. C'est le motif que le composer répète — une feature
+            // « absente » y est presque toujours une feature non branchée.
+            backgroundSound: avatarBadgeSound,
+            onEditBackgroundSound: editBackgroundSoundAction,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -473,7 +599,7 @@ extension MeeshyComposerHost {
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) },
-            localMedia: documentLocalMedia,
+            localMedia: headerTileMedia,
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onPickBackground: { hex in
                 // Phase 2 (#3939) — choisir un fond pose la couleur SUR la slide
@@ -491,7 +617,12 @@ extension MeeshyComposerHost {
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
             ),
-            showsScene: documentHasScene,
+            // **Le MÊME prédicat que la vue montée** (#4513) — `sceneIsPresent`,
+            // jamais `documentHasScene` en direct. Les deux répondaient à la
+            // même question et divergeaient sur une story vide : la vue disait
+            // « il y a une scène », cette branche disait « non », et l'écran
+            // n'en montrait aucune.
+            showsScene: sceneIsPresent,
             sceneAspectRatio: viewModel.currentCanvasRatio,
             onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
             // **#4035 — taper la scène quand son FOND est un média le
@@ -518,6 +649,19 @@ extension MeeshyComposerHost {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // #4657 — la rangée de l'avatar montre le son de fond : la note,
+            // l'onde et la durée à côté du visage, et le texte descend.
+            // **Ce qu'elle a le DROIT de montrer est une loi** (#4670), pas la
+            // propriété du site qui écrit : la place dit le FOND, et un son de
+            // contenu n'y paraît jamais.
+            backgroundSound: avatarBadgeSound,
+            // #4668 — et le toucher l'OUVRE, comme la carte du son de contenu.
+            onEditBackgroundSound: editBackgroundSoundAction,
+            // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
+            // zone de texte, transcription défilante, et se rouvre au toucher.
+            onEditForegroundSound: { son in editForegroundSound(son) },
+            onDeleteForegroundSound: { son in deleteForegroundSound(son) },
+            foregroundSounds: foregroundSounds,
             // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à
@@ -623,6 +767,26 @@ extension MeeshyComposerHost {
     /// **Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)`**,
     /// le SEUL classeur MIME du dépôt (six sites de production) — jamais un
     /// `hasPrefix` recopié, qui divergerait de la casse et des repli qu'il gère.
+    /// **Ce que la rangée haute montre — les FONDS, et rien d'autre** (#4724).
+    ///
+    /// > Directive porteur 2026-09-01 : « le comportement actuel qui fait que
+    /// > lorsqu'on ajoute n'importe quel média ça vient [dans] la trail des
+    /// > slides doit être supprimé ! »
+    ///
+    /// Les deux barres hautes recevaient `documentLocalMedia` — la liste
+    /// ENTIÈRE. Une tuile paraissait donc pour tout ce qui entre : une image
+    /// posée SUR la scène, un vocal qui a déjà sa carte sous le texte, un PDF
+    /// qui n'est aucune page. Le carrousel grossissait sans qu'on ait ajouté de
+    /// page, et taper la tuile ne menait nulle part — l'hôte ne sait naviguer
+    /// que vers une slide, et ces médias n'en fondaient aucune.
+    ///
+    /// La règle lit l'index des FONDATIONS, jamais une seconde vérité :
+    /// `slideIdByMediaURL` dit déjà « ce média a fondé cette slide », ce qui est
+    /// exactement l'ensemble des fonds.
+    var headerTileMedia: [ComposerDocumentMedia] {
+        ComposerHeaderTiles.tiles(documentLocalMedia, founding: slideIdByMediaURL)
+    }
+
     var documentContentMedia: [ComposerContentMedia] {
         documentLocalMedia.compactMap { media in
             switch ComposerIngestRouter.route(mime: media.mimeType) {
@@ -715,6 +879,34 @@ extension MeeshyComposerHost {
     /// et ce n'est pas un rangement : monté en fermeture d'`.overlay` dans
     /// `body`, il plantait à l'ouverture — débordement de pile par profondeur de
     /// type SwiftUI. Le fichier du type porte la trace et la leçon.
+    /// **Le volet de description servi à la surface** (#4742).
+    ///
+    /// Il LIT ; la saisie reste l'affaire de `sceneDescriptionEditor`, qui
+    /// monte au-dessus du clavier. Deux champs pour un même texte auraient
+    /// divergé au premier réglage — ici il n'y en a qu'un, et le volet ouvre
+    /// celui-là.
+    ///
+    /// Pendant la SAISIE le volet s'efface : l'éditeur affiche déjà le texte,
+    /// et le laisser derrière montrerait la description en double.
+    var sceneDescriptionPanel: AnyView? {
+        guard !editsSceneDescription else { return nil }
+        return AnyView(
+            ComposerSceneDescriptionPanel(
+                text: sceneDescriptionBinding.wrappedValue,
+                placeholder: String(localized: "composer.description.placeholder",
+                                    defaultValue: "Ajouter une description",
+                                    bundle: .main),
+                isCollapsed: $sceneDescriptionCollapsed,
+                onEdit: {
+                    // Ouvrir la saisie DÉPLIE : écrire dans un volet rangé
+                    // laisserait l'auteur taper sans voir ce qu'il écrit.
+                    sceneDescriptionCollapsed = false
+                    editsSceneDescription = true
+                }
+            )
+        )
+    }
+
     var sceneDescriptionEditor: some View {
         ComposerSceneDescriptionEditor(
             text: sceneDescriptionBinding,
@@ -744,10 +936,43 @@ extension MeeshyComposerHost {
     /// descriptions ». Ce que la loi 9 / B1 protégeait (un seul contenu,
     /// aller-retour scène ↔ document) valait tant que la description ÉTAIT le
     /// texte du post ; cette prémisse est révoquée, la loi la suit.
+    /// **Le champ écrit ce que son RÔLE désigne** (#4890) — et le rôle vient du
+    /// FORMAT, jamais de ce site.
+    ///
+    /// `docs/product/meeshy-composer-modele.md` § 3 : en Story et en Réel le
+    /// texte de la slide EST le contenu de la publication ; en Post c'est la
+    /// **légende du média** de cette slide, et le `content` du post a son propre
+    /// logement. Le document nommait déjà ce champ comme le site fautif —
+    /// « juste en S/R et faux en P » — pendant que le code écrivait
+    /// `currentSlide.content` dans les deux cas.
+    ///
+    /// > **Un nom qui vaut pour deux rôles ne fait pas rougir quand on sert le
+    /// > mauvais.** C'est pourquoi la décision n'est plus prise ici sous le mot
+    /// > « description » : `ComposerSlideTextRole` la porte, une fois.
     var sceneDescriptionBinding: Binding<String> {
         Binding(
-            get: { viewModel.currentSlide.content ?? "" },
-            set: { viewModel.applyContentText($0) }
+            get: {
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    return viewModel.currentSlide.content ?? ""
+                case .caption:
+                    // Sans média sur la slide courante, il n'y a pas de légende
+                    // à lire — et surtout aucune raison de retomber sur le
+                    // contenu, qui appartient au post et non à ce média.
+                    guard let media = selectedSlideMediaURL else { return "" }
+                    return documentMediaCaptions[media] ?? ""
+                }
+            },
+            set: { texte in
+                switch ComposerSlideTextRole.role(for: selectedFormat) {
+                case .content:
+                    viewModel.applyContentText(texte)
+                case .caption:
+                    ComposerSlideTextRole.applyCaption(texte,
+                                                       to: selectedSlideMediaURL,
+                                                       in: &documentMediaCaptions)
+                }
+            }
         )
     }
     // MARK: - Le mood
@@ -848,6 +1073,18 @@ extension MeeshyComposerHost {
     var formatChip: some View {
         ComposerFormatFan(
             offeredFormats: profile.offeredFormats,
+            // **Les QUATRE formats restent au menu** (#4030) : ceux que la
+            // composition ne permet pas encore s'y montrent éteints avec leur
+            // raison, au lieu de disparaître. Mesuré au simulateur le
+            // 2026-08-30 : depuis l'entrée Post, l'éventail n'offrait que Post
+            // et Story — la bascule vers Réel et Mood semblait ne pas exister.
+            candidateFormats: ComposerFormat.allComposable,
+            // **La cause du refus, pas seulement le refus** (#4858). Les MÊMES
+            // deux faits que `moodGate` juge — un média ingéré, une scène — de
+            // sorte que la phrase servie ne peut pas contredire le verdict qui
+            // l'a produite. Les lire ici plutôt que de les recalculer dans
+            // l'éventail est ce qui garde les deux d'accord.
+            carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
             selection: formatSelection
         )
         .font(.footnote.weight(.semibold))
@@ -863,66 +1100,32 @@ extension MeeshyComposerHost {
     /// du jeu servi, donc la bande n'est pas ouvrable, ET il laisse
     /// `composerTrimBand` à `nil`, donc elle n'aurait rien à montrer si elle
     /// l'était. Une seule question posée une fois, deux conséquences.
-    var trimmableSelection: (url: URL, bounds: MediaTrimBounds,
-                             sourceDuration: Double, isVideo: Bool)? {
-        guard let id = selectedSceneItemId else { return nil }
-        return viewModel.sourceTrim(id: id)
+    /// L'unique lecture du juge de l'historique. Le socle posait la même
+    /// question à deux endroits ; le rail la pose une fois.
+    var composerServesHistory: Bool {
+        ComposerHistoryService.servesHistory(on: mountedComposerView)
     }
 
-    /// **La bande : la source entière, la fenêtre gardée, deux poignées.**
+    /// **Les jetons de l'objet sélectionné — un site unique.** Trois
+    /// consommateurs les lisent (la rangée, le jeton encadré, le geste), et
+    /// trois résolutions du même jeu peuvent diverger.
+    var sceneObjectChips: [ComposerObjectChips.Chip] {
+        ComposerObjectChips.chips(forSelected: selectedSceneItemId,
+                                  in: viewModel.currentSlide,
+                                  openableBands: openableSceneBands)
+    }
+
+    /// **Les bandes qu'on peut OUVRIR à cet instant** — un site unique.
     ///
-    /// Le composant vient du SDK (`MediaTrimStrip`), qui ne sait rien du
-    /// produit : il reçoit une durée, des bornes et rend des bornes. Ce que ce
-    /// meuble ajoute est ce que le SDK ne peut pas savoir — quel objet est
-    /// sélectionné, où son fichier est chargé, et à qui remettre le résultat.
-    ///
-    /// **L'écriture est IMMÉDIATE** (loi 7 du milestone) : chaque image du
-    /// geste écrit sur le modèle, donc la scène, l'aperçu et la vignette
-    /// suivent le doigt. Un « Appliquer » ferait choisir à l'aveugle.
-    var composerTrimBand: AnyView? {
-        guard let id = selectedSceneItemId, let sel = trimmableSelection else { return nil }
-        // La durée MESURÉE prime sur celle du modèle : voir
-        // `trimSourceDurations`. Tant que la mesure n'est pas revenue, la
-        // valeur du modèle sert de minorant — la bande est utilisable
-        // aussitôt, elle s'élargit quand la vérité arrive.
-        let duree = max(trimSourceDurations[id] ?? 0, sel.sourceDuration)
-        return AnyView(
-            MediaTrimStrip(
-                content: sel.isVideo ? .video(sel.url) : .audio,
-                sourceDuration: duree,
-                bounds: MediaTrimRule.resolved(start: sel.bounds.start,
-                                               end: sel.bounds.end,
-                                               sourceDuration: duree),
-                waveform: trimWaveform(for: id),
-                accent: MeeshyColors.brandPrimary,
-                onChange: { bornes in
-                    viewModel.setSourceTrim(id: id, bounds: bornes, sourceDuration: duree)
-                }
-            )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .task(id: sel.url) { await mesurerLaSource(id: id, url: sel.url) }
-        )
+    /// Elle servait deux consommateurs par deux appels séparés : la bande
+    /// elle-même, et les jetons de l'inspecteur qui doivent savoir si leur
+    /// destination mène quelque part. Deux calculs du même jeu peuvent
+    /// diverger, et le jour où ils divergent le jeton s'illumine sur une bande
+    /// que `opened` refuse — un contrôle inerte qui a l'air vivant, c'est-à-dire
+    /// exactement le défaut que ce câblage vient de fermer.
+    var openableSceneBands: Set<ComposerSceneBand> {
+        ComposerSceneCapabilities.bands(canTrimSelection: trimmableSelection != nil,
+                                        canStyleSelection: styleableSelection != nil)
     }
 
-    /// L'onde d'un SON, quand elle a été analysée. Une vidéo n'en porte pas sur
-    /// le modèle — la bande montre alors ses vignettes seules, ce qui suffit à
-    /// repérer un plan.
-    func trimWaveform(for id: String) -> [Float] {
-        viewModel.currentEffects.audioPlayerObjects?
-            .first(where: { $0.id == id })?
-            .waveformSamples ?? []
-    }
-
-    /// **Demander au FICHIER sa durée.** Le modèle ne la porte pas de façon
-    /// fiable (cf. `trimSourceDurations`), et c'est la seule mesure qui laisse
-    /// un rognage se DÉFAIRE : sans elle, chaque réouverture de la bande
-    /// montrerait une source rétrécie à la fenêtre précédente.
-    func mesurerLaSource(id: String, url: URL) async {
-        let asset = AVURLAsset(url: url)
-        guard let duree = try? await asset.load(.duration) else { return }
-        let secondes = CMTimeGetSeconds(duree)
-        guard secondes.isFinite, secondes > 0 else { return }
-        trimSourceDurations[id] = secondes
-    }
 }

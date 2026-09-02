@@ -60,6 +60,7 @@ final class PublishIntentTests: XCTestCase {
     ) -> PublishIntent {
         PublishIntent.document(
             localMedia: localMedia,
+            declaredType: nil,
             forcePlainPost: forcePlainPost,
             content: "bonjour",
             visibility: "PUBLIC",

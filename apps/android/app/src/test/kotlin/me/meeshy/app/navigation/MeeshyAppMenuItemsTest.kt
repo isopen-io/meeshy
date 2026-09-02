@@ -1,48 +1,62 @@
 package me.meeshy.app.navigation
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Ce que le menu deploye doit, et ne doit plus, offrir.
+ * Ce que l'echelle deployee doit, et ne doit plus, offrir.
  *
- * La liste est extraite de `rememberRadialMenuItems` (qui est @Composable, donc
- * hors de portee d'un test JVM) pour que la regle soit verifiable.
+ * La liste est extraite de [rememberMenuLadderItems] (qui est @Composable, donc
+ * hors de portee d'un test JVM) pour que la regle soit verifiable. Parite iOS
+ * stricte : 6 barreaux, Communautes differee (aucune destination Android),
+ * Reels retire (appui long seul). Contacts (`menu_contacts`) est le SEUL
+ * barreau retenu qui n'a pas d'equivalent iOS direct — il porte le nominal
+ * a un geste vers l'onglet Contacts par defaut depuis que People a quitte
+ * le TopAppBar de l'ecran Conversations.
  */
 class MeeshyAppMenuItemsTest {
 
-    // "Feed" quitte le menu : un simple tap du bouton gauche y mene desormais.
-    // L'y laisser offrirait deux chemins pour un meme geste.
     @Test
-    fun `the deployed menu no longer offers Feed`() {
-        assertFalse(menuItemLabelKeys().contains("tab_feed"))
+    fun `the ladder offers exactly the six rungs, in order`() {
+        assertThat(menuLadderLabelKeys())
+            .containsExactly(
+                "menu_my_links",
+                "menu_notifications",
+                "tab_calls",
+                "menu_discover",
+                "menu_contacts",
+                "menu_settings",
+            )
+            .inOrder()
     }
 
-    // "Reels" RESTE : il n'est atteignable que par appui long, un geste non
-    // decouvrable, qui ne doit pas etre le seul chemin vers une section entiere.
     @Test
-    fun `the deployed menu still offers Reels`() {
-        assertTrue(menuItemLabelKeys().contains("menu_reels"))
+    fun `settings is always the last rung`() {
+        assertThat(menuLadderLabelKeys().last()).isEqualTo("menu_settings")
     }
 
-    // L'entree reglages dit ce qu'elle FAIT : libelle "Settings", icone engrenage,
-    // route settings. L'ancien libelle "Profile" sous un engrenage menant aux
-    // reglages cumulait trois signaux contradictoires pour une meme entree.
     @Test
-    fun `the deployed menu labels the settings entry as settings, not profile`() {
-        assertTrue(menuItemLabelKeys().contains("menu_settings"))
-        assertFalse(menuItemLabelKeys().contains("tab_profile"))
+    fun `the ladder no longer offers Reels`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_reels")
     }
 
-    // Le menu reste la voie d'acces aux sections sans bouton dedie.
     @Test
-    fun `the deployed menu keeps the sections that have no dedicated button`() {
-        val keys = menuItemLabelKeys()
-        assertTrue(keys.contains("tab_messages"))
-        assertTrue(keys.contains("tab_calls"))
-        assertTrue(keys.contains("tab_activity"))
-        assertTrue(keys.contains("menu_contacts"))
-        assertTrue(keys.contains("menu_new_conversation"))
+    fun `the ladder no longer offers a dedicated Messages rung`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("tab_messages")
+    }
+
+    @Test
+    fun `the ladder no longer offers New Conversation`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_new_conversation")
+    }
+
+    @Test
+    fun `the ladder offers Contacts — the nominal one-gesture path since People left the header`() {
+        assertThat(menuLadderLabelKeys()).contains("menu_contacts")
+    }
+
+    @Test
+    fun `the ladder does not yet offer Communities`() {
+        assertThat(menuLadderLabelKeys()).doesNotContain("menu_communities")
     }
 }

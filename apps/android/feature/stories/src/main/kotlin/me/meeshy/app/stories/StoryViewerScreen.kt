@@ -44,6 +44,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -140,6 +141,8 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showSendTo by remember { mutableStateOf(false) }
+    var sendToStoryId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -325,9 +328,10 @@ fun StoryViewerScreen(
         slideDurationMs,
         showViewers,
         showComments,
+        showSendTo,
         railOverlayActive,
     ) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || railOverlayActive) return@LaunchedEffect
+        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         // Gate: hold the countdown at empty until the current slide's media has
@@ -466,6 +470,20 @@ fun StoryViewerScreen(
             }
         }
 
+        // The author's freehand drawing, read-only — a stroke-only slide is publishable
+        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
+        // the reader (and the author, re-viewing their own story) would see a bare background.
+        if (slide != null && slide.strokes.isNotEmpty()) {
+            StoryDrawingLayer(
+                strokes = slide.strokes,
+                isCapturing = false,
+                activeColorHex = "#FFFFFF",
+                activeWidthDesign = 0.0,
+                onStrokeCaptured = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         slide?.backgroundAudioUrl?.let { url ->
             key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = slide.backgroundLoop) }
         }
@@ -585,6 +603,14 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                onClick = {
+                                    showOptions = false
+                                    sendToStoryId = state.currentStoryId
+                                    showSendTo = true
+                                },
+                            )
                             if (state.isOwnStory) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
@@ -746,6 +772,18 @@ fun StoryViewerScreen(
             storyId = commentsStoryId,
             accentHex = accent,
             onDismiss = { showComments = false },
+        )
+    }
+
+    val frozenSendToStoryId = sendToStoryId
+    if (showSendTo && frozenSendToStoryId != null) {
+        StorySendToSheet(
+            storyId = frozenSendToStoryId,
+            accentHex = accent,
+            onDismiss = {
+                showSendTo = false
+                sendToStoryId = null
+            },
         )
     }
 }
@@ -1003,6 +1041,9 @@ private fun StoryTextObjectLayer(
                 textAlign = textAlign,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = with(density) { fontSizePx.toSp() },
+                // The EFFECT axis (#4870) — the same table as the composer preview
+                // and the two other clients, at the glyphs' real pixel size.
+                style = LocalTextStyle.current.copy(shadow = animated.effect.composeShadow(fontSizePx, color)),
             )
         }
     }

@@ -17,6 +17,7 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -33,7 +34,8 @@ import { logger } from './messages-shared';
 function cleanAttachmentsForApi(
   attachments: any[],
   languageFilter?: readonly string[],
-  currentParticipantId?: string
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
 ): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
@@ -59,11 +61,12 @@ function cleanAttachmentsForApi(
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
 
-    // #4177 — `currentUserConsumption` (progression PERSONNELLE de lecture,
-    // par pièce jointe) retiré : ni déclaré dans `messageAttachmentSchema`
-    // ni lu par aucun client — fast-json-stringify le retirait depuis
-    // toujours. Réintroduire cette projection exige de la déclarer d'abord
-    // au schéma partagé (hors territoire de ce correctif).
+    // #3909 — la progression PERSONNELLE de lecture, REVENUE, et cette fois
+    // déclarée au `messageAttachmentSchema` avant d'être calculée. #4177
+    // l'avait retirée parce qu'elle mourait à la sérialisation ; l'ordre
+    // corrigé est déclaration → projection → lecteur. `null` = jamais consommé
+    // par ce participant, ce qu'un lecteur doit distinguer de « position 0 ».
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -264,6 +267,21 @@ export function buildMessageListSelect(options: {
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // La protection du message CITÉ — le niveau que ce select ne
+            // demandait pas du tout, alors que `attachmentFullSelect` la sert
+            // déjà sur ses PIÈCES JOINTES (`reply-attachment-protection-contract`).
+            // Sans ces champs, un client ne peut pas savoir qu'il rend le texte
+            // d'un message à vue unique : répondre à un message protégé en
+            // publiait le contenu entier dans chaque bulle-citation du fil.
+            // Même famille, une couche plus haut : ce que la route CONSTRUIT et
+            // ce que le schéma DÉCLARE sont deux vérités séparées — les deux
+            // ont dû bouger.
+            isViewOnce: true,
+            isBlurred: true,
+            expiresAt: true,
+            effectFlags: true,
+            isEncrypted: true,
+            encryptionMode: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
@@ -370,6 +388,82 @@ export async function loadMessageReadStatusMap(
 }
 
 /**
+ * La progression PERSONNELLE de lecture d'un participant sur une pièce jointe.
+ *
+ * Sert la reprise cross-device : rouvrir un vocal ou une vidéo repart là où on
+ * s'était arrêté, sur n'importe quel appareil (#3909).
+ */
+export type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+/**
+ * Charge la progression du participant courant sur les pièces jointes de la
+ * PAGE — une seule requête, bornée aux identifiants rendus, scopée au
+ * participant. Miroir exact de `userReactionsMap`.
+ *
+ * ## Ce champ a déjà vécu, et il est mort d'être indéclaré
+ *
+ * La projection existait depuis juin 2026 et `fast-json-stringify` la retirait
+ * de CHAQUE réponse, faute d'être déclarée au `messageAttachmentSchema` : deux
+ * requêtes Prisma par page payées pour un champ qu'aucun client ne recevait.
+ * #4177 a retiré ce travail mort, à raison.
+ *
+ * Ce qui la ramène n'est pas l'inverse de ce retrait : c'est la DÉCLARATION,
+ * posée d'abord (`packages/shared/types/api-schemas.ts`). Sans elle, ce
+ * chargeur remourrait en silence — et le lecteur web qui l'attend
+ * (`useMediaConsumptionReporter`) serait un contrôle non alimenté, ce qui se
+ * voit encore moins qu'un champ absent.
+ */
+export async function loadCurrentUserConsumptionMap(
+  prisma: PrismaClient,
+  messages: readonly any[],
+  currentParticipantId: string | undefined
+): Promise<Map<string, CurrentUserConsumption>> {
+  const map = new Map<string, CurrentUserConsumption>();
+  if (!currentParticipantId || messages.length === 0) return map;
+
+  const attachmentIds: string[] = messages.flatMap((m: any) =>
+    Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+  );
+  if (attachmentIds.length === 0) return map;
+
+  try {
+    const rows = await prisma.attachmentStatusEntry.findMany({
+      where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+      // Borne EXACTE, pas arbitraire : `@@unique([attachmentId, participantId])`
+      // garantit au plus une ligne par pièce jointe pour ce participant, donc
+      // `take` ne peut rien tronquer — il DIT seulement la borne que le couple
+      // impose déjà, ce que le cliquet des `findMany` non bornés demande.
+      take: attachmentIds.length,
+      select: {
+        attachmentId: true,
+        lastPlayPositionMs: true,
+        listenedComplete: true,
+        lastWatchPositionMs: true,
+        watchedComplete: true,
+      },
+    });
+    for (const row of rows) {
+      map.set(row.attachmentId, {
+        lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+        listenedComplete: row.listenedComplete ?? false,
+        lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+        watchedComplete: row.watchedComplete ?? false,
+      });
+    }
+  } catch (err) {
+    // Une reprise absente coûte un redémarrage au début ; faire échouer la
+    // liste entière coûte la conversation. La carte vide est le bon repli.
+    logger.warn('[CONVERSATIONS] Failed to load media consumption:', err);
+  }
+  return map;
+}
+
+/**
  * Sérialise une ligne `Message` de `GET /conversations/:id/messages` au
  * format `GatewayMessage` (@meeshy/shared/types) : présence de l'expéditeur,
  * pièces jointes nettoyées, traductions filtrées par le Prisme, accusés de
@@ -390,6 +484,8 @@ export type MessageRowMappingContext = {
   }>;
   senderPresenceVis: any;
   listMissingEntry: any;
+  /** #3909 — la progression de lecture du participant, par pièce jointe. */
+  consumptionMap: Map<string, CurrentUserConsumption>;
 };
 
 export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext): any {
@@ -520,7 +616,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
           _count: message._count
         };
 
@@ -538,7 +634,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
           // — sans lui, une citation d'un message géolocalisé n'affiche
           // jamais sa position, même si la liste principale la restitue.
-          mappedMessage.replyTo = hoistLocationOnto({
+          mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             sender: replySender ? {
@@ -547,7 +643,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          });
+          }));
         }
 
         return mappedMessage;
@@ -650,6 +746,7 @@ export async function enrichForwardedMessagesForList(
               // pas celle de `msg` lui-même — sans elle, un message transféré
               // géolocalisé n'affiche jamais sa position dans l'aperçu.
               const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
+              const forwardedSticker = stickerFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -663,6 +760,7 @@ export async function enrichForwardedMessagesForList(
                 } : null,
                 attachments: original.attachments,
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
+                ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };
             }
           }

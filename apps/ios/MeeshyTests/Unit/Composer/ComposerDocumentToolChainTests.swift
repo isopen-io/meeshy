@@ -152,14 +152,15 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
             ComposerDocumentTool.canonicalRow,
-            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · mention · document · lieu · micro "
+            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · doc · lieu · micro · mention "
                 + "— jamais d'une liste à part."
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .mention, .document, .place, .microphone],
-            "La rangée servie doit couvrir la rangée canonique dans l'ordre exact que les doigts "
-                + "connaissent depuis la feuille historique. `.mention` se range à côté de l'emoji : "
+            [.photo, .camera, .emoji, .document, .place, .microphone, .mention],
+            "La rangée servie doit couvrir la rangée canonique dans l'ordre de la maquette `1a` "
+                + "(#4071). `.mention` est passé en queue parce qu'au 4e rang il poussait trois "
+                + "outils hors champ, et qu'il est le seul à avoir une seconde porte — taper `@` : "
                 + "les deux seuls outils dont la destination est le TEXTE, pas une pièce jointe."
         )
     }
@@ -245,9 +246,10 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             return XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         XCTAssertTrue(
-            compact(code).contains(compact("servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }")),
+            compact(code).contains(compact("ComposerDocumentTool.servedRow(for: selectedFormat)")),
             "`servedDocumentTools` doit rester une PROJECTION de `ComposerDocumentTool.servedRow` — jamais "
-                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique."
+                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique. "
+                + "Depuis #4700 la projection prend le FORMAT : une story n'a pas de champ de contenu à outiller."
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
@@ -303,6 +305,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
         let intent = PublishIntent.document(
             localMedia: brouillon.localMedia,
+            declaredType: nil,
             forcePlainPost: brouillon.forcePlainPost,
             content: brouillon.text,
             visibility: brouillon.visibility.rawValue,
@@ -427,6 +430,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
         let intent = PublishIntent.document(
             localMedia: brouillon.localMedia,
+            declaredType: nil,
             forcePlainPost: brouillon.forcePlainPost,
             content: brouillon.text,
             visibility: brouillon.visibility.rawValue,
@@ -466,6 +470,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
         let intent = PublishIntent.document(
             localMedia: [vocal],
+            declaredType: nil,
             forcePlainPost: false,
             content: nil,
             visibility: "PUBLIC",
@@ -491,6 +496,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     func test_unDocumentSansVocal_gardeLaLangueDeLaCapsule() {
         let intent = PublishIntent.document(
             localMedia: [],
+            declaredType: nil,
             forcePlainPost: false,
             content: "Hello everyone",
             visibility: "PUBLIC",

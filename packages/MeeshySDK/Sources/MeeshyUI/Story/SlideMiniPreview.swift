@@ -54,8 +54,15 @@ private struct StoryMiniFilterModifier: ViewModifier {
 }
 
 /// Mini composite preview of a slide's canvas at t=0.
-/// Renders all layers (background, drawing, foreground media, text, stickers)
-/// preserving normalized position, scale, and rotation of each element.
+/// Rend TOUTES les couches de la slide — fond, dessin, média de premier plan,
+/// texte, stickers, **pastille de lieu et pastille audio** — en préservant la
+/// position normalisée, l'échelle et la rotation de chaque élément.
+///
+/// **Le doc-comment promettait « all layers » et il en manquait trois** (#4743) :
+/// ni `locationObjects`, ni `audioPlayerObjects`, et un sticker GABARIT y
+/// paraissait sous son repli emoji au lieu de son dessin. La vignette mentait
+/// donc sur la slide — un auteur qui avait posé un lieu ne le voyait pas dans
+/// la bande.
 struct SlideMiniPreview: View {
     let effects: StoryEffects
     let bgImage: UIImage?
@@ -70,6 +77,8 @@ struct SlideMiniPreview: View {
                 foregroundMediaLayer(in: geo.size)
                 textLayer(in: geo.size)
                 stickerLayer(in: geo.size)
+                locationLayer(in: geo.size)
+                audioLayer(in: geo.size)
                 // Le dessin est la couche la PLUS HAUTE — parité avec
                 // `StoryRenderer` (overlay dessin à zPosition 9999, au-dessus de
                 // texte/média/stickers) et avec le composite ThumbHash. Avant, le
@@ -255,11 +264,102 @@ struct SlideMiniPreview: View {
     private func stickerLayer(in size: CGSize) -> some View {
         let stickers = effects.stickerObjects ?? []
         ForEach(stickers) { sticker in
-            Text(sticker.emoji)
-                .font(.system(size: max(3, CGFloat(sticker.scale) * 4)))
-                .rotationEffect(.degrees(Double(sticker.rotation)))
-                .position(x: CGFloat(sticker.x) * size.width,
-                          y: CGFloat(sticker.y) * size.height)
+            if sticker.kind == .template,
+               let dessin = StickerTemplateRenderer.image(
+                   templateID: sticker.templateId,
+                   slots: sticker.slots,
+                   metrics: StickerTemplateMetrics.sticker(
+                       geometry: CanvasGeometry(renderSize: size),
+                       baseSize: sticker.baseSize,
+                       scale: sticker.scale),
+                   screenScale: UIScreen.main.scale)?.0 {
+                // **La vignette passe par le moteur QUI DESSINE la scène.**
+                // Peindre `Text(sticker.emoji)` y montrait le repli — 💕 pour
+                // deux cœurs, 🕐 pour un ruban d'heure — c'est-à-dire ce que
+                // voit un lecteur qui ne sait PAS rendre la décoration, pas ce
+                // que l'auteur a posé.
+                Image(uiImage: dessin)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: dessin.size.width, height: dessin.size.height)
+                    .rotationEffect(.degrees(Double(sticker.rotation)))
+                    .position(x: CGFloat(sticker.x) * size.width,
+                              y: CGFloat(sticker.y) * size.height)
+            } else if let bitmap = StoryStickerLayer.bitmapCacheKeys(for: sticker)
+                        .lazy.compactMap({ loadedImages[$0] }).first {
+                // **Un sticker IMAGE se peint dans la vignette** (#4852) — la
+                // même taille, la même rotation et la même position que le
+                // glyphe, le bitmap ajusté dans le carré du sticker comme sur
+                // la scène (`StoryStickerLayer`, gravité `.resizeAspect`).
+                let side = CanvasGeometry.stickerFontSize(
+                    baseSize: sticker.baseSize, scale: sticker.scale,
+                    canvasWidth: size.width)
+                Image(uiImage: bitmap)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: side, height: side)
+                    .rotationEffect(.degrees(Double(sticker.rotation)))
+                    .position(x: CGFloat(sticker.x) * size.width,
+                              y: CGFloat(sticker.y) * size.height)
+            } else {
+                // La MÊME règle de taille que la scène, le composite et
+                // l'export (`CanvasGeometry.stickerFontSize`, #4824) : la
+                // vignette ignorait `baseSize` et la largeur de scène.
+                Text(sticker.wireEmoji)
+                    .font(.system(size: CanvasGeometry.stickerFontSize(
+                        baseSize: sticker.baseSize, scale: sticker.scale,
+                        canvasWidth: size.width)))
+                    .rotationEffect(.degrees(Double(sticker.rotation)))
+                    .position(x: CGFloat(sticker.x) * size.width,
+                              y: CGFloat(sticker.y) * size.height)
+            }
+        }
+    }
+
+    // MARK: - Location Layer (#4743)
+
+    /// La pastille de lieu passe par le MÊME moteur que la scène — la vignette
+    /// et le canvas ne peuvent donc pas diverger sur son allure.
+    @ViewBuilder
+    private func locationLayer(in size: CGSize) -> some View {
+        ForEach(effects.locationObjects) { lieu in
+            if let dessin = StickerTemplateRenderer.image(
+                templateID: StoryLocationLayer.resolvedTemplateID(lieu.styleId),
+                slots: StoryLocationLayer.templateSlots(for: lieu.place),
+                metrics: StickerTemplateMetrics.location(
+                    geometry: CanvasGeometry(renderSize: size),
+                    scale: CGFloat(lieu.scale)),
+                screenScale: UIScreen.main.scale)?.0 {
+                Image(uiImage: dessin)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: dessin.size.width, height: dessin.size.height)
+                    .rotationEffect(.degrees(lieu.rotation))
+                    .position(x: CGFloat(lieu.x) * size.width,
+                              y: CGFloat(lieu.y) * size.height)
+            }
+        }
+    }
+
+    // MARK: - Audio Layer (#4743)
+
+    /// **Une APPROXIMATION, et elle est assumée.** La pastille audio réelle est
+    /// une vue SwiftUI vivante (forme d'onde animée, état de lecture) qu'on ne
+    /// peut pas peindre à 60 × 106 points sans la rendre illisible. Ce qu'il
+    /// faut dire à cette taille, c'est « il y a du son ICI », et une capsule à
+    /// note le dit — la vignette du texte approxime déjà pour la même raison.
+    @ViewBuilder
+    private func audioLayer(in size: CGSize) -> some View {
+        let pastilles = effects.audioPlayerObjects ?? []
+        ForEach(pastilles) { audio in
+            let côté = max(4, size.width * 0.16)
+            Image(systemName: "music.note")
+                .font(.system(size: côté * 0.62, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: côté, height: côté)
+                .background(Circle().fill(Color.black.opacity(0.55)))
+                .position(x: CGFloat(audio.x) * size.width,
+                          y: CGFloat(audio.y) * size.height)
         }
     }
 

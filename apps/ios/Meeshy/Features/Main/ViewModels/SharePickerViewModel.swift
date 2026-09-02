@@ -78,7 +78,7 @@ final class SharePickerViewModel: ObservableObject {
     private func refreshConversations() async {
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
-                endpoint: "/conversations",
+                ConversationsEndpoint.root,
                 offset: 0,
                 limit: 50
             )
@@ -146,7 +146,7 @@ final class SharePickerViewModel: ObservableObject {
                 attachmentIds: nil
             )
             let _: APIResponse<SendMessageResponseData> = try await api.post(
-                endpoint: "/conversations/\(conversationId)/messages",
+                ConversationsEndpoint.byIdMessages(id: conversationId),
                 body: body
             )
             sentToIds.insert(conversationId)
@@ -178,7 +178,7 @@ final class SharePickerViewModel: ObservableObject {
         guard networkMonitor.isOnline else { return nil }
         do {
             let response: APIResponse<PostShareResult> = try await api.post(
-                endpoint: "/posts/\(storyId)/share",
+                PostsEndpoint.byPostIdShare(postId: storyId),
                 body: StoryShareLinkRequest(platform: "system", generateLink: true)
             )
             return response.data.shortUrl

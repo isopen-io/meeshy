@@ -448,7 +448,31 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Logout
 
+    /// Déconnexion COMPLÈTE : la session finit et le compte disparaît du
+    /// sélecteur de l'écran de connexion.
     public func logout() async {
+        await logout(forgettingAccount: true)
+    }
+
+    /// Déconnexion, en choisissant si le compte est OUBLIÉ.
+    ///
+    /// `forgettingAccount: false` sert le « changer de compte » : la session
+    /// se termine exactement comme une déconnexion — jeton, jeton de session,
+    /// profil et caches par compte sont effacés du trousseau et de la mémoire —
+    /// mais l'entrée du SÉLECTEUR survit, si bien que l'écran de connexion
+    /// propose encore le compte au lieu d'exiger de retaper son identifiant.
+    ///
+    /// **Ce n'est pas un affaiblissement.** Une `SavedAccount` ne porte que
+    /// l'identité (nom, avatar, dernière activité) : `attemptAccountLogin`
+    /// appelle `login(username:password:)`, donc revenir sur le compte
+    /// redemande le mot de passe, exactement comme avant. Ce que le drapeau
+    /// épargne est la SAISIE de l'identifiant, jamais l'authentification.
+    ///
+    /// Le paramètre ne remonte pas dans `AuthManaging` : son unique
+    /// consommateur est l'écran de réglages, qui tient le type concret en
+    /// `@EnvironmentObject`, et l'ajouter au protocole casserait les mocks de
+    /// tous ses autres conformants sans servir personne.
+    public func logout(forgettingAccount: Bool) async {
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
@@ -538,7 +562,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
-        removeFromSavedAccounts(userId: userId)
+        // Le SEUL geste que « changer de compte » épargne : l'entrée du
+        // sélecteur. Tout ce qui précède — trousseau, caches, files — est
+        // effacé dans les deux cas.
+        if forgettingAccount {
+            removeFromSavedAccounts(userId: userId)
+        }
 
         activeUserId = nil
         currentUser = nil

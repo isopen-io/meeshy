@@ -5,7 +5,16 @@ Ce fichier est le contrat complet ; le prompt `/loop` s'y réfère au lieu de le
 
 ---
 
-## Les sept lois
+## Les huit lois
+
+> **Ces huit-ci sont les règles de la BOUCLE, numérotées indépendamment des DOUZE
+> lois de la planche** (`docs/product/planche-meeshy-composer.md` § « Les douze
+> lois »). Les deux numérotations se croisent — « loi 4 » vaut ici *budget de
+> lignes* et là-bas *rien à l'écran sans raison* — et le code du composer cite
+> « loi N » près de deux cents fois **en visant toujours la planche**. Donc :
+> dans cette page, une citation nue renvoie à la planche ; une règle de cette
+> liste se cite « **règle N ci-dessus** ».
+
 
 **1. PRÉSERVER ET COMPLÉTER, jamais supprimer.** La maquette est une **cible**, pas une liste
 d'autorisations. Ce que l'app porte en plus du document **se conserve**. Un élément absent de la
@@ -42,6 +51,25 @@ intermédiaire, sans attendre la fermeture d'une feuille. Un réglage qui ne pre
 « Appliquer » fait choisir à l'aveugle. **Corollaire :** un éditeur temps réel doit porter un
 **snapshot** pour que l'annulation restaure vraiment ce qui existait avant.
 
+**8. LE PRISME N'AFFICHE QUE CE DONT ON A BESOIN, AU MOMENT OÙ ON EN A BESOIN**
+(directive porteur, 2026-08-30). Énoncée sur le `⋯` — *« le menu ⋯ apparaît quand il y a du
+contenu pour appliquer des options »* — et **à maintenir pour TOUS** les contrôles, pas seulement
+celui-là. Un contrôle dont l'objet n'existe pas ENCORE est absent, et il paraît à l'instant où son
+objet apparaît.
+
+C'est la **jumelle temporelle de la loi 4 de la PLANCHE** : celle-ci juge la CAPACITÉ (un contrôle sans effet est
+absent), celle-ci juge le MOMENT. Les deux se répondent, et aucune ne remplace l'autre.
+
+Deux exceptions, **nommées** — une exception implicite est une infraction :
+- **l'action terminale** (`Publier`) reste peinte et grisée avec sa raison : la masquer laisserait
+  l'auteur sans savoir par où sortir ;
+- **les FORMATS impossibles** restent au menu, éteints avec leur raison (#4030) — un format
+  enseigne une règle du produit, là où un contrôle ne fait qu'agir.
+
+Tenue par `ComposerProgressiveDisclosureGuardTests`, qui épingle chaque chrome optionnel derrière sa
+condition. Le cliquet n'existe pas pour les quatre sites qui obéissent déjà : il existe pour le
+CINQUIÈME contrôle, celui qu'on ajoutera sans y penser.
+
 > **Ce que la loi 7 ne dit PAS.** Elle gouverne l'**effet**, pas le bouton. Les captures cibles
 > portent des `OK` (`1c`), `APPLIQUER` (`2l`), `ENREGISTRER` (`3c`) — et ce ne sont pas des
 > infractions : ces boutons **ferment une surface**, ils ne déclenchent rien. Le test qui tranche est
@@ -76,7 +104,7 @@ mène. Six tours, précédés des découpes.
 
 | Tour | Ce qu'il pose | Vues | Issues |
 |---|---|---|---|
-| **t0** | Les découpes hors budget (loi 4) — préalable à toute addition | — | #4102 #4103 #4104 #4105 |
+| **t0** | Les découpes hors budget (règle 4 ci-dessus) — préalable à toute addition | — | #4102 #4103 #4104 #4105 |
 | **t1** | **Le tronc** — sans lui rien n'est atteignable | `1a` → `1b` → `1c` → `1f` | #4071 #4062 #4064 · #4072 #4061 #4070 #4065 · #4073 #4063 · #4076 |
 | **t2** | Les branches d'édition, toutes ouvertes depuis `1c` | `1d` `1e` `1g` `2d` `2e` `3b` `3c` | #4074 #4075 #4077 #4082 #4083 #4092 #4093 |
 | **t3** | Les autres entrées vers le tronc | `3a` `2a` `2b` `2c` `4b` `4c` | #4091 #4079 #4080 #4081 #4099 #4100 |
@@ -208,7 +236,7 @@ ce qui diffère et ce qui dépasse. Rappel de la loi 1 : « dépasse » ≠ « �
 ### 6 — Implémenter
 
 Réutiliser ou factoriser l'existant du composer (36 fichiers sous `Features/Main/Composer`) plutôt
-que réécrire. Si le fichier visé dépasse 1 100 lignes, **le découper d'abord** (loi 4).
+que réécrire. Si le fichier visé dépasse 1 100 lignes, **le découper d'abord** (règle 4 ci-dessus).
 TDD quand le comportement est testable ; le gate iOS est non négociable.
 
 ### 7 — Vérifier
@@ -231,6 +259,37 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 
 ---
 
+## Quelle SURFACE porte les 31 vues — et comment l'atteindre
+
+**Les vues de ce milestone vivent sur `ComposerSceneSurface`, et une seule route y mène.**
+`ComposerMountedView.mounted(surface:hasScene:)` tranche en trois lignes :
+
+```swift
+case .scene:    return .atelier          // profil STORY → l'atelier historique du SDK
+case .mood:     return .mood
+case .document: return hasScene ? .scene : .document
+```
+
+Le profil **STORY monte l'atelier**, toujours, quel que soit son fond. `ComposerSceneSurface`
+n'est atteinte que par le profil **DOCUMENT portant une scène** — c'est-à-dire un POST auquel
+on a ajouté un média. Ce n'est pas un défaut : c'est la loi 1 — l'ancien chemin reste routé
+tant que la matrice des 31 vues n'est pas complète, et le décommissionnement est un lot
+séparé.
+
+**Conséquence pour la vérification** : ouvrir le composer depuis le plateau des stories et
+chercher son rail *leading* ou sa rangée basse ne montre RIEN, et l'écran a l'air correct —
+c'est l'atelier faisant son travail. Une demi-heure y a été perdue le 2026-08-31. Le chemin
+qui sert :
+
+1. entrer par le composer de POST (le `+` du fil, ou la porte document) ;
+2. y **ajouter un média** — sans lui, `hasScene` est faux et c'est la surface document qui
+   monte ;
+3. la scène 9:16 apparaît alors avec ses deux rails et sa rangée basse.
+
+> Avant de conclure qu'une vue n'est pas montée, **vérifier quelle surface l'écran montre**.
+> La question « est-ce POSÉ ? » a une couche au-dessus d'elle : « quelle SURFACE est
+> posée ? » — et aucune des deux ne rougit toute seule.
+
 ## Pièges mesurés
 
 | Piège | Symptôme | Parade |
@@ -242,6 +301,9 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 | ids de planches commençant par un chiffre | `'#1a' is not a valid selector` | `[id="1a"]` |
 | Playwright sans navigateur installé | `Executable doesn't exist` | Chrome installé, via `capture-cibles.js` |
 | `git commit` emporte tout l'index | le WIP d'une autre session part avec | `git commit -- <chemins>` |
+| `test-without-building` après un build ROUGE | suites nommées, comptes plausibles, **vert** — sur le bundle d'AVANT | gater sur le CODE DE SORTIE du `build-for-testing` (`BUILD_RC=$?` en ligne suivante, sans tube). **Pas** sur `grep "TEST BUILD SUCCEEDED"` : avec `-quiet` la ligne n'est pas imprimée et un build vert est déclaré rouge |
+| `idb ui tap` deux fois pour un double-tap | ~1,1 s par appel : le geste dégénère (éditeur d'objet, zoom viewport) | aucun double-tap n'est synthétisable — éprouver le layer, pas la capture |
+| Composer ouvert depuis le plateau des STORIES | ni rail *leading*, ni rangée basse, et l'écran a l'air correct | c'est l'atelier — entrer par le POST + un média (§ ci-dessus) |
 
 ## Ce qui ferme une issue
 
@@ -252,4 +314,4 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 5. **Chaque vignette de la vue montre la vraie donnée** (loi 6) — vérifié sur la capture, pas sur le code.
 6. **Chaque réglage de la vue s'y voit en direct** (loi 7) — la modification et son annulation, toutes deux filmées ou capturées.
 7. **L'entrée et la sortie de la vue sont câblées** — le chemin complet depuis le fil a été parcouru au simulateur.
-8. **La revue est conduite par Opus** et conclut sur les sept lois, une par une.
+8. **La revue est conduite par Opus** et conclut sur les huit lois, une par une.

@@ -15,7 +15,7 @@ struct AffiliatesListView: View {
     var body: some View {
         VStack(spacing: 0) {
             ContactsSearchField(
-                placeholder: String(localized: "contacts.affiliates.search-placeholder", defaultValue: "Rechercher un affilie", bundle: .main),
+                placeholder: String(localized: "contacts.affiliates.search-placeholder", defaultValue: "Rechercher un affilié", bundle: .main),
                 query: $viewModel.searchQuery
             )
             .padding(.horizontal, 16)

@@ -1,4 +1,8 @@
 import XCTest
+// `StoryTextObject` / `StoryTextStyle` sont des modèles du SDK : les nommer
+// plutôt que compter sur la visibilité transitive de `@testable import Meeshy`,
+// qui casse au premier renommage.
+import MeeshySDK
 @testable import Meeshy
 
 /// #4064 — **la rangée d'outils cesse d'être permanente, et le socle ne bouge
@@ -327,5 +331,159 @@ final class ComposerSceneBandOpeningContrastGuardTests: XCTestCase {
         XCTAssertTrue(compact(try bandSource()).contains("onDarkSurface:true"),
                       "Le plateau est sombre EN PERMANENCE : une couleur adaptative y peint "
                         + "du sombre sur du sombre dès que l'appareil quitte la nuit.")
+    }
+}
+
+/// **La zone basse porte UN seul contenu, et l'exclusion se lit sur le rail.**
+///
+/// La surface écrivait `if let toolOptions { … } else if let band { … }` pendant
+/// que le meuble passait le panneau d'options **inconditionnellement**. La
+/// branche `band` n'a donc jamais été atteinte : la palette de fond (`1b`), la
+/// bande de rognage (`2d`) et **tout jeton d'objet dont la destination est une
+/// bande** (`1c`) étaient inertes depuis leur livraison.
+///
+/// > Le commentaire qui décrit ce mécanisme existait déjà, douze lignes plus
+/// > bas, sur la rangée de jetons — écrit dans le lot qui l'y avait corrigé.
+/// > **Un diagnostic posé au-dessus d'une ligne qui a encore le défaut ne le
+/// > signale pas : il prouve qu'on le savait.**
+final class ComposerLowZoneTests: XCTestCase {
+
+    // MARK: - La règle
+
+    /// Le témoin qui était IMPOSSIBLE à écrire avant la règle : sans outil
+    /// ouvert, une bande servie prend le bas.
+    func test_sansOutilOuvert_laBandeServiePrendLeBas() {
+        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: .palette),
+                       .band(.palette))
+        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: .timeline),
+                       .band(.timeline))
+    }
+
+    /// Un outil ouvert prend la place, quelle que soit la bande demandée — les
+    /// deux ne coexistent jamais.
+    func test_unOutilOuvert_prendLaPlaceDeLaBande() {
+        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: true, band: .palette),
+                       .toolOptions)
+        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: true, band: nil),
+                       .toolOptions)
+    }
+
+    /// Ni outil ni bande ⇒ le bas ne porte que le socle (loi 4).
+    func test_niOutilNiBande_leBasNePorteQueLeSocle() {
+        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: nil), .nothing)
+    }
+
+    /// **Les deux règles du bas répondent à la MÊME question.** La rangée de
+    /// jetons et la zone basse consultent toutes deux « un outil est-il
+    /// ouvert ? » ; si elles divergeaient, un jeton pourrait paraître au-dessus
+    /// des options de l'outil qui vient de le remplacer.
+    func test_lesJetonsEtLaZoneBasse_neSeContredisentJamais() {
+        let jeton = ComposerObjectChips.Chip(id: "c", label: "L", destination: .palette)
+        for outilOuvert in [true, false] {
+            let jetonsServis = ComposerObjectChips.isServed(toolIsOpen: outilOuvert,
+                                                            chips: [jeton])
+            let zone = ComposerLowZone.resolve(toolIsOpen: outilOuvert, band: .palette)
+            XCTAssertEqual(jetonsServis, zone != .toolOptions,
+                           "Les jetons paraissent exactement quand la zone basse n'est pas "
+                             + "prise par un outil — une seule question, une seule réponse.")
+        }
+    }
+
+    // MARK: - La source : la branche morte ne peut pas revenir
+
+    private func surfaceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Le fusible. Sans lui, un chemin devenu faux rendrait les deux gardes
+    /// ci-dessous vertes sur une chaîne vide.
+    func test_laSource_estLisible() throws {
+        XCTAssertTrue(try surfaceSource().contains("ComposerSceneBandView"),
+                      "Chemin de source faux — les gardes suivantes ne mesureraient rien.")
+    }
+
+    /// POSITIVE : la surface consulte la règle.
+    func test_laSurface_consulteLaRegleDeZoneBasse() throws {
+        XCTAssertTrue(compact(try surfaceSource()).contains("ComposerLowZone.resolve(toolIsOpen:"),
+                      "La zone basse doit se résoudre par la règle, pas par la présence d'une vue.")
+    }
+
+    /// NÉGATIVE : la présence du panneau ne peut plus gouverner la bande.
+    func test_laBande_neDependPlusDeLaPresenceDuPanneau() throws {
+        XCTAssertFalse(compact(try surfaceSource()).contains("iflettoolOptions{toolOptions}elseiflet"),
+                       "L'hôte passe le panneau d'options inconditionnellement : le gater sur sa "
+                         + "présence rend la branche `band` inatteignable, et avec elle la palette "
+                         + "de fond, la bande de rognage et tout jeton qui ouvre une bande.")
+    }
+}
+
+/// **#4083 — le spécimen des 18 styles trouve son hôte, et le jeton STYLE
+/// cesse de pointer sur du vide.**
+///
+/// `ComposerSceneCapabilities.bands` ne servait que `.palette` et `.timeline`.
+/// `.textStyles` appartenait au critère de `ComposerSceneBand` sans être
+/// servie — donc `ComposerSceneBand.opened` la refusait, donc
+/// `ComposerObjectChips.porte(_:parmi:)` n'attachait aucune destination au
+/// jeton « STYLE », qui s'annonçait en `StaticText` et ne faisait rien.
+///
+/// > Mesuré au simulateur le 2026-08-31, avant ce lot : « taper STYLE ne fait
+/// > rien ». La chaîne était juste de bout en bout — c'est la CAPACITÉ qui
+/// > manquait à son extrémité.
+final class ComposerSceneBandStyleCapabilityTests: XCTestCase {
+
+    /// Le cœur du lot : un TEXTE sélectionné rend la bande des styles ouvrable.
+    func test_unTexteSelectionne_rendLaBandeDesStylesOuvrable() {
+        let servies = ComposerSceneCapabilities.bands(canTrimSelection: false,
+                                                      canStyleSelection: true)
+        XCTAssertTrue(servies.contains(.textStyles))
+        XCTAssertTrue(servies.contains(.palette), "La palette reste servie en toutes circonstances.")
+    }
+
+    /// …et une sélection qui n'est pas un texte ne la sert pas. Sans ce refus,
+    /// la bande s'ouvrirait sur un spécimen sans texte à peindre.
+    func test_uneSelectionSansTexte_neSertPasLaBandeDesStyles() {
+        XCTAssertFalse(ComposerSceneCapabilities.bands(canTrimSelection: true)
+                        .contains(.textStyles))
+        XCTAssertFalse(ComposerSceneCapabilities.bands(canTrimSelection: false)
+                        .contains(.textStyles))
+    }
+
+    /// **Les deux capacités sont INDÉPENDANTES.** Une vidéo se rogne sans se
+    /// styliser ; un texte se stylise sans se rogner ; et rien n'interdit qu'un
+    /// jour les deux soient vraies. Un `Set` reçu tout fait aurait laissé
+    /// l'appelant les confondre sans que le compilateur bronche.
+    func test_lesDeuxCapacites_neSeContaminentPas() {
+        let lesDeux = ComposerSceneCapabilities.bands(canTrimSelection: true,
+                                                      canStyleSelection: true)
+        XCTAssertEqual(lesDeux, [.palette, .timeline, .textStyles])
+
+        let aucune = ComposerSceneCapabilities.bands(canTrimSelection: false,
+                                                     canStyleSelection: false)
+        XCTAssertEqual(aucune, [.palette])
+    }
+
+    /// **Le jeton STYLE devient actionnable sans qu'une ligne de
+    /// `ComposerObjectChips` ait changé** — c'est le jeu SERVI qui décide.
+    /// Ce témoin relie les deux bouts : la capacité, et le jeton qu'un doigt
+    /// touche.
+    func test_leJetonStyle_devientActionnable_desQueLaBandeEstServie() {
+        var texte = StoryTextObject(id: "t1", text: "Bonjour")
+        texte.textStyle = StoryTextStyle.neon.rawValue
+
+        let inerte = ComposerObjectChips.chips(for: texte, openableBands: [.palette])
+        XCTAssertNil(inerte.first { $0.id == "style" }?.destination,
+                     "Sans bande servie, le jeton ne doit porter aucune destination.")
+
+        let vivant = ComposerObjectChips.chips(for: texte,
+                                               openableBands: [.palette, .textStyles])
+        XCTAssertEqual(vivant.first { $0.id == "style" }?.destination, .textStyles)
     }
 }

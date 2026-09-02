@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
+    implementation(libs.work.runtime)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

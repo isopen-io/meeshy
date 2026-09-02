@@ -106,7 +106,11 @@ struct StoryViewerView: View {
     var targetCommentId: String? = nil
     var targetParentCommentId: String? = nil
 
-    static let heartEmoji = "\u{2764}\u{FE0F}"
+    /// Projection de `MeeshyQuickReactions.heart` — le détail d'un post et le
+    /// lecteur de réels l'empruntaient à CETTE surface, si bien que leur cœur
+    /// dépendait du fichier du lecteur de story. Le nom reste (les deux
+    /// surfaces le citent), la valeur vient d'ailleurs.
+    static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -1390,7 +1394,11 @@ struct StoryViewerView: View {
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
-    private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
+    /// La liste vit au SDK (`MeeshyQuickReactions.standard`) : elle était
+    /// écrite ici ET dans le composer, avec quatre émojis communs sur six et
+    /// un ordre différent. Le post et le réel la servent désormais aussi —
+    /// une troisième copie aurait divergé de même.
+    private let quickEmojis = MeeshyQuickReactions.standard
 
     // MARK: - Comments Overlay (Instagram-style)
 
@@ -1609,8 +1617,18 @@ struct StoryViewerView: View {
     /// Les surfaces NON scrollables (strip d'emojis, strip de langues,
     /// transcription) gardent, elles, le swipe de fermeture — c'est un simple
     /// bandeau, aucun recognizer concurrent ne peut voler le geste.
+    /// **La légende dépliée en fait partie depuis #4831.** Son corpus est une
+    /// `ScrollView` comme les autres, et elle a vécu HORS de cette liste tout le
+    /// temps où elle a existé : un glissement pour lire faisait naviguer ou
+    /// refermer.
+    ///
+    /// > Un mécanisme de cession qui ÉNUMÈRE ses ayants droit ne protège que ce
+    /// > qu'on a pensé à y inscrire. Chaque surface défilante ajoutée après lui
+    /// > naît hors de sa protection, et rien ne rougit — le mécanisme fait
+    /// > exactement ce pour quoi il a été écrit.
     var hasScrollableReaderSurface: Bool { // internal for cross-file extension access
         showCommentsOverlay || showFullEmojiPicker || showFullLanguagePicker
+            || isCaptionExpanded
     }
 
     /// Bord supérieur de la surface scrollable à opposer au point de départ du

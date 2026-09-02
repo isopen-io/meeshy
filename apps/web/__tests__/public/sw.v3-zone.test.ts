@@ -56,7 +56,17 @@ import path from 'path';
 const SW_SOURCE_PATH = path.join(__dirname, '../../public/sw.js');
 const swSource = fs.readFileSync(SW_SOURCE_PATH, 'utf8');
 
-const PROD_COMPOSE_PATH = path.join(__dirname, '../../../../docker-compose.prod.yml');
+const RACINE_DU_DEPOT = path.join(__dirname, '../../../..');
+
+/**
+ * LES DEUX DÉPLOIEMENTS QUI SERVENT LA ZONE, et non le seul qui a été écrit le
+ * premier. La bascule du § 4.9 se joue d'abord sur STAGING : ne lire que la
+ * production revenait à gager l'environnement où rien ne bouge encore.
+ */
+const DEPLOIEMENTS = [
+  { fichier: 'docker-compose.prod.yml', routeur: 'frontend-v3' },
+  { fichier: 'docker-compose.staging.yml', routeur: 'frontend-v3-staging' },
+] as const;
 
 class FakeResponse {
   readonly ok: boolean;
@@ -219,22 +229,36 @@ function neverCalled(): (request: FakeRequest) => Promise<FakeResponse> {
 }
 
 /**
- * Les préfixes que la règle Traefik du routeur `frontend-v3` revendique
- * AUJOURD'HUI, lus dans le compose de production. C'est ce qui fait du témoin
- * §9 un gate d'anti-divergence : `V3_ZONE_PREFIXES` est un JUMEAU tenu à la
- * main, et un préfixe ajouté au routeur sans être ajouté au worker rouvre le
- * défaut sur la route qu'il vient de basculer.
+ * Les chemins que les règles Traefik de la zone revendiquent AUJOURD'HUI, lus
+ * dans les DEUX composes. Ce témoin garde le COMPORTEMENT — chaque chemin
+ * réclamé échappe vraiment au listener ; l'anti-divergence, elle, est gardée
+ * par `scripts/check-v3-pipeline.mjs`, qui EXÉCUTE `belongsToV3Zone` au lieu
+ * de la recopier et pose l'invariant une fois par déploiement.
+ *
+ * `Path` ET `PathPrefix` : les deux matchers que Traefik distingue sur un
+ * chemin. Cette extraction ne connaissait que le second et jetait le premier
+ * SANS UN MOT — or `Path(`/`)` est la forme exacte employée quand la vitrine a
+ * basculé sur staging, donc le seul chemin humain de la zone était invisible
+ * ici. Un parseur qui n'en connaît qu'un rend le même verdict qu'un parseur
+ * qui n'a rien à juger.
  */
-function traefikV3Prefixes(): readonly string[] {
-  const compose = fs.readFileSync(PROD_COMPOSE_PATH, 'utf8');
-  const rule = compose
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.includes('traefik.http.routers.frontend-v3.rule='));
-  if (rule === undefined) {
-    throw new Error('la règle du routeur frontend-v3 est absente de docker-compose.prod.yml');
-  }
-  return [...rule.matchAll(/PathPrefix\(`([^`]+)`\)/g)].map(([, value]) => value);
+type CheminReclame = { readonly matcher: string; readonly valeur: string };
+
+function traefikV3Paths(): readonly CheminReclame[] {
+  return DEPLOIEMENTS.flatMap(({ fichier, routeur }) => {
+    const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, fichier), 'utf8');
+    const rule = compose
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.includes(`traefik.http.routers.${routeur}.rule=`));
+    if (rule === undefined) {
+      throw new Error(`la règle du routeur ${routeur} est absente de ${fichier}`);
+    }
+    return [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, valeur]) => ({
+      matcher: matcher ?? '',
+      valeur: valeur ?? '',
+    }));
+  });
 }
 
 describe('public/sw.js — la zone v3 échappe entièrement au Service Worker legacy', () => {
@@ -356,19 +380,24 @@ describe('public/sw.js — la zone v3 échappe entièrement au Service Worker le
   );
 
   it(
-    'JUMEAU — chaque `PathPrefix` revendiqué par le routeur `frontend-v3` du ' +
-      'compose de production échappe au worker, préfixe exact et sous-chemin',
+    'JUMEAU — chaque chemin revendiqué par un routeur de la zone, en production ' +
+      'comme en staging, échappe au worker',
     () => {
-      const prefixes = traefikV3Prefixes();
-      expect(prefixes.length).toBeGreaterThan(0);
+      const chemins = traefikV3Paths();
+      expect(chemins.length).toBeGreaterThan(0);
 
       const cache = createFakeCache();
       const sw = loadServiceWorker({ fetchImpl: neverCalled(), cache });
 
-      for (const prefix of prefixes) {
-        expect(sw.dispatchFetch(makeRequest(`${ORIGIN}${prefix}`, { mode: 'navigate' }))).toBeNull();
+      for (const { matcher, valeur } of chemins) {
+        expect(sw.dispatchFetch(makeRequest(`${ORIGIN}${valeur}`, { mode: 'navigate' }))).toBeNull();
+
+        // `Path` est une ÉGALITÉ : il ne réclame AUCUN sous-chemin, et en
+        // exiger un ici ferait porter au worker une frontière que le routeur
+        // ne trace pas. Seul `PathPrefix` en réclame.
+        if (matcher !== 'PathPrefix') continue;
         expect(
-          sw.dispatchFetch(makeRequest(`${ORIGIN}${prefix}/quelque-chose`, { mode: 'navigate' }))
+          sw.dispatchFetch(makeRequest(`${ORIGIN}${valeur}/quelque-chose`, { mode: 'navigate' }))
         ).toBeNull();
       }
     }

@@ -15,7 +15,11 @@
 @import './light.css';
 
 :root {
-  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* La pile NATIVE : aucune @font-face, aucune requête de police (charte
+     § 12.5 règle 2). Inter en avait ouvert la porte — la police n'était servie
+     par personne, mais le jeton la nommait, et un jeton qui nomme une police
+     absente finit par la faire charger. */
+  --font-native: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   --font-weight-regular: 400;
@@ -36,6 +40,52 @@
   --leading-tight: 1.2;
   --leading-normal: 1.45;
   --leading-relaxed: 1.6;
+
+  /* L'ÉCHELLE FERMÉE de la charte (§ 12.5 règles 1 et 8). Un espacement écrit
+     en pixels dans une feuille est la SECONDE table du corollaire 2 sous un
+     autre nom : elle ne se voit pas au grep des couleurs, et elle dérive
+     écran par écran. Neuf pas, et rien entre deux. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* Les CIBLES (règle 4). 44 px est le minimum tactile ; 56 et 52 sont les deux
+     hauteurs d'action que la directive du porteur nomme « gros boutons ». */
+  --target-min: 44px;
+  --action-height: 56px;
+  --action-height-secondary: 52px;
+  --action-width: 220px;
+  --field-height: 56px;
+  --row-height: 80px;
+
+  /* Les TRAITS (règle 10) : un filet sépare, un contour déclare un contrôle,
+     un anneau annonce le focus. Trois épaisseurs, trois rôles. */
+  --stroke-hair: 1px;
+  --stroke-strong: 2px;
+  --stroke-focus: 3px;
+
+  /* La GÉOMÉTRIE des glyphes et des avatars (règles 23 et 26). */
+  --glyph: 24px;
+  --glyph-inline: 16px;
+  --glyph-large: 40px;
+  --avatar: 48px;
+  --avatar-small: 32px;
+  --presence-dot: 14px;
+
+  /* Le flou du cadre INERTE de /chat/:lien (règle 25) — le seul filter:blur du
+     dépôt, et la seule raison pour laquelle ce jeton existe. */
+  --frame-blur: 8px;
+
+  /* La MESURE de lecture et les deux largeurs de coquille (règles 8 et 18). */
+  --measure: 34em;
+  --shell-width: 680px;
+  --shell-width-wide: 940px;
 
   --radius-xs: 6px;
   --radius-sm: 8px;

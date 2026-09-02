@@ -17,6 +17,24 @@
   "next": "15.5.23",
   "consequence": "99,6 Ko > 95 Ko — le plancher dépasse le plafond du RÔLE PREMIER (§ 8.3, lecture partagée) avant tout code produit. Déclaré en question ouverte : budgets.json → questions_ouvertes, conception § 11 question 12."
  },
+ "plancher_next_requetes": {
+  "quoi": "Le nombre de requêtes émises AVANT le premier pixel par une page d'App Router qui ne monte AUCUN composant client — le même plancher que plancher_next_ko, compté en requêtes plutôt qu'en octets. Deux d'entre elles sont l'écran (document + feuille de la coquille) ; les quatre autres sont le runtime que Next pose dans le <head> de toute page rendue : webpack, le chunk React, le chunk partagé, main-app.",
+  "valeur": 6,
+  "detail": [
+   "document",
+   "static/css/*.css (feuille de la coquille)",
+   "static/chunks/webpack-*.js (préchargé)",
+   "static/chunks/415ba63b-*.js",
+   "static/chunks/576-*.js",
+   "static/chunks/main-app-*.js"
+  ],
+  "mesure_sur": "une PAGE d'App Router qui ne monte aucun composant client. Mesuré le 2026-08-30 sur /l/:token/expired, alors rendu par une page ; cet écran est depuis un GESTIONNAIRE DE ROUTE et ne paie plus ce plancher — le rejouer demande donc une page sonde, comme plancher_next_ko.",
+  "profil": "Fast 3G du budgets.json (Network.emulateNetworkConditions)",
+  "commande": "poser une page sonde jetable sous app/(public)/ puis cd apps/web-v3 && bun run build && bun run e2e -- e2e/visual/v3-network-vitals.spec.ts",
+  "date": "2026-08-30",
+  "next": "15.5.23",
+  "consequence": "6 > 2 — le plancher dépasse le GATE que le § 8.3 pose sur /l/:token/expired, et ceux de /l/:token (1), de la lecture partagée (3) et de /chats/:key (4). Les deux écrans de /l/:token y échappent en étant des gestionnaires de route ; la question reste ouverte pour les écrans qui ont besoin d'une PAGE. Déclaré dans budgets.json → questions_ouvertes."
+ },
  "groupes": {},
  "sprite_phosphor": {
   "quoi": "Les octets des deux actifs commités de packages/icons — le sprite externe servi en une requête à cache immuable, et le sous-sprite critique inliné dans le layout (§ 8.5).",
@@ -33,5 +51,83 @@
   },
   "glyphes": 72,
   "glyphes_critiques": 8
+ },
+ "l_token_expired_requetes": {
+  "quoi": "Les requêtes émises avant le premier pixel par /l/:token/expired, une fois l'écran passé en GESTIONNAIRE DE ROUTE. Le § 8.3 en gate deux (« HTML + CSS ») ; le document étant autoporteur — table de jetons et glyphes inlinés depuis leurs paquets —, même la feuille disparaît et il n'en reste qu'UNE. L'écran en servait SIX quand il était rendu par une page (cf. plancher_next_requetes).",
+  "valeur": 1,
+  "detail": {
+   "Document": {
+    "requetes": 1,
+    "octets": 8176
+   }
+  },
+  "fcp_ms": 644,
+  "lcp_ms": 644,
+  "cls": 0,
+  "profil": "Fast 3G du budgets.json (Network.emulateNetworkConditions)",
+  "commande": "cd apps/web-v3 && bun run build && bun run e2e -- e2e/visual/v3-lien-expire.spec.ts",
+  "date": "2026-08-30",
+  "next": "15.5.23",
+  "temoin": "apps/web-v3/e2e/visual/v3-lien-expire.spec.ts § « tient tous les plafonds réseau de budgets.json »"
+ },
+ "contours_de_controle": {
+  "quoi": "Le contraste du CONTOUR des contrôles sans fond de /l/:token/expired contre le plan qui les porte — WCAG 1.4.11, 3:1. Mesuré au navigateur sur la couleur SERVIE, dans les quatre colonnes de thème : le gate de jetons mesure la valeur d'un jeton, jamais celui qu'un écran choisit.",
+  "controle": "a.cta.secondaire — bouton fantôme, sa bordure porte seule l'affordance",
+  "sombre": {
+   "bordure": "#75798c",
+   "plan": "#0d0e16",
+   "rapport": 4.46
+  },
+  "clair": {
+   "bordure": "#767b94",
+   "plan": "#f1f3f9",
+   "rapport": 3.76
+  },
+  "avant_correctif": {
+   "jeton": "--color-border",
+   "sombre": 1.62,
+   "clair": 1.27
+  },
+  "commande": "cd apps/web-v3 && bun run build && bun run e2e -- e2e/visual/v3-lien-expire.spec.ts",
+  "date": "2026-08-30",
+  "temoin": "apps/web-v3/e2e/visual/lib/contours.ts, consommé par v3-lien-expire.spec.ts § « sert la bonne table dans les quatre colonnes de thème »"
+ },
+ "vitrine": {
+  "quoi": "Ce que la VITRINE (`/` sans cookie de session) coûte au premier pixel, une fois portée à la charte du § 12.5. Le § 12.6 la gate à UNE requête : le document porte sa table de jetons, ses trois feuilles et ses onze glyphes, inlinés depuis @meeshy/design-tokens et @meeshy/icons. Le seul <script> est celui du thème.",
+  "requetes_avant_premier_pixel": 1,
+  "requetes_pendantes": 0,
+  "octets_transferes": 21334,
+  "octets_transferes_note": "MESURÉ sur `next start`, qui ne compresse PAS la réponse d'un gestionnaire de route (aucun `content-encoding` servi, vérifié au curl). En production et en préproduction, le routeur `frontend-v3` porte `compress@file` (infrastructure/docker/compose/docker-compose.{prod,staging}.yml) : le document part alors à 6 416 o gzip -9. Les deux chiffres sont donnés parce que le premier est celui de la mesure locale et le second celui du lecteur.",
+  "document_gzip_9_octets": 6416,
+  "table_de_jetons_gzip_9_octets": 1325,
+  "feuilles_gzip_9_octets": 1390,
+  "feuilles_detail": "socle + chrome + feuille de la vitrine, tels que le <style> les sert ; plafond décidé du § 12.6 : 4 096 o. La table est plafonnée à 1 536 o.",
+  "fcp_ms": 680,
+  "lcp_ms": 680,
+  "cls": 0,
+  "profil": "Fast 3G du budgets.json (Network.emulateNetworkConditions)",
+  "commande": "cd apps/web-v3 && bun run build && bun run start & ; node scripts/mesure-reseau.mjs http://127.0.0.1:3300/",
+  "date": "2026-09-01",
+  "next": "15.5.23",
+  "temoin": "apps/web-v3/__tests__/charte.test.ts § « règle 3 — le poids » (les deux plafonds gzip) et apps/web-v3/budgets.json → reseau.ecrans « / » (la requête et le LCP)",
+  "seconde_visite": {
+   "quoi": "Ce que coûte le RETOUR sur la vitrine — bouton Précédent depuis /login, seconde visite, reprise après coupure. C'est le chiffre que `no-store, private` rendait ÉGAL au premier : le navigateur n'avait pas le droit de GARDER l'entité, donc aucun validateur ne pouvait être présenté et le document repartait entier. `private, no-cache` + `ETag` le ramène à un aller-retour d'en-têtes, sans rien concéder sur la correction — la revalidation repasse par le gestionnaire, donc par le cookie de session.",
+   "statut": 304,
+   "octets_corps": 0,
+   "octets_entetes": 276,
+   "avant_le_correctif": "200 · 21 334 o de corps à chaque retour (6 416 o gzip derrière `compress@file`) · aucun `etag` · `cache-control: no-store, private`",
+   "commande": "cd apps/web-v3 && bun run build && npx next start -p 3311 -H 127.0.0.1 & puis : E=$(curl -s -D - -o /dev/null http://127.0.0.1:3311/ | tr -d '\\r' | awk -F': ' '/^etag/{print $2}') ; curl -s -o /dev/null -w '%{http_code} — %{size_download} o de corps, %{size_header} o d en-tetes\\n' -H \"If-None-Match: $E\" http://127.0.0.1:3311/",
+   "date": "2026-09-01",
+   "temoin": "apps/web-v3/__tests__/authentification.test.ts § « la racine sert le bon écran à chacun » — le 304, la stabilité de l'étiquette d'un appel à l'autre, les deux formes d'`If-None-Match` (liste, `W/`), et le fait qu'un porteur de descripteur de session ne reçoit JAMAIS 304"
+  }
+ },
+ "participate": {
+  "quoi": "Le poids du module de participation (lib/realtime/participate.ts compilé par bun build, servi sous /__v3/rt/participate.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js). Tous deux arrivent APRÈS le premier pixel de /chats/:cle et /chat/:lien (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page.",
+  "participate_brut_octets": 86860,
+  "participate_gzip_9_octets": 25632,
+  "socket_io_client_brut_octets": 40435,
+  "socket_io_client_gzip_9_octets": 12849,
+  "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",
+  "date": "2026-09-02"
  }
 }

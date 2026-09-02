@@ -4,36 +4,81 @@ import MeeshySDK
 
 // MARK: - Sticker Picker View
 
+/// **La palette de CONSTRUCTIONS** (#4579, directive porteur 2026-08-31).
+///
+/// Cette feuille n'est plus un clavier d'emoji : elle propose ce qui se POSE
+/// sur la scène — des décorations d'amour, l'heure qu'il est, un lieu alentour,
+/// ses propres stickers. C'est ce qui évite de multiplier les icônes du rail :
+/// une porte, cinq constructions, et un point d'extension pour la suivante.
+///
+/// ## Ce que la feuille ne décide pas
+///
+/// Ni la localisation (permission, `CLLocationManager`), ni le magasin de
+/// « Mes stickers » (budget, éviction, disque). Les deux sont **injectés par
+/// l'app** ; sans injection leur onglet est **absent**, jamais grisé — loi 4.
+///
+/// ## Le gel
+///
+/// L'heure est lue **une fois, à l'ouverture**, et figée dans les emplacements
+/// du gabarit à la pose. Rien en aval ne relit l'horloge : tout lecteur voit
+/// l'heure que l'auteur a composée, et une story archivée garde son sens.
 public struct StickerPickerView: View {
+
     public var onStickerSelected: (String) -> Void
     /// Ce que fait un tap sur une vignette de « Mes stickers ». Requis, sans
     /// défaut : une bibliothèque peinte dont les vignettes ne mènent nulle part
-    /// est une affordance inerte (loi 4). La section reste, elle, gouvernée par
-    /// la seule présence du magasin (`\.storyStickerLibrary`).
+    /// est une affordance inerte (loi 4).
     public var onLibraryStickerSelected: (StoryStickerLibraryItem) -> Void
+    /// Ce que fait un tap sur une décoration d'AMOUR ou d'HEURE : poser un
+    /// `StorySticker` de nature `.template`, avec ses emplacements déjà figés.
+    ///
+    /// **Requis, sans défaut** — même règle que `onLibraryStickerSelected` : un
+    /// rappel par défaut vide ferait de la grille une affordance INERTE, qui
+    /// vibre sous le doigt et ne pose rien (loi 4). Sans défaut, tout site de
+    /// montage doit dire ce qu'il fait de la décoration.
+    public var onTemplateSelected: (StickerTemplate, [String: String]) -> Void
+    /// Ce que fait un tap sur une décoration de LIEU : poser un
+    /// `StoryLocationObject` — la famille qui porte la donnée géographique que
+    /// la plateforme LIT, jamais un sticker jumeau.
+    public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    @State private var selectedCategory: StickerCategory = .smileys
-    @State private var searchText = ""
-    @Environment(\.colorScheme) private var colorScheme
+    @State var selectedCategory: StickerCategory = .smileys
+    @State private var selectedTab: StickerPaletteTab = .emoji
+    @Environment(\.colorScheme) var colorScheme
 
     /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
-    /// `.storyStickerLibraryProvided()` : la section entière est alors ABSENTE
-    /// (loi 4), jamais un rail grisé sans magasin derrière.
-    @Environment(\.storyStickerLibrary) private var stickerLibrary
-    @State private var libraryItems: [StoryStickerLibraryItem] = []
+    /// `.storyStickerLibraryProvided()`.
+    @Environment(\.storyStickerLibrary) var stickerLibrary
+    /// #4579 — les lieux alentour. `nil` tant que l'app n'a pas injecté son
+    /// fournisseur : l'onglet « Lieu » n'existe alors pas.
+    @Environment(\.stickerNearbyPlaces) var nearbyPlaces
+    @Environment(\.stickerPaletteClock) private var clock
+
+    @State var libraryItems: [StoryStickerLibraryItem] = []
+    @State var places: [SharedPlace] = []
+    @State var selectedPlaceIndex: Int = 0
+    /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
+    /// l'horloge à chaque rendu ferait bouger les vignettes sous le doigt.
+    @State var openedAt: Date = .distantPast
+    /// Les mots que l'auteur tape dans l'onglet Texte (#4822) — les vignettes
+    /// se redessinent à la frappe (loi 7), et la pose les fige.
+    @State var typedStickerText: String = ""
 
     public init(onStickerSelected: @escaping (String) -> Void,
-                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void) {
+                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void,
+                onTemplateSelected: @escaping (StickerTemplate, [String: String]) -> Void,
+                onLocationTemplateSelected: @escaping (SharedPlace, StickerTemplate) -> Void) {
         self.onStickerSelected = onStickerSelected
         self.onLibraryStickerSelected = onLibraryStickerSelected
+        self.onTemplateSelected = onTemplateSelected
+        self.onLocationTemplateSelected = onLocationTemplateSelected
     }
 
-    private var filteredEmojis: [String] {
-        guard !searchText.isEmpty else { return selectedCategory.emojis }
-        let all = StickerCategory.allCases.flatMap(\.emojis)
-        return all.filter { $0.unicodeScalars.contains { scalar in
-            String(scalar).localizedCaseInsensitiveContains(searchText)
-        }}
+    /// Les onglets réellement servis — la loi 4, résolue par une fonction pure
+    /// que son propre témoin exerce (`StickerPaletteTab.offered`).
+    var offeredTabs: [StickerPaletteTab] {
+        StickerPaletteTab.offered(hasLibrary: stickerLibrary != nil,
+                                  hasNearbyPlaces: nearbyPlaces != nil)
     }
 
     public var body: some View {
@@ -42,91 +87,54 @@ public struct StickerPickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
-            categoryTabs
-            emojiGrid
-            if stickerLibrary != nil {
-                myStickersSection
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-            }
+            paletteTabs
+            Divider().opacity(0.15)
+            tabContent
         }
         .padding(16)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
-        // L'identité (`nil` ou non) ne change pas après le montage — seul le
-        // PREMIER rendu doit charger les récents ; les pastes suivants mettent
-        // `libraryItems` à jour directement depuis leur propre résultat.
-        .task(id: stickerLibrary == nil) {
-            guard let stickerLibrary else { return }
-            libraryItems = await stickerLibrary.recents()
+        .task {
+            // Une seule lecture de l'horloge, à l'ouverture (cf. doc de type).
+            if openedAt == .distantPast { openedAt = clock() }
+            if let stickerLibrary, libraryItems.isEmpty {
+                libraryItems = await stickerLibrary.recents()
+            }
+        }
+        // **La position se demande quand on ENTRE dans l'onglet, pas à
+        // l'ouverture de la palette.**
+        //
+        // Mesuré au simulateur : charger les lieux dans le `.task` faisait
+        // surgir l'alerte système « Autoriser Meeshy à utiliser votre
+        // position ? » PAR-DESSUS la grille d'emoji, avant que l'auteur ait
+        // manifesté le moindre intérêt pour un lieu. Une permission demandée
+        // sans motif visible est une permission refusée — et un refus ferme
+        // l'onglet pour de bon (l'injecteur ne sert plus le fournisseur).
+        //
+        // Le chargement reste UNE fois : `places.isEmpty` garde l'idempotence
+        // quand on revient sur l'onglet.
+        .adaptiveOnChange(of: selectedTab) { _, onglet in
+            guard onglet == .place, let nearbyPlaces, places.isEmpty else { return }
+            Task { places = await nearbyPlaces.nearby() }
         }
     }
 
-    // MARK: - « Mes stickers » (V3-5)
+    // MARK: - En-tête
 
-    /// Le déclencheur naturel de C8 : coller une image PENDANT que ce panneau
-    /// est ouvert la retient, plutôt que de laisser 126 lignes de magasin sans
-    /// aucun appelant. Depuis S1, `StorySticker` porte une image intégrée
-    /// (`postMediaId`) : taper une vignette la POSE sur le canevas, la
-    /// bibliothèque n'est plus une collection sans sortie.
-    private var myStickersSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(String(localized: "story.sticker.library.title", defaultValue: "Mes stickers", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.85) : MeeshyColors.indigo950.opacity(0.85))
-                Spacer()
-                if let stickerLibrary {
-                    PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
-                        Task { libraryItems = await stickerLibrary.paste(providers) }
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonBorderShape(.capsule)
-                    .frame(minHeight: 32)
-                }
-            }
-            if libraryItems.isEmpty {
-                Text(String(
-                    localized: "story.sticker.library.empty",
-                    defaultValue: "Collez une image pour commencer votre bibliothèque",
-                    bundle: .module
-                ))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(libraryItems) { item in
-                            Button {
-                                onLibraryStickerSelected(item)
-                                HapticFeedback.medium()
-                            } label: {
-                                Image(uiImage: item.thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)  // cf. note des onglets
-                            .accessibilityLabel(String(
-                                localized: "story.sticker.library.a11y",
-                                defaultValue: "Autocollant de votre bibliothèque",
-                                bundle: .module
-                            ))
-                        }
-                    }
-                }
-                .frame(height: 52)
-            }
-        }
-    }
-
-    // MARK: - Panel Header
+    /// Le glyphe de la feuille — **le même que celui de la porte qui l'ouvre**
+    /// (`ComposerRailDoor.sticker`). Une feuille dont l'en-tête ne ressemble pas
+    /// au bouton qui vient de la faire monter est une rupture de continuité
+    /// visuelle : l'utilisateur perd la trace de ce qu'il a touché.
+    ///
+    /// Aucun glyphe Apple ne s'appelle « sticker » ni « peel » (vérifié dans
+    /// `CoreGlyphs.bundle`) ; celui-ci dit le geste — la feuille qui se décolle.
+    /// iOS 16.0 = le plancher du projet.
+    static let sheetSymbolName = "rectangle.portrait.on.rectangle.portrait.angled"
 
     private var panelHeader: some View {
         HStack {
-            Image(systemName: "face.smiling")
+            Image(systemName: Self.sheetSymbolName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
@@ -136,109 +144,124 @@ public struct StickerPickerView: View {
         }
     }
 
-    // MARK: - Category Tabs
+    // MARK: - Les onglets
 
-    private var categoryTabs: some View {
+    private var paletteTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(StickerCategory.allCases, id: \.self) { category in
+                ForEach(offeredTabs) { onglet in
                     Button {
-                        withAnimation(.spring(response: 0.25)) { selectedCategory = category }
+                        withAnimation(.spring(response: 0.25)) { selectedTab = onglet }
                         HapticFeedback.light()
                     } label: {
-                        Text(category.icon)
-                            .font(.system(size: 22))
-                            .frame(width: 40, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedCategory == category ? Color.white.opacity(0.2) : Color.clear)
-                            )
+                        VStack(spacing: 3) {
+                            Image(systemName: onglet.symbolName)
+                                .font(.system(size: 15, weight: .semibold))
+                            Text(Self.tabTitle(onglet))
+                                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        }
+                        .foregroundStyle(selectedTab == onglet
+                                         ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                         : AnyShapeStyle(Color.secondary))
+                        .frame(minWidth: 56, minHeight: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selectedTab == onglet
+                                      ? Color.primary.opacity(0.08) : Color.clear)
+                        )
                     }
-                    // .plain obligatoire : le style par défaut rend les
-                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72 —
-                    // onglets et grille vides à la 1re mise en service).
+                    // `.plain` obligatoire : le style par défaut rend les
+                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72).
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Self.tabTitle(onglet))
+                    .accessibilityAddTraits(selectedTab == onglet ? [.isSelected] : [])
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
+        }
+        // Un onglet retiré sous le doigt (le magasin se démonte) laisserait la
+        // feuille sur un contenu qui n'existe plus.
+        .adaptiveOnChange(of: offeredTabs) { _, servis in
+            if !servis.contains(selectedTab) { selectedTab = servis.first ?? .emoji }
         }
     }
 
-    // MARK: - Emoji Grid
-
-    private var emojiGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 8) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
-                    Button {
-                        onStickerSelected(emoji)
-                        HapticFeedback.medium()
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 30))
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)  // cf. note des onglets (emoji invisibles sinon)
-                    .accessibilityLabel(String(localized: "story.sticker.a11y", defaultValue: "Autocollant \(emoji)", bundle: .module))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        // Cède de la place à la section « Mes stickers » quand elle est
-        // rendue — sans quoi les deux réclament leur plein espace sur une
-        // sheet en `.medium` (hauteur fixe, pas de detent `.large` de repli)
-        // et la seconde déborderait sur les petits écrans.
-        .frame(maxHeight: stickerLibrary == nil ? 260 : 200)
-    }
-}
-
-// MARK: - Sticker Category
-
-public enum StickerCategory: String, CaseIterable {
-    case smileys, animals, food, activities, travel, objects, symbols, flags
-
-    public var icon: String {
-        switch self {
-        case .smileys: return "\u{1F600}"
-        case .animals: return "\u{1F43E}"
-        case .food: return "\u{1F354}"
-        case .activities: return "\u{26BD}"
-        case .travel: return "\u{2708}\u{FE0F}"
-        case .objects: return "\u{1F4A1}"
-        case .symbols: return "\u{2764}\u{FE0F}"
-        case .flags: return "\u{1F3F3}\u{FE0F}"
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .emoji:   emojiTab
+        case .text:    textTab
+        case .love:    templateTab(family: .love)
+        case .joy:          templateTab(family: .joy)
+        case .surprise:     templateTab(family: .surprise)
+        case .mood:         templateTab(family: .mood)
+        case .greeting:     templateTab(family: .greeting)
+        case .reaction:     templateTab(family: .reaction)
+        case .party:        templateTab(family: .party)
+        case .availability: templateTab(family: .availability)
+        case .nature: templateTab(family: .nature)
+        case .cheer: templateTab(family: .cheer)
+        case .answer: templateTab(family: .answer)
+        case .food: templateTab(family: .food)
+        case .sport: templateTab(family: .sport)
+        case .travel: templateTab(family: .travel)
+        case .work: templateTab(family: .work)
+        case .music: templateTab(family: .music)
+        case .time:    templateTab(family: .time)
+        case .weather: templateTab(family: .weather)
+        case .place:   placeTab
+        case .library: libraryTab
         }
     }
 
-    public var emojis: [String] {
-        switch self {
-        case .smileys:
-            return ["\u{1F600}", "\u{1F602}", "\u{1F60D}", "\u{1F60E}", "\u{1F61C}", "\u{1F60A}", "\u{1F609}",
-                    "\u{1F622}", "\u{1F621}", "\u{1F633}", "\u{1F914}", "\u{1F92F}", "\u{1F970}", "\u{1F973}",
-                    "\u{1F60B}", "\u{1F92D}", "\u{1F971}", "\u{1F976}", "\u{1F975}", "\u{1F47B}", "\u{1F4A9}"]
-        case .animals:
-            return ["\u{1F436}", "\u{1F431}", "\u{1F43B}", "\u{1F98A}", "\u{1F981}", "\u{1F42F}", "\u{1F984}",
-                    "\u{1F40D}", "\u{1F41D}", "\u{1F98B}", "\u{1F427}", "\u{1F989}", "\u{1F99C}", "\u{1F433}"]
+    static func tabTitle(_ onglet: StickerPaletteTab) -> String {
+        switch onglet {
+        case .emoji:
+            return String(localized: "sticker.tab.emoji", defaultValue: "Emoji", bundle: .module)
+        case .text:
+            return String(localized: "sticker.tab.text", defaultValue: "Texte", bundle: .module)
+        case .love:
+            return String(localized: "sticker.tab.love", defaultValue: "Amour", bundle: .module)
+        case .time:
+            return String(localized: "sticker.tab.time", defaultValue: "Heure", bundle: .module)
+        case .weather:
+            return String(localized: "sticker.tab.weather", defaultValue: "Météo", bundle: .module)
+        case .joy:
+            return String(localized: "sticker.tab.joy", defaultValue: "Joie", bundle: .module)
+        case .surprise:
+            return String(localized: "sticker.tab.surprise", defaultValue: "Stupeur", bundle: .module)
+        case .mood:
+            return String(localized: "sticker.tab.mood", defaultValue: "Humeur", bundle: .module)
+        case .greeting:
+            return String(localized: "sticker.tab.greeting", defaultValue: "Salut", bundle: .module)
+        case .reaction:
+            return String(localized: "sticker.tab.reaction", defaultValue: "Réactions", bundle: .module)
+        case .party:
+            return String(localized: "sticker.tab.party", defaultValue: "Fête", bundle: .module)
+        case .availability:
+            return String(localized: "sticker.tab.availability", defaultValue: "Dispo", bundle: .module)
+        case .nature:
+            return String(localized: "sticker.tab.nature", defaultValue: "Nature", bundle: .module)
+        case .cheer:
+            return String(localized: "sticker.tab.cheer", defaultValue: "Bravo", bundle: .module)
+        case .answer:
+            return String(localized: "sticker.tab.answer", defaultValue: "Réponses", bundle: .module)
         case .food:
-            return ["\u{1F355}", "\u{1F354}", "\u{1F32E}", "\u{1F363}", "\u{1F370}", "\u{1F369}", "\u{1F366}",
-                    "\u{2615}", "\u{1F377}", "\u{1F37A}", "\u{1F353}", "\u{1F34E}", "\u{1F34C}", "\u{1F951}"]
-        case .activities:
-            return ["\u{26BD}", "\u{1F3C0}", "\u{1F3C8}", "\u{26BE}", "\u{1F3BE}", "\u{1F3B1}", "\u{1F3AE}",
-                    "\u{1F3B5}", "\u{1F3B8}", "\u{1F3A4}", "\u{1F3AC}", "\u{1F3A8}", "\u{1F3AD}", "\u{1F3AA}"]
+            return String(localized: "sticker.tab.food", defaultValue: "Gourmand", bundle: .module)
+        case .sport:
+            return String(localized: "sticker.tab.sport", defaultValue: "Sport", bundle: .module)
         case .travel:
-            return ["\u{2708}\u{FE0F}", "\u{1F680}", "\u{1F3D6}\u{FE0F}", "\u{1F3D4}\u{FE0F}", "\u{1F30D}", "\u{1F5FC}", "\u{1F3E0}",
-                    "\u{1F697}", "\u{1F6B2}", "\u{1F6F3}\u{FE0F}", "\u{26F2}", "\u{1F3A2}", "\u{26FA}", "\u{1F30C}"]
-        case .objects:
-            return ["\u{1F4A1}", "\u{1F4F7}", "\u{1F4F1}", "\u{1F4BB}", "\u{2328}\u{FE0F}", "\u{1F3A7}", "\u{1F50D}",
-                    "\u{1F4DA}", "\u{270F}\u{FE0F}", "\u{1F4E6}", "\u{1F513}", "\u{2699}\u{FE0F}", "\u{1F4CE}", "\u{2702}\u{FE0F}"]
-        case .symbols:
-            return ["\u{2764}\u{FE0F}", "\u{1F525}", "\u{2B50}", "\u{1F4AF}", "\u{26A1}", "\u{1F31F}", "\u{1F4A5}",
-                    "\u{2728}", "\u{1F308}", "\u{1F389}", "\u{1F388}", "\u{1F381}", "\u{1F3C6}", "\u{1F48E}"]
-        case .flags:
-            return ["\u{1F1EB}\u{1F1F7}", "\u{1F1FA}\u{1F1F8}", "\u{1F1EC}\u{1F1E7}", "\u{1F1EA}\u{1F1F8}", "\u{1F1E9}\u{1F1EA}", "\u{1F1EE}\u{1F1F9}", "\u{1F1EF}\u{1F1F5}",
-                    "\u{1F1E7}\u{1F1F7}", "\u{1F1E8}\u{1F1E6}", "\u{1F1E6}\u{1F1FA}", "\u{1F1F0}\u{1F1F7}", "\u{1F1F2}\u{1F1FD}", "\u{1F1EE}\u{1F1F3}", "\u{1F1F7}\u{1F1FA}"]
+            return String(localized: "sticker.tab.travel", defaultValue: "Voyage", bundle: .module)
+        case .work:
+            return String(localized: "sticker.tab.work", defaultValue: "Travail", bundle: .module)
+        case .music:
+            return String(localized: "sticker.tab.music", defaultValue: "Musique", bundle: .module)
+        case .place:
+            return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
+        case .library:
+            return String(localized: "story.sticker.library.title",
+                          defaultValue: "Mes stickers", bundle: .module)
         }
     }
 }

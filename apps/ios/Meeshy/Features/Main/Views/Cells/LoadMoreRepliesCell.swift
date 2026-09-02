@@ -55,7 +55,7 @@ final class LoadMoreRepliesCell: UICollectionViewCell {
     static func labelText(remaining: Int) -> String {
         String(
             localized: "comments.load-more-replies",
-            defaultValue: "View \(remaining) more \(remaining == 1 ? "reply" : "replies")",
+            defaultValue: "Voir \(remaining) réponses de plus",
             bundle: .main
         )
     }

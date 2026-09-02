@@ -286,6 +286,16 @@ extension UniversalComposerBar {
                 label: String(localized: "composer.attach.emoji", defaultValue: "Emoji", bundle: .main)
             ) { fire { onRequestTextEmoji?() } })
         }
+        // Même glyphe que la porte `ComposerRailDoor.sticker` et que l'en-tête
+        // de la palette (`StickerPickerView.sheetSymbolName`) : ce n'est PAS un
+        // smiley — la tuile emoji ci-dessus insère dans le TEXTE, celle-ci
+        // ouvre une palette de constructions qui deviennent un MESSAGE.
+        if onRequestStickerPicker != nil {
+            tiles.append(CarouselTile(
+                id: "sticker", icon: "rectangle.portrait.on.rectangle.portrait.angled", color: "6C5CE7",
+                label: String(localized: "composer.attach.sticker", defaultValue: "Sticker", bundle: .main)
+            ) { fire { onRequestStickerPicker?() } })
+        }
         return tiles
     }
 

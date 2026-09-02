@@ -307,6 +307,55 @@ public final class StoryTextLayer: CATextLayer {
         // tandis que le GLASS reste un sous-calque (il fait du blur GPU).
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
         applyFrameBorder(text, geometry: geometry)
+        applyTextEffect(text, renderedFontSize: renderedFontSize, textColor: color)
+    }
+
+    // MARK: - Effet (#4870)
+
+    /// **L'ombre de l'EFFET vit sur la calque qui PEINT les glyphes** — la
+    /// sous-calque quand il y en a une, `self` sinon.
+    ///
+    /// Une ombre `CALayer` se calcule sur TOUT ce que la calque compose,
+    /// sous-calques compris. Posée sur `self` au-dessus d'un fond solide ou
+    /// d'un liseré, elle ombrerait la BOÎTE et non les lettres — c'est
+    /// pourquoi `applyBackgroundStyle` force la sous-calque de glyphes dès
+    /// qu'un effet rencontre une boîte (`effectNeedsGlyphSublayer`). Un texte
+    /// nu garde le chemin historique : ses glyphes sont le seul contenu de
+    /// `self`, l'ombre est donc la leur.
+    ///
+    /// Les deux hôtes possibles sont REMIS À ZÉRO avant de poser : `configure`
+    /// est idempotent, et une calque réutilisée ne doit pas garder l'ombre
+    /// d'un objet précédent ni celle d'un fond qu'elle n'a plus.
+    @MainActor
+    private func applyTextEffect(_ text: StoryTextObject,
+                                 renderedFontSize: CGFloat,
+                                 textColor: UIColor) {
+        StoryTextEffectRendering.clear(self)
+        if let glyphLayer { StoryTextEffectRendering.clear(glyphLayer) }
+        guard text.hasTextEffect else { return }
+        StoryTextEffectRendering.apply(text.parsedTextEffect,
+                                       to: glyphLayer ?? self,
+                                       fontSize: renderedFontSize,
+                                       textColor: textColor,
+                                       rasterizationScale: renderScale)
+    }
+
+    /// Un effet rencontre-t-il quelque chose que `self` PEINT en plus des
+    /// glyphes — un fond solide sur `backgroundColor`, un liseré sur `border` ?
+    /// Alors les glyphes doivent migrer en sous-calque pour que l'ombre soit la
+    /// leur — voir `applyTextEffect`.
+    ///
+    /// La question est « qu'est-ce que `self` peint ? », PAS « y a-t-il une
+    /// boîte ? » : `hasFrameBox` est faux dès que la forme est « Aucun », mais
+    /// `applyBackgroundStyle(.solid)` pose le fond sur `backgroundColor` sans
+    /// regarder la forme — fond solide + forme « Aucun » + effet ombrait la
+    /// boîte (revue adverse du lot, 2026-09-02). Le verre et les formes
+    /// path-based installent toujours leur sous-calque : ce prédicat ne
+    /// tranche que les cas où `self` peint lui-même.
+    private var effectNeedsGlyphSublayer: Bool {
+        guard let textObject, textObject.hasTextEffect else { return false }
+        return textObject.hasFrameBox
+            || textObject.resolvedBackgroundStyle != StoryTextBackgroundStyle.none
     }
 
     /// Rend les glyphes invisibles (couleur de premier plan transparente) tout
@@ -378,8 +427,10 @@ public final class StoryTextLayer: CATextLayer {
             // Texte nu, sans boîte : les glyphes peignent directement `self`
             // (chemin historique, inchangé) SAUF si une réserve d'encre
             // existe — auquel cas elle doit rester vide de VRAIS glyphes
-            // (Panne 2), d'où la même sous-calque insetée que les autres fonds.
-            if inkOverhangRenderPad > 0 {
+            // (Panne 2), d'où la même sous-calque insetée que les autres fonds
+            // — ou si un EFFET rencontre un liseré porté par `self`
+            // (`effectNeedsGlyphSublayer`, #4870).
+            if inkOverhangRenderPad > 0 || effectNeedsGlyphSublayer {
                 installGlyphSublayer(frame: glyphPaintFrame(bounds))
             }
             return
@@ -416,8 +467,10 @@ public final class StoryTextLayer: CATextLayer {
             cornerRadius = frameCornerRadius(height: bounds.height)
             // Même réserve d'encre que le cas `.none` nu ci-dessus : le fond
             // vit sur `backgroundColor` (inchangé), seuls les glyphes migrent
-            // en sous-calque insetée quand `inkOverhangRenderPad > 0`.
-            if inkOverhangRenderPad > 0 {
+            // en sous-calque insetée quand `inkOverhangRenderPad > 0` — ou
+            // quand un EFFET doit ombrer les lettres et non la boîte
+            // (`effectNeedsGlyphSublayer`, #4870).
+            if inkOverhangRenderPad > 0 || effectNeedsGlyphSublayer {
                 installGlyphSublayer(frame: glyphPaintFrame(bounds))
             }
 

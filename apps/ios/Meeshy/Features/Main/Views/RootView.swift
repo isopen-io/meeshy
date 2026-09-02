@@ -1244,12 +1244,37 @@ struct RootView: View {
             // so cold-launch deep links and warm-launch push taps land on
             // the same screen for the same id.
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerCoordinator.present(StoryViewerRequest(
-                    id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
-                ))
+                // Le `postId` VOYAGE : il a servi à trouver le groupe, il doit
+                // encore désigner la story. Sans lui — et avec
+                // `startAtFirstUnviewed: true` — le lecteur s'ouvrait sur le bon
+                // groupe à une AUTRE story, ce qui fait mentir tout lien partagé
+                // (#4903, mesuré au simulateur). L'aval savait déjà s'en servir.
+                storyViewerCoordinator.present(
+                    .targetingStory(postId: postId,
+                                    inGroup: storyViewModel.storyGroups[groupIdx].id))
             } else {
-                router.push(.postDetail(postId))
+                // **Absent du TRAY ne veut pas dire absent.** `groupIndex`
+                // interroge un cache local ; un lien reçu de quelqu'un d'autre
+                // — le cas NOMINAL du partage — désigne presque toujours une
+                // story que ce cache ignore. Conclure « indisponible » de ce
+                // silence, c'est répondre à la question « l'ai-je déjà ? »
+                // quand celle posée est « existe-t-elle ? » (#4903).
+                //
+                // `ensureStoryLoaded` sait déjà répondre à la seconde : il est
+                // cache-first, ne va au réseau que si nécessaire, et écarte les
+                // stories mortes pour qu'un lien périmé n'insère pas de groupe
+                // fantôme. Le détail du post reste le repli — pour une story
+                // réellement expirée ou supprimée, il dit la bonne chose.
+                Task { @MainActor in
+                    if await storyViewModel.ensureStoryLoaded(postId: postId),
+                       let loadedIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                        storyViewerCoordinator.present(
+                            .targetingStory(postId: postId,
+                                            inGroup: storyViewModel.storyGroups[loadedIdx].id))
+                    } else {
+                        router.push(.postDetail(postId))
+                    }
+                }
             }
 
         case .userProfile(let username):
@@ -1355,20 +1380,20 @@ struct RootView: View {
                 let message: String
                 switch error {
                 case .server(404, _):
-                    message = String(localized: "Lien introuvable", defaultValue: "Lien introuvable")
+                    message = String(localized: "link.error.not-found", defaultValue: "Lien introuvable")
                 case .server(410, let msg):
                     message = msg.isEmpty
-                        ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
+                        ? String(localized: "link.error.inactive", defaultValue: "Ce lien n'est plus actif")
                         : msg
                 case .forbidden(let reason, _):
-                    message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
+                    message = reason ?? String(localized: "link.error.forbidden", defaultValue: "Accès refusé à cette conversation")
                 default:
-                    message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                    message = error.errorDescription ?? String(localized: "link.error.open", defaultValue: "Impossible d'ouvrir le lien")
                 }
                 FeedbackToastManager.shared.showError(message)
             } catch {
                 FeedbackToastManager.shared.showError(
-                    String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
+                    String(localized: "link.error.open", defaultValue: "Impossible d'ouvrir le lien")
                 )
             }
         }
@@ -1933,7 +1958,7 @@ struct RootView: View {
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
             FeedbackToastManager.shared.showError(
-                String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
+                String(localized: "link.error.open-conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
             )
         }
     }

@@ -190,16 +190,30 @@ public struct AudioChipMarquee: View {
     let height: CGFloat
     let fontSize: CGFloat
 
+    /// **La teinte appartient à la SURFACE, pas à l'atome** (#4078).
+    ///
+    /// Le blanc reste le défaut parce qu'il est juste là où cet atome est né :
+    /// posé SUR UN MÉDIA (chip de premier plan du reader, en-tête du viewer
+    /// story, réel plein écran), où aucune couleur dérivée du contenu n'est
+    /// garantie AA — même convention que `BackgroundSoundBadge.overMediaAccentHex`.
+    ///
+    /// Il est FAUX dès que l'hôte est un fond thémé : la carte du fil peut
+    /// être claire, et le crédit y sortait à 1,03:1 — illisible. L'hôte qui
+    /// connaît sa surface passe donc sa propre teinte.
+    let tint: Color
+
     public init(text: String,
                 paused: Bool = false,
                 window: AudioChipPlaybackWindow? = nil,
                 height: CGFloat = 18,
-                fontSize: CGFloat = 12) {
+                fontSize: CGFloat = 12,
+                tint: Color = .white) {
         self.text = text
         self.paused = paused
         self.window = window
         self.height = height
         self.fontSize = fontSize
+        self.tint = tint
     }
 
     @State private var contentWidth: CGFloat = 0
@@ -299,7 +313,8 @@ public struct AudioChipMarquee: View {
                 AudioChipRemainingTimeText(window: window,
                                            minuteDigits: digits,
                                            fontSize: fontSize,
-                                           dimmed: paused)
+                                           dimmed: paused,
+                                           tint: tint)
             }
         }
     }
@@ -327,7 +342,8 @@ public struct AudioChipMarquee: View {
                 AudioChipRemainingTimeText(window: window,
                                            minuteDigits: digits,
                                            fontSize: fontSize,
-                                           dimmed: paused)
+                                           dimmed: paused,
+                                           tint: tint)
             }
         }
     }
@@ -335,7 +351,7 @@ public struct AudioChipMarquee: View {
     private func marqueeText(_ string: String) -> some View {
         Text(string)
             .font(.system(size: fontSize, weight: .semibold))
-            .foregroundColor(.white.opacity(paused ? 0.5 : 0.92))
+            .foregroundColor(tint.opacity(paused ? 0.5 : 0.92))
             .lineLimit(1)
     }
 
@@ -364,17 +380,24 @@ struct AudioChipRemainingTimeText: View {
     let minuteDigits: Int
     let fontSize: CGFloat
     let dimmed: Bool
+    /// Même teinte que le texte qui le PRÉCÈDE sur la ligne : le compteur est
+    /// la queue du crédit, pas un voisin. Les peindre séparément a produit le
+    /// défaut du #4078 à l'échelle d'une rangée — un segment lisible, un autre
+    /// invisible.
+    let tint: Color
 
     @ObservedObject private var playhead = StoryReaderPlayheadState.shared
 
     init(window: AudioChipPlaybackWindow,
          minuteDigits: Int,
          fontSize: CGFloat,
-         dimmed: Bool) {
+         dimmed: Bool,
+         tint: Color = .white) {
         self.window = window
         self.minuteDigits = minuteDigits
         self.fontSize = fontSize
         self.dimmed = dimmed
+        self.tint = tint
     }
 
     var body: some View {
@@ -389,7 +412,7 @@ struct AudioChipRemainingTimeText: View {
                 minuteDigits: minuteDigits))
                 .font(.system(size: fontSize, weight: .semibold))
                 .monospacedDigit()
-                .foregroundColor(.white.opacity(dimmed ? 0.5 : 0.92))
+                .foregroundColor(tint.opacity(dimmed ? 0.5 : 0.92))
                 .lineLimit(1)
                 .fixedSize()
         }

@@ -3,12 +3,19 @@ package me.meeshy.sdk.session
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.friend.BlockCache
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.notification.NotificationRepository
+import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
@@ -29,8 +36,8 @@ import org.robolectric.RobolectricTestRunner
  * wiping E2EE keys and per-user caches"): none of Meeshy's on-device stores are
  * namespaced by userId (parity with iOS `CacheCoordinator.reset()`), so a second
  * account signing in on the same device would otherwise inherit the previous
- * account's conversations, messages, categories and drafts. [SessionTeardown.wipe]
- * must leave every one of them empty.
+ * account's conversations, messages, categories, drafts, friendship graph and
+ * notifications. [SessionTeardown.wipe] must leave every one of them empty.
  */
 @RunWith(RobolectricTestRunner::class)
 class SessionTeardownTest {
@@ -57,7 +64,19 @@ class SessionTeardownTest {
         draftStore: InMemoryConversationDraftStore = InMemoryConversationDraftStore(),
         lockStore: InMemoryConversationLockStore = InMemoryConversationLockStore(),
         storyDraftStore: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
-    ) = DefaultSessionTeardown(db, categoryStore, draftStore, lockStore, storyDraftStore)
+        friendshipCache: FriendshipCache = FriendshipCache(),
+        notificationRepository: NotificationRepository = NotificationRepository(mockk(relaxed = true)),
+        blockCache: BlockCache = BlockCache(),
+    ) = DefaultSessionTeardown(
+        db,
+        categoryStore,
+        draftStore,
+        lockStore,
+        storyDraftStore,
+        friendshipCache,
+        notificationRepository,
+        blockCache,
+    )
 
     private fun composerDraft() = StoryComposerDraftSnapshot(
         slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "half-written story", mediaIds = listOf("cmid_1"))),
@@ -126,16 +145,53 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_clearsTheFriendshipCacheAndTheNotificationRepositorySingletons() = runTest {
+        val friendshipCache = FriendshipCache()
+        friendshipCache.didReceiveRequest(senderId = "alice", requestId = "r1")
+        assertThat(friendshipCache.pendingReceivedCount).isEqualTo(1)
+
+        val notificationApi: NotificationApi = mockk(relaxed = true)
+        val notificationRepository = NotificationRepository(notificationApi)
+        notificationRepository.prependLive(
+            ApiNotification(id = "n1", state = NotificationState(isRead = false, createdAt = "2026-08-27T12:00:00Z")),
+        )
+        assertThat(notificationRepository.unreadCountStream.value).isEqualTo(1)
+
+        teardown(friendshipCache = friendshipCache, notificationRepository = notificationRepository).wipe()
+
+        assertThat(friendshipCache.pendingReceivedCount).isEqualTo(0)
+        assertThat(notificationRepository.unreadCountStream.value).isEqualTo(0)
+    }
+
+    @Test
+    fun wipe_clearsTheBlockCache() = runTest {
+        val blockCache = BlockCache()
+        blockCache.setBlocked("bob", blocked = true)
+        assertThat(blockCache.isBlocked("bob")).isTrue()
+
+        teardown(blockCache = blockCache).wipe()
+
+        assertThat(blockCache.isBlocked("bob")).isFalse()
+        assertThat(blockCache.blockedCount).isEqualTo(0)
+    }
+
+    @Test
     fun wipe_isIdempotentOnAnAlreadyClearDevice() = runTest {
         val categoryStore = InMemoryCategorySnapshotStore()
         val draftStore = InMemoryConversationDraftStore()
         val lockStore = InMemoryConversationLockStore()
         val storyDraftStore = InMemoryStoryComposerDraftStore()
+        val friendshipCache = FriendshipCache()
+        val notificationRepository = NotificationRepository(mockk(relaxed = true))
+        val blockCache = BlockCache()
         val instance = teardown(
             categoryStore = categoryStore,
             draftStore = draftStore,
             lockStore = lockStore,
             storyDraftStore = storyDraftStore,
+            friendshipCache = friendshipCache,
+            notificationRepository = notificationRepository,
+            blockCache = blockCache,
         )
 
         instance.wipe()
@@ -147,5 +203,8 @@ class SessionTeardownTest {
         assertThat(lockStore.hasMasterPin()).isFalse()
         assertThat(lockStore.lockedConversationIds).isEmpty()
         assertThat(storyDraftStore.load()).isNull()
+        assertThat(friendshipCache.pendingReceivedCount).isEqualTo(0)
+        assertThat(notificationRepository.unreadCountStream.value).isEqualTo(0)
+        assertThat(blockCache.blockedCount).isEqualTo(0)
     }
 }

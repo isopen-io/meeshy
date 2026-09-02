@@ -123,9 +123,14 @@ final class LentilleSceneActivityTests: XCTestCase {
 
     func test_quickActions_areTheListTail_andTheEmptyState_behindTheFlag() throws {
         let code = try normalized("Meeshy/Features/Main/Views/ConversationListView.swift")
-        XCTAssertTrue(code.contains("quickActions(isEmptyState: false, minHeight: listTailMinHeight)"),
-                      "La queue de liste = les accès rapides, hauts d'une demi-région visible.")
-        XCTAssertTrue(code.contains("if LentilleFeatureFlag.isLentilleListEnabled { quickActions(isEmptyState: true) }"),
+        // **Le compte voyage jusqu'aux DEUX montages** (directive porteur
+        // 2026-09-01). La queue de liste passe le compte RÉEL — c'est lui qui
+        // décide des trois grands boutons jusqu'à dix conversations ; l'état
+        // vide passe zéro, écrit plutôt que sous-entendu.
+        XCTAssertTrue(code.contains("quickActions(isEmptyState: false, conversationCount: conversationViewModel.conversations.count, minHeight: listTailMinHeight)"),
+                      "La queue de liste = les accès rapides, hauts d'une demi-région visible, et le "
+                          + "compte RÉEL — sans lui, le seuil de démarrage ne pourrait jamais tomber.")
+        XCTAssertTrue(code.contains("if LentilleFeatureFlag.isLentilleListEnabled { quickActions(isEmptyState: true, conversationCount: 0) }"),
                       "L'état vide = les mêmes accès rapides.")
         XCTAssertEqual(code.components(separatedBy: "ConversationListQuickActions(").count - 1, 1,
                        "Une seule fabrique, deux montages : zéro divergence entre queue et état vide.")
@@ -143,14 +148,20 @@ final class LentilleSceneActivityTests: XCTestCase {
             ConversationListQuickActions.Action.allCases,
             [.findMembers, .myContacts, .myAffiliates, .newMessage, .story, .mood, .post, .invite, .shortcutLink]
         )
-        // État vide : les deux héros sortent de la grille (gros boutons) ;
-        // en queue de liste, tout le monde est une tuile.
+        // Tant qu'on DÉMARRE, les trois héros sortent de la grille (gros
+        // boutons) ; passé le seuil, tout le monde redevient une tuile.
+        //
+        // Le paramètre s'appelait `isEmptyState` — il ne le peut plus depuis la
+        // directive du 2026-09-01 : ce n'est pas le VIDE qui décide mais le
+        // DÉMARRAGE, jusqu'à dix conversations (`ConversationListQuickActions
+        // .showsHeroes(conversationCount:)`, éprouvé par
+        // `ConversationListHeroThresholdTests`).
         XCTAssertEqual(ConversationListQuickActions.Action.heroes, [.findMembers, .myContacts, .myAffiliates])
         XCTAssertEqual(
-            ConversationListQuickActions.Action.tiles(isEmptyState: true),
+            ConversationListQuickActions.Action.tiles(showsHeroes: true),
             [.newMessage, .story, .mood, .post, .invite, .shortcutLink]
         )
-        XCTAssertEqual(ConversationListQuickActions.Action.tiles(isEmptyState: false), ConversationListQuickActions.Action.allCases)
+        XCTAssertEqual(ConversationListQuickActions.Action.tiles(showsHeroes: false), ConversationListQuickActions.Action.allCases)
         for action in ConversationListQuickActions.Action.allCases {
             XCTAssertFalse(action.title.isEmpty)
             XCTAssertFalse(action.icon.isEmpty)

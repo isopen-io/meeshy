@@ -29,12 +29,9 @@
  * deux sont posés ici en doublure, et l'absence du canal est elle-même un cas
  * de test (un navigateur sans canal doit dégrader, pas planter).
  */
-import { renderHook } from '@testing-library/react';
-
 import {
   canalDuLien,
   observeCycleDeVie,
-  useCycleDeVie,
   type Balise,
   type OptionsDuCycleDeVie,
   type TransitionDeCycle,
@@ -909,62 +906,6 @@ describe('le site unique du cycle de vie', () => {
       detache();
 
       expect(canaux.size).toBe(0);
-    });
-  });
-
-  describe('le hook — la seule voie ouverte à un composant', () => {
-    it('observe pendant le montage et se tait après le démontage', () => {
-      const vues: TransitionDeCycle[] = [];
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({ sur: (vue) => vues.push(vue), cleDuJeton: CLE }),
-      );
-      bascule('hidden');
-      unmount();
-      bascule('visible');
-
-      expect(vues.filter((vue) => vue.type === 'masquage')).toHaveLength(1);
-      expect(vues.filter((vue) => vue.type === 'reprise')).toHaveLength(0);
-    });
-
-    it('porte la télémétrie du composant à la fermeture réelle du document', () => {
-      const beacon = balises();
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({ sur: () => undefined, cleDuJeton: CLE, telemetrie: () => TELEMETRIE }),
-      );
-      transition('pagehide', false);
-      unmount();
-
-      expect(beacon.mock.calls).toEqual([[TELEMETRIE.url, TELEMETRIE.corps]]);
-    });
-
-    it('porte le battement du composant sans lui faire toucher une minuterie', () => {
-      jest.useFakeTimers();
-      const battre = jest.fn();
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({
-          sur: () => undefined,
-          cleDuJeton: CLE,
-          battement: { intervalleMs: 600_000, battre },
-        }),
-      );
-      jest.advanceTimersByTime(600_000);
-      unmount();
-      jest.advanceTimersByTime(600_000);
-      jest.useRealTimers();
-
-      expect(battre).toHaveBeenCalledTimes(1);
-    });
-
-    it('ne se rattache pas quand seule l’identité des rappels change', () => {
-      const vues: TransitionDeCycle[] = [];
-      const { rerender } = renderHook(() =>
-        useCycleDeVie({ sur: (vue) => vues.push(vue), cleDuJeton: CLE }),
-      );
-      rerender();
-      rerender();
-      bascule('hidden');
-
-      expect(vues.filter((vue) => vue.type === 'masquage')).toHaveLength(1);
     });
   });
 });

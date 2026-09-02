@@ -351,7 +351,7 @@ public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unc
         limit: Int = 20
     ) async throws -> PaginatedAPIResponse<[NearbyPost]> {
         try await api.request(
-            endpoint: "/posts/nearby",
+            PostsEndpoint.nearby,
             method: "GET",
             body: nil,
             queryItems: NearbyDiscoveryQuery.nearbyItems(
@@ -371,7 +371,7 @@ public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unc
         cellSize: NearbyDensityCellSize
     ) async throws -> [NearbyDensityCell] {
         let response: APIResponse<[NearbyDensityCell]> = try await api.request(
-            endpoint: "/posts/nearby/density",
+            PostsEndpoint.nearbyDensity,
             method: "GET",
             body: nil,
             queryItems: NearbyDiscoveryQuery.densityItems(

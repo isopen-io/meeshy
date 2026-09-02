@@ -1,0 +1,88 @@
+{
+ "pourquoi": [
+  "CE FICHIER EST ÉCRIT À LA MAIN, ET AUCUN OUTIL NE LE RÉGÉNÈRE.",
+  "",
+  "`vues.json` est REGÉNÉRÉ par `capture-cibles.js` depuis la planche, écran par écran.",
+  "La planche ne connaît aucun jeton : elle dessine `/l/:token`, jamais `/l/lien-vivant`.",
+  "Un `jetons` posé dans `vues.json` survivrait donc jusqu'à la prochaine capture, puis",
+  "disparaîtrait SANS UN MOT — et sa disparition rendrait exactement le refus que le",
+  "résolveur émet à bon droit quand un jeton manque vraiment. Le mode dégradé serait",
+  "indiscernable du mode nominal. D'où ce fichier : la régénération ne peut pas effacer",
+  "ce qu'elle n'écrit pas.",
+  "",
+  "CE QU'UNE LIGNE DÉCLARE. La valeur de chaque `:jeton` de la route, telle que",
+  "`compare-rendu.js` doit la substituer pour que la navigation serve CET écran-là. Deux",
+  "vues qui partagent une route ont besoin d'un ÉTAT, pas d'une route : `linkRedirect` et",
+  "`linkExpired` visent toutes deux `/l/:token`, et c'est le jeton qui les sépare.",
+  "",
+  "CE QU'UNE LIGNE NE PROMET PAS. Qu'une valeur DÉCLARÉE mène au bon écran est une",
+  "question de CONFORMITÉ, mesurée par l'écart structurel (rc=1 si l'écran dévie), jamais",
+  "de sélection (rc=3, « je n'ai pas su mesurer »). Les confondre ferait d'un outil muet",
+  "un outil accusateur.",
+  "",
+  "AJOUTER UNE VUE : une entrée `\"<id de vue>\": { \"<nom du jeton>\": \"<valeur>\" }`. Les",
+  "jetons non déclarés restent REFUSÉS et NOMMÉS — c'est le comportement voulu, pas une",
+  "lacune à combler en masse.",
+  "",
+  "UN JETON PAR ÉTAT DE `/chat/:lien` (directive 2026-09-01, conception § 12.3). La même",
+  "adresse rend TROIS états décidés par le serveur ; deux sont des vues de la planche :",
+  "`join` = lien VIVANT sans session (état CHOIX), `rights` = lien REJOINT (état INVITÉ,",
+  "juste après la jonction). La valeur du jeton est ce que la passerelle de bouchon",
+  "(apps/web-v3/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
+  "`lien-vivant` / `jeton-expire` séparent déjà les deux vues de `/l/:token`. `thread` est",
+  "le fil du MEMBRE (`/chats/:cle`) ; le fil de l'INVITÉ est la vue `rights`, même module.",
+  "UN ÉTAT DE SESSION, DÉCLARÉ PAR VUE (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,",
+  "`/chats/:id` — ne rend rien à un visiteur sans créance : elle redirige vers `/login`. Ce n'est",
+  "pas un jeton de route qui la sépare d'une vue publique, c'est une SESSION. Une vue le déclare",
+  "par la clé `@session` (jamais un `:jeton` de la route, donc jamais confondue avec l'un d'eux),",
+  "et `compare-rendu.js` la traduit en cookies posés sur le contexte du navigateur. Le bloc",
+  "`sessions` ci-dessous dit lesquels, et ce sont ceux que la PASSERELLE DE BOUCHON reconnaît :",
+  "`__tests__/conformite-des-vues.test.ts` les oppose aux constantes du dépôt (`COOKIE_DE_JETON`,",
+  "`COOKIE_DE_SESSION`, `JETON_DU_MEMBRE`) et rougit si l'un dérive.",
+  "",
+  "Ce qui sépare `vitrine` de `home` (toutes deux `/`) est cette même session — mais leur",
+  "COLLISION de chemin reste à trancher dans `vues-comparables.mjs` (deux vues, un chemin), et",
+  "ce n'est pas fait : `home` ne déclare donc encore aucune session. Voir conception § 12.8."
+ ],
+ "sessions": {
+  "membre": {
+   "pourquoi": "Le lecteur CONNECTÉ tel que la passerelle de bouchon le sert : un jeton de membre, et la session ouverte que la zone v3 exige.",
+   "cookies": {
+    "meeshy_auth": "JWT.sonde",
+    "meeshy_session": "ouverte"
+   }
+  }
+ },
+ "jetons": {
+  "linkRedirect": {
+   "token": "lien-vivant"
+  },
+  "linkExpired": {
+   "token": "jeton-expire"
+  },
+  "join": {
+   "lien": "lien-vivant"
+  },
+  "rights": {
+   "lien": "lien-rejoint"
+  },
+  "thread": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
+  "rich": {
+   "id": "fil-riche",
+   "@session": "membre"
+  },
+  "media": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
+  "login": {
+   "lien": "lien-vivant"
+  },
+  "signup": {
+   "lien": "lien-vivant"
+  }
+ }
+}

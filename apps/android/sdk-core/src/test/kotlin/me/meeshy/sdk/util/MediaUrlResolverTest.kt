@@ -69,4 +69,60 @@ class MediaUrlResolverTest {
     fun `une chaine vide ne designe aucun media et ne recoit pas de route`() {
         assertThat(resolveMediaUrl("", base)).isEqualTo("https://gate.meeshy.me/")
     }
+
+    // ── Magasin statique (#4625) ────────────────────────────────────────────
+    //
+    // 272 avatars de staging portaient leur adresse absolue et ne s'affichaient
+    // QUE pour cette raison : reduits a leur cle, ils partaient se chercher sur
+    // la passerelle, ou ils ne sont pas. Ces temoins sont le pendant Kotlin de
+    // `packages/shared/api/__tests__/media-ref.test.ts` et de
+    // `MeeshyConfigTests` (iOS).
+
+    @Test
+    fun `une cle statique va sur l hote STATIQUE, jamais sur la passerelle`() {
+        assertThat(resolveMediaUrl("static:u/i/2025/11/avatar_1763143871947_o0.jpg", base))
+            .isEqualTo("https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg")
+    }
+
+    @Test
+    fun `l hote statique se derive du domaine web, pas de la passerelle`() {
+        assertThat(resolveMediaUrl("static:u/i/a.jpg", "https://gate.staging.meeshy.me/api/v1"))
+            .isEqualTo("https://static.staging.meeshy.me/u/i/a.jpg")
+    }
+
+    @Test
+    fun `en developpement la cle statique suit le PORT du web, pas celui de l API`() {
+        assertThat(resolveMediaUrl("static:u/i/a.jpg", "http://localhost:3000/api/v1"))
+            .isEqualTo("http://localhost:3100/u/i/a.jpg")
+    }
+
+    @Test
+    fun `deux cles qu aucune FORME ne distinguait vont a deux magasins`() {
+        // Le temoin decisif : ni `u/i/2025/11/a.jpg` ni `avatars/user/<id>.jpg`
+        // ne ressemble a une cle datee, et les deux partaient au meme hote.
+        assertThat(resolveMediaUrl("static:u/i/2025/11/a.jpg", base))
+            .isEqualTo("https://static.meeshy.me/u/i/2025/11/a.jpg")
+        assertThat(resolveMediaUrl("avatars/user/68f2a814.jpg", base))
+            .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/avatars/user/68f2a814.jpg")
+    }
+
+    @Test
+    fun `une cle statique encode ce qu une URL ne porte pas tel quel`() {
+        assertThat(resolveMediaUrl("static:u/i/2025/11/Photo de profil.jpg", base))
+            .isEqualTo("https://static.meeshy.me/u/i/2025/11/Photo%20de%20profil.jpg")
+    }
+
+    @Test
+    fun `sans base configuree, une cle statique est rendue telle quelle`() {
+        // Meme contrat que pour une cle de passerelle : rendre une adresse
+        // inventee echouerait plus loin, sans dire pourquoi.
+        assertThat(resolveMediaUrl("static:u/i/a.jpg", null)).isEqualTo("static:u/i/a.jpg")
+    }
+
+    @Test
+    fun `un schema sans cle n est pas recompose`() {
+        assertThat(resolveMediaUrl("static:", base)).isEqualTo("static:")
+        assertThat(resolveMediaUrl("static:/", base)).isEqualTo("static:/")
+    }
+
 }

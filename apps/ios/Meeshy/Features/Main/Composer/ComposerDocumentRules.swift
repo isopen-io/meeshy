@@ -149,8 +149,26 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// déclaration, mais rien ne garantit qu'il ne bougera pas : la rangée est
     /// écrite ici en toutes lettres, et `ComposerDocumentSurfaceTests` vérifie
     /// qu'aucun outil n'en manque.
+    /// **L'ordre est celui de la cible `1a`, et les ajouts de l'app viennent
+    /// APRÈS (#4071).**
+    ///
+    /// Mesuré au simulateur : la rangée ne peut pas montrer ses sept tuiles
+    /// nommées sur 402 pt à taille nominale — rien ne le pourrait sans passer
+    /// sous la cible tactile de 44 pt. Il y aura donc toujours un débordement ;
+    /// la seule question est CE QUI déborde.
+    ///
+    /// `.mention` occupait le 4e rang et poussait `.document`, `.place` et
+    /// `.microphone` hors champ — trois outils dont la chaîne va pourtant
+    /// jusqu'au brouillon et au publieur, et dont AUCUN pixel ne paraissait.
+    /// Ce sont les six de la maquette qui passent devant ; ce que l'app ajoute
+    /// en propre défile. La loi 1 dit que ce qui dépasse RESTE — elle ne dit
+    /// pas que ça passe en premier.
+    ///
+    /// `.mention` perd le moins à ce déplacement : la mention s'écrit aussi en
+    /// tapant `@` dans le texte, avec sa bande de suggestions — c'est le seul
+    /// outil de la rangée qui a une seconde porte.
     static let canonicalRow: [ComposerDocumentTool] = [
-        .photo, .camera, .emoji, .mention, .document, .place, .microphone
+        .photo, .camera, .emoji, .document, .place, .microphone, .mention
     ]
 
     /// **Ce que cet outil DÉCLENCHE — et `nil` veut dire « rien ».**
@@ -216,6 +234,34 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// liste écrite à part l'aurait reprise à son compte.
     static var servedRow: [ComposerDocumentTool] {
         canonicalRow.filter { $0.effect != nil }
+    }
+
+    /// **La rangée canonique appartient au POST** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// > « Enlever les éléments de la rangée canonique car destinés pour les
+    /// > posts (seule entité qui peut avoir un texte spécifiquement pour
+    /// > contenu). »
+    ///
+    /// Les sept outils servent tous la même chose : composer un CHAMP DE TEXTE
+    /// et ce qu'on y joint. Emoji et mention s'insèrent dedans ; photo, caméra,
+    /// fichier, lieu et micro y attachent une pièce. Or une story n'a pas de
+    /// champ de contenu — on y écrit en POSANT un objet texte sur un canvas,
+    /// avec sa police, sa couleur et sa place. Servir la rangée sous une story
+    /// offrirait sept gestes qui visent un champ que l'écran n'a pas.
+    ///
+    /// **Le RÉEL la garde**, et ce n'est pas un oubli : ses canvas sont ses
+    /// médias, comme ceux d'un post, et il se compose depuis le même document.
+    /// Ce qui distingue la story n'est pas d'avoir un canvas — c'est que
+    /// chacun de ses canvas est une unité d'histoire à publier, pas un média de
+    /// la publication.
+    ///
+    /// **Remis en cause le 2026-09-02, RÉTABLI le même jour** (retour porteur) :
+    /// j'y avais servi les outils qui posent un objet de scène, pour réparer un
+    /// défaut que je venais de créer en retirant les rails. Les rails sont
+    /// restaurés — la story se compose par eux et par la rangée contextuelle.
+    static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
+        format == .story ? [] : servedRow
     }
 
     /// **Le jeu SF MODERNE — décision produit 2026-08-26 : SF retravaillés
@@ -593,7 +639,19 @@ nonisolated enum ComposerDocumentPublishGate {
         /// Défaut `false`, et c'est le sens SÛR : un appelant qui l'ignore
         /// obtient une flèche INERTE sur la scène, jamais une flèche armée
         /// au-dessus d'une composition vide.
-        atelierHasMatter: Bool = false
+        atelierHasMatter: Bool = false,
+        /// **La matière du DOCUMENT — des pièces jointes, un lieu (#4514).**
+        ///
+        /// Elle manquait, et le défaut était silencieux : un post de deux photos
+        /// sans légende était REFUSÉ, bouton peint et désactivé, sans que rien
+        /// ne dise que la seule chose absente était du texte. Mesuré au
+        /// simulateur le 2026-08-31.
+        ///
+        /// Défaut `false` des deux côtés — le sens SÛR : un appelant qui ne se
+        /// prononce pas obtient le comportement d'avant, jamais une porte
+        /// ouverte sur un brouillon vide.
+        hasMedia: Bool = false,
+        hasLocation: Bool = false
     ) -> Bool {
         guard !isPublishing else { return false }
         guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
@@ -603,7 +661,16 @@ nonisolated enum ComposerDocumentPublishGate {
         case .mood:
             return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
         case .document:
+            // **Publier une photo sans un mot est le cas NOMINAL d'un réseau
+            // social, pas un cas limite.** La porte n'acceptait qu'un repost ou
+            // du texte : les pièces jointes ne figuraient pas dans la question,
+            // alors que l'écran les montrait déjà en vignettes.
+            //
+            // Un lieu seul compte aussi — « je suis ici » est une publication
+            // en soi et n'a pas besoin d'une légende pour en être une.
             return repostOfId != nil
+                || hasMedia
+                || hasLocation
                 || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
@@ -919,6 +986,31 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Couleur de fond", bundle: .main)
     }
 
+    /// **Le mot PEINT sur la tuile, distinct de celui que lit VoiceOver
+    /// (#4071).**
+    ///
+    /// « Couleur de fond » occupe à lui seul près du double d'une tuile
+    /// voisine, et la rangée n'a pas cette place : mesuré au simulateur, il
+    /// repoussait trois entrées hors champ à taille nominale. « Fond » est le
+    /// mot du document — la vue `1b` étiquette ce plan « fond · plan bg », et
+    /// la rangée de la scène le nomme déjà ainsi.
+    ///
+    /// La forme longue ne DISPARAÎT pas : elle reste l'étiquette
+    /// d'accessibilité, là où la place ne coûte rien et où le contexte manque
+    /// le plus. Raccourcir les deux aurait échangé un défaut de disposition
+    /// contre un défaut d'accessibilité.
+    ///
+    /// **La clé est de la famille `composer.attach.*`, et pas d'une famille
+    /// neuve.** La bascule de fond est une tuile de CETTE rangée : lui ouvrir
+    /// `composer.document.tool.*` aurait recréé la famille parallèle que
+    /// `test_lesLibellesDOutils_reutilisentLaFamilleDattacheDejaTraduite`
+    /// existe pour interdire — six libellés dupliqués, deux traductions à
+    /// faire diverger.
+    static var backgroundShort: String {
+        String(localized: "composer.attach.background",
+               defaultValue: "Fond", bundle: .main)
+    }
+
     /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne
     /// reprend PAS le littéral `"Langue du post"` de la feuille historique :
     /// sa clé contient des espaces et échappe au cliquet français
@@ -947,6 +1039,19 @@ nonisolated enum ComposerDocumentCopy {
     static var publishError: String {
         String(localized: "feed.post.publish.error",
                defaultValue: "Erreur lors de la publication", bundle: .main)
+    }
+
+    /// **Un format qu'aucun canal ne sait porter** (#4869).
+    ///
+    /// Distincte de `publishError`, et c'est le point : « erreur lors de la
+    /// publication » envoie réessayer, quand rien de ce que l'auteur peut faire
+    /// ne changera l'issue. Une phrase qui nomme la CAUSE lui évite le second
+    /// tap — c'est la même règle que les refus de l'éventail (#4858), un cran
+    /// plus loin dans le geste.
+    static var publishFormatUnsupported: String {
+        String(localized: "composer.publish.format.unsupported",
+               defaultValue: "Ce format ne peut pas encore être publié d'ici",
+               bundle: .main)
     }
 
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`

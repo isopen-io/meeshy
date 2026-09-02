@@ -138,7 +138,7 @@ describe('AuthStore', () => {
   describe('setTokens', () => {
     it('should set auth token', () => {
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token');
+        useAuthStore.getState().setTokens({ authToken: 'test-auth-token' });
       });
 
       const state = useAuthStore.getState();
@@ -146,14 +146,14 @@ describe('AuthStore', () => {
       expect(state.sessionExpiry).toBeNull();
     });
 
-    // Le 2e créneau (`refreshToken`) reste ACCEPTÉ positionnellement —
-    // `hooks/use-auth.ts:175`, hors territoire de ce lot, l'appelle encore —
-    // mais n'a plus de contrepartie en état réactif (#4405, étape 3) : rien
-    // ne produisait jamais de valeur pour lui (mesuré). Une valeur qui y
-    // transite ne doit apparaître NULLE PART dans l'état.
-    it('drops the (now inert) second positional slot — it never surfaces in state', () => {
+    // Le champ `refreshToken` reste ACCEPTÉ (nommé, #4491 — objet nommé,
+    // miroir de #4450 sur `setCredentials`) mais n'a plus de contrepartie en
+    // état réactif (#4405, étape 3) : rien ne produisait jamais de valeur
+    // pour lui (mesuré). Une valeur qui y transite ne doit apparaître NULLE
+    // PART dans l'état.
+    it('drops the (now inert) refreshToken field — it never surfaces in state', () => {
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'legacy-value-that-must-be-dropped');
+        useAuthStore.getState().setTokens({ authToken: 'test-auth-token', refreshToken: 'legacy-value-that-must-be-dropped' });
       });
 
       const state = useAuthStore.getState();
@@ -165,7 +165,7 @@ describe('AuthStore', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', undefined, undefined, 3600);
+        useAuthStore.getState().setTokens({ authToken: 'test-auth-token', expiresIn: 3600 });
       });
 
       const state = useAuthStore.getState();
@@ -182,11 +182,11 @@ describe('AuthStore', () => {
     // pour `sessionToken` — c'est lui qui garde la couverture de cette logique.
     it('should preserve existing session token if not provided', () => {
       act(() => {
-        useAuthStore.getState().setTokens('token-1', undefined, 'session-1');
+        useAuthStore.getState().setTokens({ authToken: 'token-1', sessionToken: 'session-1' });
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('token-2');
+        useAuthStore.getState().setTokens({ authToken: 'token-2' });
       });
 
       const state = useAuthStore.getState();
@@ -200,7 +200,7 @@ describe('AuthStore', () => {
       // First set auth state
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        useAuthStore.getState().setTokens('test-token', 'test-refresh', undefined, 3600);
+        useAuthStore.getState().setTokens({ authToken: 'test-token', refreshToken: 'test-refresh', expiresIn: 3600 });
       });
 
       // Then clear it
@@ -279,7 +279,7 @@ describe('AuthStore', () => {
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('store-jwt');
+        useAuthStore.getState().setTokens({ authToken: 'store-jwt' });
       });
 
       await act(async () => {
@@ -306,7 +306,7 @@ describe('AuthStore', () => {
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('store-jwt', undefined, 'store-session-token');
+        useAuthStore.getState().setTokens({ authToken: 'store-jwt', sessionToken: 'store-session-token' });
       });
 
       await act(async () => {
@@ -331,7 +331,7 @@ describe('AuthStore', () => {
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('store-jwt');
+        useAuthStore.getState().setTokens({ authToken: 'store-jwt' });
       });
 
       let result: boolean = false;
@@ -357,7 +357,7 @@ describe('AuthStore', () => {
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('store-jwt');
+        useAuthStore.getState().setTokens({ authToken: 'store-jwt' });
       });
 
       let result: boolean = false;
@@ -375,7 +375,7 @@ describe('AuthStore', () => {
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       act(() => {
-        useAuthStore.getState().setTokens('store-jwt');
+        useAuthStore.getState().setTokens({ authToken: 'store-jwt' });
       });
 
       let result: boolean = false;
@@ -502,10 +502,10 @@ describe('AuthStore', () => {
 
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        // Le 2e argument (créneau `refreshToken`, désormais inerte, #4405)
-        // ne doit atterrir NULLE PART — ni en état, ni dans ce que
+        // Le champ `refreshToken` (désormais inerte, #4405 ; nommé depuis
+        // #4491) ne doit atterrir NULLE PART — ni en état, ni dans ce que
         // `partialize` retient pour la persistance.
-        useAuthStore.getState().setTokens('auth-token', 'legacy-refresh-slot-value');
+        useAuthStore.getState().setTokens({ authToken: 'auth-token', refreshToken: 'legacy-refresh-slot-value' });
         useAuthStore.setState({ sessionExpiry });
       });
 

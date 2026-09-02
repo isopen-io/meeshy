@@ -6,6 +6,8 @@
  * à partir du `type`, `actor`, `context` et `metadata`.
  */
 
+import type { PostType } from './post.js';
+
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
 // =====================================================
@@ -74,8 +76,8 @@ export enum NotificationTypeEnum {
 
   // ===== FRIEND CONTENT EVENTS (Phase 4F) =====
   // Fired when a friend publishes new content.
-  // STATUS and MOOD share friend_new_mood — they are lightweight
-  // ephemeral content and grouping avoids type proliferation.
+  // `friend_new_mood` porte du STATUS : le nom PRODUIT a donné son nom au type
+  // de notification et le garde (§ 7), le DISCRIMINANT dit STATUS (#4906).
   FRIEND_NEW_STORY = 'friend_new_story',
   FRIEND_NEW_POST = 'friend_new_post',
   FRIEND_NEW_MOOD = 'friend_new_mood',
@@ -468,10 +470,21 @@ export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
 }
 
 /**
- * Type de contenu social — pilote le wording et l'icône côté client.
- * REEL = vidéo verticale courte (distincte de POST/STORY/MOOD/STATUS).
+ * Type de contenu social qui TRAVERSE LE FIL — le type de `metadata.postType`
+ * et `metadata.contentType`, les discriminants que les trois clients lisent.
+ * C'est EXACTEMENT `PostType`, par ALIAS et non par recopie : une recopie
+ * dérive en silence, l'alias rend la dérive IMPOSSIBLE.
+ *
+ * **`'MOOD'` en est sorti (#4906)** — nom PRODUIT de `STATUS`, et le § 7 de
+ * `docs/product/meeshy-composer-modele.md` tient la frontière : un identifiant
+ * de fil garde `status`, la prose dit « mood ». Rien ne l'émettait, ce qui ne
+ * le rendait pas inoffensif — **une valeur de fil que personne n'émet est une
+ * AUTORISATION**, et deux surfaces la traitaient à part. La tolérance de
+ * LECTURE reste (clients, `NotificationPostLabelKind` au catalogue) : on ne
+ * durcit pas sur une valeur déjà persistée.
+ * Cliquet : `__tests__/types/social-post-type-wire-guard.test.ts`.
  */
-export type SocialPostType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+export type SocialPostType = PostType;
 
 /**
  * Metadata pour post_comment / comment_reply

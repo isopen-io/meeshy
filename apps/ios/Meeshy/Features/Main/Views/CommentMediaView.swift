@@ -147,6 +147,19 @@ struct CommentMediaView: View {
     /// `ConversationViewModel.mediaCaptionMap` côté conversation). Résolu par le
     /// Prisme en amont (`FeedComment.displayContent`).
     var carrierText: String? = nil
+    /// Langue d'ORIGINE du commentaire porteur (`FeedComment.originalLanguage`),
+    /// pour le Prisme audio (#4926).
+    ///
+    /// C'est un REPLI, pas la source principale : la langue qui concourt au rang
+    /// de l'origine est celle de la PISTE
+    /// (`MessageTranscription.language`), et un commentaire vocal transcrit la
+    /// porte toujours. Le porteur ne sert qu'au cas où la transcription n'est
+    /// pas encore revenue — cas où il n'y a de toute façon aucune piste
+    /// traduite, donc où l'élection rend l'original.
+    ///
+    /// `nil` par défaut : un hôte qui ne le sert pas ne casse rien, il retombe
+    /// sur la transcription. Ce qui serait FAUX, c'est de fabriquer une langue.
+    var carrierOriginalLanguage: String? = nil
     /// Infos auteur pour le label expéditeur du viewer plein écran (parité
     /// conversation : avatar + nom + date au-dessus du média).
     let authorName: String
@@ -274,6 +287,17 @@ struct CommentMediaView: View {
                     accentColor: accentColor,
                     transcription: media.transcription,
                     translatedAudios: media.translatedAudios,
+                    // Prisme AUDIO (#4926). `carrier` vient du commentaire
+                    // porteur, quand l'hôte le sert — la transcription prime de
+                    // toute façon, et c'est elle qui existe dans le cas nominal
+                    // d'un commentaire vocal.
+                    initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                        originalLanguage: SocialAudioTrack.originalLanguage(
+                            transcription: media.transcription,
+                            carrier: carrierOriginalLanguage
+                        ),
+                        translatedAudios: media.translatedAudios
+                    ),
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media, author: author,

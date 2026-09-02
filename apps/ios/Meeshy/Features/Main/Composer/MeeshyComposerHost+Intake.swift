@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
@@ -44,34 +45,113 @@ extension MeeshyComposerHost {
     /// dernier média laisse donc une slide vierge, ce qui est exactement l'état
     /// d'un post sans média.
     func syncPostMediaIntoSlides() {
-        guard selectedFormat == .post else { return }
+        // **Le rail de la scène pose sur TOUS les formats** (#4879).
+        //
+        // Ce guard portait le NOM de la fonction — « en Post, chaque média
+        // ingéré devient SA slide » (#4038) — et il était juste tant que la
+        // seule porte média était la rangée du document, qui n'existe qu'en
+        // Post. La porte du RAIL est arrivée après (#4724), et elle vit sur la
+        // SCÈNE : sur une STORY, ce `return` rendait la branche `.sceneRail`
+        // du placement ci-dessous entièrement MORTE — la photo était ingérée
+        // avec le bon mime, et n'atteignait jamais le canvas.
+        //
+        // Mesuré au simulateur, journal à l'appui : par le rail d'une story,
+        // « ingest photothèque … mime=image/jpeg » puis RIEN ; par la rangée
+        // d'un post, le même « ingest » suivi de « placement: porte=documentRow ».
+        //
+        // > **Un guard qui reprend le nom de sa fonction vieillit avec lui.**
+        // > « Post » décrivait la seule porte du jour ; la fonction est devenue
+        // > le site unique du placement, et le guard a continué d'exclure les
+        // > formats où la porte NEUVE vit.
+        //
+        // La condition élargie est PRÉCISE plutôt que retirée : elle demande
+        // s'il reste un média du RAIL à placer. Retirer le guard ferait poser
+        // des slides à des médias arrivés autrement sur une story — un
+        // changement de comportement que rien ici ne mesure.
+        let posePourLaScene = documentContentMedia.contains {
+            mediaRoleByURL[$0.sourceURL] == nil && railPosedMediaURLs.contains($0.sourceURL)
+        }
+        guard selectedFormat == .post || posePourLaScene else { return }
 
-        // **Le SON ne fait pas de slide (#4052).** Il se pose sur la scène
-        // COURANTE comme bande-son — pas une page du carrousel. Traité AVANT la
-        // boucle des visuels : il n'entre jamais dans `slideIdByMediaURL`, dont
-        // l'invariant est « une entrée = une slide », et l'y mettre ferait
-        // supprimer une slide au retrait du vocal.
-        viewModel.applyContentAudio(documentContentMedia.filter { $0.kind == .audio })
+        // **Le SON ne fait pas de slide (#4052), et depuis #4657 il ne fait pas
+        // non plus de BANDE-SON tout seul.**
+        //
+        // Cette ligne posait `applyContentAudio(…audio…)` : tout son de la liste
+        // média du document devenait la bande-son de la scène. C'était juste
+        // tant que la porte « Vocal » n'offrait aucun choix. Le commutateur de
+        // placement a changé la donne, et la ligne s'est mise à contredire le
+        // texte que l'app affiche elle-même : « Pièce jointe du post, avec son
+        // lecteur » d'un côté, « Son de fond, 5 secondes » sur la pastille de
+        // l'avatar de l'autre — pour le MÊME son. Mesuré au simulateur
+        // `Meeshy-iOS26` le 2026-09-01, reproductible.
+        //
+        // Un son placé en FOND ne passe jamais par ici : `applyCreatedAudio`
+        // l'envoie directement à la scène (`attachPastedAudio`), et
+        // `ingestSoundFiles` fait de même. Ce qui reste dans
+        // `documentContentMedia` est donc TOUJOURS du contenu — une pièce
+        // jointe, qui se joue dans son lecteur et non sous la scène.
+        //
+        // > Une règle écrite avant le contrôle qui la contredit ne rougit
+        // > nulle part : elle continue de s'appliquer, correctement, à une
+        // > question que plus personne ne pose.
 
+        // **Un média posé a un RÔLE, et c'est la PORTE qui le donne** (#4724,
+        // directive porteur 2026-09-01). Chaque média visuel ouvrait sa page,
+        // quelle que soit la porte : la rangée haute grossissait d'une tuile
+        // pour une image qu'on venait simplement de POSER sur la scène.
+        //
+        // `ComposerMediaPlacement` tranche, et sa moitié la moins évidente est
+        // celle qui garde la rangée haute d'accord avec le modèle : le rail ne
+        // pose en premier plan que s'il a un fond SUR QUOI poser.
         for media in documentContentMedia where media.kind != .audio
-            && slideIdByMediaURL[media.sourceURL] == nil {
-            let target: String
-            // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une porte
-            // du rail ajoute « en additif » ; créer une page est le geste de
-            // `[+]`, et lui seul (directive porteur 2026-08-30). La rangée du
-            // document, elle, garde la doctrine de la vue `1g` — en Post, une
-            // slide est UN média.
-            if railPosedMediaURLs.contains(media.sourceURL) {
-                target = viewModel.currentSlide.id
-            } else if slideIdByMediaURL.isEmpty,
-               (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
-                target = viewModel.currentSlide.id
-            } else {
-                viewModel.addSlide()
-                target = viewModel.currentSlide.id
+            && mediaRoleByURL[media.sourceURL] == nil {
+            let porte: ComposerMediaDoor =
+                railPosedMediaURLs.contains(media.sourceURL) ? .sceneRail : .documentRow
+            // **Le MÊME prédicat que `addMediaObject`**, mot pour mot : un fond
+            // de slide est un `mediaObject` résolu OU une image de fond posée
+            // au niveau de la slide. En omettre la seconde moitié ferait
+            // déclarer « fond » un objet que le modèle écrirait en premier
+            // plan — une tuile pour un média qui n'est pas une page.
+            let dejaUnFond = viewModel.currentSlide.effects.resolvedBackgroundMedia != nil
+                || viewModel.slideImages[viewModel.currentSlide.id] != nil
+            let role = ComposerMediaPlacement.role(door: porte,
+                                                   currentSlideHasBackground: dejaUnFond)
+            mediaRoleByURL[media.sourceURL] = role
+            // **Le placement se DIT** (#4879). Il se décide UNE fois par média,
+            // et son verdict ne se rejoue jamais : sans cette ligne, un canvas
+            // resté noir n'est attribuable à rien — porte, rôle, slide cible et
+            // format sont les quatre termes qui, ensemble, expliquent où le
+            // média est parti.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "placement: \(media.sourceURL.lastPathComponent, privacy: .public) porte=\(String(describing: porte), privacy: .public) role=\(String(describing: role), privacy: .public) slide=\(viewModel.currentSlide.id, privacy: .public) fond=\(dejaUnFond, privacy: .public) format=\(String(describing: selectedFormat), privacy: .public)"
+            )
+
+            switch role {
+            case .foreground:
+                // Il rejoint la scène COURANTE et n'y fonde rien : pas de
+                // `addSlide`, pas d'entrée dans l'index des fondations, donc
+                // pas de tuile. C'est tout le lot.
+                viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+
+            case .background:
+                let target: String
+                // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une
+                // porte du rail ajoute « en additif » ; créer une page est le
+                // geste de `[+]`, et lui seul (directive porteur 2026-08-30).
+                // La rangée du document, elle, garde la doctrine de la vue
+                // `1g` — en Post, une slide est UN média.
+                if porte == .sceneRail {
+                    target = viewModel.currentSlide.id
+                } else if slideIdByMediaURL.isEmpty,
+                   (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                    target = viewModel.currentSlide.id
+                } else {
+                    viewModel.addSlide()
+                    target = viewModel.currentSlide.id
+                }
+                viewModel.applyContentMedia([media], intoSlideId: target)
+                slideIdByMediaURL[media.sourceURL] = target
             }
-            viewModel.applyContentMedia([media], intoSlideId: target)
-            slideIdByMediaURL[media.sourceURL] = target
         }
 
         let present = Set(documentContentMedia.filter { $0.kind != .audio }.map(\.sourceURL))
@@ -80,6 +160,13 @@ extension MeeshyComposerHost {
                 viewModel.removeSlide(at: index)
             }
             slideIdByMediaURL.removeValue(forKey: url)
+        }
+        // **Le rôle s'oublie avec le média**, sinon un fichier re-choisi après
+        // un retrait serait sauté en silence : la mémoire des rôles sert AUSSI
+        // de garde d'idempotence, et une garde qui survit à son objet refuse la
+        // pose suivante.
+        for (url, _) in mediaRoleByURL where !present.contains(url) {
+            mediaRoleByURL.removeValue(forKey: url)
         }
     }
 
@@ -107,10 +194,25 @@ extension MeeshyComposerHost {
     /// La question se pose au MEUBLE parce que c'est lui qui monte les vues ;
     /// `ComposerOverflowPolicy`, elle, ne reçoit qu'un FAIT — pas un nom de
     /// surface, qu'elle n'aurait aucun moyen d'éprouver.
-    var backgroundPaletteIsReachable: Bool {
-        ComposerMountedView.mounted(surface: mountedSurface,
-                                    hasScene: documentHasScene) != .scene
-    }
+    /// **Elle lit la vue MONTÉE, elle ne la recalcule pas** (#4513). Elle
+    /// refaisait l'appel à `mounted(surface:hasScene:)` avec ses propres
+    /// arguments — une seconde écriture de la même question, qui a divergé dès
+    /// que la règle a pris une troisième entrée : elle aurait continué de
+    /// répondre « scène » pour une scène simplement INCRUSTÉE, où la rangée
+    /// d'outils du document offre pourtant bien la palette.
+    ///
+    /// > Une valeur lue à un seul endroit ne peut pas être lue de travers
+    /// > ailleurs.
+    /// **#4919 — la surface de SCÈNE a désormais son propre chemin**, la porte
+    /// `background` du rail gauche. La réponse est donc `true` PARTOUT : la
+    /// rangée d'outils sur le document, la porte sur la scène.
+    ///
+    /// Laisser `false` ici donnerait DEUX contrôles pour un même réglage sur le
+    /// même écran — très exactement le doublon que le paramètre de
+    /// `ComposerOverflowPolicy` existe pour éviter, et que son doc-comment
+    /// nomme. La règle, elle, ne change pas : elle garde ses deux réponses, et
+    /// ses témoins les épinglent. Ce qui change est le FAIT qu'on lui rapporte.
+    var backgroundPaletteIsReachable: Bool { true }
 
     /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la
     /// règle sert — une entrée absente, jamais grisée.
@@ -171,10 +273,19 @@ extension MeeshyComposerHost {
             documentBackground = nil
             documentLocation = nil
             documentDiscoverability.reset()
-            documentTranscription = nil
+            documentTranscriptions = [:]
+            // Le contexte d'édition désigne une URL de `documentLocalMedia`
+            // qu'on vient de vider : le laisser posé ferait remplacer une
+            // entrée qui n'existe plus.
+            editedForegroundSound = nil
             // La carte média→slide est un INDEX du meuble : la laisser pleine
             // ferait retirer, au prochain sync, des slides qui n'existent plus.
             slideIdByMediaURL = [:]
+            // Sa jumelle sert AUSSI de garde d'idempotence (#4724) : la laisser
+            // pleine ferait sauter la re-pose de la même photo après un « Tout
+            // effacer » — exactement le défaut que `viewModel.reset()` ferme
+            // trois lignes plus haut pour `carriedContentSources`.
+            mediaRoleByURL = [:]
             selectedSceneItemKind = nil
         }
     }
@@ -196,11 +307,17 @@ extension MeeshyComposerHost {
     }
 
     /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
-    /// choisi, ou au moins un média devenu slide. La lier au seul
+    /// choisi, un média devenu slide, ou un objet POSÉ dessus. La lier au seul
     /// `documentBackground` (Phase 2) la réservait aux fonds de COULEUR, donc
-    /// laissait un post de photos sans aucune scène.
+    /// laissait un post de photos sans aucune scène ; la lier aux seules
+    /// FONDATIONS la démontait dès que la dernière tuile partait, en emportant
+    /// hors de vue les objets de premier plan que la slide gardait (#4724, V2).
     var documentHasScene: Bool {
-        documentBackground != nil || !slideIdByMediaURL.isEmpty
+        ComposerScenePresence.hasScene(
+            backgroundHex: documentBackground,
+            foundedSlides: slideIdByMediaURL.count,
+            sceneObjectCount: viewModel.currentSlide.sceneObjects.count
+        )
     }
 
     func carryContentIntoSceneIfNeeded() {
@@ -229,55 +346,6 @@ extension MeeshyComposerHost {
             documentLocation = place
             documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
         }
-    }
-
-    /// **Le sixième outil (T2.6)**, dernier de la rangée — même composant que
-    /// le composer inline du fil monte déjà (`AudioPostComposerView`,
-    /// `FeedView+Attachments.swift`) : en fabriquer un second aurait donné
-    /// deux feuilles d'enregistrement/transcription à faire diverger,
-    /// exactement le défaut que `PublishIntent` existe pour fermer.
-    ///
-    /// **La destination est double, et c'est le cœur du lot.** L'enregistrement
-    /// rejoint `documentLocalMedia` comme un `ComposerDocumentMedia` ORDINAIRE
-    /// — il part par la file durable, comme tout média local (T2.3). La
-    /// transcription voyage À CÔTÉ dans `documentTranscription`, jamais fondue
-    /// dans le texte : `documentDraft` la transmet telle quelle à
-    /// `ComposerDocumentDraft.document(mobileTranscription:)`, que la porte
-    /// poste à `PublishIntent.document(transcription:)`.
-    ///
-    /// **La capsule de langue est SEMÉE, jamais imposée.** Poser
-    /// `documentLanguage = transcription.language` au retour rend le contrôle
-    /// RÉEL (loi 4) et évite qu'une voix parte étiquetée par la langue de
-    /// démarrage du meuble — mais ce n'est qu'un confort d'affichage : la
-    /// garantie qui compte est le `??` de `PublishIntent.document`, qui élit
-    /// la langue PARLÉE même si l'auteur rouvre la capsule et la change après
-    /// coup.
-    ///
-    /// **Un son EMPRUNTÉ à la bibliothèque est hors du périmètre de ce lot.**
-    /// `AudioPostComposerView.onPublishBorrowed` référence un `soundId` déjà
-    /// côté serveur, sans fichier LOCAL ni transcription — une matière que
-    /// `ComposerDocumentDraft` ne modélise pas ici. Fermer la feuille sans
-    /// effet est le choix assumé, plutôt qu'un second chemin d'envoi pour un
-    /// cas que la rangée du document n'offre nulle part ailleurs.
-    var documentAudioComposerSheet: some View {
-        AudioPostComposerView(
-            onPublish: { audioURL, mimeType, durationMs, transcription in
-                documentLocalMedia.append(ComposerDocumentMediaFactory.media(
-                    url: audioURL,
-                    declaredMimeType: mimeType,
-                    durationMs: durationMs
-                ))
-                documentTranscription = transcription
-                if let transcription {
-                    documentLanguage = transcription.language
-                }
-                presentedPortal = nil
-                HapticFeedback.light()
-            },
-            onPublishBorrowed: { _ in
-                presentedPortal = nil
-            }
-        )
     }
 
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
@@ -352,7 +420,13 @@ extension MeeshyComposerHost {
                     documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
                 }
             ),
-            title: "Langue du post"
+            // L'IDENTIFIANT, pas la phrase (#4621) : `"Langue du post"` était une
+            // clé-PHRASE, retirée du catalogue quand les soixante et une phrases
+            // françaises ont cessé de servir de clé. La feuille affichait donc sa
+            // clé brute, en français, dans les sept locales. Le défaut était déjà
+            // nommé douze lignes plus bas dans `ComposerDocumentRules.language` :
+            // « sa clé contient des espaces et échappe au cliquet français ».
+            title: "feed.post.language"
         )
     }
 
@@ -360,7 +434,20 @@ extension MeeshyComposerHost {
     /// écrite ici. Le jour où un outil gagnera sa destination, il suffira de lui
     /// donner un `effect` : une énumération recopiée ici aurait exigé de penser
     /// aux DEUX endroits, et le second est celui qu'on oublie.
-    var servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }
+    /// La rangée SERVIE dépend du format : une story n'a pas de champ de
+    /// contenu à outiller (`ComposerDocumentTool.servedRow(for:)`).
+    var servedDocumentTools: [ComposerDocumentTool] {
+        ComposerDocumentTool.servedRow(for: selectedFormat)
+    }
+
+    /// **Semer la première unité d'histoire.** Appelé au changement de format
+    /// et au montage ; la règle décide, pas ce corps — c'est elle qui porte la
+    /// raison de ne pas se fier à l'initialisation d'un autre module.
+    func seedStoryCanvasIfNeeded() {
+        guard ComposerStoryCanvas.needsSeedSlide(format: selectedFormat,
+                                                 slideCount: viewModel.slides.count) else { return }
+        viewModel.addSlide()
+    }
 
     /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
     ///
@@ -383,6 +470,24 @@ extension MeeshyComposerHost {
         case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
+        case .hashtag:
+            // **La jumelle de `.mention`, et par le même mécanisme** (#4636) :
+            // elle ouvre un sélecteur dont le résultat s'écrit dans le TEXTE de
+            // la publication. Aucun objet n'est posé sur la scène — un hashtag
+            // classe ce qui part, il ne s'y voit pas.
+            HapticFeedback.light()
+            presentedPortal = .hashtag
+        case .background:
+            // **#4919 — la porte FOND déplie la bande `.palette`**, celle-là
+            // même que le menu `⋯` ouvrait en dépannage.
+            //
+            // Elle BASCULE, comme le dessin et pour la même raison : la bande
+            // occupe ≈ 170 pt de la zone basse, et une porte qui ne saurait
+            // qu'ouvrir les rendrait à sens unique. C'est le geste exact de
+            // `ComposerOverflowEntry.pickBackground`, déplacé du menu au rail —
+            // le même effet par un chemin qu'on trouve sans le chercher.
+            HapticFeedback.light()
+            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
         case .description:
             // La SEULE façon d'ouvrir la description sur la scène incrustée
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
@@ -411,6 +516,18 @@ extension MeeshyComposerHost {
                 // simulateur le 2026-08-30 : la bande paraissait, le trait
                 // jamais.
                 viewModel.beginDrawing()
+                // **Les commandes de l'outil paraissent EN DIRECT** (#4633,
+                // directive porteur 2026-08-31 : « la rangée canonique du bas
+                // disparaît pour mettre en place les commandes d'outils
+                // directement en direct »).
+                //
+                // `MeeshyToolOptionsPanel` ne rend quelque chose que si un outil
+                // est DÉPLIÉ : ouvrir le dessin laissait la zone basse VIDE
+                // jusqu'à ce qu'une bulle du rail soit tapée — un geste de plus
+                // avant le premier réglage, sur un écran qui venait précisément
+                // de libérer cette place. Le pinceau est le premier réglage de
+                // tout tracé ; le déplier d'emblée ne devine rien.
+                viewModel.setExpandedDrawingTool(.tool)
             }
         case .text:
             // **Poser PUIS ouvrir l'éditeur, dans le même geste.** `addText()`
@@ -421,7 +538,7 @@ extension MeeshyComposerHost {
             // (`exitTextEditingMode`), donc « poser » n'engage à rien.
             HapticFeedback.light()
             if let objet = viewModel.addText() {
-                viewModel.enterTextEditingMode(textId: objet.id)
+                openObjectEditor(objet.id)
             }
         case .sticker:
             // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
@@ -437,6 +554,31 @@ extension MeeshyComposerHost {
     /// **Le rail délègue au VIEWMODEL, jamais au canvas.** Muter la slide par
     /// le modèle est ce qui garde publication, reader et export d'accord ; le
     /// meuble n'a d'ailleurs aucune référence à la vue UIKit.
+    /// **Taper un jeton de l'inspecteur ouvre là où sa valeur se CHANGE**
+    /// (#4073).
+    ///
+    /// Le geste n'existait pas : `onObjectChip` était au contrat de la surface
+    /// et aucun meuble ne le remplissait. La rangée peignait donc six capsules
+    /// qui s'annonçaient `.isButton`, vibraient sous le doigt, et n'ouvraient
+    /// rien — un contrôle INERTE, ce qui coûte plus qu'un contrôle absent
+    /// puisqu'il PROMET (loi 4).
+    ///
+    /// La destination est décidée par la RÈGLE, qui a déjà regardé le jeu des
+    /// bandes ouvrables : ce meuble ne fait que poser le résultat. Un jeton
+    /// sans destination rend la bande INCHANGÉE — la refermer ferait de
+    /// « TAILLE 140 % », pendant un rognage, un bouton d'annulation déguisé.
+    func handleObjectChip(_ chipId: String) {
+        let suivante = ComposerObjectChips.toggled(chipId,
+                                                   in: sceneObjectChips,
+                                                   opened: requestedSceneBand)
+        // Le retour haptique suit l'EFFET, jamais le doigt : faire vibrer
+        // l'appareil pour un geste qui ne change rien est précisément le retour
+        // trompeur que la loi 4 combat.
+        guard suivante != requestedSceneBand else { return }
+        requestedSceneBand = suivante
+        HapticFeedback.light()
+    }
+
     func handleTrailingRailAction(_ action: StoryCanvasContextAction) {
         guard let id = selectedSceneItemId else { return }
         switch action {
@@ -454,11 +596,20 @@ extension MeeshyComposerHost {
             requestedSceneBand = requestedSceneBand == .timeline ? nil : .timeline
             HapticFeedback.light()
         case .edit, .leaveScene:
-            // Injoignables : `ComposerSceneCapabilities.controllers` ne les
-            // contient pas, et le `switch` reste exhaustif pour que les servir
-            // oblige à passer ici. `edit` attend l'inspecteur par kind (#4073) ;
-            // `leaveScene` attend qu'une règle dise ce que l'objet DEVIENT une
-            // fois dehors (#4038).
+            // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
+            // le `switch` exhaustif oblige à relire quand on les sert.
+            //
+            // `edit` a désormais son chemin — l'appui long et l'action
+            // VoiceOver « Modifier », câblés par `onItemEdit` (#4074) — mais
+            // pas ici : le rail *trailing* règle les DIMENSIONS d'un objet et
+            // l'histoire de la publication (directive porteur 2026-08-31).
+            // « Modifier » n'est pas une dimension ; l'y ajouter donnerait deux
+            // portes au même geste, ce que la règle « une porte n'a pas de
+            // jumelle » interdit.
+            //
+            // `leaveScene` attend, elle, qu'une règle dise ce que l'objet
+            // DEVIENT une fois dehors (#4038) — une décision produit, pas un
+            // câblage.
             break
         }
     }
@@ -479,7 +630,12 @@ extension MeeshyComposerHost {
             presentedPortal = .location
         case .attachesTranscribedAudio:
             HapticFeedback.light()
-            presentedPortal = .audio
+            // **La MÊME feuille que « Ajouter un son » (#4657).** Ce qui
+            // distinguait les deux portes n'était pas le geste — les deux
+            // enregistrent, importent et empruntent — mais la DESTINATION du
+            // résultat. Elle se choisit désormais dans la feuille ; l'entrée ne
+            // fait plus que POSER le défaut qui lui correspond.
+            openSoundSheet(placement: .foreground)
         case .none:
             break
         }
@@ -584,104 +740,90 @@ extension MeeshyComposerHost {
     /// donc jamais cette scène.
     func presentSoundSources() {
         HapticFeedback.light()
-        presentedPortal = .sound
+        // La porte du rail n'a pas d'avis sur le placement : ce que l'auteur a
+        // choisi la fois d'avant tient. `nil` le dit ; `.background` l'imposerait.
+        openSoundSheet(placement: nil)
     }
 
     /// Les provenances SECONDAIRES, offertes sous le micro dans la feuille.
     /// `.record` n'y figure pas : c'est la surface principale, pas une porte.
+    /// **La provenance décide du MÉCANISME de présentation, pas seulement de la
+    /// destination** (#4632). `ComposerSoundHandoff` porte la règle : un portail
+    /// se remplace, un sélecteur système exige que la feuille se ferme d'abord.
+    ///
+    /// La branche `.files` posait `showsFileImporter = true` en laissant
+    /// `presentedPortal = .sound` monté — deux présentations sur le même corps de
+    /// vue, dont iOS n'honore que la première. Le bouton était INERTE.
     func presentSoundSource(_ source: ComposerSoundSource) {
-        switch source {
-        case .library:
+        switch ComposerSoundHandoff.handoff(for: source) {
+        case .portal:
             presentedPortal = .soundLibrary
-        case .files:
-            railPosesNextMedia = true
-            showsFileImporter = true
-        case .record:
+        case .systemImporterAfterDismiss:
+            // Le son se pose sur la SCÈNE, pas dans la liste média du document :
+            // `railPosesNextMedia` ne le concerne donc pas.
+            fileImportIntent = .sound
+            pendingFileImport = true
+            presentedPortal = nil
+        case .sheetSurface:
             break
         }
     }
 
-    /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
-    /// déjà ses deux entrées « Fichiers » et « Bibliothèque », que le composer
-    /// ne lui passait simplement jamais — et le rôle de mixage se pose SOUS le
-    /// bouton, à la place que le porteur a nommée.
+    /// **La reprise, à la fermeture EFFECTIVE de la feuille** (#4632).
     ///
-    /// Le résultat va sur la SCÈNE (`attachPastedAudio`), jamais dans la liste
-    /// média du document : c'est tout le correctif.
-    var composerSoundSheet: some View {
-        UnifiedAudioRecorderSheet(
-            preferredLanguage: documentLanguage,
-            showsLanguageStrip: true,
-            onImportAudioFile: { presentSoundSource(.files) },
-            onOpenSoundLibrary: { presentSoundSource(.library) },
-            accessory: AnyView(soundRolePicker),
-            onRecordComplete: { url, _ in
-                viewModel.attachPastedAudio(url: url, role: chosenSoundRole)
-                presentedPortal = nil
-                HapticFeedback.light()
-            }
-        )
+    /// Le drapeau retombe avant l'ouverture : un `pendingFileImport` resté vrai
+    /// rouvrirait l'importateur à la prochaine fermeture de n'importe quel
+    /// portail — la même classe de défaut que `railPosesNextMedia` documente
+    /// deux cents lignes plus haut.
+    ///
+    /// **Elle sert DEUX présentations depuis #4636**, et c'est ce qui a motivé
+    /// son nom actuel : la feuille d'audience doit elle aussi se fermer avant
+    /// d'ouvrir le sélecteur de personnes, sous peine de reproduire à
+    /// l'identique le défaut du bouton « Fichiers ». Une seule reprise, un seul
+    /// `onDismiss`, aucune chance qu'une troisième s'en dispense en silence.
+    /// **LA façon d'éditer un texte — une seule, quelle que soit la porte**
+    /// (#4634, directive porteur : « il faut préserver la même façon d'éditer un
+    /// texte que celle de le créer »).
+    ///
+    /// Créer un texte et modifier un texte existant passaient tous deux par
+    /// `enterTextEditingMode`, mais aboutissaient à des écrans différents : la
+    /// création ouvrait l'édition en ligne avec une zone basse VIDE (aucun outil
+    /// déplié), la modification la même chose. Les dix-huit styles, eux,
+    /// n'étaient atteignables qu'APRÈS avoir refermé l'éditeur.
+    ///
+    /// Ce site unique ouvre l'éditeur plein écran dans les deux cas — et ferme
+    /// le portail d'abord : `fullScreenCover` et `.sheet` se disputent le même
+    /// présentateur, et fermer l'état invalide chez l'ÉCRIVAIN vaut mieux que le
+    /// garder chez le lecteur.
+    func openObjectEditor(_ id: String) {
+        presentedPortal = nil
+        selectedSceneItemId = id
+        selectedSceneItemKind = .text
+        viewModel.enterTextEditingMode(textId: id)
+        editedObject = ComposerEditedObject(id: id)
     }
 
-    /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
-    ///
-    /// La sélection affichée est le rôle qui s'appliquerait SANS choix : tant
-    /// que l'auteur n'a rien dit, la pastille montre ce que la règle
-    /// automatique ferait, et non un défaut arbitraire qui la contredirait.
-    @ViewBuilder
-    var soundRolePicker: some View {
-        let effectif = chosenSoundRole ?? automaticSoundRole
-        VStack(alignment: .leading, spacing: 6) {
-            Text(ComposerSoundRoleCopy.title)
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                ForEach(ComposerAudioRole.allCases, id: \.self) { role in
-                    Button {
-                        chosenSoundRole = role
-                        HapticFeedback.light()
-                    } label: {
-                        Text(ComposerSoundRoleCopy.label(role))
-                            .font(MeeshyFont.relative(13, weight: .medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(role == effectif
-                                               ? Color.accentColor.opacity(0.22)
-                                               : Color.primary.opacity(0.07))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(ComposerSoundRoleCopy.label(role))
-                    .accessibilityAddTraits(role == effectif ? [.isSelected] : [])
-                }
-            }
+    /// Fermer rend la scène au doigt ET sort du mode d'édition — les deux, sans
+    /// quoi le rail continuerait d'afficher les contrôleurs d'un texte qu'on
+    /// n'édite plus. C'est le modèle qui décide du sort d'une coquille vide : il
+    /// la supprime.
+    func closeObjectEditor() {
+        viewModel.exitTextEditingMode()
+        editedObject = nil
+    }
+
+    func resumePendingPresentation() {
+        if pendingFileImport {
+            pendingFileImport = false
+            showsFileImporter = true
+            return
         }
-        .padding(.top, 10)
+        if let mode = pendingAudiencePicker {
+            pendingAudiencePicker = nil
+            audiencePickerMode = mode
+        }
     }
 
-    /// Ce que la règle ferait si l'auteur ne disait rien — la source unique,
-    /// APPELÉE et jamais recopiée.
-    var automaticSoundRole: ComposerAudioRole {
-        ComposerAudioPlacement.isBackground(
-            sceneAlreadyHasBackgroundAudio: viewModel.currentEffects.resolvedBackgroundAudio != nil
-        ) == true ? .background : .foreground
-    }
-
-    /// L'étagère des sons. Le picker vient du SDK — le meuble ne fait que le
-    /// présenter et remettre son résultat au viewModel, seul site qui sait ce
-    /// qu'un son EMPRUNTÉ vaut (`soundId` renseigné, `postMediaId` vide : c'est
-    /// ce couple qui dit au serveur « enregistre un usage, ne capture rien »).
-    var soundLibrarySheet: some View {
-        SoundLibraryPicker(
-            onPick: { sound in
-                viewModel.addBorrowedSound(sound)
-                presentedPortal = nil
-                HapticFeedback.light()
-            },
-            onCancel: { presentedPortal = nil }
-        )
-    }
 
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
@@ -713,8 +855,54 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
+    /// **LE site unique où une porte d'ingestion écrit dans
+    /// `documentLocalMedia` — et il marque le rail AVANT d'écrire** (#4879).
+    ///
+    /// ## Le défaut qu'il ferme
+    ///
+    /// Une photo ajoutée par le rail de la scène n'y arrivait jamais. Elle était
+    /// pourtant bien ingérée — la surface Post la montrait — et apparaissait
+    /// après un aller-retour de format. Reproduit deux fois au simulateur.
+    ///
+    /// `syncPostMediaIntoSlides` est branchée sur `documentLocalMedia` et lit
+    /// `railPosedMediaURLs` pour choisir la porte du média. Les quatre sites
+    /// d'ingestion ÉCRIVAIENT d'abord et marquaient ensuite : au moment où
+    /// l'observateur tournait, l'ensemble était encore vide. Le média était donc
+    /// classé « rangée du document » — une slide à lui — au lieu d'être posé sur
+    /// la scène courante.
+    ///
+    /// Le verdict est DÉFINITIF : la boucle ne considère que les médias sans
+    /// rôle (`mediaRoleByURL[url] == nil`). Un rôle mal attribué ne se rejoue
+    /// jamais, et c'est pourquoi le symptôme survivait à tout rafraîchissement.
+    ///
+    /// > **Un drapeau consommé APRÈS l'observateur qui le lit ne vaut rien** —
+    /// > et il échoue du côté silencieux : ni erreur, ni journal, un média
+    /// > correctement ingéré rangé au mauvais endroit.
+    ///
+    /// ## Deux propriétés, et la seconde n'est pas cosmétique
+    ///
+    /// **Un seul écrivain** : tant que quatre sites écrivaient, l'ordre était une
+    /// discipline ; il est désormais une propriété, et un cinquième site ne peut
+    /// plus le rejouer.
+    ///
+    /// **Une seule notification** : les boucles appelaient `append` par item,
+    /// donc rejouaient la dérivation autant de fois qu'il y avait de fichiers,
+    /// chaque fois sur un état différent — la place d'un média dépendait de son
+    /// RANG dans la sélection.
+    ///
+    /// `medias` vide ⇒ rien, pas même la consommation du drapeau : une
+    /// ingestion qui n'a rien produit ne doit pas déclarer que le rail a servi.
+    func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
+        guard !medias.isEmpty else { return }
+        consumeRailPosing(medias.map(\.url))
+        documentLocalMedia.append(contentsOf: medias)
+    }
+
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
-        var posees: [URL] = []
+        // Les médias sont ACCUMULÉS puis remis en une fois à
+        // `ingestIntoDocument` : écrire dans la boucle rejouait la dérivation à
+        // chaque item, sur un état différent (#4879).
+        var medias: [ComposerDocumentMedia] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let declaredType = item.supportedContentTypes.first
@@ -724,14 +912,20 @@ extension MeeshyComposerHost {
             guard (try? data.write(to: url)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
+            // TOUT en aval — `ComposerIngestRouter` en tire la famille, et une
+            // famille `.document` fait qu'un média n'atteint jamais la scène,
+            // sans qu'aucune ligne ne le signale.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "ingest photothèque: \(url.lastPathComponent, privacy: .public) type=\(declaredType?.identifier ?? "nil", privacy: .public) mime=\(mime, privacy: .public) durée=\(duration ?? -1, privacy: .public)"
+            )
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(url)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 
@@ -804,16 +998,14 @@ extension MeeshyComposerHost {
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
-            consumeRailPosing([url])
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg")])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: "video/quicktime",
                 durationMs: duration
-            ))
-            consumeRailPosing([url])
+            )])
         }
         HapticFeedback.light()
     }
@@ -842,7 +1034,18 @@ extension MeeshyComposerHost {
     /// `Task`, comme les deux autres ingestions.
     func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
         guard case .success(let urls) = result else { return }
-        var posees: [URL] = []
+        // **L'intention retombe dès la lecture** : elle vaut pour UNE ouverture.
+        // Laissée à `.sound`, elle ferait poser sur la scène le fichier suivant,
+        // même arrivé par la rangée du document.
+        let intention = fileImportIntent
+        fileImportIntent = .media
+        if intention == .sound {
+            await ingestSoundFiles(urls)
+            return
+        }
+        // Même accumulation que la photothèque (#4879) : marquer le rail avant
+        // d'écrire, et n'écrire qu'une fois.
+        var medias: [ComposerDocumentMedia] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -852,29 +1055,16 @@ extension MeeshyComposerHost {
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+            medias.append(ComposerDocumentMediaFactory.media(
                 url: destination,
                 declaredMimeType: mime,
                 durationMs: duration
             ))
-            posees.append(destination)
         }
-        consumeRailPosing(posees)
+        ingestIntoDocument(medias)
         HapticFeedback.light()
     }
 
-    /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
-    /// du fil ouvre déjà, avec ses catégories, sa recherche et ses récents. En
-    /// fabriquer un second ici aurait donné deux listes d'emojis, deux mémoires
-    /// et deux jeux de catégories à faire diverger : le motif que la surface du
-    /// mood a refusé pour `StatusViewModel.moodOptions`.
-    ///
-    /// Il écrit dans `documentText`, et **jamais dans `moodEmoji`** : les deux
-    /// sont des emojis et vivent à quelques lignes l'un de l'autre, mais l'un
-    /// est un caractère glissé dans une phrase et l'autre est la matière
-    /// DÉFINISSANTE d'un mood — celle sans laquelle `ComposerDocumentPublishGate`
-    /// refuse de publier. Les confondre changerait ce qu'un mood EST à chaque
-    /// frappe de son texte.
     var emojiPickerSheet: some View {
         EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
             documentText += emoji
@@ -922,6 +1112,21 @@ extension MeeshyComposerHost {
             viewModel.addSticker(image: item.thumbnail,
                                  provider: StoryStickerLibraryItem.provider,
                                  scale: StorySticker.posedScale)
+            presentedPortal = nil
+            HapticFeedback.light()
+        }, onTemplateSelected: { gabarit, emplacements in
+            // **L'échelle vient du GABARIT**, pas de `posedScale` : ce 2,2
+            // agrandit un glyphe NU, et ferait déborder un cartouche qui mesure
+            // déjà son contenu. `addSticker(template:slots:)` la lit lui-même.
+            viewModel.addSticker(template: gabarit, slots: emplacements)
+            presentedPortal = nil
+            HapticFeedback.light()
+        }, onLocationTemplateSelected: { lieu, gabarit in
+            // **Un lieu décoré reste un `StoryLocationObject`**, jamais un
+            // sticker jumeau : lui seul porte les coordonnées et l'id de POI
+            // que la plateforme LIT (`/posts/nearby`). Le gabarit n'en décore
+            // que l'apparence.
+            viewModel.addLocation(place: lieu, styleId: gabarit.id)
             presentedPortal = nil
             HapticFeedback.light()
         })

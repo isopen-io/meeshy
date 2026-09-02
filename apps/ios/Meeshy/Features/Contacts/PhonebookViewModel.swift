@@ -180,7 +180,7 @@ final class PhonebookViewModel: ObservableObject {
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(
                 String(
-                    format: String(localized: "contacts.phonebook.sync-done", defaultValue: "%d contacts synchronises, %d sur Meeshy", bundle: .main),
+                    format: String(localized: "contacts.phonebook.sync-done", defaultValue: "%d contacts synchronisés, %d sur Meeshy", bundle: .main),
                     result.syncedCount,
                     result.matchedCount
                 )
@@ -261,7 +261,7 @@ final class PhonebookViewModel: ObservableObject {
             loadState = .loaded
             try? await CacheCoordinator.shared.phonebook.save([], for: cacheKey)
             FeedbackToastManager.shared.showSuccess(
-                String(localized: "contacts.phonebook.erased", defaultValue: "Repertoire efface", bundle: .main)
+                String(localized: "contacts.phonebook.erased", defaultValue: "Répertoire effacé", bundle: .main)
             )
         } catch {
             FeedbackToastManager.shared.showError(

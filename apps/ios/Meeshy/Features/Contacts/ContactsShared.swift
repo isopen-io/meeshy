@@ -282,7 +282,7 @@ struct DirectoryPersonRow: View, Equatable {
         var title: String {
             switch self {
             case .write:
-                return String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main)
+                return String(localized: "contacts.phonebook.write", defaultValue: "Lui écrire", bundle: .main)
             case .invite:
                 return String(localized: "contacts.phonebook.invite", defaultValue: "Inviter", bundle: .main)
             }

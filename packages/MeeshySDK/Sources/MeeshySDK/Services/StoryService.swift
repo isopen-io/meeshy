@@ -71,7 +71,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
             ))
         }
         let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
-            endpoint: "/posts/feed/stories", method: "GET", body: nil, queryItems: queryItems
+            PostsEndpoint.feedStories, method: "GET", body: nil, queryItems: queryItems
         )
         cachePosts(response.data)
         return response
@@ -84,11 +84,11 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         // ViewModel, masquant du même coup les vrais échecs réseau (la story
         // pouvait alors réapparaître non-vue au prochain `list()`). On décode
         // donc la forme réelle. (2026-06-01)
-        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/posts/\(storyId)/view", method: "POST")
+        let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdView(postId: storyId), method: "POST")
     }
 
     public func delete(storyId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/posts/\(storyId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: storyId))
     }
 
     public func react(storyId: String, emoji: String) async throws {
@@ -97,18 +97,18 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         // l'utilisateur tapait sur n'importe quel emoji de la palette, le serveur
         // enregistrait toujours un coeur. On envoie maintenant l'emoji explicite.
         let body = LikeRequest(emoji: emoji)
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/like", body: body)
+        let _: APIResponse<[String: String]> = try await api.post(PostsEndpoint.byPostIdLike(postId: storyId), body: body)
     }
 
     public func comment(storyId: String, content: String) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content)
-        let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(storyId)/comments", body: body)
+        let response: APIResponse<APIPostComment> = try await api.post(PostsEndpoint.byPostIdComments(postId: storyId), body: body)
         return response.data
     }
 
     public func repost(storyId: String) async throws {
         let body = RepostRequest()
-        let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/repost", body: body)
+        let _: APIResponse<[String: String]> = try await api.post(PostsEndpoint.byPostIdRepost(postId: storyId), body: body)
     }
 
     public func listMine(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -117,7 +117,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         let response: PaginatedAPIResponse<[APIPost]> = try await api.request(
-            endpoint: "/posts/stories/mine", method: "GET", body: nil, queryItems: queryItems
+            PostsEndpoint.storiesMine, method: "GET", body: nil, queryItems: queryItems
         )
         cachePosts(response.data)
         return response
@@ -125,7 +125,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     public func republish(storyId: String) async throws -> APIPost {
         let response: APIResponse<APIPost> = try await api.request(
-            endpoint: "/posts/\(storyId)/republish", method: "POST"
+            PostsEndpoint.byPostIdRepublish(postId: storyId), method: "POST"
         )
         cachePosts([response.data])
         return response.data
@@ -140,7 +140,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     }
 
     public func fetchPost(id: String) async throws -> APIPost {
-        let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(id)")
+        let response: APIResponse<APIPost> = try await api.request(PostsEndpoint.byPostId(postId: id))
         cachePost(response.data)
         return response.data
     }

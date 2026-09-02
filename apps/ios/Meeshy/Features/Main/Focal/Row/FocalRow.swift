@@ -467,11 +467,41 @@ struct FocalRow: View {
     /// (`audioHostsCaption` ⇒ le texte vit DANS le widget audio, WS-3).
     @ViewBuilder
     private var textOrEmojiBlock: some View {
-        if content.isEmojiOnly && content.reply == nil {
+        if let sticker = content.sticker {
+            stickerBlock(sticker)
+        } else if content.isEmojiOnly && content.reply == nil {
             emojiBlock
         } else if content.hasTextOrNonMediaContent && audioMode != .hostsCaption {
             textBlock
         }
+    }
+
+    /// **Le sticker se DESSINE en Focal, Script et Rivière comme en Bulles.**
+    ///
+    /// Ces trois modes partagent cette rangée, qui « reproduit en une seule
+    /// décision » ce que `BubbleStandardLayout` fait — et la reproduction avait
+    /// omis le sticker : le mot n'apparaissait pas une fois dans tout
+    /// `Focal/Row/`. Un message-sticker s'y rendait par son texte de repli,
+    /// c'est-à-dire par l'emoji du gabarit quand il en avait un, et par rien
+    /// quand il n'en avait pas.
+    ///
+    /// Le dessin n'est pas recopié : `MessageStickerArtwork` est l'atome que la
+    /// bulle monte aussi. Une règle qui divergerait — la priorité gabarit →
+    /// image → emoji, la place réservée avant rasterisation, le mouvement —
+    /// divergerait pour les quatre modes à la fois, donc pour aucun.
+    ///
+    /// Il vient AVANT l'emoji-only : un sticker gabarit porte un emoji de repli
+    /// (`wireEmoji`), si bien qu'un message-sticker peut satisfaire
+    /// `isEmojiOnly` et se faire rendre comme un gros emoji — le repli servi à
+    /// la place de la chose, alors que la chose est disponible.
+    ///
+    /// Le côté est celui de la rangée, plus petit que dans la bulle : le Focal
+    /// tient une colonne de texte, pas une carte.
+    @ViewBuilder
+    private func stickerBlock(_ sticker: BubbleContent.Sticker) -> some View {
+        MessageStickerArtwork(sticker: sticker, side: FocalMetrics.Sticker.side)
+            .padding(.leading, indent)
+            .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
 
     /// « emoji-only conserve 90/60/quarante-cinq pt » (critère §7) : `emojiFontSize`

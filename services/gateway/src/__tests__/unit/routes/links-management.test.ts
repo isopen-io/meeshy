@@ -35,18 +35,6 @@ jest.mock('../../../middleware/auth', () => ({
   UnifiedAuthRequest: {},
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 jest.mock('../../../routes/links/types', () => ({
   updateLinkSchema: { parse: (...args: any[]) => mockUpdateLinkParse(...args) },
   updateLinkBodySchema: { type: 'object', properties: {}, additionalProperties: true },

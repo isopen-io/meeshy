@@ -100,6 +100,79 @@ nonisolated enum ComposerReelGate {
 /// Le seuil est `isAccessibilitySize` et non un palier choisi à la main : c'est
 /// la frontière que le système lui-même trace entre « plus grand » et « conçu
 /// pour l'accessibilité », et la recopier en dur la ferait diverger.
+/// **Le rail qui FLOTTE sur la scène — quatre gestes, bord droit, DEDANS
+/// (#4072, arbitrage du 2026-08-28 sur #4061).**
+///
+/// L'arbitrage a écarté la disposition « deux rails latéraux encastrant la
+/// scène » au motif qu'aucune capture ne la montre. Ce que la planche `1b`
+/// montre est UN rail, flottant sur le bord DROIT, à quatre actions
+/// (✎ ☺ ♫ #) — **et la rangée d'outils basse conservée**.
+///
+/// **Deux places, deux NIVEAUX** (directive porteur 2026-08-31, #4561).
+///
+/// > « On exploite la place du plateau sans encombrer le canvas. […] Sur la
+/// > rangée à gauche, ce sont les features qui apparaissent sur le canvas
+/// > visuellement ; on préserve sur la ligne canonique la description du
+/// > contenu, l'ajout de son de fond, image et vidéo de fond, mention et
+/// > localisation de la publication. »
+///
+/// - la rangée de GAUCHE porte ce qui **se voit** sur la scène — texte,
+///   sticker, son posé, média de premier plan, tracé ;
+/// - la LIGNE CANONIQUE porte ce qui appartient à l'**envoi ou à la slide** —
+///   description, mention, lieu de la publication.
+///
+/// **L'axe précédent était « agit sur la scène » contre « fait entrer de la
+/// matière ».** Il classait le dessin en bas (un tracé ENTRE dans la scène) et
+/// la mention à gauche (elle agit sur ce qui est là) — deux rangements
+/// défendables qui ne disaient rien à l'auteur, parce qu'ils décrivent le VERBE
+/// de la porte et non l'endroit où son résultat apparaît. La main, elle, suit
+/// le résultat : le geste part de la colonne et atterrit sur la scène.
+///
+/// **Aucun rail ne se pose SUR la scène** (même directive). Un contrôle
+/// flottant vole les touches de la bande qu'il couvre, et l'auteur découvre la
+/// zone morte en essayant d'y traîner quelque chose. Le plateau est de la place
+/// disponible — la scène est figée en 9:16, l'écran ne l'est pas.
+nonisolated enum ComposerSceneFloatingRail {
+
+    /// **La rangée de GAUCHE — ce qui apparaît visuellement sur la scène.**
+    ///
+    /// Elle se DÉDUIT du niveau de chaque porte, jamais d'une liste. Le
+    /// littéral qui vivait ici — `[.text, .sticker, .sound, .mention]` — rangeait
+    /// `.mention` parmi ce qui vit sur la scène, alors que `ComposerRailDoor`
+    /// la déclare `.publication` deux fichiers plus loin. Deux répartitions
+    /// coexistaient : l'une raisonnée, l'autre recopiée, et seule la recopiée
+    /// était appelée.
+    ///
+    /// > Une liste écrite à la main À CÔTÉ d'une règle qui décide déjà la même
+    /// > chose ne se fait contredire par rien : les deux compilent, et le
+    /// > doc-comment de la règle continue d'énoncer une classification juste que
+    /// > le produit n'applique pas.
+    /// **Le format est un paramètre, pas un détail** (#4893) : depuis la
+    /// directive du 2026-09-02, lieu, hashtag, mention et corpus de texte ne
+    /// sont du niveau OBJET qu'en Story. Prendre le niveau sans dire pour quel
+    /// format rendrait une répartition figée — celle d'avant la bascule — sans
+    /// qu'aucun appelant ne rougisse.
+    static func sideRow(from served: [ComposerRailDoor],
+                        format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { $0.level(for: format).appearsOnCanvas }
+    }
+
+    /// **La LIGNE CANONIQUE — ce qui appartient à l'envoi ou à la slide.**
+    ///
+    /// La description du contenu, la mention et le lieu de la publication : rien
+    /// de tout cela n'a de place sur la scène, et le bas est déjà la zone de ce
+    /// qui décide de l'envoi (loi 5).
+    ///
+    /// Les deux rangées forment une PARTITION du jeu servi — c'est la
+    /// négation du même prédicat, donc aucune porte ne peut se perdre ni
+    /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
+    static func lowRow(from served: [ComposerRailDoor],
+                       format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { !$0.level(for: format).appearsOnCanvas }
+    }
+}
+
+
 nonisolated enum ComposerSocleDensity {
     static func showsLabels(_ size: DynamicTypeSize) -> Bool {
         !size.isAccessibilitySize
@@ -310,7 +383,7 @@ nonisolated extension ComposerIntent {
     /// le composer historique nommé, et rien d'autre.
     /// Le gate du réel n'entre PAS dans ce calcul, et ce n'est pas une
     /// approximation : le routage legacy est le même pour les deux valeurs du
-    /// gate, sur les neuf portes — `ComposerIntentTests` le prouve porte par
+    /// gate, sur les huit portes — `ComposerIntentTests` le prouve porte par
     /// porte plutôt que de le laisser se supposer. La composition vide est donc
     /// lue ici pour ce qu'elle est, une valeur neutre, et non recopiée en
     /// littéral : le `false` en dur est exactement ce que V1 a eu à retrouver
@@ -367,8 +440,48 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les portes du rail *leading*. Passées à `ComposerRailDoor.offered`, qui
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
+    /// **La porte SON est REVENUE le 2026-09-01** (#4722, directive porteur :
+    /// « lorsqu'on a posé une scène on puisse TOUJOURS ajouter un son sur la
+    /// scène, en son de fond de la scène ou en chip resizable sur la scène »).
+    ///
+    /// Elle en était partie la veille, et le motif était juste :
+    ///
+    /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
+    /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker /
+    /// > chip redimensionnable, déplaçable. »
+    ///
+    /// Le retrait s'appuyait sur DEUX destinations de remplacement, nommées
+    /// dans ce doc-comment même : « le son POSÉ revient par la palette de
+    /// constructions (#4579) ; le son de FOND reste au socle, où il porte son
+    /// crédit ». **Aucune des deux n'existe plus.** La palette porte cinq
+    /// onglets — `emoji`, `love`, `time`, `place`, `library` — et pas de son,
+    /// #4579 étant ouvert ; et la pastille du socle est partie le lendemain
+    /// (« on n'a plus besoin du bouton ajouter un son en bas »), remplacée par
+    /// une pastille d'avatar qui affiche un CRÉDIT — donc qui ne se peint que
+    /// s'il y a déjà un son. La scène n'avait plus aucun chemin vers le son.
+    ///
+    /// > **Deux retraits justifiés, chacun renvoyant vers un chemin que
+    /// > l'autre ne fournit pas.** Ni l'un ni l'autre commit n'était faux ;
+    /// > c'est leur SOMME qui a fermé la porte — et une somme n'a pas de site
+    /// > où rougir. Le témoin qui l'attrape ne peut donc pas interroger un
+    /// > retrait : il demande que la scène serve AU MOINS UN chemin vers le
+    /// > son, quel qu'il soit.
+    ///
+    /// Ce qui rendait le retrait sûr reste vrai — la porte ne coûte aucune
+    /// capacité neuve : `handleRailDoor(.sound)` appelle `presentSoundSources()`,
+    /// et la feuille qui s'ouvre porte déjà le CHOIX des deux destinations
+    /// (`chosenSoundPlacement` : fond de la scène, ou puce posée dessus). La
+    /// directive d'aujourd'hui est donc servie par cette seule ligne : ce
+    /// n'était pas une capacité qui manquait, c'était son entrée.
+    ///
+    /// **`.hashtag` y entre le 2026-08-31** (#4636, directive porteur : « mettre
+    /// l'outil hashtag dans la liste des outils d'un slide ou d'une
+    /// publication »). Elle est servie parce que le meuble possède le chemin
+    /// complet — le texte de la publication est à lui (`documentText`), et
+    /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
+    /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .place
+        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -406,8 +519,22 @@ nonisolated enum ComposerSceneCapabilities {
     /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
     /// l'état, et c'est lui que les gardes interrogent pour vérifier
     /// qu'aucune bande sans hôte n'y est entrée par distraction.
-    static func bands(canTrimSelection: Bool) -> Set<ComposerSceneBand> {
-        canTrimSelection ? bands.union([.timeline]) : bands
+    /// **Deux capacités, deux questions distinctes** — et c'est pour cela
+    /// qu'elles sont deux paramètres et non un `Set` reçu tout fait : le jour
+    /// où l'appelant les confond, le compilateur ne dit rien, alors qu'un
+    /// paramètre nommé se relit.
+    ///
+    /// `canStyleSelection` est vrai quand l'objet sélectionné est un TEXTE
+    /// (#4083). Sans lui, la bande `textStyles` n'était jamais servie et le
+    /// jeton « STYLE » de l'inspecteur pointait sur du vide — mesuré au
+    /// simulateur le 2026-08-31 : il s'annonçait en `StaticText`, faute de
+    /// destination ouvrable.
+    static func bands(canTrimSelection: Bool,
+                      canStyleSelection: Bool = false) -> Set<ComposerSceneBand> {
+        var servies = bands
+        if canTrimSelection { servies.insert(.timeline) }
+        if canStyleSelection { servies.insert(.textStyles) }
+        return servies
     }
 }
 
@@ -550,15 +677,98 @@ nonisolated enum ComposerSoundRoleCopy {
                defaultValue: "Place du son", bundle: .main)
     }
 
-    static func label(_ role: ComposerAudioRole) -> String {
+    /// **Le libellé dépend de la DESTINATION, pas du seul rôle** (#4722).
+    ///
+    /// « Contenu de publication · Pièce jointe du post, avec son lecteur » est
+    /// juste sur un post texte, et FAUX sur une scène : là, le même choix pose
+    /// une puce sur la toile — déplaçable, redimensionnable, sans lecteur sous
+    /// le texte, puisqu'il n'y a pas de texte. Le rôle envoyé au modèle est
+    /// pourtant le même (`ComposerAudioRole.foreground`).
+    ///
+    /// > Un interrupteur dont le libellé décrit ce que l'option fait AILLEURS
+    /// > est pire qu'un libellé vague : il est vérifiable, et il est faux.
+    /// > L'auteur qui le lit choisit sciemment autre chose que ce qu'il obtient.
+    ///
+    /// Le paramètre a un DÉFAUT — `.contentCard`, le cas historique — parce que
+    /// deux appelants (`FeedView`) n'offrent aucun placement du tout et n'ont
+    /// donc rien à dire là-dessus. Le défaut sert ceux qui ne posent pas la
+    /// question, jamais ceux qui la posent : le meuble, lui, passe la
+    /// destination qu'il vient de résoudre.
+    static func label(_ role: ComposerAudioRole,
+                      destination: ComposerSoundDestination = .contentCard) -> String {
+        if role == .foreground, destination == .sceneChip {
+            return String(localized: "composer.sound.role.foreground.scene",
+                          defaultValue: "Puce sur la scène", bundle: .main)
+        }
         switch role {
+        // **Ce que le son EST**, pas où il se place géométriquement (directive
+        // porteur 2026-09-01). « En fond » et « au premier plan » décrivaient
+        // une position ; ce que l'auteur choisit est une NATURE — la slide
+        // porte ce son, ou la publication EST ce son.
+        //
+        // **Et le fond appartient à la SLIDE, pas à la publication** (arbitrage
+        // porteur 2026-09-01, #4673 : « clairement à un Slide ! »). Le modèle le
+        // portait déjà — `StorySlide.effects.audioPlayerObjects` est par slide —
+        // et le mot disait le contraire. Un libellé qui désigne le mauvais
+        // propriétaire est exactement ce qui a permis à la question de rester
+        // ouverte : chaque relecteur y lisait la réponse qu'il avait en tête.
         case .background:
             return String(localized: "composer.sound.role.background",
-                          defaultValue: "En fond", bundle: .main)
+                          defaultValue: "Fond de la slide", bundle: .main)
         case .foreground:
             return String(localized: "composer.sound.role.foreground",
-                          defaultValue: "Au premier plan", bundle: .main)
+                          defaultValue: "Contenu de publication", bundle: .main)
         }
+    }
+
+    /// **Ce que le placement VEUT DIRE sur une publication** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// Deux mots — « fond », « premier plan » — décrivent une géométrie, et le
+    /// choix n'en est pas une : c'est un choix de NATURE. Le dire sous chaque
+    /// option coûte deux lignes et retire la seule question que l'auteur ne
+    /// pouvait pas trancher à l'œil.
+    ///
+    /// | placement | ce que le lecteur voit et entend |
+    /// |---|---|
+    /// | fond | le son se joue pendant la lecture ; **aucun lecteur** n'apparaît |
+    /// | premier plan | le son devient une **pièce jointe** du post, avec son lecteur — un post audio |
+    /// **Et sa définition suit la même destination** (#4722) — c'est elle qui
+    /// porte le mot « redimensionnable », donc la promesse que la directive
+    /// fait à l'auteur.
+    static func description(_ role: ComposerAudioRole,
+                            destination: ComposerSoundDestination = .contentCard) -> String {
+        if role == .foreground, destination == .sceneChip {
+            return String(localized: "composer.sound.role.foreground.scene.detail",
+                          defaultValue: "Posée sur la scène : déplaçable, redimensionnable.",
+                          bundle: .main)
+        }
+        switch role {
+        case .background:
+            return String(localized: "composer.sound.role.background.detail",
+                          defaultValue: "Se joue pendant cette slide, sans lecteur visible.",
+                          bundle: .main)
+        case .foreground:
+            return String(localized: "composer.sound.role.foreground.detail",
+                          defaultValue: "Pièce jointe du post, avec son lecteur.",
+                          bundle: .main)
+        }
+    }
+
+    /// **Pourquoi le premier plan est refusé à un son EMPRUNTÉ.**
+    ///
+    /// Une pièce jointe est un FICHIER de la publication : en faire une à
+    /// partir d'un son de la bibliothèque supposerait de le ré-uploader, donc
+    /// de le détacher de son `soundId` — et le crédit de son auteur avec lui.
+    /// Le fond, lui, référence le son sans le copier : c'est là que le rognage
+    /// d'un son emprunté vit, porté par `sourceStart`/`sourceEnd`.
+    ///
+    /// Désactiver l'option en le DISANT vaut mieux que la masquer : une option
+    /// absente se lit comme une capacité qui n'existe pas.
+    static var borrowedForegroundRefusal: String {
+        String(localized: "composer.sound.role.foreground.borrowed",
+               defaultValue: "Un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir une pièce jointe.",
+               bundle: .main)
     }
 }
 
@@ -646,5 +856,94 @@ nonisolated enum ComposerHistoryService {
     ///   seule ; `ComposerMountedView` est le seul type qui la porte.
     static func servesHistory(on view: ComposerMountedView) -> Bool {
         view == .scene || view == .atelier
+    }
+}
+
+/// **Ce qu'une provenance de son EXIGE de la présentation** (#4632).
+///
+/// ## Le défaut que ce type ferme
+///
+/// `ComposerPortal` a rendu deux feuilles simultanées non représentables : une
+/// variable ne porte qu'une valeur, et ouvrir la seconde ferme la première. La
+/// règle a tenu — pour les feuilles. **Elle ne dit rien des présentations qui
+/// n'en sont pas.**
+///
+/// Le bouton « Fichiers » de la feuille du son posait `showsFileImporter = true`
+/// en laissant `presentedPortal = .sound` monté. Les deux présentations sont
+/// attachées au MÊME corps de vue ; iOS n'en présente pas une seconde depuis un
+/// présentateur déjà occupé. **Le bouton était INERTE** — aucun crash, aucune
+/// trace, rien à l'écran.
+///
+/// Sa voisine `.library` n'avait pas ce défaut, et c'est ce qui a caché le
+/// défaut un mois : elle REMPLACE le portail (`.soundLibrary`), donc elle passe
+/// par la propriété structurelle du type somme. Les deux branches se
+/// ressemblaient au point d'être lues comme équivalentes ; elles empruntent deux
+/// mécanismes de présentation différents, dont un seul est protégé.
+///
+/// > **Une garantie STRUCTURELLE ne protège que ce qu'elle représente.** Un
+/// > `ComposerPortal?` rend impossibles deux FEUILLES concurrentes ; il ne peut
+/// > rien contre une feuille et un sélecteur système, parce que le second n'est
+/// > pas une de ses valeurs. Ce qui échappe au type échappe à sa preuve.
+nonisolated enum ComposerSoundHandoff: Equatable {
+
+    /// La provenance ouvre un autre PORTAIL — le type somme ferme le premier
+    /// tout seul, aucune précaution à prendre.
+    case portal
+
+    /// La provenance ouvre une présentation SYSTÈME. Elle ne peut pas paraître
+    /// tant qu'une feuille occupe le présentateur : il faut FERMER, puis ouvrir
+    /// à la fermeture effective (`onDismiss`), jamais dans la même transaction.
+    case systemImporterAfterDismiss
+
+    /// Le micro est la surface de la feuille elle-même — il n'y a rien à ouvrir.
+    case sheetSurface
+
+    static func handoff(for source: ComposerSoundSource) -> ComposerSoundHandoff {
+        switch source {
+        case .library: return .portal
+        case .files:   return .systemImporterAfterDismiss
+        case .record:  return .sheetSurface
+        }
+    }
+}
+
+/// **Ce que l'importateur de fichiers va RAPPORTER** (#4632).
+///
+/// Le meuble n'a qu'UN `.fileImporter`, et c'est voulu : deux sélecteurs frères
+/// rejoueraient exactement le conflit de présentation que `ComposerSoundHandoff`
+/// documente. Ce qui change d'une porte à l'autre n'est donc pas le sélecteur
+/// mais ce qu'on lui demande — et ce qu'on fait du résultat.
+///
+/// **La destination est le VRAI correctif.** Même l'importateur ouvert, tout
+/// fichier partait dans `documentLocalMedia`, la liste média du DOCUMENT : un
+/// audio choisi pour la scène n'y arrivait jamais comme son. C'est le défaut que
+/// #4483 avait fermé pour l'enregistrement (« le résultat va sur la SCÈNE,
+/// jamais dans la liste média ») et que la branche fichier n'avait pas suivi.
+nonisolated enum ComposerFileImportIntent: Equatable {
+
+    /// La rangée du document et la porte média — tout ce qui compose la
+    /// publication.
+    case media
+
+    /// La porte SON : un fichier audio, posé sur la scène avec son rôle.
+    case sound
+
+    /// **Le filtre suit l'intention.** `.item` sur la porte du son laisserait
+    /// choisir un PDF pour un son de fond : une erreur que l'utilisateur
+    /// n'apprend qu'après coup, quand rien ne se passe.
+    var contentTypes: [UTType] {
+        switch self {
+        case .media: return [.item]
+        case .sound: return [.audio]
+        }
+    }
+
+    /// Un son de scène est UNIQUE — la scène n'en porte qu'un par rôle. Offrir
+    /// la sélection multiple promettrait une pose que le modèle ne tient pas.
+    var allowsMultipleSelection: Bool {
+        switch self {
+        case .media: return true
+        case .sound: return false
+        }
     }
 }

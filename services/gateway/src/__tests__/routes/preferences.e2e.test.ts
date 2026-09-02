@@ -21,7 +21,12 @@ describe('/me/preferences API - Defaults and Validation', () => {
   describe('Preference Defaults', () => {
     it('should have valid PRIVACY defaults', () => {
       expect(PRIVACY_PREFERENCE_DEFAULTS.showOnlineStatus).toBe(true);
-      expect(PRIVACY_PREFERENCE_DEFAULTS.allowAnalytics).toBe(true);
+      // `allowAnalytics` vaut FAUX par défaut : la télémétrie est OPT-IN, et
+      // `consent-gated-defaults-invariant.test.ts` en fait un invariant
+      // (« telemetryEnabled et allowAnalytics valent FAUX par défaut — les deux
+      // qui n'ont aucune garde d'usage »). Cette ligne attendait `true`, la
+      // valeur d'avant ce basculement.
+      expect(PRIVACY_PREFERENCE_DEFAULTS.allowAnalytics).toBe(false);
       expect(PRIVACY_PREFERENCE_DEFAULTS.showLastSeen).toBe(true);
     });
 

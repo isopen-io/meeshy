@@ -51,13 +51,18 @@ extension StoryComposerViewModel {
         // elements loaded from a persisted slide). Mirrors the lookup
         // used inside `allElementsSortedByZ` so the public accessor and
         // the sort agree on the same value.
-        let effects = currentEffects
-        if let t = effects.textObjects.first(where: { $0.id == id }) { return t.zIndex }
-        if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex }
-        if let a = effects.audioPlayerObjects?.first(where: { $0.id == id }) { return a.zIndex ?? 0 }
-        if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex }
-        if let l = effects.locationObjects.first(where: { $0.id == id }) { return l.zIndex }
-        return 0
+        // **La cascade des CINQ familles — la plus dense du dépôt** (#4591).
+        // `MeeshySceneObject.zIndex` rend exactement ce que ces cinq lignes
+        // rendaient, l'optionnel de l'audio compris : la somme le résout en `0`,
+        // comme le `?? 0` d'ici et comme son propre décodeur.
+        //
+        // **`allElementsSortedByZ` n'est PAS repointée**, et c'est délibéré :
+        // elle empile texte, média, AUDIO, sticker, lieu, quand `sceneObjects`
+        // range texte, média, sticker, lieu, AUDIO. À `zIndex` égal — et le
+        // défaut vaut `0` pour tous — l'ordre diffère, or c'est lui que
+        // `bringForward` lit pour choisir AVEC QUI permuter. Le gain d'une
+        // ligne ne vaut pas un changement de voisin.
+        return currentEffects.sceneObject(id: id)?.zIndex ?? 0
     }
 
     /// Promote an element to the front. Persists the value into the slide's effects so

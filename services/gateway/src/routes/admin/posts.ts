@@ -59,9 +59,12 @@ const adminPostRowSchema = {
     },
     media: {
       type: 'array',
-      // `mediaSelect` porte dix-neuf champs et suit le pipeline média. Un média
-      // est ici une donnée d'inspection, pas un contrat client : le laisser
-      // passer entier vaut mieux que d'en figer une copie qui dériverait.
+      // `additionalProperties: true` : un média est ici une donnée
+      // d'inspection, pas un contrat client fermé — figer une copie de sa
+      // forme la ferait dériver du pipeline média. Ce que la LISTE en charge
+      // est donc ce qu'elle en sert, et c'est `adminPostListMediaSelect`
+      // (#4392) qui le dit — pas `mediaSelect`, dont la paire lourde du Prisme
+      // n'avait aucun lecteur mesuré ici.
       items: { type: 'object', additionalProperties: true }
     },
     _count: {
@@ -98,6 +101,40 @@ interface PostListQuery {
 // Adding `language`, `variantOf`, `transcription`, `translations` here (via the
 // shared select) closes the Prisme Linguistique drift that previously affected
 // the admin views.
+
+/**
+ * Média d'une LIGNE de la LISTE d'administration — `mediaSelect` MOINS la paire
+ * lourde du Prisme (#4392).
+ *
+ * `transcription` porte le texte ET ses segments mot-à-mot ; `translations`
+ * porte la carte de TOUTES les langues, chacune avec son URL de piste. Servis
+ * pour chaque média de chaque post de chaque page, sur une vue qui n'affiche
+ * qu'une vignette et trois compteurs.
+ *
+ * Le comptage des lecteurs (critère 1 de l'issue) rend ZÉRO sur les quatre
+ * surfaces :
+ *   - web     : `apps/web/components/admin/user-detail/UserPostsSection.tsx`
+ *               est le SEUL appelant du dépôt, et son type `AdminPostMedia`
+ *               déclare quatre champs — `id`, `mimeType`, `fileUrl`,
+ *               `thumbnailUrl` ;
+ *   - iOS/SDK : `AdminEndpoint.posts` est DÉCLARÉ et jamais appelé ; le seul
+ *               cas d'`AdminEndpoint` consommé par tout iOS est
+ *               `mePermissions` (`PermissionsService.swift`) ;
+ *   - Android : aucune surface admin (`core/network/.../api/` n'a pas d'API
+ *               d'administration).
+ *
+ * La route de DÉTAIL (`GET /admin/posts/:postId`, `adminPostDetailSelect`
+ * ci-dessous) continue de les servir par `mediaSelect` : c'est elle qui
+ * inspecte un post. Même partage que #4166, qui a retiré `translatedBodies` /
+ * `translatedSubjects` de la LISTE des diffusions après avoir mesuré leur
+ * unique lecteur sur la page de DÉTAIL.
+ *
+ * Dérivé PAR OMISSION plutôt que réécrit : une colonne future de `PostMedia`
+ * ajoutée à `mediaSelect` continue d'arriver ici toute seule, et seules les
+ * deux colonnes lourdes sont nommées. Le drift que `postIncludes.ts` interdit
+ * est celui d'une COPIE, pas celui d'une soustraction déclarée.
+ */
+const { transcription: _omitTranscription, translations: _omitTranslations, ...adminPostListMediaSelect } = mediaSelect;
 
 /**
  * Projection RACINE de `GET /admin/posts/:postId` (#4166, critère 1 —
@@ -380,6 +417,25 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
   // ──────────────────────────────────────────────────────────────────────
   // GET /posts — List posts with filters and pagination
   // ──────────────────────────────────────────────────────────────────────
+  /**
+   * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
+   * prochain lot n'ait pas à reposer la question »).
+   *
+   * GARDÉ, avec son lecteur nommé — `UserPostsSection.tsx`, seul appelant du
+   * dépôt, lit `id`, `type`, `visibility`, `content`, `moodEmoji`,
+   * `deletedAt`, `likeCount`, `commentCount`, `viewCount`, `createdAt`,
+   * `media[{ id, mimeType, fileUrl, thumbnailUrl }]` et la pagination. Les
+   * autres colonnes de `adminPostRowSchema` (compteurs de repost, de partage,
+   * de signet, `author`, `_count`) sont servies pour l'inspection admin et
+   * restent déclarées.
+   *
+   * RETIRÉ, à zéro lecteur mesuré sur les QUATRE surfaces : `transcription` et
+   * `translations` du média — voir `adminPostListMediaSelect`.
+   *
+   * PAS TRANCHÉ ICI (critère 2, décision produit) : servir la transcription
+   * sur demande (`?include=transcription`) pour modérer un contenu audio ou
+   * vidéo sans passer par la route de détail.
+   */
   fastify.get('/posts', {
     onRequest: [fastify.authenticate, requireAdmin],
     schema: {
@@ -507,7 +563,9 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             updatedAt: true,
             author: { select: authorSelect },
             media: {
-              select: mediaSelect,
+              // #4392 — la LISTE, donc `adminPostListMediaSelect` : voir sa
+              // déclaration pour le comptage des lecteurs qui l'a décidé.
+              select: adminPostListMediaSelect,
               orderBy: { order: 'asc' }
             },
             _count: {

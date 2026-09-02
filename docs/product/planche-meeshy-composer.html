@@ -923,7 +923,7 @@ footer .mono{font-size:11.5px}
       <tr><td><b>Références</b> — @ inline · sélecteur (appui long = mode) · INLINE/PINNED/NOTE/SILENT · badge épinglé (referenceUserId) · tri-état à l'édition</td><td class="mono">ReferenceComposerBar, ReferenceModeMenu, StoryMentionPickerSheet, adoptDeclaredReferences</td><td>Objet <span class="mono">mention</span> (PINNED) + méta (autres modes) — P7</td></tr>
       <tr><td><b>Timeline</b> — pistes, règle graduée dérivée de la largeur des libellés, lanes 52 pt, keyframes x/y/scale/opacity/volume/easing</td><td class="mono">32 vues Timeline/* · StoryKeyframe</td><td>Plan 2D unique (P8)</td></tr>
       <tr><td><b>Transitions</b> — entrée/sortie PAR SLIDE + transitions entre clips (Timeline V2) <span class="tag tEx">recensé 20/08</span></td><td class="mono">opening/closing: StoryTransitionEffect · clipTransitions: [StoryClipTransition]</td><td>Champ de la Scene + jointures du plan 2D — raté par le recensement initial, PAS un manque SOTA</td></tr>
-      <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyDocument, conservé</td></tr>
+      <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyPublication, conservé</td></tr>
       <tr><td><b>Cadre par slide</b> — l'import d'un fond paysage impose un canvas 16:9 <span class="tag tEx">recensé 20/08</span></td><td class="mono">canvasAspectRatio (nil = 9:16)</td><td><b>ABSORBÉ</b> par la scène 9:16 à bandes actives : le porteur garde son ratio, le cadre plus jamais. Lecture v1 : letterbox dans la scène — COUVERT (rév. 2, U20) : le convertisseur REMAPPE les ancres libres dans le rect letterboxé, golden à l'appui (§C2 rév. 4)</td></tr>
       <tr><td>Caméra — flash (off/on/auto)</td><td class="mono">CameraView (flashMode)</td><td>Conservé dans la capture (P9)</td></tr>
       <tr><td><b>Aperçu</b> — canvas né en pause, bouton lecture</td><td class="mono">règle « born paused »</td><td>Aperçu du socle = ScenePlayer en mode preview</td></tr>
@@ -2472,9 +2472,23 @@ flowchart TD
   <span class="mono">payload</span>, permissif par contrat. <b>Le dix-neuvième style ne coûtera donc
   ni champ, ni version, ni migration</b> — c'est la promesse de la dimension 12 (« la complexité se
   paie dans le code ») rendue mesurable sur un cas précis.</div>
+
+  <div class="callout"><b>Un style est une POLICE, et rien d'autre ; ce qui brille est un second
+  axe</b> (#4850, #4870 — 2026-09-02). La mesure a tranché : les dix-huit cas résolvent tous vers
+  une famille, une graisse ou un design, et aucun n'applique d'effet — « néon » est du système
+  semibold arrondi. Sept des dix-huit sont des polices <em>déguisées</em> en effets, et c'est ce
+  mélange de vocabulaire que l'auteur voyait dans la grille. La section s'appelle donc
+  <b>POLICE</b>, et l'<b>EFFET</b> — <span class="mono">lueur · ombre · relief</span> — est une
+  section à part, juste après, portée par la clé <span class="mono">textEffect</span> du
+  <span class="mono">payload</span> (absente ⇒ aucun). Une seule table, en fraction de la taille
+  de police, recopiée sur les trois clients (<span class="mono">StoryTextEffect</span> Swift ·
+  <span class="mono">story-text-effect.ts</span> · <span class="mono">StoryTextEffect.kt</span>).
+  <b>La lueur ne vit que sur cet axe</b> : web et Android faisaient briller « néon » pendant
+  qu'iOS — où la story est composée — ne le faisait pas ; un effet caché derrière un nom de
+  police, différent selon le client, était exactement ce que l'axe vient fermer.</div>
   <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
     <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">système .black</p></div>
-    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold + glow</p></div>
+    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold — la lueur est un EFFET (#4870)</p></div>
     <div class="card"><h4>machine</h4><p style="font-size:19px;font-family:Courier,'Courier New',monospace;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Courier</p></div>
     <div class="card"><h4>manuscrit</h4><p style="font-size:22px;font-family:'Snell Roundhand','Segoe Script',cursive;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">SnellRoundhand</p></div>
     <div class="card"><h4>classique</h4><p style="font-size:21px;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Georgia</p></div>
@@ -2561,7 +2575,7 @@ flowchart TD
       <tr><td>Socle</td><td>Aperçu · Publier</td><td class="mono">eye · arrow.up.circle.fill</td><td>Publier = pill dégradé de marque ; états in-flight (progress dans le pill) et échec (<span class="mono">exclamationmark.circle</span>)</td></tr>
       <tr class="grp"><td colspan="4">AMORCE (cible) &amp; outils</td></tr>
       <tr><td>Amorce</td><td>Content (S·P·R, rév. 26) · Texte · Sticker · Son · Lieu</td><td class="mono">text.alignleft · textformat (Aa) · face.smiling · music.note · mappin.and.ellipse</td><td>la rangée des kinds que le profil autorise (P4)</td></tr>
-      <tr><td>Texte</td><td>Style · Couleur · Fond · Taille · Align · Langue</td><td class="mono">textformat.alt · paintpalette · character.textbox · textformat.size · text.aligncenter (⇄ leading/trailing : ALIGNEMENT s'inverse en RTL) · globe</td><td>la rangée des 18 familles rend « Aa » dans sa police (P21)</td></tr>
+      <tr><td>Texte</td><td>Police · Effet (#4870) · Couleur · Fond · Taille · Align · Langue</td><td class="mono">textformat.alt · sparkles · paintpalette · character.textbox · textformat.size · text.aligncenter (⇄ leading/trailing : ALIGNEMENT s'inverse en RTL) · globe</td><td>la rangée des 18 familles rend « Aa » dans sa police (P21)</td></tr>
       <tr><td>Média</td><td>Caméra · Galerie · Coller · Éditer · Premier plan</td><td class="mono">camera · photo.on.rectangle · doc.on.clipboard (PasteButton système — icône imposée) · crop.rotate · square.2.layers.3d.top.filled</td><td><span class="tag tEx">existant</span> pour caméra/galerie</td></tr>
       <tr><td>Filtres</td><td>8 filtres + intensité</td><td class="mono">camera.filters + slider.horizontal.3</td><td>vignettes d'aperçu, le nom sous chaque vignette</td></tr>
       <tr><td>Son</td><td>Bibliothèque · Fichier · Micro · Volume · Bornes · Extraction</td><td class="mono">music.note.list · doc.badge.plus · mic · speaker.wave.2 · timeline.selection · square.and.arrow.up.on.square</td><td>bornes = le trim de P23 ; extraction = le toggle enfin transmis (C7b)</td></tr>

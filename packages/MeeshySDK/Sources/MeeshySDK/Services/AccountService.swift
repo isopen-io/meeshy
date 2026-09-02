@@ -31,7 +31,7 @@ public final class AccountService: AccountServiceProviding, @unchecked Sendable 
             currentPassword: currentPassword
         )
         let response: APIResponse<AccountDeletionOpened> = try await api.post(
-            endpoint: "/me/account/deletion",
+            MeEndpoint.accountDeletion,
             body: body
         )
         return response.data
@@ -39,7 +39,7 @@ public final class AccountService: AccountServiceProviding, @unchecked Sendable 
 
     public func deletionStatus() async throws -> AccountDeletionStatus {
         let response: APIResponse<AccountDeletionStatus> = try await api.request(
-            endpoint: "/me/account/deletion"
+            MeEndpoint.accountDeletion
         )
         return response.data
     }

@@ -6,150 +6,46 @@ import MeeshyUI
 
 // MARK: - FeedPostCard Media Preview
 extension FeedPostCard {
+    /// **Vue `3f` — un lot de médias se PARCOURT, il ne se contemple pas.**
+    ///
+    /// Un média seul garde son rendu ; à partir de deux, la carte monte le
+    /// carrousel (`FeedPostCardCarousel`) : un média à la fois, à la taille de
+    /// la carte, avec SA légende, un compteur et des pastilles.
+    ///
+    /// Ce qui a disparu ici : la mosaïque (2 côte à côte, 3 en 1+2, 4 en
+    /// grille, 5+ en 2+3 avec un badge `+N`). Elle montrait tout d'un coup —
+    /// ce que le carrousel perd, et qu'il faut assumer — mais elle ne pouvait
+    /// porter AUCUNE légende par média, ce qui est la doctrine même de `3f`.
+    ///
+    /// L'index de page n'est PAS déclaré ici : il vit dans le carrousel. Posé
+    /// sur la carte, chaque glissement invaliderait l'en-tête, le crédit du
+    /// son, le texte et la rangée d'actions — et le Prisme relancerait sa
+    /// résolution de langue à chaque slide. « La pagination ne change ni le
+    /// texte du post ni l'annonce du son » devient ainsi une impossibilité de
+    /// structure, pas une précaution à tenir.
     @ViewBuilder
     var mediaPreview: some View {
         let mediaList = post.media
-        let count = mediaList.count
-        let spacing: CGFloat = 3
 
-        if count == 1, let media = mediaList.first {
+        if mediaList.count == 1, let media = mediaList.first {
             // Aucun cadre de hauteur ici : image et vidéo portent la leur via
             // `fittedMediaHeight`. Le `.frame(height: 220)` qui vivait ici
             // écrasait ce calcul et letterboxait les clips verticaux.
             // L'audio et les documents restent compacts et s'auto-dimensionnent.
             singleMediaView(media)
                 .contentShape(RoundedRectangle(cornerRadius: 12))
-        } else if count == 2 {
-            // Two images side by side - equal width
-            HStack(spacing: spacing) {
-                galleryImageView(mediaList[0])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-                galleryImageView(mediaList[1])
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[1]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-            }
-            .frame(height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count == 3 {
-            // One large left, two stacked right
-            HStack(spacing: spacing) {
-                galleryImageView(mediaList[0])
-                    .aspectRatio(0.75, contentMode: .fill)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[0]) }
-                    .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-
-                VStack(spacing: spacing) {
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count == 4 {
-            // 2x2 grid
-            VStack(spacing: spacing) {
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        } else if count >= 5 {
-            // First row: 2 images, Second row: 3 images with +N overlay
-            VStack(spacing: spacing) {
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[0])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[0]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 1 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[1])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[1]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 2 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                }
-                HStack(spacing: spacing) {
-                    galleryImageView(mediaList[2])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[2]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 3 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    galleryImageView(mediaList[3])
-                        .contentShape(Rectangle())
-                        .onTapGesture { openFullscreen(mediaList[3]) }
-                        .accessibilityLabel(String(localized: "feed.media.item", defaultValue: "Media 4 of \(count)", bundle: .main))
-                        .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                        .accessibilityAddTraits(.isButton)
-                    ZStack {
-                        galleryImageView(mediaList[4])
-                        if count > 5 {
-                            Color.black.opacity(0.6)
-                            Text("+\(count - 5)")
-                                .font(MeeshyFont.relative(22, weight: .bold))
-                                .foregroundColor(.white)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { openFullscreen(mediaList[4]) }
-                    .accessibilityLabel(count > 5
-                        ? String(localized: "feed.media.moreItems", defaultValue: "\(count - 5) more media items", bundle: .main)
-                        : String(localized: "feed.media.item", defaultValue: "Media 5 of \(count)", bundle: .main))
-                    .accessibilityHint(String(localized: "feed.media.viewFullscreen", defaultValue: "Toucher pour agrandir", bundle: .main))
-                    .accessibilityAddTraits(.isButton)
-                }
-            }
-            .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+        } else if mediaList.count > 1 {
+            FeedPostCardCarousel(
+                media: mediaList,
+                // MÊME résolveur que la galerie plein écran (vue `3e`) : la
+                // légende propre du média, et le texte du porteur seulement
+                // s'il n'y a qu'un visuel — donc jamais ici, où il y en a
+                // plusieurs. Le carrousel consulte la règle, il ne la réécrit
+                // pas.
+                captions: SocialMediaCaption.map(for: mediaList, carrierText: post.displayContent),
+                accentColor: accentColor,
+                onOpen: { openFullscreen($0) }
+            )
         }
     }
 
@@ -181,74 +77,11 @@ extension FeedPostCard {
     }
 
     // Gallery-specific image view (no individual rounding)
+    /// Délégation mince vers `FeedMediaTile` (#4096) : le visuel d'un média de
+    /// carte est décrit à UN seul endroit, que le carrousel et l'aperçu d'une
+    /// republication montent tous deux.
     func galleryImageView(_ media: FeedMedia) -> some View {
-        ZStack {
-            let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
-            if !thumbUrl.isEmpty || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else {
-                LinearGradient(
-                    colors: [Color(hex: media.thumbnailColor), Color(hex: media.thumbnailColor).opacity(0.6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-
-            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
-            if media.type == .video {
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 36, height: 36)
-                        Circle()
-                            .fill(Color.white.opacity(0.85))
-                            .frame(width: 30, height: 30)
-                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.black.opacity(0.7))
-                            .offset(x: 1)
-                    }
-                    if let duration = media.durationFormatted {
-                        Text(duration)
-                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                }
-                .accessibilityHidden(true)
-            } else if media.type == .audio {
-                VStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(MeeshyFont.relative(20))
-                        .foregroundColor(.white)
-                    if let duration = media.durationFormatted {
-                        Text(duration)
-                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                }
-                .accessibilityHidden(true)
-            }
-        }
-        .clipped()
+        FeedMediaTile(media: media)
     }
 
     func openFullscreen(_ media: FeedMedia) {
@@ -327,6 +160,17 @@ extension FeedPostCard {
                     accentColor: media.thumbnailColor,
                     transcription: media.transcription,
                     translatedAudios: media.translatedAudios,
+                    // Prisme AUDIO (#4926) — la piste ET la bande de
+                    // transcription sortent de la MÊME élection : un seul
+                    // paramètre, donc structurellement une seule descente
+                    // (§ cycle 128 du CLAUDE.md racine).
+                    initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                        originalLanguage: SocialAudioTrack.originalLanguage(
+                            transcription: media.transcription,
+                            carrier: post.originalLanguage
+                        ),
+                        translatedAudios: media.translatedAudios
+                    ),
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media,

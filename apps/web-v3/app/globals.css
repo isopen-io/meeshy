@@ -28,7 +28,7 @@ body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-body);
+  font-family: var(--font-native);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
@@ -37,6 +37,34 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* La SORTIE d'un écran sans contenu — aujourd'hui le seul lien que la coquille
+   rende (`app/not-found.tsx`).
+
+   Un `<a>` NU n'est pas « non stylé » : il est peint par le navigateur, en
+   `#0000EE` (visité `#551A8B`). Sur `--color-bg` du schéma sombre (`#0d0e16`),
+   ce bleu rend **2,05:1** — très en dessous des 4,5:1 de la dimension 5, et
+   INVISIBLE pour aucun gate : le § 3.2 corollaire 2 refuse les couleurs
+   ÉCRITES, or ici aucune valeur n'était écrite. Le défaut était sombre-seul
+   (en clair, `#f1f3f9`, le même bleu rend ~8,4:1), c'est-à-dire l'inverse du
+   biais habituel. `--color-primary` sur `--color-bg` est, lui, une paire déjà
+   mesurée dans les DEUX schémas par `scripts/check-jetons.mjs`
+   (`ENCRES_SUR_PLAN` × `PLANS`, seuil 4,5) : prendre le jeton, c'est hériter du
+   gate.
+
+   `min-block-size: 44px` : la cible tactile de la dimension 5. Une ligne de
+   texte de 15 px n'en fait pas la moitié. Le soulignement est explicite pour
+   que le lien reste repérable sans dépendre de la seule couleur. [revue #4414] */
+.sortie {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-inline: 4px;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

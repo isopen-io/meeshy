@@ -106,6 +106,12 @@ public struct StoryComposerView: View {
     /// `StoryCanvasUIView.currentManipulationLayer`. Mise à jour via le
     /// callback `onManipulationLayerChanged` du `StoryComposerCanvasView`.
     @State var manipulationLayer: CanvasManipulationLayer = .canvas
+    /// L'écran est-il au repos ? (#3915) — alimenté par
+    /// `onEditClockThrottleChanged` du canvas, consommé par la puce audio de
+    /// premier plan, dont les deux `TimelineView(.animation(…))` tournent sur
+    /// l'horloge d'ANIMATION de SwiftUI et survivaient donc à la veille
+    /// d'`editDisplayLink`.
+    @State var isEditClockThrottled = false
 
     // MARK: - Publication
 

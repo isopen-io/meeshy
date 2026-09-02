@@ -1,1 +1,17 @@
-infrastructure/docker/compose/docker-compose.local-https.yml
+# Ce fichier N'EST PAS une composition. [#4544]
+#
+# La racine portait ici un LIEN dont la cible n'a jamais existé — mesuré, aucun
+# commit du dépôt n'a jamais écrit
+# infrastructure/docker/compose/docker-compose.local-https.yml.
+#
+# Le nom survit pourtant dans la documentation (docs/FIREBASE_LOCAL_SETUP.md,
+# docs/FIREBASE_FRONTEND_SETUP.md) : c'est précisément pour ces lecteurs-là que
+# le refus vaut mieux que la suppression. L'environnement local en HTTPS
+# (mkcert, *.meeshy.local) est servi par docker-compose.local.yml.
+#
+# Même forme et même contrainte que docker-compose.yml de la racine — voir son
+# en-tête pour le pourquoi de ${VAR:?message} et de l'absence de « : ».
+
+services:
+  ou-est-la-composition-local-https:
+    image: ${MEESHY_COMPOSITION_LOCAL_HTTPS:?La composition local-https n existe plus. L environnement local en HTTPS est servi par infrastructure/docker/compose/docker-compose.local.yml. Lancer docker compose -f infrastructure/docker/compose/docker-compose.local.yml up, ou scripts/dev.sh}

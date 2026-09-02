@@ -334,6 +334,35 @@ class MessageRepositoryTest {
         assertThat(request.expiresAt).isNull()
     }
 
+    /**
+     * **Le corps envoye porte un `clientMessageId` au format que le gateway
+     * EXIGE** (#4624).
+     *
+     * Le temoin voisin epingle `request.clientMessageId == cmid` : la coherence
+     * du client AVEC LUI-MEME, vraie quel que soit le prefixe. Il est reste
+     * vert pendant que TOUT envoi Android etait rejete en 400. Ce qui manquait
+     * est le FORMAT, et il appartient au serveur — les trois portes le
+     * declarent a l'identique :
+     * `routes/conversations/messages-send.ts:56` (REST),
+     * `validation/socket-event-schemas.ts:24` (socket),
+     * `routes/links/types.ts:99` (lien anonyme).
+     *
+     * Le litteral est RECOPIE plutot que derive d'`OutboxIds` : une constante
+     * partagee avec la source ferait passer ce temoin par construction, et
+     * c'est justement la construction qui etait fausse.
+     */
+    @Test
+    fun `sendOptimistic puts a gateway-shaped clientMessageId on the wire`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val serverContract =
+            "^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        assertThat(sentRequest("message:c1").clientMessageId).matches(serverContract)
+        assertThat(cmid).matches(serverContract)
+    }
+
     @Test
     fun `sendOptimistic encodes the chosen effects onto the outbox request`() = runTest {
         val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")), clock = MutableClock(0L))
@@ -584,6 +613,61 @@ class MessageRepositoryTest {
         )
         assertThat(request.forwardedFromId).isEqualTo("orig-msg")
         assertThat(request.forwardedFromConversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun `sendOptimistic story replies carry the storyReplyToId on the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+
+        val bubble = cachedMessage(cmid)
+        assertThat(bubble.storyReplyToId).isEqualTo("story-1")
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
+    }
+
+    @Test
+    fun `a non-story send carries no storyReplyToId`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isNull()
+        assertThat(cachedMessage(cmid).storyReplyToId).isNull()
+    }
+
+    @Test
+    fun `retrySend preserves the storyReplyToId when re-enqueuing from the cached payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
     }
 
     private suspend fun cachedMessage(id: String): ApiMessage =

@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -168,6 +169,12 @@ private fun RecoveryScaffold(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
+                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
+                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
+                // seul le CONTENU est retreci — c'est exactement la geometrie
+                // d'avant, le degrade en plus.
+                .systemBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = MeeshySpacing.xl),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),

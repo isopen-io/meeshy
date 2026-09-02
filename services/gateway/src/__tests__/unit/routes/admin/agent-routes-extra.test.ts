@@ -78,6 +78,9 @@ function makePrisma(): any {
     agentUserRole: {
       count: jest.fn<any>(),
       findMany: jest.fn<any>(),
+      // #4465 — `GET /stats` compte les utilisateurs contrôlés distincts en
+      // base (`$group` + `$count`) plutôt que de charger une ligne par rôle.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ total: 0 }]),
       upsert: jest.fn<any>(),
       update: jest.fn<any>(),
       deleteMany: jest.fn<any>(),
@@ -99,6 +102,9 @@ function makePrisma(): any {
     },
     agentScanLog: {
       findMany: jest.fn<any>(),
+      // #4465 — `GET /scan-logs/stats` agrège par seau en base (`$facet`)
+      // plutôt que de charger une ligne par scan.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ buckets: [], outcomes: [] }]),
       count: jest.fn<any>(),
       findUnique: jest.fn<any>(),
     },
@@ -825,20 +831,18 @@ describe('Agent Admin Routes — extra coverage', () => {
       await app.ready();
     });
 
+    // #4465 — l'agrégation par seau (jour/semaine, $facet) tourne désormais
+    // côté MongoDB : `aggregateRaw` rend directement le document replié, et
+    // ces témoins vérifient la fusion `buckets` + `outcomes` du HANDLER, pas
+    // le pipeline lui-même (hors de portée d'un double Prisma).
     it('aggregates by day bucket', async () => {
-      const startedAt = new Date('2024-06-01T10:00:00Z');
-      prisma.agentScanLog.findMany.mockResolvedValue([
-        {
-          startedAt,
-          conversationId: CONV_ID,
-          outcome: 'success',
-          messagesSent: 3,
-          reactionsSent: 1,
-          userIdsUsed: [USER_ID],
-          estimatedCostUsd: 0.01,
-          configChangedAt: null,
-        },
-      ]);
+      prisma.agentScanLog.aggregateRaw.mockResolvedValue([{
+        buckets: [{
+          _id: '2024-06-01', scans: 1, messagesSent: 3, reactionsSent: 1,
+          costUsd: 0.01, configChanges: 0, conversations: 1, users: 1,
+        }],
+        outcomes: [{ _id: { bucket: '2024-06-01', outcome: 'success' }, count: 1 }],
+      }]);
 
       const res = await app.inject({ method: 'GET', url: '/scan-logs/stats?bucket=day' });
       const body = JSON.parse(res.body);
@@ -850,19 +854,13 @@ describe('Agent Admin Routes — extra coverage', () => {
     });
 
     it('aggregates by week bucket', async () => {
-      const startedAt = new Date('2024-06-05T10:00:00Z');
-      prisma.agentScanLog.findMany.mockResolvedValue([
-        {
-          startedAt,
-          conversationId: CONV_ID,
-          outcome: 'success',
-          messagesSent: 2,
-          reactionsSent: 0,
-          userIdsUsed: [],
-          estimatedCostUsd: 0.005,
-          configChangedAt: startedAt,
-        },
-      ]);
+      prisma.agentScanLog.aggregateRaw.mockResolvedValue([{
+        buckets: [{
+          _id: '2024-06-02', scans: 1, messagesSent: 2, reactionsSent: 0,
+          costUsd: 0.005, configChanges: 1, conversations: 1, users: 0,
+        }],
+        outcomes: [{ _id: { bucket: '2024-06-02', outcome: 'success' }, count: 1 }],
+      }]);
 
       const res = await app.inject({ method: 'GET', url: '/scan-logs/stats?bucket=week' });
       const body = JSON.parse(res.body);

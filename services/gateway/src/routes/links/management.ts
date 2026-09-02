@@ -95,6 +95,84 @@ export async function loadShareLinkForManagement(
   return { outcome: 'ok', id: link.id };
 }
 
+/**
+ * L'ÉCRITURE unique d'un lien de partage, et l'effet de bord qui doit la suivre.
+ *
+ * Trois routes écrivaient ce bloc — `PATCH /links/:linkId` ici, `/toggle` et
+ * `/extend` dans `admin.ts` — chacune avec sa propre projection `include` et
+ * sa propre décision de révoquer, ou non, les invités déjà entrés. C'est cette
+ * recopie qui avait produit la divergence que le commentaire de `PATCH`
+ * décrivait (#4170) : `/toggle` révoquait, `PATCH` acceptait `isActive: false`
+ * sans révoquer, et le seuil EFFECTIF d'une règle recopiée est celui de sa
+ * copie la plus permissive.
+ *
+ * La révocation est donc portée ICI et non chez l'appelant — un appelant qui
+ * l'oublie ferme la porte sans vider la salle, et l'oubli ne se voit pas :
+ * la ligne du lien est bien à `isActive: false`, la liste rend le bon état,
+ * et les invités continuent de recevoir chaque message.
+ *
+ * `data.isActive === false`, jamais `body.isActive` : un corps qui ne nomme
+ * pas `isActive` ne doit rien révoquer, et un `PATCH` qui le pose à `true`
+ * ne rend rien à personne — une ligne `Participant` close ne se rouvre que
+ * par la porte d'entrée.
+ */
+export async function applyShareLinkUpdate(
+  fastify: FastifyInstance,
+  linkRowId: string,
+  data: Record<string, unknown>
+) {
+  // AVANT la fermeture, et pas après — l'ordre est celui que `DELETE
+  // /links/:linkId` argumentait déjà pour lui seul, et son argument vaut pour
+  // les trois : `Participant.shareLinkId` est une colonne NUE (aucune relation
+  // Prisma, donc aucune cascade), et une ligne de lien devenue inactive ne
+  // relie plus rien à un invité qui resterait connecté par erreur. Révoquer
+  // d'abord fait échouer FERMÉ : si la révocation lève, le lien reste actif et
+  // la reprise est idempotente. L'ordre inverse laisse l'état exactement
+  // interdit — lien fermé, invités encore dans la room.
+  if (data.isActive === false) {
+    await revokeShareLinkGuests({
+      prisma: fastify.prisma,
+      io: fastify.socketIOHandler?.getManager()?.getIO(),
+      manager: fastify.socketIOHandler?.getManager(),
+      shareLinkId: linkRowId,
+    });
+  }
+
+  return fastify.prisma.conversationShareLink.update({
+    where: { id: linkRowId },
+    data,
+    include: SHARE_LINK_MANAGEMENT_INCLUDE,
+  });
+}
+
+/**
+ * La projection que les trois écritures rendaient, à l'identique et
+ * séparément. Une quatrième copie serait la première à pouvoir diverger.
+ */
+const SHARE_LINK_MANAGEMENT_INCLUDE = {
+  conversation: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      type: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+  creator: {
+    select: {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      displayName: true,
+      avatar: true,
+    },
+  },
+} as const;
+
 export async function registerManagementRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
     requireAuth: true,
@@ -193,54 +271,9 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       if (body.allowedLanguages !== undefined) updateData.allowedLanguages = body.allowedLanguages;
       if (body.allowedIpRanges !== undefined) updateData.allowedIpRanges = body.allowedIpRanges;
 
-      const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: loaded.id },
-        data: updateData,
-        include: {
-          conversation: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-      });
-
-      // #4170 — le seuil EFFECTIF d'une règle recopiée est celui de sa porte
-      // la PLUS PERMISSIVE : `PATCH /links/:linkId` accepte `isActive` depuis
-      // l'origine (`updateLinkSchema` le déclare), mais SEUL `/toggle`
-      // (`admin.ts`) revoquait les invités déjà entrés en désactivant. Un
-      // appelant qui coupait un lien par CETTE porte-ci laissait donc chaque
-      // invité anonyme connecté dans la room de la conversation, sans le
-      // savoir — la moitié « inaccessible to EXISTING anonymous users » que
-      // le contrat OpenAPI de `/toggle` promet, `PATCH` ne la tenait pas.
-      // Convergeant sur le même effet quel que soit le champ qui le déclenche
-      // (`updateData.isActive === false`, jamais `body.isActive` — un body
-      // sans `isActive` ne doit rien révoquer), cette route unique referme
-      // l'écart plutôt que de le documenter.
-      if (updateData.isActive === false) {
-        await revokeShareLinkGuests({
-          prisma: fastify.prisma,
-          io: fastify.socketIOHandler?.getManager()?.getIO(),
-          manager: fastify.socketIOHandler?.getManager(),
-          shareLinkId: loaded.id,
-        });
-      }
+      // #4351 — l'écriture ET sa révocation vivent dans `applyShareLinkUpdate`,
+      // le site unique partagé avec `/toggle` et `/extend`.
+      const updatedLink = await applyShareLinkUpdate(fastify, loaded.id, updateData);
 
       return sendSuccess(reply, updatedLink, { message: 'Lien mis à jour avec succès' });
 

@@ -5,6 +5,7 @@ import { getCacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
+import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -176,7 +177,20 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
                 token: { type: 'string' },
                 sessionToken: { type: 'string' },
                 session: sessionSchema,
-                expiresIn: { type: 'number', example: 86400 }
+                expiresIn: { type: 'number', example: 86400 },
+
+                // Branche « second facteur attendu » (#4534). Elle DOIT être
+                // déclarée : `fast-json-stringify` retire tout champ absent du
+                // schéma, et une garde dont l'annonce n'atteint aucun client
+                // n'a fermé la porte que pour la murer — le compte protégé
+                // resterait sans sortie. Même défaut qu'à `POST /login` avant
+                // #4138 (`routes/auth/login.ts:66-77`).
+                //
+                // Les deux branches sont EXCLUSIVES : celle-ci ne porte ni
+                // `token`, ni `sessionToken`, ni `session`, ni `expiresIn`.
+                requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
+                twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /auth/login/2fa with the user code' },
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
               }
             }
           }
@@ -211,6 +225,27 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
 
       if (!result.success) {
         return sendBadRequest(reply, result.error);
+      }
+
+      // Second facteur attendu : aucune session n'existe, il n'y a donc rien à
+      // marquer de confiance — seulement à RETENIR (#4534). Depuis #4471 la
+      // préférence est gardée par le SERVEUR entre les deux étapes, indexée
+      // par l'empreinte du jeton d'étape 2 : le lien magique rejoint cette
+      // mémoire sans rien faire transporter au client, donc sans qu'aucune
+      // asymétrie ne puisse se rouvrir entre les deux portes de connexion.
+      if (result.requires2FA) {
+        await rememberPendingDeviceTrust({
+          store: cacheStore,
+          twoFactorToken: result.twoFactorToken,
+          rememberDevice: result.rememberDevice
+        });
+
+        return sendSuccess(reply, {
+          requires2FA: true,
+          twoFactorToken: result.twoFactorToken,
+          user: result.user,
+          message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
+        });
       }
 
       // Use rememberDevice from SERVER-SIDE storage (not from client request)

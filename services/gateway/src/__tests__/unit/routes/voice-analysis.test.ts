@@ -71,18 +71,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 jest.mock('@meeshy/shared/types/voice-api', () => ({}));
 
 // ─── Import the route under test (AFTER all jest.mock calls) ─────────────────

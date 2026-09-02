@@ -303,17 +303,44 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
     expect(fichiersTs(RACINE_ROUTES).length).toBeGreaterThan(100);
   });
 
+  /**
+   * Fichiers d'AUTRES lots qui se déclarent alias ET portent le mécanisme.
+   *
+   * Troisième liste, et pas une extension de `MON_TERRITOIRE` : celle-là nomme
+   * les fichiers de #4274, et y verser un fichier d'un autre lot ferait mentir
+   * son intitulé. Ils subissent en revanche la MÊME vérification que lui — un
+   * fichier qui se déclare alias sans importer ni appeler le site unique tombe,
+   * quel que soit le lot qui l'a écrit.
+   */
+  const AUTRES_LOTS_CONFORMES = [
+    // #4150 — les six portes de télémétrie de lecture (`view`, `impression`,
+    // `impressions/batch`, `engagement/batch`, `downloads`, `anonymous-view`)
+    // deviennent des alias délégant à `POST /social/events`. Leur sursis est
+    // DÉCLARÉ dans `routes/social/deprecation.ts`, un module pur que la Partie 4
+    // ÉVALUE réellement — les six sites y sont donc mesurés, pas gelés.
+    'posts/impressions.ts',
+    'posts/interactions.ts',
+  ].sort();
+
   it('l’ensemble EXACT des fichiers auto-déclarés est celui-ci — ni plus, ni moins', () => {
-    expect(fichiersAvecAutoDeclaration()).toEqual([...MON_TERRITOIRE, ...HORS_TERRITOIRE].sort());
+    expect(fichiersAvecAutoDeclaration())
+      .toEqual([...MON_TERRITOIRE, ...AUTRES_LOTS_CONFORMES, ...HORS_TERRITOIRE].sort());
   });
 
-  it.each(MON_TERRITOIRE)('%s (mon territoire) importe et appelle réellement le site unique', (relatif) => {
+  it.each([...MON_TERRITOIRE, ...AUTRES_LOTS_CONFORMES])('%s importe et appelle réellement le site unique', (relatif) => {
     const texte = fs.readFileSync(path.join(RACINE_ROUTES, relatif), 'utf8');
     // Chemin relatif variable selon la PROFONDEUR du fichier sous `routes/` —
     // `admin/reports.ts` (un niveau) importe par `../../utils/deprecation`,
     // `anonymous.ts` (directement sous `routes/`, #4167) par
     // `../utils/deprecation`. La forme, jamais un nombre de `..` fixe.
-    expect(texte).toMatch(/from '(?:\.\.\/)+utils\/deprecation'/);
+    //
+    // #4150 importe `depreciee` du site unique ET son ADRESSE d'un module de
+    // déclaration partagé (`social/deprecation`) : les six alias annoncent le
+    // même sursis, et le recopier six fois serait six dates à corriger le jour
+    // où l'échéance bouge. Les deux formes sont acceptées ; ce qui est exigé
+    // reste identique — importer le mécanisme, et l'appeler autant de fois
+    // qu'on se déclare alias.
+    expect(texte).toMatch(/from '(?:\.\.\/)+utils\/deprecation'|from '\.\.\/social\/deprecation'/);
     const nbDeclarations = texte.split('\n').filter(declareUnAlias).length;
     const nbAppels =
       texte.split('depreciee(').length - 1 + (texte.split('annoncerDepreciation(').length - 1);

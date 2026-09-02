@@ -59,19 +59,58 @@ final class ShareFanoutOriginResolverTests: XCTestCase {
 
     // MARK: - Garde de source : le dispatcher ne transfère JAMAIS un partage
 
+    /// **TOUT le dispatcher, ses extensions comprises** — jamais un fichier
+    /// nommé.
+    ///
+    /// La garde lisait `OutboxDispatcher.swift`. Le découpage du 2026-08-31
+    /// (`ec6591a296`) a emporté les trois symboles gardés — `ShareFanoutOriginResolver.resolve`,
+    /// `forwardedFromId:` et `copyAttachmentsFromMessageId:` — vers
+    /// `OutboxDispatcher+Messages.swift` ; le husk n'en contenait plus AUCUN
+    /// (mesuré : 0 occurrence sur 54 Ko), et les trois témoins rougissaient.
+    ///
+    /// > **Une garde qui nomme un FICHIER garde une adresse, pas une règle.**
+    /// > Repointer le chemin l'aurait remise au vert jusqu'au découpage suivant.
+    /// > Lire le type ENTIER — le fichier et ses extensions — la rend
+    /// > indifférente à la géographie, qui est précisément ce que la règle ne
+    /// > dit pas.
+    ///
+    /// Le rouge, lui, était la bonne direction : une garde POSITIVE qui perd
+    /// son fichier TOMBE. Une garde négative serait passée au vert en perdant
+    /// sa protection — c'est ce motif-là qu'un découpage rend dangereux.
     private var dispatcherSource: String {
         get throws {
-            try String(
-                contentsOf: URL(fileURLWithPath: #filePath)
-                    .deletingLastPathComponent()   // Share
-                    .deletingLastPathComponent()   // Unit
-                    .deletingLastPathComponent()   // MeeshyTests
-                    .deletingLastPathComponent()   // ios
-                    .appendingPathComponent(
-                        "Meeshy/Features/Main/Services/OutboxDispatcher.swift"),
-                encoding: .utf8
+            let services = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Share
+                .deletingLastPathComponent()   // Unit
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Services")
+
+            let fichiers = try FileManager.default
+                .contentsOfDirectory(atPath: services.path)
+                .filter { $0.hasPrefix("OutboxDispatcher") && $0.hasSuffix(".swift") }
+                .sorted()
+
+            XCTAssertGreaterThanOrEqual(
+                fichiers.count, 1,
+                "Aucun fichier `OutboxDispatcher*.swift` — la garde ne mesurerait RIEN."
             )
+
+            return try fichiers
+                .map { try String(contentsOf: services.appendingPathComponent($0), encoding: .utf8) }
+                .joined(separator: "\n")
         }
+    }
+
+    /// Le fusible. Sans lui, un renommage du type rendrait les gardes
+    /// ci-dessous vertes sur une chaîne vide — le mode d'extinction propre aux
+    /// gardes qui lisent des fichiers.
+    func test_laSourceDuDispatcher_estLisible() throws {
+        let source = try dispatcherSource
+        XCTAssertGreaterThan(source.count, 20_000,
+                             "Source du dispatcher introuvable ou tronquée.")
+        XCTAssertTrue(source.contains("dispatchSendMessage"),
+                      "Le corps d'envoi a disparu de la source lue — chemin devenu faux.")
     }
 
     /// Commentaires ET littéraux de chaîne masqués — round 1 de revue,

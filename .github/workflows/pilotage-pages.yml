@@ -1,6 +1,7 @@
 # =============================================================================
 # Pilotage — page « Avancement Meeshy » publiée sur GitHub Pages
-# Régénérée toutes les 6 h, à chaque mouvement d'issue ou de milestone, et à la demande.
+# Régénérée depuis `main` UNIQUEMENT — voir le bloc « `main` SEULEMENT » plus bas :
+# l'environnement `github-pages` n'admet pas `dev`, devenue la branche par défaut.
 # Le GITHUB_TOKEN lit le projet d'organisation tant qu'il est PUBLIC (vérifié le 2026-08-26,
 # run 32991204250). S'il devenait privé : poser un secret PILOTAGE_TOKEN (PAT lisant les
 # projets), sinon la page se génère en mode dégradé (issues + milestones ; ni « En cours »
@@ -53,9 +54,45 @@ concurrency:
   group: pilotage-pages
   cancel-in-progress: false
 
+# ─────────────────────────────────────────────────────────────────────────────
+# `main` SEULEMENT — l'environnement `github-pages` n'admet pas `dev`
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# L'environnement `github-pages` porte une `deployment_branch_policy` qui
+# n'autorise QUE `main` (vérifié le 2026-08-31 :
+# `gh api repos/isopen-io/meeshy/environments/github-pages/deployment-branch-policies`
+# → une seule entrée, `main`).
+#
+# Or la branche par défaut du dépôt est passée à `dev`. Et `schedule`, `issues`,
+# `milestone` et `workflow_dispatch` s'exécutent TOUJOURS sur la branche par
+# défaut, quel que soit l'endroit d'où vient l'événement. Chaque fermeture
+# d'issue lançait donc un run sur `dev`, dont le job `deploy` était REFUSÉ par
+# la règle d'environnement — « Branch "dev" is not allowed to deploy to
+# github-pages ».
+#
+# Le refus arrive au SETUP du job : aucune étape n'est enregistrée, et le log ne
+# nomme rien. C'est ce qui rendait le diagnostic pénible — il n'y avait rien à
+# journaliser.
+#
+# Les deux jobs sont donc gardés sur `main`. Sur toute autre branche ils sont
+# SAUTÉS (`skipped`), pas en échec : le workflow cesse d'être rouge, et il
+# cesse aussi de consommer un runner à chaque mouvement d'issue.
+#
+# CONSÉQUENCE ASSUMÉE, écrite pour qu'on ne la redécouvre pas : la page ne se
+# régénère plus sur les mouvements d'issue ni sur l'horaire — ces événements ne
+# s'exécutent que sur `dev`. Elle se régénère sur une poussée de `main` touchant
+# `scripts/pilotage/**`, ou par `workflow_dispatch --ref main`.
+#
+# L'alternative, si l'on veut retrouver le rafraîchissement automatique : ouvrir
+# `dev` dans la politique de branches de l'environnement — un seul appel
+# (`gh api -X POST .../deployment-branch-policies -f name=dev -f type=branch`).
+# Elle n'a pas été prise ici : élargir une règle de protection d'environnement
+# est une décision de dépôt, pas un correctif de workflow.
+
 jobs:
   build:
     name: Tests, extraction, génération
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -89,6 +126,7 @@ jobs:
   deploy:
     name: Déploiement Pages
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

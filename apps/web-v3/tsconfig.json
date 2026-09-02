@@ -1,3 +1,22 @@
+/*
+ * `exclude` PORTE « packages », ET CE N'EST PAS DÉCORATIF.
+ *
+ * Dans le dépôt, `packages/` vit à la RACINE, hors de `apps/web-v3` : le glob
+ * `include` ne l'atteint jamais. DANS L’IMAGE, le Dockerfile les copie SOUS la
+ * racine de l'application (`/app/packages/shared`), pour que le lien de
+ * workspace existe — et le même glob les balaie alors comme s'ils étaient à
+ * nous. `next build` a ainsi type-checké `packages/shared/prisma/migrations/
+ * migrate-user-roles.ts` et échoué sur `Cannot find module '../client'`, le
+ * client Prisma que la v3 ne génère pas et n'a aucune raison de générer.
+ *
+ * Le défaut ne pouvait PAS se voir en local : c'est la géographie de l'image
+ * qui le crée. `@meeshy/design-tokens` et `@meeshy/icons` ne l'avaient jamais
+ * révélé parce qu'ils ne portent aucun `.ts`.
+ *
+ * Exclure n'empêche pas d'IMPORTER : TypeScript suit toujours les `.d.ts` du
+ * paquet à travers la résolution de modules. Cela l'empêche seulement de
+ * compiler les sources du paquet comme si elles étaient les nôtres.
+ */
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -30,5 +49,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.d.mts", "next-env.d.ts", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", ".next"]
+  "exclude": ["node_modules", ".next", "packages"]
 }

@@ -22,9 +22,9 @@ import {
 } from './SessionService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { recipientLanguage } from '../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { searchTokensFor } from '../utils/search-tokens';
-import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
   isAccountLocked,
   recordFailedLoginAttempt,
@@ -43,6 +43,13 @@ import {
   TOKEN_TTL,
   type SessionBoundTokenPayload,
 } from './auth/session-jwt';
+import {
+  mintPendingTwoFactorChallenge,
+  pendingTwoFactorWhere,
+  clearPendingTwoFactor,
+} from './auth/pending-two-factor';
+import { AUTH_USER_SELECT } from './auth/auth-user-projection';
+import { registrationLanguages } from './auth/registration-languages';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -63,6 +70,7 @@ export interface RegisterData {
   phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
   systemLanguage?: string;
   regionalLanguage?: string;
+  customDestinationLanguage?: string;
   phoneTransferToken?: string; // Token proving SMS verification for phone transfer
   skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
 }
@@ -177,42 +185,12 @@ export class AuthService {
           ],
           isActive: true
         },
+        // La ligne d'une réponse d'authentification a UN site — `AUTH_USER_SELECT`,
+        // qui porte aussi l'état du verrou (#4138). Le mot de passe est le seul
+        // ajout de ce chemin : c'est le seul à le confronter (#4554).
         select: {
-          id: true,
-          username: true,
-          password: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true,
-          // L'état du verrou voyage avec l'utilisateur : le chemin de connexion
-          // l'a déjà lu, le relire serait une requête pour rien (#4138).
-          failedLoginAttempts: true,
-          lockedUntil: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
+          ...AUTH_USER_SELECT,
+          password: true
         }
       });
 
@@ -255,19 +233,9 @@ export class AuthService {
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
-        // Generate a temporary token for 2FA verification
-        const twoFactorToken = crypto.randomBytes(32).toString('hex');
-        const twoFactorTokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
-
-        // Store the temporary token (expires in 5 minutes)
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            // Store hash of the token for security
-            phoneVerificationCode: twoFactorTokenHash, // Reusing this field temporarily
-            phoneVerificationExpiry: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-          }
-        });
+        // Le défi d'étape 2 se compose AILLEURS — `./auth/pending-two-factor`,
+        // site unique que le lien magique appelle aussi (#4542).
+        const twoFactorToken = await mintPendingTwoFactorChallenge({ prisma: this.prisma, userId: user.id });
 
         // Return partial auth result requiring 2FA
         const socketIOUser = this.userToSocketIOUser(user);
@@ -372,47 +340,30 @@ export class AuthService {
     requestContext?: RequestContext
   ): Promise<AuthResult | { success: false; error: string }> {
     try {
-      // Hash the token to compare with stored value
-      const tokenHash = crypto.createHash('sha256').update(twoFactorToken).digest('hex');
+      // Le défi se lit par son site unique, qui rend `null` quand aucun défi
+      // ne PEUT être valide — un jeton vide n'atteint donc jamais la base.
+      const challenge = pendingTwoFactorWhere(twoFactorToken);
+
+      if (!challenge) {
+        logger.warn('[AUTH_SERVICE] ❌ Token 2FA absent ou vide');
+        return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
 
       // Find user with matching token
       const user = await this.prisma.user.findFirst({
         where: {
-          phoneVerificationCode: tokenHash,
-          phoneVerificationExpiry: { gt: new Date() },
+          ...challenge,
           isActive: true
         },
+        // Le MÊME site que `authenticate` : sans lui, cette liste avait perdu
+        // `isOnline` et `lastActiveAt`, que `userToSocketIOUser` lit — la
+        // présence partait `undefined` de la seconde porte (#4554). Le secret
+        // TOTP et les codes de secours sont l'ajout de ce chemin : c'est le
+        // seul à les confronter.
         select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          twoFactorEnabledAt: true,
+          ...AUTH_USER_SELECT,
           twoFactorSecret: true,
-          twoFactorBackupCodes: true,
-          lastLoginIp: true,
-          lastLoginLocation: true,
-          lastLoginDevice: true,
-          timezone: true,
-          emailVerifiedAt: true,
-          phoneVerifiedAt: true,
-          pendingEmail: true,
-          pendingPhoneNumber: true,
-          createdAt: true,
-          updatedAt: true,
-          failedLoginAttempts: true,
-          lockedUntil: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
+          twoFactorBackupCodes: true
         }
       });
 
@@ -493,8 +444,7 @@ export class AuthService {
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          phoneVerificationCode: null,
-          phoneVerificationExpiry: null,
+          ...clearPendingTwoFactor(),
           isOnline: true,
           lastActiveAt: new Date(),
           lastLoginIp: requestContext?.ip || user.lastLoginIp,
@@ -658,6 +608,10 @@ export class AuthService {
       const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
       const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
 
+      // Les trois rangs du Prisme que l'inscription exprime, composés en UN site
+      // (#4682) : un rang qu'elle ne demande pas n'est pas écrit.
+      const languages = registrationLanguages(data);
+
       // Créer l'utilisateur avec les données normalisées et contexte d'inscription
       // Note: Si phoneOwnershipConflict, on a déjà fait un early return plus haut
       const user = await this.prisma.user.create({
@@ -680,8 +634,9 @@ export class AuthService {
           phoneCountryCode: phoneCountryCode,
           // Mark phone as verified at registration (allows phone-based password reset)
           phoneVerifiedAt: cleanPhoneNumber ? new Date() : null,
-          systemLanguage: data.systemLanguage || 'fr',
-          regionalLanguage: data.regionalLanguage || 'fr',
+          systemLanguage: languages.systemLanguage,
+          regionalLanguage: languages.regionalLanguage,
+          customDestinationLanguage: languages.customDestinationLanguage,
           displayName: normalizedDisplayName,
           isOnline: true,
           lastActiveAt: new Date(),
@@ -713,7 +668,9 @@ export class AuthService {
           verificationLink,
           verificationCode,
           expiryHours: tokenExpiryHours,
-          language: data.systemLanguage || 'fr'
+          // Le rang SERVI, pas `data.systemLanguage` : le premier e-mail d'un
+          // compte partait en français à qui n'avait renseigné que son rang 2.
+          language: languages.systemLanguage
         });
 
         if (emailResult.success) {
@@ -767,28 +724,11 @@ export class AuthService {
           id: userId,
           isActive: true
         },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          phoneNumber: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          bio: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          isOnline: true,
-          lastActiveAt: true,
-          twoFactorEnabledAt: true,
-          createdAt: true,
-          updatedAt: true,
-          ...AUTO_TRANSLATE_PREFERENCE_SELECT
-        }
+        // Troisième consommateur de `userToSocketIOUser`, et le plus amputé des
+        // trois avant #4554 : la réponse du lien magique (`routes/auth/magic-link.ts`,
+        // seul appelant) ne portait ni vérification d'email ou de téléphone, ni
+        // suivi de connexion, ni changement de contact en attente.
+        select: { ...AUTH_USER_SELECT }
       });
 
       if (!user) {
@@ -969,7 +909,13 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Find user by email (include systemLanguage for i18n)
+      // Les QUATRE rangs du Prisme, jamais `systemLanguage` seul : la
+      // projection est la seule des deux moitiés de la descente qu'aucun témoin
+      // de rang ne peut voir (#4642). Un `select` étroit rend les rangs 2 à 4
+      // `undefined` chez `recipientLanguage`, donc « non réglés », donc le
+      // repli — et l'e-mail de vérification partait en `'fr'` vers tout lecteur
+      // dont la langue applicative vit dans `regionalLanguage` ou dans la seule
+      // locale appareil.
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -981,7 +927,7 @@ export class AuthService {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           emailVerifiedAt: true
         }
       });
@@ -1231,6 +1177,15 @@ export class AuthService {
   /**
    * Convertir un User Prisma en SocketIOUser
    * Note: user.userFeature doit être inclus dans la requête pour les champs de préférences
+   *
+   * `banner` et `timezone` y sont depuis #4641. Ils manquaient — et c'est la
+   * forme de défaut que la garde de #4554 ne peut PAS voir : elle rougit quand
+   * ce projecteur lit un champ hors de son `select`, or ici il ne le lisait
+   * pas DU TOUT. En aval, `formatUserResponse` écrivait
+   * `banner: user.banner || null` sur un `undefined` par construction : tout
+   * compte portant une bannière recevait `null` à chaque connexion. Ce que ce
+   * projecteur doit porter n'est donc pas seulement ce que ses appelants
+   * lisent, mais ce que `userSchema` PROMET à ses clients.
    */
   private userToSocketIOUser(user: any): SocketIOUser {
     return {
@@ -1243,6 +1198,7 @@ export class AuthService {
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner,
       role: user.role,
       permissions: this.getUserPermissions({
         ...user,
@@ -1270,6 +1226,7 @@ export class AuthService {
       lastLoginLocation: user.lastLoginLocation,
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
+      timezone: user.timezone,
       profileCompletionRate: user.profileCompletionRate
     };
   }

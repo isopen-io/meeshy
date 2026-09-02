@@ -33,12 +33,29 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// Les kinds dont CET hôte sait ouvrir un éditeur — voir
+    /// `StoryCanvasUIView.editableKinds`. Un hôte qui ne traite que le texte le
+    /// dit ici, plutôt que d'offrir « Modifier » sur un objet qu'il ignore.
+    public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media]
     /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
     public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+
+    /// **L'objet SÉLECTIONNÉ, et ce que le badge en dit** (#4073, vue `1c`).
+    ///
+    /// Le canvas n'en avait aucune notion : taper un objet remontait bien un
+    /// `onItemTapped` à l'hôte, mais RIEN ne revenait le désigner à l'écran.
+    /// L'inspecteur, les contrôleurs du rail et le menu d'appui long portaient
+    /// donc tous sur un objet invisible.
+    ///
+    /// Le libellé vient de l'HÔTE et n'est pas déduit ici : « TEXTE · PLAN FG ·
+    /// z 2 » est du vocabulaire produit, localisé, que le SDK n'a pas à
+    /// connaître. Le canvas tient la GÉOMÉTRIE, l'app tient les MOTS.
+    public var selectedItemId: String?
+    public var selectionBadge: String?
     /// Y (écran) du haut des contrôleurs de l'outil texte — le texte en cours
     /// d'édition reste au-dessus (cf. `StoryCanvasUIView.inlineEditFloorGlobalY`).
     /// `.greatestFiniteMagnitude` = pas de plafond (texte centré, comportement
@@ -52,6 +69,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// Le canvas passe en veille, ou en sort (#3915) — la couche SwiftUI
+    /// posée par-dessus doit suspendre ses propres animations, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
     /// Notifié pendant un pinch à 3 doigts sur le canvas. Pilote
     /// `canvasScale` + l'overlay éphémère `viewportPinchDelta` côté
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
@@ -104,14 +125,18 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
                 onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
+                selectedItemId: String? = nil,
+                selectionBadge: String? = nil,
                 inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
                 inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
+                onEditClockThrottleChanged: ((Bool) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
@@ -126,14 +151,18 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
+        self.editableKinds = editableKinds
         self.onItemLeftScene = onItemLeftScene
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.selectedItemId = selectedItemId
+        self.selectionBadge = selectionBadge
         self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
+        self.onEditClockThrottleChanged = onEditClockThrottleChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -180,6 +209,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         }
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
+        view.editableKinds = editableKinds
         view.onItemLeftScene = onItemLeftScene
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
@@ -187,6 +217,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         view.inlineEditCeilingGlobalY = inlineEditCeilingGlobalY
         view.onManipulationLayerChanged = onManipulationLayerChanged
+        view.onEditClockThrottleChanged = onEditClockThrottleChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -221,8 +252,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        uiView.onEditClockThrottleChanged = onEditClockThrottleChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
@@ -230,6 +263,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onViewportZoomResetRequested = onViewportZoomResetRequested
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
         uiView.canvasCornerRadius = canvasCornerRadius
+        // **Le cadre de sélection** (#4073). `setSelectionMarker` se garde
+        // lui-même contre la réassignation identique : `updateUIView` est
+        // appelée à chaque évaluation du corps SwiftUI, et reposer le cadre à
+        // chaque passe le ferait clignoter sous le doigt.
+        uiView.setSelectionMarker(id: selectedItemId, badge: selectionBadge)
 
         // Bridge des bitmaps édités/foreground du composer vers
         // `StoryCanvasUIView.readerContext.imageCache`. On reconstruit le

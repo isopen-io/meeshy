@@ -61,7 +61,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func login(username: String, password: String, rememberDevice: Bool = true) async throws -> LoginResponseData {
         let body = LoginRequest(username: username, password: password, rememberDevice: rememberDevice)
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login", body: body)
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.login, body: body)
         return response.data
     }
 
@@ -71,14 +71,14 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
             let code: String
         }
         let body = TwoFactorLoginRequest(twoFactorToken: twoFactorToken, code: code)
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login/2fa", body: body)
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.loginN2Fa, body: body)
         return response.data
     }
 
     // MARK: - Register
 
     public func register(request: RegisterRequest) async throws -> LoginResponseData {
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/register", body: request)
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.register, body: request)
         return response.data
     }
 
@@ -89,7 +89,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = MagicLinkRequest(email: email, deviceFingerprint: deviceFingerprint)
         let data = try JSONEncoder().encode(body)
         let response: MagicLinkResponse = try await api.request(
-            endpoint: "/auth/magic-link/request", method: "POST", body: data
+            AuthEndpoint.magicLinkRequest, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -99,7 +99,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func validateMagicLink(token: String) async throws -> LoginResponseData {
         let body = MagicLinkValidateRequest(token: token)
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/magic-link/validate", body: body)
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.magicLinkValidate, body: body)
         return response.data
     }
 
@@ -109,7 +109,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = ForgotPasswordRequest(email: email)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/forgot-password", method: "POST", body: data
+            AuthEndpoint.forgotPassword, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -120,7 +120,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = ResetPasswordRequest(token: token, newPassword: newPassword)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/password-reset/reset", method: "POST", body: data
+            AuthEndpoint.resetPassword, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -133,7 +133,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = SendPhoneCodeRequest(phoneNumber: phoneNumber)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/phone/send-code", method: "POST", body: data
+            AuthEndpoint.sendPhoneCode, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -142,7 +142,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func verifyPhone(phoneNumber: String, code: String) async throws -> VerifyPhoneResponse {
         let body = VerifyPhoneRequest(phoneNumber: phoneNumber, code: code)
-        let response: APIResponse<VerifyPhoneResponse> = try await api.post(endpoint: "/auth/phone/verify", body: body)
+        let response: APIResponse<VerifyPhoneResponse> = try await api.post(AuthEndpoint.verifyPhone, body: body)
         return response.data
     }
 
@@ -152,7 +152,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = VerifyEmailRequest(code: code)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/verify-email", method: "POST", body: data
+            AuthEndpoint.verifyEmail, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -163,7 +163,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = VerifyEmailCodeRequest(code: code, email: email)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/verify-email", method: "POST", body: data
+            AuthEndpoint.verifyEmail, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 400, message: response.error ?? response.message ?? "Verification failed")
@@ -174,7 +174,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = ResendVerificationRequest(email: email)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/resend-verification", method: "POST", body: data
+            AuthEndpoint.resendVerification, method: "POST", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -189,7 +189,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         if let email { items.append(URLQueryItem(name: "email", value: email)) }
         if let phone { items.append(URLQueryItem(name: "phoneNumber", value: phone)) }
         let response: APIResponse<AvailabilityResponse> = try await api.request(
-            endpoint: "/auth/check-availability", queryItems: items
+            AuthEndpoint.checkAvailability, queryItems: items
         )
         return response.data
     }
@@ -211,7 +211,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
             let lastName: String?
         }
         let response: APIResponse<PhoneOwnershipResponse> = try await api.post(
-            endpoint: "/auth/phone-transfer/check",
+            AuthEndpoint.phoneTransferCheck,
             body: Body(phoneNumber: phone, countryCode: countryCode, firstName: firstName, lastName: lastName)
         )
         return response.data
@@ -221,7 +221,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func refreshToken(_ currentToken: String, sessionToken: String? = nil) async throws -> LoginResponseData {
         let body = RefreshTokenRequest(token: currentToken, sessionToken: sessionToken)
-        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/refresh", body: body)
+        let response: APIResponse<LoginResponseData> = try await api.post(AuthEndpoint.refresh, body: body)
         return response.data
     }
 
@@ -235,7 +235,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let body = Body(currentPassword: currentPassword, newPassword: newPassword)
         let data = try JSONEncoder().encode(body)
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/users/me/password", method: "PATCH", body: data
+            UsersEndpoint.mePassword, method: "PATCH", body: data
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
@@ -244,20 +244,16 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     // MARK: - Email Verification
 
-    public func verifyEmail(token: String) async throws {
-        struct VerifyEmailBody: Encodable { let token: String }
-        let body = try JSONEncoder().encode(VerifyEmailBody(token: token))
-        let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/email/verify", method: "POST", body: body
-        )
-        guard response.success else {
-            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Verification failed")
-        }
-    }
+    // `verifyEmail(token:)` a été RETIRÉE (#4588). Elle visait
+    // `/auth/email/verify`, que le serveur ne sert pas — mesuré 404 sur
+    // `gate.staging.meeshy.me` — et n'avait AUCUN appelant. Sa jumelle vivante
+    // est `verifyEmail(code:)`, quelques lignes plus haut, sur la bonne
+    // adresse. Deux fonctions au nom quasi identique, une seule qui marche :
+    // c'est ce qui rend ce défaut invisible à la relecture.
 
     public func resendEmailVerification() async throws {
         let response: SimpleAPIResponse = try await api.request(
-            endpoint: "/auth/email/resend-verification", method: "POST"
+            AuthEndpoint.resendVerification, method: "POST"
         )
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Resend failed")
@@ -267,7 +263,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     // MARK: - Me
 
     public func me() async throws -> MeeshyUser {
-        let response: APIResponse<MeResponseData> = try await api.request(endpoint: "/auth/me")
+        let response: APIResponse<MeResponseData> = try await api.request(AuthEndpoint.me)
         return response.data.user
     }
 
@@ -275,7 +271,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func logout() async {
         do {
-            let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+            let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
         } catch {
             // Best-effort assumé : la déconnexion locale doit aboutir même hors
             // ligne. `logoutThrowing()` est la variante à utiliser quand
@@ -292,7 +288,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     /// silently left the session live on the gateway when the device was
     /// offline at the moment of logout.
     public func logoutThrowing() async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+        let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
     }
 
     /// D5.hygiene — sends the explicit `token` as the Authorization header
@@ -301,7 +297,7 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     /// time this retry loop actually sends its request).
     public func logoutThrowing(token: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.requestWithHeaders(
-            endpoint: "/auth/logout",
+            AuthEndpoint.logout,
             method: "POST",
             body: nil,
             queryItems: nil,

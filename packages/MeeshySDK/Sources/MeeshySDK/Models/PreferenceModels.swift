@@ -182,7 +182,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public static let defaults = PrivacyPreferences(
         showOnlineStatus: true, showLastSeen: true, showReadReceipts: true,
         showTypingIndicator: true, allowContactRequests: true, allowGroupInvites: true,
-        allowCallsFromNonContacts: false, saveMediaToGallery: false, allowAnalytics: true,
+        allowCallsFromNonContacts: false, saveMediaToGallery: false, allowAnalytics: false,
         shareUsageData: false, blockScreenshots: false, hideProfileFromSearch: false,
         encryptionPreference: .optional, autoEncryptNewConversations: false,
         showEncryptionStatus: true, warnOnUnencrypted: false, extras: [:]
@@ -191,7 +191,7 @@ public struct PrivacyPreferences: Codable, Equatable, Sendable {
     public init(
         showOnlineStatus: Bool = true, showLastSeen: Bool = true, showReadReceipts: Bool = true,
         showTypingIndicator: Bool = true, allowContactRequests: Bool = true, allowGroupInvites: Bool = true,
-        allowCallsFromNonContacts: Bool = false, saveMediaToGallery: Bool = false, allowAnalytics: Bool = true,
+        allowCallsFromNonContacts: Bool = false, saveMediaToGallery: Bool = false, allowAnalytics: Bool = false,
         shareUsageData: Bool = false, blockScreenshots: Bool = false, hideProfileFromSearch: Bool = false,
         encryptionPreference: EncryptionPreference = .optional, autoEncryptNewConversations: Bool = false,
         showEncryptionStatus: Bool = true, warnOnUnencrypted: Bool = false, extras: [String: CodableValue] = [:]
@@ -735,7 +735,7 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         compactMode: false, sidebarPosition: .left, showAvatars: true,
         animationsEnabled: true, reducedMotion: false,
         highContrastMode: false, screenReaderOptimized: false, keyboardShortcutsEnabled: true,
-        tutorialsCompleted: [], betaFeaturesEnabled: false, telemetryEnabled: true, extras: [:]
+        tutorialsCompleted: [], betaFeaturesEnabled: false, telemetryEnabled: false, extras: [:]
     )
 
     public init(
@@ -744,7 +744,7 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         compactMode: Bool = false, sidebarPosition: SidebarPosition = .left, showAvatars: Bool = true,
         animationsEnabled: Bool = true, reducedMotion: Bool = false,
         highContrastMode: Bool = false, screenReaderOptimized: Bool = false, keyboardShortcutsEnabled: Bool = true,
-        tutorialsCompleted: [String] = [], betaFeaturesEnabled: Bool = false, telemetryEnabled: Bool = true,
+        tutorialsCompleted: [String] = [], betaFeaturesEnabled: Bool = false, telemetryEnabled: Bool = false,
         dataProcessingConsentAt: String? = nil, voiceDataConsentAt: String? = nil,
         voiceProfileConsentAt: String? = nil, voiceCloningConsentAt: String? = nil,
         voiceCloningEnabledAt: String? = nil,

@@ -19,10 +19,29 @@ nonisolated struct ComposerIntent: Equatable {
     let origin: ComposerOrigin
 }
 
-/// Les neuf portes du composer. La GRAINE qu'une porte apporte n'a pas de champ
+/// Les huit portes du composer. La GRAINE qu'une porte apporte n'a pas de champ
 /// à elle : elle est matérialisée par les valeurs associées ci-dessous.
+///
+/// ## Il n'y a PAS de porte par FORMAT (décision porteur 2026-08-31, #4623)
+///
+/// > « On choisit de faire un réel à partir du Feed principal ou à partir du
+/// > **+** de story. On choisit **dans le composer** si on fait un post, une
+/// > story ou un réel / mood. »
+///
+/// `.reelTab` a donc été RETIRÉE. Elle nommait une entrée que le produit ne veut
+/// pas : une porte qui déclare son format d'avance, là où la décision doit se
+/// prendre APRÈS, quand l'auteur voit ce qu'il compose.
+///
+/// C'est la loi 9 tenue à la lettre — **le format est un CHAMP, pas une
+/// identité**. Une porte par format ferait de chaque format une identité qu'on
+/// choisit avant d'avoir composé.
+///
+/// Le réel reste atteignable, et il l'était déjà : `plusReel` l'ajoute à
+/// l'éventail de `.storyTray` et de `.feedComposer` dès que la composition
+/// qualifie. **La capacité existait ; c'est l'entrée dédiée dont le produit ne
+/// veut pas.**
 nonisolated enum ComposerOrigin: Equatable {
-    case storyTray, feedComposer, reelTab, moodChip
+    case storyTray, feedComposer, moodChip
     /// Deux portes PORTENT leur format au lieu de le deviner : l'appelant l'a
     /// déjà en main, puisqu'on tape « reposter » ou « modifier » sur une carte
     /// RENDUE. Ce format n'est pas une graine — il fait partie de l'identité de
@@ -55,7 +74,35 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .repost(let postId, _):
             return postId
-        case .storyTray, .feedComposer, .reelTab, .moodChip, .edit, .draft, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia:
+            return nil
+        }
+    }
+
+    /// **Le brouillon que cette porte REPREND**, quand elle en reprend un —
+    /// sinon `nil`. Jumeau exact de `repostedPostId` ci-dessus, et pour la
+    /// raison que son doc-comment donne déjà.
+    ///
+    /// ## Le piège que ce lecteur désarme
+    ///
+    /// `.draft(id:)` transportait un identifiant que **personne ne lisait** :
+    /// zéro `case .draft(let …)` au dépôt (mesuré le 2026-08-31). Le seul
+    /// chemin d'adoption du meuble passe par un PARAMÈTRE séparé,
+    /// `MeeshyComposerHost(draftId:)` — la « seconde source » que le
+    /// doc-comment de `repostedPostId` existe pour interdire.
+    ///
+    /// > Une porte non construite est une route morte ; une porte dont la
+    /// > GRAINE n'a aucun lecteur est pire — elle compile, elle route, et elle
+    /// > perd ce qu'on lui confie. Le jour où quelqu'un l'aurait montée, le
+    /// > brouillon repris serait resté intact à côté d'un composer vierge.
+    ///
+    /// Le `switch` est exhaustif : une dixième porte casse la compilation ici
+    /// avant de pouvoir répondre `nil` par omission.
+    var resumedDraftId: String? {
+        switch self {
+        case .draft(let id):
+            return id
+        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia:
             return nil
         }
     }
@@ -64,6 +111,19 @@ nonisolated extension ComposerOrigin {
 /// Les quatre contenus que Meeshy publie. Le format reste CHANGEABLE après
 /// l'ouverture — c'est un champ, pas une identité (loi 9 de la spec).
 nonisolated enum ComposerFormat: Equatable { case story, post, reel, status }
+
+nonisolated extension ComposerFormat {
+    /// **L'ordre du menu de bascule, écrit UNE fois.**
+    ///
+    /// Post d'abord : c'est la porte d'entrée du composer, celle depuis
+    /// laquelle on bascule vers les trois autres. Ensuite la durée décroît —
+    /// Story et Réel vivent une journée, le Mood une heure.
+    ///
+    /// Cet ordre ne dépend PAS de ce qui est disponible : un format qui devient
+    /// choisissable parce qu'on vient d'ajouter une vidéo ne doit pas sauter de
+    /// place sous le doigt.
+    static let allComposable: [ComposerFormat] = [.post, .story, .reel, .status]
+}
 
 /// Le composer n'invente pas son vocabulaire : ses quatre formats sont les
 /// quatre `PostType` du SDK, ceux sous lesquels le serveur range ce qu'on lui
@@ -312,20 +372,6 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: nil
             )
 
-        case .reelTab:
-            // Profil DÉFINI, câblage HORS v1 : aucun point d'entrée réels
-            // n'existe au dépôt — les Réels sont un overlay lancé depuis le fil,
-            // sans bouton de création (revue Fable n°5).
-            return ComposerProfile(
-                initialFormat: .reel,
-                offeredFormats: [.reel, .post],
-                showsSlides: false,
-                showsTimeline: true,
-                opensWith: .videoCameraReady,
-                allowsCapture: true,
-                routesToLegacy: nil
-            )
-
         case .moodChip:
             // Rév. 7 (lot 4.6, 2026-08-24) : la porte du mood cesse de router.
             // Les trois conditions que le lot 3 exigeait d'une porte-document
@@ -542,6 +588,26 @@ nonisolated extension ComposerProfile {
             )
 
         case .draft, .share:
+            // **Deux portes DÉCLARÉES SANS APPELANT** (#4611, mesuré le
+            // 2026-08-31) — dites ici pour qu'aucune session ne les monte en
+            // croyant qu'elles sont servies :
+            //
+            // - `.draft` : la reprise VIVANTE marche, et elle traverse bien le
+            //   meuble — `openComposer(resumingDraftId:)` pose `pendingDraftId`,
+            //   `StoryTrayActions` le remet en PARAMÈTRE (`draftId:`), le meuble
+            //   adopte. Cette porte est donc une SECONDE expression de la même
+            //   intention, et c'est elle qui n'a pas d'appelant.
+            //   Elle en était même une expression MENTEUSE : son `id` n'avait
+            //   aucun lecteur (zéro `case .draft(let …)` au dépôt). Le meuble le
+            //   lit désormais en repli du paramètre
+            //   (`ComposerOrigin.resumedDraftId`), donc la monter marcherait —
+            //   elle ne perd plus ce qu'on lui confie.
+            // - `.share` : l'extension de partage ne fait aujourd'hui que
+            //   router vers des conversations. Publier une pièce reçue est la
+            //   vue `2a` de la planche, portée par #4079.
+            //
+            // Inventaire gardé : `ComposerDoorInventoryGuardTests`.
+            //
             // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE
             // — la table reste une fonction de l'origine, elle n'ouvre pas le
             // document pour le deviner.

@@ -201,7 +201,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
-                endpoint: "/posts/feed",
+                PostsEndpoint.feed,
                 cursor: nil,
                 limit: limit
             )
@@ -255,7 +255,7 @@ class FeedViewModel: ObservableObject {
                 }
             } else {
                 if posts.isEmpty {
-                    error = response.error ?? String(localized: "Impossible de charger le fil", defaultValue: "Impossible de charger le fil")
+                    error = response.error ?? String(localized: "feed.load.error", defaultValue: "Impossible de charger le fil")
                 }
             }
         } catch let apiError as APIError {
@@ -324,7 +324,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(
-                endpoint: "/posts/feed",
+                PostsEndpoint.feed,
                 cursor: nextCursor,
                 limit: limit
             )
@@ -577,7 +577,7 @@ class FeedViewModel: ObservableObject {
 
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
-                endpoint: "/posts/\(postId)/bookmark",
+                PostsEndpoint.byPostIdBookmark(postId: postId),
                 method: "POST"
             )
         } catch {
@@ -696,7 +696,7 @@ class FeedViewModel: ObservableObject {
                 mentions: mentions
             )
             let response: APIResponse<APIPost> = try await api.request(
-                endpoint: "/posts",
+                PostsEndpoint.root,
                 method: "POST",
                 body: try JSONEncoder().encode(request)
             )
@@ -1177,7 +1177,7 @@ class FeedViewModel: ObservableObject {
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
             let response: APIResponse<PostSharePayload> = try await api.request(
-                endpoint: "/posts/\(postId)/share",
+                PostsEndpoint.byPostIdShare(postId: postId),
                 method: "POST",
                 body: bodyData
             )

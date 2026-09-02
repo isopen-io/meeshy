@@ -147,6 +147,50 @@ export declare const composeVerdictReseau: (
 
 export declare const raisonLisible: (erreur: unknown) => string;
 
+/**
+ * Le contexte de navigateur dont `mesurePage` a besoin — structurel, pour que ce
+ * fichier de déclarations ne dépende pas de Playwright. Un appelant lui passe un
+ * `Browser` ; le seul membre qu'il utilise est `newContext`.
+ */
+export type NavigateurDeMesure = {
+  newContext(options: Record<string, unknown>): Promise<{
+    newPage(): Promise<unknown>;
+    newCDPSession(page: unknown): Promise<unknown>;
+    /**
+     * Facultatif dans le CONTRAT parce qu'il l'est à l'usage : `mesurePage` ne
+     * l'appelle que si des cookies lui sont passés. L'exiger de tout navigateur
+     * obligerait chaque double de test à porter une méthode qu'il ne verra
+     * jamais appelée — un contrat plus large que le besoin.
+     */
+    addCookies?(cookies: readonly CookieDeMesure[]): Promise<void>;
+    close(): Promise<void>;
+  }>;
+};
+
+/** Un cookie posé avant la navigation — la forme que Playwright accepte. */
+export type CookieDeMesure = {
+  readonly name: string;
+  readonly value: string;
+  readonly url: string;
+};
+
+export declare const mesurePage: (args: {
+  readonly url: string;
+  readonly commande: string;
+  readonly navigateur: NavigateurDeMesure;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly timeoutMs?: number;
+  readonly profil?: ProfilReseau | null;
+  /** L'agent servi à la page. Défaut : l'iPhone du § 8.3. */
+  readonly userAgent?: string;
+  /**
+   * Les cookies posés AVANT la navigation. `/` sert la vitrine sans eux et le
+   * tableau de bord avec (§ 12.2) : sans cette option, un gate sur l'écran
+   * connecté mesurerait l'écran public (§ 12.6).
+   */
+  readonly cookies?: readonly CookieDeMesure[];
+}) => Promise<Mesure>;
+
 export declare const mesureUrls: (
   urls: readonly string[],
   commandePour: (url: string) => string,

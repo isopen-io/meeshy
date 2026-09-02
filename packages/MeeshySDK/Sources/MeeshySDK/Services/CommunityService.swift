@@ -40,7 +40,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
         if let search, !search.isEmpty {
             queryItems.append(URLQueryItem(name: "search", value: search))
         }
-        return try await api.request(endpoint: "/communities", queryItems: queryItems)
+        return try await api.request(CommunitiesEndpoint.root, queryItems: queryItems)
     }
 
     // MARK: - Search Public Communities
@@ -51,13 +51,13 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
             URLQueryItem(name: "offset", value: "\(offset)"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ]
-        return try await api.request(endpoint: "/communities/search", queryItems: queryItems)
+        return try await api.request(CommunitiesEndpoint.search, queryItems: queryItems)
     }
 
     // MARK: - Get Community by ID
 
     public func get(communityId: String) async throws -> APICommunity {
-        let response: APIResponse<APICommunity> = try await api.request(endpoint: "/communities/\(communityId)")
+        let response: APIResponse<APICommunity> = try await api.request(CommunitiesEndpoint.byId(id: communityId))
         return response.data
     }
 
@@ -65,7 +65,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func create(name: String, identifier: String? = nil, description: String? = nil, isPrivate: Bool = true) async throws -> APICommunity {
         let body = CreateCommunityRequest(name: name, identifier: identifier, description: description, isPrivate: isPrivate)
-        let response: APIResponse<APICommunity> = try await api.post(endpoint: "/communities", body: body)
+        let response: APIResponse<APICommunity> = try await api.post(CommunitiesEndpoint.root, body: body)
         return response.data
     }
 
@@ -77,14 +77,14 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
         let body = UpdateCommunityRequest(name: name, identifier: identifier,
                                           description: description, isPrivate: isPrivate,
                                           avatar: avatar, banner: banner)
-        let response: APIResponse<APICommunity> = try await api.put(endpoint: "/communities/\(communityId)", body: body)
+        let response: APIResponse<APICommunity> = try await api.put(CommunitiesEndpoint.byId(id: communityId), body: body)
         return response.data
     }
 
     // MARK: - Delete Community
 
     public func delete(communityId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/communities/\(communityId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(CommunitiesEndpoint.byId(id: communityId))
     }
 
     // MARK: - Get Members
@@ -94,7 +94,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
             URLQueryItem(name: "offset", value: "\(offset)"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ]
-        return try await api.request(endpoint: "/communities/\(communityId)/members", queryItems: queryItems)
+        return try await api.request(CommunitiesEndpoint.byIdMembers(id: communityId), queryItems: queryItems)
     }
 
     // MARK: - Add Member
@@ -105,7 +105,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
             let role: String
         }
         let body = AddMemberBody(userId: userId, role: role.rawValue)
-        let response: APIResponse<APICommunityMember> = try await api.post(endpoint: "/communities/\(communityId)/members", body: body)
+        let response: APIResponse<APICommunityMember> = try await api.post(CommunitiesEndpoint.byIdMembers(id: communityId), body: body)
         return response.data
     }
 
@@ -118,7 +118,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
         let body = RoleBody(role: role.rawValue)
         let data = try JSONEncoder().encode(body)
         let response: APIResponse<APICommunityMember> = try await api.request(
-            endpoint: "/communities/\(communityId)/members/\(memberId)/role",
+            CommunitiesEndpoint.byIdMembersByMemberIdRole(id: communityId, memberId: memberId),
             method: "PATCH",
             body: data
         )
@@ -129,7 +129,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func removeMember(communityId: String, userId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/communities/\(communityId)/members/\(userId)",
+            CommunitiesEndpoint.byIdMembersByMemberId(id: communityId, memberId: userId),
             method: "DELETE"
         )
     }
@@ -138,7 +138,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func join(communityId: String) async throws -> APICommunityMember {
         let response: APIResponse<APICommunityMember> = try await api.request(
-            endpoint: "/communities/\(communityId)/join",
+            CommunitiesEndpoint.byIdJoin(id: communityId),
             method: "POST"
         )
         return response.data
@@ -148,7 +148,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func leave(communityId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/communities/\(communityId)/leave",
+            CommunitiesEndpoint.byIdLeave(id: communityId),
             method: "POST"
         )
     }
@@ -157,7 +157,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func invite(communityId: String, userId: String) async throws -> APICommunityMember {
         let body = InviteMemberRequest(userId: userId)
-        let response: APIResponse<APICommunityMember> = try await api.post(endpoint: "/communities/\(communityId)/invite", body: body)
+        let response: APIResponse<APICommunityMember> = try await api.post(CommunitiesEndpoint.byIdInvite(id: communityId), body: body)
         return response.data
     }
 
@@ -181,7 +181,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func checkIdentifier(_ identifier: String) async throws -> IdentifierAvailability {
         let response: APIResponse<IdentifierAvailability> = try await api.request(
-            endpoint: "/communities/check-identifier/\(identifier)"
+            CommunitiesEndpoint.checkIdentifierByIdentifier(identifier: identifier)
         )
         return response.data
     }
@@ -190,7 +190,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func getConversations(communityId: String) async throws -> [APIConversation] {
         let response: APIResponse<[APIConversation]> = try await api.request(
-            endpoint: "/communities/\(communityId)/conversations"
+            CommunitiesEndpoint.byIdConversations(id: communityId)
         )
         return response.data
     }
@@ -199,7 +199,7 @@ public final class CommunityService: CommunityServiceProviding, @unchecked Senda
 
     public func addConversation(communityId: String, conversationId: String) async throws -> APIConversation {
         let response: APIResponse<APIConversation> = try await api.request(
-            endpoint: "/communities/\(communityId)/conversations/\(conversationId)",
+            CommunitiesEndpoint.byIdConversationsByConversationId(id: communityId, conversationId: conversationId),
             method: "POST"
         )
         return response.data

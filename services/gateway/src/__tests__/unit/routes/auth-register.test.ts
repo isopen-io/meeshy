@@ -38,11 +38,18 @@ jest.mock('../../../routes/auth/types', () => ({
   formatUserResponse: (...a: any[]) => mockFormatUserResponse(...a),
 }));
 
+// `routes/auth/register.ts` importe ses schemas du BARIL `@meeshy/shared/types`,
+// donc le double se pose la ; mais les VALEURS viennent du vrai module de
+// schemas (#4649). Reecrire `errorResponseSchema` a la main remplacait le
+// contrat que les cinq assertions de corps d'erreur ci-dessous pretendent
+// mesurer. `api-schemas` plutot que le baril entier : meme objets (le baril le
+// re-exporte), 72 ms au lieu de 388 ms de chargement.
+//
+// `registerRequestSchema` reste permissif — un schema de REQUETE reel deplace
+// le refus dans AJV, avant le handler : autre sujet, autre temoin (#4649).
 jest.mock('@meeshy/shared/types', () => ({
-  userSchema: { type: 'object', additionalProperties: true },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   registerRequestSchema: { type: 'object', additionalProperties: true },
-  validationErrorResponseSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' } } },
 }));
 
 const mockNormalizePhoneWithCountry = jest.fn<any>();
