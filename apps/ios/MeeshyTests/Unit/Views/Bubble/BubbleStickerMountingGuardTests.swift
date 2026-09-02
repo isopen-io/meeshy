@@ -14,6 +14,10 @@ final class BubbleStickerMountingGuardTests: XCTestCase {
 
     private static let host = "Meeshy/Features/Main/Views/ThemedMessageBubble.swift"
     private static let leaf = "Meeshy/Features/Main/Views/Bubble/BubbleSticker.swift"
+    /// L'ATOME de dessin — extrait de `leaf` pour que Focal, Script et
+    /// Rivière montent le MÊME sticker que la bulle. C'est lui qui porte
+    /// désormais la courbe, le temps et Reduce Motion.
+    private static let artwork = "Meeshy/Features/Main/Views/Bubble/MessageStickerArtwork.swift"
     private static let builder = "Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift"
 
     private func source(_ relativePath: String) throws -> String {
@@ -54,8 +58,16 @@ final class BubbleStickerMountingGuardTests: XCTestCase {
     /// Le mouvement est une fonction PURE du temps : `TimelineView` + Reduce
     /// Motion, jamais une boucle `repeatForever` ni un `withAnimation` posé
     /// depuis `onAppear` (règles 2, 5 et 6 des effets de message).
+    /// **Cette garde a suivi le code, elle ne l'a pas retenu.** Elle
+    /// interrogeait `BubbleSticker` ; le mouvement vit maintenant dans
+    /// `MessageStickerArtwork`, l'atome que les QUATRE modes de lecture
+    /// montent. Extraire fait franchir aux gardes une frontière qu'elles ne
+    /// signalent pas : elles nomment un FICHIER, et le fichier s'est vidé sans
+    /// cesser de compiler. La parade tient en une ligne, AVANT d'extraire —
+    /// `grep` le nom du fichier dans les tests, la liste EST le lot à
+    /// repointer. Je ne l'avais pas appliquée.
     func test_bubbleSticker_animatesFromTimeAndHonoursReduceMotion() throws {
-        let leaf = try source(Self.leaf)
+        let leaf = try source(Self.artwork)
 
         XCTAssertTrue(leaf.contains("TimelineView("),
                       "la pose se lit sur une TimelineView, fonction du temps.")
@@ -77,5 +89,38 @@ final class BubbleStickerMountingGuardTests: XCTestCase {
                        "BubbleSticker est une feuille à entrées primitives.")
         XCTAssertFalse(leaf.contains(".shared"),
                        "aucun singleton lu dans la feuille — l'hôte résout et passe des primitifs.")
+    }
+
+    /// **La bulle MONTE l'atome, elle ne le réécrit pas.**
+    ///
+    /// Seconde moitié de l'extraction, et la raison pour laquelle deux gardes
+    /// valent mieux qu'un repointage : l'atome porte la RÈGLE (courbe, temps,
+    /// Reduce Motion), la bulle porte le MONTAGE. Sans ce témoin, un futur lot
+    /// pourrait réintroduire une `TimelineView` locale dans `BubbleSticker` —
+    /// la garde du mouvement resterait verte, puisqu'elle regarde l'atome, et
+    /// les deux implémentations divergeraient en silence.
+    func test_bubbleSticker_montsSharedArtwork_andRewritesNothing() throws {
+        let leaf = try source(Self.leaf)
+
+        XCTAssertTrue(leaf.contains("MessageStickerArtwork("),
+                      "la bulle monte l'atome partagé — le même que Focal, Script et Rivière.")
+        XCTAssertFalse(leaf.contains("TimelineView("),
+                       "aucune horloge locale : le mouvement appartient à l'atome.")
+        XCTAssertFalse(leaf.contains(".pose(at:"),
+                       "aucune seconde lecture de la courbe.")
+    }
+
+    /// **Les trois autres modes le montent AUSSI.** C'est le défaut que ce lot
+    /// corrige : le mot « sticker » n'apparaissait pas une fois dans tout
+    /// `Focal/Row/`, alors que la rangée reçoit un `BubbleContent` qui le
+    /// porte — trois modes de lecture sur quatre servaient l'emoji de repli à
+    /// la place du gabarit disponible.
+    func test_focalRow_montsTheSameArtwork() throws {
+        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+
+        XCTAssertTrue(row.contains("MessageStickerArtwork("),
+                      "Focal, Script et Rivière dessinent le sticker, comme la bulle.")
+        XCTAssertTrue(row.contains("content.sticker"),
+                      "la rangée LIT le sticker que son contenu porte déjà.")
     }
 }
