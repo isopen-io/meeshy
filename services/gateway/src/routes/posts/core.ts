@@ -4,8 +4,15 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
-import { postSignalText } from '../../services/posts/storyContentComposition';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import {
+  runPublicationEffects,
+  servePublishedPost,
+  finalReferences,
+  hoistLocation,
+  type PublishedPostRow,
+  type PublishedPostType,
+} from './publication';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
@@ -26,14 +33,11 @@ import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/ap
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
 import { MentionService } from '../../services/MentionService';
-import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
-import type { ResolvedPostMentions } from '../../services/posts/postMentions';
+import { reconcilePostMentions } from '../../services/posts/postMentions';
 import {
   withMentions,
   graftReferences,
-  readPostReferences,
   projectReferencesForViewer,
-  type PostReference,
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
 import {
@@ -42,35 +46,9 @@ import {
 } from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
-import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
+import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
+import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
-
-/**
- * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
- * socket d'un post/story/status — miroir exact du hoist `trackingLinks` des
- * messages (`MessageHandler`). Le destinataire rend le lien (texte + façade
- * vidéo) vers `/l/<token>` sans réécrire l'URL. Les réponses REST exposent déjà
- * `metadata` ; ce hoist ne sert que les payloads temps réel. No-op si absent.
- */
-function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
-  const metadata = post?.metadata as Record<string, unknown> | null | undefined;
-  const tl = metadata?.trackingLinks;
-  if (Array.isArray(tl) && tl.length > 0) {
-    return { ...post, trackingLinks: tl } as T;
-  }
-  return post;
-}
-
-/**
- * Hisse `metadata.location` en top-level `location`, sur le post ET sur
- * chaque commentaire de son aperçu embarqué (`post.comments`) — voir
- * `hoistLocationDeep` (services/location/sharedPlace.ts). Appliqué à la fois
- * à la réponse REST et au payload socket (contrairement à `trackingLinks`,
- * qui ne hissait jusqu'ici que le payload socket, et qui ne descend pas dans
- * `comments`). No-op si rien ne porte de lieu.
- */
-const hoistLocation = hoistLocationDeep;
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -202,24 +180,14 @@ export function registerCoreRoutes(
   const hashtagService = new HashtagService(prisma);
 
   /**
-   * Le jeu FINAL des références d'un post, à servir après une écriture.
-   *
-   * Trois états, et les distinguer est tout l'intérêt : la résolution n'a rien
-   * pu établir (`undefined` — l'appelant garde ce que la relation portait, une
-   * mention périmée valant mieux qu'une mention détruite), le post ne nomme
-   * plus personne (`[]` sans ouvrir de requête — le cas de l'immense majorité
-   * des publications), ou il en nomme, et la seule source de leur profil et de
-   * leur mode est la base d'APRÈS l'écriture.
+   * Le corps de la PUBLICATION vit dans `./publication` (#4151) — un noyau
+   * unique, appelé par `POST /posts` et `POST /posts/from-attachment`. Ce qui
+   * reste ici est ce qui DIFFÈRE : la porte, la validation de son corps, et la
+   * décision de quelle ligne écrire. L'ÉDITION garde son propre chemin (elle
+   * réconcilie plutôt qu'elle ne crée) et n'emprunte au noyau que la relecture
+   * des références et la composition de la réponse.
    */
-  const finalReferences = async (
-    postId: string,
-    resolved: ResolvedPostMentions,
-    onError: (error: unknown) => void
-  ): Promise<PostReference[] | undefined> => {
-    if (!resolved.reconciled) return undefined;
-    if (resolved.mentionedUserIds.length === 0) return [];
-    return readPostReferences({ prisma, postId, onError });
-  };
+  const publicationContext = { fastify, prisma, mentionService, hashtagService };
 
   // POST /posts — Create a new post
   //
@@ -364,93 +332,25 @@ export function registerCoreRoutes(
         authContext.registeredUser.id,
       );
 
-      const postId = (post as any).id as string;
-      const postContent = (post as any).content as string | undefined;
-
-      // Le Prisme couvre AUSSI la légende d'un média publié — sans ce
-      // déclenchement, le texte d'un REEL/POST from-attachment n'était jamais
-      // traduit. Parité stricte avec `POST /posts` : STORY exclue (son `content`
-      // est déjà traduit par le pipeline audience-driven du service), langue
-      // source = celle persistée par `createPost` (SSOT), fire-and-forget.
-      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
-      if (shouldTranslateContent) {
-        try {
-          PostTranslationService.shared.translatePost(
-            postId,
-            parsed.data.content,
-            (post as any).originalLanguage,
-            authContext.registeredUser.id,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: translate post failed'));
-        } catch {
-          // PostTranslationService not initialized — skip silently
-        }
-      }
-
-      // La publication n'est plus SILENCIEUSE : elle résout les mentions du
-      // contenu et diffuse en temps réel, exactement comme `POST /posts`. La
-      // charge de from-attachment n'a pas de canal `mentions` déclaré — seul le
-      // TEXTE de la légende nomme, d'où `declared: undefined`.
-      const createdMentions = await resolvePostMentions({
-        prisma,
-        mentionService,
-        notificationService: fastify.notificationService,
-        post: {
-          id: postId,
-          authorId: authContext.registeredUser.id,
-          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-          visibility: (post as any).visibility as string | undefined,
-          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-        },
-        content: postContent,
-        declared: undefined,
-        onError: (err: unknown) => {
-          fastify.log.error(`[POST /posts/from-attachment] post mention reconcile failed: ${err}`);
-        },
+      // Le CORPS de la publication — le noyau partagé avec `POST /posts`
+      // (#4151). Il porte tout ce qui suit l'écriture : Prisme, mentions,
+      // relecture des références, diffusion, hashtags, éventail d'amis, et la
+      // composition du corps servi. La charge de from-attachment n'a ni canal
+      // `mentions` déclaré ni effets de scène — seul le TEXTE de la légende
+      // nomme, d'où les deux `undefined`.
+      const served = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: post as unknown as PublishedPostRow,
+        authorId: authContext.registeredUser.id,
+        postType: postType as PublishedPostType,
+        submittedContent: parsed.data.content,
+        storyEffects: undefined,
+        declaredMentions: undefined,
+        porte: 'POST /posts/from-attachment',
       });
 
-      // Le jeu FINAL, relu APRÈS l'écriture des lignes — même raison qu'à
-      // `POST /posts` : `createPost` a chargé sa relation avant que ces lignes
-      // n'existent, la servir telle quelle rendrait `mentions: []` par
-      // construction.
-      const references = await finalReferences(postId, createdMentions, (err: unknown) => {
-        fastify.log.error(`[POST /posts/from-attachment] post reference reload failed: ${err}`);
-      });
-
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        // Charge utile d'AUDIENCE : neutre, sans les silencieuses — même règle
-        // que `POST /posts`.
-        const broadcastReferences = references && projectReferencesForViewer({
-          references,
-          authorId: authContext.registeredUser.id,
-          viewerId: undefined,
-        });
-        const broadcastPost = withMentions(
-          graftReferences(
-            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
-            broadcastReferences
-          ),
-          WIRE_BROADCAST
-        ) as unknown as Post;
-        if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast story created failed'));
-        } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast status created failed'));
-        } else {
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast post created failed'));
-        }
-      }
-
-      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
-      // qu'il vient de poser (parité avec `POST /posts`).
-      return sendSuccess(
-        reply,
-        withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
-          wireReaderFromRequest(request as UnifiedAuthRequest)
-        ),
-        { message: 'Published' }
-      );
+      return sendSuccess(reply, served, { statusCode: 201 });
     } catch (error) {
       return sendInternalError(reply, 'Failed to publish attachment', { code: 'PUBLISH_FAILED' });
     }
@@ -512,82 +412,22 @@ export function registerCoreRoutes(
         },
       });
 
-      // Trigger async translation for text content (fire-and-forget).
+      // Le CORPS de la publication — le noyau partagé avec
+      // `POST /posts/from-attachment` (#4151). Il porte le Prisme, les
+      // mentions, la relecture des références, la diffusion, les hashtags,
+      // l'éventail d'amis et la composition du corps servi.
       //
-      // G2 — seules les STORY sont EXCLUES : leur `content` est déjà traduit
-      // par le pipeline audience-driven du service
-      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
-      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
-      // des écritures concurrentes dans `Post.translations`.
-      //
-      // La condition testait `=== 'POST'`, ce qui laissait REEL et STATUS
-      // sans aucun pipeline — ni ici, ni dans le service. Or le feed de
-      // production est fait presque uniquement de REEL portant du texte :
-      // vérifié le 2026-07-27, 40 REEL consécutifs sans une seule traduction.
-      // Le Prisme ne s'appliquait donc pas au gros du contenu. On exclut
-      // désormais STORY explicitement, pour qu'un futur type soit couvert
-      // par défaut plutôt qu'oublié en silence.
-      const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
-      if (shouldTranslateContent) {
-        try {
-          const translationService = PostTranslationService.shared;
-          translationService.translatePost(
-            (post as any).id,
-            parsed.data.content,
-            // Use the canonical language persisted by createPost (SSOT) rather
-            // than the raw client claim — it already incorporates the normalized
-            // claim (or the detected fallback) and matches the NLLB source keys.
-            (post as any).originalLanguage,
-            authContext.registeredUser.id,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts]: translate post failed'));
-        } catch {
-          // PostTranslationService not initialized — skip silently
-        }
-      }
-
-      // **Le texte qui alimente les SIGNAUX, dérivé À LA DEMANDE** (#4502).
-      //
-      // `content` ne porte plus le texte de scène : la passerelle a cessé de
-      // l'y recopier (directive porteur 2026-08-30). Les deux consommateurs
-      // ci-dessous en dépendaient sans le savoir — ils lisaient `postContent`,
-      // deux cents lignes après son affectation, et la recopie les servait.
-      //
-      // `postSignalText` rend la légende de l'auteur si elle existe, sinon la
-      // concaténation des textes de scène. Jamais les deux : « sinon on
-      // référence le contenu réel » est la seconde moitié de la directive, et
-      // concaténer referait le doublon qu'on vient de retirer.
-      const postContent = (post as any).content as string | undefined;
-      const postSignals = postSignalText({
-        content: postContent,
-        storyEffects: (post as any).storyEffects,
-      });
-
-      // GW1 — use the DECORATED instance (wired push+socket+email by
-      // server.ts), never a bare local NotificationService: a bare instance
-      // persists notifications but silently drops every push and socket emit
-      // (friend_new_post/friend_new_story/friend_new_mood never delivered).
-      // The guard keeps degraded boot working (decoration happens after
-      // SocketIOManager init; standalone harnesses may not have it).
-      const notifService = fastify.notificationService;
-
-      // Persist and notify post-body mentions. Single entry point shared with
-      // the edit path (services/posts/postMentions.ts) — never throws.
-      const createdMentions = await resolvePostMentions({
-        prisma,
-        mentionService,
-        notificationService: notifService,
-        post: {
-          id: (post as any).id as string,
-          authorId: authContext.registeredUser.id,
-          // Discriminant d'entité → surface ouverte au tap côté client.
-          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-          // Audience du post — décide qui, parmi les nommés, a le droit d'être
-          // prévenu. Un mentionné hors audience recevait l'extrait du contenu.
-          visibility: (post as any).visibility as string | undefined,
-          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-        },
-        content: postContent,
+      // `postType` est le type DEMANDÉ, pas celui qui a été écrit : la branche
+      // de diffusion suit l'intention (`createPost` peut avoir dégradé un REEL
+      // non qualifiant en POST, ce qui ne change pas la branche mais changerait
+      // le contrat si on lisait la ligne), l'éventail d'amis suit la base.
+      const served = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: post as unknown as PublishedPostRow,
+        authorId: authContext.registeredUser.id,
+        postType: (parsed.data.type ?? 'POST') as PublishedPostType,
+        submittedContent: parsed.data.content,
         // Le texte d'une story ne vit pas dans sa légende : il vit dans les
         // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
         // nommait personne.
@@ -597,105 +437,11 @@ export function registerCoreRoutes(
         // canal, les nommer imposait d'écrire leur `@handle` dans la légende —
         // une phrase inventée pour satisfaire l'extracteur, visible de tous et
         // traduite par le Prisme comme du contenu d'auteur.
-        declared: parsed.data.mentions,
-        onError: (err: unknown) => {
-          fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
-        },
-      });
-      // L'éventail vers les amis exclut les mentionnés : `user_mentioned` prime
-      // sur `friend_new_post`, sinon un ami nommé reçoit les deux.
-      const mentionedUserIdsForDedup = [...createdMentions.mentionedUserIds];
-
-      // Le jeu FINAL, relu APRÈS l'écriture des lignes. `createPost` a chargé
-      // sa relation avant que `resolvePostMentions` n'existe pour ce post : la
-      // servir telle quelle rendait `mentions: []` PAR CONSTRUCTION, et les
-      // deux clients lisent `[]` comme un verdict (« personne ne matche »),
-      // pas comme une absence de savoir — l'auteur voyait son propre `@alice`
-      // en texte mort.
-      const references = await finalReferences((post as any).id as string, createdMentions, (err: unknown) => {
-        fastify.log.error(`[POST /posts] post reference reload failed: ${err}`);
+        declaredMentions: parsed.data.mentions,
+        porte: 'POST /posts',
       });
 
-      // Broadcast via Socket.IO — APRÈS la résolution, seul instant où les
-      // références du post existent. Avant, l'événement partait avec la
-      // relation vide qu'il venait de charger.
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        // La charge utile temps réel est servie à une AUDIENCE : elle reste
-        // neutre, sans les silencieuses — même règle que le `select` des feeds
-        // (`postMentionInclude`), appliquée ici parce que le jeu relu, lui, les
-        // porte toutes.
-        const broadcastReferences = references && projectReferencesForViewer({
-          references,
-          authorId: authContext.registeredUser.id,
-          viewerId: undefined,
-        });
-        // `withMentions` AUSSI sur l'événement : une charge utile temps réel est
-        // une charge utile. Servie sous le nom de la relation Prisma
-        // (`postMentions`), elle ne se décode pas — la clé exposée est
-        // `mentions`, ici comme dans la réponse rendue plus bas.
-        const broadcastPost = withMentions(
-          graftReferences(
-            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
-            broadcastReferences
-          ),
-          WIRE_BROADCAST
-        ) as unknown as Post;
-        if (postType === 'STORY') {
-          // U1 parity — voir `broadcastPostCreated` juste en dessous : sans
-          // l'écho du cmid, une STORY créée hors-ligne (dont un repost via
-          // `POST /posts { repostOfId }`) ne pouvait jamais réconcilier son
-          // item optimiste avec la story serveur.
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
-        } else if (postType === 'STATUS') {
-          // U1 parity — même raison que STORY ci-dessus.
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
-        } else {
-          // U1 — echo the request cmid so an offline author reconciles its
-          // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
-        }
-      }
-
-      // Un `#voyage` posé sur la SCÈNE reste indexé : sans la dérivation il
-      // cesserait de l'être le jour où la recopie a été retirée, en silence.
-      if (postSignals) {
-        const hashtags = hashtagService.extractHashtags(postSignals);
-        if (hashtags.length > 0) {
-          hashtagService.createPostHashtags((post as any).id as string, hashtags).catch((err: unknown) => {
-            fastify.log.error(`[POST /posts] hashtag persist failed: ${err}`);
-          });
-        }
-      }
-
-      // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      if (notifService) {
-        const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-        notifService.createFriendContentNotificationsBatch({
-          postId: (post as any).id as string,
-          authorId: authContext.registeredUser.id,
-          contentType: postTypeForNotif,
-          excerpt: postSignals?.slice(0, 100),
-          postCreatedAt: (post as any).createdAt ?? undefined,
-          postExpiresAt: (post as any).expiresAt ?? undefined,
-          excludeUserIds: mentionedUserIdsForDedup,
-          visibility: (post as any).visibility as string | undefined,
-          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-        }).catch((err: unknown) => {
-          fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
-        });
-      }
-
-      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
-      // qu'il vient de poser, sans quoi il ne pourrait plus en retirer une.
-      return sendSuccess(
-        reply,
-        withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
-          wireReaderFromRequest(request as UnifiedAuthRequest)
-        ),
-        { statusCode: 201 }
-      );
+      return sendSuccess(reply, served, { statusCode: 201 });
     } catch (error) {
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
@@ -731,10 +477,11 @@ export function registerCoreRoutes(
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
-      return sendSuccess(reply, withMentions(
-        hoistLocation(post as unknown as Record<string, unknown>),
-        wireReaderFromRequest(request as UnifiedAuthRequest)
-      ));
+      return sendSuccess(reply, servePublishedPost({
+        post: post as unknown as Record<string, unknown>,
+        references: undefined,
+        request,
+      }));
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -825,8 +572,13 @@ export function registerCoreRoutes(
       // laissait une référence révoquée affichée chez tous les lecteurs, que
       // rien n'invalidait ensuite (le web remplace le post en cache sans
       // refetch), et privait l'édition de toute façon d'annoncer une entrante.
-      const references = await finalReferences(postId, reconciled, (err: unknown) => {
-        fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+      const references = await finalReferences({
+        prisma,
+        postId,
+        resolved: reconciled,
+        onError: (err: unknown) => {
+          fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+        },
       });
 
       {
@@ -878,13 +630,13 @@ export function registerCoreRoutes(
       }
 
       // La réponse va à l'AUTEUR — seul autorisé à éditer — et lui voit tout.
-      return sendSuccess(
-        reply,
-        withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
-          wireReaderFromRequest(request as UnifiedAuthRequest)
-        )
-      );
+      // Même composition que les portes de création (`servePublishedPost`,
+      // #4151) : une édition rend le même post que la publication.
+      return sendSuccess(reply, servePublishedPost({
+        post: post as unknown as Record<string, unknown>,
+        references,
+        request,
+      }));
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });

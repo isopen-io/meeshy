@@ -10,6 +10,14 @@
  *
  * Harnais calqué sur posts-share-route.test.ts (fastify.inject + mocks Prisma).
  *
+ * **201 depuis #4151** — la route empruntait `sendSuccess(..., { message:
+ * 'Published' })`, donc 200 + une clé `message`, là où `POST /posts` rend 201
+ * et rien d'autre : deux corps SERVIS différents pour la même ligne écrite.
+ * Les deux portes partagent désormais leur corps (`routes/posts/publication.ts`)
+ * et leur statut. Les deux clients qui appellent cette route acceptent tout
+ * 2xx (`(200...299)` côté SDK iOS, `response.ok` côté web) — mesuré avant la
+ * bascule.
+ *
  * @jest-environment node
  */
 
@@ -266,7 +274,7 @@ describe('POST /posts/from-attachment — iOS-02(a) : visibilité par défaut se
       payload: { attachmentId: ATTACHMENT_ID, target: 'STORY' },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     expect(mockCreatePost).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'STORY', visibility: 'FRIENDS' }),
       USER_ID,
@@ -283,7 +291,7 @@ describe('POST /posts/from-attachment — iOS-02(a) : visibilité par défaut se
       payload: { attachmentId: ATTACHMENT_ID },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     expect(mockCreatePost).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'POST', visibility: 'PUBLIC' }),
       USER_ID,
@@ -302,7 +310,7 @@ describe('POST /posts/from-attachment — iOS-02(b) : la publication n\'est plus
       payload: { attachmentId: ATTACHMENT_ID },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
     expect(social.broadcastPostCreated).toHaveBeenCalledTimes(1);
     await app.close();
@@ -319,7 +327,7 @@ describe('POST /posts/from-attachment — iOS-02(b) : la publication n\'est plus
       payload: { attachmentId: ATTACHMENT_ID, content: 'Hi @alice' },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
     expect(mockCreatePostMentions).toHaveBeenCalledWith(
       'post-m',
@@ -345,7 +353,7 @@ describe('POST /posts/from-attachment — iOS-02(c) : le Prisme couvre la légen
       payload: { attachmentId: ATTACHMENT_ID, content: 'Bonjour' },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
     expect(translationMock()).toHaveBeenCalledTimes(1);
     expect(translationMock()).toHaveBeenCalledWith('post-tr', 'Bonjour', 'fr', USER_ID);
@@ -362,7 +370,7 @@ describe('POST /posts/from-attachment — iOS-02(c) : le Prisme couvre la légen
       payload: { attachmentId: ATTACHMENT_ID, target: 'STORY', content: 'Bonjour' },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
     expect(translationMock()).not.toHaveBeenCalled();
     await app.close();

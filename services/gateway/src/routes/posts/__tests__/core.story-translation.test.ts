@@ -241,10 +241,16 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
 
     expect(res.statusCode).toBe(201);
     expect(translatePostMock).toHaveBeenCalledTimes(1);
+    // `undefined`, jamais `null` (#4151) : la signature de `translatePost`
+    // déclare `originalLanguage?: string`, et le noyau de publication rend le
+    // champ dans cette forme plutôt que de recopier la colonne à travers un
+    // `any`. Comportement INCHANGÉ — `null ?? detectLanguage(c)` et
+    // `undefined ?? detectLanguage(c)` sont le même repli ; c'est le type
+    // qu'on cesse de mentir.
     expect(translatePostMock).toHaveBeenCalledWith(
       'post-id-123',
       'A regular post caption',
-      null,
+      undefined,
       'user-id-abc',
     );
 
@@ -274,7 +280,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
       expect(translatePostMock).toHaveBeenCalledWith(
         'post-id-123',
         'Une phrase à traduire',
-        null,
+        undefined,
         'user-id-abc',
       );
 
