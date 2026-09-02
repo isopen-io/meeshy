@@ -24379,7 +24379,7 @@ Voisines : § 435 (une règle appliquée à une seule de ses dimensions),
 § 433 (ce qui s'énumère se périme — les numéros « 1. / 2. / 3. » des blocs du
 rail, faux dès qu'on déplace un bloc, ont été retirés dans le même lot).
 
-## Leçon 438 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
+## Leçon 439 — Deux protections INDÉPENDANTES chez deux hôtes différents, et il en faut DEUX : trois façons d'échouer, une seule de réussir
 
 **Le fait (2026-09-02).** Le `content` d'une story est tantôt une légende
 d'auteur, tantôt un index de recherche que la passerelle dérive de la
