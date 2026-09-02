@@ -207,6 +207,22 @@ grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
 git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
 ```
 
+**Une divergence de NOM, et c'est celle que le § 1 met en garde d'éviter.**
+Le contrat nomme l'objet de scène **`place`** (`ACTIVE_KINDS`,
+`canvas-v3.ts:5`) ; la somme Swift le nomme **`location`**
+(`MeeshySceneObject.swift:60`). Or `location` est, dans le même langage et
+souvent dans le même fichier, le **lieu de la PUBLICATION** (`location:
+SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire exactement la
+paire que le tableau du § 1 sépare : *d'où l'on publie* contre *une pastille
+posée sur une scène*.
+
+> **Le seul mot que ce cas ne devait pas porter est celui qu'il porte.** La
+> confusion n'est pas hypothétique : le modèle l'a nommée avant qu'elle
+> existe dans le type, et un lecteur qui suit `place` depuis le contrat ne le
+> trouve nulle part côté Swift.
+
+Suivi : renommer le cas en `.place` — mécanique, mais sur l'API publique du SDK.
+
 **Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
 solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
 précède son implémentation. Ce qui doit être su, en revanche, c'est **où le
