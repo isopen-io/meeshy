@@ -154,17 +154,31 @@ export function convertV1ToV3(
     // La spec O8 les attendait déjà ici : `unclaimedCanvasMediaIds` compte
     // `sticker` parmi les CLAIM_BEARING_KINDS et lit `payload.postMediaId`
     // (ci-dessous). Le convertisseur était simplement en retard sur elle.
+    //
+    // MÊME piège, deuxième morsure (#4741). Les stickers à GABARIT — pastille
+    // de lieu, cadre de coeurs, ruban d'heure — portent leur dessin dans
+    // `templateId` et leur texte dans `slots`. Sans ces deux clés, une
+    // décoration qui traverse le serveur redevient son emoji de REPLI : le
+    // composer dessine, le lecteur rend un glyphe.
+    //
+    // L'emoji continue de voyager, et c'est délibéré : il sert le lecteur dont
+    // le build ne connaît pas ce `templateId`, qui verra un glyphe plutôt qu'un
+    // trou. Mais un repli conservé SANS la chose dont il est le repli n'est
+    // plus un repli — c'est le contenu.
+    //
+    // Deux correctifs parallèles (#4741 sur dev, #4819 sur la branche stickers)
+    // ont recopié ces clés le même jour ; la fusion garde la forme la plus
+    // STRICTE : `slots` n'est transporté que si toutes ses valeurs sont des
+    // chaînes (`isStringMap`) — un emplacement numérique ne rendrait rien et
+    // ferait mentir le type `[String: String]` du client. `animation` et
+    // `duration` (#4821) voyagent au même titre.
     o.payload = {
       emoji: st.emoji,
-      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
-      ...(str(st.provider) ? { provider: st.provider } : {}),
-      // `templateId`/`slots` : une DÉCORATION (#4716) porte un gabarit et ses
-      // valeurs figées à la pose. Même défaut que `postMediaId` ci-dessus, même
-      // correctif (#4819) : les reconstruire ici, sinon un cadran d'heure qui
-      // traverse le serveur ressort en « 🕐 ».
       ...(str(st.templateId) ? { templateId: st.templateId } : {}),
       ...(isStringMap(st.slots) ? { slots: st.slots } : {}),
       ...(str(st.animation) ? { animation: st.animation } : {}),
+      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
+      ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
       ...(typeof st.duration === 'number' ? { duration: st.duration } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),

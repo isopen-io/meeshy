@@ -27,6 +27,32 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(sticker?.payload.emoji).toBe('🖼️');
   });
 
+  // MÊME piège, deuxième morsure. Le lot iOS #4741 a introduit les stickers à
+  // GABARIT — pastille de lieu, cadre de cœurs, ruban d'heure — dont le dessin
+  // vit dans `templateId` et dont le texte vit dans `slots`. Le convertisseur
+  // ne les recopiait pas : une décoration qui traverse le serveur redevenait
+  // son emoji de repli, exactement comme un sticker image redevenait un glyphe
+  // avant le cas ci-dessus.
+  //
+  // Le repli, lui, DOIT continuer de voyager : il sert le lecteur dont le build
+  // ne connaît pas ce gabarit.
+  it('transporte templateId et slots d\'une décoration', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        {
+          id: 's2', emoji: '📍', x: 0.5, y: 0.5,
+          templateId: 'locationStamp',
+          slots: { title: 'Tessalit', subtitle: 'Mali' },
+        },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('locationStamp');
+    expect(sticker?.payload.slots).toEqual({ title: 'Tessalit', subtitle: 'Mali' });
+    expect(sticker?.payload.emoji).toBe('📍');
+  });
+
   it('transporte le gabarit et les valeurs figées d\'une décoration (#4819)', () => {
     const doc = convertV1ToV3({
       stickerObjects: [
