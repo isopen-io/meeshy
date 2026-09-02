@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
@@ -90,6 +91,14 @@ extension MeeshyComposerHost {
             let role = ComposerMediaPlacement.role(door: porte,
                                                    currentSlideHasBackground: dejaUnFond)
             mediaRoleByURL[media.sourceURL] = role
+            // **Le placement se DIT** (#4879). Il se décide UNE fois par média,
+            // et son verdict ne se rejoue jamais : sans cette ligne, un canvas
+            // resté noir n'est attribuable à rien — porte, rôle, slide cible et
+            // format sont les quatre termes qui, ensemble, expliquent où le
+            // média est parti.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "placement: \(media.sourceURL.lastPathComponent, privacy: .public) porte=\(String(describing: porte), privacy: .public) role=\(String(describing: role), privacy: .public) slide=\(viewModel.currentSlide.id, privacy: .public) fond=\(dejaUnFond, privacy: .public) format=\(String(describing: selectedFormat), privacy: .public)"
+            )
 
             switch role {
             case .foreground:
@@ -859,6 +868,13 @@ extension MeeshyComposerHost {
             guard (try? data.write(to: url)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
+            // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
+            // TOUT en aval — `ComposerIngestRouter` en tire la famille, et une
+            // famille `.document` fait qu'un média n'atteint jamais la scène,
+            // sans qu'aucune ligne ne le signale.
+            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+                "ingest photothèque: \(url.lastPathComponent, privacy: .public) type=\(declaredType?.identifier ?? "nil", privacy: .public) mime=\(mime, privacy: .public) durée=\(duration ?? -1, privacy: .public)"
+            )
             medias.append(ComposerDocumentMediaFactory.media(
                 url: url,
                 declaredMimeType: mime,
