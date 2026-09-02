@@ -7,6 +7,7 @@ import { FileText, Heart, MessageCircle, Eye, Clock, Loader2, Image as ImageIcon
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import type { PostType } from '@meeshy/shared/types/post';
 
 interface AdminPostMedia {
   id: string;
@@ -17,7 +18,8 @@ interface AdminPostMedia {
 
 interface AdminUserPost {
   id: string;
-  type: 'POST' | 'REEL' | 'STORY' | 'STATUS';
+  /** #4809 — `PostType` (packages/shared/types/post.ts), pas une redéclaration. */
+  type: PostType;
   visibility: string;
   content: string | null;
   moodEmoji: string | null;
@@ -35,7 +37,9 @@ interface PaginatedPosts {
   pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
 }
 
-type PostTypeFilter = 'ALL' | 'POST' | 'REEL' | 'STORY' | 'STATUS';
+/** #4809 — `PostType` plus le sentinel local `'ALL'` (aucun filtre) : un sous-ensemble
+ *  volontaire n'existe pas ici, c'est un SUR-ensemble d'un cran (toutes les valeurs + 'ALL'). */
+type PostTypeFilter = PostType | 'ALL';
 
 const PAGE_SIZE = 20;
 
@@ -47,6 +51,9 @@ const TYPE_FILTERS: ReadonlyArray<{ value: PostTypeFilter; labelKey: string }> =
   { value: 'STATUS', labelKey: 'usersDetail.postTypeStatus' },
 ];
 
+// Témoin de dérive (#4809) : `Record<PostType, …>` exige TOUTES les clés de
+// `AdminUserPost['type']` — désormais `PostType` importé ci-dessus. Une valeur
+// ajoutée à la source sans entrée ici fait échouer la compilation ICI.
 const POST_TYPE_META: Record<AdminUserPost['type'], { key: string; cls: string }> = {
   POST: { key: 'usersDetail.postTypePost', cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   REEL: { key: 'usersDetail.postTypeReel', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
