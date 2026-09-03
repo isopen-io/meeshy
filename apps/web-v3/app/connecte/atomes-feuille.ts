@@ -58,3 +58,34 @@ export const apercuDeLigne = (racine: string): string =>
   `${racine} .apercu{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1);min-width:0;font-size:var(--text-base);color:var(--color-text-muted)}` +
   `${racine} .apercu .langue{flex:none}` +
   `${racine} .apercu .texte{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`;
+
+/**
+ * LA GÉOMÉTRIE D'UNE FEUILLE QUI MONTE — un atome PARAMÉTRÉ par sa classe, la
+ * même raison qu'`apercuDeLigne` un cran plus haut.
+ *
+ * TROIS SURIMPRESSIONS LA PARTAGENT et n'en servent qu'UNE chacune : le profil
+ * d'un participant (`?profil=`, § 12.10.3), la feuille « nouveau lien »
+ * (`/links?nouveau`, #5071) et celle qui viendra. Elles ne sont JAMAIS sur le
+ * même document — c'est ce qui permet de paramétrer plutôt que de grouper.
+ *
+ * ELLE A ÉTÉ EXTRAITE AU MOMENT DE LA TROISIÈME, ET C'EST LE BON MOMENT. Deux
+ * copies se surveillent ; trois divergent. Le doc-comment de
+ * `profil-feuille.ts` nommait déjà « la géométrie de `dialog.feuille` » comme
+ * si elle existait — elle était recopiée. Le jour où le rayon d'une feuille
+ * change, il change ici, une fois.
+ *
+ * CE QUI RESTE CHEZ CHAQUE FEUILLE : son CONTENU. L'atome ne porte que ce qui
+ * fait d'un `<dialog>` une feuille qui monte — l'ancrage en bas, la hauteur
+ * bornée, le voile, la poignée. Une feuille qui ajouterait ici une règle de son
+ * en-tête la ferait payer aux deux autres.
+ *
+ * `.voile` N'EST PAS PARAMÉTRÉ : c'est le voile, le même partout, et le seul
+ * chemin de fermeture qui marche sans JavaScript quand `::backdrop` n'existe
+ * pas (un `<dialog open>` non modal n'en pose aucun).
+ */
+export const feuilleQuiMonte = (classe: string): string =>
+  '.voile{position:fixed;inset:0;z-index:4;display:block;background:var(--color-overlay)}' +
+  `dialog.${classe}{position:fixed;inset:auto 0 0;z-index:5;box-sizing:border-box;width:100%;max-width:none;max-height:90dvh;overflow:auto;margin:0;padding:0 var(--space-5) var(--space-5);border:0;border-radius:var(--radius-2xl) var(--radius-2xl) 0 0;background:var(--color-surface-raised);color:var(--color-text)}` +
+  `dialog.${classe}::backdrop{background:var(--color-overlay)}` +
+  `dialog.${classe} .poignee{display:block;position:relative;width:100%;height:var(--target-min);margin:0 0 var(--space-2)}` +
+  `dialog.${classe} .poignee::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--glyph-large);height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-strong)}`;

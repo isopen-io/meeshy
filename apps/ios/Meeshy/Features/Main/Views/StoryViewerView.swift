@@ -880,39 +880,36 @@ struct StoryViewerView: View {
                 senderName: currentGroup?.username
             )
         }
+        // **« Éditer et republier en POST » — la MÊME porte, ouverte ailleurs**
+        // (#5055).
+        //
+        // Ce cover montait `UnifiedPostComposer`, le dernier composer historique
+        // présenté nu du dépôt. Il n'avait plus de raison d'être depuis #5053 :
+        // la porte de republication offre `[.story, .post]` par son éventail, et
+        // publier en post y est un ANCRAGE — le même `POST /posts/:id/repost`,
+        // la même charge (`comment` + lien vers l'original).
+        //
+        // Ce que le geste apporte encore, et qui justifie de le GARDER plutôt
+        // que de le fondre dans « Republier » : l'auteur a DIT son format. La
+        // porte ouvre donc dessus, sans le lui redemander — et l'éventail reste
+        // peint, donc il peut changer d'avis (loi 9).
+        //
+        // ÉCART ASSUMÉ : `UnifiedPostComposer` reprojetait la scène de la story
+        // dans sa surface d'édition (`CanvasReprojector`, `onStoryImported`).
+        // Le meuble ouvert en `.post` monte la surface DOCUMENT — du texte, une
+        // audience. La scène n'est pas perdue : un geste sur l'éventail la
+        // ramène. La CHARGE publiée, elle, est identique — les deux chemins
+        // n'envoyaient jamais que le commentaire et le lien.
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
-            UnifiedPostComposer(
-                repostingStory: wrapper.story,
-                authorHandle: wrapper.authorHandle,
-                onPublishRepost: { content, sourceStory, visibility in
-                    do {
-                        try await RepostPublisher.shared.publish(
-                            .quoted(
-                                postId: sourceStory.id,
-                                targetType: .post,
-                                comment: content,
-                                visibility: visibility
-                            )
-                        )
-                        editAndRepostAsPostSource = nil
-                        FeedbackToastManager.shared.show(String(localized: "story.publish.success", defaultValue: "Publié", bundle: .main))
-                    } catch {
-                        FeedbackToastManager.shared.showError(String(localized: "story.publish.error", defaultValue: "Échec de la publication", bundle: .main))
-                        throw error
-                    }
-                },
-                onStoryImported: { result in
-                    Logger.stories.info(
-                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) locations=\(result.locations.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
-                    )
-                },
-                onDismiss: { editAndRepostAsPostSource = nil }
+            StoryRepublishComposer(
+                source: wrapper,
+                viewModel: viewModel,
+                onFinish: { editAndRepostAsPostSource = nil },
+                opening: .post
             )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
         // **Republication en STORY — par le MEUBLE** (#5053).
         //

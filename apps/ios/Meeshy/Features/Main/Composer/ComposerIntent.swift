@@ -17,6 +17,56 @@ import MeeshySDK
 /// pas — elle se lit, depuis n'importe où.
 nonisolated struct ComposerIntent: Equatable {
     let origin: ComposerOrigin
+
+    /// **Le format sur lequel l'auteur veut ATTERRIR**, quand un geste l'a déjà
+    /// dit (#5055). `nil` — le cas de huit portes sur neuf — laisse la table
+    /// décider, comme avant.
+    ///
+    /// ## Ce n'est PAS une porte par format
+    ///
+    /// La décision porteur du 2026-08-31 (#4623) a retiré `.reelTab` avec une
+    /// raison qu'il faut relire au mot près : « une porte qui déclare son format
+    /// d'avance, **là où la décision doit se prendre APRÈS**, quand l'auteur voit
+    /// ce qu'il compose ». Elle vise une porte qui PRÉSUME — le `+` d'un onglet
+    /// « réel » suppose que l'auteur veut un réel avant qu'il ait rien composé.
+    ///
+    /// Ici l'auteur a choisi EXPLICITEMENT, dans le menu : « Éditer et republier
+    /// **en post** ». Lui rouvrir sur le format de la source lui demanderait de
+    /// redire ce qu'il vient de dire. Et l'éventail reste peint : le choix est
+    /// pré-rempli, jamais verrouillé — ce qui est exactement la loi 9, le format
+    /// est un CHAMP.
+    ///
+    /// > La différence entre les deux cas n'est pas « avant / après » mais
+    /// > **« deviné / dit »**. Une porte qui devine impose ; une porte qui
+    /// > transporte un choix explicite obéit.
+    ///
+    /// Un format hors de l'éventail de la porte est IGNORÉ, jamais honoré : il
+    /// ouvrirait sur une surface que l'éventail ne permet pas de quitter, donc
+    /// sur un cul-de-sac. `openingFormat(compositionQualifiesAsReel:)` est le
+    /// site unique de cette borne.
+    let opening: ComposerFormat?
+
+    init(origin: ComposerOrigin, opening: ComposerFormat? = nil) {
+        self.origin = origin
+        self.opening = opening
+    }
+
+    /// Le format que le meuble MONTE à l'ouverture — la table, sauf si un geste
+    /// a nommé un format qu'elle offre.
+    ///
+    /// La borne est ici et nulle part ailleurs : un appelant qui la referait
+    /// aurait le droit de l'oublier, et un `opening` non offert ouvrirait alors
+    /// une surface sans sortie.
+    func openingFormat(compositionQualifiesAsReel: Bool) -> ComposerFormat {
+        let profil = ComposerProfile.profile(
+            for: origin,
+            compositionQualifiesAsReel: compositionQualifiesAsReel
+        )
+        guard let opening, profil.offeredFormats.contains(opening) else {
+            return profil.initialFormat
+        }
+        return opening
+    }
 }
 
 /// Les huit portes du composer. La GRAINE qu'une porte apporte n'a pas de champ

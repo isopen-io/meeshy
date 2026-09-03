@@ -693,10 +693,14 @@ struct MeeshyComposerHost: View {
         if let repris { composer.adoptDraft(id: repris) }
         _viewModel = StateObject(wrappedValue: composer)
 
-        let ouverture = ComposerProfile.profile(
-            for: intent.origin,
+        // #5055 — `openingFormat` est la table, SAUF si un geste a nommé un
+        // format qu'elle offre (« Éditer et republier en post »). La borne
+        // — un format hors éventail est ignoré — vit chez l'intention, pas
+        // ici : la refaire ici en ferait une seconde écriture, et c'est celle
+        // du meuble qu'on oublierait de tenir à jour.
+        let ouverture = intent.openingFormat(
             compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
-        ).initialFormat
+        )
         _currentFormat = State(initialValue: ouverture)
 
         // La mémoire d'audience s'applique ICI, et une seule fois — loi 10 sur

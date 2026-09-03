@@ -80,7 +80,21 @@ export type Charge = {
  * toujours de façon synchrone ; `await` sur une valeur qui n'est pas une
  * promesse résout immédiatement, donc rien n'y change.
  */
-export type Ecran = (charge: Charge, maintenant: number, requete: Request) => string | Promise<string>;
+/**
+ * `recuperer` ARRIVE JUSQU'À L'ÉCRAN, et c'est ce qui rend ses propres appels
+ * mesurables. Un écran ne se contente pas toujours de la charge commune : le
+ * profil d'un participant (`?profil=`) et le carnet de la feuille de création
+ * (`?nouvelle`) sont demandés PAR l'écran, dans leur état seulement. Sans ce
+ * quatrième argument, ces appels-là échappaient à toute couture — un témoin
+ * pouvait opposer un serveur à la porte, jamais à ce que l'écran demande
+ * ensuite. Il n'est jamais fourni en production.
+ */
+export type Ecran = (
+  charge: Charge,
+  maintenant: number,
+  requete: Request,
+  recuperer?: Recuperateur,
+) => string | Promise<string>;
 
 /**
  * `recuperer` est la MÊME couture que celle de `connexion` / `conversations` :
@@ -93,21 +107,35 @@ export const serviteurDe =
     ecran,
     avecLiens = false,
     recuperer,
+    statut = 200,
   }: {
     readonly chemin: string;
     readonly ecran: Ecran;
     readonly avecLiens?: boolean;
     readonly recuperer?: Recuperateur;
+    /**
+     * LE STATUT DU DOCUMENT SERVI — 200 pour une lecture, autre chose quand ce
+     * même document est la RÉPONSE À UN REFUS. `/chats` re-sert sa liste avec
+     * la feuille de création et son alerte quand la passerelle refuse
+     * (`CREE_UNE_CONVERSATION`) : le document est juste, l'écriture a échoué,
+     * et un 200 le dirait réussi à tout ce qui lit les statuts. Il vaut mieux
+     * un champ de plus ici qu'une seconde façon de charger la même page.
+     */
+    readonly statut?: number;
   }) =>
-  async (requete: Request): Promise<Response> => {
+  async (requete: Request, recuperant?: Recuperateur): Promise<Response> => {
+    // L'APPELANT L'EMPORTE SUR L'OPTION : un témoin oppose son serveur à la
+    // porte sans reconstruire le serviteur, et la production n'en passe aucun.
+    const recuperer_ = recuperant ?? recuperer;
+
     const jeton = jetonDuLecteur(requete);
     if (jeton === null) return versLaConnexion(chemin);
 
     const [identite, fil, liens] = await Promise.all([
-      moi({ jeton, recuperer }),
-      conversations({ jeton, recuperer }),
+      moi({ jeton, recuperer: recuperer_ }),
+      conversations({ jeton, recuperer: recuperer_ }),
       avecLiens
-        ? liensDuLecteur({ jeton, recuperer })
+        ? liensDuLecteur({ jeton, recuperer: recuperer_ })
         : Promise.resolve<LiensDuLecteur>({ genre: 'indisponible' }),
     ]);
 
@@ -131,7 +159,9 @@ export const serviteurDe =
         },
         Date.now(),
         requete,
+        recuperer_,
       ),
+      statut,
     );
   };
 

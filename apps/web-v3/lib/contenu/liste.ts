@@ -120,3 +120,38 @@ export const libelleDuGeste = ({
  * tenir la promesse — et le départ de la page l'expédie sans attendre.
  */
 export const FENETRE_REVERSIBLE_MS = 5_000;
+
+/**
+ * LA COPIE DE LA FEUILLE « NOUVELLE CONVERSATION » (`sheet:conv`, #5072).
+ *
+ * DEUX GESTES, ET LE CRITÈRE DE FIN LES COMPTE : ouvrir la feuille, soumettre.
+ * Cocher des contacts est FACULTATIF — une conversation qui naît vide se
+ * remplit par un lien de partage, et exiger un participant ferait un troisième
+ * geste obligatoire pour rien.
+ *
+ * LE TYPE N'EST PAS OFFERT. `POST /conversations` en accepte cinq (`direct`,
+ * `group`, `public`, `global`, `broadcast`) ; cette feuille en sert UN,
+ * `group`, et le nomme par ce qu'il fait plutôt que par son mot de schéma. Un
+ * tête-à-tête ne se décide pas ici mais depuis la personne — c'est un autre
+ * geste, avec une autre porte d'entrée. Offrir cinq boutons radio dont trois
+ * sont refusés à un lecteur ordinaire (`global` demande ADMIN, `broadcast` un
+ * droit de diffusion) serait un contrôle qui ment.
+ */
+export const NOUVELLE_CONVERSATION = {
+  ouvrir: 'Nouvelle conversation',
+  titre: 'Nouvelle conversation',
+  fermer: 'Fermer',
+
+  nom: 'Nom de la conversation',
+  nomAide: 'Ce que les autres verront en haut du fil.',
+  description: 'Description',
+  descriptionAide: 'Facultative — une phrase pour dire de quoi il s’agit.',
+
+  contacts: 'Inviter des contacts',
+  contactsAide: 'Facultatif. Vous pourrez aussi partager un lien après la création.',
+  sansContact: 'Vous n’avez pas encore de contact à inviter.',
+
+  creer: 'Créer la conversation',
+  refuse: 'La conversation n’a pas été créée.',
+  sansNom: 'Donnez un nom à la conversation.',
+} as const;
