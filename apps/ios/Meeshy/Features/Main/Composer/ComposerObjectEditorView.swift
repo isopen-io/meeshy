@@ -138,7 +138,12 @@ struct ComposerObjectEditorView: View {
             // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
             Button(action: onClose) {
                 HStack(spacing: 3) {
-                    Image(systemName: "chevron.left")
+                    // `chevron.backward`, jamais `chevron.left` : le second nomme
+                    // un côté PHYSIQUE et ne se retourne pas en arabe, où le
+                    // retour est à droite. `RightToLeftLayoutGuardTests` l'a
+                    // attrapé — la flèche pointait vers l'avant du fil pour la
+                    // moitié RTL de nos sept langues.
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(15, weight: .semibold))
                     Text(LocalizedNumber.exact(objectCount))
                         .font(MeeshyFont.relative(16, weight: .semibold).monospacedDigit())
