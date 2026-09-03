@@ -79,6 +79,50 @@ ignore un kind ne casse pas — `case .reserved(let raw)` le conserve à
 l'aller-retour et l'inscrit dans `unpaintableKinds`, donc le lecteur SAIT qu'il
 peint une scène amputée. C'est le producteur qui manquerait, jamais le filet.
 
+### Le MOUVEMENT d'un objet est une propriété, jamais un kind
+
+La règle ci-dessus a une jumelle qu'il faut énoncer, parce qu'elle décide de la
+même chose dans l'autre sens. *Sept kinds déclarés ne font pas sept cas d'objet*
+dit qu'on n'invente pas un cas pour aligner un compte ; celle-ci dit **qu'on
+n'invente pas un kind pour porter une capacité nouvelle** (#3956).
+
+Le cas vivant est le MOUVEMENT d'une décoration (`StorySticker.animation`,
+#4821) : `pulse`, `heartbeat`, `wobble`, `bounce`, `float`, `spin`, `blink`,
+`shake`, `swing`, et deux en un coup, `pop` et `tada`.
+
+| ce qu'il EST | ce qu'il n'est PAS |
+|---|---|
+| une **propriété** d'un `sticker` — un champ de plus sur la charge | un huitième `ACTIVE_KIND` |
+| **déclaré par le GABARIT** (`StickerTemplate.animation`), recopié à la pose | un réglage que l'auteur compose |
+| une **fonction pure du temps** — `pose(at:) → Pose` | une `CAAnimation`, que `layer.render(in:)` ignorerait à l'export |
+
+**Pourquoi une propriété et pas un kind, précisément.** Un client qui ne sait
+pas rendre le mouvement — web et Android aujourd'hui — lit la décoration et la
+peint FIXE : il perd le mouvement, jamais la décoration. Un kind neuf aurait
+produit l'inverse : `case .reserved(let raw)` l'aurait conservé à
+l'aller-retour et inscrit dans `unpaintableKinds`, donc la scène se serait
+déclarée AMPUTÉE pour un mouvement absent. Le choix du contenant décide de ce
+qu'on perd quand un lecteur ne suit pas.
+
+**Une seule fonction, trois horloges.** `pose(at:)` est le site unique du
+mouvement, et c'est ce qui fait que le lecteur (60 Hz), l'export (30 fps, où
+Core Animation n'anime rien) et le composer rendent la même image — la loi 6
+appliquée au mouvement. Seule l'HORLOGE diffère, et l'écart est assumé :
+
+| surface | horloge |
+|---|---|
+| lecteur, export | le **playhead** de la slide, moins `startTime` |
+| composition (#4999) | un **temps ÉCOULÉ depuis la pose** (`StoryStickerMotionClock`) — il n'y a pas de playhead en édition, et il ne doit pas y en avoir : le faire avancer ferait disparaître tout objet dont la fenêtre temporelle serait passée |
+
+**Ce que l'auteur en voit, avant de poser.** La palette MONTRE le mouvement sur
+la vignette et le marque d'un glyphe (#5000) : le fait, jamais le nom de la
+courbe. `pose(at: 0)` étant l'identité par contrat, une vignette qui entre à
+l'écran part de la pose exacte que la décoration prendra — et un `pop` ou un
+`tada` joue à la POSE, pas une fois à l'ouverture.
+
+Restitution, `reduceMotion`, et l'état cross-plateforme : § du modèle du
+lecteur, et #4911 pour la décision web / Android.
+
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
 Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
