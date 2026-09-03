@@ -43,18 +43,25 @@ export const THEME_PAR_DEFAUT = 'dark';
  * LE COOKIE PORTE TROIS VALEURS, ET « system » EN EST UNE. C'est une leçon de
  * ce lot, trouvée par le témoin navigateur : la première version EFFAÇAIT le
  * cookie pour « comme mon système », en croyant que ne rien garder suffisait à
- * ne rien imposer. Le miroir de la ligne suivante avait déjà écrit « light »
+ * ne rien imposer. La recopie de la ligne suivante avait déjà écrit « light »
  * dans `localStorage` — le repli le relisait, et « comme mon système » ne
  * rendait RIEN. Un magasin qu'on alimente ne se vide pas en effaçant SON
  * ALIMENT. ABSENT et « system » disent donc deux choses différentes : le
- * premier « rien n'a été choisi ICI » (on suit alors le legacy, puis l'OS), le
- * second « je choisis de suivre mon système » (`localStorage` reçoit la même
- * valeur, que la webapp legacy comprend déjà — c'est le troisième cas de son
- * propre témoin).
+ * premier « rien n'a été choisi ICI », le second « je choisis de suivre mon
+ * système ».
  *
- * La recopie n'est pas une seconde vérité : elle porte le choix jusqu'à la
- * webapp legacy, qui ne lit que `localStorage`. Sans cookie, rien n'est écrit —
- * un lecteur qui n'a jamais réglé son thème ici ne se voit rien imposer.
+ * LA RECOPIE N'EST PAS POUR LE LEGACY, et il faut le dire parce que c'est la
+ * lecture naturelle et qu'elle est FAUSSE : la webapp legacy ne lit PAS
+ * `meeshy-theme`. Elle a ses deux clés à elle — `gp-theme-mode`
+ * (`components/v2/ThemeProvider.tsx`) et `meeshy-app` (`constants/auth.ts`) —,
+ * que la v3 refuse délibérément (#4411, et le témoin « ne lit aucune des deux
+ * clés divergentes du legacy » l'interdit). `meeshy-theme` est la clé PROPRE de
+ * la v3, arbitrée, et elle n'avait jusqu'ici AUCUN écrivain (#4477) : c'est ce
+ * que la recopie corrige. Elle sert deux choses réelles — garder le choix quand
+ * les cookies seuls sont effacés (les navigateurs offrent ce geste séparément),
+ * et donner un écrivain à la clé que les colonnes de thème du § 9.6 forcent
+ * pour simuler un choix explicite. Sans cookie, rien n'est écrit : un lecteur
+ * qui n'a jamais réglé son thème ici ne se voit rien imposer.
  *
  * La lecture tolère `light`, `dark`, `system` et RIEN d'autre. Une valeur
  * inconnue — un cookie forgé, un reste d'une version future — retombe sur

@@ -27320,7 +27320,8 @@ donnée, s'attendre à ce qu'elle exhume la façon dont on la calcule.
 **Le fait.** `/settings/application` (web v3, #5065) offre trois choix de thème : clair, sombre,
 « comme mon système ». Le magasin est un COOKIE — le seul qu'un formulaire sans JavaScript puisse
 écrire — et le script inline de la tête le lit avant le premier pixel, puis le RECOPIE dans
-`localStorage` pour que la webapp legacy, qui ne lit que lui, suive le même choix.
+`localStorage['meeshy-theme']`, la clé PROPRE de la v3, qui n'avait jusque-là aucun écrivain
+(#4477).
 
 La première version écrivait `light` ou `dark`, et **EFFAÇAIT** le cookie pour « comme mon
 système » : ne rien garder semblait la façon la plus honnête de ne rien imposer. Le témoin
@@ -27329,7 +27330,8 @@ clair** : la recopie avait déjà posé `light` dans `localStorage`, et le repli
 cookie ⇒ relis `localStorage` » — y retrouvait exactement ce qu'on venait d'effacer.
 
 **Ce qui rend le défaut invisible.** Chaque moitié est juste isolément. La recopie est juste (elle
-porte le choix jusqu'au legacy). Le repli est juste (il fait survivre un choix fait dans le legacy).
+donne un écrivain à une clé qui n'en avait pas, et garde le choix quand seuls les cookies sont
+effacés). Le repli est juste (il fait survivre un choix que cette clé porterait déjà).
 L'effacement est juste **si le cookie est le seul magasin**. Il ne l'est plus dès qu'on ALIMENTE le
 second, et c'est le lot lui-même qui l'a fait, dix lignes plus haut.
 

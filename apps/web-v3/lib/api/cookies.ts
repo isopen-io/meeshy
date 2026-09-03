@@ -30,12 +30,13 @@ export const COOKIE_DE_JETON = 'meeshy_auth';
  * pose, et le serveur ne peut poser qu'un cookie : c'est le seul magasin que
  * les deux bouts partagent.
  *
- * `localStorage` reste LU par le script de tête, et c'est délibéré : la webapp
- * legacy y écrit son propre choix (`meeshy-theme`), et un lecteur qui a réglé
- * son thème là-bas le retrouve ici. Le script MIROITE en retour ce qu'il
- * résout, si bien que le legacy suit un choix fait dans la v3. Le seul cas où
- * les deux divergent est un réglage fait dans le legacy APRÈS un réglage fait
- * ici — le cookie l'emporte — et il disparaît avec le legacy.
+ * `localStorage['meeshy-theme']` reste LU par le script de tête, et le cookie y
+ * est RECOPIÉ. Ce n'est pas pour la webapp legacy — elle ne lit pas cette clé,
+ * elle a les siennes (`gp-theme-mode`, `meeshy-app`), que la v3 refuse
+ * délibérément (#4411). `meeshy-theme` est la clé PROPRE de la v3, et elle
+ * n'avait aucun écrivain (#4477) : la recopie lui en donne un, garde le choix
+ * quand seuls les cookies sont effacés, et alimente les colonnes de thème du
+ * § 9.6.
  *
  * IL PORTE TROIS VALEURS — `light`, `dark`, `system` — et son ABSENCE en est
  * une quatrième, qui ne veut pas dire la même chose que `system` : absent, rien
