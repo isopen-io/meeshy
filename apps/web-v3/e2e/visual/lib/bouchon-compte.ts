@@ -215,10 +215,34 @@ export const routesDuCompte =
           name: 'Ops Lagos',
           isActive: true,
           currentUses: 12,
+          maxUses: null,
+          expiresAt: null,
           conversation: { id: CONVERSATION_DU_LECTEUR.id, title: CONVERSATION_DU_LECTEUR.titre, type: 'group' },
         },
+        // Un lien FERMÉ, avec sa capacité et son échéance : c'est la ligne que
+        // le tableau de bord ÉCARTE et que l'écran `/links` doit garder. Sans
+        // elle, l'audit ne verrait jamais l'étiquette « Fermé » ni la teinte
+        // en sourdine — c'est-à-dire jamais le contraste qui les rend
+        // lisibles.
+        {
+          id: 'l2',
+          linkId: 'mshy_demo',
+          identifier: 'demo-sept',
+          name: 'Démo septembre',
+          isActive: false,
+          currentUses: 3,
+          maxUses: 10,
+          expiresAt: '2026-12-31T12:00:00.000Z',
+          conversation: null,
+        },
       ],
-      pagination: { total: 1 },
+      pagination: { total: 2 },
+      // `meta.summary` — les agrégats de TOUT le carnet, servis par
+      // `?include=summary` (`routes/links/user.ts:611-613` puis `:624-630`).
+      // Le compte des actifs n'est PAS celui de la page : le bouchon en sert
+      // dix-sept pour deux lignes, ce qu'aucun décompte local ne pourrait
+      // produire.
+      meta: { summary: { totalLinks: 30, activeLinks: 17, totalUses: 400 } },
     });
     return true;
   };
