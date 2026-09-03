@@ -7,10 +7,10 @@ import { langAttribut } from '@/app/connecte/transcrit';
 import { quand } from '@/app/connecte/vue';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { documentDeMessage } from '@/app/enveloppe/vue';
+import { mediaHtml } from '@/app/media-html';
 import { echappe } from '@/app/socle';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
-import type { MediaDeStory, Story, Voisinage } from '@/lib/api/publication';
-import { formeDePiece } from '@/lib/api/formes';
+import type { Story, Voisinage } from '@/lib/api/publication';
 import { GENRE_STORY, type GenreServi } from '@/lib/contenu/partage';
 import { LONGUEUR_MAX_DE_LA_REPONSE } from '@/lib/contenu/story';
 import { nomDeLangue } from '@/lib/contenu/langues';
@@ -121,24 +121,6 @@ const enTete = (etat: EtatDeLaStory): string => {
     `<a class="fermer" href="/" aria-label="${echappe(copie.fermer)}">${svgDuSprite('ph-x')}</a>` +
     '</header>'
   );
-};
-
-/**
- * LE MÉDIA D'UNE copie. Une image est rendue AVEC ses dimensions (le CLS est
- * nul par construction, § 12.6) ; une vidéo et un son restent en
- * `preload="none"` — zéro octet avant la pression, comme dans la galerie. Un
- * genre sans lecteur natif et sans image (un fichier) n'est pas rendu : une
- * story n'en porte pas, et fabriquer une affiche pour un cas que la passerelle
- * ne produit pas serait inventer.
- */
-const mediaHtml = (media: MediaDeStory, texte: string): string => {
-  const alt = media.alt ?? texte;
-  const dimensions =
-    media.largeur === null || media.hauteur === null ? '' : ` width="${media.largeur}" height="${media.hauteur}"`;
-  if (media.genre === 'image') return `<img src="${echappe(media.url)}" alt="${echappe(alt)}"${dimensions}/>`;
-  const lecteur = formeDePiece(media.genre).lecteur;
-  if (lecteur === null) return '';
-  return `<${lecteur} controls preload="none" src="${echappe(media.url)}"></${lecteur}>`;
 };
 
 const scene = (etat: EtatDeLaStory): string => {

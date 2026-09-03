@@ -32,6 +32,7 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   apercuLangueOriginale: null,
   sourdine: false,
   archivee: false,
+  participantsInscrits: [],
   ...attributs,
 });
 
@@ -406,6 +407,10 @@ describe('le tableau de bord', () => {
       systemLanguage: 'fr',
       regionalLanguage: null,
       customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
     },
     conversations: [CONVERSATION({ nonLus: 3 }), CONVERSATION({ id: 'b', titre: 'Marta Ruiz', nonLus: 2 })],
     total: 7,
@@ -467,7 +472,7 @@ describe('le tableau de bord', () => {
    */
   const tableauDUneCarte = (membres: number): string =>
     documentDuTableau({
-      lecteur: { id: 'u1', prenom: 'Sonde', nomAffiche: 'Sonde Neuf', pseudonyme: 's1', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null },
+      lecteur: { id: 'u1', prenom: 'Sonde', nomAffiche: 'Sonde Neuf', pseudonyme: 's1', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, nom: null, bio: null, email: null, telephone: null },
       conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres })],
       total: 1,
       liens: { genre: 'liste', liens: [] },
@@ -503,6 +508,10 @@ describe('le tableau de bord', () => {
         systemLanguage: langues?.[0] ?? 'fr',
         regionalLanguage: langues?.[1] ?? null,
         customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
       },
       conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres: 2, ...attributs })],
       total: 1,

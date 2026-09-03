@@ -56,6 +56,7 @@ const fil = (droits: Droits): string =>
     composeur: { genre: 'ouvert' },
     tempsReel: null,
     plein: null,
+    profil: null,
   } satisfies EtatDuFil);
 
 const choix = (): string =>

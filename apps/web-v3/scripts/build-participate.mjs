@@ -23,17 +23,20 @@ import { gzipSync } from 'node:zlib';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
-// DEUX modules, pas un — et la raison est un POIDS mesuré, pas un goût
+// TROIS modules, pas un — et la raison est un POIDS mesuré, pas un goût
 // d'architecture. `participate.js` pèse 26 173 o gzip (budgets-mesures.json) :
 // c'est le prix du fil — composeur, réserve, plein écran, réactions, peinture
-// de bulles. La LISTE n'a besoin d'aucun d'eux, et le lui faire télécharger
-// après son premier pixel coûterait plus d'une seconde sur la 3G rurale du
-// § 12.6, pour du code qu'elle n'exécute jamais. Le socle qu'ils PARTAGENT —
-// socket.io-client — reste un seul actif, à une seule adresse, donc mis en
-// cache une seule fois pour les deux écrans.
+// de bulles. La LISTE n'a besoin d'aucun d'eux, et le FIL SOCIAL (#5031)
+// n'a besoin ni d'eux ni d'un socket — aimer et reposter sont des allers
+// simples (`lib/realtime/feed.ts`) — et les lui faire télécharger après leur
+// premier pixel coûterait sur la 3G rurale du § 12.6, pour du code qu'ils
+// n'exécutent jamais. Le socle que `participate` et `liste` PARTAGENT —
+// socket.io-client — reste un seul actif, à une seule adresse ; `feed` ne
+// l'importe pas du tout.
 const SOURCES = [
   { base: 'participate', chemin: join(RACINE, 'lib', 'realtime', 'participate.ts') },
   { base: 'liste', chemin: join(RACINE, 'lib', 'realtime', 'liste.ts') },
+  { base: 'feed', chemin: join(RACINE, 'lib', 'realtime', 'feed.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');
@@ -65,11 +68,13 @@ const ecrisLaMesure = (poids) => {
   const mesures = JSON.parse(readFileSync(MESURES, 'utf8'));
   mesures.participate = {
     quoi:
-      'Le poids des DEUX modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil.',
+      'Le poids des TROIS modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
     participate_brut_octets: poids.participate.brut,
     participate_gzip_9_octets: poids.participate.gzip,
     liste_brut_octets: poids.liste.brut,
     liste_gzip_9_octets: poids.liste.gzip,
+    feed_brut_octets: poids.feed.brut,
+    feed_gzip_9_octets: poids.feed.gzip,
     socket_io_client_brut_octets: poids.socket?.brut ?? null,
     socket_io_client_gzip_9_octets: poids.socket?.gzip ?? null,
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',

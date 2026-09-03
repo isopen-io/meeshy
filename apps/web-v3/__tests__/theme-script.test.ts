@@ -1,3 +1,4 @@
+import { COOKIE_DE_THEME } from '../lib/api/cookies';
 import { THEME_STORAGE_KEY, themeScriptSource } from '../app/theme-script';
 
 const INLINE_BYTE_BUDGET = 400;
@@ -21,10 +22,25 @@ const runThemeScript = (): void => {
 
 const rootClasses = (): readonly string[] => Array.from(document.documentElement.classList);
 
+const poseLeCookie = (valeur: string): void => {
+  document.cookie = `${COOKIE_DE_THEME}=${valeur}`;
+};
+
+const effaceLesCookies = (): void => {
+  document.cookie
+    .split(';')
+    .map((morceau) => morceau.trim().split('=')[0])
+    .filter((nom) => nom !== '')
+    .forEach((nom) => {
+      document.cookie = `${nom}=;max-age=0`;
+    });
+};
+
 beforeEach(() => {
   document.documentElement.className = '';
   document.documentElement.removeAttribute('style');
   window.localStorage.clear();
+  effaceLesCookies();
 });
 
 describe('le script de thème inline', () => {
@@ -96,6 +112,71 @@ describe('le script de thème inline', () => {
 
     expect(document.documentElement.getAttribute('style')).toBeNull();
     expect(themeScriptSource).not.toContain('colorScheme');
+  });
+
+  /**
+   * LE COOKIE EST LE MAGASIN QUE `/settings/application` PEUT ÉCRIRE, et c'est
+   * la raison de sa priorité. Ces quatre témoins tiennent chacun une moitié de
+   * la règle : sans le premier, un choix fait à l'écran serait perdu au
+   * rechargement (le contrôle n'aurait pas d'effet) ; sans le second, un
+   * lecteur venu du legacy perdrait le sien ; sans le troisième, le legacy ne
+   * suivrait jamais un choix fait ici ; sans le quatrième, un cookie forgé
+   * poserait sur `<html>` une classe que la table de jetons ne connaît pas.
+   */
+  it('le cookie l’emporte sur localStorage — sinon le choix serait perdu au rechargement', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    poseLeCookie('light');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(rootClasses()).toContain('light');
+    expect(rootClasses()).not.toContain('dark');
+  });
+
+  it('retombe sur localStorage quand aucun cookie n’est posé — le choix fait dans le legacy survit', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(rootClasses()).toContain('light');
+  });
+
+  it('MIROITE le cookie dans localStorage — c’est ce qui fait suivre le legacy', () => {
+    poseLeCookie('light');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+  });
+
+  /**
+   * LE DÉFAUT QUE LE TÉMOIN NAVIGATEUR A TROUVÉ, fixé ici en jsdom une fois
+   * qu'on sait où regarder : un lecteur qui avait choisi « Clair », puis
+   * « comme mon système », restait clair — le miroir de `localStorage` gardait
+   * l'aliment du repli.
+   */
+  it('« system » l’emporte sur ce que le miroir a laissé dans localStorage', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    poseLeCookie('system');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(rootClasses()).toContain('dark');
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('system');
+  });
+
+  it('ignore un cookie qui ne vaut ni light ni dark, et n’écrit rien', () => {
+    poseLeCookie('fuchsia');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(rootClasses()).toEqual(['dark']);
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
   });
 
   it('tient dans le budget de 400 octets inline', () => {

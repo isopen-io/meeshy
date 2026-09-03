@@ -73,8 +73,14 @@ export type Charge = {
  * sans JavaScript répond à un geste par une redirection (Post/Redirect/Get), et
  * `?fait=` est la seule voix qu'il a pour dire ce qui vient d'avoir lieu. Le
  * tableau de bord l'ignore — il ne répond à aucun geste.
+ *
+ * ASYNCHRONE parce que `/chats` a une SECONDE raison de parler à la
+ * passerelle — le profil d'un participant (`?profil=`, § 12.10.3), une
+ * requête de plus SEULEMENT quand elle est demandée. Le tableau de bord rend
+ * toujours de façon synchrone ; `await` sur une valeur qui n'est pas une
+ * promesse résout immédiatement, donc rien n'y change.
  */
-export type Ecran = (charge: Charge, maintenant: number, requete: Request) => string;
+export type Ecran = (charge: Charge, maintenant: number, requete: Request) => string | Promise<string>;
 
 /**
  * `recuperer` est la MÊME couture que celle de `connexion` / `conversations` :
@@ -111,7 +117,7 @@ export const serviteurDe =
     if (fil.genre === 'panne') return rendu(documentDePanne(), 503);
 
     return rendu(
-      ecran(
+      await ecran(
         {
           lecteur: identite.genre === 'lecteur' ? identite.lecteur : null,
           // LES ARCHIVÉES N'ATTEIGNENT AUCUN DES DEUX ÉCRANS. `GET

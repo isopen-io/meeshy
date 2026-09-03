@@ -44,11 +44,13 @@ const etatServi = (): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   plein: null,
+  profil: null,
   tempsReel: {
     passerelle: 'https://gate.test',
     actifs: {
       participate: { nom: 'p.js', url: '/__v3/rt/p.js', corps: '' },
       liste: { nom: 'l.js', url: '/__v3/rt/l.js', corps: '' },
+      feed: { nom: 'feed.l.js', url: '/__v3/rt/feed.l.js', corps: '' },
       socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
     },
   },
