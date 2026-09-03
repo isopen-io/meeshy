@@ -127,6 +127,8 @@ const V3_ZONE_PREFIXES = [
   '/stories',
   '/reels',
   '/moods',
+  '/feed',
+  '/composer',
 ];
 
 function belongsToV3Zone(pathname) {
