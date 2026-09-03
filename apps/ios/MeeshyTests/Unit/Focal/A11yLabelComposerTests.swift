@@ -44,7 +44,7 @@ final class A11yLabelComposerTests: XCTestCase {
             isBlurred: false,
             isViewOnce: false,
             isPinned: isPinned,
-            isForwarded: false,
+            forwardAttribution: nil,
             editedAt: editedAt,
             isEditSaving: false,
             hasEditHistory: false,

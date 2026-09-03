@@ -258,7 +258,16 @@ extension BubbleContent {
         self.isBlurred = message.isBlurred
         self.isViewOnce = message.isViewOnce
         self.isPinned = message.pinnedAt != nil
-        self.isForwarded = message.forwardedFromId != nil
+        // **Le site UNIQUE où l'attribution d'un transfert se tranche** (#5058).
+        //
+        // `forwardedFromId` dit QUE le message est un transfert ;
+        // `ForwardBadgePolicy` dit QUI a le droit d'être nommé — un groupe au
+        // moins public, l'auteur en tête-à-tête, personne sinon. Les deux
+        // doivent être lus ENSEMBLE : une référence absente sur un transfert
+        // avéré rend `.anonymous`, qui est un badge, pas une absence de badge.
+        self.forwardAttribution = message.forwardedFromId == nil
+            ? nil
+            : ForwardBadgePolicy.attribution(for: message.forwardedFrom)
         self.editedAt = message.isEdited ? message.updatedAt : nil
         self.isEditSaving = isEditSaving
         self.hasEditHistory = hasEditHistory

@@ -278,19 +278,25 @@ struct FocalRow: View {
     /// `FocalEphemeralBadge` (ce chantier) pour un countdown vivant sans
     /// faire porter le `@StateObject` par `FocalRow`.
     ///
-    /// `BubbleForwardedIndicator` prend une `ForwardAttribution` déjà
-    /// tranchée — `BubbleContent` ne porte que le booléen `isForwarded` (pas
-    /// de `ForwardReference` résolue), donc l'attribution reste `.anonymous`
-    /// ici : repli sur le libellé générique « Transféré ». Écart signalé, pas
-    /// une seconde résolution inventée — et c'est le repli SÛR, jamais celui
-    /// qui nommerait quelqu'un.
+    /// **L'attribution est la MÊME qu'en bulle depuis le #5058.** Elle restait
+    /// `.anonymous` ici — « Transféré » tout court — parce que `BubbleContent`
+    /// ne portait qu'un booléen et que la rangée plate n'avait pas le `Message`
+    /// d'où la bulle tirait sa `ForwardReference`. L'écart était SIGNALÉ, et le
+    /// repli était le bon : jamais celui qui nommerait quelqu'un.
+    ///
+    /// Ce qui manquait était en AMONT. `BubbleContent.forwardAttribution` porte
+    /// désormais la valeur tranchée par `ForwardBadgePolicy` au site unique
+    /// qu'est `BubbleContentBuilder` — pas une seconde résolution inventée ici,
+    /// ce que le repli refusait à juste titre, mais la PREMIÈRE, remontée là où
+    /// les trois peaux la partagent. Une règle de confidentialité résolue à
+    /// deux endroits est une règle qui divergera.
     @ViewBuilder
     private var badgesSection: some View {
         if content.isPinned {
             BubblePinnedIndicator()
         }
-        if content.isForwarded {
-            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: .anonymous)
+        if let attribution = content.forwardAttribution {
+            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: attribution)
         }
         if let ephemeral = content.ephemeral {
             FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)
