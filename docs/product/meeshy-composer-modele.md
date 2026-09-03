@@ -868,6 +868,32 @@ est tenue des DEUX côtés, par deux structures opposées :
 > même comportement ? ». Le premier critère aurait signalé une divergence là où
 > il n'y en a pas, et l'aurait ratée là où elle compte.
 
+## 6 sexies. Android ÉCRIT aussi — et son port a dérivé (mesure 2026-09-04)
+
+Les mesures précédentes regardaient Android en LECTURE. Il écrit également :
+`PostApi.createStory(@Body CreateStoryRequest)`, appelé par `PostRepository` et
+par le videur d'outbox hors ligne.
+
+Son type se déclare **« port of `CreateStoryRequest` (ServiceModels.swift) »** —
+et il lui manque **cinq** champs : `mentions` · `visibilityUserIds` ·
+`mediaAlt` · `mediaCaption` · `allowSoundExtraction`. (Il en porte trois que
+Swift range ailleurs — `effectFlags`, `moodEmoji`, `parentId` — ce qui est une
+autre découpe, pas un manque.)
+
+**Le coût actuel est nul** : Android n'a ni sélecteur d'audience nommée pour une
+publication, ni mentions de publication (les siennes ne servent que les
+commentaires). Rien ne se perd aujourd'hui.
+
+> **Ce qui rend la dérive coûteuse est sa DÉCLARATION, pas son effet.** Qui
+> ajoutera un jour une audience nommée à Android lira « port », supposera la
+> parité, et ne rencontrera **aucune erreur de compilation** — le champ n'existe
+> pas pour être passé. La valeur disparaîtra entre le composer et le fil, sans un
+> mot. Une seule des cinq est rattrapée en aval (`visibilityUserIds`, refusé par
+> la passerelle sans liste) ; les quatre autres partiraient en silence, dont le
+> texte alternatif.
+
+Détail et critères : #5078.
+
 ## 7. Correspondance avec ce qui existe
 
 Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au fil.
