@@ -45,7 +45,13 @@ public struct ReferenceNoteRow: View, Equatable {
 
     /// Les deux gardes, extraites pour être vérifiables sans monter de vue —
     /// c'est ici, et nulle part ailleurs, que se joue la non-fuite des SILENT.
-    static func noted(in references: [PostReference]) -> [PostReference] {
+    ///
+    /// **`public` depuis #5002** : le pied de la scène du composer doit poser la
+    /// MÊME question (« qui paraît, qui ne paraît jamais ») avant même de
+    /// décider s'il y a une ligne à peindre. La réponse ne pouvait pas être
+    /// recopiée côté app — « ici, et nulle part ailleurs » est le contrat de
+    /// cette fonction, et une copie l'aurait annulé au premier mode ajouté.
+    public static func noted(in references: [PostReference]) -> [PostReference] {
         references.filter { $0.display == .note }
     }
 
