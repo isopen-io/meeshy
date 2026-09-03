@@ -21,6 +21,7 @@ import { FEUILLE_DE_LA_LISTE } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
+import { FEUILLE_DES_REGLAGES } from '@/app/connecte/reglages-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -76,6 +77,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU', source: FEUILLE_DU_TABLEAU },
   { nom: 'app/connecte/profil-feuille.ts', source: FEUILLE_DU_PROFIL },
   { nom: 'app/connecte/social-feuille.ts', source: FEUILLE_DU_FIL_SOCIAL },
+  { nom: 'app/connecte/reglages-feuille.ts', source: FEUILLE_DES_REGLAGES },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -150,6 +152,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU',
       'app/connecte/profil-feuille.ts',
       'app/connecte/social-feuille.ts',
+      'app/connecte/reglages-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -251,6 +254,10 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
     // fil, la liste et les commentaires : chrome + connecté + sa feuille.
     { nom: 'fil social', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL_SOCIAL },
+    // Les SIX écrans de réglages servent la MÊME composition : chrome, zone
+    // connectée, l'en-tête du fil (qu'ils réemploient) et leur feuille. Une
+    // seule ligne suffit donc à les opposer tous les six au plafond.
+    { nom: 'réglages', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
