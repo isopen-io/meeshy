@@ -11779,6 +11779,41 @@ documente une absence d'abonnement, lue comme un abonnement.
 > vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
 > l'autre moitié du piège en place.
 
+### Une règle citée MOT POUR MOT peut être fausse par sa PORTÉE
+
+En écrivant #5018 j'ai justifié une contrainte par une règle du dépôt, citée
+exactement :
+
+> « un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir
+> une pièce jointe »
+
+La phrase existe, au caractère près (`ComposerSoundRoleCopy.borrowedForegroundRefusal`).
+**La portée que je lui ai donnée, elle, était inventée.** Elle gouverne le premier
+plan sur la surface POST AUDIO — où « premier plan » signifie *pièce jointe* — et
+elle n'est consommée qu'à deux lignes d'`AudioPostComposerView`. Sur la surface
+SCÈNE, `ComposerSoundDestination.forForeground(on:)` fait dire au même mot
+« puce de scène », qui ne ré-uploade rien et garde son `soundId`.
+
+Le doc-comment du refus donne sa propre raison — « une pièce jointe est un
+FICHIER de la publication […] supposerait de le ré-uploader » — et cette raison
+**ne survit pas au changement de destination**. Le code le dit même dans le sens
+inverse de ma prémisse : `addBorrowedSound` pose déjà une piste empruntée en
+PREMIER PLAN dès qu'un fond existe.
+
+Le plus instructif : le codebase avait écrit l'avertissement douze lignes plus
+haut — *« le mot "premier plan" désignait deux choses »* — et je suis tombé dans
+exactement la distinction qu'il documente, en lisant le fichier qui la porte.
+
+> **Un extrait vérifié n'est vérifié que sur son TEXTE.** « Cette règle existe »
+> et « cette règle gouverne mon cas » sont deux affirmations, et la seconde ne
+> s'établit pas en relisant la citation — elle s'établit en cherchant ses
+> CONSOMMATEURS. Un `grep` du nom de la règle répond en une commande à une
+> question qu'une lecture attentive du texte ne peut pas trancher.
+
+C'est la jumelle de la leçon 261 (« une énumération de sites porte deux
+affirmations ») appliquée à une règle unique : là-bas l'angle mort était
+*ce que la liste omet*, ici c'est *où la règle s'applique*.
+
 #### Le miroir de cette précaution : un témoin ne peut plus s'ANCRER sur un commentaire
 
 La leçon ci-dessus dit qu'une garde doit dépouiller. Sa conséquence se paie un
