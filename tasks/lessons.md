@@ -11817,6 +11817,38 @@ défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règl
 comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
 explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
 
+### Un motif TROP ÉTROIT rend un faux négatif CONFIANT — trois fois en une session
+
+Le 2026-09-03, trois mesures fausses, toutes de la même forme : un motif de
+recherche plus étroit que la question, et un « zéro » lu comme une réponse.
+
+| ce que je cherchais | le motif employé | ce qu'il ratait | ce que j'ai conclu, à tort |
+|---|---|---|---|
+| une région de code à borner | un `// MARK:` | les commentaires sont DÉPOUILLÉS par la garde | « la fonction n'existe pas » |
+| le type `MeeshySceneObject` | `struct\|type\|interface\|class` | c'est un **`enum`** somme | « c'est un nom de doc, pas un type » |
+| les transitions au contrat | `grep "transition"` | **la casse** — `clipTransitions` | « aucune transition n'est modélisée » |
+
+La troisième est la plus coûteuse : elle est partie dans une réponse au porteur
+ET dans un document committé, où elle a vécu une heure. Les transitions existent,
+sont produites par le composer et rendues par les **trois** clients.
+
+> **Un `grep` qui rend zéro ne prouve rien tant qu'on n'a pas vérifié que son
+> motif pouvait trouver.** Le test tient en une commande : chercher un cas dont
+> on SAIT qu'il existe. Si le motif ne le trouve pas non plus, le zéro ne parlait
+> pas du monde — il parlait du motif.
+
+Et le réflexe qui les attrape toutes les trois : **quand un zéro contredit une
+attente raisonnable, suspecter l'instrument avant le monde.** Le porteur
+supposait les transitions acquises ; cette attente était le signal qu'il fallait
+élargir le motif, pas la corriger. Deux formes concrètes, gratuites :
+`grep -i` par défaut sur un nom de concept, et chercher la RACINE
+(`transit`, `Scene`) plutôt que le mot entier.
+
+Fil rouge avec les leçons voisines : celle sur la PORTÉE dit qu'un extrait
+vérifié ne l'est que sur son texte ; celle-ci dit qu'une ABSENCE mesurée ne l'est
+que sur son motif. Les deux se réduisent à la même prudence — **la mesure décrit
+l'instrument autant que l'objet.**
+
 ### Une règle citée MOT POUR MOT peut être fausse par sa PORTÉE
 
 En écrivant #5018 j'ai justifié une contrainte par une règle du dépôt, citée

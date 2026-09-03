@@ -346,16 +346,53 @@ Neuf champs, et il faut les citer pour clore la question des « détails d'effet
 Donc : **`start` et `end` EXISTENT**, portés par `timing`, et l'entrée d'un objet
 dans la timeline n'est pas un ajout de contrat.
 
-### Ce qui n'existe PAS
+### Les transitions : elles EXISTENT, une couche plus haut, et sans vocabulaire partagé
 
-**Aucune transition d'entrée ni de sortie n'est modélisée.** Mesuré : zéro
-occurrence de `transition` dans `packages/shared/types/`. Un objet a des bornes
-temporelles, pas une manière d'apparaître ni de disparaître.
+> **Correction d'une mesure fausse écrite dans ce document le 2026-09-03.** J'y
+> avais affirmé « aucune transition d'entrée ni de sortie n'est modélisée », sur
+> la foi d'un `grep -n "transition"` rendant zéro dans `packages/shared/types/`.
+> Le motif était SENSIBLE À LA CASSE et ratait `clipTransitions`. La phrase est
+> restée committée moins d'une heure ; elle est fausse et voici l'état réel.
 
-> La question du porteur supposait les transitions acquises parce qu'elles
-> voisinent naturellement avec `start`/`end` dans l'esprit. Elles n'y sont pas —
-> et les ajouter est un lot de CONTRAT, à ne pas confondre avec le rognage
-> temporel, que `timing` couvre déjà.
+**Un OBJET n'a pas de transition** — c'est le seul point que l'affirmation
+fausse avait juste. Ses neuf champs portent `timing { start, end, keyframes }` :
+des bornes, pas une manière d'apparaître.
+
+**Une SCÈNE en a trois**, et elles sont vivantes de bout en bout :
+
+| champ | ce qu'il porte | qui le produit | qui le rend |
+|---|---|---|---|
+| `opening` | l'entrée de la scène | `viewModel.openingEffect` (composer iOS) | iOS (`StoryViewerView+Canvas`, `+Content`), Android (`CanvasV3Projection`), web (`story-transforms`) |
+| `closing` | la sortie | `viewModel.closingEffect` | idem |
+| `clipTransitions` | les fondus entre clips adjacents, **30 au plus** | `TimelineViewModel`, `VideoCompositor` | iOS, Android (`StoryClipTransitionResolver`), web (crossfade) |
+
+Le vocabulaire côté client est `StoryTransitionEffect` — **quatre** cas :
+`fade` · `zoom` · `slide` · `reveal`.
+
+### Ce qui, en revanche, n'existe VRAIMENT pas : leur définition PARTAGÉE
+
+Le contrat les transporte **opaques** :
+
+```ts
+opening: z.record(z.string(), z.unknown()).optional(),
+closing: z.record(z.string(), z.unknown()).optional(),
+clipTransitions: z.array(z.record(z.string(), z.unknown())).max(30).optional(),
+```
+
+`z.unknown()` — le contrat garantit qu'un objet passe, jamais ce qu'il contient.
+Le vocabulaire des quatre effets est donc défini **trois fois côté client**
+(Swift `StoryTransitionEffect`, Kotlin `StoryClipTransition`, TypeScript dans
+`story-transforms`) et **nulle part** dans `packages/shared`.
+
+> C'est la forme exacte que ce dépôt a déjà payée trois fois sur le Prisme : une
+> règle réécrite par chaque client diverge sans qu'aucun témoin ne tombe, parce
+> que rien ne les compare. Ici le risque est plus discret encore — le contrat
+> ACCEPTE tout, donc un cinquième effet ajouté par un seul client voyage
+> intact jusqu'aux deux autres, qui l'ignorent en silence.
+
+Ce qui reste à décider n'est donc pas « faut-il des transitions » mais **« faut-il
+que le contrat les CONNAISSE »** — un lot de contrat, distinct du rognage
+temporel que `timing` couvre déjà.
 
 ## 1 ter. Ce que chaque nom devient SOUS le composer
 
