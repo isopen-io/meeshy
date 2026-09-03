@@ -170,6 +170,32 @@ décision de design, ouverte en `décision-produit` — pas un défaut à corrig
 d'initiative, parce qu'un correctif inventé ici figerait un choix qui appartient
 au porteur.
 
+### Comment un FRÈRE apprend où est la carte — les deux clés de préférence
+
+La carte de scène est **ajustée à son ratio puis CENTRÉE** dans un canvas de
+hauteur infinie. Ses bords ne sont donc pas ceux de son parent, et l'écart varie
+avec le ratio comme avec l'écran. Trois mécanismes coexistent pour le franchir,
+et **ils ne s'emploient pas dans les mêmes cas** — c'est la distinction qui a
+coûté deux diagnostics faux :
+
+| ce qu'on veut poser | mécanisme | pourquoi |
+|---|---|---|
+| un contenu SUR le plateau, aligné au dessin (rails, trace du son) | `ComposerRailGeometry.sceneBottomInset` / `sceneLeadingInset`, appliqués en **overlay** | l'overlay connaît la géométrie du canvas qu'il recouvre ; il ne paie **aucun** espacement de pile |
+| un FRÈRE de la pile (le pied des références) | `ComposerSceneCardLeadingKey` et `ComposerSceneCardBottomKey`, deux `PreferenceKey` publiées par le lecteur de géométrie du canvas et lues en `@State` par la surface | un frère ne voit pas la géométrie du canvas ; il faut la lui REMONTER |
+| un contenu DANS la carte (la description) | rien à franchir | il est déjà dans le repère du dessin |
+
+> **Une pile ne voit pas le VIDE de ses enfants, seulement leurs cadres.** Un
+> frère posé sous un canvas `maxHeight: .infinity` se range sous le CADRE, donc
+> sous le letterbox — 77 pt mesurés au 2026-09-03, la moitié basse exacte du
+> centrage. Aucun réordonnancement n'y change rien : il n'y a pas de frère à
+> déplacer, il y a du vide à franchir.
+
+**Et une gouttière n'est pas un espacement de pile.** Un overlay ne paie que la
+gouttière ; un frère paie la gouttière ET le `spacing` du `VStack`. Le haut et le
+bas d'une même carte peuvent donc afficher le même écart par deux chemins
+différents (mesuré : 14 pt des deux côtés, dont 6 + 8 en bas) — les confondre
+double l'écart au premier réglage.
+
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 

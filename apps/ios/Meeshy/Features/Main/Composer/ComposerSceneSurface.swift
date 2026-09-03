@@ -506,6 +506,11 @@ struct ComposerSceneSurface: View {
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
 
+    /// Le letterbox BAS du dessin, remonté par `ComposerSceneCardBottomKey`
+    /// (#5036). Le pied des références s'en sert pour COLLER à la carte plutôt
+    /// qu'au bas de la frame.
+    @State private var sceneCardBottom: CGFloat = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ComposerTopBar(
@@ -600,12 +605,23 @@ struct ComposerSceneSurface: View {
                 // jamais.
                 .background {
                     GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ComposerSceneCardLeadingKey.self,
-                            value: ComposerRailGeometry.sceneLeadingInset(
-                                overlay: geo.size,
-                                ratio: aspectRatio,
-                                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                        Color.clear
+                            .preference(
+                                key: ComposerSceneCardLeadingKey.self,
+                                value: ComposerRailGeometry.sceneLeadingInset(
+                                    overlay: geo.size,
+                                    ratio: aspectRatio,
+                                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                            // **Le letterbox BAS, par le MÊME lecteur** (#5036).
+                            // Deux `GeometryReader` sur la même vue mesureraient
+                            // la même chose deux fois et pourraient diverger d'une
+                            // passe de layout ; un seul lecteur, deux préférences.
+                            .preference(
+                                key: ComposerSceneCardBottomKey.self,
+                                value: ComposerRailGeometry.sceneBottomInset(
+                                    overlay: geo.size,
+                                    ratio: aspectRatio,
+                                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
                     }
                 }
                 // **L'ORDRE des modificateurs EST la disposition** (#4633,
@@ -700,6 +716,62 @@ struct ComposerSceneSurface: View {
                 }
                 .padding(.top, 8)
 
+                // **Ce que la publication EMPORTE, COLLÉ au bas de la scène**
+                // (#5002 pour son contenu, #5036 pour sa place).
+                //
+                // > Directive porteur 2026-09-03 : « les hashtag et mention
+                // > doivent être **directement en bas de la scene** aligné comme
+                // > le son de fond de la scene ! »
+                //
+                // **La loi : ce qui QUALIFIE la scène la touche ; ce qui
+                // l'OUTILLE vient après.** D'où sa remontée en TÊTE de la zone
+                // basse — devant la bande de mention, la bande contextuelle et
+                // les jetons d'objet, qui outillent tous. C'est la jumelle basse
+                // de #5017, qui a posé la même loi en haut pour la trace du son,
+                // et le porteur fait lui-même le rapprochement.
+                //
+                // **L'ordre ne suffisait pas, et c'est ce que la mesure a
+                // appris.** Le pied était DÉJÀ avant la rangée d'outils, et il
+                // flottait pourtant à 77 pt sous le dessin. Ces points ne sont
+                // ni une marge ni un espacement : le canvas est
+                // `maxHeight: .infinity` et la carte s'y CENTRE — c'est la
+                // moitié basse du letterbox, que rien n'occupe. Un `VStack` ne
+                // pouvait pas la fermer ; seule la mesure remontée le peut.
+                //
+                // La remontée passe par `referencesLift`, jamais par un
+                // littéral : elle vaut zéro dès que la carte est contrainte par
+                // la hauteur (iPad, format non 9:16), cas où il n'y a rien à
+                // remonter et où une valeur écrite en dur ferait chevaucher le
+                // pied avec la rangée qui le suit.
+                //
+                // `padding` NÉGATIF et non `offset` : il collapse la mise en
+                // page, donc ce qui suit remonte avec lui. Un `offset`
+                // déplacerait le dessin du pied en laissant sa place réservée —
+                // le trou serait simplement descendu d'un cran.
+                //
+                // **Il CÈDE la place aux options d'un outil** (#5010, directive
+                // porteur 2026-09-03 : « lorsqu'on affiche les options d'un
+                // outil il faut cacher les éléments permanents de la zone
+                // canonique »). C'était le SEUL élément du bas que personne ne
+                // gouvernait. La question passe par `ComposerCanonicalZone`,
+                // jamais par un `!toolIsOpen` écrit ici : la troisième copie
+                // d'une condition diverge, et ce fichier a déjà payé cette leçon.
+                //
+                // Dans le couloir, sous la carte — jamais dessus : aucun hashtag
+                // ni aucune personne nommée ne se peint sur un pixel du rendu, et
+                // les poser là volerait les touches de la bande qu'ils
+                // couvriraient (loi 6).
+                if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
+                    ComposerSceneReferenceFooter(hashtags: sceneHashtags,
+                                                 references: sceneReferences,
+                                                 leadingInset: sceneCardLeading,
+                                                 onOpenHashtags: onOpenHashtags,
+                                                 onOpenMentions: onOpenMentions)
+                        .padding(.top, -ComposerRailGeometry.referencesLift(
+                            cardBottomInset: sceneCardBottom,
+                            gutter: ComposerRailGeometry.referencesGutter))
+                }
+
                 // **La bande contextuelle, entre la scène et la description**
                 // (#4064). L'ordre n'est pas un rangement : de haut en bas, le
                 // bas de l'écran descend les niveaux du modèle — l'objet (les
@@ -774,37 +846,6 @@ struct ComposerSceneSurface: View {
                                            activeChipId: activeObjectChipId,
                                            onSelect: onObjectChip)
                 }
-                // **Ce que la publication EMPORTE, au pied de la scène** (#5002,
-                // directive porteur 2026-09-03). Dernière marche de l'escalier
-                // avant la rangée d'entrée : les hashtags et les personnes
-                // nommées n'appartiennent ni à l'objet ni à la scène, ils
-                // partent avec la PUBLICATION.
-                //
-                // Dans le couloir, sous la carte — jamais dessus : aucun d'eux
-                // ne se peint sur un pixel du rendu, et les poser là volerait
-                // les touches de la bande qu'ils couvriraient.
-                // Aucun `tint:` : voir la note de l'en-tête son, en tête de ce
-                // corps — `plateauTint` est le FOND, pas un accent de contenu.
-                //
-                // **Il CÈDE la place aux options d'un outil** (#5010, directive
-                // porteur 2026-09-03 : « lorsqu'on affiche les options d'un
-                // outil il faut cacher les éléments permanents de la zone
-                // canonique »). C'était le SEUL élément du bas que personne ne
-                // gouvernait : une lecture permanente posée sous les réglages
-                // de l'outil qu'on venait d'ouvrir.
-                //
-                // La question passe par `ComposerCanonicalZone`, jamais par un
-                // `!toolIsOpen` écrit ici : la troisième copie d'une condition
-                // diverge, et ce fichier a déjà payé cette leçon — trois
-                // surfaces mortes d'un coup pour avoir lu la présence d'une VUE
-                // au lieu de la question qu'elles posaient.
-                if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
-                    ComposerSceneReferenceFooter(hashtags: sceneHashtags,
-                                                 references: sceneReferences,
-                                                 leadingInset: sceneCardLeading,
-                                                 onOpenHashtags: onOpenHashtags,
-                                                 onOpenMentions: onOpenMentions)
-                }
                 // **La rangée basse — une PLACE permanente, un contenu qui
                 // change** (#4072, précisé au #5010).
                 //
@@ -827,6 +868,7 @@ struct ComposerSceneSurface: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerSceneCardBottomKey.self) { sceneCardBottom = $0 }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :

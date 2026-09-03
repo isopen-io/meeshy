@@ -527,11 +527,16 @@ struct BubbleStandardLayout: View {
                 // ForwardBadgePolicy tranche (groupe au moins public nommé,
                 // cercle privé et type inconnu anonymes, tête-à-tête par
                 // l'auteur), la bulle ne fait que rendre.
-                if content.isForwarded {
+                // #5058 — l'attribution est portée par `BubbleContent`, résolue
+                // une fois par `BubbleContentBuilder`. La bulle l'appelait
+                // elle-même sur le `Message` ; la rangée plate n'avait pas ce
+                // `Message` et retombait sur `.anonymous`. Un seul site résout
+                // désormais, et les trois peaux rendent la MÊME chose.
+                if let attribution = content.forwardAttribution {
                     BubbleForwardedIndicator(
                         isMe: isMe,
                         isDark: isDark,
-                        attribution: ForwardBadgePolicy.attribution(for: message.forwardedFrom)
+                        attribution: attribution
                     )
                 }
 

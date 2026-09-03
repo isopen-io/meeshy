@@ -914,58 +914,32 @@ struct StoryViewerView: View {
             .storyPasteProvided()
             .storyStickerLibraryProvided()
         }
-        // Republication en STORY — le composeur s'ouvre prérempli avec la
-        // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
-        // peut pas le retirer, cf. `StoryComposerViewModel+Repost`).
+        // **Republication en STORY — par le MEUBLE** (#5053).
         //
-        // Audience : la story source est le DÉFAUT, et `allowedVisibilities`
-        // plafonne le sélecteur — même audience ou plus restreinte, jamais plus
-        // large. Le serveur refuse l'élargissement de son côté (403
-        // `REPOST_AUDIENCE_WIDENING`) ; ce plafond n'est qu'une affordance.
+        // Ce cover montait `StoryComposerView` NU jusqu'au 2026-09-03 : ni
+        // éventail de format, ni plateau, ni socle. La table des portes déclare
+        // pourtant l'ANCRAGE en post depuis le lot 4.7 (« garder la chose pour
+        // de bon ») — l'option était écrite et n'atteignait aucun écran.
         //
-        // `repostOfId` descend jusqu'à `createStory` via la file de
-        // publication : sans lui la republication naîtrait sans lien vers son
-        // original, donc sans attribution ni crédit de vues.
+        // Tout ce qu'il portait — hydratation, plafond d'audience, `repostOfId`,
+        // fournisseurs d'environnement — vit désormais dans
+        // `StoryRepublishComposer`, une porte à part. L'extraction n'est pas un
+        // rangement de passage : ce fichier fait 2 400 lignes, très au-delà du
+        // plafond DUR de 1 200, et la directive de budget interdit d'AJOUTER à
+        // un fichier hors budget avant d'avoir extrait.
         .fullScreenCover(item: $republishStorySource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryComposerView(
-                viewModel: StoryComposerViewModel(
-                    reposting: wrapper.story,
-                    authorHandle: wrapper.authorHandle
-                ),
-                initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
-                initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
-                allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
-                    viewModel.publishStoryInBackground(
-                        targetType: targetType,
-                        slides: slides,
-                        slideImages: slideImages,
-                        loadedImages: loadedImages,
-                        loadedVideoURLs: loadedVideoURLs,
-                        loadedAudioURLs: loadedAudioURLs,
-                        originalLanguage: originalLanguage,
-                        visibility: visibility,
-                        visibilityUserIds: visibilityUserIds,
-                        draftId: draftId,
-                        repostOfId: wrapper.story.id,
-                        references: references,
-                        composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
-                                                               caption: accessibility.mediaCaption ?? [:]),
-                        allowSoundExtraction: accessibility.allowSoundExtraction
-                    )
-                    republishStorySource = nil
-                    // La création accepte TOUJOURS : hors-ligne, la story part
-                    // en file d'attente au lieu de rester dans le composeur —
-                    // même contrat que la publication nominale.
-                    return true
-                },
-                onDismiss: { republishStorySource = nil }
+            StoryRepublishComposer(
+                source: wrapper,
+                viewModel: viewModel,
+                onFinish: { republishStorySource = nil }
             )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
+            // Les trois modèles d'environnement ne traversent PAS un
+            // `fullScreenCover` (cf. la remarque de ce fichier, l. 263). La
+            // porte les redéclare en `@EnvironmentObject` ; c'est ici qu'ils
+            // lui sont remis.
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
     }
 
