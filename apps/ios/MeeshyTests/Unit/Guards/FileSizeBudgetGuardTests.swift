@@ -56,7 +56,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationListViewModel.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
-        "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
         "FeedView+Attachments.swift",
@@ -213,7 +212,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
     /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
     /// les 31 noms de l'arbre fusionné, jamais soustrait.
-    private static let legacyLineCeiling = 67_091
+    private static let legacyLineCeiling = 62_330
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
