@@ -1,5 +1,6 @@
 
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { choixDeLangue } from '@/app/choix-de-langue';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { documentPleinEcran } from '@/app/connecte/fil-vue';
 import { langAttribut } from '@/app/connecte/transcrit';
@@ -98,29 +99,6 @@ const segments = ({ voisinage, genre: { copie } }: EtatDeLaStory): string =>
 const avatar = (nom: string): string =>
   `<span class="avatar ${teinteDeLAvatar(nom)}" aria-hidden="true">${echappe(initiales(nom))}</span>`;
 
-/**
- * LES LANGUES OFFERTES — un lien par langue que la story porte RÉELLEMENT
- * (l'originale et celles dont la traduction a un texte). Un `<details>` s'ouvre
- * sans une ligne de JavaScript ; `aria-current` dit celle qui est lue.
- */
-const langues = (genre: GenreServi, story: Story): string => {
-  if (story.languesOffertes.length < 2) return '';
-  const { copie } = genre;
-  const lue = langueLue(story);
-  return (
-    `<details class="langues">` +
-    `<summary title="${echappe(copie.langues)}">${svgDuSprite('ph-translate')}<span class="hors-ecran">${echappe(copie.langues)}</span></summary>` +
-    `<ul aria-label="${echappe(copie.langues)}">` +
-    story.languesOffertes
-      .map(
-        (langue) =>
-          `<li><a href="${echappe(adresseDuPartage(genre, story.id, langue))}"${langue === lue ? ' aria-current="true"' : ''} lang="${echappe(langue)}">` +
-          `${echappe(nomDeLangue(langue))}</a></li>`,
-      )
-      .join('') +
-    '</ul></details>'
-  );
-};
 
 const enTete = (etat: EtatDeLaStory): string => {
   const { story, genre } = etat;
@@ -134,7 +112,12 @@ const enTete = (etat: EtatDeLaStory): string => {
       ? ''
       : `<time datetime="${echappe(story.publieeA)}">${echappe(quand(story.publieeA, etat.maintenant))}</time>`) +
     '</div>' +
-    langues(genre, story) +
+    choixDeLangue({
+      languesOffertes: story.languesOffertes,
+      langueLue: langueLue(story),
+      adresse: (langue) => adresseDuPartage(genre, story.id, langue),
+      libelle: copie.langues,
+    }) +
     `<a class="fermer" href="/" aria-label="${echappe(copie.fermer)}">${svgDuSprite('ph-x')}</a>` +
     '</header>'
   );
@@ -192,7 +175,15 @@ const scene = (etat: EtatDeLaStory): string => {
  */
 const prisme = (genre: GenreServi, story: Story): string => {
   const { copie } = genre;
-  if (story.langueServie === null || story.langueOriginale === null) return '';
+  // Une TRADUCTION, pas simplement une langue connue : `langueServie` porte
+  // celle de l'original quand c'est lui qui est servi.
+  if (
+    story.langueServie === null ||
+    story.langueOriginale === null ||
+    story.langueServie === story.langueOriginale
+  ) {
+    return '';
+  }
   return (
     '<p class="story-prisme">' +
     svgDuSprite('ph-translate') +

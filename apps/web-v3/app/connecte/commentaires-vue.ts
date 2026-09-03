@@ -1,4 +1,7 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { langAttribut } from '@/app/connecte/transcrit';
+import { DOCUMENT_LANGUAGE } from '@/app/document-language';
+import { choixDeLangue } from '@/app/choix-de-langue';
 import { echappe } from '@/app/socle';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import type { Commentaire, GenreDePublication, Publication } from '@/lib/api/publication';
@@ -77,7 +80,11 @@ const lignePrisme = ({
   readonly langueOriginale: string | null;
   readonly texteOriginal: string;
 }): string => {
-  if (langueServie === null || langueOriginale === null) return '';
+  // LA LIGNE DU PRISME ANNONCE UNE TRADUCTION, donc elle ne se rend que s'il y
+  // en a eu une. `langueServie` porte désormais la langue de l'original quand
+  // c'est lui qui est servi : la garder sur `null` annoncerait « traduit de
+  // l'anglais » au-dessus d'un texte anglais.
+  if (langueServie === null || langueOriginale === null || langueServie === langueOriginale) return '';
 
   return (
     '<details class="prisme">' +
@@ -112,7 +119,7 @@ const cartePublication = (publication: Publication): string =>
   `<span class="vignette" aria-hidden="true">${svgDuSprite(GLYPHE_PAR_GENRE[publication.genre] ?? 'ph-article')}</span>` +
   '<span class="dit">' +
   `<span class="qui">${echappe(publication.titre ?? publication.auteur)}${publication.titre === null ? '' : ` · ${echappe(publication.auteur)}`}</span>` +
-  `<span class="texte"${publication.langueServie === null ? '' : ` lang="${echappe(publication.langueServie)}"`}>${echappe(publication.texte)}</span>` +
+  `<span class="texte"${langAttribut(publication.langueServie, DOCUMENT_LANGUAGE)}>${echappe(publication.texte)}</span>` +
   lignePrisme(publication) +
   '</span>' +
   '</article>';
@@ -131,7 +138,7 @@ const ligne = (k: Commentaire, maintenant: number): string => {
     `<span class="qui">${echappe(k.auteur)}</span>` +
     (instant === '' ? '' : `<span class="instant">${echappe(instant)}</span>`) +
     '</span>' +
-    `<span class="texte"${k.langueServie === null ? '' : ` lang="${echappe(k.langueServie)}"`}>${echappe(k.texte)}</span>` +
+    `<span class="texte"${langAttribut(k.langueServie, DOCUMENT_LANGUAGE)}>${echappe(k.texte)}</span>` +
     lignePrisme(k) +
     '<span class="gestes">' +
     `<span class="compteur">${svgDuSprite(GLYPHE_COEUR)}<span class="hors-ecran">${echappe(COMMENTAIRES.aimes(k.aimes))}</span><span aria-hidden="true">${k.aimes}</span></span>` +
@@ -148,6 +155,17 @@ const ligne = (k: Commentaire, maintenant: number): string => {
   );
 };
 
+/**
+ * L'EN-TÊTE, ET SON SÉLECTEUR DE LANGUE (`sheet:lang`).
+ *
+ * Il est au MÊME endroit que sur la story — dans l'en-tête, à droite du titre
+ * — et porte le MÊME mot (« Changer la langue ») : un lecteur qui passe d'un
+ * écran à l'autre cherche le geste où il l'a laissé (dimension 6).
+ *
+ * `?lang=` est un GESTE sur la publication, pas un réglage : la porte le lui
+ * applique sans le descendre au fil, sans quoi une langue choisie masquerait
+ * les commentaires qu'elle ne traduit pas.
+ */
 const enTete = (publication: Publication): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(COMMENTAIRES.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
@@ -155,6 +173,12 @@ const enTete = (publication: Publication): string =>
   `<h1>${echappe(COMMENTAIRES.titre)}</h1>` +
   (publication.titre === null ? '' : `<p class="sous">${echappe(publication.titre)}</p>`) +
   '</div>' +
+  choixDeLangue({
+    languesOffertes: publication.languesOffertes,
+    langueLue: publication.langueServie ?? publication.langueOriginale,
+    adresse: (langue) => `/post/${encodeURIComponent(publication.id)}?lang=${encodeURIComponent(langue)}`,
+    libelle: COMMENTAIRES.langues,
+  }) +
   '</header>';
 
 const corps = ({ publication, commentaires, encore, maintenant }: EtatDesCommentaires): string =>

@@ -34,6 +34,8 @@ export const COMMENTAIRES = {
    * langue servie ne commence par un `h` muet en français.
    */
   traduitDe: (langue: string): string => `traduit ${deLaLangue(langue)}`,
+  /** Le libellé du sélecteur de langue — le même mot que la story (dimension 6). */
+  langues: 'Changer la langue',
   voirLOriginal: 'voir l’original',
   voirLaTraduction: 'voir la traduction',
 

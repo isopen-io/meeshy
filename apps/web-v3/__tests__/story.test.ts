@@ -121,11 +121,16 @@ describe('le Prisme sur une story', () => {
   it('sert l’original — sans rien annoncer — quand l’origine gagne à son rang', () => {
     const story = lue({}, ['en', 'fr']);
     expect(story.texte).toBe('Three charts, two surprises. The review lands tomorrow.');
-    expect(story.langueServie).toBeNull();
+    // `langueServie` porte la langue du texte AFFICHÉ, l'original compris —
+    // c'est ce qui permet de poser `lang="en"` sur de l'anglais servi dans un
+    // document français. « Rien n'est annoncé » se lit désormais sur l'égalité
+    // avec `langueOriginale`, pas sur un `null` qui confondait deux questions.
+    expect(story.langueServie).toBe(story.langueOriginale);
   });
 
   it('sert l’original quand aucune traduction ne matche', () => {
-    expect(lue({}, ['yo']).langueServie).toBeNull();
+    const sansTraduction = lue({}, ['yo']);
+    expect(sansTraduction.langueServie).toBe(sansTraduction.langueOriginale);
   });
 
   it('n’offre que les langues RÉELLEMENT servies, l’origine comprise', () => {
@@ -155,7 +160,10 @@ describe('la langue explicitement demandée', () => {
   it('rend l’original quand elle DÉSIGNE la langue d’origine', () => {
     const story = lue({}, ['fr'], 'en');
     expect(story.texte).toBe('Three charts, two surprises. The review lands tomorrow.');
-    expect(story.langueServie).toBeNull();
+    // C'EST LE CAS QUE LE SÉLECTEUR DE LANGUE PRODUIT : le lecteur demande la
+    // langue d'ORIGINE, et l'original est servi. Il doit porter son `lang=` —
+    // sans quoi un document français ferait lire l'anglais à voix française.
+    expect(story.langueServie).toBe('en');
   });
 
   it('retombe sur le prisme quand aucune traduction ne la porte — jamais un refus', () => {
