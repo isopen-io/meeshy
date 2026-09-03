@@ -24,15 +24,18 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 
-/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que son
-/// placeholder : ses traductions ne partent pas à côté du texte que les clients
-/// masquent — une garde se mesure sur tout ce que la charge TRANSPORTE (#4945,
-/// leçon 275), et une traduction est le même secret en N langues.
-const quotedMessageIsProtected = (quoted: { isViewOnce?: boolean | null; isBlurred?: boolean | null; isEncrypted?: boolean | null }): boolean =>
-  Boolean(quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted);
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
+/// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
+/// transcription. Le prédicat ET la composition de ce qui est SERVI vivent au
+/// site unique `servedQuotedMessage`, partagé avec les deux producteurs de
+/// `message:new` : la garde ne retenait ici que les traductions pendant que
+/// `...message.replyTo` répandait le texte et qu'`attachmentFullSelect`
+/// servait le média (leçon 275 — une garde se mesure sur tout ce que la charge
+/// TRANSPORTE).
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -289,6 +292,10 @@ export function buildMessageListSelect(options: {
             effectFlags: true,
             isEncrypted: true,
             encryptionMode: true,
+            // Le TYPE porte l'icône du placeholder servi à un message protégé
+            // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
+            // masquée se lit « 👁️ 💬 », quel que soit son média.
+            messageType: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
@@ -653,14 +660,14 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             // #4945 — même projection JSON → tableau que la racine, même filtre
             // de langues ; sans elle le blob Prisma brut voyagerait sous un
-            // nom que les clients lisent comme un tableau.
-            translations: includeTranslations && !quotedMessageIsProtected(message.replyTo)
-              ? transformTranslationsToArray(
-                  message.replyTo.id,
-                  message.replyTo.translations as Record<string, any>,
-                  hasLanguageFilter ? { languages: languageFilter } : undefined
-                )
-              : undefined,
+            // nom que les clients lisent comme un tableau. Et le TEXTE et le
+            // MÉDIA de la citation passent par la même garde que ses
+            // traductions : ils sont étalés APRÈS `...message.replyTo`, donc
+            // ils la remplacent.
+            ...servedQuotedMessage(message.replyTo, {
+              includeTranslations,
+              languages: hasLanguageFilter ? languageFilter : undefined,
+            }),
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,

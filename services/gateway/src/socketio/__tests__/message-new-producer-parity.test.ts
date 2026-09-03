@@ -129,7 +129,14 @@ jest.mock('../../services/PrivacyPreferencesService', () => ({
 }));
 
 let mockNotificationServiceInstance: any;
+// Double PROLONGÉ, jamais remplacé : ce module exporte aussi les fonctions PURES
+// du masquage de protection (`protectedPreview`, `maskedAttachment`), que la
+// composition de `message:new` appelle pour la citation. Un double partiel les
+// rendait `undefined` — le broadcast levait, et les DEUX producteurs n'émettaient
+// plus rien (cf. § « Un double PARTIEL d'un module perd en silence tout ce que le
+// module GAGNE » du CLAUDE.md de la passerelle).
 jest.mock('../../services/notifications/NotificationService', () => ({
+  ...(jest.requireActual('../../services/notifications/NotificationService') as Record<string, unknown>),
   NotificationService: jest.fn().mockImplementation(() => {
     mockNotificationServiceInstance = {
       setSocketIO: jest.fn(),
@@ -617,6 +624,48 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
       keys.filter((k) => !enrichments.has(k)).sort();
 
     expect(contractOf(restKeys)).toEqual(contractOf(socketKeys));
+  });
+
+  /**
+   * La citation d'un message PROTÉGÉ, sur les DEUX producteurs.
+   *
+   * `replyTo` est HORS du contrat de parité ci-dessus — les deux transports lui
+   * donnent délibérément deux formes — et c'est exactement ce qui a laissé le
+   * producteur REST/ZMQ reconstruire sa citation champ par champ SANS un seul
+   * champ de protection : répondre à un message à vue unique republiait son
+   * texte EN CLAIR dans la bulle temps réel, pendant que le même fil rechargé
+   * par REST affichait « 👁️ 💬 ». La FORME diverge ; ce que la charge a le
+   * DROIT de transporter, non.
+   */
+  const messageCitantUnSecret = () => makeContractMessage({
+    replyTo: {
+      id: 'msg-cite-000000000',
+      senderId: 'sender-participantId',
+      content: 'le code du coffre est 4271',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: new Date('2026-08-22T09:59:00.000Z'),
+      isViewOnce: true,
+      translations: { en: { text: 'the vault code is 4271', translationModel: 'basic', createdAt: new Date() } },
+    },
+  });
+
+  const attendCitationMasquee = (payload: Record<string, unknown>) => {
+    const citation = payload.replyTo as Record<string, unknown>;
+    expect(citation).toBeDefined();
+    expect(String(citation['content'])).not.toContain('4271');
+    expect(citation['translations']).toBeUndefined();
+    // La protection VOYAGE : sans elle, un client ne peut pas SAVOIR qu'il rend
+    // le placeholder d'un secret plutôt qu'un texte.
+    expect(citation['isViewOnce']).toBe(true);
+  };
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur socket', async () => {
+    attendCitationMasquee(await payloadFromSocketPath(messageCitantUnSecret()));
+  });
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur REST/ZMQ', async () => {
+    attendCitationMasquee(await payloadFromRestPath(messageCitantUnSecret()));
   });
 
   // -------------------------------------------------------------------------

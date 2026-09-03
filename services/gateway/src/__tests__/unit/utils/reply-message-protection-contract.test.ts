@@ -33,6 +33,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import fastJson from 'fast-json-stringify';
 import { messageSchema } from '@meeshy/shared/types/api-schemas';
+import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 
 const SELECT = join(__dirname, '../../../routes/conversations/messages-list-query.ts');
 
@@ -169,24 +170,91 @@ describe('replyTo — les traductions du message cité sont demandées et projet
     expect(bloc).toMatch(/\.\.\.\(includeTranslations \? \{ translations: true \} : \{\}\)/);
   });
 
-  it('le mapping projette replyTo.translations en tableau, avec le filtre de langues', () => {
+  it('le mapping sert la citation par le site unique — texte, traductions et média ensemble', () => {
     const debut = source.indexOf('mappedMessage.replyTo = ');
     expect(debut).toBeGreaterThan(-1);
     const mapping = source.slice(debut, source.indexOf('return mappedMessage;', debut));
     expect(mapping).toMatch(
-      /translations: includeTranslations && !quotedMessageIsProtected\(message\.replyTo\)\s*\?\s*transformTranslationsToArray\(\s*message\.replyTo\.id,\s*message\.replyTo\.translations/,
+      /\.\.\.servedQuotedMessage\(message\.replyTo, \{\s*includeTranslations,\s*languages: hasLanguageFilter \? languageFilter : undefined,\s*\}\)/,
     );
   });
 
-  it('les traductions d’un message cité PROTÉGÉ ne voyagent pas — la garde couvre vue unique, flou et chiffrement', () => {
-    const debut = source.indexOf('const quotedMessageIsProtected = ');
-    expect(debut).toBeGreaterThan(-1);
-    // Le corps du prédicat, pas sa signature : le type littéral porte lui aussi
-    // des `;`, donc on borne sur la ligne qui rend le verdict.
-    const corps = source.slice(source.indexOf('Boolean(', debut), source.indexOf('\n', source.indexOf('Boolean(', debut)));
-    for (const champ of ['isViewOnce', 'isBlurred', 'isEncrypted']) {
-      expect(corps).toContain(`quoted.${champ}`);
-    }
+  /**
+   * La garde ne se lit plus dans une chaîne de caractères : elle s'EXERCE. Un
+   * témoin de source atteste qu'un prédicat existe ; seul un témoin de
+   * comportement atteste que le secret ne part pas — et la garde d'origine ne
+   * retenait QUE les traductions pendant que `...message.replyTo` répandait le
+   * texte et qu'`attachmentFullSelect` servait la vignette, le ThumbHash, les
+   * dimensions et la transcription (leçon 275).
+   */
+  describe('servedQuotedMessage — ce que la citation d’un message protégé a le droit de transporter', () => {
+    const secret = {
+      id: '507f1f77bcf86cd799439014',
+      content: 'le code du coffre est 4271',
+      messageType: 'image',
+      translations: { en: { text: 'the vault code is 4271', translationModel: 'basic' as const, createdAt: new Date() } },
+      attachments: [
+        {
+          id: '507f1f77bcf86cd799439015',
+          mimeType: 'image/jpeg',
+          fileUrl: 'https://cdn/secret.jpg',
+          thumbnailUrl: 'https://cdn/secret-thumb.jpg',
+          thumbHash: 'AQIDBA==',
+          width: 1024,
+          height: 768,
+          transcription: 'la transcription du vocal',
+        },
+      ],
+    };
+
+    it.each([
+      ['vue unique', { isViewOnce: true }],
+      ['flouté', { isBlurred: true }],
+      ['chiffré', { isEncrypted: true }],
+      ['bitfield vue unique', { effectFlags: 4 }],
+    ])('ne republie ni le texte ni ses traductions — %s', (_nom, protection) => {
+      const servi = servedQuotedMessage({ ...secret, ...protection });
+      expect(String(servi['content'])).not.toContain('4271');
+      expect(servi['translations']).toBeUndefined();
+    });
+
+    it('ne laisse partir ni vignette, ni ThumbHash, ni dimensions, ni transcription', () => {
+      const servi = servedQuotedMessage({ ...secret, isViewOnce: true });
+      const piece = (servi['attachments'] as Record<string, unknown>[])[0];
+      expect(piece['mimeType']).toBe('image/jpeg');
+      for (const champ of ['fileUrl', 'thumbnailUrl', 'thumbHash', 'width', 'height', 'transcription']) {
+        expect(piece[champ]).toBeUndefined();
+      }
+    });
+
+    it('retient le média d’une PIÈCE JOINTE protégée sous un message qui ne l’est pas — les deux niveaux déclarent', () => {
+      const servi = servedQuotedMessage({
+        ...secret,
+        attachments: [{ ...secret.attachments[0], isViewOnce: true }],
+      });
+      expect((servi['attachments'] as Record<string, unknown>[])[0]['fileUrl']).toBeUndefined();
+    });
+
+    it('laisse passer une citation ORDINAIRE, traductions projetées en tableau', () => {
+      const servi = servedQuotedMessage(secret);
+      expect(servi['content']).toBeUndefined();
+      expect(servi['translations']).toEqual([
+        expect.objectContaining({ targetLanguage: 'en', translatedContent: 'the vault code is 4271' }),
+      ]);
+      expect((servi['attachments'] as Record<string, unknown>[])[0]['fileUrl']).toBe('https://cdn/secret.jpg');
+    });
+
+    /**
+     * L'ÉPHÉMÈRE n'est pas une protection au sens de la citation — son texte
+     * est lisible dans le fil jusqu'à l'expiration, et la citation vit dans ce
+     * même fil. Même verdict exactement qu'`APIMessageReplyTo.isProtected` côté
+     * iOS : masquer ici afficherait un placeholder là où le client attend le
+     * texte.
+     */
+    it('ne masque PAS un message seulement éphémère', () => {
+      const servi = servedQuotedMessage({ ...secret, expiresAt: new Date() });
+      expect(servi['content']).toBeUndefined();
+    });
   });
 
   it('le schéma de sérialisation DÉCLARE replyTo.translations — sinon fast-json-stringify strippe la projection', () => {
