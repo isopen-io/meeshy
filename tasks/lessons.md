@@ -11779,6 +11779,236 @@ documente une absence d'abonnement, lue comme un abonnement.
 > vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
 > l'autre moitié du piège en place.
 
+### Trois choses DÉCRIVENT le code, et on les lit comme si elles l'ÉTAIENT
+
+Trois formes du même piège, rencontrées dans la même journée (2026-09-03), dont
+deux que j'ai posées moi-même :
+
+| l'artefact | ce qu'on croit lire | ce que c'est |
+|---|---|---|
+| un **corps d'issue** | l'état du code | l'état du code **au jour où il a été écrit** |
+| un **doc-comment** | ce que le code fait | ce que le code faisait **quand le commentaire a été écrit** |
+| une **capture envoyée par le porteur** | l'écran d'aujourd'hui | l'écran **au moment du screenshot** |
+
+Les trois cas :
+
+1. **Le corps d'issue.** J'avais justifié une contrainte de #5018 par une règle du
+   dépôt citée exactement — vraie, mais gouvernant une autre surface (voir la
+   leçon ci-dessous sur la PORTÉE).
+2. **Le doc-comment.** `ComposerSceneSurface` documente l'ordre de sa zone basse
+   comme un escalier des niveaux du modèle. J'ai écrit dans #5036 que l'ordre
+   venait « de l'ordre d'écriture d'un `VStack` » — c'est-à-dire que j'ai décrit
+   une doctrine délibérée comme un accident. La différence n'est pas de style :
+   **un accident se corrige, un renversement se documente.**
+3. **La capture.** Le porteur a envoyé un écran montrant les hashtags visibles
+   pendant qu'une rangée d'outils occupe le bas. La session voisine a mesuré que
+   cette capture **précède le commit `c6d5577cdb`**, qui rend la situation
+   impossible. Mon diagnostic — « la rangée d'options s'intercale » — décrivait
+   un état révolu, et je l'avais lu comme l'état courant.
+
+> **Un écran envoyé par le porteur est DATÉ, comme un corps d'issue.** Devant un
+> défaut montré en image, la première question n'est pas « où est-il dans le
+> code ? » mais **« cette image est-elle encore vraie ? »** — `git log` sur les
+> fichiers concernés depuis l'heure de la capture répond en une commande.
+
+Et le corollaire qui vaut pour les trois : **avant de qualifier un état de
+défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règle
+énoncée, un choix justifié en commentaire ne sont pas des accidents ; les traiter
+comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
+explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
+
+### PROJETÉ PUIS JETÉ — la troisième nature d'un rendu manquant, et la plus trompeuse
+
+Le modèle du lecteur distinguait deux natures d'écart entre clients : le **repli
+déclaré** (#4911 — « dit la même chose en moins bien ») et l'**absence muette**
+(#4912 — « ne dit rien »). Une troisième est apparue en mesurant les transitions
+de scène (#5043), et elle est pire que les deux pour qui relit le code.
+
+Android **traduit** `scene.opening` / `scene.closing` — `opening =
+transitionOf(scene.opening)` dans `CanvasV3Projection.kt` — porte le vocabulaire
+complet (`StoryTransitionEffect` : FADE · ZOOM · SLIDE · REVEAL, identique à
+iOS), et **aucune vue ne consomme le résultat**.
+
+> **Une projection orpheline se LIT comme une implémentation.** On cherche le
+> champ : il est là. Son type : il est là. Sa conversion : elle est là. Rien,
+> dans ce qu'on vient de lire, ne dit que la chaîne s'arrête au maillon suivant.
+> Un repli se VOIT, une absence se CHERCHE — celle-ci se déguise.
+
+Le réflexe qui l'attrape est celui du Prisme, appliqué un cran plus loin :
+**« qui affiche ce que ce code vient de produire ? »**, posé sur le RÉSULTAT de
+la conversion et pas sur son entrée. En pratique, `grep` le nom de la propriété
+projetée hors du fichier qui la projette — s'il ne sort que des tests et des
+mappings, la chaîne est orpheline.
+
+Corollaire pour l'écriture : **une projection sans consommateur mérite un
+commentaire qui le DIT**, sinon le prochain lecteur la comptera comme faite. Une
+ligne suffit — « traduit ici, non consommé, voir #n » — et elle transforme un
+piège en dette déclarée.
+
+### Un report CONDITIONNEL est daté par sa CONDITION, pas par sa date
+
+Le web déclare hors périmètre les transitions inter-scènes, et pose sa condition
+noir sur blanc (`CanvasV3Scene.tsx:836`) :
+
+> « Reste hors périmètre, **et le sera tant qu'aucun lecteur ne le rendra** […]
+> leur donner un rendu serait du neuf, pas de la parité. »
+
+Le raisonnement était juste à l'écriture : si personne ne rend, ne pas rendre ne
+creuse aucun écart. **Mais iOS les rend** (`StoryOpeningEntrance.armed`). La
+condition est fausse aujourd'hui, et « du neuf » est devenu « de la parité » —
+sans que personne ne relise la phrase, parce que **ce qui l'a périmée s'est passé
+sur une AUTRE plateforme**.
+
+> **Un commentaire qui décrit l'état d'un VOISIN est le plus fragile de tous :
+> rien, dans le fichier qui le porte, ne change quand le voisin bouge.** Un
+> commentaire sur son propre code se fait démentir par le diff d'à côté ; celui-là
+> peut rester faux des mois sans qu'aucun geste ne le croise.
+
+Deux réflexes qui l'attrapent :
+
+- **En lisant** un report conditionnel, ne pas lire la conclusion — lire la
+  CONDITION, et la vérifier. Elle est la seule partie datée.
+- **En écrivant**, préférer une condition qu'un TÉMOIN peut surveiller à une
+  condition en prose. « Tant qu'aucun lecteur ne le rend » est vérifiable par une
+  garde de source sur les trois clients ; laissée en prose, elle ne se vérifie
+  que le jour où quelqu'un passe par là.
+
+Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artefact
+décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
+l'affirmation et ce qui pourrait la démentir.
+
+### Une ABSENCE confirme une hypothèse aussi facilement qu'elle l'infirme — et alors on ne la vérifie pas
+
+Quatrième forme du même piège le 2026-09-03, et la plus retorse. Les trois
+premières me faisaient conclure *« ça n'existe pas »* ; celle-ci m'a fait
+conclure *« ça a fonctionné »*.
+
+Je vérifiais une livraison voisine : *quand un outil s'ouvre, les éléments
+permanents de la zone canonique cèdent la place*. J'ouvre l'outil texte, je
+relève l'arbre : le pied des références, le socle, la description et l'en-tête du
+son ont tous disparu. Verdict apparent : **vérifié, tout cède.**
+
+La capture d'écran dit autre chose. **Rien n'a cédé : un AUTRE écran s'est
+ouvert** — l'éditeur d'objet plein écran. Les éléments sont restés sur le
+précédent. J'avais mesuré une navigation et lu un comportement.
+
+> **Quand une absence CONTREDIT ce qu'on attend, on la creuse ; quand elle le
+> CONFIRME, on la publie.** C'est le même signal, et c'est le biais qui décide
+> de son traitement. Une absence n'est jamais une preuve à elle seule : elle dit
+> « je n'ai pas trouvé », pas « ce n'est pas là », et encore moins « ce que je
+> croyais s'est produit ».
+
+Le contrôle, ici, ne coûtait rien non plus : **regarder l'écran.** Une capture
+aurait montré le titre « ‹ 1 » et le bouton « Terminé » — deux affordances de
+NAVIGATION qui n'existent pas sur l'écran qu'on croit observer. La règle
+pratique : devant une absence qui confirme une attente, demander *« que
+verrait-on si la cause était tout autre ? »* — et se donner le moyen de le voir.
+
+Les quatre formes de la journée, pour mémoire, parce qu'elles ne se ressemblent
+pas : un `grep` sensible à la casse · un arbre d'accessibilité qui n'entre pas
+dans les conteneurs · un geste trop bref pour déclencher un glisser-fermer · une
+navigation prise pour un masquage. **Un seul et même défaut de raisonnement, sous
+quatre instruments différents** — ce qui explique qu'armer l'un n'apprenne rien
+sur les autres.
+
+### Un outil qui n'énumère pas ce qu'il ne traverse pas rend un faux négatif en forme d'INVENTAIRE
+
+Sixième erreur de mesure du 2026-09-03, et la plus coûteuse : j'ai ouvert une issue
+(#5051) affirmant que les rails du composer étaient inaccessibles à VoiceOver —
+neuf portes réduites à un seul élément. **C'était faux, et le travail
+d'accessibilité en place était soigné** : chaque porte a son étiquette, sa valeur
+de badge, et ses glyphes décoratifs sont masqués.
+
+La cause : `idb ui describe-all` **n'entre pas dans les conteneurs**. Un rail
+déclaré `.accessibilityElement(children: .contain)` — le modificateur JUSTE, celui
+qui préserve les enfants — n'apparaît que comme un `AXGroup`. L'outil a rendu dix
+éléments pour tout l'écran, ce qui ressemble à un écran nu.
+
+> **Une liste est toujours complète *pour ce que l'outil sait rendre*.** Ce qui la
+> rend trompeuse n'est pas son contenu mais sa FORME : un inventaire se lit comme
+> exhaustif, alors qu'un `grep` à zéro se lit — au mieux — comme une absence de
+> preuve. Le faux négatif déguisé en inventaire est plus dur à soupçonner que le
+> faux négatif déguisé en silence.
+
+Le contrôle coûte une commande, et c'est le même que celui des `grep` :
+**interroger un point où l'on SAIT qu'un contrôle existe.**
+`idb ui describe-point --udid <udid> 32 277` rend « Ajouter un son », `AXButton`.
+Si le point répond et que l'arbre se taisait, c'est l'arbre qui mentait.
+
+Ce qui rend cette erreur instructive : j'avais appliqué ce contrôle toute la
+journée sur des `grep` — « vérifier que le motif peut trouver » — et je ne l'ai pas
+appliqué à `describe-all`, parce qu'un outil d'inspection d'UI ne ressemble pas à
+un motif de recherche. **La discipline vaut pour tout instrument qui rend une
+ABSENCE, quelle que soit sa forme** : compilateur, arbre d'accessibilité, journal
+filtré, listing tronqué.
+
+### Chercher la RÉPONSE avant de formuler la question — et la chercher dans la GOUVERNANCE
+
+Cinq fois le 2026-09-03, j'ai affirmé une absence, posé une question ou ouvert une
+issue sur un sujet **que le dépôt documentait déjà**. Les trois premières étaient
+des motifs de recherche trop étroits (leçon voisine) ; les deux dernières sont
+d'une autre nature, et plus coûteuses :
+
+| ce que j'ai fait | ce qui existait, et où |
+|---|---|
+| demandé au porteur si `apps/web` et `apps/web-v3` coexistent | **premier paragraphe** de `docs/product/MeeshyWebV3Design/conception-web-v3.md`, comme décision porteur non négociable |
+| ouvert #5040 en affirmant qu'aucune surcharge ne portait `storyEffects` | `PostService.createCanvasPost` la porte — et `docs/product/api-simplification/social.md` nomme **cinq** sites de construction du corps là où j'en voyais un |
+
+La différence avec un grep trop étroit : là, je cherchais **au mauvais endroit**.
+Je lisais le CODE pour répondre à des questions d'INTENTION et de PLAN — or le
+dépôt sépare explicitement les deux, et le dit : « l'ÉTAT vit dans les issues
+GitHub, jamais ici ; ce document décrit la CIBLE et les MÉCANISMES ».
+
+> **Le code dit ce qui EST ; la gouvernance dit ce qui est VOULU et ce qui est
+> DÉJÀ SU.** Une question d'intention (« faut-il ? », « remplace-t-on ? »), une
+> affirmation d'absence (« rien ne fait X ») et un projet de lot se cherchent
+> d'abord dans `docs/product/`, dans le milestone et dans son épopée — pas au
+> `grep`.
+
+Le réflexe, en une ligne : **avant d'ouvrir une issue, lire le document que son
+milestone cite.** Le milestone #74 nomme `MeeshyWebV3Design/ordre.md` ; le
+document de conception nomme `api-simplification/*.md`. Les deux réponses que
+j'ai manquées étaient à un saut de lien de la gouvernance que je consultais déjà.
+
+Et un corollaire d'humilité utile : mon erreur sur `createCanvasPost` est
+**exactement** celle qu'a commise l'auteur de `createBorrowedSoundPost`, qui a
+justifié un contournement par une surcharge qu'il n'avait pas vue. Deux personnes
+s'y sont trompées en une semaine, sur le même fichier — ce n'est plus une
+distraction, c'est une propriété de la surface. Un télescope de onze déclarations
+ne se parcourt pas des yeux, donc il se re-crée au lieu de se réutiliser.
+
+### Un motif TROP ÉTROIT rend un faux négatif CONFIANT — trois fois en une session
+
+Le 2026-09-03, trois mesures fausses, toutes de la même forme : un motif de
+recherche plus étroit que la question, et un « zéro » lu comme une réponse.
+
+| ce que je cherchais | le motif employé | ce qu'il ratait | ce que j'ai conclu, à tort |
+|---|---|---|---|
+| une région de code à borner | un `// MARK:` | les commentaires sont DÉPOUILLÉS par la garde | « la fonction n'existe pas » |
+| le type `MeeshySceneObject` | `struct\|type\|interface\|class` | c'est un **`enum`** somme | « c'est un nom de doc, pas un type » |
+| les transitions au contrat | `grep "transition"` | **la casse** — `clipTransitions` | « aucune transition n'est modélisée » |
+
+La troisième est la plus coûteuse : elle est partie dans une réponse au porteur
+ET dans un document committé, où elle a vécu une heure. Les transitions existent,
+sont produites par le composer et rendues par les **trois** clients.
+
+> **Un `grep` qui rend zéro ne prouve rien tant qu'on n'a pas vérifié que son
+> motif pouvait trouver.** Le test tient en une commande : chercher un cas dont
+> on SAIT qu'il existe. Si le motif ne le trouve pas non plus, le zéro ne parlait
+> pas du monde — il parlait du motif.
+
+Et le réflexe qui les attrape toutes les trois : **quand un zéro contredit une
+attente raisonnable, suspecter l'instrument avant le monde.** Le porteur
+supposait les transitions acquises ; cette attente était le signal qu'il fallait
+élargir le motif, pas la corriger. Deux formes concrètes, gratuites :
+`grep -i` par défaut sur un nom de concept, et chercher la RACINE
+(`transit`, `Scene`) plutôt que le mot entier.
+
+Fil rouge avec les leçons voisines : celle sur la PORTÉE dit qu'un extrait
+vérifié ne l'est que sur son texte ; celle-ci dit qu'une ABSENCE mesurée ne l'est
+que sur son motif. Les deux se réduisent à la même prudence — **la mesure décrit
+l'instrument autant que l'objet.**
+
 ### Une règle citée MOT POUR MOT peut être fausse par sa PORTÉE
 
 En écrivant #5018 j'ai justifié une contrainte par une règle du dépôt, citée
@@ -26897,7 +27127,57 @@ code : *est-ce un indicatif ou un impératif ?* « compte comme un élément » 
 un impératif ; « aucune scène ne se crée » est un indicatif. Le code ne peut pas
 répondre — il est toujours cohérent avec la règle qu'il applique.
 
-## Leçon 496 — Un job filtré par CHEMIN rend le workflow vert sans rien construire, et le premier lot qui touche ce chemin hérite d'une panne qu'il n'a pas causée
+## Leçon 496 — Un invariant a deux sens, et c'est presque toujours le second qui manque
+
+`check-v3-pipeline.mjs` gardait « la règle du routeur ne réclame que des
+chemins que la zone SERT ». Impeccable, testé, prouvé rouge sous mutation — et
+aveugle à l'exact contraire : **la zone pouvait servir un écran que la règle ne
+réclame pas**, et rien ne rougissait.
+
+Mesuré le 2026-09-03 : `/stories/:id`, `/post/:id`, `/search`, `/links`,
+`/contacts` et `/notifications` étaient tous servis par `apps/web-v3/app` et
+sur AUCUN chemin de bascule. Six écrans livrés, testés, mesurés — et
+injoignables depuis un navigateur. Le porteur en a conclu que le travail
+n'était pas fait, ce qui était la seule conclusion que la preuve à sa
+disposition autorisait.
+
+**Une garde qui vérifie « tout ce que A déclare existe dans B » ne dit RIEN de
+« tout ce que B contient est déclaré dans A ».** Les deux sens ont l'air d'une
+seule idée quand on l'écrit en français — « A et B sont d'accord » — et ce
+sont deux contrôles. Le premier attrape la déclaration de trop, le second
+l'oubli ; et l'oubli est le défaut nominal, parce qu'il est ce qu'on produit
+en ajoutant quelque chose sans penser à tout ce qui devrait suivre.
+
+La question à poser à tout invariant de correspondance est donc : **« et si
+j'ajoute une ligne DE L'AUTRE CÔTÉ, qui rougit ? »**
+
+## Leçon 497 — Le maillon qui manque n'est pas toujours celui qu'on garde ; parfois il est un cran avant
+
+Ayant trouvé les six écrans injoignables, le réflexe a été d'ajouter leurs
+préfixes à la règle Traefik de staging. **Un invariant existant l'a refusé** —
+`leWorkerLegacySEfface` : le service worker du legacy est enregistré sur
+`scope:'/'` et intercepte la navigation de tout visiteur REVENANT. Réclamer un
+chemin au routeur avant que le worker DÉPLOYÉ sache s'en effacer sert la v3
+aux navigateurs neufs seulement, et le retour arrière prévu y est inerte.
+
+La bascule a donc DEUX marches, dans un seul ordre : déclarer le préfixe dans
+`V3_ZONE_PREFIXES`, **déployer**, puis seulement réclamer au routeur. Le dépôt
+ne peut tenir seul que la première. Le nouvel invariant s'y pose — « le worker
+legacy connaît TOUT ce que la zone sert » — et laisse la seconde à la décision
+de déploiement, gardée par l'invariant existant qui la prend dans l'autre sens.
+Les deux tracent la route complète : servi ⇒ connu du worker ⇒ réclamé.
+
+**Un gate qui refuse un correctif n'est pas un obstacle : c'est le seul
+endroit où une connaissance de déploiement survit à la session qui l'a
+acquise.** Le réflexe — passer outre, « je sais ce que je fais » — aurait
+produit un défaut PIRE que celui qu'on corrige : des écrans qui marchent en
+navigation privée et pas autrement, c'est-à-dire un bogue que le rapporteur ne
+peut pas reproduire.
+
+Corollaire de forme : le prédicat du worker est **exécuté**, jamais recopié
+dans le gate. Une seconde implémentation prétendrait garder la divergence
+qu'elle créerait.
+## Leçon 498 — Un job filtré par CHEMIN rend le workflow vert sans rien construire, et le premier lot qui touche ce chemin hérite d'une panne qu'il n'a pas causée
 
 `Docker #3546` rouge sur mon merge : « Build translator » meurt sur
 
@@ -26960,3 +27240,77 @@ hypothèse :
 httpcore==0.17.3 + anyio==4.15.0  ->  AttributeError: ... no attribute 'abc'
 httpcore==0.17.3 + anyio==4.14.2  ->  import OK
 ```
+
+---
+
+## Leçon 499 — Un témoin écrit sur la valeur où deux implémentations SONT D'ACCORD ne prouve rien sur aucune des deux
+
+**#5045, 2026-09-03.** Le sélecteur de fonds du composer peignait ses pastilles
+avec `Color(hex:)` ; le renderer qui peint réellement la story lit le même champ
+avec `StoryTextLayer.parseHexColorNonisolated`. **Deux parseurs pour une seule
+valeur** — et le premier ne connaissait pas la forme à huit chiffres.
+
+La convention du dépôt est « RRGGBBAA », écrite sur le modèle (`StoryTextObject`
+: « Hex "RRGGBB" ou "RRGGBBAA" ») et honorée par Android comme par le renderer
+iOS. `Color(hex:)`, lui, masquait les 24 bits de POIDS FAIBLE — ce qui ne rend
+pas une couleur approximative mais une couleur SANS RAPPORT :
+
+```
+000000A6  « Noir 65 % »    ->  (0, 0, 166)     un BLEU franc
+6366F1A6  « Indigo 65 % »  ->  (102, 241, 166) un VERT
+FFFFFFA6  « Blanc 65 % »   ->  (255, 255, 166) un jaune pâle
+```
+
+Trois pastilles sur douze annonçaient une couleur que la publication ne
+peindrait jamais. C'est la loi 6 prise à revers : **l'aperçu mentait sur le
+rendu**, et il le faisait depuis la seule surface dont le métier est de montrer.
+
+### Ce qui rend cette leçon différente de « deux sources de vérité »
+
+Le défaut n'a pas survécu par absence de témoin. `ColorHexInitTests` en avait un,
+nommé pour ce cas exact :
+
+```swift
+func test_eightDigit_masksLow24Bits() { assertHex("FFFFFFFF", (255, 255, 255)) }
+```
+
+Il passait. Il passe **encore** après le correctif — et c'est tout le problème :
+`FFFFFFFF` est le SEUL hex à huit chiffres sur lequel le masquage faux et la
+lecture juste rendent le même RGB. Le témoin épinglait le point de RENCONTRE des
+deux implémentations.
+
+> **Un témoin choisi sur une valeur où l'implémentation fausse et l'implémentation
+> juste s'accordent est vert dans les deux mondes : il ne discrimine rien.** Son
+> nom (« masksLow24Bits ») DÉCRIVAIT pourtant le bug, et sa présence donnait à la
+> suite l'air de couvrir le cas.
+
+C'est la forme générale des leçons 261 (« un témoin de RANG s'écrit sur un rang
+AUTRE que le premier ») et 486, poussée d'un cran : là-bas le témoin manquait
+d'un cas, ici il en avait un — le mauvais. **Devant un témoin qui garde une
+CONVERSION, demander : sur quelle entrée les deux lectures possibles
+divergent-elles ? C'est celle-là qu'il faut écrire, et elle seule.**
+
+### La parade, en trois gestes
+
+1. **Épingler le consommateur au producteur, pas à une constante.** Le témoin qui
+   compte désormais ne dit pas « `000000A6` vaut noir » mais « le SÉLECTEUR et le
+   RENDERER lisent le même hex » — une égalité entre les deux implémentations,
+   qui tombe dès qu'elles divergent, quelle que soit la valeur juste.
+2. **Assertionner ce que la conversion TRANSPORTE, pas seulement ce qu'elle
+   rend.** Trois témoins vérifiaient la teinte ; aucun l'alpha. Un parseur qui
+   aurait rendu la bonne teinte à opacité pleine les passait tous — et « 65 % »
+   serait resté indiscernable de son opaque voisin, le défaut d'origine sous une
+   autre forme (écho de la leçon 275 : ce qui part À CÔTÉ de ce qu'on garde).
+3. **Ne pas supprimer le témoin non discriminant — le RENOMMER et le doter de
+   voisins qui discriminent.** Il vaut comme non-régression ; c'est son nom, qui
+   promettait une couverture, qu'il fallait corriger.
+
+### Le corollaire de recherche
+
+Le défaut a été trouvé en implémentant une DIRECTIVE D'AFFICHAGE (« montrer
+l'exemple dans la boîte »), pas en cherchant un bug. **Rendre une valeur plus
+VISIBLE est la façon la moins chère de découvrir qu'on la lisait mal** : tant
+que « Noir 65 % » n'était qu'une pastille de 16 pt à côté d'un libellé, personne
+ne comparait le bleu au noir. Une vignette de 56 pt qui MONTRE le fond rend
+l'écart impossible à manquer. Quand une directive demande de mieux montrer une
+donnée, s'attendre à ce qu'elle exhume la façon dont on la calcule.

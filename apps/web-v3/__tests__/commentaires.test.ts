@@ -144,9 +144,13 @@ describe('le Prisme d’un commentaire', () => {
     const [k] = await litLeFil({ langues: ['de'] });
 
     expect(k?.texte).toBe('Are the Q1 numbers up to date?');
-    // `langueServie` reste NULLE : c'est ce qui dit à la vue de ne poser aucun
-    // `lang=` particulier, le texte étant dans sa langue d'origine.
-    expect(k?.langueServie).toBeNull();
+    // `langueServie` porte la langue du texte AFFICHÉ, l'original compris.
+    // Elle valait `null` ici, et deux choses en dépendaient à tort : le `lang=`
+    // (servir de l'anglais dans un document français sans l'annoncer le fait
+    // lire à voix française) et la ligne du Prisme, dont la vraie question est
+    // « est-ce une TRADUCTION ? », c'est-à-dire `langueServie !== langueOriginale`.
+    expect(k?.langueServie).toBe('en');
+    expect(k?.langueServie).toBe(k?.langueOriginale);
   });
 
   /**
@@ -166,7 +170,8 @@ describe('le Prisme d’un commentaire', () => {
     });
 
     expect(k?.texte).toBe('Are the Q1 numbers up to date?');
-    expect(k?.langueServie).toBeNull();
+    // Servie = originale ⇒ aucune traduction n'a eu lieu, et la vue n'annonce rien.
+    expect(k?.langueServie).toBe(k?.langueOriginale);
   });
 
   /**

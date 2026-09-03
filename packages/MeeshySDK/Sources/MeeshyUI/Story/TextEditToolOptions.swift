@@ -62,9 +62,19 @@ public struct TextEditToolOptions: View {
     let tool: TextEditTool
     @Binding var textObject: StoryTextObject
 
-    public init(tool: TextEditTool, textObject: Binding<StoryTextObject>) {
+    /// **Demandée par l'hôte, jamais devinée** (#5045). Le défaut `.row` est
+    /// ce qui rend le lot sûr : les deux hôtes SDK — la barre au-dessus du
+    /// clavier et la zone basse de la scène — n'ont pas la hauteur d'une
+    /// grille, et ne changent pas d'un pixel tant qu'ils ne la demandent pas.
+    /// Voir `TextEditOptionsLayout`.
+    let layout: TextEditOptionsLayout
+
+    public init(tool: TextEditTool,
+                textObject: Binding<StoryTextObject>,
+                layout: TextEditOptionsLayout = .row) {
         self.tool = tool
         self._textObject = textObject
+        self.layout = layout
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -198,14 +208,19 @@ public struct TextEditToolOptions: View {
     /// est ce que VoiceOver lit ; l'œil, lui, compare quatre lueurs et ombres
     /// sur le même glyphe, comme la grille des polices compare dix-huit faces
     /// sur le même « Aa ».
+    @ViewBuilder
     private var effectOptions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(StoryTextEffect.allCases, id: \.self) { effect in
-                    effectChip(effect)
+        if layout.wraps(.effect) {
+            effectGrid
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(StoryTextEffect.allCases, id: \.self) { effect in
+                        effectChip(effect)
+                    }
                 }
+                .padding(4)   // marge pour la lueur, qui déborde de la vignette
             }
-            .padding(4)   // marge pour la lueur, qui déborde de la vignette
         }
     }
 
@@ -409,11 +424,16 @@ public struct TextEditToolOptions: View {
 
     // MARK: - Background
 
+    @ViewBuilder
     private var backgroundOptions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
-                    backgroundChip(style)
+        if layout.wraps(.background) {
+            backgroundGrid
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
+                        backgroundChip(style)
+                    }
                 }
             }
         }

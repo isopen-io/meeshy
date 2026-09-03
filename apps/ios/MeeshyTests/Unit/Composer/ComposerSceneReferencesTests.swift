@@ -188,4 +188,40 @@ final class ComposerSceneReferencesTests: XCTestCase {
         XCTAssertTrue(dit.contains("été"))
         XCTAssertFalse(dit.contains("#"), "« dièse voyage » n'apprend rien de plus que « voyage »")
     }
+    /// **Les deux bandes s'alignent sur le MÊME bord** (#5036).
+    ///
+    /// > Directive porteur 2026-09-03 : « les hashtag et mention doivent etre
+    /// > directement en bas de la scene **aligé comme le son de fond de la
+    /// > scene** ! »
+    ///
+    /// Le pied était monté en `.padding(.horizontal, 16)` — le bord du COULOIR —
+    /// pendant que l'en-tête recevait `sceneCardLeading`, le bord du DESSIN.
+    /// Mesuré au #5017 : 65 pt contre 44. Deux bandes qui encadrent la même
+    /// carte s'alignaient sur deux verticales différentes, et le littéral ne
+    /// pouvait pas suivre : la carte est ajustée à son ratio puis CENTRÉE, donc
+    /// son bord bouge avec le ratio comme avec l'écran.
+    ///
+    /// Le témoin épingle la SOURCE du bord, pas sa valeur — une distance juste
+    /// aujourd'hui et écrite en dur redeviendrait fausse au premier autre ratio.
+    func test_bothBandsTakeTheirLeadingEdgeFromTheSameMeasuredSource() throws {
+        let surface = try source("ComposerSceneSurface.swift")
+        for montage in ["ComposerSceneSoundHeader(", "ComposerSceneReferenceFooter("] {
+            guard let debut = surface.range(of: montage) else {
+                return XCTFail("\(montage) doit être monté")
+            }
+            let apres = debut.upperBound ..< surface.endIndex
+            guard let fin = surface.range(of: ")", range: apres)?.upperBound else {
+                return XCTFail("montage non délimité")
+            }
+            let args = String(surface[debut.upperBound ..< fin])
+            XCTAssertTrue(args.contains("leadingInset: sceneCardLeading"),
+                          "\(montage) prend son bord du dessin MESURÉ")
+        }
+        // Pas d'assertion NÉGATIVE sur le littéral disparu : elle s'écrirait sur
+        // une chaîne multi-ligne exacte, donc elle passerait au vert dès qu'un
+        // espacement change — une garde qui meurt en silence vaut moins que pas
+        // de garde. L'affirmation positive ci-dessus suffit : un littéral ne
+        // peut pas satisfaire `leadingInset: sceneCardLeading`.
+    }
+
 }

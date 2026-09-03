@@ -167,6 +167,76 @@ export const documentDuSite = ({
   '</html>';
 
 /**
+ * UNE PAGE QUI DIT UNE CHOSE — un titre, ce qu'il faut savoir, et ce qu'on
+ * peut faire.
+ *
+ * CINQ écrans la composaient à la main, au caractère près : la panne
+ * (`connecte/vue.ts`), l'invitation et l'indisponible de la story, ceux des
+ * commentaires, et le refus d'origine (`provenance.ts`). En ajouter deux —
+ * les réels et les humeurs — en aurait fait sept, et une divergence sur la
+ * SEPTIÈME copie ne se serait vue nulle part.
+ *
+ * Ce n'est pas un gabarit générique : c'est la forme que la charte donne à un
+ * écran sans contenu (règle 18 — l'état vide est DESSINÉ). Le titre est un
+ * `<h1>` parce que chaque document en veut exactement un ; les actions vivent
+ * dans une `<section class="acces">` NOMMÉE par la première d'entre elles,
+ * pour qu'un lecteur d'écran sache ce que ce groupe de liens propose.
+ *
+ * `actions` VIDE ne rend pas la section — un `<nav>` sans lien serait un
+ * repère d'orientation qui ne mène nulle part.
+ */
+export type ActionDuMessage = {
+  readonly libelle: string;
+  readonly href: string;
+  /** `primaire` par défaut : c'est le geste que l'écran propose. */
+  readonly ton?: 'primaire' | 'contour';
+  readonly glyphe?: string;
+};
+
+export const documentDeMessage = ({
+  titre,
+  paragraphes,
+  actions = [],
+  feuille,
+  robots = 'noindex, nofollow',
+  retour = true,
+  description,
+}: {
+  readonly titre: string;
+  readonly paragraphes: readonly string[];
+  readonly actions?: readonly ActionDuMessage[];
+  readonly feuille: string;
+  readonly robots?: string;
+  readonly retour?: boolean;
+  /** Par défaut le PREMIER paragraphe : la description d'une page qui dit une chose est ce qu'elle dit. */
+  readonly description?: string;
+}): string =>
+  documentDuSite({
+    titre: `${titre} — ${MARQUE}`,
+    description: description ?? paragraphes[0] ?? titre,
+    feuille,
+    robots,
+    retour,
+    corps:
+      '<div class="bonjour">' +
+      `<h1>${echappe(titre)}</h1>` +
+      paragraphes.map((texte) => `<p>${echappe(texte)}</p>`).join('') +
+      '</div>' +
+      (actions.length === 0
+        ? ''
+        : `<section class="acces" aria-label="${echappe(actions[0]?.libelle ?? '')}"><nav>` +
+          actions
+            .map(
+              ({ libelle, href, ton = 'primaire', glyphe }) =>
+                `<a class="action ${ton}" href="${echappe(href)}">` +
+                (glyphe === undefined ? '' : svgDuSprite(glyphe)) +
+                `${echappe(libelle)}</a>`,
+            )
+            .join('') +
+          '</nav></section>'),
+  });
+
+/**
  * LA RÉPONSE, et sa politique de cache.
  *
  * Elle ne partage PAS `rendDocument` avec les écrans de lien, et c'est une

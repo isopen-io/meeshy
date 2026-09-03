@@ -284,6 +284,99 @@ lieu ne se peint pas du tout sur Android — absence MUETTE), et elles ne sont p
 de même nature : un repli dit la même chose en moins bien, une absence ne dit
 rien.
 
+## 4 bis-2. Ils sont QUATRE, pas trois (mesure 2026-09-03)
+
+Le § 4 bis parle des « TROIS lecteurs ». **`apps/web-v3` en est un quatrième**,
+et il sert déjà `/stories/:id`, `/reels/:id`, `/moods/:id` — le rôle de lecture
+PUBLIQUE, celui d'un lien partagé. Milestone #74, 47 issues ouvertes ; 284
+fichiers ; aucune mention dans la documentation produit jusqu'à cette ligne.
+
+Ce qu'il rend d'une story, mesuré : **son média de fond, et rien d'autre.** Son
+modèle `Story` porte `medias: MediaDeStory[]` (`url` · `genre` · `alt` ·
+`largeur` · `hauteur`) ; il ne lit **pas** `storyEffects` — zéro occurrence dans
+tout le paquet. Ni objets, ni plans, ni `timing`, ni transitions, ni `thumbHash`.
+
+Et **rien ne le dit** : c'est une absence muette au sens du § 4 bis, la nature
+que ce document nomme comme la plus coûteuse.
+
+**Et la cible, elle, est ÉCRITE** — `docs/product/MeeshyWebV3Design/conception-web-v3.md`
+§ 1 : « le visiteur doit pouvoir **lire intégralement** (story, reel, post, mood,
+conversation partagée) ». Une story rendue comme son seul fond ne tient pas cette
+promesse : ses textes, ses stickers, son lieu et ses puces audio font partie de ce
+qu'il y a à lire. **Ce n'est donc pas un choix à déclarer, c'est un écart à
+combler** (#5049).
+
+La contrainte qui le rend intéressant est réelle : la v3 est zéro-JS et sous
+budget de REQUÊTES — `/stories/:id` est un gestionnaire de route et non une page
+précisément parce qu'une page émet six requêtes avant le premier pixel là où le
+budget en autorise trois. Mais les objets portent `anchor`, `plane`, `z`,
+`transform` : un `position:absolute` par objet coûte des OCTETS de document, que
+le budget mesure, et zéro requête supplémentaire.
+
+### Ce que la gouvernance de la v3 tranche déjà, et qu'il ne faut pas rouvrir
+
+Trois décisions porteur, non négociables (même document, préambule) :
+
+1. **`apps/web` reste vif et sert le trafic** — les deux applications coexistent ;
+   ce n'est pas une transition à échéance.
+2. **La bascule se fait une route à la fois**, par un `PathPrefix` Traefik ; le
+   retour arrière est le retrait du préfixe, et rien n'est supprimé au passage.
+3. **Le décommissionnement d'`apps/web` est un milestone SÉPARÉ**, ouvert
+   seulement quand le routeur legacy ne sert plus aucune route.
+
+Corollaire : les lacunes de rendu d'`apps/web` (#5043, #5047) ne sont pas du
+travail jeté — cette application sert le trafic et continuera. Ce qui reste vrai
+est que la v3 ne doit pas en hériter : c'est un « et », pas un « ou ».
+
+**Corollaire immédiat pour les deux dettes de la section suivante** : #5043 et
+#5047 décrivent des lacunes d'`apps/web`. Si la v3 reprend le rôle de lecture
+publique, elles doivent être décidées POUR la v3 — sinon on les corrige dans un
+client qu'on remplace, ou on les hérite en silence dans celui qui le remplace.
+
+## 4 ter. La même divergence existe un cran PLUS HAUT — au niveau de la SCÈNE (2026-09-03)
+
+Le § 4 bis compte les clés de **charge**, donc le niveau de l'OBJET, et sur deux
+lecteurs. Deux mesures faites le lendemain montrent que la divergence se rejoue
+au niveau de la **scène**, et que la colonne manquante — iOS — n'est pas toujours
+celle qui rend le plus.
+
+| champ de scène | iOS | Android | web |
+|---|---|---|---|
+| `clipTransitions` (fondus entre clips) | rend | rend | rend |
+| `opening` / `closing` (entrée, sortie) | **rend** | **projette puis jette** | ne rend pas |
+| `thumbHash` (le placeholder d'attente) | rend | rend | **ne connaît pas** |
+
+### Une TROISIÈME nature d'écart, que la taxonomie du § 4 bis n'avait pas
+
+Ce document distingue justement le **repli déclaré** (#4911 — « dit la même chose
+en moins bien ») de l'**absence muette** (#4912 — « ne dit rien »). Le cas
+d'Android sur `opening`/`closing` n'est ni l'un ni l'autre :
+
+`CanvasV3Projection.kt:286-287` **traduit** les deux champs — `opening =
+transitionOf(scene.opening)` — et **aucune vue ne les consomme**. Le modèle
+existe, le vocabulaire existe (`StoryTransitionEffect` : FADE · ZOOM · SLIDE ·
+REVEAL, identique à iOS), le rendu n'existe pas.
+
+> **Projeté puis jeté.** C'est la pire des trois natures pour qui relit le code,
+> parce que c'est la seule qui a l'AIR complète : on trouve le champ, on trouve
+> son type, on trouve sa conversion — et rien ne dit que la chaîne s'arrête là.
+> Un repli se voit, une absence se cherche ; une projection orpheline se lit
+> comme une implémentation.
+
+### Et un report dont la condition a expiré
+
+Le web déclare `opening`/`closing` hors périmètre, avec sa raison
+(`CanvasV3Scene.tsx:836`) : « **tant qu'aucun lecteur ne le rendra** […] leur
+donner un rendu serait du neuf, pas de la parité ». Le raisonnement était juste à
+l'écriture. **iOS les rend.** La condition est fausse, et « du neuf » est devenu
+« de la parité » — sans que personne ne relise la phrase, parce que ce qui l'a
+périmée s'est passé sur une AUTRE plateforme.
+
+Détail et critères : #5043 (les transitions), #5047 (le `thumbHash`, dont
+l'absence laisse une story web s'ouvrir sur du vide — `CanvasV3Scene` n'a aucun
+état de chargement, et c'est le chemin de TOUTES ses stories depuis que la
+passerelle refuse le non-v3).
+
 ## 5. Ce que ce document ne couvre pas
 
 - **Le rendu lui-même** (`StoryCanvasUIView`, les couches, les dessinateurs) —

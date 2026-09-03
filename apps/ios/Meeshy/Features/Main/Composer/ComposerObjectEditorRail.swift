@@ -176,6 +176,17 @@ nonisolated enum ComposerObjectEditorRail {
     /// la directive du porteur tranche.
     static let optionsMaxHeight: CGFloat = 260
 
+    /// **La largeur du couloir de tête** (#5026) — 52 pt, celle du #4936.
+    ///
+    /// Elle est passée à 68 le temps que le rail porte le NOM de chaque outil
+    /// (#5029), puis est revenue : la directive du porteur a retiré les noms,
+    /// et un couloir large pour un contenu qui ne l'occupe plus prendrait à la
+    /// carte une largeur que rien ne réclame.
+    ///
+    /// La CIBLE reste bornée à 44 pt de HAUT — c'est le contact qui doit rester
+    /// atteignable, pas le dessin qui doit grossir.
+    static let railWidth: CGFloat = 52
+
     /// **Il n'y a pas de fonction de bascule, et c'est le cœur du lot.**
     ///
     /// La liste dépliante en avait une (`opened(after:from:)`, qui rend `nil`
@@ -274,6 +285,56 @@ nonisolated enum ComposerObjectEditorRail {
 /// le geste naturel pour attraper une glissière de gauche — refermerait
 /// l'écran. C'est le cas que le seuil horizontal seul laisse passer, et le seul
 /// que l'utilisateur ne comprendrait pas.
+/// **Le glissement qui REND l'écran à la scène** (#5027, directive porteur
+/// 2026-09-03).
+///
+/// > « Le swipe bas doit tout cacher, même l'outil activé à l'instant doit se
+/// > désactiver pour laisser pleine place à la scène. »
+///
+/// ## Deux effets, pas un
+///
+/// Ranger le clavier ne suffit pas : la zone d'options garderait sa hauteur, et
+/// la scène ne gagnerait que les ≈ 300 pt du clavier. La directive demande la
+/// PLEINE place, donc le panneau de l'outil s'efface aussi.
+///
+/// ## L'invariant que ça semble casser, et pourquoi il tient
+///
+/// `ComposerObjectEditorSection` est NON optionnel depuis #4936, et son
+/// doc-comment dit pourquoi : « un `nil` viderait la zone basse, et un bas vide
+/// est le défaut que cet écran existe pour fermer ». Un outil désactivé
+/// paraît donc contredire le type.
+///
+/// Il ne le contredit pas, parce que **les deux vides ne sont pas le même** :
+/// celui de #4936 était le vide par DÉFAUT — un écran qui s'ouvre muet, sans
+/// que personne l'ait demandé. Celui-ci est un vide DEMANDÉ, par un geste
+/// délibéré, et réversible d'un tap sur n'importe quel outil.
+///
+/// > Une bascule juste dans une disposition peut être fausse dans une autre —
+/// > et un état interdit comme défaut peut être légitime comme réponse à un
+/// > geste. Ce qui change n'est pas l'état, c'est qui l'a voulu.
+///
+/// L'outil reste donc SÉLECTIONNÉ dans l'état de la vue : rouvrir le panneau
+/// ramène celui qu'on réglait, et non le premier de la liste. Le type garde son
+/// invariant, et le repli est un fait d'affichage à côté de lui.
+nonisolated enum ComposerObjectEditorDismissGesture {
+
+    /// La distance verticale au-delà de laquelle le geste est une INTENTION.
+    /// Plus généreuse que le seuil du bord (60 pt) : ce geste part du corps de
+    /// l'écran, où la main a plus de course.
+    static let minimumTranslation: CGFloat = 70
+
+    /// Le geste rend-il l'écran à la scène ?
+    ///
+    /// **La dominance verticale n'est pas une précaution de plus** : la zone
+    /// d'options défile, le plan 2D panne, le canvas déplace des objets. Sans
+    /// ce terme, tout balayage horizontal un peu penché replierait le panneau
+    /// qu'on est en train de lire.
+    static func completes(translation: CGSize) -> Bool {
+        guard translation.height >= minimumTranslation else { return false }
+        return abs(translation.height) > abs(translation.width)
+    }
+}
+
 nonisolated enum ComposerEdgeBackGesture {
 
     /// La largeur de la lisière qui reçoit le geste. Le système en donne ~20 pt

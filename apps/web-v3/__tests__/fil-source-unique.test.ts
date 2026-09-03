@@ -94,3 +94,50 @@ describe('le battement de bail', () => {
     expect(invite).toContain("METHODE_DU_BATTEMENT = 'PATCH'");
   });
 });
+
+/**
+ * LE NOM D'UNE LANGUE — trois écrans, et il en existait DEUX versions.
+ *
+ * `fil-vue.ts` et `story-vue.ts` lisaient `getLanguageInfo(code)` de
+ * `@meeshy/shared` (le NOM NATIF : « Español », « Deutsch », « 中文 ») ;
+ * `commentaires-vue.ts`, écrit plus tard, appelait
+ * `Intl.DisplayNames(['fr'])` (« espagnol », « allemand », « chinois »).
+ *
+ * Deux mots pour la même langue sur deux écrans de la même application — et
+ * sous une ligne de Prisme, dont le rôle est précisément de DIRE dans quelle
+ * langue on lit. C'est la dimension 6 (même mot partout) et la 11 (une source
+ * de vérité) perdues d'un seul geste, et aucune garde ne pouvait le voir :
+ * chaque fichier était parfaitement cohérent avec lui-même.
+ *
+ * Le témoin est de SOURCE et non de comportement, pour la raison que ce
+ * fichier porte en tête : une jumelle ne se voit à l'exécution qu'une fois
+ * qu'elle a divergé, et il est alors trop tard. Il interdit donc les deux
+ * choses qui ont produit la divergence — une seconde implémentation, et
+ * l'appel direct à l'API de repli.
+ */
+describe('le nom d’une langue', () => {
+  const VUES_QUI_NOMMENT_UNE_LANGUE = [
+    'app/connecte/fil-vue.ts',
+    'app/connecte/commentaires-vue.ts',
+    'app/(public)/partage-vue.ts',
+  ];
+
+  it.each(VUES_QUI_NOMMENT_UNE_LANGUE)('vient de lib/contenu/langues.ts (%s)', (chemin) => {
+    const vue = source(chemin);
+
+    expect(vue).toContain("from '@/lib/contenu/langues'");
+    // Aucune vue ne redéclare la fonction : elle l'IMPORTE.
+    expect(vue).not.toMatch(/const nomDeLangue = \(/);
+  });
+
+  it.each(VUES_QUI_NOMMENT_UNE_LANGUE)('n’appelle ni Intl.DisplayNames ni getLanguageInfo en direct (%s)', (chemin) => {
+    const vue = source(chemin);
+
+    // `Intl.DisplayNames` est la forme DIVERGENTE — elle rend le nom traduit
+    // en français, quand tout le reste de l'app rend le nom NATIF.
+    expect(vue).not.toContain('Intl.DisplayNames');
+    // Et `getLanguageInfo` est la bonne source, mais lue à UN seul endroit :
+    // trois lectures directes sont trois occasions de re-diverger.
+    expect(vue).not.toContain('getLanguageInfo');
+  });
+});

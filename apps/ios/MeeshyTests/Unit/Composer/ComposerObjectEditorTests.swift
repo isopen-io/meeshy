@@ -229,7 +229,24 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertTrue(code.contains("ForEach(TextEditTool.all.filter{$0 != .style}".replacingOccurrences(of: " ", with: "")),
                       "Les outils doivent venir de `TextEditTool.all` — une liste écrite à "
                       + "la main divergerait au premier outil ajouté au SDK.")
-        XCTAssertTrue(code.contains("TextEditToolOptions(tool:tool,textObject:binding)"))
+        // **#5045 — deux fragments plutôt qu'une signature entière.** Ce témoin
+        // épinglait l'appel COMPLET, `TextEditToolOptions(tool:tool,textObject:binding)` ;
+        // ajouter un argument le faisait rougir alors que rien de ce qu'il
+        // garde n'avait bougé. Une garde qui cite une signature devient un
+        // inventaire à tenir à jour, et son rouge ne dit pas ce qui a cassé.
+        //
+        // Les deux fragments ci-dessous survivent à une reformulation de la
+        // liste d'arguments, et tombent sur ce qui compte : que l'écran monte
+        // bien le panneau du SDK, et qu'il lui demande la GRILLE — la
+        // disposition que la directive du 2026-09-03 exige ici, et que les
+        // deux hôtes SDK ne demandent PAS (ils n'ont pas la hauteur, cf.
+        // `TextEditOptionsLayout`).
+        XCTAssertTrue(code.contains("TextEditToolOptions("),
+                      "L'écran monte le panneau d'options du SDK, jamais une copie locale.")
+        XCTAssertTrue(code.contains("layout:.grid"),
+                      "L'écran plein demande la grille verticale (#5045) — sans elle, "
+                      + "douze fonds défilent horizontalement dans un panneau qui a la "
+                      + "hauteur de les montrer tous.")
         XCTAssertFalse(code.contains("expandedTool"),
                        "L'écran ne doit dépendre d'AUCUN outil déplié du ViewModel : c'est "
                        + "cette condition qui rendait la zone basse vide pendant l'édition.")

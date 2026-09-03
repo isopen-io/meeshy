@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
-import { FEUILLE_DE_LA_STORY } from '@/app/(public)/stories/[id]/story-feuille';
+import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
+import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
@@ -64,7 +65,8 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/plein-feuille.ts', source: FEUILLE_DU_PLEIN },
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
   { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
-  { nom: 'app/(public)/stories/[id]/story-feuille.ts', source: FEUILLE_DE_LA_STORY },
+  { nom: 'app/(public)/partage-feuille.ts', source: FEUILLE_DE_LA_STORY },
+  { nom: 'app/choix-de-langue.ts', source: FEUILLE_DU_CHOIX_DE_LANGUE },
   { nom: 'app/connecte/notifs-feuille.ts', source: FEUILLE_DES_NOTIFS },
   { nom: 'app/connecte/contacts-feuille.ts', source: FEUILLE_DES_CONTACTS },
   { nom: 'app/connecte/liens-feuille.ts', source: FEUILLE_DES_LIENS },
@@ -137,7 +139,8 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/plein-feuille.ts',
       'app/(public)/chat/[lien]/choix-feuille.ts',
       'app/connecte/medias-feuille.ts',
-      'app/(public)/stories/[id]/story-feuille.ts',
+      'app/(public)/partage-feuille.ts',
+      'app/choix-de-langue.ts',
       'app/connecte/notifs-feuille.ts',
       'app/connecte/contacts-feuille.ts',
       'app/connecte/liens-feuille.ts',

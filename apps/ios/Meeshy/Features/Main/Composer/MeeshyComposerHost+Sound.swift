@@ -77,6 +77,47 @@ extension MeeshyComposerHost {
         HapticFeedback.medium()
     }
 
+    /// **Faire sortir le son du FOND pour le poser sur la scène** (#5018).
+    ///
+    /// `nil` quand il n'y a rien à promouvoir — pas de fond, ou un fond LEGACY
+    /// qui n'a aucun objet derrière lui. L'entrée de menu disparaît alors au
+    /// lieu de griser : un contrôle existe s'il a un effet.
+    var promoteBackgroundSoundAction: (() -> Void)? {
+        guard let son = avatarBadgeSound,
+              ComposerSoundPromotion.promotableId(
+                background: son,
+                audioObjects: viewModel.currentEffects.audioPlayerObjects ?? []) != nil
+        else { return nil }
+        return { promoteBackgroundSound(son) }
+    }
+
+    /// La promotion en deux temps, et l'ordre n'est pas indifférent.
+    ///
+    /// `toggleBackground` d'abord : c'est LUI qui tient les invariants du plan
+    /// — un seul fond par slide, et le nettoyage des champs legacy
+    /// (`backgroundAudioId` et sa suite) qu'un objet promu laisserait sinon
+    /// derrière lui, à jouer en parallèle. La place ensuite, parce qu'elle n'a
+    /// aucun invariant à tenir. Le SDK n'exposait AUCUN déplacement hors
+    /// glissement — `beginDrag`/`updateDrag`/`endDrag` ne portent qu'un état
+    /// éphémère, et `endDrag()` ne commite rien — d'où le verbe `moveElement`
+    /// ajouté pour ce lot. L'app ne force pas la porte de `currentEffects`,
+    /// qui est `public internal(set)` et le reste.
+    ///
+    /// > Sans la seconde moitié, la promotion « marcherait » et serait
+    /// > invisible : un fond n'a pas de position utile, donc deux sons promus
+    /// > l'un après l'autre se poseraient au même point. L'auteur verrait UNE
+    /// > puce là où le compte en annonce deux — le défaut que
+    /// > `StoryObjectPlacement` existe pour empêcher.
+    func promoteBackgroundSound(_ sound: StoryAudioPlayerObject) {
+        guard let id = ComposerSoundPromotion.promotableId(
+            background: sound,
+            audioObjects: viewModel.currentEffects.audioPlayerObjects ?? []) else { return }
+        let place = ComposerSoundPromotion.landing(on: viewModel.currentSlide, promoting: id)
+        viewModel.toggleBackground(id: id)
+        viewModel.moveElement(id: id, to: place)
+        HapticFeedback.medium()
+    }
+
     /// **Ce que le doigt fait de la pastille** — `nil` quand la loi refuse
     /// d'ouvrir (#4668), et la pastille redevient alors une lecture pure.
     var editBackgroundSoundAction: (() -> Void)? {

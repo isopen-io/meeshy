@@ -1,19 +1,21 @@
-import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { choixDeLangue } from '@/app/choix-de-langue';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { documentPleinEcran } from '@/app/connecte/fil-vue';
 import { langAttribut } from '@/app/connecte/transcrit';
 import { quand } from '@/app/connecte/vue';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
-import { documentDuSite } from '@/app/enveloppe/vue';
+import { documentDeMessage } from '@/app/enveloppe/vue';
 import { mediaHtml } from '@/app/media-html';
 import { echappe } from '@/app/socle';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import type { Story, Voisinage } from '@/lib/api/publication';
-import { LONGUEUR_MAX_DE_LA_REPONSE, STORY } from '@/lib/contenu/story';
+import { GENRE_STORY, type GenreServi } from '@/lib/contenu/partage';
+import { LONGUEUR_MAX_DE_LA_REPONSE } from '@/lib/contenu/story';
+import { nomDeLangue } from '@/lib/contenu/langues';
 
-import { FEUILLE_DE_LA_STORY } from './story-feuille';
+import { FEUILLE_DE_LA_STORY } from './partage-feuille';
 
 /**
  * LA STORY, RENDUE PAR LE SERVEUR — texte servi au Prisme compris (issue
@@ -46,6 +48,13 @@ import { FEUILLE_DE_LA_STORY } from './story-feuille';
  */
 
 export type EtatDeLaStory = {
+  /**
+   * LE GENRE SERVI — story, réel ou humeur. Il porte le vocabulaire, le
+   * préfixe d'adresse et le fait que le contenu se PARCOURE ou non. C'est la
+   * seule chose qui sépare les trois écrans : le lecteur, lui, est un
+   * (#4929).
+   */
+  readonly genre: GenreServi;
   readonly story: Story;
   readonly voisinage: Voisinage;
   readonly maintenant: number;
@@ -60,24 +69,23 @@ export const CHAMP_DE_L_AIME = 'aime';
 
 const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY;
 
-export const adresseDeLaStory = (id: string, langue?: string): string =>
-  `/stories/${encodeURIComponent(id)}${langue === undefined ? '' : `?lang=${encodeURIComponent(langue)}`}`;
+export const adresseDuPartage = (genre: GenreServi, id: string, langue?: string): string =>
+  `${genre.base}/${encodeURIComponent(id)}${langue === undefined ? '' : `?lang=${encodeURIComponent(langue)}`}`;
 
-const nomDeLangue = (code: string): string => {
-  const info = getLanguageInfo(code);
-  return info.nativeName ?? info.name;
-};
+/** L'adresse d'une STORY — la projection que la porte de `/stories/:id` lit. */
+export const adresseDeLaStory = (id: string, langue?: string): string =>
+  adresseDuPartage(GENRE_STORY, id, langue);
 
 /** La langue effectivement LUE — celle que le Prisme a élue, ou celle d'origine. */
 const langueLue = (story: Story): string | null => story.langueServie ?? story.langueOriginale;
 
-const segments = ({ voisinage }: EtatDeLaStory): string =>
-  `<ol class="segments" aria-label="${echappe(STORY.segments(voisinage.segments.length))}">` +
+const segments = ({ voisinage, genre: { copie } }: EtatDeLaStory): string =>
+  `<ol class="segments" aria-label="${echappe(copie.segments(voisinage.segments.length))}">` +
   voisinage.segments
     .map(
       (segment, index) =>
         `<li${segment.courant ? ' aria-current="step"' : ''}>` +
-        `<span class="hors-ecran">${echappe(STORY.segment(index + 1, voisinage.segments.length))}</span></li>`,
+        `<span class="hors-ecran">${echappe(copie.segment(index + 1, voisinage.segments.length))}</span></li>`,
     )
     .join('') +
   `</ol>`;
@@ -91,31 +99,10 @@ const segments = ({ voisinage }: EtatDeLaStory): string =>
 const avatar = (nom: string): string =>
   `<span class="avatar ${teinteDeLAvatar(nom)}" aria-hidden="true">${echappe(initiales(nom))}</span>`;
 
-/**
- * LES LANGUES OFFERTES — un lien par langue que la story porte RÉELLEMENT
- * (l'originale et celles dont la traduction a un texte). Un `<details>` s'ouvre
- * sans une ligne de JavaScript ; `aria-current` dit celle qui est lue.
- */
-const langues = (story: Story): string => {
-  if (story.languesOffertes.length < 2) return '';
-  const lue = langueLue(story);
-  return (
-    `<details class="langues">` +
-    `<summary title="${echappe(STORY.langues)}">${svgDuSprite('ph-translate')}<span class="hors-ecran">${echappe(STORY.langues)}</span></summary>` +
-    `<ul aria-label="${echappe(STORY.langues)}">` +
-    story.languesOffertes
-      .map(
-        (langue) =>
-          `<li><a href="${echappe(adresseDeLaStory(story.id, langue))}"${langue === lue ? ' aria-current="true"' : ''} lang="${echappe(langue)}">` +
-          `${echappe(nomDeLangue(langue))}</a></li>`,
-      )
-      .join('') +
-    '</ul></details>'
-  );
-};
 
 const enTete = (etat: EtatDeLaStory): string => {
-  const { story } = etat;
+  const { story, genre } = etat;
+  const { copie } = genre;
   return (
     '<header class="story-tete">' +
     avatar(story.auteur) +
@@ -125,19 +112,33 @@ const enTete = (etat: EtatDeLaStory): string => {
       ? ''
       : `<time datetime="${echappe(story.publieeA)}">${echappe(quand(story.publieeA, etat.maintenant))}</time>`) +
     '</div>' +
-    langues(story) +
-    `<a class="fermer" href="/" aria-label="${echappe(STORY.fermer)}">${svgDuSprite('ph-x')}</a>` +
+    choixDeLangue({
+      languesOffertes: story.languesOffertes,
+      langueLue: langueLue(story),
+      adresse: (langue) => adresseDuPartage(genre, story.id, langue),
+      libelle: copie.langues,
+    }) +
+    `<a class="fermer" href="/" aria-label="${echappe(copie.fermer)}">${svgDuSprite('ph-x')}</a>` +
     '</header>'
   );
 };
 
+/**
+ * LE MÉDIA D'UNE PUBLICATION — le site UNIQUE `@/app/media-html` (partagé
+ * avec `app/connecte/social-vue.ts`, #5031) : une définition locale a déjà
+ * fait planter `next start` en production quand un AUTRE segment d'App
+ * Router l'importait (voir le doc-comment de ce module). Ne pas la redupliquer
+ * ici — c'est exactement la jumelle que ce module existe pour éviter.
+ */
+
 const scene = (etat: EtatDeLaStory): string => {
+  const { copie } = etat.genre;
   const { story, voisinage } = etat;
   const langue = langAttribut(langueLue(story), DOCUMENT_LANGUAGE);
   const premier = story.medias[0];
   const contenu =
     premier === undefined
-      ? `<p class="texte"${langue}>${echappe(story.texte === '' ? STORY.sansContenu : story.texte)}</p>`
+      ? `<p class="texte"${langue}>${echappe(story.texte === '' ? copie.sansContenu : story.texte)}</p>`
       : '<figure>' +
         mediaHtml(premier, story.texte) +
         (story.texte === '' ? '' : `<figcaption${langue}>${echappe(story.texte)}</figcaption>`) +
@@ -149,10 +150,10 @@ const scene = (etat: EtatDeLaStory): string => {
       : `<a class="tap ${classe}" href="${echappe(adresseDeLaStory(cible))}"><span class="hors-ecran">${echappe(libelle)}</span></a>`;
 
   return (
-    `<section class="scene" aria-label="${echappe(STORY.scene)}">` +
+    `<section class="scene" aria-label="${echappe(copie.scene)}">` +
     contenu +
-    tap('precedente', voisinage.precedente, STORY.precedente) +
-    tap('suivante', voisinage.suivante, STORY.suivante) +
+    tap('precedente', voisinage.precedente, copie.precedente) +
+    tap('suivante', voisinage.suivante, copie.suivante) +
     '</section>'
   );
 };
@@ -162,13 +163,22 @@ const scene = (etat: EtatDeLaStory): string => {
  * une story déjà écrite dans la langue du lecteur, elle n'apprendrait rien. Le
  * « voir l'original » est un LIEN, donc un EFFET (charte règle 7).
  */
-const prisme = (story: Story): string => {
-  if (story.langueServie === null || story.langueOriginale === null) return '';
+const prisme = (genre: GenreServi, story: Story): string => {
+  const { copie } = genre;
+  // Une TRADUCTION, pas simplement une langue connue : `langueServie` porte
+  // celle de l'original quand c'est lui qui est servi.
+  if (
+    story.langueServie === null ||
+    story.langueOriginale === null ||
+    story.langueServie === story.langueOriginale
+  ) {
+    return '';
+  }
   return (
     '<p class="story-prisme">' +
     svgDuSprite('ph-translate') +
-    `<span>${echappe(STORY.traduitDe(nomDeLangue(story.langueOriginale)))}</span>` +
-    `<a href="${echappe(adresseDeLaStory(story.id, story.langueOriginale))}">${echappe(STORY.original)}</a>` +
+    `<span>${echappe(copie.traduitDe(nomDeLangue(story.langueOriginale)))}</span>` +
+    `<a href="${echappe(adresseDuPartage(genre, story.id, story.langueOriginale))}">${echappe(copie.original)}</a>` +
     '</p>'
   );
 };
@@ -181,32 +191,46 @@ const prisme = (story: Story): string => {
  * lequel des deux gestes il fait. La cible dessine les deux ; les rendre
  * inertes aurait été le défaut que la charte règle 7 nomme.
  */
-const repondre = (etat: EtatDeLaStory): string =>
-  `<form class="story-repondre" method="post" action="${echappe(adresseDeLaStory(etat.story.id))}">` +
-  `<label class="hors-ecran" for="champ-reponse">${echappe(STORY.repondre)}</label>` +
-  `<textarea id="champ-reponse" name="${CHAMP_DE_LA_REPONSE}" rows="1" maxlength="${LONGUEUR_MAX_DE_LA_REPONSE}" autocomplete="off" enterkeyhint="send" placeholder="${echappe(STORY.repondreA(etat.story.auteur))}">${echappe(etat.brouillon)}</textarea>` +
-  `<button class="aimer" type="submit" name="${CHAMP_DE_L_AIME}" value="${etat.story.aimee ? '0' : '1'}" aria-pressed="${etat.story.aimee ? 'true' : 'false'}" aria-label="${echappe(STORY.aimer)}">${svgDuSprite('ph-heart')}</button>` +
-  `<button class="envoyer" type="submit" aria-label="${echappe(STORY.envoyer)}">${svgDuSprite('ph-arrow-up')}</button>` +
-  '</form>';
+const repondre = (etat: EtatDeLaStory): string => {
+  const { copie } = etat.genre;
+  return (
+  `<form class="story-repondre" method="post" action="${echappe(adresseDuPartage(etat.genre, etat.story.id))}">` +
+  `<label class="hors-ecran" for="champ-reponse">${echappe(copie.repondre)}</label>` +
+  `<textarea id="champ-reponse" name="${CHAMP_DE_LA_REPONSE}" rows="1" maxlength="${LONGUEUR_MAX_DE_LA_REPONSE}" autocomplete="off" enterkeyhint="send" placeholder="${echappe(copie.repondreA(etat.story.auteur))}">${echappe(etat.brouillon)}</textarea>` +
+  `<button class="aimer" type="submit" name="${CHAMP_DE_L_AIME}" value="${etat.story.aimee ? '0' : '1'}" aria-pressed="${etat.story.aimee ? 'true' : 'false'}" aria-label="${echappe(copie.aimer)}">${svgDuSprite('ph-heart')}</button>` +
+  `<button class="envoyer" type="submit" aria-label="${echappe(copie.envoyer)}">${svgDuSprite('ph-arrow-up')}</button>` +
+  '</form>'
+  );
+};
 
-const corps = (etat: EtatDeLaStory): string =>
+const corps = (etat: EtatDeLaStory): string => {
+  const { copie } = etat.genre;
+  return (
   '<main id="main-content" class="story-ecran">' +
-  segments(etat) +
+  // La barre de segments n'existe QUE pour un genre qui se parcourt. Un réel
+  // et une humeur se lisent seuls : une barre à un seul segment serait un
+  // repère qui n'oriente vers rien (charte règle 7).
+  (etat.genre.avecSegments ? segments(etat) : '') +
   enTete(etat) +
   scene(etat) +
-  prisme(etat.story) +
-  (etat.confirmation ? `<p class="story-etat" role="status">${echappe(STORY.repondu)}</p>` : '') +
-  (etat.erreur === null ? '' : `<p class="alerte" role="alert"><b>${echappe(STORY.refuse)}</b> ${echappe(etat.erreur)}</p>`) +
+  prisme(etat.genre, etat.story) +
+  (etat.confirmation ? `<p class="story-etat" role="status">${echappe(copie.repondu)}</p>` : '') +
+  (etat.erreur === null ? '' : `<p class="alerte" role="alert"><b>${echappe(copie.refuse)}</b> ${echappe(etat.erreur)}</p>`) +
   repondre(etat) +
-  '</main>';
+  '</main>'
+  );
+};
 
-export const documentDeLaStory = (etat: EtatDeLaStory): string =>
+export const documentDuPartage = (etat: EtatDeLaStory): string =>
   documentPleinEcran({
-    titre: `${STORY.de(etat.story.auteur)} — Meeshy`,
-    description: etat.story.texte === '' ? STORY.titre : etat.story.texte,
+    titre: `${etat.genre.copie.de(etat.story.auteur)} — Meeshy`,
+    description: etat.story.texte === '' ? etat.genre.copie.titre : etat.story.texte,
     corps: corps(etat),
     feuille: FEUILLE,
   });
+
+/** Le document d'une STORY — la projection que la porte de `/stories/:id` lit. */
+export const documentDeLaStory = (etat: EtatDeLaStory): string => documentDuPartage(etat);
 
 /**
  * L'INVITATION — ce que reçoit le visiteur SANS session. Aucune donnée de la
@@ -214,24 +238,17 @@ export const documentDeLaStory = (etat: EtatDeLaStory): string =>
  * L'adresse est gardée de côté dans `returnUrl`, comme la modale de
  * `/chat/:lien` garde la sienne.
  */
-export const documentDeLInvitation = ({ id }: { readonly id: string }): string => {
+export const documentDeLInvitation = ({ genre, id }: { readonly genre: GenreServi; readonly id: string }): string => {
+  const { copie } = genre;
   const ici = encodeURIComponent(adresseDeLaStory(id));
-  return documentDuSite({
-    titre: `${STORY.invitation.titre} — Meeshy`,
-    description: STORY.invitation.corps,
+  return documentDeMessage({
+    titre: copie.invitation.titre,
+    paragraphes: [copie.invitation.corps, copie.invitation.note],
+    actions: [
+      { libelle: copie.invitation.seConnecter, href: `/login?returnUrl=${ici}`, glyphe: 'ph-sign-in' },
+      { libelle: copie.invitation.creerUnCompte, href: `/signup?returnUrl=${ici}`, ton: 'contour' },
+    ],
     feuille: FEUILLE_CONNECTEE,
-    robots: 'noindex, nofollow',
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(STORY.invitation.titre)}</h1>` +
-      `<p>${echappe(STORY.invitation.corps)}</p>` +
-      `<p>${echappe(STORY.invitation.note)}</p>` +
-      '</div>' +
-      `<section class="acces" aria-label="${echappe(STORY.invitation.seConnecter)}"><nav>` +
-      `<a class="action primaire" href="/login?returnUrl=${ici}">${svgDuSprite('ph-sign-in')}${echappe(STORY.invitation.seConnecter)}</a>` +
-      `<a class="action contour" href="/signup?returnUrl=${ici}">${echappe(STORY.invitation.creerUnCompte)}</a>` +
-      '</nav></section>',
-    retour: true,
   });
 };
 
@@ -242,19 +259,10 @@ export const documentDeLInvitation = ({ id }: { readonly id: string }): string =
  * actions) est l'issue SUIVANTE ; ce document en est le plancher honnête, pas
  * son remplaçant.
  */
-export const documentIndisponible = (): string =>
-  documentDuSite({
-    titre: `${STORY.indisponible.titre} — Meeshy`,
-    description: STORY.indisponible.corps,
+export const documentIndisponible = (genre: GenreServi): string =>
+  documentDeMessage({
+    titre: genre.copie.indisponible.titre,
+    paragraphes: [genre.copie.indisponible.corps],
+    actions: [{ libelle: genre.copie.indisponible.action, href: '/' }],
     feuille: FEUILLE_CONNECTEE,
-    robots: 'noindex, nofollow',
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(STORY.indisponible.titre)}</h1>` +
-      `<p>${echappe(STORY.indisponible.corps)}</p>` +
-      '</div>' +
-      `<section class="acces" aria-label="${echappe(STORY.indisponible.action)}"><nav>` +
-      `<a class="action primaire" href="/">${echappe(STORY.indisponible.action)}</a>` +
-      '</nav></section>',
-    retour: true,
   });

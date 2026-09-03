@@ -1000,7 +1000,7 @@ extension StoryComposerViewModel {
     /// Contrainte : au plus 1 media visuel en background + 1 audio en background par slide.
     /// Toggle ON sur un élément → les autres du même type sont repassés en foreground.
     /// Toggle OFF → l'élément redevient foreground (aucun autre n'est promu automatiquement).
-    func toggleBackground(id: String) {
+    public func toggleBackground(id: String) {
         var effects = currentEffects
 
         if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {

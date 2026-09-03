@@ -177,6 +177,61 @@ describe('la porte de /post/:id', () => {
     expect(html.match(/Modifier/g)).toHaveLength(1);
   });
 
+
+  /**
+   * LE CHOIX DE LA LANGUE — `sheet:lang`, et ce qu'il est devenu.
+   *
+   * La matrice le dessine en `<dialog>` natif, « ouvrable au clavier et
+   * fermable par Échap ». Un `<dialog>` ne s'OUVRE que par `showModal()` :
+   * c'est du JavaScript, sur des écrans que le budget gate à 0 Ko. La forme
+   * retenue est celle que la story sert déjà — un `<details>` natif, un lien
+   * par langue —, qui tient le critère qui COMPTE : « choisir une langue MUTE
+   * le texte rendu ». Elle est de plus opérable au clavier sans une ligne de
+   * script, et le retour arrière du navigateur y annule le choix.
+   *
+   * Le critère « la langue élue passe par `resolvePrismTranslation()`, jamais
+   * par un lookup rang-1 » est tenu par la porte, éprouvée plus haut : `?lang=`
+   * y est un GESTE sur la publication, pas un réglage, et il ne descend pas au
+   * fil.
+   */
+  it('offre une langue par traduction PORTÉE, et dit laquelle est lue', async () => {
+    const html = await (
+      await sert(
+        'https://meeshy.test/post/p1',
+        NOMINALE(
+          publicationServie({
+            translations: carte({
+              fr: 'La revue de mars est prête.',
+              es: 'La revisión de marzo está lista.',
+            }),
+          }),
+        ),
+      )
+    ).text();
+
+    // Les trois langues que la publication porte RÉELLEMENT : son original et
+    // ses deux traductions. Pas une de plus — offrir une langue qu'aucun texte
+    // ne porte serait un contrôle sans effet (charte règle 7).
+    expect(html).toContain('href="/post/p1?lang=en"');
+    expect(html).toContain('href="/post/p1?lang=fr"');
+    expect(html).toContain('href="/post/p1?lang=es"');
+    // Celle qui est LUE se dit — sinon le choix se fait à l'aveugle.
+    expect(html).toContain('aria-current="true"');
+  });
+
+  it('n’offre AUCUN choix quand la publication ne porte qu’une langue', async () => {
+    const html = await (
+      await sert(
+        'https://meeshy.test/post/p1',
+        NOMINALE(publicationServie({ translations: {}, originalLanguage: 'fr' })),
+      )
+    ).text();
+
+    // Un sélecteur à une entrée est un contrôle qui ne change rien : il n'est
+    // pas rendu, pas grisé.
+    expect(html).not.toContain('class="langues"');
+  });
+
   it.each(['POST', 'REEL', 'STORY'])('ouvre un %s, et dit lequel', async (type) => {
     const html = await (
       await sert('https://meeshy.test/post/p1', NOMINALE(publicationServie({ type })))

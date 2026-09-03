@@ -1,6 +1,5 @@
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
-import { documentDuSite } from '@/app/enveloppe/vue';
-import { echappe } from '@/app/socle';
+import { documentDeMessage } from '@/app/enveloppe/vue';
 
 /**
  * D'OÙ VIENT LA REQUÊTE — deux gardes de provenance, posées sur toute porte de
@@ -126,19 +125,15 @@ export const PROVENANCE = {
 export const refusDOrigine = (requete: Request): Response => {
   const ici = new URL(requete.url).pathname;
   return new Response(
-    documentDuSite({
-      titre: `${PROVENANCE.titre} — Meeshy`,
-      description: PROVENANCE.corps,
+    documentDeMessage({
+      titre: PROVENANCE.titre,
+      paragraphes: [PROVENANCE.corps],
+      actions: [{ libelle: PROVENANCE.action, href: ici }],
       feuille: FEUILLE_CONNECTEE,
-      corps:
-        '<div class="bonjour">' +
-        `<h1>${echappe(PROVENANCE.titre)}</h1>` +
-        `<p>${echappe(PROVENANCE.corps)}</p>` +
-        '</div>' +
-        `<section class="acces" aria-label="${echappe(PROVENANCE.action)}"><nav>` +
-        `<a class="action primaire" href="${echappe(ici)}">${echappe(PROVENANCE.action)}</a>` +
-        '</nav></section>',
-      retour: true,
+      // `index, follow` : la valeur par défaut de `documentDuSite`, que ce
+      // document avait. L'en-tête `x-robots-tag` de la réponse dit déjà
+      // `noindex` — les deux ne se contredisent pas, l'en-tête gagne.
+      robots: 'index, follow',
     }),
     {
       status: 403,

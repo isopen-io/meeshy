@@ -387,6 +387,11 @@ struct ComposerSceneSurface: View {
     /// la surface ne fait que peindre ce qu'elle reçoit.
     var onDeleteBackgroundSound: (() -> Void)?
 
+    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par l'appui
+    /// long de la trace. `nil` ⇒ l'entrée disparaît — un fond LEGACY n'a aucun
+    /// objet à basculer, et l'hôte le sait avant nous.
+    var onPromoteBackgroundSound: (() -> Void)?
+
     // MARK: - Ce que la publication EMPORTE (#5002)
 
     /// Les balises DÉRIVÉES du texte de la publication, sans leur `#`. La
@@ -639,7 +644,8 @@ struct ComposerSceneSurface: View {
                                                  toolIsOpen: toolIsOpen,
                                                  leadingInset: sceneCardLeading,
                                                  onEdit: onEditBackgroundSound,
-                                                 onDelete: onDeleteBackgroundSound))
+                                                 onDelete: onDeleteBackgroundSound,
+                                                 onPromote: onPromoteBackgroundSound))
                 }
                 .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
@@ -795,9 +801,9 @@ struct ComposerSceneSurface: View {
                 if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
                     ComposerSceneReferenceFooter(hashtags: sceneHashtags,
                                                  references: sceneReferences,
+                                                 leadingInset: sceneCardLeading,
                                                  onOpenHashtags: onOpenHashtags,
                                                  onOpenMentions: onOpenMentions)
-                        .padding(.horizontal, 16)
                 }
                 // **La rangée basse — une PLACE permanente, un contenu qui
                 // change** (#4072, précisé au #5010).

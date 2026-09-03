@@ -1,3 +1,5 @@
+import { deLaLangue } from './langues';
+
 /**
  * LA COPIE DE L'ÉCRAN DES COMMENTAIRES.
  *
@@ -31,8 +33,9 @@ export const COMMENTAIRES = {
    * produit en sert sept. Le `h` reste hors du champ de cette règle — aucune
    * langue servie ne commence par un `h` muet en français.
    */
-  traduitDe: (langue: string): string =>
-    /^[aeiouyàâäéèêëîïôöùûü]/i.test(langue) ? `traduit de l’${langue}` : `traduit du ${langue}`,
+  traduitDe: (langue: string): string => `traduit ${deLaLangue(langue)}`,
+  /** Le libellé du sélecteur de langue — le même mot que la story (dimension 6). */
+  langues: 'Changer la langue',
   voirLOriginal: 'voir l’original',
   voirLaTraduction: 'voir la traduction',
 
