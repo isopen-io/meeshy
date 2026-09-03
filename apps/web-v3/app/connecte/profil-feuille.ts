@@ -1,8 +1,10 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { feuilleQuiMonte } from './atomes-feuille';
+
 /**
  * LA FEUILLE DU PROFIL D'UN PARTICIPANT (§ 12.10.3) — une feuille BASSE sur
- * mobile, centrée au-delà de 600 px, exactement la géométrie de `dialog.feuille`
+ * mobile, centrée au-delà de 600 px — la géométrie que `feuilleQuiMonte`
  * (`choix-feuille.ts`) : les deux flottent sur le MÊME plan
  * (`--color-surface-raised`, second emploi assumé de la règle 9), et une
  * troisième feuille flottante réinventerait une géométrie déjà jugée.
@@ -27,15 +29,15 @@ import { compacte } from '@/app/enveloppe/feuille';
  * `lib/realtime/plein-ecran.ts` élève le `<dialog open data-retour>` en
  * modale et Échap suit le même chemin.
  *
+ * LA GÉOMÉTRIE N'EST PLUS ÉCRITE ICI : `feuilleQuiMonte('profil')`
+ * (`atomes-feuille.ts`) la sert, et la feuille « nouveau lien » la sert aussi.
+ * Cette feuille-ci ne porte plus que ce qui lui est PROPRE — sa tête, son
+ * identité, sa relation, sa bio.
+ *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
  */
-export const FEUILLE_DU_PROFIL = compacte(`
-.voile{position:fixed;inset:0;z-index:4;display:block;background:var(--color-overlay)}
-dialog.profil{position:fixed;inset:auto 0 0;z-index:5;box-sizing:border-box;width:100%;max-width:none;max-height:90dvh;overflow:auto;margin:0;padding:0 var(--space-5) var(--space-5);border:0;border-radius:var(--radius-2xl) var(--radius-2xl) 0 0;background:var(--color-surface-raised);color:var(--color-text)}
-dialog.profil::backdrop{background:var(--color-overlay)}
-dialog.profil .poignee{display:block;position:relative;width:100%;height:var(--target-min);margin:0 0 var(--space-2)}
-dialog.profil .poignee::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--glyph-large);height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-strong)}
+export const FEUILLE_DU_PROFIL = feuilleQuiMonte('profil') + compacte(`
 dialog.profil .tete{display:flex;align-items:flex-start;gap:var(--space-3)}
 dialog.profil .identite{flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-3)}
 dialog.profil .identite .avatar{width:var(--space-8);height:var(--space-8);font-size:var(--text-lg)}

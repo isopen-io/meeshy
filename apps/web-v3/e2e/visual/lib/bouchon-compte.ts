@@ -100,6 +100,12 @@ export type EtatDuCompteDeBouchon = {
   readonly profil: Record<string, string>;
   /** Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de bon. */
   readonly appareils: { id: string; deviceName: string; platform: string; lastUsedAt: string | null }[];
+  /**
+   * LES LIENS CRÉÉS PENDANT LA SESSION, relus par `GET /links`. Sans cet état
+   * partagé, `POST /links` rendrait 201 et le carnet servirait la liste
+   * d'avant : le témoin serait vert sur une création qui ne crée rien.
+   */
+  readonly liensCrees: Record<string, unknown>[];
 };
 
 /** Une partie de demande — `demandeAvecPresenceSchema`, présence MASQUÉE par la loi. */
@@ -364,6 +370,28 @@ const CHAMPS_ACCEPTES: readonly string[] = [
   'autoTranslateEnabled',
 ];
 
+/** Les champs de `createLinkSchema` que le bouchon accepte — recopiés du schéma. */
+const CHAMPS_DE_LIEN: readonly string[] = [
+  'conversationId',
+  'name',
+  'description',
+  'maxUses',
+  'maxConcurrentUsers',
+  'maxUniqueSessions',
+  'expiresAt',
+  'allowAnonymousMessages',
+  'allowAnonymousFiles',
+  'allowAnonymousImages',
+  'allowViewHistory',
+  'requireAccount',
+  'requireNickname',
+  'requireEmail',
+  'requireBirthday',
+  'allowedLanguages',
+  'allowedIpRanges',
+  'newConversation',
+];
+
 export const MOT_DE_PASSE_DU_BOUCHON = 'mot-de-passe-actuel';
 
 export const APPAREILS_DU_BOUCHON = [
@@ -420,6 +448,41 @@ export const routesDuCompte =
       json({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }, 401);
       return true;
     }
+    /**
+     * `POST /api/v1/links` (`routes/links/creation.ts:29`) — la création d'un
+     * lien de partage. Le bouchon REFUSE tout champ que `createLinkSchema` ne
+     * déclare pas, plutôt que de l'ignorer : c'est la seule façon qu'un témoin
+     * rougisse le jour où la v3 enverrait `allowedCountries`, que la passerelle
+     * accepte et n'applique JAMAIS.
+     */
+    if (chemin === '/api/v1/links' && requete.method === 'POST') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      const inconnus = Object.keys(soumis).filter((champ) => !CHAMPS_DE_LIEN.includes(champ));
+      if (inconnus.length > 0) {
+        json({ success: false, error: { message: `Unsupported field: ${inconnus.join(', ')}` } }, 400);
+        return true;
+      }
+      const titre = (soumis.newConversation as { title?: string } | undefined)?.title;
+      if (typeof titre !== 'string' || titre.trim() === '') {
+        json({ success: false, error: { message: 'Le titre de la conversation est requis' } }, 400);
+        return true;
+      }
+      const linkId = `mshy_cree_${etat.liensCrees.length + 1}`;
+      etat.liensCrees.push({
+        id: `lc${etat.liensCrees.length + 1}`,
+        linkId,
+        identifier: linkId,
+        name: typeof soumis.name === 'string' && soumis.name !== '' ? soumis.name : titre,
+        isActive: true,
+        currentUses: 0,
+        maxUses: typeof soumis.maxUses === 'number' ? soumis.maxUses : null,
+        expiresAt: typeof soumis.expiresAt === 'string' ? soumis.expiresAt : null,
+        conversation: null,
+      });
+      json({ success: true, data: { linkId, conversationId: `c${etat.liensCrees.length}` } }, 201);
+      return true;
+    }
+
     /**
      * `PATCH /api/v1/users/me` (`routes/users/profile-updates.ts:41`) — les
      * HUIT champs acceptés, et pas un de plus. Le bouchon REFUSE tout autre
@@ -760,12 +823,15 @@ export const routesDuCompte =
     }
 
     if (etat.lecteurSansRien) {
-      json({ success: true, data: [], pagination: { total: 0 } });
+      json({ success: true, data: etat.liensCrees, pagination: { total: etat.liensCrees.length } });
       return true;
     }
     json({
       success: true,
       data: [
+        // LES LIENS CRÉÉS EN TÊTE : c'est là que le lecteur les cherche, et
+        // c'est ce qui rend la création VISIBLE au témoin.
+        ...etat.liensCrees,
         {
           id: 'l1',
           linkId: LIEN_DU_FIL,
