@@ -224,3 +224,16 @@ pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
 httpx==0.24.1
 httpcore==0.17.3
+# anyio 4.15.0 (publiée le 2026-09-02 à 21:46 UTC) fait passer ses SOUS-MODULES en
+# import paresseux : `anyio.abc` cesse d'être atteignable depuis un `import anyio`
+# seul. httpcore 0.17.3 — épinglé vieux juste au-dessus — annote
+# `AnyIOStream.__init__(self, stream: anyio.abc.ByteStream)` à la CRÉATION de la
+# classe, donc `import httpcore` lève `AttributeError: module 'anyio' has no
+# attribute 'abc'` et l'image translator ne se construit plus (Docker #3546).
+# httpcore déclare `anyio>=3.0,<5.0` : il accepte 4.15.0 sans rien savoir de la
+# rupture — le plafond doit donc être posé ICI. Reproduit et infirmé en local :
+# httpcore 0.17.3 + anyio 4.15.0 => AttributeError ; + anyio 4.14.2 => import OK.
+# Ne PAS lever ce plafond tant que httpx/httpcore restent sur cette paire ; le
+# jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en propre
+# et la contrainte tombe d'elle-même.
+anyio==4.14.2
