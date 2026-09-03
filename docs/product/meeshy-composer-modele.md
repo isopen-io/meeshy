@@ -391,9 +391,25 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 
 ### Ce que cette opacité coûte, en chiffres
 
-| mesure | valeur |
+> **Ces nombres sont DATÉS du 2026-09-02, et le premier n'est pas reproductible
+> en l'état** (constat du 2026-09-03). Recompté par trois méthodes — `grep` sur
+> `public var|let`, bornage par la déclaration suivante, équilibrage d'accolades
+> — il rend **112**, **131** et **119**. L'écart ne vient pas des modèles : il
+> vient de ce que « un champ » n'est pas défini. Faut-il compter les propriétés
+> CALCULÉES ? les `internal` ? celles d'une extension ?
+>
+> **Un nombre que personne ne sait recompter n'est pas une mesure, c'est une
+> décoration** — et il décore d'autant mieux qu'il est précis. Ce qu'il faut
+> n'est pas de le corriger : c'est de dire par quelle RÈGLE il s'obtient, et de
+> laisser une garde le tenir. Suivi : #4986.
+>
+> Le RATIO, lui, reste vrai à ce qu'il sert à dire : environ la moitié des champs
+> ne sont exercés par aucun golden, et les huit pertes silencieuses sont toutes
+> tombées de ce côté-là.
+
+| mesure | valeur (2026-09-02) |
 |---|---|
-| champs des cinq modèles d'objet | **123** |
+| champs des cinq modèles d'objet | **≈ 120** — voir l'avertissement ci-dessus |
 | champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **65** (53 %) |
 | champs jamais exercés — donc jamais comparés | **58** (47 %) |
 | clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 |
