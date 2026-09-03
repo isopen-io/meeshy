@@ -26401,7 +26401,7 @@ et de la règle « une valeur DÉDUITE n'est pas une valeur LUE » : ici la vale
 avait été lue, mais dans un doc-comment — et un doc-comment est une valeur
 DÉDUITE par quelqu'un d'autre, à une date qu'il n'a pas écrite.
 
-## Leçon 489 — Un correcteur mort en vol laisse un arbre MIXTE, et six formes que la revue avait bien vues
+## Leçon 492 — Un correcteur mort en vol laisse un arbre MIXTE, et six formes que la revue avait bien vues
 
 **Contexte (2026-09-03, #4938 — revue finale du chantier « conversation sans
 latence »).** Le workflow de revue adverse a rendu cinquante constats ; l'agent
