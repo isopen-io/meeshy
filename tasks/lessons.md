@@ -11877,6 +11877,31 @@ Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artef
 décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
 l'affirmation et ce qui pourrait la démentir.
 
+### Un `pbxproj` régénéré : le NOMBRE ne dit rien, le STATUT GIT dit tout
+
+`xcodegen` globe le **disque**, pas l'index. Régénérer le projet ajoute donc
+TOUT ce qui traîne, y compris le travail non committé des sessions voisines —
+et deux situations opposées produisent le même diff volumineux.
+
+| ce que le diff ajoute | ce que c'est | ce qu'il faut faire |
+|---|---|---|
+| des fichiers **tous trackés** | une **réparation** — le `pbxproj` du dépôt était périmé par rapport aux sources | committer est légitime, en le DISANT dans le message |
+| **un seul** fichier non tracké | une **bombe** — le projet référencera un fichier absent au prochain checkout, et il ne compilera pas | écarter le `pbxproj` du commit |
+
+Les deux cas ont été rencontrés le 2026-09-03, à quelques heures d'écart et par
+deux sessions différentes : trente fichiers ajoutés, tous committés (réparation)
+d'un côté ; cinq ajoutés dont trois non trackés (bombe) de l'autre. **Le volume
+ne discrimine pas** — une leçon écrite sur un seul des deux sens ferait interdire
+ce qui est légitime, ou autoriser ce qui casse.
+
+> Le contrôle tient en deux commandes : lister les `.swift` ajoutés par
+> `git diff -- <pbxproj>`, puis `git ls-files --error-unmatch` sur chacun.
+
+**Et le refus est indolore**, ce qui enlève toute raison d'hésiter : la CI lance
+`xcodegen generate` avant de builder, et `meeshy.sh` régénère sur dérive chez qui
+tire le commit. Écarter le `pbxproj` ne perd donc rien — il n'y a jamais de raison
+d'éditer ce fichier à la main pour n'en garder qu'une partie.
+
 ### Un ORDRE juste peut produire une disposition FAUSSE — le vide n'est pas un frère
 
 J'ai ouvert #5036 en lisant une capture du porteur : les hashtags apparaissaient
