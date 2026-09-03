@@ -11817,6 +11817,38 @@ défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règl
 comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
 explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
 
+### Un report CONDITIONNEL est daté par sa CONDITION, pas par sa date
+
+Le web déclare hors périmètre les transitions inter-scènes, et pose sa condition
+noir sur blanc (`CanvasV3Scene.tsx:836`) :
+
+> « Reste hors périmètre, **et le sera tant qu'aucun lecteur ne le rendra** […]
+> leur donner un rendu serait du neuf, pas de la parité. »
+
+Le raisonnement était juste à l'écriture : si personne ne rend, ne pas rendre ne
+creuse aucun écart. **Mais iOS les rend** (`StoryOpeningEntrance.armed`). La
+condition est fausse aujourd'hui, et « du neuf » est devenu « de la parité » —
+sans que personne ne relise la phrase, parce que **ce qui l'a périmée s'est passé
+sur une AUTRE plateforme**.
+
+> **Un commentaire qui décrit l'état d'un VOISIN est le plus fragile de tous :
+> rien, dans le fichier qui le porte, ne change quand le voisin bouge.** Un
+> commentaire sur son propre code se fait démentir par le diff d'à côté ; celui-là
+> peut rester faux des mois sans qu'aucun geste ne le croise.
+
+Deux réflexes qui l'attrapent :
+
+- **En lisant** un report conditionnel, ne pas lire la conclusion — lire la
+  CONDITION, et la vérifier. Elle est la seule partie datée.
+- **En écrivant**, préférer une condition qu'un TÉMOIN peut surveiller à une
+  condition en prose. « Tant qu'aucun lecteur ne le rend » est vérifiable par une
+  garde de source sur les trois clients ; laissée en prose, elle ne se vérifie
+  que le jour où quelqu'un passe par là.
+
+Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artefact
+décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
+l'affirmation et ce qui pourrait la démentir.
+
 ### Un motif TROP ÉTROIT rend un faux négatif CONFIANT — trois fois en une session
 
 Le 2026-09-03, trois mesures fausses, toutes de la même forme : un motif de
