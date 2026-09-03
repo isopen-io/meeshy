@@ -231,8 +231,16 @@ struct ComposerObjectEditorView: View {
     /// **Le rail d'OUTILS, à gauche** (#4936) — la place que le plateau donne à
     /// ce qui agit. Il défile : dix entrées ne tiennent pas dans la hauteur que
     /// la scène laisse, et les tronquer en cacherait une sans le dire.
+    ///
+    /// **L'indicateur de défilement est MONTRÉ, et c'est une mesure.** Dix
+    /// entrées font 460 pt là où la scène en laisse ≈ 370 : deux d'entre elles —
+    /// APPARITION et TIMELINE — tombent hors du rail visible. Mesuré au
+    /// simulateur : l'arbre d'accessibilité les place bien à y=514 et y=560,
+    /// donc elles EXISTENT, et rien à l'écran ne disait qu'il fallait défiler
+    /// pour les atteindre. Un rail dont on ne voit pas qu'il continue promet
+    /// huit outils là où il en a dix.
     private var toolRail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 6) {
                 ForEach(ComposerObjectEditorRail.entries, id: \.self) { entree in
                     Button { selectedTool = entree } label: {
