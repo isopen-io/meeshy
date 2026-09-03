@@ -296,6 +296,7 @@ export const passerelleDeBouchon = async (options?: {
   const masquees = new Set<string>();
   const profil: Record<string, string> = {};
   const appareils = APPAREILS_DU_BOUCHON.map((appareil) => ({ ...appareil }));
+  const liensCrees: Record<string, unknown>[] = [];
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -303,6 +304,7 @@ export const passerelleDeBouchon = async (options?: {
     masquees,
     profil,
     appareils,
+    liensCrees,
   });
 
   const serveur = createServer(async (requete, reponse) => {

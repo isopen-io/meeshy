@@ -14,7 +14,7 @@ import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
-import { FEUILLE_DES_LIENS } from '@/app/connecte/liens-feuille';
+import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from '@/app/connecte/liens-feuille';
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE } from '@/app/connecte/liste-feuille';
@@ -78,6 +78,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/profil-feuille.ts', source: FEUILLE_DU_PROFIL },
   { nom: 'app/connecte/social-feuille.ts', source: FEUILLE_DU_FIL_SOCIAL },
   { nom: 'app/connecte/reglages-feuille.ts', source: FEUILLE_DES_REGLAGES },
+  { nom: 'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN', source: FEUILLE_DU_NOUVEAU_LIEN },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -153,6 +154,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/profil-feuille.ts',
       'app/connecte/social-feuille.ts',
       'app/connecte/reglages-feuille.ts',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -258,6 +260,12 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     // connectée, l'en-tête du fil (qu'ils réemploient) et leur feuille. Une
     // seule ligne suffit donc à les opposer tous les six au plafond.
     { nom: 'réglages', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES },
+    // L'état `/links?nouveau` : la SEULE composition qui porte la feuille de
+    // création — un carnet ordinaire n'en paie pas un octet.
+    {
+      nom: 'liens avec la feuille de création',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_LIENS + FEUILLE_DU_NOUVEAU_LIEN,
+    },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
@@ -399,8 +407,16 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
    * Règle 9 — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
    * rien d'autre ». La feuille modale de jonction a été le seul emploi tant
    * que rien d'autre ne flottait ; le panneau de profil (§ 12.10.3) est le
-   * SECOND, sur le MÊME plan et pour la MÊME raison — un second emploi assumé
-   * de la règle, pas un écart d'elle.
+   * SECOND et la feuille « nouveau lien » (#5071) le TROISIÈME — trois emplois
+   * assumés de la règle, pas trois écarts d'elle : les trois FLOTTENT, sur le
+   * même plan.
+   *
+   * LE PIED COLLANT DE LA TROISIÈME EN EST UN QUATRIÈME EMPLOI, et il mérite
+   * qu'on dise pourquoi il n'en est pas un écart : il ne flotte pas AU-DESSUS
+   * de la feuille, il EST la feuille — le fond qu'il peint doit être
+   * exactement celui sous lequel le formulaire défile, sans quoi le bouton
+   * « Créer » se lirait sur une bande d'une autre couleur. Un second jeton
+   * l'aurait fait diverger au premier changement de surface.
    */
   it('ne réserve --color-surface-raised qu’à ce qui flotte', () => {
     const peints = FEUILLES.flatMap(({ nom, source }) =>
@@ -411,6 +427,8 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
     expect(peints).toEqual([
       'app/(public)/chat/[lien]/choix-feuille.ts › dialog.feuille',
       'app/connecte/profil-feuille.ts › dialog.profil',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN › dialog.nouveau-lien',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN › dialog.nouveau-lien .pied',
     ]);
   });
 });
