@@ -65,7 +65,7 @@ extension StoryCanvasUIView {
                 label: locationAccessibilityLabel(for: location),
                 traits: .staticText,
                 id: location.id,
-                editableKind: .location
+                editableKind: .place
             ))
         }
         // Un container UIKit qui expose des enfants via `accessibilityElements`

@@ -95,42 +95,75 @@ final class SceneObjectFamilyVocabularyTests: XCTestCase {
                        "quatre couches disent « place » ; la cinquième ne doit plus dire autre chose")
     }
 
-    /// **La famille est déclarée DEUX fois, et les deux doivent dire le même
-    /// mot.**
+    /// **La famille est déclarée CINQ fois, et le mot doit être le même partout.**
     ///
-    /// `MeeshySceneObject` porte l'union (`case place(StoryLocationObject)`) et
-    /// son ombre sans charge (`Kind.place`). Les témoins ci-dessus ne voient que
-    /// la SECONDE : ils lisent des `rawValue`, et un cas d'union n'en a pas.
+    /// Ce témoin a été écrit trois fois, et les deux premières versions étaient
+    /// fausses de la même façon — elles comparaient une PAIRE :
     ///
-    /// > Mesuré à mes dépens : le premier lot de #4960 a renommé `Kind` et laissé
-    /// > l'union dire `location`. Tout compilait, les quatre témoins passaient, et
-    /// > la moitié du renommage manquait. **Une garde qui contrôle une des deux
-    /// > déclarations jumelles ne garde pas la paire** — elle donne seulement
-    /// > l'impression de le faire.
+    /// 1. la première lisait `Kind.allCases` et des `rawValue` : elle n'a pas vu
+    ///    le cas d'UNION (`case location(StoryLocationObject)`), qui n'a pas de
+    ///    `rawValue` ;
+    /// 2. la seconde a ajouté l'union : elle n'a pas vu
+    ///    `StoryCanvasUIView.CanvasItemKind`, qui n'était dans aucune des deux
+    ///    déclarations comparées.
     ///
-    /// Ce témoin lit donc la SOURCE, faute d'un moyen d'énumérer les cas d'une
-    /// union à l'exécution. Il vaut pour toute famille : le mot du `Kind` doit
-    /// apparaître comme cas d'union, et aucun ancien nom ne doit subsister.
-    func test_lUnion_etSonKind_disentLeMemeMot() throws {
-        // Cinq remontées : Story / Models / MeeshySDKTests / Tests / MeeshySDK.
-        // Quatre suffisaient en apparence — le fichier était simplement
-        // introuvable, et le témoin échouait sur une erreur d'E/S plutôt que sur
-        // la règle. Un chemin faux ne se distingue pas d'une règle violée quand
-        // on ne lit que la couleur.
-        let url = URL(fileURLWithPath: #filePath)
+    /// > **Une garde par PAIRE ne garde pas une famille de cinq.** Elle rend un
+    /// > verdict vrai sur ce qu'elle regarde, et muet sur tout le reste — ce qui
+    /// > se lit comme un verdict sur l'ensemble. J'ai fermé #4960 deux fois sur
+    /// > cette confusion.
+    ///
+    /// Celle-ci BALAIE : toute déclaration dont le jeu de cas EST celui des
+    /// familles d'objets de scène doit employer `place`. Elle n'a pas besoin de
+    /// connaître le nom des types — c'est la FORME de la déclaration qui la
+    /// désigne, donc une sixième naîtrait sous sa surveillance.
+    func test_aucuneDeclarationDeFamilles_neDitLocation() throws {
+        let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Models/MeeshySceneObject.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Sources")
 
-        for famille in MeeshySceneObject.Kind.allCases {
-            XCTAssertTrue(source.contains("case \(famille.rawValue)("),
-                          "La famille « \(famille.rawValue) » n'a pas de cas d'union du même "
-                          + "nom : l'union et le Kind doivent dire le même mot.")
+        let fichiers = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        XCTAssertGreaterThan(fichiers.count, 100,
+                             "le balayage ne voit presque aucune source — chemin faux, "
+                             + "et un balayage aveugle est toujours vert")
+
+        // Les mots qui, ENSEMBLE, désignent une déclaration de familles d'objets
+        // de scène. Trois suffisent : aucun autre énuméré du dépôt ne les réunit.
+        let signature: Set<String> = ["text", "media", "sticker"]
+        var fautifs: [String] = []
+
+        for fichier in fichiers {
+            guard let contenu = try? String(contentsOf: fichier, encoding: .utf8) else { continue }
+            for ligne in contenu.split(separator: "\n") where ligne.contains("case ") {
+                let mots = Set(ligne
+                    .replacingOccurrences(of: "case", with: " ")
+                    .split(whereSeparator: { !$0.isLetter })
+                    .map(String.init))
+                guard signature.isSubset(of: mots), mots.contains("location") else { continue }
+                fautifs.append("\(fichier.lastPathComponent) → \(ligne.trimmingCharacters(in: .whitespaces))")
+            }
         }
-        XCTAssertFalse(source.contains("case location("),
-                       "l'union dit encore « location » — c'est la moitié du renommage "
-                       + "que le premier lot de #4960 avait laissée")
+
+        XCTAssertTrue(fautifs.isEmpty,
+                      "Ces déclarations nomment une famille d'objets de scène « location » "
+                      + "alors que le contrat du fil dit « place » :\n  "
+                      + fautifs.joined(separator: "\n  "))
+    }
+
+    /// **Le balayage VOIT vraiment quelque chose.** Sans ce contre-exemple, un
+    /// motif qui ne matche plus rien rendrait un vert éternel — la façon dont
+    /// une garde négative meurt en silence.
+    func test_leBalayage_reconnaitUneDeclarationDeFamilles() {
+        let ligne = "        case text, media, sticker, location, audio"
+        let mots = Set(ligne
+            .replacingOccurrences(of: "case", with: " ")
+            .split(whereSeparator: { !$0.isLetter })
+            .map(String.init))
+        XCTAssertTrue(Set(["text", "media", "sticker"]).isSubset(of: mots))
+        XCTAssertTrue(mots.contains("location"),
+                      "le motif doit reconnaître la forme EXACTE que le lot vient de corriger")
     }
 }
