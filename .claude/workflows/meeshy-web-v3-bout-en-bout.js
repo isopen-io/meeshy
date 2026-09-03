@@ -3,18 +3,18 @@ export const meta = {
   description:
     'Developper la v3 web de bout en bout : charte visuelle jugee, vues neuves inscrites dans la planche et la conception, issues, TDD ecran par ecran, temps reel, revue croisee, gates, livraison — chaque agent sur le modele qui convient a sa tache',
   whenToUse:
-    "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat, fil temps reel), puis l'ordre calcule de ordre.md. Args : { branche, focus, plafond, tours, sans_issues }.",
+    "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat, fil temps reel), puis l'ordre calcule de ordre.md. Args : { branche, focus, plafond, tours, sans_issues, refaire_charte }.",
   phases: [
     { title: 'Cadrer', detail: "mesurer ce qui existe, lire l'ordre calcule et les issues, choisir les travaux du tour", model: 'sonnet' },
-    { title: 'Charte', detail: 'trois directions de style en concurrence, un juge, UNE charte opposable', model: 'opus' },
-    { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'opus' },
+    { title: 'Charte', detail: 'sautee par defaut (deja arretee, § 12.5) ; trois directions en concurrence + un juge seulement si refaire_charte=true', model: 'opus' },
+    { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'sonnet' },
     { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code', model: 'sonnet' },
-    { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte', model: 'opus' },
-    { title: 'Revue', detail: 'sonnet prend en defaut la surface, opus attaque la conception', model: 'opus' },
+    { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte — opus reserve aux ecrans PHARES', model: 'sonnet' },
+    { title: 'Revue', detail: 'sonnet prend en defaut la surface, opus attaque la conception (le contradicteur, pas le redacteur)', model: 'opus' },
     { title: 'Gates', detail: 'ordre, tsc, lint, tests, build + budget, conformite visuelle, axe — corriger, jamais contourner', model: 'sonnet' },
-    { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'opus' },
-    { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'opus' },
-    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour", model: 'opus' },
+    { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'sonnet' },
+    { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'sonnet' },
+    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour", model: 'sonnet' },
   ],
 }
 
@@ -30,16 +30,27 @@ const SCRATCH = `${REPO}/.cache/web-v3-workflow`
 
 const A = args && typeof args === 'object' ? args : {}
 const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
+// Ordre du focus (directive du porteur 2026-09-01, etendue 2026-09-03 § 12.10) : la vitrine et le
+// tableau de bord d'abord, puis le fil COMPLET (thread, rich, media — citation, plein ecran,
+// transcription, profil en modale), la liste (chats, avec son balayage), puis les feeds et leur
+// creation, puis les liens de partage. Une reprise de run ne relit pas toujours ses args, donc cet
+// ordre vit dans le script, pas seulement dans l'appel.
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
-  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread']
+  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
-const SANS_CHARTE = A.sans_charte === true
+// La charte visuelle EST ARRETEE (§ 12.5 de la conception, opposable, chaque regle a son temoin)
+// depuis le tour 2 du projet reel. La relancer a CHAQUE invocation (tour===1 redemarre a chaque
+// run) gaspillait 4 appels dont un juge a effort max sur une decision deja prise — mesure dans
+// l'historique du script (§ 12.10.7 de la conception). Defaut desormais : SAUTEE ; seul un
+// refaire_charte=true explicite la relance (redesign assume).
+const SANS_CHARTE = A.refaire_charte !== true
 // Les ecrans PHARES du porteur : implementes EN PREMIER, par le modele le plus fort, avec une
 // recette au navigateur en plus des deux revues. `dabord` ordonne ; `phares` (defaut = dabord)
-// choisit le traitement.
+// choisit le traitement. Rester UN PETIT ENSEMBLE (2-3 cles) : chaque cle coute un traitement a
+// effort max — l'etendre en silence est le meme gaspillage que le § 12.10.7 corrige ailleurs.
 // Defaut : les deux fils (directive du porteur, 2026-09-01) — une reprise de run ne relit pas
 // toujours ses args, donc la priorite vit dans le script, pas seulement dans l'appel.
 const DABORD = Array.isArray(A.dabord) && A.dabord.length
@@ -275,6 +286,23 @@ et sur le cadrage qui les a soulevees. Ne les rediscute pas : applique-les.
      ne changent pas d'un octet ;
    - la decision d'ouvrir un jour ces deux routes ENSEMBLE reste une issue \`decision-produit\` a
      ouvrir, jamais un travail de ce tour.
+
+2. LE FIL EST UN CHAT, PAS UN FORMULAIRE — LE DETAIL EST AU § 12.10 (2026-09-03). Lis-le en entier
+   avant de toucher \`thread\`, \`rich\`, \`media\` ou \`chats\` ; en resume :
+   - citation/reponse, plein ecran sur TOUT media (image/video/audio), transcription au Prisme —
+     par des mecanismes a TEMOIN (defilement, mise en evidence au clic, zoom), JAMAIS par le mode
+     « focal » (opacite permanente) retire au tour 2 (§ 12.9) : ne le reintroduis pas ;
+   - le nombre de participants ne s'affiche PAS dans une conversation a 2 (\`fil-vue.ts:168,183\`,
+     \`vue.ts:63,114\`) ; a partir de 3, il reste ;
+   - le profil d'un participant s'ouvre en MODALE (\`sheet:profil-membre\`, nouvel ecran hors
+     matrice, distinct de \`sheet:member\` qui est l'espace du COMPTE PROPRE) — le faire entrer dans
+     la planche/matrice/cible en phase Concevoir avant tout code ;
+   - \`/chats\` recoit le balayage gauche/droite (archiver/mute d'un cote, supprimer de l'autre),
+     optimiste, ET les memes actions restent au clavier/lecteur d'ecran (jamais le geste seul) ;
+   - feed, reels, comments, composer, storyCreate, links/sheet:link rejoignent le focus explicite,
+     dans cet ordre, apres le fil et la liste — aucune route ni critere de fin ne change, seul
+     l'ORDRE d'attaque change ;
+   - rien de tout cela n'ajoute un octet de JS hors ce que § 12.4 autorise deja.
 `
 
 
@@ -604,7 +632,7 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
     const DIRECTIONS = [
       {
         nom: 'clarte-rurale',
-        modele: 'opus',
+        modele: 'sonnet',
         angle: "LA LISIBILITE D'ABORD, pour un telephone d'entree de gamme au soleil, en 3G lente : contrastes forts, typographie systeme genereuse, boutons pleins et hauts, un seul accent, zero decoration qui ne porte pas de sens. Le luxe, c'est l'espace blanc.",
       },
       {
@@ -682,7 +710,7 @@ ${court(propositions, 12000)}`,
     charteRetenue = jugement
     log(`Charte retenue : ${jugement ? jugement.retenue : '(aucune — le juge n a rien rendu)'}`)
   } else if (SANS_CHARTE) {
-    log('Charte : sautee (sans_charte=true) — la charte est celle du § 12 de la conception')
+    log('Charte : sautee par defaut (deja arretee, § 12.5) — passe refaire_charte=true pour la relancer')
   }
 
   const CHARTE = charteRetenue && charteRetenue.charte
@@ -750,7 +778,7 @@ mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
 
 Ne commit PAS. Rends le rapport, les fichiers touches, les vues ajoutees (id, route, png), le rc de
 l'ordre, et les contradictions tranchees.`,
-    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: 'opus', effort: 'high' })
+    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: 'sonnet', effort: 'high' })
 
   if (conception && conception.ordre_rc !== 0) {
     log(`ATTENTION : ordre-des-ecrans.js rend rc=${conception.ordre_rc} — la phase Gates devra le remettre a 0`)
@@ -843,7 +871,7 @@ METHODE, dans cet ordre :
 
 Rends un rapport texte : ce que tu as fait, les fichiers touches, les commandes lancees et leurs
 sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute contradiction trouvee.`,
-      { label: `livrer:${t.cle}`, phase: 'Implementer', model: 'opus', effort: phare ? 'max' : 'high' })
+      { label: `livrer:${t.cle}`, phase: 'Implementer', model: phare ? 'opus' : 'sonnet', effort: phare ? 'max' : 'high' })
 
     // ------------------------------------------------------------------ Revue
     phase('Revue')
@@ -958,7 +986,7 @@ ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d
 
 Rends : corriges (nombre), refutes (nombre), rapport (ce qui a ete corrige, ce qui a ete refute et
 pourquoi, les commandes rejouees et leurs sorties).`,
-        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: 'opus', effort: phare ? 'max' : 'high' })
+        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: phare ? 'opus' : 'sonnet', effort: phare ? 'max' : 'high' })
       corrections.push(correction)
 
       if (passe === 1 && correction && correction.corriges > 0) {
@@ -1046,7 +1074,7 @@ ${court(rouges, 8000)}
 CE QUI BLOQUE, selon la passe : ${gates.ce_qui_bloque || '(non dit)'}
 
 Rends ce que tu as corrige, avec les commandes rejouees et leurs sorties.`,
-      { label: `corriger-gates:tour-${tour}:${passe}`, phase: 'Implementer', model: 'opus', effort: 'high' })
+      { label: `corriger-gates:tour-${tour}:${passe}`, phase: 'Implementer', model: 'sonnet', effort: 'high' })
   }
 
   // -------------------------------------------------------------------------
@@ -1079,7 +1107,7 @@ GATES (sorties) :
 ${court(gates, 10000)}
 
 Rends un rapport texte des fichiers touches et de ce qui a change dans chaque document.`,
-    { label: `documenter:tour-${tour}`, phase: 'Documenter', model: 'opus', effort: 'medium' })
+    { label: `documenter:tour-${tour}`, phase: 'Documenter', model: 'sonnet', effort: 'medium' })
 
   // -------------------------------------------------------------------------
   phase('Livrer')
@@ -1104,7 +1132,7 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    titre en francais qui dit le RESULTAT (\`feat(web-v3): …\`, \`docs(design): …\`), un corps qui dit
    CE QUI ETAIT CASSE ou absent et POURQUOI la forme retenue, \`Closes #<n>\` par issue livree
    (JAMAIS \`Closes #0\`), et en fin de message :
-   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+   Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
    N'ecris aucun nom de modele ailleurs dans le message.
 3. \`git push -u origin ${BRANCHE}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
    Sur rejet non-reseau (non fast-forward) : \`git pull --rebase origin ${BRANCHE}\` puis rejoue
@@ -1141,7 +1169,7 @@ ${resultats.map((r) => `- ${r.cle} (#${r.issue || '?'}) : ${r.titre}\n  mures: $
 
 DOCUMENTATION DU TOUR :
 ${(documentation || '').slice(0, 3000)}`,
-    { label: `livrer:tour-${tour}`, phase: 'Livrer', schema: LIVRAISON, model: 'opus', effort: 'high' })
+    { label: `livrer:tour-${tour}`, phase: 'Livrer', schema: LIVRAISON, model: 'sonnet', effort: 'high' })
 
   // -------------------------------------------------------------------------
   phase('Completude')
@@ -1166,7 +1194,7 @@ Ta question : QU'EST-CE QUI MANQUE ENCORE, et dans quel ordre le prochain tour d
 
 RAPPORTS DE LIVRAISON :
 ${court(livraison, 4000)}`,
-    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: 'opus', effort: 'high' })
+    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: 'sonnet', effort: 'high' })
 
   resultatsDesTours.push({
     tour,

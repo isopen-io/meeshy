@@ -79,6 +79,50 @@ ignore un kind ne casse pas — `case .reserved(let raw)` le conserve à
 l'aller-retour et l'inscrit dans `unpaintableKinds`, donc le lecteur SAIT qu'il
 peint une scène amputée. C'est le producteur qui manquerait, jamais le filet.
 
+### Le MOUVEMENT d'un objet est une propriété, jamais un kind
+
+La règle ci-dessus a une jumelle qu'il faut énoncer, parce qu'elle décide de la
+même chose dans l'autre sens. *Sept kinds déclarés ne font pas sept cas d'objet*
+dit qu'on n'invente pas un cas pour aligner un compte ; celle-ci dit **qu'on
+n'invente pas un kind pour porter une capacité nouvelle** (#3956).
+
+Le cas vivant est le MOUVEMENT d'une décoration (`StorySticker.animation`,
+#4821) : `pulse`, `heartbeat`, `wobble`, `bounce`, `float`, `spin`, `blink`,
+`shake`, `swing`, et deux en un coup, `pop` et `tada`.
+
+| ce qu'il EST | ce qu'il n'est PAS |
+|---|---|
+| une **propriété** d'un `sticker` — un champ de plus sur la charge | un huitième `ACTIVE_KIND` |
+| **déclaré par le GABARIT** (`StickerTemplate.animation`), recopié à la pose | un réglage que l'auteur compose |
+| une **fonction pure du temps** — `pose(at:) → Pose` | une `CAAnimation`, que `layer.render(in:)` ignorerait à l'export |
+
+**Pourquoi une propriété et pas un kind, précisément.** Un client qui ne sait
+pas rendre le mouvement — web et Android aujourd'hui — lit la décoration et la
+peint FIXE : il perd le mouvement, jamais la décoration. Un kind neuf aurait
+produit l'inverse : `case .reserved(let raw)` l'aurait conservé à
+l'aller-retour et inscrit dans `unpaintableKinds`, donc la scène se serait
+déclarée AMPUTÉE pour un mouvement absent. Le choix du contenant décide de ce
+qu'on perd quand un lecteur ne suit pas.
+
+**Une seule fonction, trois horloges.** `pose(at:)` est le site unique du
+mouvement, et c'est ce qui fait que le lecteur (60 Hz), l'export (30 fps, où
+Core Animation n'anime rien) et le composer rendent la même image — la loi 6
+appliquée au mouvement. Seule l'HORLOGE diffère, et l'écart est assumé :
+
+| surface | horloge |
+|---|---|
+| lecteur, export | le **playhead** de la slide, moins `startTime` |
+| composition (#4999) | un **temps ÉCOULÉ depuis la pose** (`StoryStickerMotionClock`) — il n'y a pas de playhead en édition, et il ne doit pas y en avoir : le faire avancer ferait disparaître tout objet dont la fenêtre temporelle serait passée |
+
+**Ce que l'auteur en voit, avant de poser.** La palette MONTRE le mouvement sur
+la vignette et le marque d'un glyphe (#5000) : le fait, jamais le nom de la
+courbe. `pose(at: 0)` étant l'identité par contrat, une vignette qui entre à
+l'écran part de la pose exacte que la décoration prendra — et un `pop` ou un
+`tada` joue à la POSE, pas une fois à l'ouverture.
+
+Restitution, `reduceMotion`, et l'état cross-plateforme : § du modèle du
+lecteur, et #4911 pour la décision web / Android.
+
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
 Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
@@ -248,28 +292,43 @@ Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
 | **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
 | **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
 | **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
-| **`MeeshyPublication`** | **rien.** Elle se projette en N `Post` (§ 1 bis) | **aucun type de ce nom** |
+| **`MeeshyPublication`** | **rien.** Elle se PROJETTE, et la cardinalité dépend du PROFIL — N posts en S, UN seul en P/R (§ 1 bis) | **aucun type de ce nom** |
 
 ```bash
 grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
 git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
 ```
 
-**Une divergence de NOM, et c'est celle que le § 1 met en garde d'éviter.**
-Le contrat nomme l'objet de scène **`place`** (`ACTIVE_KINDS`,
-`canvas-v3.ts:5`) ; la somme Swift le nomme **`location`**
-(`MeeshySceneObject.swift:60`). Or `location` est, dans le même langage et
-souvent dans le même fichier, le **lieu de la PUBLICATION** (`location:
-SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire exactement la
-paire que le tableau du § 1 sépare : *d'où l'on publie* contre *une pastille
-posée sur une scène*.
+**La divergence de NOM qui vivait ici est SOLDÉE** (#4776, #4960 ; re-mesurée le
+2026-09-03) :
 
-> **Le seul mot que ce cas ne devait pas porter est celui qu'il porte.** La
-> confusion n'est pas hypothétique : le modèle l'a nommée avant qu'elle
-> existe dans le type, et un lecteur qui suit `place` depuis le contrat ne le
-> trouve nulle part côté Swift.
+```
+MeeshySceneObject.swift:60:    case place(StoryLocationObject)
+canvas-v3.ts:5: ACTIVE_KINDS = ['text','media','sticker','audio','place','drawing','mention']
+```
 
-Suivi : renommer le cas en `.place` — mécanique, mais sur l'API publique du SDK.
+Le contrat et la somme Swift disent le même mot. Ce paragraphe décrivait
+jusqu'ici un cas nommé `location`, et prescrivait « Suivi : renommer le cas en
+`.place` » — un défaut révolu et un suivi déjà fait.
+
+> **Une dette payée dont l'énoncé survit coûte deux fois** : elle envoie le
+> lecteur chercher un défaut absent, et elle discrédite les autres énoncés du
+> même document — celui qui a vérifié une fois pour rien ne vérifiera pas la
+> deuxième. C'est la raison pour laquelle un document d'AUTORITÉ se relit
+> ligne à ligne au lieu de s'augmenter par le bas.
+
+**Ce que l'épisode laisse, et qui vaut d'être gardé.** `location` était, dans le
+même langage et souvent dans le même fichier, le **lieu de la PUBLICATION**
+(`location: SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire
+exactement la paire que le tableau du § 1 sépare : *d'où l'on publie* contre
+*une pastille posée sur une scène*. Le mot qu'un cas ne doit pas porter est
+celui qui désigne déjà autre chose à deux lignes de là, et le contrat partagé
+est l'arbitre : quand il a un nom, c'est le sien.
+
+Corollaire de méthode, payé au renommage : **seul le compilateur compte les
+consommateurs d'un membre renommé.** Un `grep` sur `location` rendait 114
+occurrences dont 3 réelles, et ratait `case .place` chez les appelants qui
+n'écrivent jamais le nom du type.
 
 **Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
 solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
@@ -391,13 +450,66 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 
 ### Ce que cette opacité coûte, en chiffres
 
-| mesure | valeur |
-|---|---|
-| champs des cinq modèles d'objet | **123** |
-| champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **65** (53 %) |
-| champs jamais exercés — donc jamais comparés | **58** (47 %) |
-| clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 |
-| pertes silencieuses corrigées en deux jours | **8** |
+> **Le premier nombre disait 123, et il n'était pas reproductible** (constat du
+> 2026-09-03). Recompté par trois heuristiques — `grep` sur `public var|let`,
+> bornage par la déclaration suivante, équilibrage d'accolades — il rendait
+> **112**, **131** et **119**. L'écart ne venait pas des modèles : il venait de
+> ce que « un champ » n'était pas défini. Propriétés calculées ? `internal` ?
+> déclarées en extension ?
+>
+> **Un nombre que personne ne sait recompter n'est pas une mesure, c'est une
+> décoration** — et il décore d'autant mieux qu'il est précis.
+>
+> **La règle est désormais `Mirror`**, sur une instance : la définition de Swift
+> lui-même pour « propriété stockée ». Elle exclut d'office les calculées, les
+> statiques et les méthodes sans qu'on ait à en décider, et n'importe qui la
+> rejoue en trois lignes. C'est aussi celle qu'emploie déjà
+> `CanvasV3ExhaustivityTests` sur les mêmes modèles — une seconde convention en
+> aurait fait deux.
+>
+> Elle rend **120**, un QUATRIÈME nombre : aucune des trois heuristiques n'était
+> juste, et chacune paraissait l'être.
+>
+> **`SceneObjectFieldCensusTests` (SDK) tient ce chiffre** et rougit dès qu'un
+> champ est ajouté à l'un des cinq modèles. Son message ne dit pas « corrige le
+> nombre » : il demande si le champ neuf est EXERCÉ par le blob v1 partagé — car
+> s'il ne l'est pas, il vient d'agrandir les 47 % que rien ne compare, ce que ce
+> paragraphe existe pour rendre visible.
+
+| mesure | valeur | tenue par |
+|---|---|---|
+| champs des cinq modèles d'objet | **120** (`Mirror`, 2026-09-03) | `SceneObjectFieldCensusTests` |
+| champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **≈ la moitié** † | — |
+| champs jamais exercés — donc jamais comparés | **≈ la moitié** † | — |
+| clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 | commit |
+| pertes silencieuses corrigées en deux jours | **8** | commits |
+
+† **Ces deux-là étaient chiffrés 65 / 58, et leur somme faisait l'ancien 123.**
+Les recopier tels quels sous un recensement de 120 aurait produit une
+arithmétique fausse — et une somme qui ne tombe pas juste est le premier endroit
+où un lecteur cesse de croire un tableau. Ils sont donc rendus à ce qu'ils
+mesurent VRAIMENT : une proportion, qui porte l'argument entière.
+
+**La répartition n'est PAS gardée, et ce n'est plus elle qu'il faut garder**
+(#4986, second volet, 2026-09-03). En cherchant à l'inventorier, la prémisse a
+bougé : depuis #4905 les cinq branches d'objet RÉPANDENT, donc un champ ajouté à
+un modèle voyage désormais **sans que le golden ait à l'exercer**. La couverture
+du golden ne porte plus le risque qu'elle portait quand ce paragraphe a été
+écrit.
+
+Ce qui immunise n'est pas le COMPTE, c'est la FORME — et c'est elle qui est
+gardée : `storyEffectsV3.spread.test.ts` exige que chacune des cinq branches
+d'objet contienne `...rest`. Une branche qu'on ramènerait à un inventaire clé par
+clé rougit désormais.
+
+> La garde EXEMPTE la branche `blob.stickers` (legacy), qui écrit
+> `o.payload = { emoji }` sans répandre — et c'est correct : sa source est un
+> tableau de CHAÎNES, pas d'objets. Il n'y a rien à répandre. Une garde qui
+> l'exigerait quand même demanderait de réparer ce qui n'est pas cassé.
+
+> Les deux dernières lignes sont d'une autre nature, et c'est pourquoi elles
+> gardent leur chiffre exact : ce sont des **événements datés**, traçables à
+> leurs commits, pas des populations à recompter.
 
 **Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
 coïncidence : c'est le mécanisme. Un champ que le golden n'exerce pas n'est

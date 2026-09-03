@@ -94,6 +94,9 @@ public struct EmbeddedSceneCanvas: View {
     /// Notifié quand l'utilisateur tape le FOND de la scène (hors de tout
     /// objet) — l'hôte l'utilise typiquement pour effacer sa sélection.
     public var onBackgroundTapped: (() -> Void)?
+    /// Appui long sur une zone VIDE de la carte — inerte chez qui ne le
+    /// branche pas (le composer l'utilise pour ouvrir la caméra, #4036).
+    public var onBackgroundLongPressed: (() -> Void)?
 
     /// **Les bitmaps du composer, keyés par id d'objet média (#4038).**
     ///
@@ -166,6 +169,7 @@ public struct EmbeddedSceneCanvas: View {
         onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
         editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
         onBackgroundTapped: (() -> Void)? = nil,
+        onBackgroundLongPressed: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
         loadedImagesVersion: UInt64 = 0,
         isDrawingOverlayActive: Bool = false,
@@ -185,6 +189,7 @@ public struct EmbeddedSceneCanvas: View {
         self.onItemDoubleTapped = onItemDoubleTapped
         self.editableKinds = editableKinds
         self.onBackgroundTapped = onBackgroundTapped
+        self.onBackgroundLongPressed = onBackgroundLongPressed
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
         self.isDrawingOverlayActive = isDrawingOverlayActive
@@ -229,6 +234,7 @@ public struct EmbeddedSceneCanvas: View {
                 selectedItemId: selectedItemId,
                 selectionBadge: selectionBadge,
                 onBackgroundTapped: onBackgroundTapped,
+                onBackgroundLongPressed: onBackgroundLongPressed,
                 isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
                 loadedImagesVersion: loadedImagesVersion,

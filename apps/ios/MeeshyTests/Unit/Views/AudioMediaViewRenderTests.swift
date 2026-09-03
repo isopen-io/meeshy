@@ -62,6 +62,46 @@ final class AudioMediaViewRenderTests: XCTestCase {
             "AudioMediaView Equatable doit détecter l'arrivée de l'avatar de l'auteur cité")
     }
 
+    /// La PROTECTION du média cité décide si la vignette est rendue et si sa
+    /// zone tactile est armée. Elle arrive après coup (bulle optimiste → écho
+    /// serveur, blob de cache ancien → refresh) : absente du comparateur, la
+    /// vignette d'un média à vue unique restait affichée pour toujours.
+    func test_audioMediaView_equatable_detectsQuotedMediaProtectionChange() {
+        let a = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                                           attachmentThumbnailUrl: "https://cdn.example/t.jpg")
+        )
+        let b = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                                           attachmentThumbnailUrl: "https://cdn.example/t.jpg",
+                                           attachmentIsProtected: true)
+        )
+
+        XCTAssertFalse(a == b,
+            "AudioMediaView Equatable doit détecter l'arrivée de la protection du média cité")
+    }
+
+    /// Les SEPT faits du média cité (#4945) — flou ThumbHash et ligne
+    /// « 1024×768 · 0:42 · 1,2 Mo ». Ils arrivent avec l'écho serveur ; absents
+    /// du comparateur, la citation restait figée sur sa version optimiste.
+    func test_audioMediaView_equatable_detectsQuotedAttachmentFactsChange() {
+        let a = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")
+        )
+        let b = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(
+                messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                attachmentFacts: ReplyReference.QuotedAttachmentFacts(
+                    thumbHash: "AQIDBA==", width: 1024, height: 768,
+                    durationMs: 42_000, fileSize: 1_200_000, pageCount: nil, mimeType: "image/jpeg"
+                )
+            )
+        )
+
+        XCTAssertFalse(a == b,
+            "AudioMediaView Equatable doit détecter l'arrivée des faits du média cité")
+    }
+
     /// Stabilité : deux instances avec exactement la même reply doivent rester égales.
     func test_audioMediaView_equatable_stableWhenReplyUnchanged() {
         let ref = ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")

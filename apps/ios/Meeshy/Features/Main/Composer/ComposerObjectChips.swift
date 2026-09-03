@@ -183,7 +183,7 @@ nonisolated enum ComposerObjectChips {
         case .media(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
         case .sticker(let o): return chips(for: o, locale: locale, openableBands: openableBands)
         case .audio(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
-        case .location:
+        case .place:
             // Le lieu ne porte que son nom, et il est déjà dit par l'en-tête de
             // la scène (#4034) : un jeton le répéterait sans rien offrir à
             // régler. Ce `return []` est ÉCRIT, jamais un défaut de cascade.
@@ -254,7 +254,7 @@ nonisolated enum ComposerObjectChips {
         case .media:    return ComposerObjectChipsCopy.kindMedia
         case .sticker:  return ComposerObjectChipsCopy.kindSticker
         case .audio:    return ComposerObjectChipsCopy.kindAudio
-        case .location: return ComposerObjectChipsCopy.kindLocation
+        case .place: return ComposerObjectChipsCopy.kindLocation
         }
     }
 

@@ -115,7 +115,7 @@ enum CommentComposerStaging {
         for item in items {
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let ext = isVideo ? "mov" : "jpg"
+            let ext = isVideo ? "mov" : await imageFileExtension(for: data)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
             guard (try? data.write(to: url)) != nil else { continue }
@@ -128,6 +128,38 @@ enum CommentComposerStaging {
             }
         }
         return result
+    }
+
+    /// **L'extension d'une image, lue dans ses OCTETS** (#4925).
+    ///
+    /// `loadTransferable(type: Data.self)` rend le fichier ORIGINAL de la
+    /// photothèque — un GIF y arrive intact. L'écrire sous un nom `.jpg` (ce que
+    /// faisait cette fonction) est une perte de données qui ne ressemble pas à
+    /// une perte de données : le `mimeType` se dérive ensuite de l'extension
+    /// (`pendingMedia`), et tout l'aval, jusqu'au serveur, ré-encode un GIF
+    /// parfaitement valide en JPEG. Mesuré : 6 448 o de GIF animé arrivés en
+    /// 4 404 o de JPEG fixe.
+    ///
+    /// La table de signatures n'est pas réécrite ici : `MediaCompressor` la
+    /// tient déjà, et c'est elle qui décide plus tard de laisser passer un GIF.
+    /// Deux tables divergeraient au premier format ajouté.
+    ///
+    /// **Seuls les trois formats que le dépôt a DÉJÀ décidé de laisser passer**
+    /// gardent leur extension. `MediaCompressor.compressImageData` rend un GIF et
+    /// un WebP tels quels, et une PNG en PNG ; il transcode en revanche le HEIC
+    /// délibérément (« most web clients cannot decode HEIC inline »). Nommer un
+    /// HEIC `.heic` ici irait donc CONTRE une décision existante, en servant au
+    /// web un format qu'il ne rend pas.
+    ///
+    /// Tout le reste — JPEG compris — reste `jpg`, le comportement d'hier : ce
+    /// lot ouvre un chemin, il ne change pas le cas nominal.
+    static func imageFileExtension(for data: Data) async -> String {
+        switch await MediaCompressor.shared.imageMimeType(of: data) {
+        case "image/gif":  return "gif"
+        case "image/png":  return "png"
+        case "image/webp": return "webp"
+        default:           return "jpg"
+        }
     }
 
     /// URLs de fichiers importés → `ComposerAttachment[]` (copie sécurisée en temp).

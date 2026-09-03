@@ -162,7 +162,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
         // Le fichier principal n'en porte plus aucun : il sort de la liste et
         // n'y revient jamais.
-        "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        // **Le `⋯` a quitté `+Intake` le 2026-09-03** (#4996) : le fichier
+        // franchissait le plafond de 1 200 lignes, et la responsabilité du
+        // menu est partie dans `MeeshyComposerHost+Overflow.swift`. La seule
+        // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
+        // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
+        // aucune et sort de la liste, comme la règle 4 l'exige.
+        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
@@ -229,7 +235,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/MyStoryCard.swift",
         "Features/Main/Views/OnboardingView.swift",
         "Features/Main/Views/ParticipantProfileSheet.swift",
-        "Features/Main/Views/PostDetailView.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
@@ -331,7 +336,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
     /// > cliquet et devient un plafond : il ne rougirait plus que sur une
     /// > régression plus grosse que l'écart accumulé.
-    private static let totalCeiling = 247
+    /// 246 et non 247 : `PostDetailView` a quitté la liste. Ses deux tailles
+    /// figées sont parties dans `PostDetailView+AbsenceStates` à l'extraction,
+    /// puis ont été converties en `MeeshyFont.relative(40)` — une icône d'état
+    /// vide n'a pas de cadre fixe, donc rien ne justifiait qu'elle ignore
+    /// Dynamic Type. Le cliquet DESCEND avec la dette : c'est ce qu'il exige,
+    /// et c'est ce qui l'empêche de devenir un plancher.
+    private static let totalCeiling = 246
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

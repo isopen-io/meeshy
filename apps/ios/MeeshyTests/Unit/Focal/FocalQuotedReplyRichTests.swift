@@ -210,8 +210,14 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "La miniature doit lire les URL DÉJÀ portées par ReplyReference — jamais une seconde résolution d'attachment."
         )
         XCTAssertTrue(
-            code.contains("CachedAsyncImage(url: thumbnailURL.absoluteString)"),
+            code.contains("CachedAsyncImage(") && code.contains("url: thumbnailURL.absoluteString"),
             "La vignette passe par CachedAsyncImage (3-tier) — jamais un AsyncImage nu qui re-télécharge à chaque réutilisation de cellule."
+        )
+        XCTAssertTrue(
+            code.contains("thumbHash: QuotedReplyPresentation.thumbHash(for: reference)"),
+            "L'appel a gagné un SECOND argument (#4946) : le flou ThumbHash instantané, refusé par la règle " +
+            "pour un média protégé. La forme mono-ligne d'origine n'est donc plus celle du fichier — c'est " +
+            "l'ajout qui a fait bouger cette assertion, pas un déplacement du composant."
         )
         XCTAssertTrue(
             code.contains("attachmentKind?.hasTimebasedTrack == true"),

@@ -57,6 +57,10 @@ type Demande = {
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
+  /** L'horloge, injectable : une story EXPIRE, et un témoin qui lit l'heure
+   *  réelle devient rouge à la date de sa fixture — sans qu'aucune ligne ait
+   *  changé (leçon 234i, l'horloge après la locale). */
+  readonly maintenant?: number;
 };
 
 const invitation = (id: string): Response => rendu(documentDeLInvitation({ id }));
@@ -80,7 +84,7 @@ type Charge =
  * rend telle quelle ; le POST la rend avec le refus PEINT et le texte saisi,
  * jamais perdu.
  */
-const charge = async ({ requete, id, recuperer }: Demande): Promise<Charge> => {
+const charge = async ({ requete, id, recuperer, maintenant = Date.now() }: Demande): Promise<Charge> => {
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return { genre: 'reponse', reponse: invitation(id) };
 
@@ -97,7 +101,6 @@ const charge = async ({ requete, id, recuperer }: Demande): Promise<Charge> => {
   if (chargee.genre === 'panne') return { genre: 'reponse', reponse: rendu(documentDePanne(), 503) };
 
   const lecteur: Lecteur | null = identite.genre === 'lecteur' ? identite.lecteur : null;
-  const maintenant = Date.now();
   const story = storyLue({
     brut: chargee.brut,
     langues: languesDuLecteur(lecteur ?? {}),

@@ -550,8 +550,24 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
      * (doc-tête). `cidsVus` est la déduplication par `clientMessageId` de la
      * passerelle (§ 6.2 de la phase 4) : une clé revue rend le message déjà
      * persisté, `isDuplicate: true`.
+     *
+     * `search` EST EXCLU DU PARAMÈTRE, et ce n'est pas un cas particulier : le
+     * routeur radix de Fastify donne la priorité à un segment STATIQUE sur un
+     * segment paramétrique, si bien que `GET /conversations/search`
+     * (`routes/conversations/search.ts:67`) l'emporte toujours sur
+     * `GET /conversations/:id`. Une expression rationnelle, elle, n'a pas cette
+     * priorité — elle prenait donc `search` pour un identifiant et servait un
+     * fil là où la production sert des résultats.
+     *
+     * C'est la faute que le dépôt nomme « un double de test ment aussi par ce
+     * qu'il ACCEPTE » : ce bouchon acceptait un identifiant que la passerelle
+     * n'accepte pas, et le témoin de la recherche tombait en accusant l'écran.
+     * Un identifiant de conversation est un ObjectId ; `search` n'en est pas
+     * un, et aucune route ne le lira jamais comme tel.
      */
-    const fil = /^\/api\/v1\/conversations\/([^/?]+)(\/messages)?$/.exec(url.pathname);
+    const fil = /^\/api\/v1\/conversations\/(?!search(?:$|[/?]))([^/?]+)(\/messages)?$/.exec(
+      url.pathname,
+    );
     if (fil === null) return false;
     const identite = etat.creanceDe(requete);
     if (identite === null) {

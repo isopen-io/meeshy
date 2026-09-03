@@ -14,7 +14,17 @@ import MeeshySDK
 public enum StoryStickerAccessibility {
 
     public static func description(for sticker: StorySticker) -> String {
-        withMotion(base(for: sticker), sticker.animation)
+        describing(base(for: sticker), motion: sticker.animation)
+    }
+
+    /// **Le site UNIQUE où un mouvement s'ajoute à une phrase** (#5000).
+    ///
+    /// La palette en a besoin comme la scène : une vignette animée doit se dire
+    /// « Cadran — 14:32, qui palpite ». Le composer aurait pu recopier la
+    /// ligne ; deux copies d'une même phrase divergent au premier libellé
+    /// ajouté, chacune restant cohérente avec elle-même.
+    public static func describing(_ base: String, motion: StickerAnimation?) -> String {
+        withMotion(base, motion)
     }
 
     private static func base(for sticker: StorySticker) -> String {

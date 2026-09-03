@@ -316,6 +316,29 @@ extension MeeshyComposerHost {
         return nil
     }
 
+    /// **Ce que chaque porte du rail PORTE DÉJÀ** (#4994).
+    ///
+    /// Le relevé est composé ICI parce que les deux magasins vivent ici : la
+    /// `StorySlide` pour ce qui se VOIT sur la scène, l'état du meuble pour ce
+    /// qui QUALIFIE la publication (le lieu, le fond, les personnes nommées).
+    /// La règle, elle, ne connaît ni l'un ni l'autre — c'est ce qui la rend
+    /// éprouvable sans monter une vue.
+    var railDoorBadges: [ComposerRailDoor: Int] {
+        ComposerRailDoorBadge.badges(
+            for: ComposerRailDoor.canonicalRail,
+            in: ComposerRailDoorBadge.matter(
+                slide: viewModel.currentSlide,
+                // **Le site UNIQUE, jamais une seconde dérivation** (#5007) :
+                // `composerHashtags` est déjà `ComposerHashtags.tags(in:
+                // documentText)`, et la feuille comme le sélecteur le lisent
+                // sans le recalculer.
+                hashtags: composerHashtags.count,
+                description: sceneDescriptionBinding.wrappedValue,
+                mentions: composerReferences.count,
+                hasDocumentLocation: documentLocation != nil,
+                hasDocumentBackground: documentBackground != nil))
+    }
+
     var sceneSurface: some View {
         ComposerSceneSurface(
             localMedia: headerTileMedia,
@@ -379,11 +402,18 @@ extension MeeshyComposerHost {
                     // une seconde vue d'édition aurait divergé au premier
                     // réglage.
                     editSceneSound(id)
-                case .media, .sticker, .location:
-                    break
+                case .media, .sticker, .place:
+                    // **#4937 — l'éditeur d'objet sert les cinq familles.** Ces
+                    // trois-là n'y ont pas encore de panneau d'options propre,
+                    // mais elles y ont leur FENÊTRE et leur TIMELINE, ce qu'aucun
+                    // autre écran n'offrait : leur `break` ne protégeait plus
+                    // rien, il rendait le geste muet.
+                    openObjectEditor(id)
+                    HapticFeedback.medium()
                 }
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
+            onBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -418,6 +448,11 @@ extension MeeshyComposerHost {
                     allowsCapture: profile.allowsCapture
                 )
             ),
+            // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
+            // ICI parce que les deux magasins vivent ici — la slide pour ce qui
+            // se voit, l'état du meuble pour ce qui qualifie la publication.
+            // La surface, elle, ne compte rien : elle relaie.
+            railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
@@ -584,6 +619,25 @@ extension MeeshyComposerHost {
             // « absente » y est presque toujours une feature non branchée.
             backgroundSound: avatarBadgeSound,
             onEditBackgroundSound: editBackgroundSoundAction,
+            onDeleteBackgroundSound: deleteBackgroundSoundAction,
+            // **Le pied lit les MÊMES magasins que le reste du meuble** (#5002).
+            //
+            // `composerHashtags` — pas `ComposerHashtags.tags(in: documentText)`.
+            // La dérivation a DÉJÀ son site unique
+            // (`MeeshyComposerHost+Audience.swift`), que la feuille et le
+            // sélecteur lisent sans le recalculer, et `ComposerAudienceAndHashtagTests`
+            // le compte. J'ai écrit la seconde dérivation en commentant, douze
+            // lignes plus haut dans la surface, que « les dériver ici ouvrirait
+            // un second chemin vers le même fait » — la règle était juste et je
+            // l'ai enfreinte dans le même lot, du côté où je ne la relisais pas.
+            sceneHashtags: composerHashtags,
+            sceneReferences: composerReferences,
+            // **La MÊME porte que le rail**, pas un second chemin : toucher une
+            // balise au pied ouvre exactement ce que la porte `#` ouvre. Un
+            // pied qui présenterait sa propre feuille en ferait deux à tenir
+            // d'accord — et la première divergence serait invisible.
+            onOpenHashtags: { handleRailDoor(.hashtag) },
+            onOpenMentions: { handleRailDoor(.mention) },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -639,6 +693,7 @@ extension MeeshyComposerHost {
             // l'atelier plein écran, que ce lot doit laisser intact. Le SDK dit
             // ce qui a été touché, l'app décide ce que cela sélectionne.
             onSceneBackgroundTapped: { handleSceneBackgroundTap() },
+            onSceneBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // Taper une vignette amène SA slide sur la scène (#4038). La table
             // `slideIdByMediaURL` est justement l'index qui relie les deux ;
             // sans elle il faudrait deviner par l'ordre, qui ment dès qu'un
@@ -657,6 +712,7 @@ extension MeeshyComposerHost {
             backgroundSound: avatarBadgeSound,
             // #4668 — et le toucher l'OUVRE, comme la carte du son de contenu.
             onEditBackgroundSound: editBackgroundSoundAction,
+            onDeleteBackgroundSound: deleteBackgroundSoundAction,
             // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
             onEditForegroundSound: { son in editForegroundSound(son) },
@@ -740,7 +796,7 @@ extension MeeshyComposerHost {
     /// telle quelle, le même composant que la scène emprunte par
     /// environnement.
     var documentCameraSheet: some View {
-        CameraView { result in
+        CameraView(initialMode: pendingCameraMode) { result in
             Task { await ingestCameraCapture(result) }
         }
     }

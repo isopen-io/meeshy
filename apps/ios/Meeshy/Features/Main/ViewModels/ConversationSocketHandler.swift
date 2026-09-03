@@ -411,7 +411,7 @@ final class ConversationSocketHandler {
                         // below — `delegate.messages` (and therefore this
                         // index) can change across the suspension point.
                         let optimisticContent = delegate.messages[optimisticIdx].content
-                        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
                         var msgArray = [decoded]
                         await delegate.decryptMessagesIfNeeded(&msgArray)
                         guard let serverMsg = msgArray.first else { return }
@@ -491,7 +491,7 @@ final class ConversationSocketHandler {
                             if hasNewData, let persistence = self.persistence {
                                 // Write refreshed attachment data through persistence;
                                 // store observation surfaces the update to the view.
-                                let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                                let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
                                 let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
                                 do {
                                     try await persistence.updateAttachmentsJson(
@@ -543,7 +543,7 @@ final class ConversationSocketHandler {
                     // them — a media-only or encrypted message received via
                     // socket rendered as an empty bubble.
                     if let persistence = self.persistence {
-                        await persistence.bufferIncomingAPIMessages([apiMsg])
+                        await persistence.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
                     }
 
                     // Own message from another device — persisted above;
@@ -554,7 +554,7 @@ final class ConversationSocketHandler {
                     // for the transient UI signals (scroll-to-bottom preview) —
                     // the persisted row stays ciphertext on disk and the
                     // display pipeline decrypts it.
-                    let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
+                    let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
                     var msgArray = [decoded]
                     await delegate.decryptMessagesIfNeeded(&msgArray)
                     guard let msg = msgArray.first else { return }

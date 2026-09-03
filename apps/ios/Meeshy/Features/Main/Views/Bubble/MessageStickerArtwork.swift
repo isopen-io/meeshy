@@ -111,19 +111,29 @@ struct MessageStickerArtwork: View {
                 Color.clear.frame(width: size.width, height: size.height)
             }
         case .picture(let picture):
-            // `autoLoad: true` : le PNG EST le message — pas une pièce jointe
-            // qu'on choisit de télécharger. Sans lui, un sticker d'une version
-            // plus récente n'aurait rien à montrer.
-            ProgressiveCachedImage(
-                thumbHash: picture.thumbHash,
-                thumbnailUrl: picture.thumbnailUrl,
-                fullUrl: picture.fileUrl,
-                autoLoad: true,
-                targetSize: CGSize(width: side, height: side)
+            // **Animé si les octets animent, figé sinon** (#4925). L'enveloppe
+            // ne remplace pas le chemin progressif : elle le garde en repli, et
+            // une image fixe — la quasi-totalité des stickers — suit exactement
+            // le chemin d'hier, au prix d'hier.
+            AnimatedCachedImage(
+                urlString: picture.fileUrl,
+                animates: animates,
+                pointSize: side
             ) {
-                Color(hex: picture.thumbnailColor).shimmer()
+                // `autoLoad: true` : le PNG EST le message — pas une pièce
+                // jointe qu'on choisit de télécharger. Sans lui, un sticker
+                // d'une version plus récente n'aurait rien à montrer.
+                ProgressiveCachedImage(
+                    thumbHash: picture.thumbHash,
+                    thumbnailUrl: picture.thumbnailUrl,
+                    fullUrl: picture.fileUrl,
+                    autoLoad: true,
+                    targetSize: CGSize(width: side, height: side)
+                ) {
+                    Color(hex: picture.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fit)
             }
-            .aspectRatio(contentMode: .fit)
             .frame(width: side, height: side)
         case .emoji(let emoji):
             Text(emoji)

@@ -55,7 +55,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
     /// aussi : le geste dit « je sors de ce que je regardais », pas « je passe
     /// au fond ».
     func test_taperLeFond_effaceUneSelectionDePremierPlan() {
-        for selection: StoryCanvasUIView.CanvasItemKind in [.text, .sticker, .location, .media] {
+        for selection: StoryCanvasUIView.CanvasItemKind in [.text, .sticker, .place, .media] {
             XCTAssertNil(
                 ComposerSceneBackgroundTapPolicy.selection(
                     currentSelection: selection, backgroundIsMedia: true),

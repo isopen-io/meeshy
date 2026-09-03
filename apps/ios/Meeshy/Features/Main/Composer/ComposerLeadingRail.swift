@@ -97,6 +97,17 @@ struct ComposerLeadingRail: View {
     /// mention · lieu), pas d'une commodité de rendu.
     var systemEntryAfter: ComposerRailDoor?
 
+    /// **Ce que chaque porte PORTE DÉJÀ** (#4994, directive porteur
+    /// 2026-09-03 : « lorsqu'une donnée a été faite (mise) pour un des
+    /// composants, il faut insérer le compteur par dessus le composant ! »).
+    ///
+    /// Déjà résolu par `ComposerRailDoorBadge` — cette vue ne compte rien, pas
+    /// plus qu'elle ne décide quelles portes peindre. Une entrée ABSENTE vaut
+    /// « rien à dire » : c'est la loi 4 portée par la forme de la donnée plutôt
+    /// que par un `if count > 0` écrit dans le corps, qu'un second site
+    /// pourrait oublier.
+    var badges: [ComposerRailDoor: Int] = [:]
+
     @State private var lastTapped: String?
 
     private var isEmpty: Bool {
@@ -193,7 +204,8 @@ struct ComposerLeadingRail: View {
         entry(id: door.rawValue,
               symbolName: door.symbolName,
               label: ComposerRailCopy.label(door),
-              tint: MeeshyColors.textSecondary(isDark: true)) {
+              tint: MeeshyColors.textSecondary(isDark: true),
+              badge: badges[door]) {
             onDoor?(door)
         }
     }
@@ -232,6 +244,7 @@ struct ComposerLeadingRail: View {
                        symbolName: String,
                        label: String,
                        tint: Color,
+                       badge: Int? = nil,
                        action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = id
@@ -245,9 +258,43 @@ struct ComposerLeadingRail: View {
                 .composerToolBounce(active: lastTapped == id)
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
+                // **La pastille est posée SUR le glyphe, hors du flux** : dans
+                // le flux elle décalerait l'icône, et la position qu'un doigt
+                // apprend ne doit pas dépendre de ce que la scène porte.
+                .overlay(alignment: .topTrailing) { badgeBubble(badge) }
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(label))
+        // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
+        // fondre dans le libellé remplacerait le VERBE que VoiceOver annonce
+        // (« Ajouter du texte ») par une phrase composée — et un contrôle qui
+        // perd son nom dès qu'il porte un état est le défaut que le socle a
+        // déjà eu à corriger.
+        .accessibilityValue(badge.map { Text(ComposerRailCopy.badgeValue($0)) } ?? Text(""))
+    }
+
+    /// La pastille elle-même. `nil` ⇒ **rien de monté** — pas un cercle
+    /// transparent, pas une vue à opacité nulle : une pastille invisible reste
+    /// dans l'arbre d'accessibilité et se fait lire.
+    @ViewBuilder
+    private func badgeBubble(_ count: Int?) -> some View {
+        if let count {
+            Text(LocalizedNumber.exact(count))
+                .font(MeeshyFont.relative(10, weight: .bold).monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .frame(minWidth: 16, minHeight: 16)
+                .background(Capsule().fill(MeeshyColors.brandPrimary))
+                // Un liseré de la teinte du plateau détache la pastille du
+                // glyphe qu'elle chevauche — sans lui, un « 8 » posé sur une
+                // icône claire se lit comme un morceau de l'icône.
+                .overlay(Capsule().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .offset(x: 4, y: -2)
+                // Le glyphe reste la cible : la pastille n'est qu'un témoin, et
+                // un témoin qui capture le doigt vole le tap de sa porte.
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -255,6 +302,13 @@ struct ComposerLeadingRail: View {
 /// par son glyphe (loi 7 : l'icône EST le verbe, donc le lecteur d'écran doit
 /// entendre ce verbe-là).
 nonisolated enum ComposerRailCopy {
+
+    /// Ce que VoiceOver DIT d'une pastille — une phrase, jamais un chiffre nu.
+    /// « 3 » annoncé seul ne dit pas ce qu'il compte ; le libellé de la porte
+    /// dit déjà le verbe, la valeur dit la quantité POSÉE.
+    static func badgeValue(_ count: Int) -> String {
+        String(format: String(localized: "composer.rail.badge.a11y", bundle: .main), count)
+    }
 
     static var railLabel: String {
         String(localized: "composer.rail.leading.label",
