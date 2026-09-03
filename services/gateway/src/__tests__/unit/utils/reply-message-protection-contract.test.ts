@@ -145,3 +145,56 @@ describe('replyTo (niveau MESSAGE) — la protection du message cité est demand
     });
   });
 });
+
+/**
+ * #4945 — la citation descend le Prisme au CHARGEMENT comme en direct.
+ *
+ * Le fil socket (`MessageProcessor`, `replyTo: { include }`) transporte la
+ * ligne ENTIÈRE du message cité, `translations` compris ; le select nommé de
+ * la liste ne les demandait pas. Un lecteur francophone répondant à un message
+ * anglais déjà traduit lisait donc la citation en anglais après un
+ * rechargement et en français à l'arrivée en direct — un texte qui change de
+ * langue selon le chemin de chargement.
+ *
+ * Deux vérités, comme plus haut : le select DEMANDE (gardé par
+ * `includeTranslations`, même économie que la racine), et le mapping PROJETTE
+ * le JSON Prisma en tableau par `transformTranslationsToArray` — la forme que
+ * tout client lit sur la racine.
+ */
+describe('replyTo — les traductions du message cité sont demandées et projetées (#4945)', () => {
+  const source = readFileSync(SELECT, 'utf-8');
+  const bloc = selectDeLaCitation(source);
+
+  it('le select de la liste demande translations, sous la même garde que la racine', () => {
+    expect(bloc).toMatch(/\.\.\.\(includeTranslations \? \{ translations: true \} : \{\}\)/);
+  });
+
+  it('le mapping projette replyTo.translations en tableau, avec le filtre de langues', () => {
+    const debut = source.indexOf('mappedMessage.replyTo = ');
+    expect(debut).toBeGreaterThan(-1);
+    const mapping = source.slice(debut, source.indexOf('return mappedMessage;', debut));
+    expect(mapping).toMatch(
+      /translations: includeTranslations && !quotedMessageIsProtected\(message\.replyTo\)\s*\?\s*transformTranslationsToArray\(\s*message\.replyTo\.id,\s*message\.replyTo\.translations/,
+    );
+  });
+
+  it('les traductions d’un message cité PROTÉGÉ ne voyagent pas — la garde couvre vue unique, flou et chiffrement', () => {
+    const debut = source.indexOf('const quotedMessageIsProtected = ');
+    expect(debut).toBeGreaterThan(-1);
+    // Le corps du prédicat, pas sa signature : le type littéral porte lui aussi
+    // des `;`, donc on borne sur la ligne qui rend le verdict.
+    const corps = source.slice(source.indexOf('Boolean(', debut), source.indexOf('\n', source.indexOf('Boolean(', debut)));
+    for (const champ of ['isViewOnce', 'isBlurred', 'isEncrypted']) {
+      expect(corps).toContain(`quoted.${champ}`);
+    }
+  });
+
+  it('le schéma de sérialisation DÉCLARE replyTo.translations — sinon fast-json-stringify strippe la projection', () => {
+    const schema = readFileSync(join(__dirname, '../../../../../../packages/shared/types/api-schemas/message.ts'), 'utf-8');
+    const debut = schema.indexOf('    replyTo: {');
+    expect(debut).toBeGreaterThan(-1);
+    const fin = schema.indexOf('    forwardedFromId:', debut);
+    const bloc = schema.slice(debut, fin);
+    expect(bloc).toMatch(/translations:\s*\{\s*type: 'array',\s*nullable: true,\s*items: messageTranslationSchema/);
+  });
+});

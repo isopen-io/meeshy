@@ -27,6 +27,13 @@ import { transformTranslationsToArray } from '../../utils/translation-transforme
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que son
+/// placeholder : ses traductions ne partent pas à côté du texte que les clients
+/// masquent — une garde se mesure sur tout ce que la charge TRANSPORTE (#4945,
+/// leçon 275), et une traduction est le même secret en N langues.
+const quotedMessageIsProtected = (quoted: { isViewOnce?: boolean | null; isBlurred?: boolean | null; isEncrypted?: boolean | null }): boolean =>
+  Boolean(quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted);
+
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
@@ -286,6 +293,13 @@ export function buildMessageListSelect(options: {
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
             metadata: true,
+            // #4945 — la citation descend le Prisme au CHARGEMENT comme à
+            // l'arrivée en direct : le fil socket `include` la ligne entière
+            // (`translations` compris) quand ce select nommé ne le demandait
+            // pas, et un lecteur francophone lisait la même citation en anglais
+            // après un rechargement et en français en temps réel. Même garde
+            // que la racine : le client qui n'en veut pas ne les paie pas.
+            ...(includeTranslations ? { translations: true } : {}),
             sender: {
               select: {
                 id: true,
@@ -637,6 +651,16 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
+            // #4945 — même projection JSON → tableau que la racine, même filtre
+            // de langues ; sans elle le blob Prisma brut voyagerait sous un
+            // nom que les clients lisent comme un tableau.
+            translations: includeTranslations && !quotedMessageIsProtected(message.replyTo)
+              ? transformTranslationsToArray(
+                  message.replyTo.id,
+                  message.replyTo.translations as Record<string, any>,
+                  hasLanguageFilter ? { languages: languageFilter } : undefined
+                )
+              : undefined,
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
