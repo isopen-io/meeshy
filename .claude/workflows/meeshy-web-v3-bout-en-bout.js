@@ -303,6 +303,23 @@ et sur le cadrage qui les a soulevees. Ne les rediscute pas : applique-les.
      dans cet ordre, apres le fil et la liste — aucune route ni critere de fin ne change, seul
      l'ORDRE d'attaque change ;
    - rien de tout cela n'ajoute un octet de JS hors ce que § 12.4 autorise deja.
+
+3. LE COMPOSEUR ENREGISTRE UN VOCAL ET PARTAGE LA POSITION (#5061, directive du porteur,
+   2026-09-03) — comme le legacy (apps/web/components/v2/MessageComposer.tsx:162-327), dans le
+   MEME composeur partage entre /chat/:lien et /chats/:cle (fil-vue.ts + fil-porte.ts, aucune
+   jumelle) :
+   - vocal : MediaRecorder, bouton micro >= 44 px a cote du bouton piece jointe, gouverne par le
+     meme droit que les pieces jointes audio (canSendFiles / allowAnonymousFiles pour l'invite),
+     etat d'enregistrement visible, annulation possible, envoi optimiste comme les autres
+     messages ; l'upload passe par POST /attachments/upload (deja utilise par lib/api/fil.ts) ;
+   - position : bouton position >= 44 px, navigator.geolocation, etat de refus explicite
+     (permission refusee, indisponible) sans jamais planter le composeur, poste un champ
+     location: { latitude, longitude } au premier niveau de POST /conversations/:id/messages —
+     la passerelle le valide et le persiste DEJA (parseSharedPlace(),
+     services/gateway/src/services/location/sharedPlace.ts ; messageType 'location') : AUCUN
+     diff serveur, la v3 relaie ce que le contrat expose ;
+   - les deux sont des AMELIORATIONS PROGRESSIVES (comme le reste du § 12.4) : le chemin sans JS
+     (texte, piece jointe classique) reste vert sans elles.
 `
 
 
