@@ -2,6 +2,7 @@ import { axe } from 'jest-axe';
 
 import { documentDuChoix } from '@/app/(public)/chat/[lien]/choix-vue';
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
+import { ETATS_DU_TEMPS_REEL } from '@/lib/contenu/fil';
 import { message } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 
@@ -132,6 +133,30 @@ describe('le fil face à axe', () => {
       }),
     );
     expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LE POINT D'ÉTAT DIT CE QU'IL MONTRE — et il le dit DÈS LE SERVEUR.
+   *
+   * Il naît en `inconnu` : le module de participation n'est pas encore arrivé,
+   * et c'est vrai. Mais son libellé hors-écran était VIDE, et le module ne
+   * l'écrivait jamais : un `aria-live` sans texte n'annonce rien, et un lecteur
+   * d'écran n'avait aucun moyen de savoir si le fil était vivant.
+   *
+   * Le défaut se voyait aussi à l'œil, autrement : `inconnu` et `creux`
+   * partageaient le MÊME rendu — un point creux —, donc « le temps réel n'est
+   * jamais arrivé » était indiscernable de « il respire ». C'est ce qui a rendu
+   * un module absent en staging invisible pendant tout un tour : la page se
+   * dégradait en Post/Redirect/Get sans qu'aucun témoin, à l'écran ou dans
+   * l'arbre d'accessibilité, ne dise pourquoi.
+   */
+  it('nomme son état AVANT que le module arrive — un aria-live vide n’annonce rien', () => {
+    ecris(documentDuFil(etat()));
+
+    const point = document.querySelector('.etat');
+    expect(point?.getAttribute('data-etat')).toBe('inconnu');
+    expect(point?.textContent?.trim()).toBe(ETATS_DU_TEMPS_REEL.inconnu);
+    expect(point?.textContent?.trim()).not.toBe('');
   });
 
   it('rougit sur un document dont la structure est fautive', async () => {

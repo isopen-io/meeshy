@@ -20,6 +20,32 @@ import { MENTION_SUPPRIMEE } from '@/lib/api/fil';
  * messages manquants — prennent la phrase de la conception (§ 6.3, § 7).
  */
 
+/**
+ * LES QUATRE ÉTATS DU TEMPS RÉEL, NOMMÉS — et c'est le point : ils l'étaient
+ * par une COULEUR seulement, ce qui ne dit rien à qui n'a pas d'yeux et rien
+ * du tout quand deux états partagent le même rendu.
+ *
+ * `inconnu` est l'état SERVI : le module de participation charge après le
+ * premier pixel (§ 12.4), donc il est vrai à l'ouverture, et il reste vrai
+ * pour toujours si le module n'arrive jamais — actif absent de l'image,
+ * poignée de main refusée, JavaScript coupé. C'est ce cas-là qui doit se
+ * LIRE : un fil qui recharge la page à chaque envoi, sans qu'aucun témoin ne
+ * dise pourquoi, coûte un diagnostic entier.
+ *
+ * Le module écrit les trois autres au fil de ses transitions
+ * (`lib/realtime/participate.ts`, `point()`), depuis cette table et jamais
+ * depuis une chaîne recopiée : une seule source pour le libellé et pour ce
+ * que la feuille dessine.
+ */
+export const ETATS_DU_TEMPS_REEL = {
+  inconnu: 'Temps réel : pas encore actif',
+  connecte: 'Temps réel : actif',
+  creux: 'Temps réel : reconnexion en cours',
+  'hors-ligne': 'Temps réel : hors ligne',
+} as const;
+
+export type EtatDuTempsReel = keyof typeof ETATS_DU_TEMPS_REEL;
+
 export const FIL = {
   retour: 'Retour aux conversations',
   retourAccueil: 'Retour à l’accueil',

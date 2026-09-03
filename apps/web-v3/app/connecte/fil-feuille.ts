@@ -95,6 +95,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-tete .sous{margin:0;font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .etat{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min)}
 .etat .point{display:block;width:var(--presence-dot);height:var(--presence-dot);border-radius:var(--radius-pill);border:var(--stroke-strong) solid var(--color-text-subtle);transition:background-color 150ms,border-color 150ms}
+.etat[data-etat=inconnu] .point{border-style:dashed}
 .etat[data-etat=connecte] .point{background:var(--color-success);border-color:var(--color-success)}
 .etat[data-etat=hors-ligne] .point{border-color:var(--color-warning)}
 

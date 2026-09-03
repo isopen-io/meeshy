@@ -26737,7 +26737,70 @@ Trouvé en relisant #4994 après qu'une session voisine a payé la même faute s
 un autre champ, dans le même fichier, la même heure. Elle, sa garde l'a
 attrapée — la sienne balayait le bon fichier.
 
-## Leçon 492 — Un titre d'issue au PRÉSENT ne dit pas s'il décrit ce qui EST ou ce qui DOIT ÊTRE
+## Leçon 492 — Un témoin qui porte une date ABSOLUE dans le futur est vert le jour où on l'écrit et rouge un jour que personne n'a choisi
+
+`__tests__/story.test.ts` posait, dans le corps de sa story de référence,
+`expiresAt: '2026-09-03T05:00:00.000Z'` — une échéance dans le futur le jour où
+le témoin a été écrit. `lisLaStory` lit l'horloge RÉELLE (`porte.ts:100`,
+`Date.now()`), et `publicationLue` rend `null` pour une story échue. À 05:00 UTC
+le lendemain, **deux témoins verts sont devenus rouges sans qu'une ligne du
+dépôt ait changé** : la CI de la veille avait raison, celle du matin aussi, et
+elles se contredisaient.
+
+Le tell est reconnaissable entre tous : **`dev` rougit alors que `git diff` sur
+la zone concernée ne rend RIEN.** Devant un test qui échoue sans changement,
+la première question n'est pas « qui a cassé ça ? » mais **« qu'est-ce qui a
+bougé sans être commité ? »** — et la seule chose qui bouge toute seule est
+l'horloge.
+
+La faute n'est pas la date : c'est le DÉCALAGE entre ce que le témoin veut dire
+et ce qu'il écrit. Il voulait dire « une story qui n'a PAS échu » et il écrivait
+« une story qui échoit à cinq heures ». Écrire l'intention — `Date.now() +
+3_600_000` — la rend vraie pour toujours ; et sa réciproque, « une story ÉCHUE »,
+s'écrit avec une date absolue PASSÉE, qui, elle, ne peut pas se périmer.
+
+Le critère n'est donc pas « absolu ou relatif » mais **le SENS de la borne par
+rapport à l'horloge que le code lit** :
+
+| Le témoin veut dire | S'écrit | Pourquoi c'est stable |
+|---|---|---|
+| « pas encore échu » | `Date.now() + delta` | vrai à toute heure |
+| « échu » | date absolue PASSÉE | le passé ne redevient pas futur |
+| « cette date-là s'affiche ainsi » | date absolue, futur compris | rien ne la compare à l'horloge |
+
+La troisième ligne compte : les quatre autres dates futures du dépôt
+(`carnet-de-liens.test.ts`, `liens-porte.test.ts`, `bouchon-compte.ts`, toutes
+au 2026-12-31) ne sont PAS des bombes — la vue des liens rend « Expire le … »
+sans jamais comparer à `Date.now()`. Les corriger par réflexe aurait été du
+bruit. **Une date absolue n'est dangereuse que si quelque chose la COMPARE au
+présent** ; le balayage se fait donc sur le consommateur, pas sur la constante.
+
+## Leçon 494 — Un témoin qui juge l'ATTRIBUT ne juge pas ce que l'utilisateur PERÇOIT
+
+Le point d'état du fil v3 portait `data-etat` et un libellé hors-écran. Quatre
+épreuves e2e vérifiaient l'attribut à chaque transition ; **aucune ne regardait
+le libellé**, et le module ne l'écrivait donc jamais. Le document naissait en
+« Temps réel : pas encore actif » — servi par le serveur, ce qui est vrai à
+l'ouverture — et l'annonçait **pour toute la vie de la page**, y compris sur un
+fil parfaitement vivant. Un `aria-live` figé sur le contraire de ce qu'il
+montre est pire qu'un `aria-live` absent.
+
+Le même angle mort avait une seconde moitié, visuelle : `inconnu` et `creux`
+partageaient le MÊME rendu — un point creux —, donc « le module n'est jamais
+arrivé » était indiscernable de « il respire ». C'est ce qui a rendu une image
+périmée en staging invisible pendant tout un tour : la page se dégradait en
+Post/Redirect/Get, exactement comme prévu par l'amélioration progressive, sans
+qu'aucun témoin — à l'écran, dans l'arbre d'accessibilité ou dans la CI — ne
+dise pourquoi. **Une dégradation gracieuse qui ne se DIT pas est un mystère,
+pas une dégradation.**
+
+La question à poser à tout témoin d'état n'est donc pas « l'attribut est-il
+posé ? » mais **« un être humain, avec ou sans yeux, peut-il distinguer cet
+état du voisin ? »**. Et l'assertion se place dans le HARNAIS que toutes les
+épreuves traversent (`attendLeTempsReel`), jamais dans une seule : c'est le
+seul endroit où la divergence entre l'attribut et le nom se voit à chaque
+passage.
+## Leçon 495 — Un titre d'issue au PRÉSENT ne dit pas s'il décrit ce qui EST ou ce qui DOIT ÊTRE
 
 Deux issues, deux sessions, la même heure du 2026-09-03, et l'ambiguïté commise
 dans les deux sens :
