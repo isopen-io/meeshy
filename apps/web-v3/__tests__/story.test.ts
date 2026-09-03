@@ -364,7 +364,7 @@ const MONDE = {
 describe('la porte de la story', () => {
   it('sert l’INVITATION sans un seul appel à la passerelle quand aucun jeton n’accompagne la demande', async () => {
     const jamais = passerelle({});
-    const reponse = await lisLaStory({ requete: requete('/stories/s1'), id: 's1', recuperer: jamais.recuperer, maintenant: MAINTENANT });
+    const reponse = await lisLaStory({ requete: requete('/stories/s1'), id: 's1', recuperer: jamais.recuperer });
 
     expect(reponse.status).toBe(200);
     expect(jamais.appels).toEqual([]);
@@ -373,7 +373,7 @@ describe('la porte de la story', () => {
 
   it('sert l’INVITATION — jamais une erreur — quand la passerelle refuse le jeton', async () => {
     const monde = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({}, 401) });
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer, maintenant: MAINTENANT });
+    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('/login?returnUrl=%2Fstories%2Fs1');
@@ -381,7 +381,12 @@ describe('la porte de la story', () => {
 
   it('sert la story au lecteur connecté, dans sa langue', async () => {
     const monde = passerelle(MONDE);
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer, maintenant: MAINTENANT });
+    const reponse = await lisLaStory({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: monde.recuperer,
+      maintenant: MAINTENANT,
+    });
 
     expect(reponse.status).toBe(200);
     expect(reponse.headers.get('x-robots-tag')).toBe('noindex, nofollow');
@@ -396,8 +401,8 @@ describe('la porte de la story', () => {
     const absente = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({ success: false, error: 'Post not found' }, 404) });
     const echue = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({ success: true, data: brute({ expiresAt: '2026-01-01T00:00:00.000Z' }) }) });
 
-    const premiere = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: absente.recuperer, maintenant: MAINTENANT });
-    const seconde = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: echue.recuperer, maintenant: MAINTENANT });
+    const premiere = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: absente.recuperer });
+    const seconde = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: echue.recuperer });
 
     expect(premiere.status).toBe(404);
     expect(seconde.status).toBe(404);
@@ -412,13 +417,13 @@ describe('la porte de la story', () => {
         throw new Error('réseau');
       },
     };
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: muette.recuperer, maintenant: MAINTENANT });
+    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: muette.recuperer });
     expect(reponse.status).toBe(503);
   });
 
   it('demande la story ET le voisinage en UN aller-retour, jamais en deux', async () => {
     const monde = passerelle(MONDE);
-    await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer, maintenant: MAINTENANT });
+    await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
 
     expect(monde.appels.map((appel) => appel.chemin).sort()).toEqual([
       '/api/v1/auth/me',
@@ -435,7 +440,6 @@ describe('ce qu’un formulaire de la story fait', () => {
       requete: soumission('/stories/s1', { reponse: 'Hâte de voir ça.' }),
       id: 's1',
       recuperer: monde.recuperer,
-      maintenant: MAINTENANT,
     });
 
     expect(reponse.status).toBe(303);
@@ -445,11 +449,11 @@ describe('ce qu’un formulaire de la story fait', () => {
 
   it('bascule l’aime par les DEUX routes que la passerelle expose', async () => {
     const pose = passerelle({ ...MONDE, '/api/v1/posts/s1/like': () => json({ success: true, data: {} }) });
-    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '1' }), id: 's1', recuperer: pose.recuperer, maintenant: MAINTENANT });
+    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '1' }), id: 's1', recuperer: pose.recuperer });
     expect(pose.appels.at(-1)?.methode).toBe('POST');
 
     const retire = passerelle({ ...MONDE, '/api/v1/posts/s1/like': () => json({ success: true, data: {} }) });
-    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '0' }), id: 's1', recuperer: retire.recuperer, maintenant: MAINTENANT });
+    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '0' }), id: 's1', recuperer: retire.recuperer });
     expect(retire.appels.at(-1)?.methode).toBe('DELETE');
   });
 
@@ -459,7 +463,6 @@ describe('ce qu’un formulaire de la story fait', () => {
       requete: soumission('/stories/s1', { reponse: 'Bonjour' }, { 'sec-fetch-site': 'cross-site' }),
       id: 's1',
       recuperer: monde.recuperer,
-      maintenant: MAINTENANT,
     });
 
     expect(monde.appels).toEqual([]);
@@ -490,7 +493,6 @@ describe('ce qu’un formulaire de la story fait', () => {
       requete: soumission('/stories/s1', { reponse: 'Bravo' }),
       id: 's1',
       recuperer: monde.recuperer,
-      maintenant: MAINTENANT,
     });
 
     expect(await reponse.text()).toContain('/login?returnUrl=%2Fstories%2Fs1');

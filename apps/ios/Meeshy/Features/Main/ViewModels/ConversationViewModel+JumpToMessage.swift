@@ -27,7 +27,7 @@ extension ConversationViewModel {
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
+            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
 
             // Switch the store window to be centered on the target message.
             let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
@@ -91,7 +91,7 @@ extension ConversationViewModel {
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
+            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
 
             // Check if the target message was in the response
             let found = response.data.contains(where: { $0.id == messageId })
@@ -147,7 +147,7 @@ extension ConversationViewModel {
                 // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
                 // fires automatically and the store refreshes its window — no direct
                 // messages mutation needed.
-                try? await messagePersistence.upsertFromAPIMessages(response.data)
+                try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
 

@@ -56,7 +56,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationListViewModel.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
-        "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
         "FeedView+Attachments.swift",
@@ -213,6 +212,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
     /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
     /// les 31 noms de l'arbre fusionné, jamais soustrait.
+    ///
+    /// 2026-09-03 (fusion de dev, `436d0f01`) — 62 304 → 62 306 (+2). Le cumul
+    /// avait baissé de 21 lignes sur cette branche (`ConversationViewModel.swift`
+    /// découpé en famille, sorti de la liste) pendant que dev en posait 23 dans
+    /// trois hôtes que cette branche ne touche pas (`FeedCommentsSheet` +5,
+    /// `PostDetailView` +9, `ReelsPlayerView` +9). REMESURÉ sur les 30 noms de
+    /// l'arbre fusionné, jamais soustrait — et le nombre est dit tel quel : un
+    /// plafond qui monte de deux se lit comme une dette de dev, pas de ce lot.
     /// **67 083 — le cumul RÉEL du 2026-09-03, mesuré sur les 31 noms avec
     /// `lineCount(of:)`, jamais soustrait.** Le cliquet DESCEND (67 091 → 67 083) :
     /// la découpe #4927 rend plus que ce que la période a coûté.
@@ -239,7 +246,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// et le cliquet reste sous sa valeur d'avant. C'est la seule forme
     /// acceptable — un plafond qui se lève pour couvrir une croissance qu'il
     /// vient de refuser cesse d'être un cliquet.
-    private static let legacyLineCeiling = 67_083
+    ///
+    /// 2026-09-03 (troisième fusion de dev, `5d5838d0`) — 62 306 → 62 203 :
+    /// dev a découpé `ReelsPlayerView` (#4927, 1 738 → 1 629) et posé six lignes
+    /// dans `MessageListViewController` (#3947). Le paragraphe de dev ci-dessus
+    /// parle des 31 noms d'AVANT #4942 (67 083) ; cette branche en compte
+    /// 30, `ConversationViewModel.swift` étant sorti de la dette — les deux
+    /// nombres décrivent le même arbre avec deux listes. REMESURÉ sur les
+    /// 30 noms de l'arbre fusionné, jamais soustrait.
+    private static let legacyLineCeiling = 62_203
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -62,7 +62,7 @@ public actor MessagePersistenceActor {
         /// mentions are all persisted. The 6-field `IncomingMessageData` path
         /// below drops every one of them (a media-only or encrypted message
         /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
-        case upsertAPIMessages([APIMessage])
+        case upsertAPIMessages([APIMessage], preferredLanguages: [String])
         case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
     }
 
@@ -228,13 +228,13 @@ public actor MessagePersistenceActor {
                     if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
-                case .upsertAPIMessages(let messages):
+                case .upsertAPIMessages(let messages, let preferredLanguages):
                     guard !messages.isEmpty else { continue }
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
                     do {
-                        try await self.upsertFromAPIMessages(messages)
+                        try await self.upsertFromAPIMessages(messages, preferredLanguages: preferredLanguages)
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
@@ -525,8 +525,8 @@ public actor MessagePersistenceActor {
     /// upsert reconciles an optimistic row by `clientMessageId`, server id or
     /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
     /// The refresh notification is posted by `upsertFromAPIMessages` itself.
-    public func bufferIncomingAPIMessages(_ messages: [APIMessage]) {
-        writeContinuation.yield(.upsertAPIMessages(messages))
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage], preferredLanguages: [String]) {
+        writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
@@ -1509,7 +1509,10 @@ public actor MessagePersistenceActor {
     /// state (layout cache, optimistic fields) for rows that already exist.
     /// Called from load/refresh paths so the MessageStore observation surfaces
     /// the authoritative server data without a direct `messages = ...` write.
-    public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
+    /// `preferredLanguages` — le prisme ORDONNÉ du lecteur, par lequel la
+    /// citation gravée dans `replyToJson` descend le Prisme (même descente que
+    /// `APIMessage.toMessage(preferredLanguages:)`). Vide ⇒ l'original.
+    public func upsertFromAPIMessages(_ apiMessages: [APIMessage], preferredLanguages: [String] = []) async throws {
         // Empty payloads are a routine outcome of pagination paths (e.g.
         // `loadOlderMessages` reaching the start of the conversation) — no
         // rows to write means no refresh to post.
@@ -1653,71 +1656,10 @@ public actor MessagePersistenceActor {
                 )
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : encoder.encodeOrLog(uiReactions, field: "reactionsJson", id: api.id)
 
-                let replyToJson: Data? = {
-                    // Réponse à un post : snapshot figé `postReplyTo` (survit à
-                    // l'expiration). On construit un ReplyReference riche pour la
-                    // citation (mood : emoji+contenu+date ; story : aperçu+compteurs).
-                    if let story = api.postReplyTo {
-                        let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        // Réponse à un mood : rendu dédié (emoji + contenu + date).
-                        if let emoji = story.moodEmoji {
-                            // `authorAvatarUrl` reste nil, DELIBEREMENT : le
-                            // snapshot `postReplyTo` ne porte pas d'avatar, et
-                            // ce nom est vide — aucun profil a ouvrir.
-                            let ref = ReplyReference(
-                                messageId: story.id,
-                                authorName: "",
-                                previewText: trimmed,
-                                isMe: false,
-                                isStoryReply: true,
-                                storyPublishedAt: story.createdAt,
-                                moodEmoji: emoji
-                            )
-                            return encoder.encodeOrLog(ref, field: "replyToJson(mood)", id: api.id)
-                        }
-                        // Idem pour la story : snapshot sans avatar, nom vide.
-                        let ref = ReplyReference(
-                            messageId: story.id,
-                            authorName: "",
-                            previewText: trimmed.isEmpty ? "\u{1F4F7} Story" : trimmed,
-                            isMe: false,
-                            isStoryReply: true,
-                            storyPublishedAt: story.createdAt,
-                            storyReactionCount: story.reactionCount,
-                            storyCommentCount: story.commentCount,
-                            storyShareCount: story.shareCount,
-                            storyThumbnailUrl: story.thumbnailUrl
-                        )
-                        return encoder.encodeOrLog(ref, field: "replyToJson(story)", id: api.id)
-                    }
-                    // Réponse à un message : chemin historique inchangé.
-                    return api.replyTo.flatMap { reply in
-                        let isMe = reply.senderId == nil
-                        let authorName = reply.sender?.name ?? "?"
-                        let firstAtt = reply.attachments?.first
-                        let ref = ReplyReference(
-                            messageId: reply.id,
-                            authorName: authorName,
-                            previewText: reply.content ?? "",
-                            isMe: isMe,
-                            // Jumeau CACHE de `MessageModels.uiReplyTo` : meme
-                            // avatar, meme cascade `resolvedAvatar`. C'est ce
-                            // blob qui alimente TOUT rechargement — l'oublier
-                            // ici ferait perdre l'avatar de la citation au
-                            // premier retour de cache, donc au scroll.
-                            authorAvatarUrl: reply.sender?.resolvedAvatar,
-                            attachmentType: firstAtt?.mimeType,
-                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
-                            // Jumeau CACHE de la protection gravée par
-                            // `MessageModels.uiReplyTo` : c'est ce blob qui
-                            // alimente TOUT rechargement, et l'oublier ici
-                            // ferait réapparaître au premier retour de cache la
-                            // vignette d'un média à vue unique.
-                            attachmentIsProtected: firstAtt?.declaredProtection
-                        )
-                        return encoder.encodeOrLog(ref, field: "replyToJson", id: api.id)
-                    }
-                }()
+                let replyToJson: Data? = Self.replyToJson(
+                    for: api, currentUserId: currentUserId,
+                    preferredLanguages: preferredLanguages, encoder: encoder
+                )
 
                 let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in
                     let fwdSenderName = fwd.sender?.name ?? "?"

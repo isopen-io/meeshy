@@ -33,6 +33,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import fastJson from 'fast-json-stringify';
 import { messageSchema } from '@meeshy/shared/types/api-schemas';
+import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 
 const SELECT = join(__dirname, '../../../routes/conversations/messages-list-query.ts');
 
@@ -143,5 +144,125 @@ describe('replyTo (niveau MESSAGE) — la protection du message cité est demand
     CHAMPS_DE_PROTECTION.forEach((champ) => {
       expect([champ, inline[champ]?.type]).toEqual([champ, racine[champ].type]);
     });
+  });
+});
+
+/**
+ * #4945 — la citation descend le Prisme au CHARGEMENT comme en direct.
+ *
+ * Le fil socket (`MessageProcessor`, `replyTo: { include }`) transporte la
+ * ligne ENTIÈRE du message cité, `translations` compris ; le select nommé de
+ * la liste ne les demandait pas. Un lecteur francophone répondant à un message
+ * anglais déjà traduit lisait donc la citation en anglais après un
+ * rechargement et en français à l'arrivée en direct — un texte qui change de
+ * langue selon le chemin de chargement.
+ *
+ * Deux vérités, comme plus haut : le select DEMANDE (gardé par
+ * `includeTranslations`, même économie que la racine), et le mapping PROJETTE
+ * le JSON Prisma en tableau par `transformTranslationsToArray` — la forme que
+ * tout client lit sur la racine.
+ */
+describe('replyTo — les traductions du message cité sont demandées et projetées (#4945)', () => {
+  const source = readFileSync(SELECT, 'utf-8');
+  const bloc = selectDeLaCitation(source);
+
+  it('le select de la liste demande translations, sous la même garde que la racine', () => {
+    expect(bloc).toMatch(/\.\.\.\(includeTranslations \? \{ translations: true \} : \{\}\)/);
+  });
+
+  it('le mapping sert la citation par le site unique — texte, traductions et média ensemble', () => {
+    const debut = source.indexOf('mappedMessage.replyTo = ');
+    expect(debut).toBeGreaterThan(-1);
+    const mapping = source.slice(debut, source.indexOf('return mappedMessage;', debut));
+    expect(mapping).toMatch(
+      /\.\.\.servedQuotedMessage\(message\.replyTo, \{\s*includeTranslations,\s*languages: hasLanguageFilter \? languageFilter : undefined,\s*\}\)/,
+    );
+  });
+
+  /**
+   * La garde ne se lit plus dans une chaîne de caractères : elle s'EXERCE. Un
+   * témoin de source atteste qu'un prédicat existe ; seul un témoin de
+   * comportement atteste que le secret ne part pas — et la garde d'origine ne
+   * retenait QUE les traductions pendant que `...message.replyTo` répandait le
+   * texte et qu'`attachmentFullSelect` servait la vignette, le ThumbHash, les
+   * dimensions et la transcription (leçon 275).
+   */
+  describe('servedQuotedMessage — ce que la citation d’un message protégé a le droit de transporter', () => {
+    const secret = {
+      id: '507f1f77bcf86cd799439014',
+      content: 'le code du coffre est 4271',
+      messageType: 'image',
+      translations: { en: { text: 'the vault code is 4271', translationModel: 'basic' as const, createdAt: new Date() } },
+      attachments: [
+        {
+          id: '507f1f77bcf86cd799439015',
+          mimeType: 'image/jpeg',
+          fileUrl: 'https://cdn/secret.jpg',
+          thumbnailUrl: 'https://cdn/secret-thumb.jpg',
+          thumbHash: 'AQIDBA==',
+          width: 1024,
+          height: 768,
+          transcription: 'la transcription du vocal',
+        },
+      ],
+    };
+
+    it.each([
+      ['vue unique', { isViewOnce: true }],
+      ['flouté', { isBlurred: true }],
+      ['chiffré', { isEncrypted: true }],
+      ['bitfield vue unique', { effectFlags: 4 }],
+    ])('ne republie ni le texte ni ses traductions — %s', (_nom, protection) => {
+      const servi = servedQuotedMessage({ ...secret, ...protection });
+      expect(String(servi['content'])).not.toContain('4271');
+      expect(servi['translations']).toBeUndefined();
+    });
+
+    it('ne laisse partir ni vignette, ni ThumbHash, ni dimensions, ni transcription', () => {
+      const servi = servedQuotedMessage({ ...secret, isViewOnce: true });
+      const piece = (servi['attachments'] as Record<string, unknown>[])[0];
+      expect(piece['mimeType']).toBe('image/jpeg');
+      for (const champ of ['fileUrl', 'thumbnailUrl', 'thumbHash', 'width', 'height', 'transcription']) {
+        expect(piece[champ]).toBeUndefined();
+      }
+    });
+
+    it('retient le média d’une PIÈCE JOINTE protégée sous un message qui ne l’est pas — les deux niveaux déclarent', () => {
+      const servi = servedQuotedMessage({
+        ...secret,
+        attachments: [{ ...secret.attachments[0], isViewOnce: true }],
+      });
+      expect((servi['attachments'] as Record<string, unknown>[])[0]['fileUrl']).toBeUndefined();
+    });
+
+    it('laisse passer une citation ORDINAIRE, traductions projetées en tableau', () => {
+      const servi = servedQuotedMessage(secret);
+      expect(servi['content']).toBeUndefined();
+      expect(servi['translations']).toEqual([
+        expect.objectContaining({ targetLanguage: 'en', translatedContent: 'the vault code is 4271' }),
+      ]);
+      expect((servi['attachments'] as Record<string, unknown>[])[0]['fileUrl']).toBe('https://cdn/secret.jpg');
+    });
+
+    /**
+     * L'ÉPHÉMÈRE n'est pas une protection au sens de la citation — son texte
+     * est lisible dans le fil jusqu'à l'expiration, et la citation vit dans ce
+     * même fil. Même verdict exactement qu'`APIMessageReplyTo.isProtected` côté
+     * iOS : masquer ici afficherait un placeholder là où le client attend le
+     * texte.
+     */
+    it('ne masque PAS un message seulement éphémère', () => {
+      const servi = servedQuotedMessage({ ...secret, expiresAt: new Date() });
+      expect(servi['content']).toBeUndefined();
+    });
+  });
+
+  it('le schéma de sérialisation DÉCLARE replyTo.translations — sinon fast-json-stringify strippe la projection', () => {
+    const schema = readFileSync(join(__dirname, '../../../../../../packages/shared/types/api-schemas/message.ts'), 'utf-8');
+    const debut = schema.indexOf('    replyTo: {');
+    expect(debut).toBeGreaterThan(-1);
+    const fin = schema.indexOf('    forwardedFromId:', debut);
+    const bloc = schema.slice(debut, fin);
+    expect(bloc).toMatch(/translations:\s*\{\s*type: 'array',\s*nullable: true,\s*items: messageTranslationSchema/);
   });
 });

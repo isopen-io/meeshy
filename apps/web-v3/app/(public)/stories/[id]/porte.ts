@@ -57,12 +57,9 @@ type Demande = {
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
-  /**
-   * L'HORLOGE, pour la MÊME raison que `recuperer` : l'échéance d'une story se
-   * lit contre une heure, et un témoin qui ne la tient pas cesse de passer le
-   * jour où son fixture échoit — c'est exactement ce qui a rougi la CI #12900
-   * (2026-09-03). Jamais fournie en production.
-   */
+  /** L'horloge, injectable : une story EXPIRE, et un témoin qui lit l'heure
+   *  réelle devient rouge à la date de sa fixture — sans qu'aucune ligne ait
+   *  changé (leçon 234i, l'horloge après la locale). */
   readonly maintenant?: number;
 };
 
@@ -87,7 +84,7 @@ type Charge =
  * rend telle quelle ; le POST la rend avec le refus PEINT et le texte saisi,
  * jamais perdu.
  */
-const charge = async ({ requete, id, recuperer, maintenant: horloge }: Demande): Promise<Charge> => {
+const charge = async ({ requete, id, recuperer, maintenant = Date.now() }: Demande): Promise<Charge> => {
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return { genre: 'reponse', reponse: invitation(id) };
 
@@ -104,7 +101,6 @@ const charge = async ({ requete, id, recuperer, maintenant: horloge }: Demande):
   if (chargee.genre === 'panne') return { genre: 'reponse', reponse: rendu(documentDePanne(), 503) };
 
   const lecteur: Lecteur | null = identite.genre === 'lecteur' ? identite.lecteur : null;
-  const maintenant = horloge ?? Date.now();
   const story = storyLue({
     brut: chargee.brut,
     langues: languesDuLecteur(lecteur ?? {}),

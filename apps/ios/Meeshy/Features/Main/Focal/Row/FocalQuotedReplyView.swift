@@ -13,8 +13,11 @@ import MeeshyUI
 /// l'auteur cité (`reference.authorColor`, déjà résolue par le SDK —
 /// `ReplyReference.init` retombe sur `DynamicColorGenerator.colorForName`
 /// quand `authorColor` est absent : « l'accent existant du SDK », jamais
-/// reconstruit ici). Une seule ligne tronquée (`.lineLimit(1)`), même
-/// approche native que `Focal/Row/FocalSystemRows.swift` (F-082) et pour la
+/// reconstruit ici). Le BUDGET DE LIGNES vient désormais de la règle partagée
+/// des trois peaux (`QuotedReplyPresentation.previewLineLimit(for: .focal)` —
+/// deux lignes) : l'unique ligne d'origine coupait la moitié des citations à
+/// mi-phrase, et la MÊME citation se lisait sur trois hauteurs selon la peau
+/// (#4946). Même approche native que `Focal/Row/FocalSystemRows.swift` (F-082) et pour la
 /// MÊME raison : le composant réel (`BubbleQuotedReply`,
 /// `BubbleQuotedReply.swift:125-127`) dessine un filet `4`pt fixe
 /// (`RoundedRectangle(cornerRadius: 2).frame(width: 4)`) et jusqu'à 2-3
@@ -134,11 +137,28 @@ struct FocalQuotedReplyView: View, Equatable {
         ThemeManager.shared.textMuted
     }
 
-    private var title: String {
+    /// NOM de l'auteur cité — celui dont l'avatar tire ses INITIALES. La
+    /// ponctuation du titre (« Alice : ») n'a rien à faire dans un monogramme.
+    private var authorName: String {
         if reference.isMe { return String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) }
         if !reference.authorName.isEmpty { return reference.authorName }
         if reference.moodEmoji != nil { return String(localized: "bubble.reply.mood", defaultValue: "Humeur", bundle: .main) }
         return reference.authorName
+    }
+
+    /// Le titre RENDU — « Alice : », composé par la règle partagée des trois
+    /// peaux (`QuotedReplyPresentation`), espace insécable comprise. Une
+    /// citation se lit de la même façon dans la bulle, ici et dans le bandeau
+    /// du composeur (#4946).
+    private var title: String {
+        QuotedReplyPresentation.title(author: authorName)
+    }
+
+    /// « 1024×768 · 0:42 · 1,2 Mo » — les faits du média cité, ou `nil` quand
+    /// aucun n'est connu ET pour tout média PROTÉGÉ : la règle partagée refuse
+    /// d'un seul endroit ce qui décrirait le secret par la bande.
+    private var quotedDetails: String? {
+        QuotedReplyPresentation.detailsLabel(for: reference)
     }
 
     /// URL de miniature du contenu cité — pièce jointe d'un message, ou
@@ -217,7 +237,13 @@ struct FocalQuotedReplyView: View, Equatable {
             // saut. Le repli `jumpToOriginal` ne sert qu'à la story, dont le
             // viewer EST le plein écran demandé : aucune capacité n'y diverge.
             if let thumbnailURL {
-                CachedAsyncImage(url: thumbnailURL.absoluteString) {
+                CachedAsyncImage(
+                    url: thumbnailURL.absoluteString,
+                    // Le flou instantané plutôt qu'un carré de couleur unie le
+                    // temps du réseau. `nil` pour un média protégé — un flou
+                    // EST une image (règle partagée, site unique).
+                    thumbHash: QuotedReplyPresentation.thumbHash(for: reference)
+                ) {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(railColor.opacity(0.18))
                 }
@@ -258,7 +284,17 @@ struct FocalQuotedReplyView: View, Equatable {
                 titleLine
 
                 previewLine
-                    .lineLimit(1)
+                    .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
+
+                // « 1024×768 · 0:42 · 1,2 Mo ». La rangée plate est dense :
+                // la ligne n'apparaît que lorsqu'un fait existe, et jamais
+                // pour un média protégé.
+                if let details = quotedDetails {
+                    Text(details)
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                        .foregroundColor(previewColor.opacity(0.8))
+                        .lineLimit(QuotedReplyPresentation.titleLineLimit)
+                }
             }
         }
         .padding(.leading, FocalMetrics.Text.indent)
@@ -285,7 +321,7 @@ struct FocalQuotedReplyView: View, Equatable {
         HStack(spacing: 5) {
             if showsAuthorGate {
                 MeeshyAvatar(
-                    name: title,
+                    name: authorName,
                     context: .custom(FocalMetrics.Avatar.size),
                     accentColor: authorHex,
                     avatarURL: reference.authorAvatarUrl,
@@ -300,7 +336,7 @@ struct FocalQuotedReplyView: View, Equatable {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(titleColor)
-                .lineLimit(1)
+                .lineLimit(QuotedReplyPresentation.titleLineLimit)
         }
     }
 

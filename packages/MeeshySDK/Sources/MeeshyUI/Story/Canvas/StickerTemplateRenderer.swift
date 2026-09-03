@@ -200,12 +200,116 @@ public enum StickerTemplateRenderer {
     /// sous-couches vivantes — n'est pas qu'une affaire de coût : c'est ce qui
     /// fait survivre la décoration à `layer.render(in:)`, donc à la capture de
     /// canvas, au backdrop et à l'export AVFoundation, sans une ligne de plus.
+    ///
+    /// Le dessin est MÉMOÏSÉ (voir `memoizedImage`) : deux demandes identiques
+    /// ne font tourner CoreGraphics qu'une fois.
     @MainActor
     public static func image(templateID: String,
                              slots: [String: String],
                              metrics: StickerTemplateMetrics,
                              screenScale: CGFloat) -> (UIImage?, CGSize)? {
         guard let dessinateur = drawer(for: templateID) else { return nil }
-        return dessinateur.draw(slots, metrics, screenScale)
+        return memoizedImage(drawer: dessinateur, slots: slots,
+                             metrics: metrics, screenScale: screenScale)
+    }
+
+    // MARK: La mémoïsation du dessin
+
+    /// **Le même gabarit ne se redessine pas** (#4947).
+    ///
+    /// Une bulle de conversation rejoue sa rasterisation à chaque réapparition
+    /// de cellule (`MessageStickerArtwork` monte un `.task(id:)`) et la palette
+    /// redessine sa vignette à chaque passage : scroller loin puis revenir
+    /// refaisait tourner CoreGraphics pour un dessin IDENTIQUE, sur le fil
+    /// principal, au moment précis où il faut des images.
+    ///
+    /// `NSCache` plutôt qu'un dictionnaire : elle rend ses entrées sous
+    /// pression mémoire, ce qu'un cache de bitmaps doit savoir faire. Le
+    /// plafond qui compte est celui des OCTETS, pas celui des entrées —
+    /// soixante-quatre gabarits de 512 pt à 2× pèseraient un quart de
+    /// gigaoctet ; `countLimit` ne borne que la longueur de la file.
+    private static let renderCache: NSCache<NSString, StickerTemplateRender> = {
+        let cache = NSCache<NSString, StickerTemplateRender>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
+
+    /// Le dessin d'un dessinateur DONNÉ, mémoïsé.
+    ///
+    /// Prend le dessinateur plutôt que son id pour que les témoins mesurent le
+    /// nombre de dessins RÉELS avec un dessinateur espion — le registre, lui,
+    /// n'est pas injectable, et un compteur posé dans le renderer ne prouverait
+    /// rien d'autre que lui-même.
+    ///
+    /// Un dessin ABSENT (taille dégénérée) ne pose aucune entrée : mémoïser une
+    /// absence empêcherait le dessin de revenir quand les mesures redeviennent
+    /// valides.
+    @MainActor
+    static func memoizedImage(drawer dessinateur: StickerTemplateDrawer,
+                              slots: [String: String],
+                              metrics: StickerTemplateMetrics,
+                              screenScale: CGFloat) -> (UIImage?, CGSize)? {
+        let clé = renderCacheKey(drawerID: dessinateur.id, slots: slots,
+                                 metrics: metrics, screenScale: screenScale) as NSString
+        if let mémoïsé = renderCache.object(forKey: clé) {
+            return (mémoïsé.image, mémoïsé.size)
+        }
+        let rendu = dessinateur.draw(slots, metrics, screenScale)
+        guard let image = rendu.0 else { return rendu }
+        renderCache.setObject(StickerTemplateRender(image: image, size: rendu.1),
+                              forKey: clé, cost: bitmapCost(of: image))
+        return rendu
+    }
+
+    /// La clé d'un rendu : ce qui le fait DIFFÉRER, et rien d'autre.
+    ///
+    /// Les emplacements sont TRIÉS — un dictionnaire n'a pas d'ordre, et deux
+    /// écritures du même contenu doivent tomber sur la même clé. Les MESURES en
+    /// font partie : la vignette de palette et la scène demandent le même
+    /// gabarit dix fois plus grand, les confondre poserait une décoration
+    /// minuscule sur une story.
+    nonisolated static func renderCacheKey(drawerID: String,
+                                           slots: [String: String],
+                                           metrics: StickerTemplateMetrics,
+                                           screenScale: CGFloat) -> String {
+        let emplacements = slots.keys.sorted()
+            .map { "\($0)=\(slots[$0] ?? "")" }
+            .joined(separator: "\u{1F}")
+        return [drawerID, emplacements,
+                "\(metrics.fontSize)", "\(metrics.horizontalPadding)",
+                "\(metrics.verticalPadding)", "\(metrics.gap)",
+                "\(screenScale)"].joined(separator: "|")
+    }
+
+    /// Le poids d'un rendu, en octets de bitmap — quatre par pixel. C'est ce
+    /// que le cache borne, pas le nombre d'images.
+    nonisolated static func bitmapCost(of image: UIImage) -> Int {
+        let pixels = (image.size.width * image.scale) * (image.size.height * image.scale)
+        guard pixels.isFinite, pixels > 0 else { return 0 }
+        return Int(min(pixels, 1e9).rounded()) * 4
+    }
+}
+
+// MARK: - Le rendu mémoïsé
+
+/// Le dessin d'un gabarit et SA TAILLE, dans une boîte de référence.
+///
+/// `NSCache` ne range que des objets, et la taille fait partie du rendu : la
+/// recalculer depuis `image.size` à la relecture supposerait que tout
+/// dessinateur rasterise exactement à la taille qu'il annonce — ce que le
+/// contrat `StickerTemplateDrawer.Draw` n'impose nulle part.
+final class StickerTemplateRender {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    let image: UIImage
+    let size: CGSize
+
+    init(image: UIImage, size: CGSize) {
+        self.image = image
+        self.size = size
     }
 }
