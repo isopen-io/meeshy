@@ -489,6 +489,10 @@ public final class StoryCanvasUIView: UIView {
     var rotationRecognizer: UIRotationGestureRecognizer!
     var singleTapRecognizer: UITapGestureRecognizer!
     var doubleTapRecognizer: UITapGestureRecognizer!
+    /// **L'appui long sur le FOND** — jamais sur un objet, où
+    /// `UIContextMenuInteraction` règne déjà (`hitTestItem` y rend un id, et
+    /// le menu se configure ; sur le fond il rend `nil`, laissant la place).
+    var backgroundLongPressRecognizer: UILongPressGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
     /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
@@ -732,6 +736,19 @@ public final class StoryCanvasUIView: UIView {
 
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
+
+    /// **Appui long sur une zone VIDE du canvas.**
+    ///
+    /// Le SDK dit ce qui a été touché ; l'hôte décide de ce que cela
+    /// déclenche. C'est la même répartition que `onBackgroundTapped`, et
+    /// c'est ce qui permet au composer d'y ouvrir la caméra (#4036) sans
+    /// que l'atelier plein écran, qui ne branche rien, change de
+    /// comportement.
+    ///
+    /// > Un geste ajouté à un composant PARTAGÉ doit être inerte chez qui
+    /// > ne le branche pas. Une closure optionnelle le garantit par
+    /// > construction — un booléen de configuration ne l'aurait pas fait.
+    public var onBackgroundLongPressed: (() -> Void)?
 
     /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
     /// un double-tap sur le fond demande un reset du viewport — prioritaire

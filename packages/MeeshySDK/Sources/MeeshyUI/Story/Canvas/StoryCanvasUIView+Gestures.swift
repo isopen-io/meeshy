@@ -30,16 +30,35 @@ extension StoryCanvasUIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        backgroundLongPressRecognizer = UILongPressGestureRecognizer(
+            target: self, action: #selector(handleBackgroundLongPress(_:)))
         canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
             target: self,
             action: #selector(handleCanvasZoomPinch(_:))
         )
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, backgroundLongPressRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
         addInteraction(UIContextMenuInteraction(delegate: self))
+    }
+
+    /// **L'appui long sur le FOND, et rien d'autre.**
+    ///
+    /// Trois conditions, chacune pour une raison distincte :
+    ///
+    /// - `mode == .edit` — en lecture, la scène se regarde ;
+    /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
+    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
+    ///   ouvrirait plusieurs viseurs ;
+    /// - `hitTestItem(at:) == nil` — sur un objet, `UIContextMenuInteraction`
+    ///   possède déjà ce geste. Le lui disputer ferait clignoter le menu.
+    @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        guard mode == .edit, recognizer.state == .began else { return }
+        guard hitTestItem(at: recognizer.location(in: self)) == nil else { return }
+        guard inlineEditingTextId == nil else { return }
+        onBackgroundLongPressed?()
     }
 
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {

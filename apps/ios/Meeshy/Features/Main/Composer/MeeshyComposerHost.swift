@@ -284,15 +284,6 @@ struct MeeshyComposerHost: View {
     /// contredirait le bouton qu'il vient de presser.
     @State var chosenSoundPlacement: ComposerAudioRole = .background
 
-    /// **Le viseur promis par la porte a-t-il déjà été ouvert ?** (#4751)
-    ///
-    /// `.task` peut rejouer — au retour d'un cover, à une recomposition de
-    /// l'arbre — et un second viseur posé par-dessus le premier serait un
-    /// écran que rien ne referme. La garde vit ICI et non dans la règle :
-    /// `armsCameraOnAppear` est pure et doit rendre la même réponse à chaque
-    /// appel, ce qui est correct pour une règle et faux pour une garde
-    /// d'unicité.
-    @State var hasArmedOpeningCamera = false
 
     /// **Le mode du viseur que la prochaine ouverture montrera** (#4998).
     /// Écrit par `presentCamera(mode:)`, l'unique porte ; lu par
@@ -709,6 +700,29 @@ struct MeeshyComposerHost: View {
         )
     }
 
+    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, #4851 —
+    /// porteur 2026-09-03 ; planche `2b`).
+    ///
+    /// C'est ce geste qui tient désormais la promesse de la porte, à la place
+    /// du viseur présenté au montage. Trois choses vivent ailleurs, exprès :
+    ///
+    /// - **si** le geste est offert — `ComposerSceneCaptureGesture.offersCapture`,
+    ///   qui lit la clause « scène vide ou à fond vide » de la directive ;
+    /// - **quel** viseur — la même règle, où le FORMAT prime la porte ;
+    /// - **comment** il s'ouvre — `presentCamera(mode:)`, le site unique.
+    ///
+    /// L'hôte ne fait que les composer. Un `if` écrit ici aurait remis la
+    /// décision dans un corps de vue, où une garde de source ne la lit pas.
+    func handleSceneCaptureLongPress() {
+        guard ComposerSceneCaptureGesture.offersCapture(
+            backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
+            format: selectedFormat
+        ) else { return }
+        HapticFeedback.medium()
+        presentCamera(mode: ComposerSceneCaptureGesture.mode(
+            format: selectedFormat, opening: profile.opensWith))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
@@ -827,17 +841,15 @@ struct MeeshyComposerHost: View {
             // story (reprise d'un brouillon de story, tiroir des stories).
             seedStoryCanvasIfNeeded()
         }
-        // **La porte qui a promis un VISEUR l'ouvre** (#4751). `.cameraReady`
-        // a quitté l'exemption qui l'envoyait à l'atelier ; sans cette ligne,
-        // « Créer une story » ouvrirait le meuble sur une scène vide et la
-        // porte la plus visible du Feed cesserait de tenir ce que son nom
-        // annonce.
+        // **Aucun viseur ne s'ouvre au montage** (#4036, #4851 — porteur
+        // 2026-09-03). Une tâche de montage appelait ici la fonction qui
+        // armait le viseur promis par la porte :
+        // « Créer une story » posait un plein écran noir devant la scène, qu'il
+        // fallait fermer pour composer. Ce que la porte promet est désormais
+        // tenu par un GESTE — l'appui long sur la scène vide, doctrine `2b`.
         //
-        // `armOpeningCameraIfPromised` est le site UNIQUE : la règle décide,
-        // le meuble exécute, et un `guard` d'idempotence tient la promesse à
-        // UNE ouverture — un `.task` peut rejouer, et un second viseur
-        // par-dessus le premier serait un écran que rien ne referme.
-        .task { armOpeningCameraIfPromised() }
+        // La ligne est RETIRÉE, pas gardée par un `if` : une présentation au
+        // montage tenue par une condition se rallume au premier cas ajouté.
     }
 
     /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
@@ -867,22 +879,6 @@ struct MeeshyComposerHost: View {
             .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
             .accessibilityAddTraits(.updatesFrequently)
         }
-    }
-
-    /// Ouvre le viseur que la porte a promis, une fois.
-    ///
-    /// **Idempotent par un état du meuble, pas par la règle** : la règle est
-    /// pure et rend la même réponse à chaque appel, ce qui est correct pour
-    /// elle et faux comme garde. C'est l'HÔTE qui sait s'il a déjà ouvert.
-    func armOpeningCameraIfPromised() {
-        guard !hasArmedOpeningCamera,
-              ComposerSurfaceRouting.armsCameraOnAppear(opening: profile.opensWith)
-        else { return }
-        hasArmedOpeningCamera = true
-        // **La porte dit AUSSI quel viseur** (#4998) : `.videoCameraReady`
-        // promettait la vidéo et ouvrait la photo, personne ne lisant la
-        // différence. La règle décide, le meuble exécute.
-        presentCamera(mode: ComposerCameraMode.mode(for: profile.opensWith))
     }
 
     /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.

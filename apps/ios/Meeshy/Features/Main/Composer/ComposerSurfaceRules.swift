@@ -119,9 +119,11 @@ nonisolated enum ComposerSurfaceRouting {
         // > visible du Feed — « Créer une story » — et c'est elle qui montait
         // > l'ancien écran.
         //
-        // Ce que la promesse devient : `armsCameraOnAppear` l'honore DANS le
-        // meuble. Router sans armer aurait tenu la lettre de la directive en
-        // perdant ce que la porte annonce.
+        // Ce que la promesse devient : elle est tenue DANS le meuble, par un
+        // GESTE — l'appui long sur la scène vide (#4036). Elle l'a d'abord
+        // été par un viseur présenté au montage (#4751), révoqué le
+        // 2026-09-03 : la porte annonçait un appareil photo et l'auteur qui
+        // venait composer devait fermer un plein écran noir.
         //
         // **Ici, l'auteur CHOISIT.** C'est le « nouveau composer » de la
         // directive porteur du 2026-09-01, et c'est là que la story cessait
@@ -167,42 +169,49 @@ nonisolated enum ComposerSurfaceRouting {
         }
     }
 
-    /// **Le VISEUR se lève là où la porte l'a promis** (#4751) — jumelle exacte
-    /// de la règle du clavier, et écrite à côté d'elle pour que la question
-    /// « qu'est-ce qui s'ouvre tout seul ? » ait UN endroit.
+    /// **Le viseur ne se lève plus AU MONTAGE** (#4036, #4851 — porteur
+    /// 2026-09-03). `armsCameraOnAppear` vivait ici et présentait le viseur dès
+    /// l'ouverture ; la règle a été RETIRÉE, pas mise à `false` : une fonction
+    /// qui rend faux partout se rebranche sans qu'on s'en aperçoive.
     ///
-    /// `.cameraReady` a quitté l'exemption qui l'envoyait à l'atelier ; sans
-    /// cette règle, elle serait devenue une entrée neutre — le meuble se
-    /// serait ouvert sur une scène vide, et la porte la plus visible du Feed
-    /// aurait cessé de tenir ce que son nom annonce.
+    /// Ce que la porte promet est désormais tenu par un GESTE —
+    /// `ComposerSceneCaptureGesture`, l'appui long sur une scène vide, doctrine
+    /// de la planche `2b`. La promesse elle-même n'est pas perdue : elle survit
+    /// dans `ComposerCameraMode.mode(for:)` juste en dessous, qui choisit le
+    /// mode que ce geste ouvrira.
     ///
-    /// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle
-    /// > PROMET. Ce qui était honoré par l'écran d'arrivée doit l'être
-    /// > explicitement au nouveau, sinon la promesse disparaît avec le
-    /// > déménagement — sans qu'aucun site ne rougisse, puisque plus personne
-    /// > ne la porte.
+    /// > Une garde de source (`ComposerSceneCaptureGestureTests`) interdit le
+    /// > retour d'une présentation au montage, parce que c'est un GESTE
+    /// > D'ÉCRITURE qu'il faut retenir, pas une valeur.
     ///
-    /// **Les deux ne sont JAMAIS vrais ensemble** : un viseur et un clavier qui
-    /// s'ouvriraient de concert se disputeraient l'écran, et le second
-    /// recouvrirait le premier. L'exhaustivité des deux `switch` le garantit
-    /// case par case plutôt que par une assertion croisée, qu'un troisième
-    /// mode d'ouverture pourrait contourner.
-    static func armsCameraOnAppear(opening: ComposerOpening) -> Bool {
-        switch opening {
-        case .cameraReady, .videoCameraReady: return true
-        case .keyboardOnContent, .moodGrid, .resume, .mediaSeeded: return false
-        }
-    }
+    /// **Ce que son retrait emporte, et qu'il faut redonner un porteur.** Les
+    /// deux `switch` jumeaux — celui-ci et `focusesContentOnAppear` — se
+    /// tenaient mutuellement : leur exhaustivité garantissait, cas par cas,
+    /// qu'un viseur et un clavier ne s'ouvrent jamais ensemble. En retirant
+    /// l'un, cette garantie perd son porteur.
+    ///
+    /// Elle est désormais VRAIE PAR CONSTRUCTION — plus aucun viseur ne s'ouvre
+    /// au montage, donc aucun ne peut rencontrer un clavier — et c'est une
+    /// forme de garantie plus forte qu'un invariant vérifié. Mais elle cesse
+    /// d'être vraie à la seconde où quelqu'un rouvre un viseur au montage :
+    /// c'est exactement ce que la garde de source interdit, et c'est sa
+    /// deuxième raison d'être.
 }
 
 /// **Dans QUEL mode le viseur promis s'ouvre** (#4998, directive porteur
 /// 2026-09-03).
 ///
-/// Jumelle de `armsCameraOnAppear`, et écrite à côté d'elle pour la même
-/// raison : la première dit SI un viseur se lève, celle-ci LEQUEL. Les séparer
-/// de deux fichiers aurait laissé la seconde question sans endroit — et c'est
-/// exactement ce qui s'est passé : `ComposerOpening` distingue `.cameraReady`
-/// de `.videoCameraReady` depuis toujours, et rien n'a jamais lu la différence.
+/// Cette règle a d'abord été la jumelle de `armsCameraOnAppear` : la première
+/// disait SI un viseur se lève, celle-ci LEQUEL. La première a été retirée le
+/// 2026-09-03 (#4036) — le viseur ne se lève plus seul — et celle-ci SURVIT :
+/// c'est elle qui porte la promesse de la porte jusqu'au geste qui l'ouvre.
+///
+/// > Retirer une règle laisse sa jumelle orpheline de sa raison d'être. Ici
+/// > la seconde question (« lequel ? ») garde tout son sens sans la première
+/// > (« si ? ») — mais il faut le DIRE, sinon elle a l'air d'un reste.
+///
+/// `ComposerOpening` distingue `.cameraReady` de `.videoCameraReady` depuis
+/// toujours, et rien n'a jamais lu la différence avant #4998.
 ///
 /// > Un type SOMME qui nomme deux promesses sans qu'aucun consommateur les
 /// > distingue n'est pas une abstraction : c'est une promesse écrite deux fois

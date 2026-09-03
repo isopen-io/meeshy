@@ -101,6 +101,8 @@ struct ComposerDocumentSurface: View {
 
     /// Relais du tap sur le FOND de la scène (désélection).
     var onSceneBackgroundTapped: (() -> Void)? = nil
+    /// **L'appui long sur la scène VIDE d'un Post ouvre la caméra** (#4036).
+    var onSceneBackgroundLongPressed: (() -> Void)? = nil
 
     /// **Naviguer entre les slides depuis le RAIL (#4038, monté en barre haute
     /// par #4047).** En Post, une slide EST un média — le rail DIT donc déjà les
@@ -380,6 +382,7 @@ struct ComposerDocumentSurface: View {
                     cornerRadius: 22,
                     onItemTapped: onSceneItemTapped,
                     onBackgroundTapped: onSceneBackgroundTapped,
+                    onBackgroundLongPressed: onSceneBackgroundLongPressed,
                     loadedImages: sceneImages,
                     loadedImagesVersion: sceneImagesVersion
                 )

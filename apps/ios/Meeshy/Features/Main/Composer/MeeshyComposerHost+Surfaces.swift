@@ -413,6 +413,7 @@ extension MeeshyComposerHost {
                 }
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
+            onBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -692,6 +693,7 @@ extension MeeshyComposerHost {
             // l'atelier plein écran, que ce lot doit laisser intact. Le SDK dit
             // ce qui a été touché, l'app décide ce que cela sélectionne.
             onSceneBackgroundTapped: { handleSceneBackgroundTap() },
+            onSceneBackgroundLongPressed: { handleSceneCaptureLongPress() },
             // Taper une vignette amène SA slide sur la scène (#4038). La table
             // `slideIdByMediaURL` est justement l'index qui relie les deux ;
             // sans elle il faudrait deviner par l'ordre, qui ment dès qu'un

@@ -91,6 +91,10 @@ struct ComposerSceneSurface: View {
 
     var onBackgroundTapped: (() -> Void)?
 
+    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
+    /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
+    var onBackgroundLongPressed: (() -> Void)?
+
     // MARK: - Les deux rails
 
     /// **Ce que le rail *leading* montre** — déjà résolu par
@@ -524,6 +528,7 @@ struct ComposerSceneSurface: View {
                     onItemDoubleTapped: onItemEdit,
                     editableKinds: editableSceneKinds,
                     onBackgroundTapped: onBackgroundTapped,
+                    onBackgroundLongPressed: onBackgroundLongPressed,
                     loadedImages: sceneImages,
                     loadedImagesVersion: sceneImagesVersion,
                     // Le canvas retire son calque de dessin persisté pendant

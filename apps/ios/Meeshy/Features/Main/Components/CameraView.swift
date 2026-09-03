@@ -22,7 +22,18 @@ enum CameraResult {
 ///
 /// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle PROMET.
 /// > Ici la promesse n'avait même jamais eu de porteur.
-enum CameraCaptureMode: Equatable, Sendable {
+/// **`nonisolated` — sinon sa conformance `Equatable` l'est au MainActor.**
+///
+/// Le fichier compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` : sans
+/// l'annotation, `==` n'est appelable que depuis le main actor, et toute règle
+/// pure qui rend un mode devient intestable — l'erreur tombe alors sur les
+/// SITES d'appel (« main actor-isolated conformance … in nonisolated context »),
+/// jamais sur la déclaration qui en est la cause.
+///
+/// > Une isolation se propage vers le HAUT par les appels. Un type de valeur à
+/// > deux cas peut ainsi retenir sur le main actor toutes les règles qui le
+/// > mentionnent, et l'erreur qu'on lit désigne partout sauf sa source.
+nonisolated enum CameraCaptureMode: Equatable, Sendable {
     case photo
     case video
 }
