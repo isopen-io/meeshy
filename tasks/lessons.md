@@ -11877,6 +11877,41 @@ Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artef
 décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
 l'affirmation et ce qui pourrait la démentir.
 
+### Chercher la RÉPONSE avant de formuler la question — et la chercher dans la GOUVERNANCE
+
+Cinq fois le 2026-09-03, j'ai affirmé une absence, posé une question ou ouvert une
+issue sur un sujet **que le dépôt documentait déjà**. Les trois premières étaient
+des motifs de recherche trop étroits (leçon voisine) ; les deux dernières sont
+d'une autre nature, et plus coûteuses :
+
+| ce que j'ai fait | ce qui existait, et où |
+|---|---|
+| demandé au porteur si `apps/web` et `apps/web-v3` coexistent | **premier paragraphe** de `docs/product/MeeshyWebV3Design/conception-web-v3.md`, comme décision porteur non négociable |
+| ouvert #5040 en affirmant qu'aucune surcharge ne portait `storyEffects` | `PostService.createCanvasPost` la porte — et `docs/product/api-simplification/social.md` nomme **cinq** sites de construction du corps là où j'en voyais un |
+
+La différence avec un grep trop étroit : là, je cherchais **au mauvais endroit**.
+Je lisais le CODE pour répondre à des questions d'INTENTION et de PLAN — or le
+dépôt sépare explicitement les deux, et le dit : « l'ÉTAT vit dans les issues
+GitHub, jamais ici ; ce document décrit la CIBLE et les MÉCANISMES ».
+
+> **Le code dit ce qui EST ; la gouvernance dit ce qui est VOULU et ce qui est
+> DÉJÀ SU.** Une question d'intention (« faut-il ? », « remplace-t-on ? »), une
+> affirmation d'absence (« rien ne fait X ») et un projet de lot se cherchent
+> d'abord dans `docs/product/`, dans le milestone et dans son épopée — pas au
+> `grep`.
+
+Le réflexe, en une ligne : **avant d'ouvrir une issue, lire le document que son
+milestone cite.** Le milestone #74 nomme `MeeshyWebV3Design/ordre.md` ; le
+document de conception nomme `api-simplification/*.md`. Les deux réponses que
+j'ai manquées étaient à un saut de lien de la gouvernance que je consultais déjà.
+
+Et un corollaire d'humilité utile : mon erreur sur `createCanvasPost` est
+**exactement** celle qu'a commise l'auteur de `createBorrowedSoundPost`, qui a
+justifié un contournement par une surcharge qu'il n'avait pas vue. Deux personnes
+s'y sont trompées en une semaine, sur le même fichier — ce n'est plus une
+distraction, c'est une propriété de la surface. Un télescope de onze déclarations
+ne se parcourt pas des yeux, donc il se re-crée au lieu de se réutiliser.
+
 ### Un motif TROP ÉTROIT rend un faux négatif CONFIANT — trois fois en une session
 
 Le 2026-09-03, trois mesures fausses, toutes de la même forme : un motif de
