@@ -346,6 +346,24 @@ struct ComposerSceneSurface: View {
     /// la surface ne fait que peindre ce qu'elle reçoit.
     var onDeleteBackgroundSound: (() -> Void)?
 
+    // MARK: - Ce que la publication EMPORTE (#5002)
+
+    /// Les balises DÉRIVÉES du texte de la publication, sans leur `#`. La
+    /// surface les REÇOIT : les dériver ici ouvrirait un second chemin vers le
+    /// même fait, et `ComposerHashtags` est le premier.
+    var sceneHashtags: [String] = []
+
+    /// Les personnes que la publication nomme, **tous modes confondus**. Ni
+    /// l'hôte ni la surface ne filtrent : le pied monte `ReferenceNoteRow`, qui
+    /// est le site unique de l'exclusion `.inline` / `.silent` / `.pinned`.
+    /// Filtrer en amont recréerait la divergence que ce montage évite.
+    var sceneReferences: [ComposerReference] = []
+
+    /// Les deux feuilles qui existent déjà — `nil` ⇒ le pied reste une lecture
+    /// et ne s'annonce pas activable (loi 4).
+    var onOpenHashtags: (() -> Void)?
+    var onOpenMentions: (() -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -450,6 +468,34 @@ struct ComposerSceneSurface: View {
                 onRemoveMedia: onRemoveMedia,
                 onSelectMedia: onSelectMedia
             )
+
+            // **La trace du son de FOND, EN TÊTE de la scène** (#5001, directive
+            // porteur 2026-09-03 : « il faut ajouter au dessus de la scene une
+            // note suivi du detail de l'audio de fond »).
+            //
+            // Elle vivait SOUS la carte, au niveau SLIDE de l'escalier du bas
+            // (#4918). Ce lot la DÉPLACE, et il faut dire ce que cela amende :
+            // l'escalier reste juste pour ce qui se RÈGLE, il l'était moins
+            // pour ce qui se CONSTATE. Un son de fond n'est pas un réglage
+            // qu'on descend chercher — il commence avec la scène, dure autant
+            // qu'elle, et n'apparaît sur aucun de ses pixels. Sous la carte, il
+            // partageait la place avec la bande d'outil et les jetons d'objet
+            // et se lisait en dernier ; au-dessus, il se lit AVEC la scène,
+            // comme un titre se lit avec ce qu'il titre.
+            //
+            // Dans le COULOIR, jamais sur la carte (`apps/ios/CLAUDE.md` § 1,
+            // loi 6) : un son de fond ne produit aucun pixel au rendu.
+            // **Aucun `tint:` — et c'est mesuré, pas oublié.** `plateauTint` est
+            // le FOND du plateau (`PlateauTint.color` → `indigo950`) ; le passer
+            // en couleur de CONTENU peint la capsule dans la couleur de ce
+            // qu'elle recouvre. Vérifié au simulateur : l'arbre d'accessibilité
+            // portait la ligne, l'écran ne montrait rien. Les deux vues gardent
+            // le défaut de `ComposerAvatarSoundBadge`, `indigo400`, qui lit sur
+            // le plateau.
+            ComposerSceneSoundHeader(backgroundSound: backgroundSound,
+                                     toolIsOpen: toolIsOpen,
+                                     onEdit: onEditBackgroundSound,
+                                     onDelete: onDeleteBackgroundSound)
 
             VStack(spacing: 8) {
                 EmbeddedSceneCanvas(
@@ -643,39 +689,32 @@ struct ComposerSceneSurface: View {
                 // invisible le reste du temps. Un texte qui part avec la
                 // publication et que l'auteur ne voit jamais est un texte qu'il
                 // oublie.
-                // **La trace du son de FOND, au niveau SLIDE de l'escalier**
-                // (#4918). Elle se pose au-dessus de la description parce que
-                // les deux appartiennent à la même marche : la description dit
-                // ce que la slide RACONTE, la trace AVEC QUOI elle se raconte.
-                //
-                // Dans le COULOIR, jamais sur la scène — `apps/ios/CLAUDE.md`
-                // § 1 : un son de fond ne produit aucun pixel au rendu, donc
-                // l'afficher sur le canvas ferait mentir l'aperçu (loi 6).
-                //
-                // La capsule est celle de la surface document
-                // (`ComposerAvatarSoundBadge`) : onde pour un enregistrement,
-                // titre et crédit pour un emprunt, durée toujours. Deux
-                // capsules pour un même objet auraient été deux vocabulaires.
-                if let trace = ComposerSceneSoundTrace.served(background: backgroundSound,
-                                                              toolIsOpen: toolIsOpen) {
-                    ComposerAvatarSoundBadge(sound: trace, onTap: onEditBackgroundSound)
-                        // **Le MÊME menu que la carte du son de contenu**
-                        // (#4930) — pas un second geste. L'appui long est la
-                        // seconde porte de la suppression depuis #4696 ; elle
-                        // manquait au plan de FOND, dont le seul chemin passait
-                        // par une feuille que `opensEditor` refuse d'ouvrir à
-                        // un son emprunté.
-                        .modifier(ComposerSoundDeletionMenu(
-                            supprimer: onDeleteBackgroundSound))
-                        .padding(.horizontal, 16)
-                        .padding(.top, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                // **La trace du son de fond a QUITTÉ cette marche** (#5001) :
+                // elle est montée en tête de la surface, juste sous la barre
+                // haute. Le raisonnement qui l'a déplacée est écrit là-bas, à
+                // l'endroit où elle se peint désormais — le laisser ici en
+                // double aurait fait deux doctrines pour une capsule.
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
                                            activeChipId: activeObjectChipId,
                                            onSelect: onObjectChip)
                 }
+                // **Ce que la publication EMPORTE, au pied de la scène** (#5002,
+                // directive porteur 2026-09-03). Dernière marche de l'escalier
+                // avant la rangée d'entrée : les hashtags et les personnes
+                // nommées n'appartiennent ni à l'objet ni à la scène, ils
+                // partent avec la PUBLICATION.
+                //
+                // Dans le couloir, sous la carte — jamais dessus : aucun d'eux
+                // ne se peint sur un pixel du rendu, et les poser là volerait
+                // les touches de la bande qu'ils couvriraient.
+                // Aucun `tint:` : voir la note de l'en-tête son, en tête de ce
+                // corps — `plateauTint` est le FOND, pas un accent de contenu.
+                ComposerSceneReferenceFooter(hashtags: sceneHashtags,
+                                             references: sceneReferences,
+                                             onOpenHashtags: onOpenHashtags,
+                                             onOpenMentions: onOpenMentions)
+                    .padding(.horizontal, 16)
                 // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
                 // ENTRER de la matière — une photo, un lieu, un tracé — quand le
                 // rail agit sur ce qui est déjà là. L'arbitrage la nomme

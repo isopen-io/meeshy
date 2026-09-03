@@ -505,6 +505,12 @@ visuellement » mais de **sur quoi le contrôle agit** — et les deux coïncide
 pour les portes, tout en tranchant ce que la première laissait flou : la place
 des contrôleurs, de l'historique et de la création de slide.
 
+> **« Trois » compte les zones qui AGISSENT, et le reste vrai.** Le § 2 quater
+> en ajoute une quatrième qui n'agit sur rien — elle CONSTATE ce que la scène
+> emporte d'invisible (le son de fond en tête, les hashtags et les mentions
+> référencées au pied). Deux natures, deux comptes : une zone de constat
+> n'édite rien, elle ouvre la feuille qui édite.
+
 | zone | agit sur | contenu |
 |---|---|---|
 | **bas du plateau** (aucun outil actif) | le CANVAS en général | ce qui vaut pour la scène entière ou la publication — fond, description, mention, lieu |
@@ -666,6 +672,51 @@ justifie son déplacement du socle vers le rail des objets (#4586).
 > qu'elle était avant que le même commit ne la corrige. **Une citation est datée
 > par le fichier qu'elle cite** — la changer sans relire ce qui la cite fabrique
 > une référence qui n'a jamais existé.
+
+### 2 quater. Le plateau a une QUATRIÈME zone — au-dessus de la scène (directive porteur 2026-09-03)
+
+> « Il faut ajouter au dessus de la scene une note suivi du detail de l'audio de
+> fond d'une scene doit être mise et au touché ouvrir la feuille permettant de
+> l'editer. […] les hashtag et mention referencé (pas les mention inline et
+> mention caché) doivent apparaitre en bas de la scene au touché ça ouvre les
+> feuille de mention ou des hashtag ! »
+
+Le § 2 bis décrit trois zones — bas, gauche, droite — et les ordonne par ce sur
+quoi elles AGISSENT. La directive en ouvre une quatrième, et elle n'agit sur
+rien : elle **CONSTATE**.
+
+| zone | ce qu'elle fait | contenu |
+|---|---|---|
+| **au-dessus de la scène** | elle CONSTATE ce que la scène emporte d'invisible | la trace du son de fond (#5001) |
+| **au pied de la scène** | idem, au niveau PUBLICATION | hashtags et mentions `.note` (#5002) |
+
+**Ce que cet ajout amende, et il faut le dire pour que le prochain lot ne le
+défasse pas.** L'escalier du bas descend les niveaux du modèle — objet, scène,
+slide, publication — et il reste juste pour ce qui se RÈGLE. Il l'était moins
+pour ce qui se CONSTATE : un son de fond n'est pas un réglage qu'on descend
+chercher. Il commence avec la scène, dure autant qu'elle, et n'apparaît sur
+aucun de ses pixels — donc rien dans la scène ne le rappelle. Sous la carte, il
+partageait la place avec la bande d'outil et les jetons d'objet et se lisait en
+dernier ; au-dessus, il se lit AVEC la scène, comme un titre se lit avec ce
+qu'il titre.
+
+**La loi 6 tient toujours, et c'est elle qui décide de la géographie.** Les deux
+zones vivent dans les COULOIRS du plateau, jamais sur la carte : ni un son de
+fond, ni un hashtag, ni une personne nommée ne produit un pixel au rendu. Les
+poser sur le canvas ferait mentir l'aperçu — et volerait au passage les touches
+de la bande couverte.
+
+**Ce qui distingue une zone de CONSTAT d'une zone de CONTRÔLE** : elle n'édite
+rien elle-même. Elle lit, et le doigt y ouvre la feuille qui édite — la même que
+la porte du rail ouvre, jamais une seconde. Un pied qui présenterait sa propre
+feuille en ferait deux à tenir d'accord, et la première divergence serait
+invisible.
+
+**Le témoin** : les deux zones sont MONTÉES (une vue sans consommateur n'a aucun
+site où rougir) et ALIMENTÉES par le meuble (un pied monté sur ses valeurs par
+défaut se peint exactement comme une publication qui n'emporte rien). Les deux
+questions sont distinctes, et les deux gardes aussi —
+`ComposerSceneReferencesTests` et `ComposerBackgroundSoundRemovalTests`.
 
 ### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
 

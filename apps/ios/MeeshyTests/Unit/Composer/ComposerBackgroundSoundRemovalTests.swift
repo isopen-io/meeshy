@@ -59,14 +59,47 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
     /// **Et les deux pastilles portent le menu.** Servir la valeur sans monter
     /// le menu donnerait un rappel que personne n'appelle — la loi 4 vue depuis
     /// l'autre bout de la chaîne.
+    ///
+    /// **Le site de la pastille de SCÈNE a changé au #5001** : la capsule est
+    /// montée en tête de la surface et vit désormais dans
+    /// `ComposerSceneSoundHeader.swift`. Ce témoin RE-VISE, il ne s'allège pas —
+    /// une garde de source ancre sur une PLACE, et ne distingue pas d'elle-même
+    /// « ce site a perdu sa protection » de « la protection a déménagé »
+    /// (leçon 486). Le second témoin ci-dessous est l'assertion qui manquait, et
+    /// c'est elle qui rend le déménagement sûr.
     func test_lesDeuxPastilles_portentLeMenu() throws {
-        for fichier in ["ComposerDocumentSurface.swift", "ComposerSceneSurface.swift"] {
+        // Le rappel ne porte pas le même NOM aux deux endroits : la surface
+        // document tient l'état du meuble, l'en-tête de scène reçoit une
+        // closure. Épingler chaque site sur SON nom garde la précision qu'un
+        // préfixe commun aurait perdue.
+        for (fichier, rappel) in [("ComposerDocumentSurface.swift", "onDeleteBackgroundSound"),
+                                  ("ComposerSceneSoundHeader.swift", "onDelete")] {
             let code = try source(fichier)
             XCTAssertTrue(code.contains("ComposerSoundDeletionMenu"),
                           "\(fichier) monte la pastille du fond sans son menu de retrait")
-            XCTAssertTrue(code.contains("supprimer: onDeleteBackgroundSound"),
+            XCTAssertTrue(code.contains("supprimer: \(rappel)"),
                           "\(fichier) monte le menu sans le brancher sur le retrait du FOND")
         }
+    }
+
+    /// **La pastille de scène est MONTÉE, et une seule fois** (#5001).
+    ///
+    /// Sans ce témoin, le déménagement ci-dessus serait vert avec une capsule
+    /// que personne n'affiche : `ComposerSceneSoundHeader` porterait sa règle et
+    /// son menu dans un fichier qu'aucune surface ne monte — une vue sans
+    /// consommateur n'a aucun site où rougir (leçon 483).
+    ///
+    /// Et le second `XCTAssertFalse` garde l'autre moitié du lot : la capsule ne
+    /// doit pas rester AUSSI en bas. Deux capsules pour un même objet seraient
+    /// deux vocabulaires, et la seconde se lirait comme un second son.
+    func test_laPastilleDeScene_estMonteeUneSeuleFois() throws {
+        let surface = try source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("ComposerSceneSoundHeader("),
+                      "la surface scène ne monte pas l'en-tête : la capsule existe et ne se voit nulle part")
+        XCTAssertFalse(surface.contains("ComposerAvatarSoundBadge"),
+                       "la capsule est restée en bas EN PLUS de l'en-tête — deux capsules pour un seul fond")
+        XCTAssertEqual(surface.components(separatedBy: "ComposerSceneSoundHeader(").count - 1, 1,
+                       "un seul montage : deux en-têtes se peindraient l'un sous l'autre")
     }
 
     /// **Le menu est PARTAGÉ, pas recopié.** Il était `private` à la surface

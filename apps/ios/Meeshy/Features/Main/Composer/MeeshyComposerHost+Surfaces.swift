@@ -328,7 +328,11 @@ extension MeeshyComposerHost {
             for: ComposerRailDoor.canonicalRail,
             in: ComposerRailDoorBadge.matter(
                 slide: viewModel.currentSlide,
-                publicationText: documentText,
+                // **Le site UNIQUE, jamais une seconde dérivation** (#5007) :
+                // `composerHashtags` est déjà `ComposerHashtags.tags(in:
+                // documentText)`, et la feuille comme le sélecteur le lisent
+                // sans le recalculer.
+                hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
                 mentions: composerReferences.count,
                 hasDocumentLocation: documentLocation != nil,
@@ -615,6 +619,24 @@ extension MeeshyComposerHost {
             backgroundSound: avatarBadgeSound,
             onEditBackgroundSound: editBackgroundSoundAction,
             onDeleteBackgroundSound: deleteBackgroundSoundAction,
+            // **Le pied lit les MÊMES magasins que le reste du meuble** (#5002).
+            //
+            // `composerHashtags` — pas `ComposerHashtags.tags(in: documentText)`.
+            // La dérivation a DÉJÀ son site unique
+            // (`MeeshyComposerHost+Audience.swift`), que la feuille et le
+            // sélecteur lisent sans le recalculer, et `ComposerAudienceAndHashtagTests`
+            // le compte. J'ai écrit la seconde dérivation en commentant, douze
+            // lignes plus haut dans la surface, que « les dériver ici ouvrirait
+            // un second chemin vers le même fait » — la règle était juste et je
+            // l'ai enfreinte dans le même lot, du côté où je ne la relisais pas.
+            sceneHashtags: composerHashtags,
+            sceneReferences: composerReferences,
+            // **La MÊME porte que le rail**, pas un second chemin : toucher une
+            // balise au pied ouvre exactement ce que la porte `#` ouvre. Un
+            // pied qui présenterait sa propre feuille en ferait deux à tenir
+            // d'accord — et la première divergence serait invisible.
+            onOpenHashtags: { handleRailDoor(.hashtag) },
+            onOpenMentions: { handleRailDoor(.mention) },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
