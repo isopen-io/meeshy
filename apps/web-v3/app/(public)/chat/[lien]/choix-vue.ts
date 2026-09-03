@@ -407,6 +407,7 @@ const cadre = (etat: EtatDuChoix): EtatDuFil => ({
   tempsReel: null,
   // Le cadre du CHOIX ne sert AUCUN message : il n'y a pas de pièce à ouvrir.
   plein: null,
+  profil: null,
 });
 
 export const documentDuChoix = (etat: EtatDuChoix): string =>

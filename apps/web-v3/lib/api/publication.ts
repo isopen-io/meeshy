@@ -93,12 +93,19 @@ export type Voisinage = {
 };
 
 const CHEMIN_DES_POSTS = '/api/v1/posts';
-/** Le plafond de `SocialPostsQuerySchema` sur ce scope (`validatePagination`, `maxLimit: 50`). */
-const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&limit=50';
+/**
+ * Le plafond de `SocialPostsQuerySchema` sur ce scope (`validatePagination`,
+ * `maxLimit: 50`). `projection=tray` (`routes/posts/feed.ts:213`,
+ * `postIncludes.ts:264-296`) : `storiesVisibles` ne projette que
+ * `{ id, auteurId, publieeA }`, exactement ce que sert la projection légère —
+ * la fenêtre de voisinage n'a besoin ni du canvas ni des traductions.
+ */
+const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&projection=tray&limit=50';
 
 const DELAI_MS = DELAI_DE_REPONSE_MS;
 
-const demande = (
+/** EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch réseau) pour le fil et le rail de stories. */
+export const demande = (
   url: string,
   jeton: string,
   recuperer: Recuperateur | undefined,
@@ -116,7 +123,13 @@ const demande = (
  * Une entrée sans texte n'existe pas : la servir ferait une langue OFFERTE qui
  * rend une story vide.
  */
-const traductions = (brut: unknown): Readonly<Record<string, string>> => {
+/**
+ * EXPORTÉE — `lib/api/social.ts` (le fil, #5031) en a besoin pour le MÊME
+ * dépouillement : la carte `code → texte` d'un post est identique, qu'il
+ * s'ouvre en plein écran (`/post/:id`) ou qu'il défile dans le fil
+ * (`/feed`). L'exporter évite la jumelle que réécrire ce filtre ferait naître.
+ */
+export const traductions = (brut: unknown): Readonly<Record<string, string>> => {
   const carte = objet(brut);
   if (carte === null) return {};
   return Object.entries(carte).reduce<Record<string, string>>((acc, [code, entree]) => {
@@ -126,7 +139,8 @@ const traductions = (brut: unknown): Readonly<Record<string, string>> => {
   }, {});
 };
 
-const media = (brut: unknown, origine: string): MediaDeStory | null => {
+/** EXPORTÉE pour la MÊME raison que `traductions` — `lib/api/social.ts` lit la même forme de pièce. */
+export const media = (brut: unknown, origine: string): MediaDeStory | null => {
   const piece = objet(brut);
   const servie = chaine(piece?.fileUrl);
   if (piece === null || servie === null) return null;
@@ -149,7 +163,8 @@ const media = (brut: unknown, origine: string): MediaDeStory | null => {
  * demandée que rien ne traduit retombe sur le Prisme plutôt que de refuser :
  * une adresse tapée à la main ne casse pas une lecture.
  */
-const servie = ({
+/** EXPORTÉE — `lib/api/social.ts` en a besoin pour élire la langue d'une publication du fil, sans réécrire la règle du § 5.4. */
+export const servie = ({
   carte,
   langueOriginale,
   langues,
@@ -405,6 +420,37 @@ export const aime = async ({
   refusDe(
     await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}/${encodeURIComponent(id)}/like`, jeton, recuperer, {
       method: pose ? 'POST' : 'DELETE',
+    }),
+  );
+
+/**
+ * REPARTAGER — `POST /posts/:postId/repost` (`routes/posts/interactions.ts:790`,
+ * `requiredAuth`), UNE SEULE forme : le repost SIMPLE (`isQuote:false`, le
+ * défaut de `RepostSchema`), sans citation ni changement d'audience — la v3 ne
+ * sert pas encore le composeur qui recueillerait les deux (#5031, comme
+ * `reponds` ci-dessus ne sert pas l'écriture d'un commentaire riche).
+ *
+ * IL N'Y A PAS DE ROUTE POUR DÉFAIRE UN REPOST (vérifié : aucun `DELETE
+ * …/repost` monté). Le geste est donc à SENS UNIQUE — l'appelant ne propose ce
+ * bouton qu'à qui n'a pas encore reposté (`isRepostedByMe === false`), jamais
+ * une bascule qu'aucune route ne saurait défaire.
+ */
+export const reposte = async ({
+  id,
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDuGeste> =>
+  refusDe(
+    await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}/${encodeURIComponent(id)}/repost`, jeton, recuperer, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
     }),
   );
 

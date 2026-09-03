@@ -29,6 +29,7 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   apercuLangueOriginale: 'fr',
   sourdine: false,
   archivee: false,
+  participantsInscrits: [],
   ...attributs,
 });
 
@@ -39,6 +40,7 @@ const TEMPS_REEL = {
   actifs: {
     participate: { nom: 'p.js', url: '/__v3/rt/p.js', corps: '' },
     liste: { nom: 'l.js', url: '/__v3/rt/l.js', corps: '' },
+    feed: { nom: 'feed.l.js', url: '/__v3/rt/feed.l.js', corps: '' },
     socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
   },
 };

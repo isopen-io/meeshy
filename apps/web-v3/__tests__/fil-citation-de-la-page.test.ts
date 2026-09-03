@@ -158,5 +158,6 @@ function fil(messages: readonly Message[]): EtatDuFil {
     composeur: { genre: 'ouvert' },
     tempsReel: null,
     plein: null,
+    profil: null,
   };
 }

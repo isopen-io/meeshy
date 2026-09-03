@@ -508,7 +508,7 @@ describe('la porte de la story', () => {
     expect(monde.appels.map((appel) => appel.chemin).sort()).toEqual([
       '/api/v1/auth/me',
       '/api/v1/posts/s1',
-      '/api/v1/social/posts?scope=stories&limit=50',
+      '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
     ]);
   });
 });

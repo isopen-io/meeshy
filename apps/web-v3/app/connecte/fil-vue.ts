@@ -16,6 +16,7 @@ import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
+import { langueDeLAuteurDansLeFil } from '@/lib/api/profil';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
 import { BANDEAUX, compteDeParticipants, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE, presenceServie } from '@/lib/contenu/fil';
 import { nomDeLangue } from '@/lib/contenu/langues';
@@ -26,7 +27,11 @@ import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { gabaritDeLigne, lignes } from './fil-lignes';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
 import { pieceEnPlein, pleinEcran } from './plein-vue';
+import { FEUILLE_DU_PROFIL } from './profil-feuille';
+import { surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { carteVide } from './vue';
+
+export type { ProfilDeLaSurimpression } from './profil-vue';
 
 /**
  * LE FIL D'UNE CONVERSATION, rendu par le SERVEUR — Prisme compris — et par UN
@@ -118,6 +123,13 @@ export type EtatDuFil = {
    * l'écran ne bouge pas, zéro octet de média avant le geste.
    */
   readonly plein: string | null;
+  /**
+   * LE PROFIL D'UN PARTICIPANT OUVERT SUR CE FIL (`?profil=`, § 12.10.3) — un
+   * ÉTAT de cette adresse, comme `plein` ci-dessus, et pour les MÊMES raisons
+   * (`app/connecte/profil-vue.ts`). `null` — le cas nominal — ne rend rien :
+   * aucune requête de plus sur une lecture ordinaire.
+   */
+  readonly profil: ProfilDeLaSurimpression | null;
 };
 
 export const CHAMP_DU_MESSAGE = 'texte';
@@ -596,18 +608,44 @@ export const documentPleinEcran = ({
   '</html>';
 
 /**
- * LA SURIMPRESSION DU PLEIN ÉCRAN — hors du `<main>`, comme la modale de l'état
- * CHOIX : une surimpression n'est pas un morceau du contenu qu'elle recouvre.
- * Sa FEUILLE ne part QUE dans cet état (`documentDuFil`) : ce que le fil
- * n'affiche pas, il ne le paie pas (charte règle 7).
+ * LA SURIMPRESSION — plein écran d'un média OU profil d'un participant, hors
+ * du `<main>`, comme la modale de l'état CHOIX : une surimpression n'est pas
+ * un morceau du contenu qu'elle recouvre. Sa FEUILLE ne part QUE dans son
+ * état (`documentDuFil`) : ce que le fil n'affiche pas, il ne le paie pas
+ * (charte règle 7).
+ *
+ * LE PROFIL PASSE AVANT LE PLEIN ÉCRAN quand les deux adresses sont posées à
+ * la fois — un cas que ni l'une ni l'autre ne produit (`?media=` et
+ * `?profil=` viennent de deux gestes distincts), mais qu'une adresse composée
+ * à la main peut présenter : une seule surimpression à la fois, jamais deux
+ * `<dialog open>` empilés.
  */
-const surimpression = (etat: EtatDuFil): string => {
+type Surimpression = { readonly genre: 'aucune' } | { readonly genre: 'plein'; readonly html: string } | { readonly genre: 'profil'; readonly html: string };
+
+const surimpression = (etat: EtatDuFil): Surimpression => {
+  if (etat.profil !== null) {
+    const { handle, servi, confirmerBlocage } = etat.profil;
+    return {
+      genre: 'profil',
+      html: surimpressionDuProfil({
+        servi,
+        handle,
+        adresseHote: adresseDeLaPorte(etat.porte),
+        langue: langueDeLAuteurDansLeFil(etat.fil, handle),
+        conversationEnCommun: etat.fil.titre,
+        confirmerBlocage,
+        peutAgir: etat.porte.genre === 'membre',
+        langueDuDocument: DOCUMENT_LANGUAGE,
+      }),
+    };
+  }
   const plein = pieceEnPlein(etat.fil, etat.plein);
-  return plein === null ? '' : pleinEcran({ plein, adresse: adresseDeLaPorte(etat.porte), langueDuDocument: DOCUMENT_LANGUAGE });
+  return plein === null ? { genre: 'aucune' } : { genre: 'plein', html: pleinEcran({ plein, adresse: adresseDeLaPorte(etat.porte), langueDuDocument: DOCUMENT_LANGUAGE }) };
 };
 
 export const documentDuFil = (etat: EtatDuFil): string => {
-  const plein = surimpression(etat);
+  const dessus = surimpression(etat);
+  const html = dessus.genre === 'aucune' ? '' : dessus.html;
   const decrit = sousTitre(etat);
   return documentPleinEcran({
     titre: `${etat.fil.titre} — Meeshy`,
@@ -623,9 +661,9 @@ export const documentDuFil = (etat: EtatDuFil): string => {
     // JavaScript il n'y a ni Échap ni piège à focus, et `inert` est ce que le
     // navigateur donne gratuitement — la première tabulation atteint la croix,
     // et le lecteur d'écran n'annonce plus un fil que rien ne montre.
-    corps: plein + corpsDuFil(etat, { inerte: plein !== '' }),
+    corps: html + corpsDuFil(etat, { inerte: html !== '' }),
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
-    feuille: plein === '' ? FEUILLE : FEUILLE + FEUILLE_DU_PLEIN,
+    feuille: FEUILLE + (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') + (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
   });
 };
 

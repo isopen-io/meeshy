@@ -38,6 +38,7 @@ const etat = (): EtatDuFil => ({
   composeur: { genre: 'ouvert' },
   tempsReel: null,
   plein: null,
+  profil: null,
 });
 
 describe('le plafond du message', () => {

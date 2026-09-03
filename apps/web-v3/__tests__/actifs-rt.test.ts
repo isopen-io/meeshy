@@ -8,41 +8,47 @@ import { GET } from '@/app/rt/[nom]/route';
 import { PREFIXE_RT, actifParNom, actifsTempsReel } from '@/lib/actifs-rt';
 
 /**
- * LES ACTIFS DU TEMPS RÉEL (conception § 12.4) : TROIS fichiers, servis dans la
- * ZONE sous un nom qui porte le hash de leur contenu, par le MÊME module qui
- * écrit leur adresse dans le document. Ce que ces témoins gardent : l'adresse
- * et le nom viennent d'une seule lecture ; un nom inconnu — ou un hash
- * périmé — rend 404 ; ce qui est servi est immuable.
+ * LES ACTIFS DU TEMPS RÉEL (conception § 12.4) : QUATRE fichiers, servis dans
+ * la ZONE sous un nom qui porte le hash de leur contenu, par le MÊME module
+ * qui écrit leur adresse dans le document. Ce que ces témoins gardent :
+ * l'adresse et le nom viennent d'une seule lecture ; un nom inconnu — ou un
+ * hash périmé — rend 404 ; ce qui est servi est immuable.
  *
- * DEUX MODULES, PAS UN. Le fil (`participate`) et la liste (`liste`) sont
- * compilés séparément parce qu'un écran ne doit télécharger que ce qu'il
- * exécute : `participate.js` pèse 26 Ko gzip (composeur, réserve, plein écran,
- * peinture de bulles), dont `/chats` n'exécute pas une ligne. Le socle qu'ils
- * PARTAGENT — socket.io-client — reste UN actif, à UNE adresse, donc mis en
- * cache une seule fois pour les deux écrans.
+ * TROIS MODULES, PAS UN. Le fil (`participate`), la liste (`liste`) et le fil
+ * social (`feed`, #5031) sont compilés séparément parce qu'un écran ne doit
+ * télécharger que ce qu'il exécute : `participate.js` pèse 26 Ko gzip
+ * (composeur, réserve, plein écran, peinture de bulles), dont ni `/chats` ni
+ * `/feed` n'exécutent une ligne. Le socle que `participate` et `liste`
+ * PARTAGENT — socket.io-client — reste UN actif, à UNE adresse ; `feed` ne le
+ * référence pas du tout (aimer et reposter sont des allers simples, aucun
+ * socket).
  */
 
 const RACINE = join(__dirname, '..');
 
-describe('les trois actifs', () => {
+describe('les quatre actifs', () => {
   const actifs = actifsTempsReel();
 
   it('composent leur adresse sous /__v3/rt/, avec le hash dans le NOM', () => {
     expect(actifs.participate.url).toBe(`${PREFIXE_RT}/${actifs.participate.nom}`);
     expect(actifs.liste.url).toBe(`${PREFIXE_RT}/${actifs.liste.nom}`);
+    expect(actifs.feed.url).toBe(`${PREFIXE_RT}/${actifs.feed.nom}`);
     expect(actifs.socket.url).toBe(`${PREFIXE_RT}/${actifs.socket.nom}`);
     expect(actifs.participate.nom).toMatch(/^participate\.[0-9a-f]{16}\.js$/);
     expect(actifs.liste.nom).toMatch(/^liste\.[0-9a-f]{16}\.js$/);
+    expect(actifs.feed.nom).toMatch(/^feed\.[0-9a-f]{16}\.js$/);
     expect(actifs.socket.nom).toMatch(/^socket\.io\.[0-9a-f]{16}\.js$/);
   });
 
   /**
-   * Les deux modules ne partagent PAS une adresse : servir la liste au fil (ou
+   * Les trois modules ne partagent AUCUNE adresse : servir la liste au fil (ou
    * l'inverse) ferait exécuter un module qui ne trouve pas sa surface et
    * n'échouerait nulle part — un temps réel silencieusement mort.
    */
-  it('donnent deux adresses DISTINCTES aux deux modules', () => {
+  it('donnent trois adresses DISTINCTES aux trois modules', () => {
     expect(actifs.liste.url).not.toBe(actifs.participate.url);
+    expect(actifs.feed.url).not.toBe(actifs.participate.url);
+    expect(actifs.feed.url).not.toBe(actifs.liste.url);
   });
 
   it('servent socket.io-client tel quel, depuis son paquet — jamais recopié', () => {
