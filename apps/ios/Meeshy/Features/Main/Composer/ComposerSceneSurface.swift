@@ -779,17 +779,42 @@ struct ComposerSceneSurface: View {
                 // les touches de la bande qu'ils couvriraient.
                 // Aucun `tint:` : voir la note de l'en-tête son, en tête de ce
                 // corps — `plateauTint` est le FOND, pas un accent de contenu.
-                ComposerSceneReferenceFooter(hashtags: sceneHashtags,
-                                             references: sceneReferences,
-                                             onOpenHashtags: onOpenHashtags,
-                                             onOpenMentions: onOpenMentions)
-                    .padding(.horizontal, 16)
-                // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
-                // ENTRER de la matière — une photo, un lieu, un tracé — quand le
-                // rail agit sur ce qui est déjà là. L'arbitrage la nomme
-                // explicitement comme conservée ; la surface n'en avait aucune,
-                // et choisir un fond faisait donc disparaître toutes les portes
-                // d'entrée d'un coup.
+                //
+                // **Il CÈDE la place aux options d'un outil** (#5010, directive
+                // porteur 2026-09-03 : « lorsqu'on affiche les options d'un
+                // outil il faut cacher les éléments permanents de la zone
+                // canonique »). C'était le SEUL élément du bas que personne ne
+                // gouvernait : une lecture permanente posée sous les réglages
+                // de l'outil qu'on venait d'ouvrir.
+                //
+                // La question passe par `ComposerCanonicalZone`, jamais par un
+                // `!toolIsOpen` écrit ici : la troisième copie d'une condition
+                // diverge, et ce fichier a déjà payé cette leçon — trois
+                // surfaces mortes d'un coup pour avoir lu la présence d'une VUE
+                // au lieu de la question qu'elles posaient.
+                if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
+                    ComposerSceneReferenceFooter(hashtags: sceneHashtags,
+                                                 references: sceneReferences,
+                                                 onOpenHashtags: onOpenHashtags,
+                                                 onOpenMentions: onOpenMentions)
+                        .padding(.horizontal, 16)
+                }
+                // **La rangée basse — une PLACE permanente, un contenu qui
+                // change** (#4072, précisé au #5010).
+                //
+                // « Permanente » qualifie la place, jamais ce qu'elle peint :
+                // `lowToolRow` ÉCHANGE son contenu selon `railMode` — outil
+                // ouvert, elle porte les contrôleurs de cet outil ; sinon, les
+                // portes qui font ENTRER de la matière.
+                //
+                // Cette ambiguïté a trompé l'inventaire du #5010, qui comptait
+                // la rangée parmi les éléments non gouvernés et prescrivait de
+                // la cacher. L'y soumettre aurait caché les contrôleurs de
+                // l'outil qu'on venait d'ouvrir — un « correctif » qui casse,
+                // appliqué à du code correct, sur la foi d'un mot plutôt que
+                // d'une lecture. Elle n'entre donc PAS dans
+                // `ComposerCanonicalZone.Element`, et ce commentaire dit
+                // pourquoi pour que personne ne l'y remette.
                 lowToolRow
 
             }

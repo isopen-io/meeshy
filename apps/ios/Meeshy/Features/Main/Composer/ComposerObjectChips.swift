@@ -148,8 +148,19 @@ nonisolated enum ComposerObjectChips {
     ///
     /// Vérifié À L'ÉCRAN le 2026-08-31 : c'est la seule chose qui séparait une
     /// rangée correcte d'une rangée invisible.
+    ///
+    /// **La moitié « un outil est ouvert » a déménagé au #5010.** Elle vivait
+    /// ici en `!toolIsOpen`, et deux autres rangées du bas portaient — ou ne
+    /// portaient pas — leur propre copie de la même condition. Elle vit
+    /// désormais dans `ComposerCanonicalZone`, qui tient l'INVENTAIRE de ce que
+    /// la zone basse peint et de ce qui cède la place.
+    ///
+    /// Ce qui RESTE ici est ce qui n'appartient qu'aux jetons : une rangée
+    /// vide ne se peint pas. Composer les deux plutôt que de tout déplacer est
+    /// délibéré — la règle partagée ne connaît pas les jetons, et lui apprendre
+    /// `chips.isEmpty` la ferait connaître chaque élément qu'elle gouverne.
     static func isServed(toolIsOpen: Bool, chips: [Chip]) -> Bool {
-        !toolIsOpen && !chips.isEmpty
+        ComposerCanonicalZone.isServed(.objectChips, toolIsOpen: toolIsOpen) && !chips.isEmpty
     }
 
     // MARK: - La résolution par SÉLECTION
