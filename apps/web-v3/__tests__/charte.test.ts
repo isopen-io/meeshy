@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
-import { FEUILLE_DE_LA_STORY } from '@/app/(public)/stories/[id]/story-feuille';
+import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';

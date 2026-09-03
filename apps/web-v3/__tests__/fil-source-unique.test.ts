@@ -119,7 +119,7 @@ describe('le nom d’une langue', () => {
   const VUES_QUI_NOMMENT_UNE_LANGUE = [
     'app/connecte/fil-vue.ts',
     'app/connecte/commentaires-vue.ts',
-    'app/(public)/stories/[id]/story-vue.ts',
+    'app/(public)/partage-vue.ts',
   ];
 
   it.each(VUES_QUI_NOMMENT_UNE_LANGUE)('vient de lib/contenu/langues.ts (%s)', (chemin) => {

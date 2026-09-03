@@ -1,7 +1,7 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
 
-import { documentDuSite } from '@/app/enveloppe/vue';
+import { documentDeMessage, documentDuSite } from '@/app/enveloppe/vue';
 import type { Conversation, Lecteur, LiensDuLecteur } from '@/lib/api/compte';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 
@@ -324,19 +324,11 @@ export const documentDesChats = ({ conversations, maintenant }: EtatDesChats): s
  * répondre ; la dimension 8 demande que cet état-là existe aussi.
  */
 export const documentDePanne = (): string =>
-  documentDuSite({
-    titre: `${PANNE.titre} — Meeshy`,
-    description: PANNE.corps,
+  documentDeMessage({
+    titre: PANNE.titre,
+    paragraphes: [PANNE.corps],
+    actions: [{ libelle: PANNE.action, href: '/' }],
     feuille: FEUILLE_CONNECTEE,
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(PANNE.titre)}</h1>` +
-      `<p>${echappe(PANNE.corps)}</p>` +
-      '</div>' +
-      '<section class="acces" aria-label="' +
-      echappe(PANNE.action) +
-      '"><nav>' +
-      `<a class="action primaire" href="/">${echappe(PANNE.action)}</a>` +
-      '</nav></section>',
+    robots: 'index, follow',
     retour: false,
   });

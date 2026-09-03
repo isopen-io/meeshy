@@ -14,7 +14,7 @@ import { FEUILLE_DES_COMMENTAIRES } from './commentaires-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
-import { documentDuSite } from '@/app/enveloppe/vue';
+import { documentDeMessage } from '@/app/enveloppe/vue';
 import { carteVide, quand } from './vue';
 
 /**
@@ -194,20 +194,13 @@ export const documentDesCommentaires = (etat: EtatDesCommentaires): string =>
  */
 export const documentDInvitation = ({ id }: { readonly id: string }): string => {
   const ici = encodeURIComponent(`/post/${id}`);
-  return documentDuSite({
-    titre: `${COMMENTAIRES.invitation} — Meeshy`,
-    description: COMMENTAIRES.invitationPrecision,
+  return documentDeMessage({
+    titre: COMMENTAIRES.invitation,
+    paragraphes: [COMMENTAIRES.invitationPrecision],
+    actions: [
+      { libelle: COMMENTAIRES.seConnecter, href: `/login?returnUrl=${ici}`, glyphe: 'ph-sign-in' },
+    ],
     feuille: FEUILLE_CONNECTEE,
-    robots: 'noindex, nofollow',
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(COMMENTAIRES.invitation)}</h1>` +
-      `<p>${echappe(COMMENTAIRES.invitationPrecision)}</p>` +
-      '</div>' +
-      `<section class="acces" aria-label="${echappe(COMMENTAIRES.seConnecter)}"><nav>` +
-      `<a class="action primaire" href="/login?returnUrl=${ici}">${svgDuSprite('ph-sign-in')}${echappe(COMMENTAIRES.seConnecter)}</a>` +
-      '</nav></section>',
-    retour: true,
   });
 };
 
@@ -222,15 +215,8 @@ export const documentDInvitation = ({ id }: { readonly id: string }): string => 
  * masquant.
  */
 export const documentIndisponible = (): string =>
-  documentDuSite({
-    titre: `${COMMENTAIRES.introuvable} — Meeshy`,
-    description: COMMENTAIRES.introuvablePrecision,
+  documentDeMessage({
+    titre: COMMENTAIRES.introuvable,
+    paragraphes: [COMMENTAIRES.introuvablePrecision],
     feuille: FEUILLE_CONNECTEE,
-    robots: 'noindex, nofollow',
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(COMMENTAIRES.introuvable)}</h1>` +
-      `<p>${echappe(COMMENTAIRES.introuvablePrecision)}</p>` +
-      '</div>',
-    retour: true,
   });

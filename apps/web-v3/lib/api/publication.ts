@@ -177,26 +177,40 @@ const servie = ({
   return memeQueLOrigine ? null : descente(langues);
 };
 
+/** Les trois genres que l'écran de PARTAGE sert — une adresse chacun, un seul lecteur. */
+export type GenreDePartage = 'STORY' | 'REEL' | 'STATUS';
+
 /**
- * LA STORY, LUE. Rend `null` pour TOUT ce qui ne se sert pas — pas une story,
- * supprimée, échue —, et l'appelant en fait la MÊME réponse qu'une story
- * absente : distinguer révélerait l'existence du contenu (§ 5.1).
+ * UNE PUBLICATION PARTAGÉE, LUE. Rend `null` pour TOUT ce qui ne se sert pas —
+ * pas le genre attendu, supprimée, échue —, et l'appelant en fait la MÊME
+ * réponse qu'une publication absente : distinguer révélerait l'existence du
+ * contenu (§ 5.1).
+ *
+ * LE GENRE EST UN PARAMÈTRE, ET C'EST TOUT CE QUI SÉPARE LES TROIS ÉCRANS.
+ * Cette fonction s'appelait `storyLue` et refusait en dur `type !== 'STORY'` :
+ * servir un réel ou une humeur aurait demandé d'en écrire une deuxième, puis
+ * une troisième, chacune divergeant à sa manière. C'est exactement la jumelle
+ * que #4929 interdit — « rendu par le MÊME composant lecteur que
+ * post/story/reel ». L'échéance (`expiresAt`) n'est pas story-spécifique : une
+ * humeur d'une heure en porte une aussi, et la garde est déjà conditionnelle.
  */
-export const storyLue = ({
+export const partageLu = ({
   brut,
+  genre,
   langues,
   langueDemandee,
   maintenant,
   origine,
 }: {
   readonly brut: Readonly<Record<string, unknown>>;
+  readonly genre: GenreDePartage;
   readonly langues: readonly string[];
   readonly langueDemandee: string | null;
   readonly maintenant: number;
   readonly origine: string;
 }): Story | null => {
   const id = chaine(brut.id);
-  if (id === null || chaine(brut.type) !== 'STORY') return null;
+  if (id === null || chaine(brut.type) !== genre) return null;
   if (instant(brut.deletedAt) !== null) return null;
 
   const expireA = instant(brut.expiresAt);
@@ -403,7 +417,7 @@ export const aime = async ({
  *
  * UN SEUL LECTEUR POUR LES TROIS SOURCES. La cible dessine trois puces — Post,
  * Réel, Story — et le critère de fin exige qu'un MÊME lecteur les rende. C'est
- * `publicationLue` : `storyLue` refuse tout ce qui n'est pas `type === 'STORY'`
+ * `publicationLue` : `partageLu` refuse tout ce qui n'est pas le genre demandé
  * parce que l'écran d'une story a ses propres règles d'expiration ; celui-ci
  * accepte les trois, et porte le `genre` pour que la vue le DISE.
  *

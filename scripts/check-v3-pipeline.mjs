@@ -170,6 +170,12 @@ const DEPLOIEMENTS = [
     source: (world) => world.prod,
     v3: V3_ROUTER,
     legacy: LEGACY_ROUTER,
+    // La production ne sert que les ACTIFS de la v3 : aucun écran n'y bascule
+    // tant que le porteur ne l'a pas prononcé (2026-09-03 : « non, pas
+    // encore »). L'exemption est DÉCLARÉE ici plutôt que subie dans un gate
+    // silencieux — la retirer fera rougir jusqu'à ce que la règle liste les
+    // écrans, ce qui est exactement le service qu'on lui demande.
+    serviceUniquementDesActifs: true,
   },
   {
     fichier: 'docker-compose.staging.yml',
@@ -818,6 +824,7 @@ const CHECKS = [
     [`${dep.fichier} : aucun PathPrefix ne vole une route voisine du legacy`, routage.aucunPrefixeNeVoleUneRouteVoisine(dep)],
   ]),
   ['chaque réécriture de zone part de la zone et atterrit sur une route servie', routage.everyZoneRewriteLandsOnAServedRoute],
+  ['le worker legacy connaît TOUT ce que la zone sert', routage.leWorkerConnaitToutCeQueLaZoneSert],
   ['les paquets copiés sous la racine sortent du type-check', lesPaquetsCopiesSortentDuTypeCheck],
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
   ["aucun fichier source de la v3 n'est ignoré par git", noSourceFileOfTheV3IsGitIgnored],

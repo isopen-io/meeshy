@@ -56,3 +56,33 @@ export const STORY = {
 
 /** Le plafond de `CreateCommentSchema.content` (`services/gateway/src/routes/posts/types.ts:406`). */
 export const LONGUEUR_MAX_DE_LA_REPONSE = 2000;
+
+/**
+ * ÉLARGIR les littéraux d'un `as const` sans perdre sa FORME.
+ *
+ * `typeof STORY` fige chaque phrase en type littéral (`'Story'`, et non
+ * `string`) : dérivé tel quel, il n'accepterait qu'une copie disant exactement
+ * les mêmes mots — c'est-à-dire aucune autre. Ce type garde les CLÉS et la
+ * structure, et ne relâche que les chaînes. Les fonctions sont laissées
+ * intactes : mapper sur leurs propriétés les détruirait.
+ */
+type Elargi<T> = {
+  readonly [K in keyof T]: T[K] extends (...args: never[]) => unknown
+    ? T[K]
+    : T[K] extends string
+      ? string
+      : T[K] extends object
+        ? Elargi<T[K]>
+        : T[K];
+};
+
+/**
+ * LA FORME de la copie d'un écran de PARTAGE — story, réel, humeur.
+ *
+ * Les trois écrans sont le MÊME lecteur (#4929 : « rendu par le MÊME composant
+ * lecteur que post/story/reel ») ; ce qui les sépare est leur vocabulaire, et
+ * un vocabulaire se paramètre. Le type se DÉRIVE de `STORY` plutôt que d'être
+ * écrit à côté : ajouter une phrase à l'un oblige les trois, et l'oubli est un
+ * échec de compilation plutôt qu'un trou à l'écran.
+ */
+export type CopieDuPartage = Elargi<typeof STORY>;
