@@ -11817,6 +11817,34 @@ défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règl
 comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
 explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
 
+### PROJETÉ PUIS JETÉ — la troisième nature d'un rendu manquant, et la plus trompeuse
+
+Le modèle du lecteur distinguait deux natures d'écart entre clients : le **repli
+déclaré** (#4911 — « dit la même chose en moins bien ») et l'**absence muette**
+(#4912 — « ne dit rien »). Une troisième est apparue en mesurant les transitions
+de scène (#5043), et elle est pire que les deux pour qui relit le code.
+
+Android **traduit** `scene.opening` / `scene.closing` — `opening =
+transitionOf(scene.opening)` dans `CanvasV3Projection.kt` — porte le vocabulaire
+complet (`StoryTransitionEffect` : FADE · ZOOM · SLIDE · REVEAL, identique à
+iOS), et **aucune vue ne consomme le résultat**.
+
+> **Une projection orpheline se LIT comme une implémentation.** On cherche le
+> champ : il est là. Son type : il est là. Sa conversion : elle est là. Rien,
+> dans ce qu'on vient de lire, ne dit que la chaîne s'arrête au maillon suivant.
+> Un repli se VOIT, une absence se CHERCHE — celle-ci se déguise.
+
+Le réflexe qui l'attrape est celui du Prisme, appliqué un cran plus loin :
+**« qui affiche ce que ce code vient de produire ? »**, posé sur le RÉSULTAT de
+la conversion et pas sur son entrée. En pratique, `grep` le nom de la propriété
+projetée hors du fichier qui la projette — s'il ne sort que des tests et des
+mappings, la chaîne est orpheline.
+
+Corollaire pour l'écriture : **une projection sans consommateur mérite un
+commentaire qui le DIT**, sinon le prochain lecteur la comptera comme faite. Une
+ligne suffit — « traduit ici, non consommé, voir #n » — et elle transforme un
+piège en dette déclarée.
+
 ### Un report CONDITIONNEL est daté par sa CONDITION, pas par sa date
 
 Le web déclare hors périmètre les transitions inter-scènes, et pose sa condition

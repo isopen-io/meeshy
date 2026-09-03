@@ -284,6 +284,50 @@ lieu ne se peint pas du tout sur Android — absence MUETTE), et elles ne sont p
 de même nature : un repli dit la même chose en moins bien, une absence ne dit
 rien.
 
+## 4 ter. La même divergence existe un cran PLUS HAUT — au niveau de la SCÈNE (2026-09-03)
+
+Le § 4 bis compte les clés de **charge**, donc le niveau de l'OBJET, et sur deux
+lecteurs. Deux mesures faites le lendemain montrent que la divergence se rejoue
+au niveau de la **scène**, et que la colonne manquante — iOS — n'est pas toujours
+celle qui rend le plus.
+
+| champ de scène | iOS | Android | web |
+|---|---|---|---|
+| `clipTransitions` (fondus entre clips) | rend | rend | rend |
+| `opening` / `closing` (entrée, sortie) | **rend** | **projette puis jette** | ne rend pas |
+| `thumbHash` (le placeholder d'attente) | rend | rend | **ne connaît pas** |
+
+### Une TROISIÈME nature d'écart, que la taxonomie du § 4 bis n'avait pas
+
+Ce document distingue justement le **repli déclaré** (#4911 — « dit la même chose
+en moins bien ») de l'**absence muette** (#4912 — « ne dit rien »). Le cas
+d'Android sur `opening`/`closing` n'est ni l'un ni l'autre :
+
+`CanvasV3Projection.kt:286-287` **traduit** les deux champs — `opening =
+transitionOf(scene.opening)` — et **aucune vue ne les consomme**. Le modèle
+existe, le vocabulaire existe (`StoryTransitionEffect` : FADE · ZOOM · SLIDE ·
+REVEAL, identique à iOS), le rendu n'existe pas.
+
+> **Projeté puis jeté.** C'est la pire des trois natures pour qui relit le code,
+> parce que c'est la seule qui a l'AIR complète : on trouve le champ, on trouve
+> son type, on trouve sa conversion — et rien ne dit que la chaîne s'arrête là.
+> Un repli se voit, une absence se cherche ; une projection orpheline se lit
+> comme une implémentation.
+
+### Et un report dont la condition a expiré
+
+Le web déclare `opening`/`closing` hors périmètre, avec sa raison
+(`CanvasV3Scene.tsx:836`) : « **tant qu'aucun lecteur ne le rendra** […] leur
+donner un rendu serait du neuf, pas de la parité ». Le raisonnement était juste à
+l'écriture. **iOS les rend.** La condition est fausse, et « du neuf » est devenu
+« de la parité » — sans que personne ne relise la phrase, parce que ce qui l'a
+périmée s'est passé sur une AUTRE plateforme.
+
+Détail et critères : #5043 (les transitions), #5047 (le `thumbHash`, dont
+l'absence laisse une story web s'ouvrir sur du vide — `CanvasV3Scene` n'a aucun
+état de chargement, et c'est le chemin de TOUTES ses stories depuis que la
+passerelle refuse le non-v3).
+
 ## 5. Ce que ce document ne couvre pas
 
 - **Le rendu lui-même** (`StoryCanvasUIView`, les couches, les dessinateurs) —
