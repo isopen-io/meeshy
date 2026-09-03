@@ -158,6 +158,24 @@ extension MeeshyComposerHost {
             // trois lignes plus haut pour `carriedContentSources`.
             mediaRoleByURL = [:]
             selectedSceneItemKind = nil
+            // **Les personnes NOMMÉES partaient avec le reste** (#5013). Elles
+            // ne figuraient dans aucune des onze lignes ci-dessus : « Tout
+            // effacer » vidait le texte, les médias, le fond et le lieu, et
+            // laissait la publication mentionner des gens que plus rien à
+            // l'écran ne montrait. Elles seraient reparties avec la
+            // publication suivante, notification comprise.
+            composerReferences = []
+            // **Les légendes, même classe et même silence.** Elles sont clées
+            // par l'URL LOCALE du média ; survivant à l'effacement, elles se
+            // ré-attachent à un fichier RE-CHOISI plus tard. C'est exactement
+            // ce que `mediaRoleByURL` documente deux lignes plus haut — « le
+            // rôle s'oublie avec le média, sinon un fichier re-choisi serait
+            // sauté en silence ».
+            documentMediaCaptions = [:]
+            // **Et l'index des durées sources**, clé par identifiant d'objet :
+            // `viewModel.reset()` vient d'invalider ces identifiants, donc le
+            // laisser plein garde des mesures qui ne désignent plus rien.
+            trimSourceDurations = [:]
         }
     }
 }
