@@ -9,8 +9,8 @@
 // L'ÉCRAN N'A AUCUN MODULE CLIENT. Ce que ce témoin ajoute au jsdom est la mise en page et les
 // couleurs calculées, pas un état vivant.
 //
-// Il vit dans le projet `chaines` : il monte sa propre passerelle de bouchon et n'importe rien de
-// `lib/a11y.ts` statiquement (`playwright.config.ts`).
+// Il vit dans le projet `pages`, comme `v3-fil-a11y.spec.ts` : c'est l'import STATIQUE de
+// `lib/a11y.ts` qui le décide, jamais le serveur qu'il monte (`playwright.config.ts`).
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';

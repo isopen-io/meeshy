@@ -10,8 +10,12 @@
 // L'ÉCRAN N'A AUCUN MODULE CLIENT — il est servi entier par son gestionnaire de route. Ce que ce
 // témoin ajoute au jsdom est donc la MISE EN PAGE et les COULEURS CALCULÉES, pas un état vivant.
 //
-// Il vit dans le projet `chaines` : il monte sa propre passerelle de bouchon et n'importe rien de
-// `lib/a11y.ts` statiquement (`playwright.config.ts`).
+// Il vit dans le projet `pages`, comme `v3-fil-a11y.spec.ts` et pour la même raison : il importe
+// `lib/a11y.ts` STATIQUEMENT. Ce qui décide n'est pas le serveur — il monte sa propre passerelle de
+// bouchon, comme les suites de `chaines` — mais cet import : le mêler aux suites de vitals réseau
+// casse la résolution de `mesure-reseau.mjs` et fait tomber sept témoins de plafond qui n'ont pas
+// changé (`playwright.config.ts`). La première version de cet en-tête affirmait le contraire, deux
+// lignes au-dessus de l'import qui la démentait ; la CI l'a dit avant tout relecteur.
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
