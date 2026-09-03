@@ -7,6 +7,7 @@ import {
   IDENTIFIANT_DU_LIEN_PARTAGE,
   LIEN_DU_FIL,
   MEMBRE,
+  PAIR_ANGLOPHONE,
   PAIR_HISPANOPHONE,
   PRENOM_DU_LECTEUR,
 } from './bouchon-monde';
@@ -41,6 +42,16 @@ import {
  *   • `GET /api/v1/posts/:postId/comments` — `routes/posts/comments.ts:61`,
  *     même garde, servant `{ success, data, pagination }` SANS schéma de
  *     réponse déclaré — donc sans rien retirer.
+ *
+ * TROIS DE PLUS DEPUIS #5031 (le fil social, `/feed`) :
+ *
+ *   • `GET /api/v1/social/posts?scope=home|stories` — `routes/posts/feed.ts:740`,
+ *     `scope=home` exige `registeredUserId` (`:789`) ;
+ *   • `POST`/`DELETE /api/v1/posts/:postId/like` — `routes/posts/
+ *     interactions.ts:79` et `:237` ;
+ *   • `POST /api/v1/posts/:postId/repost` — `routes/posts/interactions.ts:790`,
+ *     UNE seule forme (repost simple, `isQuote:false`) — aucune route pour le
+ *     défaire.
  *
  * LES DEUX DERNIÈRES SERVENT DES TRADUCTIONS EN CARTE D'OBJETS
  * (`{ langue: { text } }`, `schema.prisma:3523`), et c'est ce qui donne sa
@@ -244,6 +255,64 @@ const COMMENTAIRES_DU_BOUCHON = [
 ];
 
 /**
+ * LE FIL SOCIAL (`/feed`, #5031) — `GET /api/v1/social/posts?scope=home`
+ * (`routes/posts/feed.ts:740`, `optionalAuth` puis `registeredUserId` requis
+ * sur `scope=home`). LE PREMIER POST EST LA MÊME PUBLICATION que
+ * `PUBLICATION_DU_BOUCHON` (« Revue de mars », Ibrahim) — l'écran des
+ * commentaires ET le fil montrent la MÊME publication dans la cible
+ * (`cible/comments.png`, `cible/feed.png`), et lui donner deux textes
+ * différents ferait deux vérités sur un seul post. Seuls les compteurs
+ * sociaux (`likeCount`, `commentCount`, `repostCount`) et le média
+ * s'ajoutent — `PostFeedService.getFeed` les sert, la route commentée ne les
+ * déclare pas.
+ */
+const FIL_SOCIAL_DU_BOUCHON = [
+  {
+    ...PUBLICATION_DU_BOUCHON,
+    likeCount: 128,
+    commentCount: 12,
+    repostCount: 4,
+    isLikedByMe: false,
+    isRepostedByMe: false,
+    media: [],
+  },
+  {
+    id: 'p-glossaire',
+    type: 'REEL',
+    content: 'Nuevo glosario compartido para el equipo.',
+    originalLanguage: 'es',
+    translations: {},
+    createdAt: new Date(Date.now() - 20 * 3_600_000).toISOString(),
+    author: { id: PAIR_HISPANOPHONE.id, username: 'marta', displayName: PAIR_HISPANOPHONE.nom },
+    likeCount: 9,
+    commentCount: 0,
+    repostCount: 0,
+    isLikedByMe: true,
+    isRepostedByMe: false,
+    media: [{ fileUrl: 'https://cdn.meeshy.test/reel-glossaire.jpg', mimeType: 'image/jpeg', width: 800, height: 600 }],
+  },
+];
+
+/**
+ * LE RAIL DE STORIES — `scope=stories&projection=tray`, projeté à un nom, un
+ * auteur, et l'état vu/non-vu (`isViewedByMe`, servi dans les DEUX
+ * projections — `PostFeedService.fetchAndEnrichStories`). Les QUATRE de la
+ * cible (`cible/feed.png` : IB, MR, SK, LM) — les trois premiers réemploient
+ * des identités déjà nommées ailleurs dans ce bouchon (`PAIR_ANGLOPHONE`,
+ * `PAIR_HISPANOPHONE`, la Sara Kim des demandes d'ami) ; seule « Luc Martin »
+ * n'a aucun autre lecteur dans le dépôt. `isViewedByMe` REPREND exactement la
+ * cible : Ibrahim et Marta portent l'anneau ACCENTUÉ (non vues), Sara et Luc
+ * l'anneau NEUTRE (déjà vues) — sans les DEUX familles, un rail où tout se
+ * ressemble repasserait inaperçu.
+ */
+const RAIL_DU_BOUCHON = [
+  { id: 'story-ibrahim', authorId: PAIR_ANGLOPHONE.id, author: { id: PAIR_ANGLOPHONE.id, displayName: PAIR_ANGLOPHONE.nom }, isViewedByMe: false },
+  { id: 'story-marta', authorId: PAIR_HISPANOPHONE.id, author: { id: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom }, isViewedByMe: false },
+  { id: 'story-sara', authorId: 'u-sara', author: { id: 'u-sara', displayName: 'Sara Kim' }, isViewedByMe: true },
+  { id: 'story-luc', authorId: 'u-luc', author: { id: 'u-luc', displayName: 'Luc Martin' }, isViewedByMe: true },
+];
+
+/**
  * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
  * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
  * part, ce que l'audit vérifie.
@@ -286,6 +355,7 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/links') ||
         chemin.startsWith('/api/v1/directory/') ||
         chemin.startsWith('/api/v1/posts/') ||
+        chemin.startsWith('/api/v1/social/') ||
         estUnePreference
       )
     ) {
@@ -339,6 +409,40 @@ export const routesDuCompte =
           regionalLanguage: 'es',
         },
       });
+      return true;
+    }
+
+    /**
+     * `GET /api/v1/social/posts?scope=home|stories` (`routes/posts/feed.ts:740`)
+     * — le fil social et son rail (#5031). `scope=home` exige un compte, comme
+     * les neuf autres scopes hors `author`/`community` : la garde est déjà
+     * passée plus haut (`creanceDe`), donc ce bouchon ne la rejoue pas.
+     */
+    if (chemin.startsWith('/api/v1/social/posts')) {
+      const scope = url.searchParams.get('scope');
+      if (scope === 'stories') {
+        json({ success: true, data: RAIL_DU_BOUCHON, pagination: { limit: 50, hasMore: false, nextCursor: null } });
+        return true;
+      }
+      json({ success: true, data: FIL_SOCIAL_DU_BOUCHON, pagination: { limit: 20, hasMore: false, nextCursor: null } });
+      return true;
+    }
+
+    /**
+     * AIMER — `POST` pose, `DELETE` retire (`routes/posts/interactions.ts:79`
+     * et `:237`). Le bouchon n'a pas d'état de like à tenir : le module de
+     * participation peint OPTIMISTEMENT avant d'appeler cette route, et un
+     * rechargement (chemin SANS JavaScript) relit `isLikedByMe` depuis
+     * `FIL_SOCIAL_DU_BOUCHON`, fixe pour la durée d'un spec.
+     */
+    if (/^\/api\/v1\/posts\/[^/]+\/like$/.test(chemin) && (requete.method === 'POST' || requete.method === 'DELETE')) {
+      json({ success: true, data: { liked: requete.method === 'POST' } });
+      return true;
+    }
+
+    /** REPOSTER — `POST /posts/:postId/repost`, une SEULE forme (repost simple). */
+    if (/^\/api\/v1\/posts\/[^/]+\/repost$/.test(chemin) && requete.method === 'POST') {
+      json({ success: true, data: { id: `repost-${Date.now()}`, isQuote: false } });
       return true;
     }
 

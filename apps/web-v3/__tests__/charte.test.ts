@@ -19,6 +19,7 @@ import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
+import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -72,6 +73,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/liste-feuille.ts', source: FEUILLE_DE_LA_LISTE },
   { nom: 'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU', source: FEUILLE_DU_TABLEAU },
   { nom: 'app/connecte/profil-feuille.ts', source: FEUILLE_DU_PROFIL },
+  { nom: 'app/connecte/social-feuille.ts', source: FEUILLE_DU_FIL_SOCIAL },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -144,6 +146,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/liste-feuille.ts',
       'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU',
       'app/connecte/profil-feuille.ts',
+      'app/connecte/social-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -242,6 +245,9 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
+    // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
+    // fil, la liste et les commentaires : chrome + connecté + sa feuille.
+    { nom: 'fil social', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL_SOCIAL },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
@@ -478,6 +484,29 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // non-lus (`.compte`) et celle de langue (`.langue`) sont déjà nommées plus
     // haut, et c'est la même règle qui les gouverne des deux côtés.
     '.actions>summary:hover',
+    // Le fil social (`cible/feed.png`, #5031) : le cœur PRESSÉ — même emploi
+    // que `.story-repondre .aimer[aria-pressed=true]`, la mienne parmi les
+    // réactions —, et l'état « Reposté » — même emploi que `.ligne .accuse`,
+    // « ceci est de moi ». Le nom de l'auteur, l'heure, le texte d'un post et
+    // le compte des trois gestes restent sur l'encre.
+    '.geste-aime[aria-pressed="true"]',
+    '.geste-reposte',
+    // La langue COCHÉE d'un post à plusieurs textes — même emploi que
+    // `.source[aria-current]` des commentaires et `.puces.filtres
+    // .puce[aria-current]` de la galerie : un contrôle SÉLECTIONNÉ, l'accent
+    // en fond. `RANGS_LANGUE_MAX` (`social-feuille.ts`) borne la génération —
+    // ce n'est pas un sélecteur écrit huit fois, c'est UNE règle, répétée par
+    // position (`:has()` ne peut pas relier un radio et son label par ID à
+    // travers la structure du document, § doc-comment du fichier).
+    '.prisme-multi:has(>input:nth-of-type(1):checked) .langues label:nth-of-type(1),.prisme-multi:has(>input:nth-of-type(2):checked) .langues label:nth-of-type(2),.prisme-multi:has(>input:nth-of-type(3):checked) .langues label:nth-of-type(3),.prisme-multi:has(>input:nth-of-type(4):checked) .langues label:nth-of-type(4),.prisme-multi:has(>input:nth-of-type(5):checked) .langues label:nth-of-type(5),.prisme-multi:has(>input:nth-of-type(6):checked) .langues label:nth-of-type(6),.prisme-multi:has(>input:nth-of-type(7):checked) .langues label:nth-of-type(7),.prisme-multi:has(>input:nth-of-type(8):checked) .langues label:nth-of-type(8)',
+    // Le saut de rail et le lien de pagination — le cliquable, comme `a` nu,
+    // mais une CLASSE plutôt que le sélecteur `a` (`.saut` reste hors-écran
+    // hors focus, `.plus` porte un contour pris à part) : même emploi 1.
+    '.saut',
+    '.plus',
+    // L'anneau NON VU d'une vignette de story — même emploi que `.compte`/
+    // `.notif .pastille` : « ceci vous attend », pas encore lu.
+    '.rail .cercle[data-vu="0"]',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

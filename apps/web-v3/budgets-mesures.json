@@ -122,11 +122,13 @@
   }
  },
  "participate": {
-  "quoi": "Le poids des DEUX modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil.",
+  "quoi": "Le poids des TROIS modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.",
   "participate_brut_octets": 89433,
   "participate_gzip_9_octets": 26549,
   "liste_brut_octets": 49334,
   "liste_gzip_9_octets": 13757,
+  "feed_brut_octets": 33173,
+  "feed_gzip_9_octets": 7613,
   "socket_io_client_brut_octets": 40435,
   "socket_io_client_gzip_9_octets": 12849,
   "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",
@@ -142,5 +144,14 @@
   "date": "2026-09-03",
   "temoin": "apps/web-v3/__tests__/fil-plein.test.ts § « le poids du document du fil, et le surcoût de l'état `?media=` » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu.",
   "consequence": "12 021 o > 9 216 o : le document du fil FRANCHIT le plafond `documents.document_o` de la charte (§ 12.5 règle 4), et le franchissait AVANT ce tour — la surimpression n'en est pas la cause (elle pèse 578 o, soit 5 %). Le plafond n'a pas de témoin (budgets.json le dit : « À CÂBLER ») ; le ratchet ci-dessus empêche la croissance silencieuse en attendant qu'un lot le règle. À porter en issue : le fil est le seul écran mesuré au-dessus."
+ },
+ "documents_du_feed": {
+  "quoi": "Ce que /feed REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline —, sur VINGT publications (la `limite` de `filSocial`), CHACUNE traduite dans DOUZE langues. Défaut corrigé (revue croisée du 2026-09-03) : `textesDuPost` inlinait TOUTE la carte `translations` d'un post — un post populaire porte 3 à 12 traductions au moment où sa carte grossit (§ schéma, « une traduction naît au premier accès d'un viewer dans cette langue »), ce qui franchissait le plafond dès la TROISIÈME. `textesDuPost` est désormais BORNÉ au Prisme du LECTEUR (`langues`, ≤ 4 entrées) — jamais aux langues qu'un AUTRE lecteur a fait naître dans la carte. La fixture mesurée ici est le pire cas — chaque post porte le maximum mesuré ailleurs (12 langues) et le lecteur n'en préfère qu'UNE — pour que le témoin rougisse si le Prisme cesse un jour d'être consulté.",
+  "feed_o": 5684,
+  "unite": "octets gzip (niveau 9) du document HTML servi",
+  "commande": "cd apps/web-v3 && bunx jest __tests__/social-vue.test.ts -t 'grossir en silence' (la ligne « [mesure] document du feed … » porte la valeur)",
+  "date": "2026-09-03",
+  "temoin": "apps/web-v3/__tests__/social-vue.test.ts § « le poids du document du fil social » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu.",
+  "consequence": "Sous le plafond `documents.document_o` (9 216 o) — corrigé, contrairement au fil (`documents_du_fil` ci-dessus, encore au-dessus). Le Prisme, pas le nombre de traductions QUE LA CARTE PORTE, gouverne désormais le poids."
  }
 }
