@@ -1,3 +1,5 @@
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+
 import { baseDeLaPasserelle } from './links';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 
@@ -66,6 +68,99 @@ export type Conversation = {
   readonly membres: number;
   readonly nonLus: number;
   readonly dernierMessageA: string | null;
+  /**
+   * L'APERÇU DU DERNIER MESSAGE, tel que la passerelle le sert — le texte
+   * ORIGINAL (`lastMessage.content`, déjà plafonné par `truncateMessagePreview`),
+   * sa carte de traductions restreinte au prisme du lecteur
+   * (`lastMessageTranslations`) et sa langue d'origine
+   * (`lastMessageOriginalLanguage`). Les trois voyagent ENSEMBLE parce que la
+   * descente du Prisme a besoin des trois : servir le texte sans sa carte
+   * afficherait l'original en croyant l'avoir traduit.
+   *
+   * Ils ne sont PAS résolus ici, et c'est la raison de leur présence brute : la
+   * porte lance `/auth/me` et `/conversations` EN PARALLÈLE (`app/connecte/
+   * porte.ts`), si bien que les langues du lecteur ne sont pas connues au
+   * moment où la charge est projetée. La descente se fait à la peinture, par
+   * `apercuServi` — le site unique, partagé par le document servi et par le
+   * module de participation qui repeint la ligne (§ 5.4).
+   */
+  readonly apercu: string | null;
+  readonly apercuTraductions: Readonly<Record<string, string>> | null;
+  readonly apercuLangueOriginale: string | null;
+  /** `userPreferences[0].isMuted` — ce que la ligne annonce et ce que son menu bascule. */
+  readonly sourdine: boolean;
+  /**
+   * `userPreferences[0].isArchived` — ce que le geste « Archiver » ÉCRIT, et
+   * que la v3 ne relisait pas.
+   *
+   * **`GET /conversations` NE FILTRE PAS les archivées.** Mesuré :
+   * `whereClause` (`routes/conversations/core-list.ts:176-247`) ne porte aucune
+   * mention de `isArchived` — la seule occurrence du dépôt côté liste est le
+   * `select` (`core-selects.ts:65`), qui la SERT. C'est donc au client
+   * d'écarter la ligne, comme la webapp legacy le fait
+   * (`apps/web/components/conversations/hooks/useConversationFiltering.ts:56-59`,
+   * `return !isArchived`). Sans cette lecture, « Archiver » était un contrôle
+   * qui MENT : le POST sans JavaScript re-rendait la ligne sous la bannière
+   * « Conversation archivée. », et la ligne retirée optimistiquement revenait au
+   * chargement suivant.
+   *
+   * Le drapeau est PROJETÉ plutôt que la ligne jetée ici : le jour où la v3
+   * rend une vue « Archivées », elle a besoin de le connaître. Ce qui l'écarte
+   * est `sansArchivees`, appelé une seule fois, par la porte de la zone
+   * connectée.
+   */
+  readonly archivee: boolean;
+};
+
+/**
+ * CE QUE LES ÉCRANS MONTRENT — la passerelle sert les archivées, le client les
+ * écarte (voir `Conversation.archivee`). UN site, partagé par le tableau de
+ * bord et par la liste : les mettre chacun leur filtre, c'est la garantie qu'un
+ * des deux l'oublie.
+ */
+export const sansArchivees = (conversations: readonly Conversation[]): readonly Conversation[] =>
+  conversations.filter((conversation) => !conversation.archivee);
+
+/**
+ * LE PRISME D'UNE LIGNE DE LISTE, DESCENDU — le texte servi, la langue dans
+ * laquelle il l'est, et celle DEPUIS laquelle il a été traduit.
+ *
+ * La descente elle-même n'est pas réécrite : `resolvePrismTranslation`
+ * (`@meeshy/shared`) est le site unique, et `null` y veut dire « servir
+ * l'original » (règle 1 du Prisme) — jamais « pas de résultat ». Ce module
+ * n'ajoute que la PROJECTION dont une ligne a besoin : la pastille de langue
+ * n'a rien à annoncer sur un message déjà écrit dans la langue du lecteur.
+ *
+ * `traduitDe` reste `null` quand la passerelle ne nomme pas la langue d'origine :
+ * une pastille sans code n'apprendrait rien, et en inventer un serait mentir.
+ */
+export type ApercuServi = {
+  readonly texte: string;
+  /** La langue du texte SERVI — ce que `lang=` porte quand elle diffère de celle du document. */
+  readonly langue: string | null;
+  /** La langue d'ORIGINE, seulement quand une traduction est servie à sa place. */
+  readonly traduitDe: string | null;
+};
+
+export type SourceDApercu = {
+  readonly apercu: string | null;
+  readonly apercuTraductions: Readonly<Record<string, string>> | null;
+  readonly apercuLangueOriginale: string | null;
+};
+
+export const apercuServi = (source: SourceDApercu, langues: readonly string[]): ApercuServi | null => {
+  if (source.apercu === null) return null;
+
+  const traduite = resolvePrismTranslation({
+    translations: source.apercuTraductions,
+    originalLanguage: source.apercuLangueOriginale,
+    preferredLanguages: langues,
+  });
+
+  if (traduite === null) {
+    return { texte: source.apercu, langue: source.apercuLangueOriginale, traduitDe: null };
+  }
+  return { texte: traduite.text, langue: traduite.language, traduitDe: source.apercuLangueOriginale };
 };
 
 export type Fil =
@@ -144,6 +239,25 @@ const nomAffiche = (brut: Readonly<Record<string, unknown>>): string => {
 };
 
 /**
+ * `lastMessageTranslations` — une carte `{ langue: aperçu tronqué }` que la
+ * passerelle restreint déjà au prisme du lecteur
+ * (`buildLastMessagePreviewTranslations`). Elle est relue ENTRÉE PAR ENTRÉE :
+ * `additionalProperties: { type: 'string' }` décrit le contrat, il ne le
+ * garantit pas de l'autre côté du réseau, et une valeur non-chaîne remise telle
+ * quelle à la descente lui ferait servir un `[object Object]`.
+ */
+const carteDeTraductions = (valeur: unknown): Readonly<Record<string, string>> | null => {
+  const brut = objet(valeur);
+  if (brut === null) return null;
+  const entrees = Object.entries(brut).filter((entree): entree is [string, string] => typeof entree[1] === 'string' && entree[1] !== '');
+  return entrees.length === 0 ? null : Object.fromEntries(entrees);
+};
+
+/** `userPreferences` est un TABLEAU d'au plus une entrée (`take: 1` sur `userId`), jamais un objet. */
+const preferences = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
+  Array.isArray(valeur) ? objet(valeur[0]) : null;
+
+/**
  * EXPORTÉE pour la RECHERCHE, qui lit la même forme.
  *
  * `GET /conversations/search` sert `conversationMinimalSchema`, exactement ce
@@ -165,6 +279,11 @@ export const conversation = (brut: Readonly<Record<string, unknown>>): Conversat
     membres: entier(brut.memberCount),
     nonLus: entier(brut.unreadCount),
     dernierMessageA: chaine(brut.lastMessageAt),
+    apercu: chaine(objet(brut.lastMessage)?.content),
+    apercuTraductions: carteDeTraductions(brut.lastMessageTranslations),
+    apercuLangueOriginale: chaine(brut.lastMessageOriginalLanguage),
+    sourdine: preferences(brut.userPreferences)?.isMuted === true,
+    archivee: preferences(brut.userPreferences)?.isArchived === true,
   };
 };
 

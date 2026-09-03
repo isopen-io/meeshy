@@ -3,9 +3,11 @@ import { fil, languesDuLecteur, type Creance } from '@/lib/api/fil';
 
 import {
   accuseCeQuiEstServi,
+  ancreDemandee,
   CACHE_PRIVE,
   curseurDemande,
   lisLeFormulaire,
+  pleinDemande,
   nomDuLecteur,
   redirection,
   rendu,
@@ -25,8 +27,11 @@ import { jetonDuLecteur } from '@/app/session';
  * passer ce qu'elle a reçu.
  *
  * GET rend le fil — `?avant=<id>` rend la page PLUS ANCIENNE (curseur `before`
- * de `GET /conversations/:id/messages`) — et DIT à la passerelle que ce qui
- * est servi est lu (`POST /conversations/:id/receipts`). POST envoie un
+ * de `GET /conversations/:id/messages`), `?autour=<id>` la tranche qui CONTIENT
+ * ce message (`around=`, ce que porte le lien d'un média et le retour de sa
+ * surimpression) — et DIT à la passerelle que ce qui est servi est lu
+ * (`POST /conversations/:id/receipts`), sauf quand un plein écran RECOUVRE le
+ * fil : ce qui n'est pas affiché n'est pas lu (`accuseCeQuiEstServi`). POST envoie un
  * message (texte, pièce jointe ou les deux) ou bascule une réaction, puis
  * REDIRIGE vers le GET (Post/Redirect/Get) en cadrant la ligne concernée
  * (`#m-<id>`) : sans cela, un rechargement reposterait le message, et le
@@ -58,6 +63,8 @@ const charge = async ({
   jeton,
   cle,
   avant,
+  autour = null,
+  plein = null,
   erreur,
   brouillon,
   statut = 200,
@@ -65,6 +72,10 @@ const charge = async ({
   readonly jeton: string;
   readonly cle: string;
   readonly avant: string | null;
+  /** `?autour=` — la tranche nommée par le message qu'elle doit contenir (§ 12.10.1). */
+  readonly autour?: string | null;
+  /** `?media=` — la pièce ouverte en plein écran (§ 12.10.1), résolue par la vue contre ce qui est servi. */
+  readonly plein?: string | null;
   readonly erreur: string | null;
   readonly brouillon: string;
   readonly statut?: number;
@@ -75,7 +86,7 @@ const charge = async ({
   const lecteur = identite.genre === 'lecteur' ? identite.lecteur : null;
   const langues = languesDuLecteur(lecteur ?? {});
   const creance: Creance = { genre: 'membre', jeton };
-  const issue = await fil({ cle, creance, moi: lecteur?.id ?? null, langues, avant });
+  const issue = await fil({ cle, creance, moi: lecteur?.id ?? null, langues, avant, autour });
 
   if (issue.genre === 'session-expiree') return versLaConnexion(cle);
   // Un membre entré par un lien que la liste ferme (`lien-clos`) lit ce que lit
@@ -84,7 +95,7 @@ const charge = async ({
   if (issue.genre === 'introuvable' || issue.genre === 'lien-clos') return rendu(documentIntrouvable(), 404);
   if (issue.genre === 'panne') return rendu(documentDePanne(), 503);
 
-  if (erreur === null) accuseCeQuiEstServi({ fil: issue.fil, creance });
+  if (erreur === null) accuseCeQuiEstServi({ fil: issue.fil, creance, plein });
 
   return rendu(
     documentDuFil({
@@ -96,6 +107,7 @@ const charge = async ({
       maintenant: Date.now(),
       composeur: { genre: 'ouvert' },
       tempsReel: tempsReelDuDocument(),
+      plein,
     }),
     erreur === null ? 200 : statut,
   );
@@ -111,7 +123,15 @@ export const GET = async (
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return versLaConnexion(cle);
 
-  return charge({ jeton, cle, avant: curseurDemande(requete), erreur: null, brouillon: '' });
+  return charge({
+    jeton,
+    cle,
+    avant: curseurDemande(requete),
+    autour: ancreDemandee(requete),
+    plein: pleinDemande(requete),
+    erreur: null,
+    brouillon: '',
+  });
 };
 
 export const POST = async (

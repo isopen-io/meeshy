@@ -80,6 +80,15 @@ export type Citation = {
    * clone.
    */
   readonly cible: string;
+  /**
+   * LA CIBLE EST DANS LA PAGE — donc le SAUT existe (§ 12.10.1). Le fait est
+   * établi par `citationsDeLaPage`, le seul site qui connaisse la tranche
+   * entière ; ni la ligne servie ni le peintre du temps réel ne le recalculent,
+   * sans quoi la même citation serait cliquable d'un côté et morte de l'autre.
+   * Faux ⇒ aucun `href` n'est rendu : un contrôle qui ne mènerait nulle part
+   * n'est pas un contrôle (charte règle 7).
+   */
+  readonly surLaPage: boolean;
 };
 
 const SORTE_PAR_TYPE: Readonly<Record<string, SorteDePublication>> = {
@@ -126,6 +135,7 @@ const reponse = (brut: Readonly<Record<string, unknown>>, mentions: MentionsRete
     apercu: cite === null ? '' : (retenue ?? chaine(cite.content) ?? ''),
     langue: retenue !== null ? null : chaine(cite?.originalLanguage),
     cible,
+    surLaPage: false,
   };
 };
 
@@ -142,6 +152,7 @@ const transfert = (brut: Readonly<Record<string, unknown>>): Citation | null => 
     apercu: '',
     langue: null,
     cible,
+    surLaPage: false,
   };
 };
 
@@ -158,6 +169,7 @@ const publication = (brut: Readonly<Record<string, unknown>>, moi: string | null
     apercu: chaine(snapshot.previewText) ?? chaine(snapshot.moodEmoji) ?? '',
     langue: null,
     cible,
+    surLaPage: false,
   };
 };
 
@@ -204,9 +216,9 @@ export type MessageCitable = {
 };
 
 const citationSurLaPage = (citation: Citation, cible: MessageCitable, mentions: MentionsRetenues): Citation => {
-  if (cible.supprime) return { ...citation, apercu: mentions.supprime, langue: null };
-  if (cible.protege) return { ...citation, apercu: mentions.protege, langue: null };
-  return { ...citation, apercu: cible.texte, langue: cible.langueServie ?? cible.langueOriginale };
+  if (cible.supprime) return { ...citation, apercu: mentions.supprime, langue: null, surLaPage: true };
+  if (cible.protege) return { ...citation, apercu: mentions.protege, langue: null, surLaPage: true };
+  return { ...citation, apercu: cible.texte, langue: cible.langueServie ?? cible.langueOriginale, surLaPage: true };
 };
 
 /**

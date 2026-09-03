@@ -23,6 +23,31 @@ export const POLITIQUE_DE_RECONNEXION = {
  */
 export const SEUIL_DE_RATTRAPAGE_MS = 30_000;
 
+/**
+ * LA RÈGLE DU RATTRAPAGE APRÈS UNE CHUTE, écrite UNE fois pour les DEUX
+ * surfaces de participation.
+ *
+ * Socket.IO NE REJOUE PAS ce qui s'est dit pendant l'absence : une coupure de
+ * deux minutes perd DÉFINITIVEMENT chaque `message:new`, chaque
+ * `conversation:updated` et chaque `conversation:unread-updated` de la fenêtre.
+ * Le retour de VISIBILITÉ n'est donc pas le seul déclencheur d'un rattrapage —
+ * un onglet resté À L'ÉCRAN sur une 3G rurale qui coupe est exactement le cas
+ * que la directive vise, et c'est celui où aucun `visibilitychange` ne vient.
+ *
+ * La liste n'avait pas cette règle : elle ne rattrapait que sur `reprise`, si
+ * bien que son rang, ses pastilles et ses aperçus restaient FAUX jusqu'au
+ * prochain masquage ou rechargement, pendant que le fil, lui, rattrapait. Une
+ * règle tenue par un seul des deux modules est une jumelle qui a déjà divergé.
+ */
+export const doitRattraper = ({
+  deconnecteDepuis,
+  maintenant,
+}: {
+  /** L'instant de la chute, `null` quand le socket n'est jamais tombé depuis le dernier rattrapage. */
+  readonly deconnecteDepuis: number | null;
+  readonly maintenant: number;
+}): boolean => deconnecteDepuis !== null && maintenant - deconnecteDepuis >= SEUIL_DE_RATTRAPAGE_MS;
+
 /** Le battement de bail d'un invité (§ 5.1, § 6.4) : 5 min, tenu par UN onglet. */
 export const PERIODE_DU_BATTEMENT_MS = 5 * 60_000;
 

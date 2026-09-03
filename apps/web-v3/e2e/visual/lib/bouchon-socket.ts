@@ -215,6 +215,24 @@ export const evenementDeReaction = ({
 
 export type BouchonSocket = {
   readonly io: Server;
+  /**
+   * CE QU'UN MESSAGE DOIT À LA LIGNE DE LISTE de chaque destinataire —
+   * `conversation:updated` (le rang et l'aperçu DÉJÀ descendu au prisme du
+   * lecteur : `MeeshySocketIOManager.ts:3216`, `MessageHandler.ts:1691`) puis
+   * `conversation:unread-updated` (la pastille :
+   * `emitUnreadCountsToRecipients.ts`). Les deux partent vers la room
+   * PERSONNELLE du lecteur, jamais vers celle de la conversation — et c'est
+   * l'ordre RÉEL : l'aperçu d'abord, le compte ensuite.
+   */
+  readonly diffuseLaLigne: (params: {
+    readonly conversationId: string;
+    readonly pour: string;
+    readonly lastMessageAt: string;
+    readonly lastMessagePreview: string;
+    readonly lastMessageOriginalLanguage?: string | null;
+    readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
+    readonly unreadCount?: number;
+  }) => void;
   /** Ce que les clients ont ÉMIS, dans l'ordre — l'équivalent du journal HTTP. */
   readonly recus: readonly Emission[];
   /** Faire parler la room de la conversation, comme `io.to(room).emit`. */
@@ -249,6 +267,19 @@ export type BouchonSocket = {
    * module qui rejoint sur `authenticated` n'en produit jamais.
    */
   readonly jonctionsRefusees: () => number;
+  /**
+   * LA PASSERELLE DEVIENT INJOIGNABLE — les sockets vivants tombent, et les
+   * poignées de main suivantes sont refusées jusqu'à `retablis()`.
+   *
+   * Ce n'est PAS `contexte.setOffline` : le réseau du navigateur reste debout,
+   * donc aucun `online` ni aucun `visibilitychange` ne vient sauver la page.
+   * C'est la coupure du § 7 (« socket tombée 30 s – 5 min ») telle qu'une 3G
+   * rurale la produit, l'onglet resté À L'ÉCRAN — le seul cas où le retour de
+   * visibilité, seul déclencheur de rattrapage de la liste jusqu'ici, ne vient
+   * jamais.
+   */
+  readonly coupe: () => void;
+  readonly retablis: () => void;
   readonly ferme: () => Promise<void>;
 };
 
@@ -323,6 +354,7 @@ export const bouchonSocket = ({
   identifiants,
   reactions,
   presences,
+  conversationsDuMembre,
 }: {
   readonly serveur: ServeurHttp;
   /** Les sessions invitées dont la place est ACTIVE — retirer une clé, c'est `isActive:false`. */
@@ -333,11 +365,29 @@ export const bouchonSocket = ({
   readonly reactions: MagasinDeReactions;
   /** La présence des pairs — `connectedUsers` —, partagée avec la fiche de conversation que la passerelle HTTP sert. */
   readonly presences: Map<string, boolean>;
+  /**
+   * LES CONVERSATIONS DU LECTEUR, rejointes À L'AUTHENTIFICATION — comme
+   * `AuthHandler._joinUserConversations` (`:724-741`) le fait pour de vrai.
+   *
+   * Ce n'est pas une commodité : c'est ce qui rend la LISTE (`/chats`) capable
+   * d'entendre `typing:start`, poussé à la room de CONVERSATION
+   * (`StatusHandler.ts:292`) et à elle seule. Un bouchon qui ne joignait que
+   * sur un `conversation:join` explicite aurait rendu vert un module qui, en
+   * production, n'aurait jamais vu une frappe — ou rouge un module correct qui
+   * refuse d'émettre une jonction dont la passerelle n'a pas besoin.
+   */
+  readonly conversationsDuMembre: readonly string[];
 }): BouchonSocket => {
+  // La coupure est refusée AU HANDSHAKE, pas dans un `io.use` : une erreur de
+  // middleware fait renoncer le client (« connexion refusée »), là qu'un refus
+  // de TRANSPORT le fait réessayer avec son backoff — ce que fait un serveur
+  // injoignable, et ce que le module doit traverser.
+  let joignable = true;
   const io = new Server(serveur, {
     path: '/socket.io/',
     transports: ['websocket', 'polling'],
     cors: { origin: true, credentials: true },
+    allowRequest: (_requete, accepte) => accepte(joignable ? null : 'coupé', joignable),
     // Voir `PING_DU_BOUCHON` : un réglage de HARNAIS dicté par l'horloge virtuelle.
     pingInterval: PING_DU_BOUCHON.intervalleMs,
     pingTimeout: PING_DU_BOUCHON.toleranceMs,
@@ -397,6 +447,37 @@ export const bouchonSocket = ({
       ? []
       : [...presences].map(([userId, isOnline]) => ({ userId, username: userId, isOnline, lastActiveAt: null }));
 
+  /**
+   * Les deux émissions que la LIGNE DE LISTE reçoit. La charge de
+   * `conversation:updated` est celle des trois émetteurs réels, champ pour
+   * champ : `conversationId`, `updatedBy`, `lastMessageAt`, `lastMessageId`,
+   * `senderId`, `updatedAt`, plus la paire du Prisme que
+   * `resolveLastMessagePreviewPrism` y répand.
+   */
+  const diffuseLaLigne: BouchonSocket['diffuseLaLigne'] = ({
+    conversationId,
+    pour,
+    lastMessageAt,
+    lastMessagePreview,
+    lastMessageOriginalLanguage = null,
+    lastMessageTranslations = null,
+    unreadCount,
+  }) => {
+    io.to(roomPersonnelle(pour)).emit('conversation:updated', {
+      conversationId,
+      updatedBy: { id: 'u9' },
+      lastMessageAt,
+      lastMessageId: identifiants.suivant(),
+      senderId: 'p-autre',
+      updatedAt: new Date().toISOString(),
+      lastMessagePreview,
+      lastMessageOriginalLanguage,
+      lastMessageTranslations,
+    });
+    if (unreadCount === undefined) return;
+    io.to(roomPersonnelle(pour)).emit('conversation:unread-updated', { conversationId, unreadCount, bridge: null });
+  };
+
   const diffuseLaPresence = (userId: string, isOnline: boolean): void => {
     presences.set(userId, isOnline);
     io.to(roomPersonnelle(UTILISATEUR_DU_MEMBRE)).emit('user:status', { userId, username: userId, isOnline, lastActiveAt: null });
@@ -424,6 +505,9 @@ export const bouchonSocket = ({
       // La room PERSONNELLE, rejointe avant l'inscription — `AuthHandler.ts:381` pour un invité
       // (`ROOMS.user(participant.id)`), le chemin inscrit pour un membre (`ROOMS.user(user.id)`).
       void socket.join(roomPersonnelle(identite.id));
+      // `_joinUserConversations` — toutes les conversations du lecteur, avant
+      // l'inscription. Un invité n'en a qu'une, et c'est sa place qui la nomme.
+      conversationsDuMembre.forEach((conversationId) => void socket.join(room(conversationId)));
       socket.emit('authenticated', {
         success: true,
         user: { id: identite.id, language: 'fr', isAnonymous: identite.genre === 'invite' },
@@ -558,12 +642,39 @@ export const bouchonSocket = ({
     emets: (conversationId, evenement, charge) => {
       io.to(room(conversationId)).emit(evenement, charge);
     },
+    diffuseLaLigne,
     diffuseLeMessage,
     diffuseLaReaction,
     diffuseLesDroits,
     diffuseLaPresence,
     connectes: () => io.sockets.sockets.size,
     jonctionsRefusees: () => jonctionsRefusees,
+    coupe: () => {
+      joignable = false;
+      /**
+       * LE TRANSPORT EST ARRACHÉ, il n'est pas « déconnecté ».
+       *
+       * `io.disconnectSockets(true)` est une déconnexion DÉLIBÉRÉE du serveur :
+       * socket.io la propage au client, qui détruit son socket, pose
+       * `skipReconnect` et ne revient JAMAIS (mesuré : zéro tentative en huit
+       * secondes réelles comme en quatre minutes virtuelles). C'est la bonne
+       * sémantique pour « le serveur te congédie », et exactement l'inverse de
+       * ce qu'on veut ici : une 3G qui coupe n'annonce rien.
+       *
+       * On ferme donc la socket TCP sous le transport — ce que voit un client
+       * dont le réseau tombe : `transport close`, puis le backoff.
+       */
+      io.sockets.sockets.forEach((socket) => {
+        const brut = (socket.conn as unknown as { readonly transport?: { readonly socket?: { terminate?: () => void; close?: () => void; destroy?: () => void } } })
+          .transport?.socket;
+        if (brut?.terminate !== undefined) brut.terminate();
+        else if (brut?.destroy !== undefined) brut.destroy();
+        else brut?.close?.();
+      });
+    },
+    retablis: () => {
+      joignable = true;
+    },
     ferme: () =>
       new Promise((resoud) => {
         io.close(() => resoud());

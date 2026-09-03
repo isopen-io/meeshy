@@ -255,7 +255,18 @@ describe('GET /sync', () => {
         gapAction: 'full_resync_required',
       },
     });
-    expect(delta).toEqual({ checkpoint: '2026-09-01T12:05:00.000Z', checkpointSeq: 9, messages: [{ id: 'a' }, { id: 'b' }], supprimes: ['d'], hasGap: true, hasMore: true });
+    expect(delta).toEqual({
+      checkpoint: '2026-09-01T12:05:00.000Z',
+      checkpointSeq: 9,
+      messages: [{ id: 'a' }, { id: 'b' }],
+      // La collection `conversations` (celle que `/chats` demande) est LUE par
+      // le même lecteur : absente de la réponse, elle rend une liste vide — pas
+      // `undefined`, que chaque appelant aurait eu à garder.
+      conversations: [],
+      supprimes: ['d'],
+      hasGap: true,
+      hasMore: true,
+    });
     expect(litLeDelta({ success: false })).toBeNull();
   });
 });

@@ -35,6 +35,14 @@ export type Delta = {
   readonly checkpointSeq: number | null;
   /** Les messages ajoutés ET modifiés depuis `since`, dans l'ordre servi. */
   readonly messages: readonly Readonly<Record<string, unknown>>[];
+  /**
+   * Les CONVERSATIONS ajoutées et modifiées — la collection que `/chats`
+   * demande (`routes/sync/conversations.ts`, `syncConversationSelect`). Elle
+   * porte `lastMessageAt`, `title` et `memberCount`, jamais le contenu du
+   * dernier message ni le compte de non-lus : la liste s'en sert pour le RANG,
+   * et rien de plus. Vide pour un appel qui ne l'a pas demandée.
+   */
+  readonly conversations: readonly Readonly<Record<string, unknown>>[];
   readonly supprimes: readonly string[];
   readonly hasGap: boolean;
   readonly hasMore: boolean;
@@ -55,15 +63,109 @@ export const urlDeSync = ({
   depuis,
   scope,
   seq,
+  collections = ['messages'],
 }: {
   readonly base: string;
   /** Le dernier `checkpoint` reçu, ou l'instant du dernier message peint au premier tour. */
   readonly depuis: string;
-  readonly scope: string;
+  /**
+   * L'ObjectId d'UNE conversation (`syncQuerySchema.scope`, `routes/sync/
+   * index.ts:85`) — ABSENT pour la LISTE, qui demande tout ce que le lecteur
+   * voit. Le paramètre est facultatif côté passerelle ; l'exiger ici aurait
+   * obligé `/chats` à en inventer un.
+   */
+  readonly scope?: string;
   readonly seq?: number;
+  /** `messages` pour le fil, `conversations` pour la liste — le vocabulaire de `SYNC_FIELD_VOCABULARY`. */
+  readonly collections?: readonly string[];
 }): string =>
-  `${base}/api/v1/sync?since=${encodeURIComponent(depuis)}&collections=messages&scope=${encodeURIComponent(scope)}` +
+  `${base}/api/v1/sync?since=${encodeURIComponent(depuis)}&collections=${encodeURIComponent(collections.join(','))}` +
+  (scope === undefined ? '' : `&scope=${encodeURIComponent(scope)}`) +
   (seq === undefined ? '' : `&seq=${seq}`);
+
+/**
+ * CE QU'UN APPEL DE `/sync` REND, en TROIS formes — parce que trois choses
+ * différentes doivent arriver ensuite.
+ *
+ * `inchange` est le **304** : la fenêtre n'a pas bougé, le corps est VIDE, et
+ * l'appelant ne doit RIEN repeindre — ni avancer son checkpoint, ni toucher son
+ * curseur. C'était jusqu'ici un `!reponse.ok` fondu dans les pannes réseau, donc
+ * indistinguable d'un silence : aucun témoin ne pouvait dire lequel des deux
+ * venait d'arriver, et le critère de fin qui demande « 304 quasi-vide au retour
+ * de focus » n'avait rien à interroger.
+ *
+ * `muet` couvre le reste — réseau tombé, refus, corps illisible : l'écran garde
+ * ce qu'il a, et le prochain retour redemandera.
+ */
+export type IssueDeSync =
+  | { readonly genre: 'inchange' }
+  | { readonly genre: 'muet' }
+  | { readonly genre: 'delta'; readonly delta: Delta; readonly validateur: string | null };
+
+/**
+ * L'APPEL LUI-MÊME, UNE SEULE FOIS POUR LES DEUX SURFACES (§ 7).
+ *
+ * Le fil et la liste demandaient chacun leur `/sync`, et les deux boucles ont
+ * divergé exactement là où ça se paie : la liste n'annonçait PAS son `seq`,
+ * donc la passerelle ne pouvait JAMAIS lui signaler de trou —
+ * `hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD`
+ * (`routes/sync/index.ts:360`) — et le bandeau « des messages manquent » de
+ * `/chats` était une branche MORTE. Une règle de protocole tenue par un seul
+ * des deux appelants n'est pas tenue.
+ *
+ * Le `if-none-match` n'est posé que si l'appelant DÉTIENT un validateur. Il n'en
+ * détient un aujourd'hui que hors navigateur : la passerelle n'expose pas
+ * `ETag` par CORS (`server.ts:404-410`, sans `exposedHeaders`), donc
+ * `reponse.headers.get('etag')` rend `null` depuis une autre origine. Le
+ * mécanisme est JUSTE et il jouera le jour où l'en-tête sera exposé (issue
+ * gateway compagnon) ; il est mesuré ici, pas supposé.
+ */
+export const demandeLeDelta = async ({
+  base,
+  depuis,
+  scope,
+  seq,
+  collections,
+  validateur,
+  entetes,
+  recuperer = fetch,
+}: {
+  readonly base: string;
+  readonly depuis: string;
+  readonly scope?: string;
+  /** Le dernier curseur GLOBAL connu — omis tant que le lecteur n'en a jamais vu. */
+  readonly seq?: number | null;
+  readonly collections?: readonly string[];
+  /** Le dernier `ETag` LU — `null` quand il n'a pas pu l'être. */
+  readonly validateur?: string | null;
+  /** La créance, telle que la surface la porte (`Bearer`, ou la session de l'invité). */
+  readonly entetes: Readonly<Record<string, string>>;
+  readonly recuperer?: (url: string, options: RequestInit) => Promise<Response>;
+}): Promise<IssueDeSync> => {
+  const url = urlDeSync({
+    base,
+    depuis,
+    ...(scope === undefined ? {} : { scope }),
+    ...(seq === undefined || seq === null ? {} : { seq }),
+    ...(collections === undefined ? {} : { collections }),
+  });
+  const reponse = await recuperer(url, {
+    headers: {
+      accept: 'application/json',
+      ...entetes,
+      ...(validateur === undefined || validateur === null ? {} : { 'if-none-match': validateur }),
+    },
+    cache: 'no-store',
+  }).catch(() => null);
+
+  if (reponse === null) return { genre: 'muet' };
+  if (reponse.status === 304) return { genre: 'inchange' };
+  if (!reponse.ok) return { genre: 'muet' };
+
+  const delta = litLeDelta(await reponse.json().catch(() => null));
+  if (delta === null) return { genre: 'muet' };
+  return { genre: 'delta', delta, validateur: reponse.headers.get('etag') };
+};
 
 export const litLeDelta = (corps: unknown): Delta | null => {
   const enveloppe = objet(corps);
@@ -73,12 +175,15 @@ export const litLeDelta = (corps: unknown): Delta | null => {
   const checkpoint = typeof donnee.checkpoint === 'string' ? donnee.checkpoint : null;
   if (checkpoint === null) return null;
 
-  const messages = objet(objet(donnee.collections)?.messages);
+  const collections = objet(donnee.collections);
+  const messages = objet(collections?.messages);
+  const conversations = objet(collections?.conversations);
 
   return {
     checkpoint,
     checkpointSeq: typeof donnee.checkpointSeq === 'number' && Number.isFinite(donnee.checkpointSeq) ? donnee.checkpointSeq : null,
     messages: [...objets(messages?.added), ...objets(messages?.modified)],
+    conversations: [...objets(conversations?.added), ...objets(conversations?.modified)],
     supprimes: objets(messages?.deleted)
       .map((tombe) => tombe.id)
       .filter((id): id is string => typeof id === 'string'),

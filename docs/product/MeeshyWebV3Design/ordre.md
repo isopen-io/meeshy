@@ -4,7 +4,7 @@
 > `depend_de` de `matrice.json`, produit par `ordre-des-ecrans.js`, qui est aussi le gate CI.
 > L'ETAT de chaque ecran vit dans son issue GitHub, jamais ici.
 
-46 ecrans (38 dessines par la planche, 8 exiges par la mission sans etre dessines), 10 lots, graphe acyclique.
+47 ecrans (39 dessines par la planche, 8 exiges par la mission sans etre dessines), 10 lots, graphe acyclique.
 
 | # | Vue | Priorite | Lot | Route | Audience | Depend de |
 |---:|---|---|---|---|---|---|
@@ -47,10 +47,11 @@
 | 37 | `contacts` | P1-role-secondaire | L5 | `/contacts` | connecte | `chats` |
 | 38 | `detail-notification` | P1-role-secondaire | L6 | `/settings/notification` | connecte | `notifPrefs` |
 | 39 | `password` | P1-role-secondaire | L6 | `/settings/security/password` | connecte | `detail-security` |
-| 40 | `profileEdit` | P1-role-secondaire | L6 | `/settings/profile/edit` | connecte | `detail-profile` |
-| 41 | `search` | P1-role-secondaire | L5 | `/search` | connecte | `chats`, `feed` |
-| 42 | `sheet:conv` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `chats` |
-| 43 | `calls` | P2-confort | L7 | `/calls` | connecte | `home` |
-| 44 | `communities` | P2-confort | L7 | `/communities` | connecte | `home` |
-| 45 | `callAudio` | P2-confort | L7 | `/calls/:id` | connecte | `calls` |
-| 46 | `callVideo` | P2-confort | L7 | `/calls/:id?video` | connecte | `callAudio` |
+| 40 | `profilMembre` | P1-role-secondaire | L5 | `/chats/:cle?profil=:membre` | les-deux | `thread`, `rich`, `chats` |
+| 41 | `profileEdit` | P1-role-secondaire | L6 | `/settings/profile/edit` | connecte | `detail-profile` |
+| 42 | `search` | P1-role-secondaire | L5 | `/search` | connecte | `chats`, `feed` |
+| 43 | `sheet:conv` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `chats` |
+| 44 | `calls` | P2-confort | L7 | `/calls` | connecte | `home` |
+| 45 | `communities` | P2-confort | L7 | `/communities` | connecte | `home` |
+| 46 | `callAudio` | P2-confort | L7 | `/calls/:id` | connecte | `calls` |
+| 47 | `callVideo` | P2-confort | L7 | `/calls/:id?video` | connecte | `callAudio` |

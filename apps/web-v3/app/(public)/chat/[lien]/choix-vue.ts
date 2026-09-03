@@ -405,6 +405,8 @@ const cadre = (etat: EtatDuChoix): EtatDuFil => ({
   maintenant: etat.maintenant,
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  // Le cadre du CHOIX ne sert AUCUN message : il n'y a pas de pièce à ouvrir.
+  plein: null,
 });
 
 export const documentDuChoix = (etat: EtatDuChoix): string =>
@@ -423,6 +425,6 @@ export const documentDuChoix = (etat: EtatDuChoix): string =>
   // grandissait vers le haut pendant que le document arrivait par morceaux
   // (CLS 0,347 mesuré en 3G, contre le gate 0,05 du § 12.6).
   modale(etat) +
-  corpsDuFil(cadre(etat), { inerte: true }) +
+  corpsDuFil(cadre(etat), { cadre: true }) +
   '</body>' +
   '</html>';

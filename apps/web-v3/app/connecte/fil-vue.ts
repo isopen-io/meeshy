@@ -5,18 +5,27 @@ import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { documentDuSite, teteDuDocument } from '@/app/enveloppe/vue';
 import { echappe } from '@/app/socle';
 import { THEME_PAR_DEFAUT } from '@/app/theme-script';
-import type { ActifsTempsReel } from '@/lib/actifs-rt';
+/**
+ * `TempsReel` et le CHARGEUR vivent dans `app/connecte/chargeur.ts` depuis
+ * qu'ils ont DEUX lecteurs — le fil et la liste (§ 12.4). Réexportés ici pour
+ * leurs lecteurs historiques.
+ */
+export { type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+export { CHARGEUR_DE_PARTICIPATION };
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
-import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE } from '@/lib/contenu/fil';
+import { BANDEAUX, compteDeParticipants, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE, presenceServie } from '@/lib/contenu/fil';
 import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { gabaritDeLigne, lignes } from './fil-lignes';
+import { FEUILLE_DU_PLEIN } from './plein-feuille';
+import { pieceEnPlein, pleinEcran } from './plein-vue';
 import { carteVide } from './vue';
 
 /**
@@ -91,11 +100,6 @@ export type Composeur =
   | { readonly genre: 'ouvert' }
   | { readonly genre: 'ferme'; readonly raison: string; readonly cause: 'lien' | 'droit' };
 
-export type TempsReel = {
-  /** L'origine que le NAVIGATEUR peut joindre — jamais l'adresse interne du conteneur. */
-  readonly passerelle: string;
-  readonly actifs: ActifsTempsReel;
-};
 
 export type EtatDuFil = {
   readonly porte: Porte;
@@ -107,6 +111,13 @@ export type EtatDuFil = {
   readonly composeur: Composeur;
   /** `null` ⇒ aucun module ne se charge : une lecture pure (§ 12.4, jamais sur une surface de lecture). */
   readonly tempsReel: TempsReel | null;
+  /**
+   * LA PIÈCE QUE L'ADRESSE OUVRE EN PLEIN ÉCRAN (`?media=`, § 12.10.1) — un
+   * ÉTAT de cette adresse, pas une adresse à elle (`app/connecte/plein-vue.ts`).
+   * `null` — le cas nominal — ne rend ni surimpression ni média : la règle de
+   * l'écran ne bouge pas, zéro octet de média avant le geste.
+   */
+  readonly plein: string | null;
 };
 
 export const CHAMP_DU_MESSAGE = 'texte';
@@ -114,6 +125,17 @@ export const CHAMP_DE_LA_PIECE = 'piece';
 
 const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DU_FIL;
 
+/**
+ * L'ADRESSE DE LA PORTE — NUE : ni curseur, ni état. C'est elle que les
+ * formulaires postent, elle que le Post/Redirect/Get vise, et elle que les états
+ * de l'adresse préfixent (`?autour=`, `?media=`, `?avant=`).
+ *
+ * Le curseur de la tranche ne l'habite PAS : ce qu'un lien de média porte, c'est
+ * le MESSAGE qu'il faut servir (`adresseDuPlein`, `lib/api/adresses-du-fil.ts`),
+ * jamais la tranche d'où l'on part — sans quoi une pièce que le module a peinte
+ * EN PLACE, laquelle n'appartient à aucune tranche nommée, resterait
+ * inatteignable.
+ */
 export const adresseDeLaPorte = (porte: Porte): string =>
   porte.genre === 'membre'
     ? `/chats/${encodeURIComponent(porte.cle)}`
@@ -159,13 +181,35 @@ const versLesMedias = (porte: Porte): string =>
 
 const enLigne = (fil: Fil): number => fil.presence.presents.length;
 
+/**
+ * LE SOUS-TITRE A UNE SEULE COMPOSITION, DEUX PROJECTIONS. Le TEXTE (la
+ * description du document) et le HTML (la ligne visible, avec sa fente de
+ * présence) partaient de deux calculs voisins, et le lot précédent les a fait
+ * DIVERGER : le texte se repliait sur le titre de la conversation là où le
+ * HTML rendait une ligne vide, si bien qu'un tête-à-tête affichait « Ibrahim
+ * Diallo » en description et RIEN à l'écran — puis, dès la première présence
+ * reçue, une description devenue « 1 en ligne », le nom de la conversation
+ * perdu. Deux composeurs de la même phrase divergent : celle-ci est composée
+ * ici, et projetée deux fois.
+ *
+ * Le REPLI a quitté la phrase : il appartient à la DESCRIPTION du document
+ * (`documentDuFil`), pas à la ligne de l'en-tête — y replier le titre le
+ * rendrait deux fois, sous le `<h1>` qui le porte déjà.
+ */
+type SousTitre = { readonly compte: string; readonly presents: number };
+
+const sousTitreDuMembre = (fil: Fil): SousTitre => ({
+  compte: compteDeParticipants({ membres: fil.membres, mot: FIL.participants }),
+  presents: enLigne(fil),
+});
+
 /** Le sous-titre en TEXTE — la description du document, et la ligne de l'invité. */
 const sousTitre = ({ porte, fil }: EtatDuFil): string => {
   if (porte.genre === 'invite') {
     return porte.pseudo === null ? FIL.entreEnAnonyme : `${FIL.entreComme} ${porte.pseudo} · ${FIL.anonyme}`;
   }
-  const presents = enLigne(fil);
-  return `${fil.membres} ${FIL.participants}${presents > 0 ? ` · ${presents} ${FIL.enLigne}` : ''}`;
+  const { compte, presents } = sousTitreDuMembre(fil);
+  return compte + (presents === 0 ? '' : presenceServie({ presents, avecSeparateur: compte !== '' }));
 };
 
 /**
@@ -175,13 +219,24 @@ const sousTitre = ({ porte, fil }: EtatDuFil): string => {
  * participants que le document a nommés (`fil-peinture.ts`, `peinsLaPresence`),
  * et qui se tait à zéro. L'invité n'a pas cette fente : la passerelle ne lui
  * pousse aucune présence (`presence-audience.ts`).
+ *
+ * La fente RÉSERVE sa hauteur (`.fil-tete .sous`, `min-height` de la feuille) :
+ * révélée par un `user:status` reçu, elle faisait autrement grandir l'en-tête
+ * d'une ligne et pousser tout le fil — un décalage sur l'écran dont le budget
+ * est CLS ≤ 0,05.
  */
 const sousTitreHtml = (etat: EtatDuFil): string => {
   if (etat.porte.genre === 'invite') return echappe(sousTitre(etat));
-  const presents = enLigne(etat.fil);
+  const { compte, presents } = sousTitreDuMembre(etat.fil);
+  // La fente garde son séparateur AVEC elle — sans compte, « · 1 en ligne »
+  // ouvrirait le sous-titre sur un point médian orphelin — et le DÉCLARE
+  // (`data-sep`), parce que le module qui la repeint doit composer la MÊME
+  // phrase sans connaître ce qui la précède.
+  const avecSeparateur = compte !== '';
   return (
-    `${etat.fil.membres} ${echappe(FIL.participants)}` +
-    `<span class="en-ligne"${presents === 0 ? ' hidden' : ''}> · ${presents} ${echappe(FIL.enLigne)}</span>`
+    echappe(compte) +
+    `<span class="en-ligne" data-sep="${avecSeparateur ? '1' : '0'}"${presents === 0 ? ' hidden' : ''}>` +
+    `${echappe(presenceServie({ presents, avecSeparateur }))}</span>`
   );
 };
 
@@ -478,51 +533,43 @@ const attributsDeParticipation = (etat: EtatDuFil): string => {
   );
 };
 
-/**
- * Le chargeur différé (§ 12.4) : `load`, puis le PREMIER PIXEL, puis l'oisiveté,
- * et seulement alors `import()`.
- *
- * Le premier pixel est attendu par l'entrée `first-contentful-paint` de la
- * chronologie de performance — pas par deux `requestAnimationFrame`, qui
- * disent qu'un rendu a été PROGRAMMÉ, jamais qu'un pixel a été PRÉSENTÉ :
- * mesuré, le module partait à 90,1 ms pour un premier pixel daté 92 ms, une
- * fois sur seize, contre le gate « aucune requête de script avant le premier
- * pixel ». L'observateur ne rend la main qu'une fois l'entrée posée, donc
- * après l'instant qu'elle porte : l'ordre est opposable. Un navigateur qui
- * n'émet pas cette entrée retombe sur une minuterie de repli — le module
- * arrive plus tard, jamais avant le pixel.
- */
-export const CHARGEUR_DE_PARTICIPATION =
-  '<script type="module">' +
-  'const m=document.querySelector("main[data-module]");' +
-  'if(m){const u=m.dataset.module;let parti=false;' +
-  'const l=()=>{if(parti)return;parti=true;import(u).catch(()=>{})};' +
-  'const i=()=>{"requestIdleCallback"in window?requestIdleCallback(l,{timeout:1500}):setTimeout(l,1)};' +
-  'const peint=()=>performance.getEntriesByName("first-contentful-paint").length>0;' +
-  'const p=()=>{if(peint()){i();return}' +
-  'try{new PerformanceObserver((e,o)=>{if(e.getEntriesByName("first-contentful-paint").length>0){o.disconnect();i()}}).observe({type:"paint",buffered:true})}catch{i()}' +
-  'setTimeout(l,4000)};' +
-  'document.readyState==="complete"?p():addEventListener("load",p,{once:true})}' +
-  '</script>';
 
 /**
- * Le corps du fil. `inerte` est le CADRE de l'état CHOIX (`/chat/:lien`) : il
- * ne porte ni gabarits ni bandeaux différés — rien de ce qu'un module ferait
- * vivre, puisqu'aucun ne se charge —, ce qui allège le document que le visiteur
- * rural reçoit avant d'avoir choisi. L'ordre est celui de la planche
- * (`cible/rights.png`) : l'en-tête, le bandeau des droits, PUIS les puces.
+ * Le corps du fil, et ses DEUX options — qui ne disent pas la même chose, et
+ * que le lot précédent confondait en une seule :
+ *
+ *   • `cadre` est l'état CHOIX (`/chat/:lien`) : un fil VIDÉ de tout ce qu'un
+ *     module ferait vivre — ni gabarits, ni bandeaux différés, ni carte
+ *     « aucun message » —, ce qui allège le document que le visiteur rural
+ *     reçoit avant d'avoir choisi ;
+ *   • `inerte` ne pose QUE l'attribut. C'est ce dont la surimpression du plein
+ *     écran a besoin : le fil reste servi ENTIER — le module vit, ses gabarits
+ *     sont là —, mais rien derrière la surimpression ne prend le focus ni ne
+ *     s'annonce au lecteur d'écran. Sans lui, et SANS JAVASCRIPT (le chemin qui
+ *     marche partout), le clavier traversait vingt-et-un contrôles invisibles —
+ *     retour, médias, composeur, sauts de citation — avant d'atteindre la
+ *     croix, et pouvait poster un message qu'il ne voyait pas.
+ *
+ * `inerte` vaut `cadre` par défaut : un cadre est toujours inerte, l'inverse
+ * n'est pas vrai.
+ *
+ * L'ordre est celui de la planche (`cible/rights.png`) : l'en-tête, le bandeau
+ * des droits, PUIS les puces.
  */
-export const corpsDuFil = (etat: EtatDuFil, { inerte = false }: { readonly inerte?: boolean } = {}): string =>
+export const corpsDuFil = (
+  etat: EtatDuFil,
+  { cadre = false, inerte = cadre }: { readonly cadre?: boolean; readonly inerte?: boolean } = {},
+): string =>
   `<main id="main-content" class="fil-ecran"${inerte ? ' inert' : ''}${attributsDeParticipation(etat)}>` +
   enTete(etat) +
   bandeauDesDroits(etat.porte, etat.fil.titre) +
   puces(etat) +
-  (inerte ? '' : bandeauxDifferes(etat)) +
+  (cadre ? '' : bandeauxDifferes(etat)) +
   (etat.erreur === null ? '' : `<p class="alerte" role="alert">${echappe(etat.erreur)}</p>`) +
   zoneDeFrappe() +
   composeur(etat) +
-  listeDesMessages(etat, inerte) +
-  (inerte ? '' : gabaritDeLigne(adresseDeLaPorte(etat.porte))) +
+  listeDesMessages(etat, cadre) +
+  (cadre ? '' : gabaritDeLigne(adresseDeLaPorte(etat.porte))) +
   '</main>';
 
 /**
@@ -553,13 +600,39 @@ export const documentPleinEcran = ({
   `<body>${corps}${script}</body>` +
   '</html>';
 
-export const documentDuFil = (etat: EtatDuFil): string =>
-  documentPleinEcran({
+/**
+ * LA SURIMPRESSION DU PLEIN ÉCRAN — hors du `<main>`, comme la modale de l'état
+ * CHOIX : une surimpression n'est pas un morceau du contenu qu'elle recouvre.
+ * Sa FEUILLE ne part QUE dans cet état (`documentDuFil`) : ce que le fil
+ * n'affiche pas, il ne le paie pas (charte règle 7).
+ */
+const surimpression = (etat: EtatDuFil): string => {
+  const plein = pieceEnPlein(etat.fil, etat.plein);
+  return plein === null ? '' : pleinEcran({ plein, adresse: adresseDeLaPorte(etat.porte), langueDuDocument: DOCUMENT_LANGUAGE });
+};
+
+export const documentDuFil = (etat: EtatDuFil): string => {
+  const plein = surimpression(etat);
+  const decrit = sousTitre(etat);
+  return documentPleinEcran({
     titre: `${etat.fil.titre} — Meeshy`,
-    description: sousTitre(etat),
-    corps: corpsDuFil(etat),
+    // Le REPLI de la DESCRIPTION, et de rien d'autre : un tête-à-tête sans
+    // personne en ligne n'a pas de sous-titre, et un document sans description
+    // ne dit rien de lui.
+    description: decrit === '' ? etat.fil.titre : decrit,
+    // LA SURIMPRESSION AVANT LE FIL, et le fil INERTE derrière elle — la même
+    // règle que la modale de l'état CHOIX, pour les deux mêmes raisons. L'ORDRE
+    // d'abord : rendue après un corps de 30 Ko, une surimpression est peinte
+    // courte puis grandit pendant que le document arrive (CLS 0,347 mesuré en
+    // 3G chez sa voisine, contre le gate 0,05). L'ACCÈS ensuite : sans
+    // JavaScript il n'y a ni Échap ni piège à focus, et `inert` est ce que le
+    // navigateur donne gratuitement — la première tabulation atteint la croix,
+    // et le lecteur d'écran n'annonce plus un fil que rien ne montre.
+    corps: plein + corpsDuFil(etat, { inerte: plein !== '' }),
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
+    feuille: plein === '' ? FEUILLE : FEUILLE + FEUILLE_DU_PLEIN,
   });
+};
 
 export const documentIntrouvable = (): string =>
   documentDuSite({

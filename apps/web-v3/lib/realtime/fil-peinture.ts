@@ -1,7 +1,8 @@
+import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDeLaPiece, annonceDuPrisme, type Accuse, type Citation, type PieceJointe, type Reaction } from '@/lib/api/fil';
-import { formeDePiece } from '@/lib/api/formes';
+import { formeDePiece, sEcouteSurPlace } from '@/lib/api/formes';
 import { initiales, TEINTES, teinteDeLAvatar } from '@/lib/avatar';
-import { FIL, libelleDeCitation } from '@/lib/contenu/fil';
+import { FIL, libelleDeCitation, presenceServie } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, heureLocale, libelleDuJour } from '@/lib/temps';
 
@@ -52,6 +53,13 @@ export type Peintre = {
    */
   readonly nomDuLecteur: string;
   readonly langueDuDocument: string;
+  /**
+   * L'adresse de la PORTE (`data-adresse`), telle que le document l'a servie :
+   * ce qui préfixe l'état plein écran d'une pièce (`?media=`). Le peintre ne la
+   * compose pas — deux compositions feraient mener la ligne peinte ailleurs que
+   * la ligne servie.
+   */
+  readonly adresse: string;
 };
 
 export const peintre = (main: HTMLElement): Peintre | null => {
@@ -67,6 +75,7 @@ export const peintre = (main: HTMLElement): Peintre | null => {
     enLigne: main.querySelector<HTMLElement>('.fil-tete .en-ligne'),
     nomDuLecteur: main.dataset.nom ?? FIL.vous,
     langueDuDocument: document.documentElement.lang || 'fr',
+    adresse: main.dataset.adresse ?? '',
   };
 };
 
@@ -167,26 +176,54 @@ const retireSauf = (racine: ParentNode, selecteur: string, garde: boolean): void
   else noeud.remove();
 };
 
-const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocument: string): void => {
+const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocument: string, adresse: string, messageId: string): void => {
   const forme = formeDePiece(piece.genre);
+  const surPlace = sEcouteSurPlace(piece.genre);
   const meta = metaDePiece(piece);
   noeud.dataset.piece = piece.id;
   noeud.dataset.genre = piece.genre;
 
   // Le bloc que le genre ne demande pas SORT du clone : une pièce peinte et une
-  // pièce servie portent alors le même balisage, au nœud près.
-  noeud.querySelector(forme.lecteur === null ? 'details.lecteur' : 'a.media')?.remove();
-  // Le média natif que la table ne NOMME pas sort avec lui : la balise vient de
-  // `forme.lecteur`, jamais d'une comparaison de genre écrite ici.
-  noeud.querySelectorAll('audio, video').forEach((media) => {
-    if (media.tagName.toLowerCase() !== forme.lecteur) media.remove();
-  });
+  // pièce servie portent alors le même balisage, au nœud près. C'est la MÊME
+  // table qui décide des deux côtés (`sEcouteSurPlace`) — un genre à qui l'on
+  // donnerait un lecteur changerait les deux d'un coup.
+  noeud.querySelector(surPlace ? 'a.media' : 'details.lecteur')?.remove();
 
   const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
   if (lien !== null) {
-    if (piece.url === '') lien.removeAttribute('href');
-    else lien.href = piece.url;
-    lien.setAttribute('aria-label', FIL.telecharger(piece.nom, meta));
+    // CE QUE LE TAP OUVRE vient de la table (`ouvre`) : le plein écran de
+    // l'adresse hôte, ou le fichier dans un onglet. Une pièce LOCALE — celle
+    // d'une bulle optimiste, que rien n'a encore téléversée — n'a PAS d'adresse
+    // (`url === ''`, `participate.ts` › `piecesLocales`) : elle n'ouvre donc
+    // rien, pas même un plein écran, dont le serveur ne saurait pas quoi
+    // rendre. Un lien sans `href` n'est pas un contrôle (charte règle 7).
+    const plein = forme.ouvre === 'plein';
+    const cible = piece.url === '' || adresse === '' ? '' : plein ? adresseDuPlein(adresse, messageId, piece.id) : piece.url;
+    if (cible === '') lien.removeAttribute('href');
+    else lien.setAttribute('href', cible);
+    if (plein) {
+      lien.removeAttribute('target');
+      lien.removeAttribute('rel');
+    } else {
+      lien.setAttribute('target', '_blank');
+      lien.setAttribute('rel', 'noopener');
+    }
+    lien.setAttribute('aria-label', plein ? FIL.pleinEcran(piece.nom, meta) : FIL.telecharger(piece.nom, meta));
+  }
+
+  // LA FICHE — la transcription entière en plein écran, pour ce qui s'écoute
+  // sur place et pour lui seul (§ 12.10.1), ET SEULEMENT quand il y a une fiche
+  // à lire : un vocal dont la transcription n'est pas encore revenue (le cas
+  // nominal des secondes qui suivent l'envoi) ouvrait une fiche VIDE. La
+  // transcription arrive par `audio:transcription-ready`, qui repeint la pièce :
+  // la puce apparaît à ce moment-là — c'est l'effet juste. Même règle que la
+  // ligne servie (`aFiche`, `app/connecte/fil-lignes.ts`).
+  const fiche = noeud.querySelector<HTMLAnchorElement>('a.fiche');
+  if (fiche !== null && !(surPlace && piece.transcription !== null)) fiche.remove();
+  else if (fiche !== null) {
+    if (piece.url === '' || adresse === '') fiche.removeAttribute('href');
+    else fiche.setAttribute('href', adresseDuPlein(adresse, messageId, piece.id));
+    fiche.setAttribute('aria-label', FIL.fiche(piece.nom));
   }
   // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
   // (cycle 128) —, jamais l'adresse de téléchargement.
@@ -216,7 +253,14 @@ const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocumen
   }
 };
 
-const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], gabarit: HTMLTemplateElement, langueDuDocument: string): void => {
+const remplisLesPieces = (
+  ligne: HTMLElement,
+  pieces: readonly PieceJointe[],
+  gabarit: HTMLTemplateElement,
+  langueDuDocument: string,
+  adresse: string,
+  messageId: string,
+): void => {
   const liste = ligne.querySelector<HTMLUListElement>('ul.pieces');
   if (liste === null) return;
   const empreinte = empreinteDesPieces(pieces);
@@ -230,7 +274,7 @@ const remplisLesPieces = (ligne: HTMLElement, pieces: readonly PieceJointe[], ga
   liste.replaceChildren(
     ...pieces.map((piece) => {
       const noeud = clone<HTMLLIElement>(gabarit, 'ul.pieces > li') ?? document.createElement('li');
-      peinsUnePiece(noeud, piece, langueDuDocument);
+      peinsUnePiece(noeud, piece, langueDuDocument, adresse, messageId);
       return noeud;
     }),
   );
@@ -267,6 +311,15 @@ const remplisLesCitations = (ligne: HTMLElement, citations: readonly Citation[],
       const noeud = clone<HTMLLIElement>(gabarit, 'ul.citations > li.citation') ?? document.createElement('li');
       noeud.dataset.genre = citation.genre;
       noeud.dataset.cite = citation.cible;
+      // LE SAUT n'existe que si la cible est dans la page — un fait établi par
+      // `citationsDeLaPage` (`lib/api/citations.ts`), jamais recalculé ici :
+      // deux calculs feraient une citation cliquable servie et morte peinte.
+      const saut = noeud.querySelector<HTMLAnchorElement>('a.saut');
+      if (saut !== null) {
+        if (citation.surLaPage) saut.setAttribute('href', ancreDuMessage(citation.cible));
+        else saut.removeAttribute('href');
+        montre(saut, '.hors-ecran', citation.surLaPage);
+      }
       texte(noeud, '.quoi', libelleDeCitation(citation));
       texte(noeud, '.apercu', citation.apercu);
       montre(noeud, '.apercu', citation.apercu !== '');
@@ -334,7 +387,10 @@ export const retireLesControlesDeReaction = (p: Peintre): void => {
  */
 export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
   ligne.dataset.id = bulle.id;
-  ligne.id = `m-${bulle.id}`;
+  // L'identifiant DOM vient de son SITE UNIQUE : c'est lui que l'ancre d'une
+  // citation vise (`ancreDuMessage`), et une seconde écriture du même préfixe
+  // ferait sauter le lien à côté de la ligne au premier changement de forme.
+  ligne.id = identifiantDuMessage(bulle.id);
   if (bulle.clientMessageId !== null) ligne.dataset.cid = bulle.clientMessageId;
   if (bulle.auteurId !== null) ligne.dataset.auteur = bulle.auteurId;
   if (bulle.ecritA !== null) ligne.dataset.ecrit = bulle.ecritA;
@@ -424,7 +480,7 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
     if (pieces !== null) pieces.hidden = true;
     if (citations !== null) citations.hidden = true;
   } else {
-    remplisLesPieces(ligne, bulle.pieces, p.gabarit, p.langueDuDocument);
+    remplisLesPieces(ligne, bulle.pieces, p.gabarit, p.langueDuDocument, p.adresse, bulle.id);
     remplisLesCitations(ligne, bulle.citations, p.gabarit, p.langueDuDocument);
   }
   if (bulle.supprime) {
@@ -560,10 +616,15 @@ export const peinsLaFrappe = (p: Peintre, frappeurs: readonly Frappeur[]): void 
   p.frappe.hidden = phrase === '';
 };
 
-/** « N en ligne », dans la fente servie — la même phrase que le serveur, tue à zéro comme lui. */
+/**
+ * « N en ligne », dans la fente servie — la MÊME phrase que le serveur, tue à
+ * zéro comme lui, séparateur compris : la fente DÉCLARE ce qui la précède
+ * (`data-sep`), que la directive § 12.10.2 a rendu variable en faisant taire le
+ * compte de participants d'une conversation à deux.
+ */
 export const peinsLaPresence = (p: Peintre, presents: number): void => {
   if (p.enLigne === null) return;
-  const phrase = ` · ${presents} ${FIL.enLigne}`;
+  const phrase = presenceServie({ presents, avecSeparateur: p.enLigne.dataset.sep === '1' });
   if (p.enLigne.textContent !== phrase) p.enLigne.textContent = phrase;
   p.enLigne.hidden = presents === 0;
 };

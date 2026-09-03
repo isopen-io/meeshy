@@ -53,7 +53,7 @@ const nextConfig: NextConfig = {
      * dix entrées sont donc composées à partir d'UNE liste, jamais recopiées.
      */
     ...Object.fromEntries(
-      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup', '/chats'].map((route) => [
+      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup'].map((route) => [
         route,
         [
           './node_modules/@meeshy/design-tokens/tokens.css',
@@ -89,7 +89,27 @@ const nextConfig: NextConfig = {
         ],
       ]),
     ),
-    '/rt/[nom]': ['./.rt/participate.js', './node_modules/socket.io-client/dist/socket.io.esm.min.js'],
+    /**
+     * `/chats` est la TROISIÈME surface de participation (§ 12.4) : elle compose
+     * l'adresse hachée de SON module (`liste.js`) et de socket.io-client en les
+     * LISANT, comme les deux portes du fil. Elle lit de plus le sprite — la
+     * pastille de langue de chaque ligne et le chevron de son menu — et la table
+     * de jetons. Sans cette entrée, l'image servirait une liste sans style dont
+     * le chargeur vise une adresse calculée sur un fichier absent.
+     */
+    '/chats': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+      './node_modules/@meeshy/icons/sprite.svg',
+      './.rt/liste.js',
+      './node_modules/socket.io-client/dist/socket.io.esm.min.js',
+    ],
+    '/rt/[nom]': [
+      './.rt/participate.js',
+      './.rt/liste.js',
+      './node_modules/socket.io-client/dist/socket.io.esm.min.js',
+    ],
   },
 };
 

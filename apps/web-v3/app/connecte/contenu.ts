@@ -33,14 +33,12 @@ export const TABLEAU_DE_BORD = {
   versLesChats: 'Mes conversations',
 } as const;
 
-export const CHATS = {
-  titre: 'Conversations',
-  accroche: 'Vos conversations, la plus récente en premier.',
-  vide: 'Aucune conversation',
-  videPrecision: 'Démarrez une nouvelle conversation pour discuter avec vos amis !',
-  participants: 'participants',
-  nonLus: 'non lus',
-} as const;
+/**
+ * LA COPIE DE LA LISTE vit sous `lib/contenu/liste.ts` — elle a DEUX auteurs
+ * (le document servi et le module qui repeint la ligne en direct), exactement
+ * comme celle du fil. Ce module la ré-exporte pour ses lecteurs historiques.
+ */
+export { ACTIONS, CHATS } from '@/lib/contenu/liste';
 
 export const PANNE = {
   titre: 'Le service ne répond pas',
