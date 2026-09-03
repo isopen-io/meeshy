@@ -248,28 +248,43 @@ Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
 | **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
 | **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
 | **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
-| **`MeeshyPublication`** | **rien.** Elle se projette en N `Post` (§ 1 bis) | **aucun type de ce nom** |
+| **`MeeshyPublication`** | **rien.** Elle se PROJETTE, et la cardinalité dépend du PROFIL — N posts en S, UN seul en P/R (§ 1 bis) | **aucun type de ce nom** |
 
 ```bash
 grep -ci slide packages/shared/types/canvas-v3.ts        # → 0
 git grep -n "struct MeeshySlide\|struct MeeshyPublication" -- '*.swift'   # → rien
 ```
 
-**Une divergence de NOM, et c'est celle que le § 1 met en garde d'éviter.**
-Le contrat nomme l'objet de scène **`place`** (`ACTIVE_KINDS`,
-`canvas-v3.ts:5`) ; la somme Swift le nomme **`location`**
-(`MeeshySceneObject.swift:60`). Or `location` est, dans le même langage et
-souvent dans le même fichier, le **lieu de la PUBLICATION** (`location:
-SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire exactement la
-paire que le tableau du § 1 sépare : *d'où l'on publie* contre *une pastille
-posée sur une scène*.
+**La divergence de NOM qui vivait ici est SOLDÉE** (#4776, #4960 ; re-mesurée le
+2026-09-03) :
 
-> **Le seul mot que ce cas ne devait pas porter est celui qu'il porte.** La
-> confusion n'est pas hypothétique : le modèle l'a nommée avant qu'elle
-> existe dans le type, et un lecteur qui suit `place` depuis le contrat ne le
-> trouve nulle part côté Swift.
+```
+MeeshySceneObject.swift:60:    case place(StoryLocationObject)
+canvas-v3.ts:5: ACTIVE_KINDS = ['text','media','sticker','audio','place','drawing','mention']
+```
 
-Suivi : renommer le cas en `.place` — mécanique, mais sur l'API publique du SDK.
+Le contrat et la somme Swift disent le même mot. Ce paragraphe décrivait
+jusqu'ici un cas nommé `location`, et prescrivait « Suivi : renommer le cas en
+`.place` » — un défaut révolu et un suivi déjà fait.
+
+> **Une dette payée dont l'énoncé survit coûte deux fois** : elle envoie le
+> lecteur chercher un défaut absent, et elle discrédite les autres énoncés du
+> même document — celui qui a vérifié une fois pour rien ne vérifiera pas la
+> deuxième. C'est la raison pour laquelle un document d'AUTORITÉ se relit
+> ligne à ligne au lieu de s'augmenter par le bas.
+
+**Ce que l'épisode laisse, et qui vaut d'être gardé.** `location` était, dans le
+même langage et souvent dans le même fichier, le **lieu de la PUBLICATION**
+(`location: SharedPlace?`, du brouillon jusqu'à `createPost`) — c'est-à-dire
+exactement la paire que le tableau du § 1 sépare : *d'où l'on publie* contre
+*une pastille posée sur une scène*. Le mot qu'un cas ne doit pas porter est
+celui qui désigne déjà autre chose à deux lignes de là, et le contrat partagé
+est l'arbitre : quand il a un nom, c'est le sien.
+
+Corollaire de méthode, payé au renommage : **seul le compilateur compte les
+consommateurs d'un membre renommé.** Un `grep` sur `location` rendait 114
+occurrences dont 3 réelles, et ratait `case .place` chez les appelants qui
+n'écrivent jamais le nom du type.
 
 **Ce que ça veut dire, et ce que ça ne veut pas dire.** Ce n'est pas une dette à
 solder : le § 1 déclare un vocabulaire CIBLE, et il est normal qu'une cible
