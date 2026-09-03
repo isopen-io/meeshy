@@ -116,7 +116,15 @@ struct ComposerDocumentSurface: View {
     /// **Ce que le doigt fait de la pastille du son de fond** (#4668). `nil` ⇒
     /// elle reste une lecture : la surface ne fabrique pas d'action que l'hôte
     /// ne lui a pas donnée.
-    var onEditBackgroundSound: (() -> Void)? = nil
+    var onEditBackgroundSound: (() -> Void)?
+
+    /// **Le RETRAIT du son de fond, par appui long** (#4930).
+    ///
+    /// `nil` ⇒ aucun menu. Deux cas le rendent : aucun fond, et un fond LEGACY
+    /// — celui que `resolvedBackgroundAudio` synthétise depuis
+    /// `backgroundAudioId`, qui n'a aucun objet à supprimer. Le meuble tranche ;
+    /// la surface ne fait que peindre ce qu'elle reçoit.
+    var onDeleteBackgroundSound: (() -> Void)? = nil
     /// **Ce que le doigt fait d'une carte de son de contenu.**
     ///
     /// Toucher la carte rouvre « Création audio » SUR ce son. `nil` ⇒ la carte
@@ -415,6 +423,8 @@ struct ComposerDocumentSurface: View {
                         avatarView
                         ComposerAvatarSoundBadge(sound: backgroundSound,
                                                  onTap: onEditBackgroundSound)
+                            .modifier(ComposerSoundDeletionMenu(
+                                supprimer: onDeleteBackgroundSound))
                         Spacer(minLength: 0)
                     }
                     textOnlyField
@@ -819,20 +829,4 @@ nonisolated enum ComposerMediaChipAffordance {
 /// Un modificateur plutôt qu'un `.contextMenu` posé en ligne : sans fermeture,
 /// AUCUN menu ne se monte — un `.contextMenu` vide s'ouvrirait quand même, sur
 /// rien, et un appui long qui répond par un cadre vide se lit comme une panne.
-private struct ComposerSoundDeletionMenu: ViewModifier {
-    let supprimer: (() -> Void)?
 
-    func body(content: Content) -> some View {
-        if let supprimer {
-            content.contextMenu {
-                Button(role: .destructive, action: supprimer) {
-                    Label(String(localized: "composer.audio.delete.action",
-                                 defaultValue: "Supprimer le son", bundle: .main),
-                          systemImage: "trash")
-                }
-            }
-        } else {
-            content
-        }
-    }
-}

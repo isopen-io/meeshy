@@ -333,6 +333,14 @@ struct ComposerSceneSurface: View {
     /// lois ». Deux gestes, ce que la dimension 7 demande.
     var onEditBackgroundSound: (() -> Void)?
 
+    /// **Le RETRAIT du son de fond, par appui long** (#4930).
+    ///
+    /// `nil` ⇒ aucun menu. Deux cas le rendent : aucun fond, et un fond LEGACY
+    /// — celui que `resolvedBackgroundAudio` synthétise depuis
+    /// `backgroundAudioId`, qui n'a aucun objet à supprimer. Le meuble tranche ;
+    /// la surface ne fait que peindre ce qu'elle reçoit.
+    var onDeleteBackgroundSound: (() -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -612,6 +620,14 @@ struct ComposerSceneSurface: View {
                 if let trace = ComposerSceneSoundTrace.served(background: backgroundSound,
                                                               toolIsOpen: toolIsOpen) {
                     ComposerAvatarSoundBadge(sound: trace, onTap: onEditBackgroundSound)
+                        // **Le MÊME menu que la carte du son de contenu**
+                        // (#4930) — pas un second geste. L'appui long est la
+                        // seconde porte de la suppression depuis #4696 ; elle
+                        // manquait au plan de FOND, dont le seul chemin passait
+                        // par une feuille que `opensEditor` refuse d'ouvrir à
+                        // un son emprunté.
+                        .modifier(ComposerSoundDeletionMenu(
+                            supprimer: onDeleteBackgroundSound))
                         .padding(.horizontal, 16)
                         .padding(.top, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
