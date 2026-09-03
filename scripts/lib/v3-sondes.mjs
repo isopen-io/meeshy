@@ -56,6 +56,20 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
       "réclame PathPrefix(`/l/`) que V3_ZONE_PREFIXES",
     ],
     [
+      // LA SONDE FABRIQUE SA PROPRE VICTIME (leçon 477). Retirer un préfixe
+      // EXISTANT marcherait aujourd'hui et mourrait le jour où cet écran est
+      // réclamé par le routeur — l'autre invariant tomberait d'abord, et
+      // celui-ci semblerait tenir sans avoir rien vu.
+      'un écran servi par la zone et absent de V3_ZONE_PREFIXES',
+      (world) => {
+        world.zone = {
+          ...world.zone,
+          routeUrls: [...world.zone.routeUrls, '/orpheline-hors-bascule'],
+        };
+      },
+      'sert /orpheline-hors-bascule, que V3_ZONE_PREFIXES du worker legacy ne couvre pas',
+    ],
+    [
       'le type-check de la v3 retiré de ci.yml',
       (world) =>
         replaceIn(world, 'ci', /^\s*run:.*type-check.*$/m, (line) =>

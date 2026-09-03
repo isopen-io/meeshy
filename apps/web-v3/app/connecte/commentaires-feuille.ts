@@ -1,4 +1,5 @@
 import { compacte } from '@/app/enveloppe/feuille';
+import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 
 /**
  * LA FEUILLE DES COMMENTAIRES — ce que `cible/comments.png` dessine.
@@ -34,7 +35,7 @@ import { compacte } from '@/app/enveloppe/feuille';
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
  */
-export const FEUILLE_DES_COMMENTAIRES = compacte(`
+export const FEUILLE_DES_COMMENTAIRES = FEUILLE_DU_CHOIX_DE_LANGUE + compacte(`
 .commentaires-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .commentaires-ecran>.fil-tete{flex:none}
 

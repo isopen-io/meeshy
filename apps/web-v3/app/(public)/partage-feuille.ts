@@ -1,3 +1,4 @@
+import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { compacte } from '@/app/enveloppe/feuille';
 
 /**
@@ -34,7 +35,7 @@ import { compacte } from '@/app/enveloppe/feuille';
  * qui prend ce qui reste. C'est la mise en page du fil (`fil-feuille.ts`), pour
  * la même raison : le composeur doit rester dans le cadre, clavier ouvert.
  */
-export const FEUILLE_DE_LA_STORY = compacte(`
+export const FEUILLE_DE_LA_STORY = FEUILLE_DU_CHOIX_DE_LANGUE + compacte(`
 .story-ecran{display:flex;flex-direction:column;height:100dvh;max-width:var(--shell-width);margin:0 auto;background:var(--color-bg-sunken)}
 .story-ecran>*{flex:none}
 
@@ -49,13 +50,6 @@ export const FEUILLE_DE_LA_STORY = compacte(`
 .story-tete .fermer{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-text)}
 .story-tete .fermer svg{width:var(--glyph);height:var(--glyph)}
 
-.langues{position:relative;flex:none}
-.langues summary{display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);list-style:none;cursor:pointer;color:var(--color-primary)}
-.langues summary::-webkit-details-marker{display:none}
-.langues summary svg{width:var(--glyph);height:var(--glyph)}
-.langues ul{position:absolute;inset-inline-end:0;z-index:1;margin:var(--space-1) 0 0;padding:var(--space-2);min-width:var(--action-width);list-style:none;border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
-.langues li a{display:flex;align-items:center;min-height:var(--target-min);padding:0 var(--space-3);border-radius:var(--radius-pill);font-size:var(--text-base);text-decoration:none}
-.langues li a[aria-current]{background:var(--color-tint-primary);font-weight:var(--font-weight-semibold)}
 
 .scene{position:relative;flex:1 1 0;display:flex;align-items:center;justify-content:center;min-height:var(--row-height);padding:var(--space-5)}
 .scene .texte{margin:0;max-width:var(--measure);text-align:center;font-size:var(--text-2xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}

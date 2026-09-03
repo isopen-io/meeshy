@@ -90,7 +90,11 @@ test('le Prisme est APPLIQUÉ, pas seulement annoncé — et l’original se dé
 
   // La publication : écrite en anglais, servie en français, et la ligne le DIT.
   await expect(page.locator('.publication .texte')).toHaveText(/La revue de mars est prête/);
-  await expect(page.locator('.publication .texte')).toHaveAttribute('lang', 'fr');
+  // AUCUN `lang=` ici, et c'est la règle d'accessibilité, pas un oubli : le
+  // document EST en français, et l'attribut ne sert qu'à signaler un passage
+  // qui en SORT. Ce témoin exigeait `lang="fr"` — il gardait « marquer les
+  // traductions », pas « dire ce qu'un lecteur d'écran doit changer de voix ».
+  await expect(page.locator('.publication .texte')).not.toHaveAttribute('lang', /./);
   await expect(page.locator('.publication .prisme summary')).toContainText('traduit de l’anglais');
 
   // L'original est REPLIÉ, et le déplier a un EFFET (charte règle 4) — sans une
@@ -155,6 +159,39 @@ test('sans session, RIEN du contenu ne part', async ({ browser }) => {
   expect(passerelle.journal.filter((appel) => appel.chemin.startsWith('/api/'))).toEqual([]);
   await expect(page.locator('body')).not.toContainText('Revue de mars');
   await expect(page.locator('a[href^="/login"]')).toBeVisible();
+
+  await ctx.close();
+});
+
+test('choisir une langue CHANGE le texte lu — sans une ligne de JavaScript', async ({ browser }) => {
+  const ctx = await contexte(browser, 'light');
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/post/p-revue`);
+
+  // Le sélecteur est REPLIÉ, et l'ouvrir est un geste natif (`<details>`).
+  const choix = page.locator('.langues');
+  await expect(choix.locator('ul')).toBeHidden();
+  await choix.locator('summary').click();
+  await expect(choix.locator('ul')).toBeVisible();
+
+  // La langue LUE se dit — sinon le choix se ferait à l'aveugle.
+  await expect(choix.locator('a[aria-current="true"]')).toHaveText('français');
+
+  // ET LE CONTRÔLE A UN EFFET. C'est le seul critère de `sheet:lang` qui
+  // compte, et le seul qu'un témoin de document ne peut pas rendre : cliquer
+  // « English » doit MUTER le texte de la publication, pas seulement changer
+  // l'adresse.
+  // « anglais », pas « English » : le nom d'une langue s'écrit dans la langue
+  // du document (`lib/contenu/langues.ts`). Ce témoin, écrit d'abord avec le
+  // nom natif, est tombé dessus — c'est exactement ce qu'on lui demande.
+  await choix.getByRole('link', { name: 'anglais', exact: true }).click();
+  await expect(page.locator('.publication .texte')).toHaveText(/The March review is ready/);
+  await expect(page.locator('.publication .texte')).toHaveAttribute('lang', 'en');
+
+  // Le fil, lui, ne suit PAS : `?lang=` est un geste sur la publication, pas un
+  // réglage. L'imposer masquerait les commentaires qu'il ne traduit pas.
+  await expect(page.locator('li[data-id="k-marta"] .texte')).toHaveAttribute('lang', 'es');
 
   await ctx.close();
 });

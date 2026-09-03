@@ -1,4 +1,6 @@
-import { lisLaStory, soumetsALaStory } from './porte';
+import { GENRE_STORY } from '@/lib/contenu/partage';
+
+import { lisLePartage, soumetsAuPartage } from '@/app/(public)/partage-porte';
 
 /**
  * `/stories/:id` — UNE STORY PARTAGÉE, lue intégralement dans la langue du
@@ -20,12 +22,13 @@ import { lisLaStory, soumetsALaStory } from './porte';
  * peut, sur cette adresse, que réchauffer un cache. Le POST, lui, POSE une
  * parole ou un aime : il regarde d'où il vient (`app/provenance.ts`).
  *
- * L'ÉTAT VIT DANS LA PORTE (`porte.ts`), pas ici : ce fichier ne fait que
+ * L'ÉTAT VIT DANS LA PORTE (`partage-porte.ts`, partagée avec `/reels/:id` et
+ * `/moods/:id`), pas ici : ce fichier ne fait que
  * nommer les deux méthodes, comme les autres gestionnaires de la zone.
  */
 
 export const GET = async (requete: Request, contexte: { params: Promise<{ id: string }> }): Promise<Response> =>
-  lisLaStory({ requete, id: (await contexte.params).id });
+  lisLePartage({ genre: GENRE_STORY, requete, id: (await contexte.params).id });
 
 export const POST = async (requete: Request, contexte: { params: Promise<{ id: string }> }): Promise<Response> =>
-  soumetsALaStory({ requete, id: (await contexte.params).id });
+  soumetsAuPartage({ genre: GENRE_STORY, requete, id: (await contexte.params).id });
