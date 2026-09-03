@@ -11877,6 +11877,40 @@ Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artef
 décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
 l'affirmation et ce qui pourrait la démentir.
 
+### Une ABSENCE confirme une hypothèse aussi facilement qu'elle l'infirme — et alors on ne la vérifie pas
+
+Quatrième forme du même piège le 2026-09-03, et la plus retorse. Les trois
+premières me faisaient conclure *« ça n'existe pas »* ; celle-ci m'a fait
+conclure *« ça a fonctionné »*.
+
+Je vérifiais une livraison voisine : *quand un outil s'ouvre, les éléments
+permanents de la zone canonique cèdent la place*. J'ouvre l'outil texte, je
+relève l'arbre : le pied des références, le socle, la description et l'en-tête du
+son ont tous disparu. Verdict apparent : **vérifié, tout cède.**
+
+La capture d'écran dit autre chose. **Rien n'a cédé : un AUTRE écran s'est
+ouvert** — l'éditeur d'objet plein écran. Les éléments sont restés sur le
+précédent. J'avais mesuré une navigation et lu un comportement.
+
+> **Quand une absence CONTREDIT ce qu'on attend, on la creuse ; quand elle le
+> CONFIRME, on la publie.** C'est le même signal, et c'est le biais qui décide
+> de son traitement. Une absence n'est jamais une preuve à elle seule : elle dit
+> « je n'ai pas trouvé », pas « ce n'est pas là », et encore moins « ce que je
+> croyais s'est produit ».
+
+Le contrôle, ici, ne coûtait rien non plus : **regarder l'écran.** Une capture
+aurait montré le titre « ‹ 1 » et le bouton « Terminé » — deux affordances de
+NAVIGATION qui n'existent pas sur l'écran qu'on croit observer. La règle
+pratique : devant une absence qui confirme une attente, demander *« que
+verrait-on si la cause était tout autre ? »* — et se donner le moyen de le voir.
+
+Les quatre formes de la journée, pour mémoire, parce qu'elles ne se ressemblent
+pas : un `grep` sensible à la casse · un arbre d'accessibilité qui n'entre pas
+dans les conteneurs · un geste trop bref pour déclencher un glisser-fermer · une
+navigation prise pour un masquage. **Un seul et même défaut de raisonnement, sous
+quatre instruments différents** — ce qui explique qu'armer l'un n'apprenne rien
+sur les autres.
+
 ### Un outil qui n'énumère pas ce qu'il ne traverse pas rend un faux négatif en forme d'INVENTAIRE
 
 Sixième erreur de mesure du 2026-09-03, et la plus coûteuse : j'ai ouvert une issue
