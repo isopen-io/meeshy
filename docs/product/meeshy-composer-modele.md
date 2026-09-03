@@ -718,6 +718,56 @@ dit qu'il en manquait au moins un, et que son absence était invisible depuis
 l'app. La question « quel geste de l'app n'a pas son verbe ? » se pose surface
 par surface, et n'a été posée qu'une fois.
 
+## 6 quater. Qui REND ce que le composer produit (méthode et résultats, 2026-09-03)
+
+Le § 6 bis mesure où la structure d'une publication est connue ; le § 6 ter, comment
+on la modifie. Celui-ci répond à la troisième question, et c'est celle qui a rendu
+le plus : **un champ que le composer PRODUIT est-il rendu par les trois lecteurs ?**
+
+### La méthode
+
+Pour chaque champ du contrat, trois questions dans cet ordre — et l'ordre compte,
+parce que chacune peut clore l'enquête :
+
+1. **le contrat le porte-t-il ?** (`canvas-v3.ts`)
+2. **un client le PRODUIT-il ?** — sans producteur, l'absence de rendu ne gêne personne
+3. **chaque client le REND-il ?** — c'est la seule question qui décrit ce que l'utilisateur voit
+
+> Le crible par comptage de fichiers (`grep -ril <champ> | wc -l`) **repère les
+> zéros, jamais les présences.** Un `opening` compte douze fichiers côté web
+> alors que le web ne peint aucune transition de scène : `webComposerOpening`,
+> « opening tag » et le reste polluent le compte. **Un zéro mérite une enquête ;
+> un non-zéro ne prouve rien.**
+
+### Ce que la méthode a trouvé
+
+**Les transitions de scène (#5043).** `opening` / `closing` sont produites par le
+composer iOS et transportées par le contrat. iOS les REND ; Android les PROJETTE
+puis les jette (aucune vue ne les consomme) ; le web ne les rend pas et déclare
+le report avec une condition — « tant qu'aucun lecteur ne le rendra » — **qui est
+fausse depuis qu'iOS les rend**. Un auteur qui pose une ouverture « reveal » la
+voit sur un client sur trois.
+
+**Le `thumbHash` (#5047).** Le contrat le décrit comme « le placeholder que quatre
+surfaces affichent avant l'arrivée du média ». iOS et Android le peignent ; le web
+ne le connaît pas — et n'a **aucun** état de chargement dans `CanvasV3Scene`, dont
+le rendu se garde par `if (media.url && …)`. Média absent, rien n'est peint. Comme
+la passerelle refuse tout ce qui n'est pas v3, c'est le chemin de TOUTES les
+stories du web.
+
+### Ce que ces deux cas ont en commun
+
+Aucun des deux n'est une panne : rien ne casse, rien ne remonte, aucun témoin ne
+tombe. **Le contrat accepte, le client ignore, l'auteur ne sait pas.** C'est la
+forme que le Prisme a déjà payée trois fois — et elle se répète ici parce que la
+même cause est en place : **une valeur transportée sans que personne ne réponde de
+son rendu.**
+
+Un vocabulaire partagé (§ #5043) ne suffirait pas à lui seul : il ferait que les
+clients parlent de la même chose, pas qu'ils la peignent. Ce qui manque en propre
+est une matrice **champ × client × rendu**, tenue, et dont une case vide soit une
+DÉCISION écrite plutôt qu'un oubli.
+
 ## 7. Correspondance avec ce qui existe
 
 Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au fil.
