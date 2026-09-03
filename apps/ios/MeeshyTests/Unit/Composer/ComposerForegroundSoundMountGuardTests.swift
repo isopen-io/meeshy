@@ -173,14 +173,31 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// Attribution et durée sont DEUX `Text` : le premier cède la largeur, le
     /// second ne la cède jamais. Les refondre en un seul rendrait « Feel the
     /// pulse · @jcnm · 2… », ce que la vérification simulateur a mesuré.
+    ///
+    /// **Le site a changé au #5011, la règle non.** Les deux `Text` vivent
+    /// désormais dans `ComposerSoundTraceRow`, que les DEUX traces montent — la
+    /// capsule du document et la ligne nue en tête de scène. Ce témoin RE-VISE :
+    /// une garde de source ancre sur une PLACE et ne distingue pas d'elle-même
+    /// « la protection a disparu » de « la protection a déménagé ».
+    ///
+    /// Et il gagne l'assertion qui manquait : la capsule ne recompose plus la
+    /// rangée elle-même. Sans elle, le déménagement serait vert avec deux
+    /// compositions concurrentes — celle qu'on garde, et celle qu'on a oublié
+    /// de retirer.
     func test_laDureeDeLaPastille_neSeTronqueJamais() throws {
-        let badge = try source("ComposerAvatarSoundBadge.swift")
-        XCTAssertTrue(badge.contains("StoryAudioIdentity.attribution(of: sound)"),
+        let rangee = try source("ComposerSoundTraceRow.swift")
+        XCTAssertTrue(rangee.contains("StoryAudioIdentity.attribution(of: sound)"),
                       "le titre et l'auteur viennent de la moitié TRONQUABLE — et de la règle UNIQUE")
-        XCTAssertTrue(badge.contains("ComposerSoundCredit.durationLabel(for: sound)"),
+        XCTAssertTrue(rangee.contains("ComposerSoundCredit.durationLabel(for: sound)"),
                       "…et la durée de la sienne, rendue à part")
-        XCTAssertFalse(badge.contains("ComposerSoundCredit.label(for: sound)"),
+        XCTAssertFalse(rangee.contains("ComposerSoundCredit.label(for: sound)"),
                        "le libellé COMPLET dans un seul `Text` est exactement ce qui tronquait la durée")
+
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertTrue(badge.contains("ComposerSoundTraceRow("),
+                      "la capsule MONTE la rangée partagée")
+        XCTAssertFalse(badge.contains("ComposerSoundCredit.durationLabel(for: sound)"),
+                       "…et ne recompose pas la sienne à côté — deux compositions divergeraient")
     }
 
     /// **L'onde ne se peint que pour un ENREGISTREMENT** (fusion 2026-09-01).
@@ -194,18 +211,39 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// Et la NOTE reste hors de toute condition : c'est elle qui porte le
     /// toucher qui ouvre « Création audio ». La conditionner retirerait le seul
     /// chemin vers l'éditeur pour la moitié des pistes.
+    /// **Re-visé au #5011, et la garde en dit PLUS qu'avant** — parce que la
+    /// règle a gagné une exception, et qu'une exception non bordée est une règle
+    /// perdue.
+    ///
+    /// La ligne en tête de scène garde l'onde même pour un son EMPRUNTÉ : la
+    /// contrainte de #4669 était la PLACE dans une capsule, et elle disparaît en
+    /// pleine largeur. Trois choses doivent donc rester vraies, et la troisième
+    /// est celle que le déménagement rendait facile à perdre :
+    ///
+    /// 1. la rangée CONSULTE toujours `StoryAudioIdentity.showsWaveform` — la
+    ///    règle n'est jamais court-circuitée, seulement élargie ;
+    /// 2. l'élargissement porte un NOM explicite, jamais un booléen anonyme ;
+    /// 3. **la capsule du document ne s'en sert pas** — #4669 tient là où la
+    ///    place manque, et c'est le seul endroit où la nouvelle liberté ferait
+    ///    disparaître le crédit d'un auteur.
     func test_lOnde_estCONDITIONNÉE_maisJamaisLaNote() throws {
-        let badge = try source("ComposerAvatarSoundBadge.swift")
-        guard let capsule = corps("private var capsule: some View {", dans: badge) else {
-            return XCTFail("`capsule` introuvable — la garde ne mesurerait rien.")
+        let rangee = try source("ComposerSoundTraceRow.swift")
+        XCTAssertTrue(rangee.contains("StoryAudioIdentity.showsWaveform(for: sound)"),
+                      "l'onde doit rester posée SOUS la règle, pas à côté d'elle")
+        XCTAssertTrue(rangee.contains("showsWaveformEvenWhenBorrowed"),
+                      "l'élargissement doit être NOMMÉ — un booléen anonyme se recopie sans sa raison")
+        guard let corpsRangee = corps("var body: some View {", dans: rangee) else {
+            return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
         }
-        XCTAssertTrue(capsule.contains("if StoryAudioIdentity.showsWaveform(for: sound) {"),
-                      "l'onde doit être posée SOUS la règle, pas à côté d'elle")
-        guard let avantOnde = capsule.components(separatedBy: "if StoryAudioIdentity.showsWaveform").first else {
+        guard let avantOnde = corpsRangee.components(separatedBy: "if showsWaveform").first else {
             return XCTFail("découpe impossible")
         }
         XCTAssertTrue(avantOnde.contains("Image(systemName: \"music.note\")"),
                       "la note se peint AVANT toute condition — elle porte le toucher qui édite")
+
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertFalse(badge.contains("showsWaveformEvenWhenBorrowed"),
+                       "la capsule du document garde #4669 : l'onde y prendrait la place du crédit")
     }
 
     /// **Poser un son en FOND passe par le remplacement, jamais en direct**

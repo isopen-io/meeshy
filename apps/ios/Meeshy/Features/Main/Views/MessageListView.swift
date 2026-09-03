@@ -447,6 +447,18 @@ struct MessageListView: UIViewControllerRepresentable {
     /// message is never hidden behind the composer/keyboard.
     /// Pass the composer height here.
     var bottomInset: CGFloat = 0
+    /// La façon dont `bottomInset` REJOINT sa nouvelle valeur (#4949).
+    ///
+    /// `nil` = pose sèche, à l'ancienne. Non-nil quand le parent sait quelle
+    /// animation est en train de jouer — typiquement la courbe et la durée
+    /// que le clavier vient d'annoncer (`KeyboardTransition`) : le fil et la
+    /// barre de composition arrivent alors ENSEMBLE, au lieu que l'un glisse
+    /// pendant que l'autre se téléporte.
+    ///
+    /// Déclaré ICI, avec les autres valeurs de configuration (cf.
+    /// `isHeaderExpanded`) : l'init memberwise impose l'ordre de déclaration
+    /// aux call sites.
+    var bottomInsetTransition: ListInsetTransition? = nil
     /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre :
     /// le parent l'étend sous la safe area haute pour que les bulles défilent
     /// jusqu'au bord de l'écran, et lui passe ici l'inset réel de la fenêtre
@@ -654,6 +666,9 @@ struct MessageListView: UIViewControllerRepresentable {
         }
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
+        // Le MONTAGE reste sec : animer un inset depuis 0 sur un contrôleur
+        // qui vient de naître ferait glisser le fil à chaque ouverture de
+        // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
         vc.applyTopInset(topInset)
         return vc
@@ -765,7 +780,10 @@ struct MessageListView: UIViewControllerRepresentable {
         }
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
-        vc.applyBottomInset(bottomInset)
+        // #4949 — la réserve basse rejoint sa valeur SUR la courbe de ce qui
+        // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.
+        // `transition == nil` retombe mot pour mot sur la pose sèche.
+        vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
         vc.applyTopInset(topInset)
     }
 

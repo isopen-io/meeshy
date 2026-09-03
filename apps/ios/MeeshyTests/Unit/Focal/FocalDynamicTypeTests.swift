@@ -155,23 +155,36 @@ final class FocalDynamicTypeTests: XCTestCase {
         )
     }
 
-    // MARK: - Branche 7 : réponse citée — POLITIQUE DOCUMENTÉE (troncature volontaire)
+    // MARK: - Branche 7 : réponse citée — POLITIQUE DOCUMENTÉE, budget PARTAGÉ (#4946)
 
-    /// `FocalQuotedReplyView` tronque volontairement le TITRE et l'APERÇU de
-    /// la citation à UNE ligne (`.lineLimit(1)`) — politique explicite du
-    /// contrat (comportement F09 de la matrice : « une ligne tronquée
-    /// (11.5) au retrait 29 »), pas un oubli. Cette garde affirme la
-    /// PRÉSENCE du `.lineLimit(1)`, à l'inverse des branches précédentes —
-    /// c'est la preuve attendue ici.
-    func test_quotedReply_lineLimitOneIsDocumentedPolicy_notAnOmission() throws {
+    /// `FocalQuotedReplyView` tronque volontairement : le TITRE et la ligne de
+    /// DÉTAILS à une ligne (`QuotedReplyPresentation.titleLineLimit`), l'APERÇU
+    /// au budget de la peau plate (`previewLineLimit(for: .focal)` — deux
+    /// lignes depuis #4946 ; une seule coupait la moitié des citations à
+    /// mi-phrase). Politique explicite, pas un oubli — et elle ne s'ÉPELLE
+    /// plus sur place : le budget vient de la règle partagée des trois peaux,
+    /// et aucun `.lineLimit(1)` littéral ne subsiste (la peau bulle est tenue à
+    /// la même interdiction par `BubbleQuotedReplyThumbHashGuardTests`). Le
+    /// comportement F09 de la matrice (« ligne tronquée ») se lit à la règle,
+    /// où il vit désormais.
+    func test_quotedReply_lineBudgetComesFromTheSharedRule_notALiteral() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalQuotedReplyView.swift"))
-        let occurrences = code.components(separatedBy: ".lineLimit(1)").count - 1
+        func occurrences(of needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
+
         XCTAssertEqual(
-            occurrences, 2,
-            "FocalQuotedReplyView.swift doit tronquer EXACTEMENT deux éléments à une ligne (titre + " +
-            "aperçu) — comportement F09 documenté de la matrice (« une ligne tronquée »), pas une " +
-            "troncature accidentelle supplémentaire ni une régression qui l'aurait retirée."
+            occurrences(of: ".lineLimit(1)"), 0,
+            "FocalQuotedReplyView.swift épelle un budget de lignes sur place : il vient de `QuotedReplyPresentation`."
         )
+        XCTAssertEqual(
+            occurrences(of: ".lineLimit(QuotedReplyPresentation.titleLineLimit)"), 2,
+            "Le titre et la ligne de détails tiennent chacun sur UNE ligne — deux éléments, ni plus ni moins."
+        )
+        XCTAssertEqual(
+            occurrences(of: ".lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))"), 1,
+            "L'aperçu prend le budget de la peau plate, et lui seul."
+        )
+        XCTAssertEqual(QuotedReplyPresentation.titleLineLimit, 1)
+        XCTAssertEqual(QuotedReplyPresentation.previewLineLimit(for: .focal), 2)
     }
 
     // MARK: - Branche 8 : notice d'appel

@@ -24,8 +24,18 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
+/// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
+/// transcription. Le prédicat ET la composition de ce qui est SERVI vivent au
+/// site unique `servedQuotedMessage`, partagé avec les deux producteurs de
+/// `message:new` : la garde ne retenait ici que les traductions pendant que
+/// `...message.replyTo` répandait le texte et qu'`attachmentFullSelect`
+/// servait le média (leçon 275 — une garde se mesure sur tout ce que la charge
+/// TRANSPORTE).
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -282,10 +292,21 @@ export function buildMessageListSelect(options: {
             effectFlags: true,
             isEncrypted: true,
             encryptionMode: true,
+            // Le TYPE porte l'icône du placeholder servi à un message protégé
+            // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
+            // masquée se lit « 👁️ 💬 », quel que soit son média.
+            messageType: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
             metadata: true,
+            // #4945 — la citation descend le Prisme au CHARGEMENT comme à
+            // l'arrivée en direct : le fil socket `include` la ligne entière
+            // (`translations` compris) quand ce select nommé ne le demandait
+            // pas, et un lecteur francophone lisait la même citation en anglais
+            // après un rechargement et en français en temps réel. Même garde
+            // que la racine : le client qui n'en veut pas ne les paie pas.
+            ...(includeTranslations ? { translations: true } : {}),
             sender: {
               select: {
                 id: true,
@@ -637,6 +658,16 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
+            // #4945 — même projection JSON → tableau que la racine, même filtre
+            // de langues ; sans elle le blob Prisma brut voyagerait sous un
+            // nom que les clients lisent comme un tableau. Et le TEXTE et le
+            // MÉDIA de la citation passent par la même garde que ses
+            // traductions : ils sont étalés APRÈS `...message.replyTo`, donc
+            // ils la remplacent.
+            ...servedQuotedMessage(message.replyTo, {
+              includeTranslations,
+              languages: hasLanguageFilter ? languageFilter : undefined,
+            }),
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,

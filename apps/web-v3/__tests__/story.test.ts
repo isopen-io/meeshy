@@ -392,7 +392,12 @@ describe('la porte de la story', () => {
 
   it('sert la story au lecteur connecté, dans sa langue', async () => {
     const monde = passerelle(MONDE);
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
+    const reponse = await lisLaStory({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: monde.recuperer,
+      maintenant: MAINTENANT,
+    });
 
     expect(reponse.status).toBe(200);
     expect(reponse.headers.get('x-robots-tag')).toBe('noindex, nofollow');
@@ -484,6 +489,7 @@ describe('ce qu’un formulaire de la story fait', () => {
       requete: soumission('/stories/s1', { reponse: 'Bravo' }),
       id: 's1',
       recuperer: monde.recuperer,
+      maintenant: MAINTENANT,
     });
 
     expect(reponse.status).toBe(400);

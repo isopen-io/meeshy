@@ -197,6 +197,16 @@ export const messageSchema = {
         createdAt: { type: 'string', format: 'date-time' },
         senderId: { type: 'string', nullable: true },
         validatedMentions: { type: 'array', items: { type: 'string' } },
+        // #4945 — la citation descend le Prisme au chargement comme en direct :
+        // la route projette `replyTo.translations` (même tableau que la racine)
+        // et, sans cette déclaration, fast-json-stringify la strippait en
+        // silence — le select et le mapping étaient justes, le fil restait vide.
+        translations: {
+          type: 'array',
+          nullable: true,
+          items: messageTranslationSchema,
+          description: 'Traductions du message cité (absentes quand il est protégé)'
+        },
         // La protection du message CITÉ, au niveau MESSAGE — jumelle de celle
         // que la copie inline déclare déjà sur ses `attachments`
         // (`reply-attachment-protection-contract`). Le défaut est le même une
