@@ -45,3 +45,59 @@ final class ComposerEdgeBackGestureTests: XCTestCase {
             startX: 8, translation: CGSize(width: -120, height: 0)))
     }
 }
+
+/// #5027 — **le glissement BAS rend l'écran à la scène.**
+///
+/// > « Le swipe bas doit tout cacher, même l'outil activé à l'instant doit se
+/// > désactiver pour laisser pleine place à la scène. » — porteur, 2026-09-03
+///
+/// Ces témoins portent sur ce que la règle REFUSE, comme ceux du bord : le
+/// geste replie le panneau qu'on est en train de lire, donc chaque faux positif
+/// se paie par un réglage qui disparaît sous les doigts.
+final class ComposerObjectEditorDismissGestureTests: XCTestCase {
+
+    func test_unGlissementFranchementBas_rendLÉcran() {
+        XCTAssertTrue(ComposerObjectEditorDismissGesture.completes(
+            translation: CGSize(width: 5, height: 140)))
+    }
+
+    /// Un frôlement n'est pas une intention. Le seuil est plus généreux que
+    /// celui du bord (70 contre 60) : ce geste part du corps de l'écran, où la
+    /// main a plus de course.
+    func test_unGlissementTropCourt_neRendRien() {
+        XCTAssertFalse(ComposerObjectEditorDismissGesture.completes(
+            translation: CGSize(width: 0, height: 40)))
+    }
+
+    /// **Le cas que le seuil vertical seul laisse passer** : la rangée
+    /// d'options défile à l'HORIZONTALE (les dix-huit polices, les fonds), et
+    /// le plan 2D panne. Sans la dominance, tout balayage un peu penché
+    /// replierait le panneau en cours de lecture.
+    func test_unBalayageHorizontalPenché_neRendRien() {
+        XCTAssertFalse(ComposerObjectEditorDismissGesture.completes(
+            translation: CGSize(width: 200, height: 90)))
+    }
+
+    /// Vers le HAUT, jamais : c'est le geste par lequel on ouvre, pas celui
+    /// par lequel on range.
+    func test_unGlissementVersLeHaut_neRendRien() {
+        XCTAssertFalse(ComposerObjectEditorDismissGesture.completes(
+            translation: CGSize(width: 0, height: -140)))
+    }
+
+    /// **Les deux gestes de cet écran ne se recouvrent pas.** Le retour part du
+    /// bord et va vers l'avant ; le repli va vers le bas. Un geste diagonal
+    /// depuis le bord ne doit pas déclencher les deux — c'est la dominance,
+    /// dans chacune des deux règles, qui l'en empêche.
+    func test_lesDeuxGestes_neSeRecouvrentJamais() {
+        let diagonales = [CGSize(width: 120, height: 130),
+                          CGSize(width: 130, height: 120),
+                          CGSize(width: 100, height: 100)]
+        for d in diagonales {
+            let retour = ComposerEdgeBackGesture.completes(startX: 4, translation: d)
+            let repli = ComposerObjectEditorDismissGesture.completes(translation: d)
+            XCTAssertFalse(retour && repli,
+                           "\(d) déclenche les DEUX gestes — l'écran se fermerait en se repliant")
+        }
+    }
+}
