@@ -11973,6 +11973,34 @@ navigation prise pour un masquage. **Un seul et même défaut de raisonnement, s
 quatre instruments différents** — ce qui explique qu'armer l'un n'apprenne rien
 sur les autres.
 
+### Un extracteur borné par un NOMBRE DE LIGNES ne connaît pas les bornes de ce qu'il extrait
+
+En comparant `CreatePostRequest` entre Swift et Kotlin, j'ai compté **17** champs
+côté Kotlin et signalé six champs « présents chez Kotlin seul ». **Cinq
+n'existaient pas dans cette classe** : `grep -A 30` avait débordé sur la classe
+voisine, une charge de transcription. Le vrai chiffre est 12.
+
+Ce qui rend l'erreur dangereuse est la **plausibilité du résultat** : des noms de
+champs bien formés, dans le bon fichier, dans le bon langage. Rien, dans ce que
+l'extracteur rend, ne dit qu'il a franchi une frontière — contrairement à un
+`grep` vide, qui au moins signale qu'on n'a rien trouvé.
+
+> **Borner par la SYNTAXE, jamais par une distance.** Une classe Kotlin s'arrête
+> à sa parenthèse fermante en début de ligne ; une `struct` Swift à la déclaration
+> de haut niveau suivante. Un `-A <n>` est une supposition sur la taille de ce
+> qu'on lit, et cette supposition n'est vérifiée par personne.
+
+Le contrôle qui l'attrape est le même que pour les autres pièges de la journée, et
+il est ici presque gratuit : **le résultat contient-il quelque chose qui n'a rien
+à faire là ?** `confidence`, `durationMs`, `segments` dans un corps de requête de
+publication — les mots eux-mêmes disaient qu'ils venaient d'ailleurs. J'avais la
+réponse sous les yeux avant d'avoir la mesure.
+
+Parenté : c'est la variante « faux POSITIF » des leçons voisines, qui portent
+toutes sur des faux négatifs. Un instrument mal borné peut aussi bien inventer
+que rater — et l'invention est plus difficile à soupçonner, parce qu'elle donne
+quelque chose à voir.
+
 ### Un outil qui n'énumère pas ce qu'il ne traverse pas rend un faux négatif en forme d'INVENTAIRE
 
 Sixième erreur de mesure du 2026-09-03, et la plus coûteuse : j'ai ouvert une issue
