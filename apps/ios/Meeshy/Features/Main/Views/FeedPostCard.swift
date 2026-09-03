@@ -718,6 +718,13 @@ struct FeedPostCard: View {
                 allAttachments: attachments,
                 startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                 accentColor: accentColor,
+                // #4934 — le plein écran garde la bascule de langue que la
+                // carte offre : `captionServings` porte le texte ET ses
+                // alternatives, `captionMap` reste servi pour les appelants qui
+                // n'ont rien à basculer.
+                captionServings: SocialMediaCaption.serving(
+                    for: post.media, carrier: .from(post: post)
+                ),
                 captionMap: SocialMediaCaption.map(
                     for: post.media, carrierText: post.displayContent
                 ),

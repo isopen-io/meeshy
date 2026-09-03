@@ -61,6 +61,40 @@ nonisolated struct SocialCarrierText {
     let byLanguage: [String: String]
 
     static let none = SocialCarrierText(served: "", byLanguage: [:])
+
+    /// **Depuis un POST — le seul porteur qui transporte ses traductions.**
+    ///
+    /// `FeedPost.translations` est une carte `langue → texte` complète, et
+    /// `content` + `originalLanguage` en fournissent la clé manquante : celle de
+    /// l'original, qui n'est jamais dans la carte des traductions.
+    ///
+    /// Sans `originalLanguage`, l'original n'entre PAS dans la carte : une
+    /// entrée sous une clé inventée serait un drapeau qui ment sur ce qu'il
+    /// sert. Mieux vaut une bascule qui ignore l'original qu'une bascule qui
+    /// l'étiquette au hasard.
+    static func from(post: FeedPost) -> SocialCarrierText {
+        var carte = (post.translations ?? [:]).mapValues(\.text)
+        if let origine = post.originalLanguage?.lowercased(), !origine.isEmpty {
+            carte[origine] = post.content
+        }
+        return SocialCarrierText(served: post.displayContent, byLanguage: carte)
+    }
+
+    /// **Un COMMENTAIRE n'offre AUCUNE bascule, et ce n'est pas un oubli.**
+    ///
+    /// `FeedComment` ne transporte pas de carte de traductions : il porte
+    /// `content`, `translatedContent` et `originalLanguage` — c'est-à-dire le
+    /// texte d'ORIGINE et le texte SERVI, sans jamais dire dans quelle langue ce
+    /// dernier est écrit. Le fil ne permet donc pas de nommer la seconde langue,
+    /// et un drapeau sans nom sûr est un drapeau qui ment.
+    ///
+    /// > La bascule d'un commentaire n'est pas « à faire côté client » : elle
+    /// > demande que le fil transporte `translations`, comme le post. Tant que
+    /// > ce n'est pas le cas, la déclarer impossible est plus honnête que de
+    /// > deviner la langue du texte servi.
+    static func from(comment: FeedComment) -> SocialCarrierText {
+        SocialCarrierText(served: comment.displayContent, byLanguage: [:])
+    }
 }
 
 /// **Ce qu'une légende de plein écran SERT, et ce qu'elle pourrait servir**

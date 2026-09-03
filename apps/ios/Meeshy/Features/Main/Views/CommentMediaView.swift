@@ -321,6 +321,19 @@ struct CommentMediaView: View {
 
     // MARK: - Fullscreen
 
+    /// **Aucune bascule de langue ici, et ce n'est PAS un oubli** (#4934).
+    ///
+    /// Le plein écran d'un média de POST offre les langues de son porteur ; un
+    /// commentaire n'en offre aucune, parce que `FeedComment` ne transporte pas
+    /// de carte de traductions — il porte le texte d'ORIGINE et le texte SERVI,
+    /// sans jamais dire dans quelle langue ce dernier est écrit. Nommer la
+    /// seconde langue demanderait de la deviner, et un drapeau sans nom sûr est
+    /// un drapeau qui ment.
+    ///
+    /// La galerie retombe donc sur `captionMap` et ne peint aucune rangée — le
+    /// comportement juste. `SocialCarrierText.from(comment:)` porte la raison en
+    /// entier.
+
     /// Galerie de CE média seul — repli quand l'hôte n'a pas déclaré la liste des
     /// commentaires (`.commentMediaGallery(_:)`), ou quand ce média n'y figure
     /// pas encore (commentaire tout juste envoyé, média arrivé par

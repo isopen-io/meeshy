@@ -122,3 +122,68 @@ final class SocialMediaCaptionServingTests: XCTestCase {
                       "sans le texte servi parmi les alternatives, on ne peut pas y revenir")
     }
 }
+
+/// **D'où viennent les langues d'un porteur** (#4934).
+///
+/// La bascule n'existe que si le fil transporte de quoi NOMMER chaque langue.
+/// Un post le fait ; un commentaire non — et le déclarer vaut mieux que de
+/// deviner la langue du texte servi.
+final class SocialCarrierTextOriginTests: XCTestCase {
+
+    private func post(content: String,
+                      original: String?,
+                      translations: [String: String],
+                      translated: String? = nil) -> FeedPost {
+        FeedPost(id: "p1", author: "alice", authorId: "a1", content: content,
+                 timestamp: Date(), originalLanguage: original,
+                 translations: translations.mapValues { PostTranslation(text: $0) },
+                 translatedContent: translated)
+    }
+
+    func test_unPost_offreSesTraductionsETsonORIGINAL() {
+        let carrier = SocialCarrierText.from(post: post(
+            content: "Le quai", original: "fr",
+            translations: ["en": "The quay"], translated: "The quay"
+        ))
+        XCTAssertEqual(carrier.served, "The quay", "le texte servi est celui du Prisme")
+        XCTAssertEqual(carrier.byLanguage["fr"], "Le quai", "l'original n'est JAMAIS dans translations")
+        XCTAssertEqual(carrier.byLanguage["en"], "The quay")
+        XCTAssertEqual(carrier.byLanguage.count, 2)
+    }
+
+    /// **Sans langue d'origine, l'original n'entre PAS dans la carte.** Une
+    /// entrée sous une clé inventée serait un drapeau qui ment sur ce qu'il
+    /// sert — mieux vaut une bascule qui ignore l'original qu'une bascule qui
+    /// l'étiquette au hasard.
+    func test_sansLangueDorigine_lOriginalNEstPasEtiquete() {
+        let carrier = SocialCarrierText.from(post: post(
+            content: "Le quai", original: nil, translations: ["en": "The quay"]
+        ))
+        XCTAssertEqual(carrier.byLanguage, ["en": "The quay"])
+    }
+
+    func test_unPostSansTraduction_nOffreQueSaPropreLangue() {
+        let carrier = SocialCarrierText.from(post: post(
+            content: "Le quai", original: "fr", translations: [:]
+        ))
+        XCTAssertEqual(carrier.byLanguage, ["fr": "Le quai"])
+        let servi = SocialMediaCaption.serving(
+            for: [FeedMedia(id: "m1", type: .image, url: "u")], carrier: carrier
+        )
+        XCTAssertTrue(servi["m1"]?.alternatives.isEmpty == true,
+                      "une seule langue ⇒ aucune bascule")
+    }
+
+    /// Un COMMENTAIRE n'offre aucune langue : le fil ne dit pas dans quelle
+    /// langue son `translatedContent` est écrit.
+    func test_unCommentaire_nOffreAucuneLangue() {
+        let commentaire = FeedComment(
+            id: "c1", author: "bob", authorId: "b1", content: "Bonjour",
+            timestamp: Date(), originalLanguage: "fr", translatedContent: "Hello"
+        )
+        let carrier = SocialCarrierText.from(comment: commentaire)
+        XCTAssertEqual(carrier.served, "Hello")
+        XCTAssertTrue(carrier.byLanguage.isEmpty,
+                      "nommer la langue de « Hello » demanderait de la deviner")
+    }
+}
