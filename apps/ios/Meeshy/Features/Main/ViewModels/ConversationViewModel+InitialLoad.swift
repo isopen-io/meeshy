@@ -32,30 +32,71 @@ extension ConversationViewModel {
 
     // MARK: - Load Messages (initial)
 
+    /// L'OUVERTURE — le seul point d'entrée du `.task` de la vue.
     func loadMessages() async {
+        await loadMessages(force: false)
+    }
+
+    /// - Parameter force: rejoue le chargement d'ouverture même si une fenêtre
+    ///   a déjà été peinte. Réservé à un rafraîchissement EXPLICITE de
+    ///   l'utilisateur ; la revalidation ordinaire passe par
+    ///   `refreshMessagesFromAPI()` / `syncMissedMessages()`, qui ne relisent
+    ///   ni l'outbox ni le cache d'ouverture.
+    func loadMessages(force: Bool) async {
         guard !isLoadingInitial else { return }
+        // IDEMPOTENCE de l'ouverture (#4943). Le `.task` d'une vue SwiftUI est
+        // rejoué à chaque ré-apparition de l'écran (retour d'arrière-plan,
+        // re-présentation d'une destination de navigation) : sans garde, tout
+        // le chargement initial — réconciliations outbox, drain NSE, lecture de
+        // cache, lecture de fenêtre, revalidation REST — repartait de zéro
+        // alors que la liste était déjà peinte, et la re-disposait.
+        //
+        // La garde ne verrouille que le SUCCÈS : une ouverture qui n'a RIEN
+        // donné (GRDB froid + réseau KO) reste rejouable au réveil suivant,
+        // sans quoi une conversation ouverte hors ligne resterait vide jusqu'à
+        // sa destruction. `force` reste la porte du rafraîchissement explicite.
+        guard force || !hasLoadedInitialMessages else { return }
         isLoadingInitial = true
         error = nil
 
-        // Réconcilie les messages bloqués en .sending/.queued dont le record
-        // outbox est épuisé → .failed. Couvre le cas « conversation rouverte
-        // après épuisement des tentatives » : la bulle affiche alors la barre
-        // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
-        await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
-        // Et les lignes optimistes ORPHELINES (process tué / Task annulée
-        // entre l'insert optimiste et serverAck/sendFailed, AUCUN outbox
-        // vivant pour les rejouer) : sans ça l'horloge `.sending` réapparaît
-        // à chaque réouverture, pour toujours.
-        await messagePersistence.reconcileOrphanedSendingRows(conversationId: conversationId)
-
-        // Drain any push-prefetched messages the NSE wrote to the App Group
-        // BEFORE reading the GRDB snapshot. A message received while the app
-        // was backgrounded (the "j'ai reçu la notif" case) is otherwise only
-        // merged on `resumeFromBackground`, never on the conversation-open
-        // path — so it stayed absent from the thread until a network refresh.
-        // `consumeAll` now persists synchronously (awaited upsert), so the
-        // snapshot below picks the message up locally — no REST round-trip.
-        await NSEPendingMessageConsumer.shared.consumeAll()
+        // Les trois réconciliations qui précèdent la lecture, en PARALLÈLE
+        // (#4943, D-OPEN-02). Elles doivent toutes précéder l'instantané —
+        // sinon la fenêtre lue ne porterait ni les états rectifiés ni les
+        // messages poussés pendant l'absence — mais AUCUNE ne lit ce qu'une
+        // autre écrit : `consumeAll` n'insère que des lignes SERVEUR (avec
+        // `serverId`, état `.sent`/`.delivered`), jamais une ligne
+        // `.sending`/`.queued` sans `serverId` que la réconciliation des
+        // orphelines devrait voir ; et les deux réconciliations filtrent des
+        // ensembles disjoints (outbox `.exhausted` d'un côté, absence d'outbox
+        // vivant de l'autre) vers le MÊME état terminal `.failed`, donc leur
+        // ordre relatif est sans effet. Ce qui se recouvre : les deux écritures
+        // de l'acteur de persistance et les allers-retours du drain NSE (upsert
+        // de cache, commit GRDB attendu), là où la version sérielle payait
+        // trois attentes bout à bout avant la moindre ligne à l'écran.
+        //
+        // 1. Les messages bloqués en .sending/.queued dont le record outbox est
+        //    épuisé → .failed. Couvre le cas « conversation rouverte après
+        //    épuisement des tentatives » : la bulle affiche alors la barre
+        //    « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
+        async let failedReconciled: Void =
+            messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
+        // 2. Les lignes optimistes ORPHELINES (process tué / Task annulée
+        //    entre l'insert optimiste et serverAck/sendFailed, AUCUN outbox
+        //    vivant pour les rejouer) : sans ça l'horloge `.sending` réapparaît
+        //    à chaque réouverture, pour toujours.
+        async let orphansReconciled: Void =
+            messagePersistence.reconcileOrphanedSendingRows(conversationId: conversationId)
+        // 3. Drain any push-prefetched messages the NSE wrote to the App Group
+        //    BEFORE reading the GRDB snapshot. A message received while the app
+        //    was backgrounded (the "j'ai reçu la notif" case) is otherwise only
+        //    merged on `resumeFromBackground`, never on the conversation-open
+        //    path — so it stayed absent from the thread until a network refresh.
+        //    `consumeAll` persists synchronously (awaited upsert), so the
+        //    snapshot below picks the message up locally — no REST round-trip.
+        async let nsePendingDrained: Void = NSEPendingMessageConsumer.shared.consumeAll()
+        await failedReconciled
+        await orphansReconciled
+        await nsePendingDrained
 
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
@@ -172,6 +213,10 @@ extension ConversationViewModel {
         // Prefetch media for visible messages
         prefetchRecentMedia()
 
+        // Ferme la porte de l'ouverture — mais seulement si elle a donné une
+        // fenêtre. Cf. la garde en tête de méthode : un chargement stérile
+        // reste rejouable.
+        hasLoadedInitialMessages = !messageStore.messages.isEmpty
         isLoadingInitial = false
     }
 
@@ -195,7 +240,12 @@ extension ConversationViewModel {
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
+            // `preferredLanguages` : le prisme ORDONNÉ du lecteur, par lequel la
+            // CITATION gravée dans la ligne descend le Prisme (#4945). Vide, la
+            // citation retomberait sur l'original alors que la traduction existe.
+            try? await messagePersistence.upsertFromAPIMessages(
+                response.data, preferredLanguages: preferredLanguages
+            )
             hasCompletedInitialFetch = true
             // Extrait transcriptions/traductions AVANT que les messages ne
             // soient surface : `messageTranscriptions` est prêt au premier
@@ -333,7 +383,13 @@ extension ConversationViewModel {
             // independent — race them so the slower path (network-bound
             // GRDB on a background actor) doesn't gate the legacy cache
             // coherence path that the unread badge / preview rely on.
-            async let persistTask: Void? = try? messagePersistence.upsertFromAPIMessages(response.data)
+            // Le prisme est LU sur le MainActor avant la tâche fille : c'est une
+            // valeur (`[String]`, Sendable), pas un accès au modèle depuis
+            // l'enfant. Cf. le doc-comment de `upsertFromAPIMessages`.
+            let readerPrism = preferredLanguages
+            async let persistTask: Void? = try? messagePersistence.upsertFromAPIMessages(
+                response.data, preferredLanguages: readerPrism
+            )
             async let olderProcessedTask = processAPIMessages(response.data)
             _ = await persistTask
             let olderProcessed = await olderProcessedTask
@@ -458,16 +514,24 @@ extension ConversationViewModel {
             guard !collected.isEmpty else { return }
 
             // Upsert backfilled messages to GRDB; store observation surfaces them automatically.
-            try? await messagePersistence.upsertFromAPIMessages(collected)
+            try? await messagePersistence.upsertFromAPIMessages(
+                collected, preferredLanguages: preferredLanguages
+            )
             extractAttachmentTranscriptions(from: collected)
             extractTextTranslations(from: collected)
 
             let userId = currentUserId
             let username = currentUsername
+            let readerPrism = preferredLanguages
             // `listAfter` already returns ascending — no reversal needed (unlike the old DESC `list`).
             // Map off the main actor (see processAPIMessages) — `toMessage` decode is CPU-bound.
             let fetchedMessages = await Task.detached(priority: .utility) {
-                collected.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+                collected.map {
+                    $0.toMessage(
+                        currentUserId: userId, currentUsername: username,
+                        preferredLanguages: readerPrism
+                    )
+                }
             }.value
             let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
 
@@ -530,7 +594,9 @@ extension ConversationViewModel {
                 )
                 guard !response.data.isEmpty else { continue }
 
-                try? await messagePersistence.upsertFromAPIMessages(response.data)
+                try? await messagePersistence.upsertFromAPIMessages(
+                    response.data, preferredLanguages: preferredLanguages
+                )
                 extractAttachmentTranscriptions(from: response.data)
                 extractTextTranslations(from: response.data)
                 covered.formUnion(response.data.map(\.id))

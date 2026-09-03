@@ -123,8 +123,13 @@ extension ConversationViewModel {
     // MARK: - Activation (start)
 
     /// Activates the conversation: registers the GRDB window observation,
-    /// kicks off the initial DB load, wires every Combine subscription, and
-    /// declares the conversation as currently-open on the sync engine.
+    /// wires every Combine subscription, and declares the conversation as
+    /// currently-open on the sync engine.
+    ///
+    /// Il n'ARME que — il ne LIT pas. La première lecture de fenêtre appartient
+    /// à `loadMessages()`, que le `.task` de la vue enchaîne juste après
+    /// (#4943) ; ce doc-comment annonçait encore le `Task { await
+    /// messageStore.loadInitial() }` que ce lot a retiré.
     ///
     /// CRITICAL — this MUST NOT run from `init`. `ConversationView` is
     /// reconstructed by SwiftUI on every parent re-evaluation (RootView's
@@ -169,8 +174,21 @@ extension ConversationViewModel {
         // — so the throwaway VMs SwiftUI allocates on every parent
         // re-evaluation never fire them (only the installed VM runs start()).
         socketHandler?.activate()
+        // OBSERVER, oui — LIRE, non. La première lecture de fenêtre appartient
+        // à `loadMessages()`, que le `.task` de la vue enchaîne juste après
+        // `start()` (#4943, D-OPEN-01). Un `Task { await
+        // messageStore.loadInitial() }` vivait ici : non attendu, il courait
+        // en parallèle de `loadMessages()`, qui relit la MÊME fenêtre — deux
+        // lectures SQLite et deux à trois re-dispositions de la liste dans la
+        // seconde suivant le tap, pour un contenu identique.
+        //
+        // Et l'ordre n'est pas une préférence de style : `loadMessages()` doit
+        // lire APRÈS avoir drainé les messages pré-récupérés par la NSE et
+        // réconcilié les lignes d'envoi orphelines. Une lecture lancée ici les
+        // manquerait toutes, puis publierait une fenêtre incomplète AVANT que
+        // les traductions ne soient hydratées — le contraire de la publication
+        // atomique que `loadInitialSnapshot` + `apply` construisent.
         messageStore.startObserving(dbPool: startupDependencies.dbPool)
-        Task { await messageStore.loadInitial() }
         messagesPersistCancellable = $messages
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)

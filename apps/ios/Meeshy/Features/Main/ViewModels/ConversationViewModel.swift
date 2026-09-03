@@ -673,6 +673,16 @@ class ConversationViewModel: ObservableObject {
     /// une extension Swift ne peut pas déclarer de propriété stockée.
     var hasCompletedInitialFetch = false
 
+    /// Le pendant de `hasStarted` pour l'OUVERTURE (#4943). Le `.task` d'une
+    /// vue SwiftUI est rejoué à chaque ré-apparition de l'écran ; `start()`
+    /// s'en protégeait, `loadMessages()` non — et tout le chargement initial
+    /// repartait alors que la liste était déjà peinte. Posée à `true`
+    /// UNIQUEMENT quand l'ouverture a produit une fenêtre : un chargement
+    /// stérile (GRDB froid + réseau KO) doit rester rejouable au réveil.
+    /// Stockée ici et non dans l'extension qui la pilote (`ConversationViewModel+InitialLoad.swift`) :
+    /// une extension Swift ne peut pas déclarer de propriété stockée.
+    var hasLoadedInitialMessages = false
+
     // MARK: - Media Prefetch (delegated to ConversationMediaHandler)
 
     /// Stockée ici et non dans l'extension qui la pilote (`ConversationViewModel+Lifecycle.swift`) :

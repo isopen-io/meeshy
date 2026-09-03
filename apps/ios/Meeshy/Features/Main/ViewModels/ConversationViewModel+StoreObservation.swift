@@ -138,6 +138,9 @@ extension ConversationViewModel {
                     let needsDecryption = self.isDirect
                         && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
                     guard needsDecryption else {
+                        // Même slice, aucun `await` entre les deux : les
+                        // métadonnées suivent l'id que la bulle vient de prendre.
+                        self.rekeyLocalAudioMetadataToServerIds()
                         self.messages = self.mergeIntoMessages(mapped)
                         return
                     }
@@ -147,10 +150,47 @@ extension ConversationViewModel {
                         await self.decryptMessagesIfNeeded(&decrypted)
                         // Drop a stale decrypt that lost the race to a newer refresh.
                         guard generation == self.storeRefreshGeneration else { return }
+                        self.rekeyLocalAudioMetadataToServerIds()
                         self.messages = self.mergeIntoMessages(decrypted)
                     }
                 }
             }
+    }
+
+    /// Re-clé les métadonnées audio LOCALES quand l'écho serveur donne son id
+    /// définitif à une bulle optimiste (#4948).
+    ///
+    /// La transcription faite SUR L'APPAREIL à l'arrêt de l'enregistrement est
+    /// posée sous le `tempId` de la bulle (`attachLocalTranscriptions`). À
+    /// l'accusé, `MessageRecord.toMessage` expose `serverId ?? localId` : la
+    /// bulle mono-audio lit alors `messageTranscriptions[message.id]` sous l'id
+    /// SERVEUR, la clé `tempId` n'est plus jamais consultée — et le karaoké
+    /// disparaissait à l'instant précis où le message était confirmé, pour ne
+    /// revenir qu'avec la transcription Whisper, plusieurs secondes plus tard.
+    ///
+    /// Ce sont les MÊMES métadonnées vues sous un autre nom : on RECOPIE, on
+    /// n'écrase pas — une transcription serveur déjà arrivée sous l'id serveur
+    /// fait autorité. Idempotent, donc rejouable à chaque publication.
+    ///
+    /// La table parcourue est `pendingServerIds` (une entrée par envoi de cette
+    /// session), jamais la fenêtre : le coût est celui des envois, pas celui de
+    /// l'historique affiché. Elle est renseignée AVANT l'écriture GRDB qui
+    /// déclenche cette publication (`finalizeSuccessfulSend`, l'accusé socket,
+    /// `OfflineQueue.retrySucceeded`), donc la correspondance est toujours là
+    /// quand on en a besoin. `messageTranscriptionsByAttachment` n'a rien à
+    /// re-clé : un `attachmentId` ne change pas.
+    func rekeyLocalAudioMetadataToServerIds() {
+        guard !pendingServerIds.isEmpty else { return }
+        for (localId, serverId) in pendingServerIds where localId != serverId {
+            if messageTranscriptions[serverId] == nil,
+               let localTranscription = messageTranscriptions[localId] {
+                messageTranscriptions[serverId] = localTranscription
+            }
+            if messageTranslatedAudios[serverId] == nil,
+               let localAudios = messageTranslatedAudios[localId] {
+                messageTranslatedAudios[serverId] = localAudios
+            }
+        }
     }
 
     /// Merges `incoming` messages into the current `messages` array, preserving
@@ -315,13 +355,23 @@ extension ConversationViewModel {
     func processAPIMessages(_ apiMessages: [APIMessage]) async -> [Message] {
         let userId = currentUserId
         let username = currentUsername
+        // Le prisme ORDONNÉ du lecteur, par lequel la CITATION portée par
+        // chaque message descend le Prisme au moment de la conversion (#4945).
+        // Lu ICI, sur le MainActor : ce qui traverse vers la tâche fille est
+        // un `[String]` (Sendable), jamais le modèle.
+        let readerPrism = preferredLanguages
         // Decode + map the API payload off the main actor. `toMessage` decodes
         // each message's translations / attachments / reactions; for a
         // multi-hundred-message conversation load that is real CPU that would
         // otherwise stutter the UI. `[APIMessage]` in and `[MeeshyMessage]` out
         // are both Sendable, so the hop is clean.
         var msgs = await Task.detached(priority: .userInitiated) {
-            apiMessages.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            apiMessages.reversed().map {
+                $0.toMessage(
+                    currentUserId: userId, currentUsername: username,
+                    preferredLanguages: readerPrism
+                )
+            }
         }.value
         await decryptMessagesIfNeeded(&msgs)
         extractAttachmentTranscriptions(from: apiMessages)
