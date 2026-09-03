@@ -25861,3 +25861,91 @@ d'avoir demandé.
 
 Voisines : la 472 (une feature qu'aucune donnée n'exerce ne se vérifie pas), même
 famille — *ce qui ne s'exécute pas ne se signale pas*.
+
+## Leçon 476 — Un client qui LIT une charge sans lire son PRODUCTEUR invente une forme, et le défaut qu'il crée est un compteur mort
+
+**Contexte.** Écran `notifs` de la v3 web (#4898). Le module d'API projette ce
+que sert `GET /api/v1/notifications`. Deux champs, deux erreurs — et j'avais
+écrit les deux avant d'ouvrir le code de la passerelle.
+
+1. **L'état vit sous `state`, pas à la racine.** `NotificationFormatter`
+   (`services/gateway/src/services/notifications/NotificationFormatter.ts:85-91`)
+   range `isRead`, `readAt`, `createdAt` et `expiresAt` dans un objet `state`.
+   Lire `brut.isRead` rend `undefined` — donc « non lue » — pour TOUTES les
+   lignes.
+2. **`unreadCount` est à la RACINE de l'enveloppe, pas sous `meta`.** Le
+   handler le pose à côté de `data` et de `pagination`, sur ses DEUX formes de
+   page (`routes/notifications.ts:207` et `:215`). Le lire sous `meta` rend
+   `undefined`, donc ZÉRO.
+
+**Ce que ces deux défauts ont en commun, et c'est le fond.** Aucun ne casse
+rien. Aucun ne lève d'exception, ne rougit un type, ne vide un écran. Ils
+rendent un COMPTEUR MORT : une boîte entièrement « non lue » dont le nombre ne
+descend jamais, une pastille éteinte en permanence. Un défaut qui *plante* se
+voit à la première exécution ; un défaut qui rend une valeur PLAUSIBLE survit à
+la recette, au type-check, et à tout témoin écrit contre la même supposition
+que le code.
+
+**La règle.** Avant d'écrire la lecture d'une charge, ouvrir le site qui la
+COMPOSE — pas sa documentation, pas son schéma de réponse, pas un exemple :
+le formateur, et le handler qui l'enveloppe. Un schéma OpenAPI dit ce qui PEUT
+être là ; seul le producteur dit OÙ.
+
+**Le corollaire sur les témoins.** Un bouchon écrit de mémoire reproduit
+l'erreur du code qu'il éprouve — les deux partagent la même supposition, et le
+vert ne prouve alors que leur accord. La charge de bouchon se COPIE du
+formateur, avec sa citation `fichier:ligne` ; c'est ce qui rend le témoin
+capable de tomber. Vérifié par mutation : les deux pièges remis en place font
+tomber 3 témoins sur 9.
+
+**Le cas jumeau, trouvé dans le même lot.** Un témoin de cet écran figeait
+`gate.meeshy.me` dans l'URL attendue : il assertait la CONFIGURATION, pas le
+comportement, et aurait rougi au premier changement de domaine sans qu'aucun
+comportement n'ait bougé. Un témoin d'appel éprouve le CHEMIN ; l'hôte vient de
+l'environnement, et l'environnement n'est pas ce qu'on garde.
+
+## Leçon 477 — Une sonde dont le matériau vient de la PRODUCTION s'éteint quand la production grandit
+
+**Le fait (2026-09-03, #4933).** Le self-test de `check-v3-pipeline.mjs` a rendu
+`AVEUGLE` sur une sonde qui n'avait rien de cassé : la livraison de l'écran
+`/links` venait de faire de la v3 le serveur de `/links`, et la sonde tirait sa
+victime de la liste des routes que le legacy sert SEUL.
+
+Le garde qu'elle éprouve est juste : « un `PathPrefix` sans barre finale emporte
+ses voisins de CHAÎNE » — `PathPrefix(`/l`)` prend `/links` et `/login`. Pour le
+faire rougir, la sonde retirait la barre de `PathPrefix(`/l/`)` et attendait le
+nom d'une victime. Cette victime a changé DEUX fois :
+
+| cycle | victime nommée | ce qui l'a tuée |
+|---|---|---|
+| — | `/login` | la v3 s'est mise à servir `/login` |
+| — | `/links` | la v3 s'est mise à servir `/links` |
+| 2026-09-03 | *plus aucune* | `/l`, `/links`, `/login` sont les TROIS routes du legacy en `/l`, et la zone les sert toutes |
+
+**Ce qui rend la leçon coûteuse : le commentaire du second changement décrivait
+déjà le mécanisme.** Il disait, mot pour mot, « `/links`, lui, reste au legacy :
+c'est la victime qui SUBSISTE, et la sonde suit la réalité plutôt que sa
+formulation d'origine ». Le diagnostic était exact et la conclusion s'est
+arrêtée un cran trop tôt : **une victime qui subsiste est une victime en
+sursis.** Constater qu'un fusible a fondu pour la seconde fois par la même cause
+et le remplacer par un fusible identique, c'est programmer la troisième.
+
+> **Un fusible ne doit pas se déclencher par CROISSANCE.** Une sonde de mutation
+> éprouve une LOI ; si son matériau est un fait de production — une route
+> existante, une date de feuille de route, un compte, un nom de fichier —, elle
+> s'éteint le jour où la production change sans que rien n'ait régressé. Et
+> comme elle s'éteint en rendant `AVEUGLE`, elle ressemble à un garde cassé :
+> on cherche le défaut du côté du garde, pas du côté du décor.
+
+**Le remède est de FABRIQUER le matériau.** Un monde muté est fait pour ça : la
+sonde ajoute elle-même le voisin (`world.legacyRoutes = [...world.legacyRoutes,
+'/l-voisine-du-legacy']`) au lieu d'en emprunter un au dépôt. Elle reste vraie
+quel que soit le nombre d'écrans que la v3 finira par servir — et le garde, lui,
+continue de lire les VRAIES routes, ce qui est son travail.
+
+Voisines : la sonde de `/aucun-ecran-ne-sert-ceci`, déplacée pour la même raison
+un lot plus tôt (« un fusible dont le calibre est une DATE de la feuille de route
+s'éteint le jour où la feuille de route y arrive ») — et, une couche plus haut,
+la règle du dépôt sur les doubles de test qui ACCEPTENT ce que la production
+refuse : dans les deux cas c'est le DÉCOR du témoin, jamais son assertion, qui
+décide s'il pourra encore tomber demain.
