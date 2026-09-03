@@ -40,7 +40,7 @@ const ETAT = {
     },
   ],
   total: 4,
-  liens: { genre: 'liste' as const, liens: [{ identifiant: 'lagos-q1', nom: 'Ops', utilisations: 12, conversation: 'c1' }] },
+  liens: { genre: 'liste' as const, liens: [{ identifiant: 'lagos-q1', nom: 'Ops', utilisations: 12, conversation: 'c1', actif: true, capacite: null, expireA: null }] },
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
 };
 
