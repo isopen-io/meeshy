@@ -12,7 +12,7 @@ import {
 } from '@/lib/api/fil';
 import { cleDeLien, cleDuLien, effaceLaPlace, jetonDuCookie, poseSession, type CleDeLien } from '@/lib/api/guest-session';
 import { rafraichis, raisonDeFermeture, type Droits } from '@/lib/api/invite';
-import { BANDEAUX, FIL } from '@/lib/contenu/fil';
+import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL } from '@/lib/contenu/fil';
 
 import { prendsLeComposeur, type ControleurDuComposeur } from './composeur';
 import { defilement, type Defilement } from './defilement';
@@ -227,9 +227,21 @@ type Contexte = {
   accuseProgramme: ReturnType<typeof setTimeout> | null;
 };
 
+/**
+ * LE POINT D'ÉTAT — l'attribut ET son nom, jamais l'un sans l'autre.
+ *
+ * L'attribut seul ne disait rien à qui n'a pas d'yeux : le libellé hors-écran
+ * naissait rempli par le serveur (`ETATS_DU_TEMPS_REEL.inconnu`) et n'était
+ * plus jamais touché, si bien qu'un fil parfaitement vivant continuait
+ * d'annoncer « pas encore actif » à un lecteur d'écran. Les deux se posent
+ * donc ensemble, depuis la table que le serveur a lue.
+ */
 const point = (ctx: Contexte, etat: 'connecte' | 'creux' | 'hors-ligne'): void => {
   const noeud = ctx.main.querySelector<HTMLElement>('.etat');
-  if (noeud !== null) noeud.dataset.etat = etat;
+  if (noeud === null) return;
+  noeud.dataset.etat = etat;
+  const nom = noeud.querySelector<HTMLElement>('.hors-ecran');
+  if (nom !== null) nom.textContent = ETATS_DU_TEMPS_REEL[etat];
 };
 
 const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void => {

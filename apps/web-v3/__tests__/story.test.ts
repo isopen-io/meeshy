@@ -48,7 +48,18 @@ const brute = (attributs: Record<string, unknown> = {}): Record<string, unknown>
   content: 'Three charts, two surprises. The review lands tomorrow.',
   originalLanguage: 'en',
   createdAt: '2026-09-02T09:00:00.000Z',
-  expiresAt: '2026-09-03T05:00:00.000Z',
+  // UNE DATE RELATIVE, ET C'EST UN CORRECTIF. Cette échéance était écrite en
+  // absolu — `2026-09-03T05:00:00Z` —, donc vraie le jour où le témoin a été
+  // écrit et FAUSSE à partir de 05:00 UTC le lendemain : `lisLaStory` lit
+  // l'horloge RÉELLE (`porte.ts:100`), et la story se mettait à échoir pour de
+  // bon. Deux témoins verts la veille rendaient 404 le jour même, sans qu'une
+  // ligne du dépôt ait changé.
+  //
+  // Ce que le témoin veut dire est « une story qui n'a PAS échu », pas « une
+  // story qui échoit à cinq heures » : il le dit désormais. Les deux épreuves
+  // qui veulent l'inverse passent leur propre date, absolue et PASSÉE — un
+  // repère qui, lui, ne peut pas se périmer.
+  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   authorId: 'u2',
   author: { id: 'u2', displayName: 'Ibrahim', username: 'ibrahim' },
   translations: {
