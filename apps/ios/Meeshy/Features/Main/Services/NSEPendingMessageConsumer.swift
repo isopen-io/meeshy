@@ -63,7 +63,7 @@ final class NSEPendingMessageConsumer {
             }
             decodedAPIMessages.append(apiMsg)
             consumedFiles.append(item.url)
-            let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username)
+            let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
 
             await CacheCoordinator.shared.messages.upsert(
                 item: message,
@@ -88,7 +88,7 @@ final class NSEPendingMessageConsumer {
         guard !decodedAPIMessages.isEmpty else { return }
         do {
             try await DependencyContainer.shared.messagePersistence
-                .upsertFromAPIMessages(decodedAPIMessages)
+                .upsertFromAPIMessages(decodedAPIMessages, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             // Only drop the prefetch files once the messages are committed to GRDB,
             // so a persist failure leaves them on disk to retry next launch instead
             // of silently dropping the push-prefetched message.

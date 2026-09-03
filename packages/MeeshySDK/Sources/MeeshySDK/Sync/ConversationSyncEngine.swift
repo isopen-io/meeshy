@@ -866,12 +866,12 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId()
-            let username = await currentUsername()
+            let userId = await currentUserId(); let username = await currentUsername()
+            let preferredLanguages = await currentPreferredLanguages()
             if let mentionedUsers = response.meta?.mentionedUsers {
                 UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
             }
-            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            let freshMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
             // Atomic merge: keep any messages that arrived via socket between the
             // REST request and this write, so they are never silently overwritten.
             await cache.messages.mergeUpdate(for: conversationId) { existing in
@@ -895,9 +895,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let response = try await messageService.listBefore(
                 conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
-            let userId = await currentUserId()
-            let username = await currentUsername()
-            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            let userId = await currentUserId(); let username = await currentUsername()
+            let preferredLanguages = await currentPreferredLanguages()
+            let olderMessages = response.data.map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: preferredLanguages) }
 
             // Atomic merge: prepend older messages without overwriting any
             // messages that arrived via socket between the REST fetch and now.
@@ -1184,12 +1184,12 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         if let mentionedUsers = apiMessage.mentionedUsers {
             UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
         }
-        let userId = await currentUserId()
-        let username = await currentUsername()
+        let userId = await currentUserId(); let username = await currentUsername()
         let displayName = await currentUserDisplayName()
+        let preferredLanguages = await currentPreferredLanguages()
         let isMe = apiMessage.senderId == userId
         let msg = apiMessage.toMessage(
-            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName, preferredLanguages: preferredLanguages)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -1221,7 +1221,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             preview: msg.content,
             translations: Self.previewTranslations(
                 from: apiMessage,
-                viewerLanguages: await currentPreferredLanguages()
+                viewerLanguages: preferredLanguages
             )
         )
 
@@ -1313,11 +1313,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleEditedMessage(_ apiMessage: APIMessage) async {
-        let userId = await currentUserId()
-        let username = await currentUsername()
+        let userId = await currentUserId(); let username = await currentUsername()
         let displayName = await currentUserDisplayName()
+        let preferredLanguages = await currentPreferredLanguages()
         let msg = apiMessage.toMessage(
-            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName, preferredLanguages: preferredLanguages)
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }

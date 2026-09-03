@@ -234,7 +234,7 @@ public actor MessagePersistenceActor {
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
                     do {
-                        try await self.upsertFromAPIMessages(messages)
+                        try await self.upsertFromAPIMessages(messages, preferredLanguages: Self.readerPrism())
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }

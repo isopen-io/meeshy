@@ -45,7 +45,7 @@ final class ThreadRepliesLoader {
             ]
         )
         return response.data.map {
-            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername)
+            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
         }
     }
 }
