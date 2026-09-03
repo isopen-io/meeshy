@@ -247,13 +247,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// acceptable — un plafond qui se lève pour couvrir une croissance qu'il
     /// vient de refuser cesse d'être un cliquet.
     ///
-    /// 2026-09-03 (troisième fusion de dev  `5d5838d0`) — 62 306 → 62 203 :
-    /// dev a découpé `ReelsPlayerView` (#4927  1 738 → 1 629) et posé six lignes
+    /// 2026-09-03 (troisième fusion de dev, `5d5838d0`) — 62 306 → 62 203 :
+    /// dev a découpé `ReelsPlayerView` (#4927, 1 738 → 1 629) et posé six lignes
     /// dans `MessageListViewController` (#3947). Le paragraphe de dev ci-dessus
     /// parle des 31 noms d'AVANT #4942 (67 083) ; cette branche en compte
-    /// 30  `ConversationViewModel.swift` étant sorti de la dette — les deux
+    /// 30, `ConversationViewModel.swift` étant sorti de la dette — les deux
     /// nombres décrivent le même arbre avec deux listes. REMESURÉ sur les
-    /// 30 noms de l'arbre fusionné  jamais soustrait.
+    /// 30 noms de l'arbre fusionné, jamais soustrait.
     private static let legacyLineCeiling = 62_203
 
     // MARK: - Règle 1 — pas de 43ᵉ
