@@ -69,7 +69,7 @@ datasets==5.0.1
 # (job "Build translator" → step "Determine build platforms").
 # NE PAS bumper sentencepiece isolément : espnet==202412 l'épingle en dur à
 # ==0.1.97 (metadata PyPI d'espnet) ; un uv pip compile confirmerait le conflit.
-huggingface_hub==1.28.0
+huggingface_hub==1.29.0
 safetensors==0.8.0
 peft==0.20.0
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
