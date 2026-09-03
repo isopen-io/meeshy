@@ -143,19 +143,20 @@ extension ConversationView {
     /// (bulle optimiste persistée AVANT l'upload, cache amorcé sous la clé que
     /// le rendu résout, hors-ligne et échec d'upload vers l'outbox durable),
     /// sans la préparation de tuiles ni la barre de progression : il n'y a
-    /// qu'un fichier, déjà prêt, déjà en mémoire.
+    /// qu'un fichier.
+    ///
+    /// **La bulle part AVANT les octets** (#4947). Ce chemin postulait « un
+    /// fichier déjà prêt, déjà en mémoire » : vrai pour un sticker de la
+    /// librairie, faux pour un emoji ou un gabarit, dont le PNG n'existe pas
+    /// encore au moment du tap. Encoder puis écrire sur le fil principal
+    /// séparait donc le tap du premier pixel. L'image, elle, EST déjà
+    /// rasterisée : elle amorce le cache d'aperçu sous l'URL locale — connue
+    /// avant que le fichier existe — et la bulle peint sans rien attendre.
     func sendStickerImage(_ image: UIImage, sticker: MessageSticker?) {
-        guard let data = image.pngData() else { return }
         let attachmentId = UUID().uuidString
-        let fileName = "sticker_\(attachmentId).png"
-        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        do {
-            try data.write(to: fileURL)
-        } catch {
-            Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
-            FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
-            return
-        }
+        let directory = FileManager.default.temporaryDirectory
+        let fileName = StickerSendPipeline.fileName(for: attachmentId)
+        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory)
 
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
@@ -163,7 +164,11 @@ extension ConversationView {
         let local = MeeshyMessageAttachment(
             id: attachmentId,
             fileName: fileName, originalName: fileName,
-            mimeType: "image/png", fileSize: data.count,
+            // Le poids n'est pas encore connu — il naîtra de l'encodage, et
+            // toutes les surfaces le taisent quand il vaut zéro. L'ESTIMER
+            // afficherait un chiffre faux sous une image que le serveur
+            // remplacera par sa propre pièce jointe deux secondes plus tard.
+            mimeType: "image/png", fileSize: 0,
             fileUrl: localKey,
             width: Int(image.size.width * image.scale),
             height: Int(image.size.height * image.scale),
@@ -171,10 +176,11 @@ extension ConversationView {
             uploadedBy: currentUserId,
             thumbnailColor: senderColor
         )
-        // La bulle optimiste lit `file://…` : amorcer les deux caches sous cette
-        // clé pour qu'elle peigne sans relire le disque ni le réseau.
+        // La bulle optimiste lit `file://…` : amorcer le cache MÉMOIRE sous
+        // cette clé AVANT de la poser pour qu'elle peigne l'image déjà rendue,
+        // sans relire le disque ni le réseau. Le cache DISQUE, lui, attend les
+        // octets — il est amorcé à la suite de l'encodage.
         DiskCacheStore.cacheImageForPreview(image, key: localKey)
-        Task { await CacheCoordinator.shared.images.save(data, for: localKey) }
 
         let pendingRef = composerState.pendingReplyReference
         let isStory = pendingRef?.isStoryReply == true
@@ -196,12 +202,45 @@ extension ConversationView {
         HapticFeedback.light()
 
         Task {
-            await uploadAndSendSticker(
-                fileURL: fileURL, data: data, image: image, tempId: tempId, sticker: sticker,
+            await encodeWriteAndSendSticker(
+                image: image, attachmentId: attachmentId, directory: directory, localKey: localKey,
+                tempId: tempId, sticker: sticker,
                 replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
                 originalLanguage: lang, currentUserId: currentUserId
             )
         }
+    }
+
+    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload.
+    ///
+    /// La bulle est déjà là : ce qui suit ne se voit pas. Un échec — un encodage
+    /// qui ne rend rien, un disque plein — est un échec d'ENVOI : la bulle
+    /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
+    /// spinner fantôme pour un fichier qui n'existera jamais.
+    private func encodeWriteAndSendSticker(
+        image: UIImage, attachmentId: String, directory: URL, localKey: String,
+        tempId: String, sticker: MessageSticker?,
+        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        originalLanguage: String, currentUserId: String
+    ) async {
+        let écrit: StickerSendPipeline.WrittenSticker
+        do {
+            écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+        } catch {
+            Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
+            await viewModel.markOptimisticMediaFailed(tempId: tempId, reason: error.localizedDescription)
+            FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+            return
+        }
+        // Le cache DISQUE s'amorce EN PARALLÈLE de l'envoi : l'attendre
+        // retarderait l'upload d'une seconde écriture des mêmes octets, alors
+        // que la bulle peint déjà depuis le cache mémoire.
+        Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
+        await uploadAndSendSticker(
+            fileURL: écrit.url, data: écrit.data, image: image, tempId: tempId, sticker: sticker,
+            replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+            originalLanguage: originalLanguage, currentUserId: currentUserId
+        )
     }
 
     /// Upload TUS puis `sendMessage` avec le `tempId` de la bulle déjà posée.
