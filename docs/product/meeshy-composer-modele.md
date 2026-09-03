@@ -830,6 +830,44 @@ clients parlent de la même chose, pas qu'ils la peignent. Ce qui manque en prop
 est une matrice **champ × client × rendu**, tenue, et dont une case vide soit une
 DÉCISION écrite plutôt qu'un oubli.
 
+## 6 quinquies. iOS et web : DEUX structures, UNE loi (mesure 2026-09-04)
+
+Le composer existe des deux côtés, et leurs fichiers ne se ressemblent pas — 73
+sources iOS contre 9 web. **Le compte ne dit rien** : ce qu'il faut mesurer est
+si la même LOI produit le même comportement, pas si les mêmes fichiers existent.
+
+### Ce qui DIVERGE, et qui n'est qu'un nom
+
+| surface | iOS | web |
+|---|---|---|
+| document | `ComposerDocumentSurface.swift` | `ComposerDocumentSurface.tsx` |
+| humeur | `ComposerMoodSurface.swift` | `ComposerMoodSurface.tsx` |
+| **scène** | `ComposerSceneSurface.swift` | **`v2/StoryComposer.tsx`** — autre nom, autre lignée |
+| repost | *aucune* — passe par le MEUBLE (`e7052cc6e3`) | `ComposerRepostSurface.tsx` — surface dédiée |
+
+Le mot « scène » est **absent** du composer web. Il faut le savoir avant de
+conclure, comme j'ai failli le faire, que le web ne compose pas de scènes : il en
+compose, et #4913 le dit (« alors que le composer web en produit »). C'est une
+divergence de VOCABULAIRE, pas de capacité — et elle vit dans une lignée `v2/`
+que le milestone de parité (#56) suit déjà.
+
+### Ce qui CONVERGE, et c'est le point important
+
+La loi 5 du repost — *« le repost miroite ; changer de format est l'ANCRAGE »* —
+est tenue des DEUX côtés, par deux structures opposées :
+
+- **web** : une surface dédiée qui remplace `RepostModal`, laquelle n'offrait
+  aucun choix de format ;
+- **iOS** : le meuble, avec la loi écrite dans `ComposerIntent` (« Le format d'un
+  repost MIROITE celui de sa source ») et ses témoins nommés
+  (`test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`).
+
+> **Une loi partagée sous deux structures est saine ; deux structures sans loi
+> partagée ne le sont pas.** La question à poser d'un composer à l'autre n'est
+> donc pas « ont-ils les mêmes fichiers ? » mais « la même règle produit-elle le
+> même comportement ? ». Le premier critère aurait signalé une divergence là où
+> il n'y en a pas, et l'aurait ratée là où elle compte.
+
 ## 7. Correspondance avec ce qui existe
 
 Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au fil.
