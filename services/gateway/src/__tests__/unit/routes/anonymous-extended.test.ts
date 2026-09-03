@@ -318,8 +318,7 @@ describe('GET /anonymous/link/:identifier — expired link', () => {
 describe('GET /anonymous/link/:identifier — les trois refus 410 servent linkId (#4829)', () => {
   const buildLinkPreviewApp = async (overrides: Record<string, unknown>) => {
     const app = await buildApp();
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValue(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValue({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValue({
       ...mockShareLink,
       ...overrides,
       // Un aperçu de lien clos ne doit RIEN dire de la conversation qu'il

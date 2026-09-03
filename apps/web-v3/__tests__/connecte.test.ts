@@ -37,7 +37,7 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
 });
 
 const LIEN = (attributs: Partial<LienDePartage> = {}): LienDePartage => ({
-  identifiant: 'lagos-q1',
+  identifiant: 'mshy_lagos',
   nom: 'Ops Lagos',
   utilisations: 12,
   conversation: '68f2a81417a557e8ce4ddfbb',
@@ -340,7 +340,7 @@ describe('les liens de partage du lecteur', () => {
       genre: 'liste',
       liens: [
         {
-          identifiant: 'lagos-q1',
+          identifiant: 'mshy_lagos',
           nom: 'Ops Lagos',
           utilisations: 12,
           conversation: 'c1',
@@ -629,7 +629,7 @@ describe('le tableau de bord', () => {
    */
   it('rend « Mes liens » avec l’adresse partagée et son emploi mesuré', () => {
     expect(doc).toContain(TABLEAU_DE_BORD.liens);
-    expect(doc).toContain('meeshy.me/chat/lagos-q1');
+    expect(doc).toContain('meeshy.me/chat/mshy_lagos');
     expect(doc).toContain('12 utilisations');
   });
 
