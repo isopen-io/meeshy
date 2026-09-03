@@ -212,7 +212,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
     /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
     /// les 31 noms de l'arbre fusionné, jamais soustrait.
-    private static let legacyLineCeiling = 62_304
+    ///
+    /// 2026-09-03 (fusion de dev, `436d0f01`) — 62 304 → 62 306 (+2). Le cumul
+    /// avait baissé de 21 lignes sur cette branche (`ConversationViewModel.swift`
+    /// découpé en famille, sorti de la liste) pendant que dev en posait 23 dans
+    /// trois hôtes que cette branche ne touche pas (`FeedCommentsSheet` +5,
+    /// `PostDetailView` +9, `ReelsPlayerView` +9). REMESURÉ sur les 30 noms de
+    /// l'arbre fusionné, jamais soustrait — et le nombre est dit tel quel : un
+    /// plafond qui monte de deux se lit comme une dette de dev, pas de ce lot.
+    private static let legacyLineCeiling = 62_306
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -103,11 +103,16 @@ final class ConversationViewModelOpenPublishTests: XCTestCase {
 
         let (sut, _) = makeSUT(dbPool: pool)
 
-        // Laisse largement le temps à une lecture parasite de se manifester.
-        try await Task.sleep(for: .milliseconds(250))
+        // Convergence SONDÉE, jamais une horloge : on attend qu'une lecture
+        // parasite APPARAISSE, et l'échec de cette attente EST le verdict. Un
+        // `Task.sleep` fixe rend l'inverse — vert quand la machine est lente,
+        // rouge quand elle l'est un peu trop.
+        let lectureParasite = await MessageStoreObservationHelper.awaitCondition {
+            sut.messageStore.windowReadsForTesting > 0
+        }
 
-        XCTAssertEqual(
-            sut.messageStore.windowReadsForTesting, 0,
+        XCTAssertFalse(
+            lectureParasite,
             "`start()` observe et arme, il ne LIT pas — la première lecture appartient à `loadMessages()`"
         )
         XCTAssertTrue(sut.messages.isEmpty)
@@ -131,9 +136,18 @@ final class ConversationViewModelOpenPublishTests: XCTestCase {
         await sut.loadMessages()
         let painted = await MessageStoreObservationHelper.awaitMessagesCount(equals: 3, in: sut)
         XCTAssertTrue(painted, "précondition : la fenêtre GRDB doit être peinte")
-        // Laisse la revalidation de fond se terminer : c'est ELLE qui produisait
-        // la troisième re-disposition (snapshot + apply d'une fenêtre identique).
-        try await Task.sleep(for: .milliseconds(300))
+        // La revalidation de fond est attendue par CONVERGENCE (sa lecture
+        // autoritaire est la seconde), pas par une horloge : à 300 ms fixes le
+        // témoin passait au vert quand le runner tenait le rythme et au rouge
+        // sans qu'aucun défaut n'existe quand il était chargé.
+        let deuxLectures = await MessageStoreObservationHelper.awaitCondition {
+            sut.messageStore.windowReadsForTesting >= 2
+        }
+        XCTAssertTrue(deuxLectures, "précondition : la revalidation autoritaire doit avoir relu la fenêtre")
+        // Puis la STABILITÉ : rien ne doit s'ajouter après elle.
+        _ = await MessageStoreObservationHelper.awaitCondition {
+            sut.messageStore.windowReadsForTesting > 2 || publications > 1
+        }
 
         XCTAssertEqual(
             publications, 1,
@@ -162,7 +176,14 @@ final class ConversationViewModelOpenPublishTests: XCTestCase {
 
         await sut.loadMessages()
         _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 3, in: sut)
-        try await Task.sleep(for: .milliseconds(300))
+        // On attend la revalidation par CONVERGENCE (sa lecture est la
+        // seconde), pas par une horloge : sous une horloge fixe, la ligne de
+        // base ci-dessous se prend AVANT la revalidation sur un runner lent, et
+        // le rejeu se voit alors attribuer une lecture qui ne lui appartient
+        // pas — rouge sans défaut.
+        _ = await MessageStoreObservationHelper.awaitCondition {
+            sut.messageStore.windowReadsForTesting >= 2
+        }
 
         let readsAfterOpen = sut.messageStore.windowReadsForTesting
         let listCallsAfterOpen = messageService.listCallCount
@@ -171,7 +192,14 @@ final class ConversationViewModelOpenPublishTests: XCTestCase {
         defer { token.cancel() }
 
         await sut.loadMessages()
-        try await Task.sleep(for: .milliseconds(200))
+        // Le verdict est une ABSENCE : on laisse le temps à une relecture, un
+        // tour REST ou une publication de se manifester, et l'échec de cette
+        // attente EST la preuve.
+        _ = await MessageStoreObservationHelper.awaitCondition {
+            sut.messageStore.windowReadsForTesting != readsAfterOpen
+                || messageService.listCallCount != listCallsAfterOpen
+                || publicationsAfterOpen > 0
+        }
 
         XCTAssertEqual(
             sut.messageStore.windowReadsForTesting, readsAfterOpen,

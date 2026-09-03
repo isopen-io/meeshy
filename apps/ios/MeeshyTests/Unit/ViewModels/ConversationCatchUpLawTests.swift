@@ -137,31 +137,22 @@ final class ConversationCatchUpLawTests: XCTestCase {
     /// qu'elle attend. Trois maillons, trois assertions — c'est la leçon du
     /// dépôt sur les correctifs dont la valeur n'atteint aucun lecteur.
     func test_theVisibleFactTravelsFromTheListToTheLaw() throws {
-        // L'UNITÉ du type : `visibleServerMessageIds()` et son site d'appel
-        // vivent dans l'extension de suivi de lecture depuis #3947, sortie de
-        // l'hôte pour le ramener sous le budget de taille.
-        let controller = try [
-            "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
-        ].map { try MyStoriesSourceCorpus.text(of: $0) }.joined(separator: "\n")
-        let view = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/Views/ConversationView.swift")
-        // Depuis #4942 le ViewModel est une FAMILLE (hôte + extensions par
-        // responsabilité) : l'ancre vit dans l'hôte, mais une garde qui ne lit
-        // qu'un fichier de la famille passerait à vide à la prochaine extraction.
-        let model = try [
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Lifecycle.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+InitialLoad.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+ReplyReference.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+MessageActions.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Translations.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Projections.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Search.swift",
-            "Meeshy/Features/Main/ViewModels/ConversationViewModel+SocketDelegate.swift",
-        ].map { try MyStoriesSourceCorpus.text(of: $0) }.joined(separator: "\n")
+        // Les trois UNITÉS, balayées par GLOB — jamais énumérées.
+        //
+        // Le contrôleur comme le ViewModel sont des FAMILLES (hôte +
+        // extensions par responsabilité), et `AppSourceGuard.unit` ramasse
+        // `Base+*.swift` quel qu'en soit le nombre. Une LISTE écrite à la main
+        // se périme au premier fichier extrait, et se périme EN SILENCE : le
+        // plancher de taille reste satisfait par les autres membres pendant
+        // que le fichier qui porte l'ancre a quitté le balayage. C'est le mode
+        // de panne que le doc-comment d'`unitURLs` nomme (leçon 347), et que
+        // la liste de onze fichiers réintroduisait dans le geste même qui le
+        // décrivait.
+        let controller = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let view = try AppSourceGuard.conversationViewSource()
+        let model = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift")
         XCTAssertGreaterThan(controller.count, 40_000)
         XCTAssertGreaterThan(view.count, 40_000)
         XCTAssertGreaterThan(model.count, 40_000)

@@ -87,8 +87,13 @@ final class ConversationReplyContextTests: XCTestCase {
             code.contains("viewModel.optimisticReplyReference(quoting: msg)"),
             "Le geste « Répondre » doit passer par la fabrique unique de citation (`optimisticReplyReference`) — sinon la bannière et la bulle divergent à nouveau."
         )
+        // `= ReplyReference(` et non `ReplyReference(` : le second est un
+        // SOUS-MOT de `optimisticReplyReference(`, l'appel même que l'assertion
+        // précédente EXIGE — la garde interdisait donc ce qu'elle prescrit deux
+        // lignes plus haut. Une garde négative s'ancre sur ce qui distingue la
+        // composition manuelle (l'affectation) de l'appel à la fabrique.
         XCTAssertFalse(
-            code.contains("ReplyReference("),
+            code.contains("= ReplyReference("),
             "Aucune citation ne se compose à la main dans ce fichier : la fabrique est le seul producteur."
         )
     }
