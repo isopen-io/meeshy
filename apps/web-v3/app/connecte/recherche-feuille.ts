@@ -24,6 +24,13 @@ import { compacte } from '@/app/enveloppe/feuille';
  * 4. **Le compte d'un groupe est en sourdine, à côté de son titre.** Il dit ce
  *    qui est AFFICHÉ ; le mettre en évidence lui donnerait le poids d'un total,
  *    qu'aucune des deux routes ne sert.
+ * 5. **Il s'appelle `.combien`, et surtout PAS `.compte`.** `.compte` est déjà
+ *    pris par la pastille de non-lus de `feuille.ts`, que cet écran charge —
+ *    une pastille PLEINE, peinte à l'accent, et l'un des cinq emplois nommés de
+ *    la règle 13. Le nom réemployé prenait donc silencieusement ce fond : axe a
+ *    mesuré 1,03:1 en sombre et 1,06:1 en clair, de l'encre sourde sur
+ *    l'accent. Aucun témoin de rendu ne pouvait le voir — le HTML était juste,
+ *    et jsdom ne calcule pas les couleurs.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
@@ -44,7 +51,7 @@ export const FEUILLE_DE_LA_RECHERCHE = compacte(`
 .groupe{display:grid;gap:var(--space-2)}
 .groupe>.entete{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);margin:0}
 .groupe>.entete h2{margin:0;font-size:var(--text-md);font-weight:var(--font-weight-semibold);color:var(--color-text)}
-.groupe>.entete .compte{flex:none;font-size:var(--text-sm);color:var(--color-text-muted)}
+.groupe>.entete .combien{flex:none;font-size:var(--text-sm);color:var(--color-text-muted)}
 .groupe>ul{display:grid;gap:var(--space-2);margin:0;padding:0;list-style:none}
 .groupe>.encore{margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}
 

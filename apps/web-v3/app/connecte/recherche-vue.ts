@@ -117,7 +117,7 @@ const groupe = ({
   '<section class="groupe">' +
   '<header class="entete">' +
   `<h2>${echappe(titre)}</h2>` +
-  `<span class="compte">${echappe(compte)}</span>` +
+  `<span class="combien">${echappe(compte)}</span>` +
   '</header>' +
   `<ul>${lignes}</ul>` +
   (encore ? `<p class="encore">${echappe(RECHERCHE.encore)}</p>` : '') +
