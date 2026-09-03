@@ -511,7 +511,13 @@ struct ComposerObjectEditorView: View {
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
                         section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
-                            TextEditToolOptions(tool: tool, textObject: binding)
+                            // **L'écran plein demande la GRILLE** (#5045).
+                            // Les deux hôtes SDK gardent la rangée : au-dessus
+                            // du clavier et dans la zone basse de la scène, la
+                            // hauteur d'une grille n'existe pas.
+                            TextEditToolOptions(tool: tool,
+                                                textObject: binding,
+                                                layout: .grid)
                         }
                     }
                     timingSection
