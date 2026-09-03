@@ -11877,6 +11877,43 @@ Parenté avec la leçon des trois artefacts qui DÉCRIVENT le code : ici l'artef
 décrit le code de quelqu'un d'autre, ce qui ajoute une distance de plus entre
 l'affirmation et ce qui pourrait la démentir.
 
+### Un ORDRE juste peut produire une disposition FAUSSE — le vide n'est pas un frère
+
+J'ai ouvert #5036 en lisant une capture du porteur : les hashtags apparaissaient
+SOUS une rangée d'outils, donc l'ordre de la pile était en cause. J'ai mesuré
+77 pt entre le bas de la carte et le pied des références, et conclu qu'il fallait
+une règle de RANG.
+
+**Les deux moitiés du diagnostic étaient fausses**, et la session voisine l'a
+établi en livrant le correctif :
+
+1. le pied était **déjà** avant la rangée d'outils — l'ordre n'a jamais été le
+   défaut ;
+2. les 77 pt n'étaient ni une marge ni un espacement : le canvas est
+   `maxHeight: .infinity` et la carte, ajustée à son ratio, s'y **centre**.
+   C'était la moitié basse du letterbox.
+
+> **Réordonner n'aurait rien changé.** Ce qui séparait le pied de la carte
+> n'était pas un frère mal placé, c'était du VIDE — et une pile ne voit pas le
+> vide de ses enfants, seulement leurs cadres.
+
+Le remède existait déjà deux fois dans le même fichier (`sceneLeadingInset` pour
+le bord gauche, `sceneBottomInset` pour les rails) ; il manquait sa remontée aux
+FRÈRES de la pile, par une clé de préférence jumelle.
+
+Ce que je retiens pour le prochain écart de disposition : **avant de postuler un
+ordre, demander ce qui OCCUPE l'espace.** Si l'arbre d'accessibilité ne rend
+aucun élément entre deux voisins qui s'éloignent, ce n'est pas qu'un frère
+invisible s'intercale — c'est qu'un cadre est plus grand que son contenu. Les
+deux se corrigent à des endroits opposés : l'un dans l'ordre de la pile, l'autre
+dans la géométrie du parent.
+
+Et un corollaire de mesure, du même échange : **une gouttière et un espacement de
+pile ne se confondent pas.** Un contenu monté en *overlay* ne paie aucun
+espacement ; un frère en paie un. Le haut et le bas d'une même carte peuvent donc
+donner le même écart visible par deux chemins différents — et les confondre
+double l'écart au premier réglage.
+
 ### Une ABSENCE confirme une hypothèse aussi facilement qu'elle l'infirme — et alors on ne la vérifie pas
 
 Quatrième forme du même piège le 2026-09-03, et la plus retorse. Les trois
