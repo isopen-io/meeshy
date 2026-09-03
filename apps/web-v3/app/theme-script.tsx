@@ -1,3 +1,5 @@
+import { COOKIE_DE_THEME } from '@/lib/api/cookies';
+
 export const THEME_STORAGE_KEY = 'meeshy-theme';
 
 /**
@@ -28,10 +30,32 @@ export const THEME_PAR_DEFAUT = 'dark';
  * `prefers-color-scheme` ne gouverne toujours QUE la valeur par défaut de la
  * classe, jamais un jeton : il n'entre en jeu qu'en l'absence de préférence
  * stockée.
+ *
+ * LE COOKIE PASSE AVANT `localStorage`, ET IL EST REMIS DEDANS.
+ *
+ * L'ordre n'est pas une préférence de goût : le cookie est le SEUL magasin que
+ * `/settings/application` peut écrire, puisque cet écran n'a pas une ligne de
+ * JavaScript et que son formulaire ne fait rien d'autre que poster (charte
+ * règle 7 — un contrôle existe s'il a un effet). Lire `localStorage` d'abord
+ * ferait perdre le choix au rechargement suivant : le lecteur aurait cliqué
+ * « Clair » et serait revenu sombre.
+ *
+ * La dernière ligne est un MIROIR, pas une seconde vérité : elle recopie le
+ * cookie dans `localStorage` pour que la webapp legacy — qui ne lit que lui —
+ * suive un choix fait dans la v3. Sans cookie, rien n'est écrit : un lecteur
+ * qui n'a jamais réglé son thème ici ne se voit pas imposer une valeur.
+ *
+ * La lecture du cookie tolère un `light`/`dark` et RIEN d'autre. Une valeur
+ * inconnue — un cookie forgé, un reste d'une version future — retombe sur
+ * `localStorage` puis sur le système, jamais sur une classe que la table de
+ * jetons ne connaît pas.
  */
 export const themeScriptSource =
-  `!function(){var s=null;try{s=localStorage.getItem('${THEME_STORAGE_KEY}')}catch(_){}` +
-  `try{var d=s==='dark'||s!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches,` +
+  `!function(){try{` +
+  `var c=(document.cookie.match(/(^|;) *${COOKIE_DE_THEME}=(light|dark)/)||[])[2],s=c;` +
+  `try{s=c||localStorage.getItem('${THEME_STORAGE_KEY}');` +
+  `if(c)localStorage.setItem('${THEME_STORAGE_KEY}',c)}catch(_){}` +
+  `var d=s==='dark'||s!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches,` +
   `e=document.documentElement;e.classList.add(d?'dark':'light');` +
   `e.classList.remove(d?'light':'dark')}catch(_){}}()`;
 

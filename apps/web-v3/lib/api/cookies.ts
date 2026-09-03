@@ -22,6 +22,28 @@ export const COOKIE_DE_SESSION = 'meeshy_session';
 export const COOKIE_DE_JETON = 'meeshy_auth';
 
 /**
+ * LE THÈME CHOISI SUR CET APPAREIL — un cookie, et non `localStorage`.
+ *
+ * Il fallait choisir, parce que `/settings/application` doit avoir un EFFET
+ * sans une ligne de JavaScript de page (charte règle 7, et le gate à 0 Ko de JS
+ * des écrans de la zone). Un formulaire ne peut écrire que ce que le SERVEUR
+ * pose, et le serveur ne peut poser qu'un cookie : c'est le seul magasin que
+ * les deux bouts partagent.
+ *
+ * `localStorage` reste LU par le script de tête, et c'est délibéré : la webapp
+ * legacy y écrit son propre choix (`meeshy-theme`), et un lecteur qui a réglé
+ * son thème là-bas le retrouve ici. Le script MIROITE en retour ce qu'il
+ * résout, si bien que le legacy suit un choix fait dans la v3. Le seul cas où
+ * les deux divergent est un réglage fait dans le legacy APRÈS un réglage fait
+ * ici — le cookie l'emporte — et il disparaît avec le legacy.
+ *
+ * ABSENT ⇒ « comme mon système ». Il n'y a donc pas de troisième valeur à
+ * écrire : le choix « système » EFFACE le cookie, ce qui est aussi la seule
+ * façon de ne rien garder de ce que le lecteur n'a pas demandé de garder.
+ */
+export const COOKIE_DE_THEME = 'meeshy_theme';
+
+/**
  * La valeur d'un cookie dans un en-tête `Cookie` — celui d'une requête, ou
  * `document.cookie`, qui ont la même forme. Un pourcent isolé fait jeter
  * `decodeURIComponent` : la valeur brute reste servie, c'est à la passerelle

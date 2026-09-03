@@ -27,6 +27,10 @@ const ETAT = {
     systemLanguage: 'fr',
     regionalLanguage: null,
     customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
   },
   conversations: [
     {

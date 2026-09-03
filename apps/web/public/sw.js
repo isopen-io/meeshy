@@ -127,6 +127,7 @@ const V3_ZONE_PREFIXES = [
   '/stories',
   '/reels',
   '/moods',
+  '/settings',
 ];
 
 function belongsToV3Zone(pathname) {

@@ -356,8 +356,18 @@ export type Carnet =
 export type Lecteur = {
   readonly id: string | null;
   readonly prenom: string | null;
+  readonly nom: string | null;
   readonly nomAffiche: string | null;
   readonly pseudonyme: string | null;
+  readonly bio: string | null;
+  /**
+   * LES DEUX COORDONNÉES SONT LUES ET NE S'ÉCRIVENT PAS. `PATCH /users/me` les
+   * exclut explicitement (#4184) : elles demandent une preuve de possession et
+   * passent par `change-email` / `change-phone`. `/settings/profile` les MONTRE
+   * — c'est ce que la cible dessine — et dit où elles se changent.
+   */
+  readonly email: string | null;
+  readonly telephone: string | null;
   /**
    * LES TROIS RANGS DU PRISME, servis tels que la passerelle les donne. Ils ne
    * sont ni normalisés ni repliés ici : `resolveUserLanguagesOrdered`
@@ -439,8 +449,12 @@ export const moi = async ({
     lecteur: {
       id: chaine(brut.id),
       prenom: chaine(brut.firstName),
+      nom: chaine(brut.lastName),
       nomAffiche: chaine(brut.displayName),
       pseudonyme: chaine(brut.username),
+      bio: chaine(brut.bio),
+      email: chaine(brut.email),
+      telephone: chaine(brut.phoneNumber),
       systemLanguage: chaine(brut.systemLanguage),
       regionalLanguage: chaine(brut.regionalLanguage),
       customDestinationLanguage: chaine(brut.customDestinationLanguage),
