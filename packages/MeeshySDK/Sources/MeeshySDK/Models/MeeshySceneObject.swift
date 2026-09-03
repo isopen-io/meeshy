@@ -62,8 +62,29 @@ public enum MeeshySceneObject: Sendable {
 
     /// Le kind SANS la charge — pour les sites qui trient, comptent ou nomment
     /// sans avoir besoin de l'objet lui-même.
+    /// **`place`, et non `location`** (#4960).
+    ///
+    /// Le contrat du fil dit `place` (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`),
+    /// son miroir Swift dit `place` (`ObjectKind`), la timeline dit `place`
+    /// (`TimelineClipKind`) et l'inspecteur aussi (`ClipSnapshot.Kind`). Cet
+    /// énuméré était le SEUL à dire `location` — et c'est celui que le composer
+    /// lit, donc celui dont tout l'éditeur d'objet dépend.
+    ///
+    /// La conversion se faisait en silence : `CanvasV3Migration` traduit
+    /// `case .place:` en `locationObject(...)` sans qu'une ligne dise que c'est
+    /// un renommage. Un lecteur qui cherchait « place » dans le composer ne
+    /// trouvait rien ; l'inverse non plus.
+    ///
+    /// > Le mot `place` gagne parce que le FIL a raison par construction — c'est
+    /// > le contrat que quatre couches et trois clients partagent — et parce que
+    /// > quatre sites l'employaient déjà contre un.
+    ///
+    /// Bénéfice inattendu, mesuré au renommage : `location` est un nom de `case`
+    /// très répandu dans ce dépôt — pièces jointes, types de média, indicateurs
+    /// de fil en portent chacun un, sans rapport avec les objets de scène.
+    /// `place` DÉSAMBIGUÏSE en plus d'aligner.
     public enum Kind: String, CaseIterable, Equatable, Sendable {
-        case text, media, sticker, location, audio
+        case text, media, sticker, place, audio
     }
 
     public var kind: Kind {
@@ -71,7 +92,7 @@ public enum MeeshySceneObject: Sendable {
         case .text:     return .text
         case .media:    return .media
         case .sticker:  return .sticker
-        case .location: return .location
+        case .location: return .place
         case .audio:    return .audio
         }
     }

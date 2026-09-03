@@ -254,7 +254,7 @@ nonisolated enum ComposerObjectChips {
         case .media:    return ComposerObjectChipsCopy.kindMedia
         case .sticker:  return ComposerObjectChipsCopy.kindSticker
         case .audio:    return ComposerObjectChipsCopy.kindAudio
-        case .location: return ComposerObjectChipsCopy.kindLocation
+        case .place: return ComposerObjectChipsCopy.kindLocation
         }
     }
 

@@ -150,7 +150,7 @@ extension StoryCanvasUIView {
     private func manipulable(_ id: String) -> MeeshySceneObject? {
         guard let objet = slide.sceneObject(id: id) else { return nil }
         switch objet.kind {
-        case .text, .media, .sticker, .location: return objet
+        case .text, .media, .sticker, .place: return objet
         case .audio: return nil
         }
     }
