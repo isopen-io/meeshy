@@ -299,12 +299,34 @@ tout le paquet. Ni objets, ni plans, ni `timing`, ni transitions, ni `thumbHash`
 Et **rien ne le dit** : c'est une absence muette au sens du § 4 bis, la nature
 que ce document nomme comme la plus coûteuse.
 
-> Le choix a de bonnes raisons possibles — la v3 est zéro-JS et sous budget de
-> REQUÊTES : `/stories/:id` est un gestionnaire de route et non une page
-> précisément parce qu'une page émet six requêtes avant le premier pixel là où
-> le budget en autorise trois. Composer une scène côté serveur est une vraie
-> question d'ingénierie. **Mais une raison non écrite ne se distingue pas d'un
-> oubli**, et c'est le seul point que ce document tranche : #5049.
+**Et la cible, elle, est ÉCRITE** — `docs/product/MeeshyWebV3Design/conception-web-v3.md`
+§ 1 : « le visiteur doit pouvoir **lire intégralement** (story, reel, post, mood,
+conversation partagée) ». Une story rendue comme son seul fond ne tient pas cette
+promesse : ses textes, ses stickers, son lieu et ses puces audio font partie de ce
+qu'il y a à lire. **Ce n'est donc pas un choix à déclarer, c'est un écart à
+combler** (#5049).
+
+La contrainte qui le rend intéressant est réelle : la v3 est zéro-JS et sous
+budget de REQUÊTES — `/stories/:id` est un gestionnaire de route et non une page
+précisément parce qu'une page émet six requêtes avant le premier pixel là où le
+budget en autorise trois. Mais les objets portent `anchor`, `plane`, `z`,
+`transform` : un `position:absolute` par objet coûte des OCTETS de document, que
+le budget mesure, et zéro requête supplémentaire.
+
+### Ce que la gouvernance de la v3 tranche déjà, et qu'il ne faut pas rouvrir
+
+Trois décisions porteur, non négociables (même document, préambule) :
+
+1. **`apps/web` reste vif et sert le trafic** — les deux applications coexistent ;
+   ce n'est pas une transition à échéance.
+2. **La bascule se fait une route à la fois**, par un `PathPrefix` Traefik ; le
+   retour arrière est le retrait du préfixe, et rien n'est supprimé au passage.
+3. **Le décommissionnement d'`apps/web` est un milestone SÉPARÉ**, ouvert
+   seulement quand le routeur legacy ne sert plus aucune route.
+
+Corollaire : les lacunes de rendu d'`apps/web` (#5043, #5047) ne sont pas du
+travail jeté — cette application sert le trafic et continuera. Ce qui reste vrai
+est que la v3 ne doit pas en hériter : c'est un « et », pas un « ou ».
 
 **Corollaire immédiat pour les deux dettes de la section suivante** : #5043 et
 #5047 décrivent des lacunes d'`apps/web`. Si la v3 reprend le rôle de lecture
