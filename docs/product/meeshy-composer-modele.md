@@ -311,6 +311,52 @@ Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733
 paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
 pas #4733, et ne doit pas être lu comme le faisant.
 
+## 1 bis-2. `storyEffects` est un NOM DE CHAMP, pas un format (mesure 2026-09-03)
+
+Question posée par le porteur : *« storyEffects est encore d'actualité dans cette
+nouvelle version ? On a plus migré vers les MeeshySceneObject avec tous les
+détails d'effet, start, end, transition d'entrée et de sortie ? »*
+
+La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
+champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
+L'INTÉRIEUR du champ.** `storyEffects` est le nom de la colonne et de la clé du
+fil ; son CONTENU est un document **canvas v3**, et la passerelle refuse tout le
+reste.
+
+| couche | ce qui porte la scène | mesure |
+|---|---|---|
+| le fil | clé `storyEffects`, contenu **canvas v3** | `routes/posts/core.ts:100` — `if (!isCanvasV3(storyEffects))` refuse, puis `CanvasV3Schema.safeParse` |
+| le contrat | `ObjectV3Schema` | `packages/shared/types/canvas-v3.ts` |
+| iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:962` |
+| iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1290`) |
+| iOS, le vocabulaire d'objet | `MeeshySceneObject`, **somme à cinq cas** — `text` · `media` · `sticker` · `place` · `audio` | `Models/MeeshySceneObject.swift:56` |
+
+Le pont est **bidirectionnel et sans mémoire** : l'encodage part TOUJOURS du
+runtime courant, jamais du `canvasV3` reçu — une composition neuve et une story
+éditée émettent donc l'une comme l'autre l'état réel du canvas.
+
+### Ce qu'un objet porte, exactement
+
+Neuf champs, et il faut les citer pour clore la question des « détails d'effet » :
+
+`id` · `kind` · `anchor` · `plane` (`bg`/`content`/`fg`) · `z` ·
+`transform { scale, rotation, opacity }` · `timing? { start, end, keyframes }` ·
+`locale?` · `payload`
+
+Donc : **`start` et `end` EXISTENT**, portés par `timing`, et l'entrée d'un objet
+dans la timeline n'est pas un ajout de contrat.
+
+### Ce qui n'existe PAS
+
+**Aucune transition d'entrée ni de sortie n'est modélisée.** Mesuré : zéro
+occurrence de `transition` dans `packages/shared/types/`. Un objet a des bornes
+temporelles, pas une manière d'apparaître ni de disparaître.
+
+> La question du porteur supposait les transitions acquises parce qu'elles
+> voisinent naturellement avec `start`/`end` dans l'esprit. Elles n'y sont pas —
+> et les ajouter est un lot de CONTRAT, à ne pas confondre avec le rognage
+> temporel, que `timing` couvre déjà.
+
 ## 1 ter. Ce que chaque nom devient SOUS le composer
 
 Les quatre noms du § 1 sont le vocabulaire du composer. Deux d'entre eux n'ont
