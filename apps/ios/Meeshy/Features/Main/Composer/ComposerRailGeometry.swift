@@ -104,6 +104,36 @@ nonisolated enum ComposerRailGeometry {
         return max(0, (overlay.height - dessin.height) / 2)
     }
 
+    /// **Ce qui sépare le bord GAUCHE de la frame du bord gauche du DESSIN**
+    /// (#5011) — le jumeau horizontal de `sceneBottomInset`, et pour la même
+    /// raison.
+    ///
+    /// > Directive porteur 2026-09-03 : « avec les **bordures gauches alignées
+    /// > à celle de la scene** ».
+    ///
+    /// La tentation est de padder de `sceneInset` : c'est l'encastrement du
+    /// COULOIR, donc le bord de la frame — et la carte, ajustée à son ratio, se
+    /// CENTRE dedans. Mesuré sur un iPhone en 9:16 : couloir à 44 pt, carte à
+    /// 65 pt. Vingt et un points d'écart, et l'écart n'est pas constant — il
+    /// vaut zéro quand la carte est contrainte par la largeur, et grandit dès
+    /// qu'elle est contrainte par la hauteur.
+    ///
+    /// > Aligner sur le couloir donnerait donc un résultat juste **par
+    /// > accident**, dans un seul format et à une seule hauteur. C'est très
+    /// > exactement le défaut que #4119 a nommé pour le bas, retrouvé sur
+    /// > l'autre axe.
+    ///
+    /// - Parameter overlay: la taille de la vue PADDÉE — celle qui inclut les
+    ///   deux couloirs, comme pour `sceneBottomInset`.
+    static func sceneLeadingInset(overlay: CGSize,
+                                  ratio: CGFloat,
+                                  horizontalInset: CGFloat) -> CGFloat {
+        let carte = CGSize(width: max(0, overlay.width - 2 * horizontalInset),
+                           height: overlay.height)
+        let dessin = CanvasGeometry.aspectFitSize(in: carte, ratio: ratio)
+        return horizontalInset + max(0, (carte.width - dessin.width) / 2)
+    }
+
     // MARK: - Ce qu'une rangée REQUIERT, et ce qui déborde
 
     /// L'écart entre deux entrées d'un rail. Lu par la vue ET par la règle : un

@@ -456,6 +456,10 @@ struct ComposerSceneSurface: View {
         }
     }
 
+    /// Le bord gauche du DESSIN, mesuré par le canvas et lu par l'en-tête son
+    /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
+    @State private var sceneCardLeading: CGFloat = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ComposerTopBar(
@@ -494,6 +498,7 @@ struct ComposerSceneSurface: View {
             // le plateau.
             ComposerSceneSoundHeader(backgroundSound: backgroundSound,
                                      toolIsOpen: toolIsOpen,
+                                     leadingInset: sceneCardLeading,
                                      onEdit: onEditBackgroundSound,
                                      onDelete: onDeleteBackgroundSound)
 
@@ -549,6 +554,26 @@ struct ComposerSceneSurface: View {
                 // C'est la loi 6 — un rail posé sur la scène ferait mentir
                 // l'aperçu sur le rendu final.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+                // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011).
+                // La carte se centre dans la largeur qu'on lui donne : son bord
+                // n'est pas celui du couloir, et l'écart dépend du ratio ET de
+                // la hauteur. L'en-tête est un FRÈRE de ce canvas — il ne peut
+                // pas le calculer, seulement le recevoir.
+                //
+                // Posé APRÈS le padding, comme les deux `ancreAuDessin` : le
+                // repère doit inclure les couloirs, sans quoi `sceneLeadingInset`
+                // calculerait le `fit` sur une largeur que la carte n'occupe
+                // jamais.
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ComposerSceneCardLeadingKey.self,
+                            value: ComposerRailGeometry.sceneLeadingInset(
+                                overlay: geo.size,
+                                ratio: aspectRatio,
+                                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                    }
+                }
                 // **L'ORDRE des modificateurs EST la disposition** (#4633,
                 // directive porteur 2026-08-31) :
                 //
@@ -726,6 +751,7 @@ struct ComposerSceneSurface: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
