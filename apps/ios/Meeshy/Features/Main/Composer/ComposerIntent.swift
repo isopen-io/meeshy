@@ -517,7 +517,30 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
                 allowsCapture: false,
-                routesToLegacy: sourceFormat == .status ? nil : .repostComposer
+                // **Rév. 8 (#5053) — `.story` rejoint `.status` sur le MEUBLE.**
+                //
+                // Les trois manques énumérés plus haut sont soldés :
+                // `ComposerHydration` donne au meuble sa graine `StoryItem` ET
+                // le plafond d'audience de la loi 10 (les deux ensemble, pour
+                // qu'on ne puisse pas passer l'une sans l'autre) ; le troisième
+                // — « son canal de scène ne porte pas `repostOfId` » — n'en
+                // était pas un : `onPublishAllInBackground` est une fermeture
+                // fournie par la porte, qui CAPTURE l'identifiant de la source.
+                // Une signature qui ne nomme pas une valeur ne l'empêche pas de
+                // voyager.
+                //
+                // Ce que la bascule DONNE, et qui manquait : l'ANCRAGE en post,
+                // déclaré par `offeredFormats` depuis le lot 4.7 et qui
+                // n'atteignait aucun écran — l'atelier nu n'a pas de plateau,
+                // donc pas d'éventail.
+                //
+                // `.post` et `.reel` restent déclarés sur `.repostComposer`.
+                // Aucun site du dépôt ne les construit (mesuré) ; les router
+                // vers le meuble affirmerait qu'il les sert, ce qui n'est
+                // vérifié par rien.
+                routesToLegacy: (sourceFormat == .status || sourceFormat == .story)
+                    ? nil
+                    : .repostComposer
             )
 
         case .edit(_, let documentFormat):
@@ -584,7 +607,26 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .resume,
                 allowsCapture: false,
-                routesToLegacy: documentFormat == .story ? .storyEdit : .editPostSheet
+                // **Rév. 10 (#5053) — `.story` passe au MEUBLE.**
+                //
+                // `storyEditComposerCover` montait `StoryComposerView` NU ;
+                // depuis le 2026-09-03 il monte `MeeshyComposerHost`
+                // (`StoryEditComposer`), hydraté par
+                // `ComposerHydration.editingStory`. La table n'a donc plus de
+                // legacy à nommer pour ce format : la porte du dépôt qui édite
+                // une story EST le meuble.
+                //
+                // Le nom `LegacyComposer.storyEdit` reste DÉCLARÉ, comme
+                // `.statusComposer` avant lui — un cas d'énumération qui perd
+                // son dernier routeur ne se supprime pas dans le même lot que
+                // le recâblage : `EditParityInventoryTests` compte encore par
+                // ce vocabulaire, et retirer le mot ferait rougir un inventaire
+                // pour une raison sans rapport avec ce qu'il mesure.
+                //
+                // `.post` / `.reel` / `.status` restent sur `EditPostSheet` :
+                // c'est la seule surface du dépôt qui sache basculer POST vers
+                // RÉEL, et le meuble ne la remplace pas ici.
+                routesToLegacy: documentFormat == .story ? nil : .editPostSheet
             )
 
         case .draft, .share:

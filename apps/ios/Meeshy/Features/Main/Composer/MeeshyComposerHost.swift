@@ -143,6 +143,19 @@ struct MeeshyComposerHost: View {
     /// reçu ouvrirait un composer VIDE — un produit parfaitement plausible.
     let mediaSeed: StoryComposerSeed?
 
+    /// **Le contenu qui EXISTE DÉJÀ** — édition ou republication d'une story
+    /// (#5053). `nil` pour toute porte qui part d'une page blanche.
+    ///
+    /// À la différence de `mediaSeed`, il PORTE UN DÉFAUT, et la raison est
+    /// l'inverse de celle écrite douze lignes plus haut : `mediaSeed` concerne
+    /// une porte, `hydration` concerne deux portes sur neuf. Un paramètre sans
+    /// défaut obligerait les sept autres à écrire `hydration: nil` — sept
+    /// occasions de se tromper de valeur pour zéro erreur évitée, la
+    /// disparition qu'on craint étant ici visible : une édition qui perdrait
+    /// son hydratation ouvrirait une story VIDE, ce qu'aucune relecture ne
+    /// laisse passer.
+    let hydration: ComposerHydration?
+
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
@@ -612,6 +625,14 @@ struct MeeshyComposerHost: View {
         intent: ComposerIntent,
         initialVisibility: String,
         draftId: String? = nil,
+        /// **Le contenu qui EXISTE DÉJÀ** (#5053) — édition ou republication
+        /// d'une story. `nil` pour toute porte qui part d'une page blanche.
+        ///
+        /// Un seul paramètre pour deux choses (quel contenu reprendre, quelle
+        /// audience il autorise) parce qu'elles sont deux faces d'un même fait :
+        /// les séparer aurait permis d'en passer une sans l'autre, c'est-à-dire
+        /// de republier sans plafond, silencieusement.
+        hydration: ComposerHydration? = nil,
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPublishDocument: @escaping @MainActor (ComposerDocumentDraft) async -> Bool,
         moodSeed: ComposerMoodSeed?,
@@ -629,6 +650,7 @@ struct MeeshyComposerHost: View {
         // graine de la porte est un défaut.
         let repris = draftId ?? intent.origin.resumedDraftId
         self.draftId = repris
+        self.hydration = hydration
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPublishDocument = onPublishDocument
         self.moodSeed = moodSeed
@@ -645,11 +667,28 @@ struct MeeshyComposerHost: View {
         // brouillon que l'auteur vient de désigner l'emporte sur ce qu'une porte
         // sème. `openingDraftAction` tient la même précédence côté SDK, et les
         // deux doivent rester d'accord.
+        //
+        // L'HYDRATATION passe AVANT la graine, et l'ordre est load-bearing :
+        // un contenu qui existe déjà n'est pas une graine qu'on pose sur une
+        // page blanche, c'est la page. Aucune porte ne passe les deux
+        // aujourd'hui, mais le `switch` doit rendre un verdict même si une le
+        // faisait un jour — et ce verdict-là est le seul qui ne perde rien.
         let composer: StoryComposerViewModel
-        if let mediaSeed {
-            composer = StoryComposerViewModel(seeding: mediaSeed)
-        } else {
-            composer = StoryComposerViewModel()
+        switch hydration {
+        case .editingStory(let hydrate):
+            // Le meuble n'en construit PAS un second : il adopte celui que la
+            // porte lui remet, déjà hydraté depuis la story publiée. L'invariant
+            // « un seul objet, un seul site d'adoption » tient — `adoptDraft`
+            // s'applique dessus douze lignes plus bas, comme aux autres.
+            composer = hydrate
+        case .repostingStory(let story, let authorHandle):
+            composer = StoryComposerViewModel(reposting: story, authorHandle: authorHandle)
+        case nil:
+            if let mediaSeed {
+                composer = StoryComposerViewModel(seeding: mediaSeed)
+            } else {
+                composer = StoryComposerViewModel()
+            }
         }
         if let repris { composer.adoptDraft(id: repris) }
         _viewModel = StateObject(wrappedValue: composer)
@@ -675,10 +714,31 @@ struct MeeshyComposerHost: View {
         // sur `.public` publierait sous une audience que l'auteur n'a pas
         // choisie. La règle porte l'ordre ; ce site ne fait que lui donner ses
         // deux sources.
+        //
+        // **Une hydratation PLAFONNÉE gagne sur la mémoire** (#5053). Republier
+        // une story privée en la voyant ouverte sur « Amis » — le dernier choix
+        // mémorisé — serait offrir une faute que le serveur refuserait ensuite
+        // (403 `REPOST_AUDIENCE_WIDENING`), après que la composition est faite.
+        // L'ÉDITION, elle, rend `nil` ici : c'est le ViewModel hydraté qui
+        // porte son audience (`editingInitialVisibility`), réassignée en
+        // priorité absolue par `StoryComposerView.init`. Deux sources pour une
+        // même valeur, dont la seconde gagne toujours, feraient une première
+        // ligne morte qui aurait l'air de décider.
+        //
+        // L'audience de l'hydratation passe par le MÊME validateur que les
+        // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient
+        // d'un `StoryItem`, donc du réseau, et un rawValue inconnu doit
+        // retomber comme n'importe quel autre plutôt que de traverser en l'état.
+        let hydratee = hydration?.initialVisibility
         _composerVisibility = State(initialValue: ComposerAudienceMemory.seed(
-            rememberedRaw: ComposerAudienceMemory.key(for: ouverture)
-                .flatMap { UserDefaults.standard.string(forKey: $0) },
-            doorRaw: initialVisibility
+            // La mémoire est NEUTRALISÉE quand l'hydratation impose une
+            // audience : c'est ce que « gagne sur » veut dire ici. La laisser
+            // en premier rang la ferait gagner, elle.
+            rememberedRaw: hydratee == nil
+                ? ComposerAudienceMemory.key(for: ouverture)
+                    .flatMap { UserDefaults.standard.string(forKey: $0) }
+                : nil,
+            doorRaw: hydratee ?? initialVisibility
         ))
     }
 
