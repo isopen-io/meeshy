@@ -365,6 +365,27 @@ const soumission = (chemin: string, champs: Readonly<Record<string, string>>, en
   });
 };
 
+/**
+ * **L'HORLOGE EST INJECTÉE, JAMAIS LUE.** Une story a une échéance : la porte
+ * compare `expiresAt` à une horloge, et tant qu'elle lisait `Date.now()`, ces
+ * témoins étaient datés — la suite a viré au rouge le 2026-09-03 à 05:00 UTC,
+ * l'heure de la fixture, sur un code que personne n'avait touché.
+ *
+ * `MAINTENANT` est la MÊME horloge que celle des témoins de vue ci-dessus, si
+ * bien que la fixture reste ABSOLUE des deux côtés. Rendre `expiresAt` relatif
+ * (`Date.now() + 1 h`) aurait déplacé la pourriture d'un jour et fait dépendre
+ * le verdict de l'ordre d'exécution : ce qu'on veut n'est pas une échéance qui
+ * fuit devant l'horloge, c'est une horloge qui ne bouge pas.
+ *
+ * Les deux passe-plats existent pour qu'aucun site d'appel ne puisse l'oublier
+ * — un témoin ajouté demain hériterait sinon du défaut d'aujourd'hui.
+ */
+const lisLa = (demande: Parameters<typeof lisLaStory>[0]): Promise<Response> =>
+  lisLaStory({ maintenant: MAINTENANT, ...demande });
+
+const soumetsA = (demande: Parameters<typeof soumetsALaStory>[0]): Promise<Response> =>
+  soumetsALaStory({ maintenant: MAINTENANT, ...demande });
+
 type Appel = { readonly methode: string; readonly chemin: string; readonly corps: string };
 
 const passerelle = (parChemin: Readonly<Record<string, () => Response>>) => {
@@ -437,6 +458,37 @@ describe('la porte de la story', () => {
     expect(seconde.status).toBe(404);
     expect(await premiere.text()).toBe(await seconde.text());
     expect(documentIndisponible(GENRE_STORY)).toContain(STORY.indisponible.titre);
+  });
+
+  /**
+   * **L'ÉCHÉANCE SE MESURE À L'HORLOGE QU'ON DONNE À LA PORTE.** Une MÊME
+   * fixture, deux horloges : vivante une minute avant, indisponible une minute
+   * après. C'est le témoin qui ROUGIT si l'horloge redevient `Date.now()` —
+   * celui de la story échue, lui, resterait vert (sa fixture est morte depuis
+   * janvier, quelle que soit l'horloge).
+   */
+  it('lit l’échéance à l’horloge INJECTÉE, jamais à celle du jour où on la rejoue', async () => {
+    const echeance = Date.parse('2026-09-03T05:00:00.000Z');
+    // Fixture ABSOLUE et PROPRE à ce témoin — le `brute()` par défaut de `MONDE`
+    // expire désormais un jour APRÈS l'instant réel du test (fixture relative,
+    // § brute()), donc il ne peut plus servir à vérifier une échéance à une
+    // date PRÉCISE : ce témoin fixe la sienne, comme le fait déjà « échue ».
+    const monde = { ...MONDE, '/api/v1/posts/s1': () => json({ success: true, data: brute({ expiresAt: new Date(echeance).toISOString() }) }) };
+    const avant = await lisLa({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: passerelle(monde).recuperer,
+      maintenant: echeance - 60_000,
+    });
+    const apres = await lisLa({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: passerelle(monde).recuperer,
+      maintenant: echeance + 60_000,
+    });
+
+    expect(avant.status).toBe(200);
+    expect(apres.status).toBe(404);
   });
 
   it('dessine la panne quand la passerelle ne répond pas', async () => {

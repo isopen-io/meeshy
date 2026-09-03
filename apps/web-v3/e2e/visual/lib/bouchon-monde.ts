@@ -46,6 +46,25 @@ export const CONVERSATION_RICHE = {
   membres: 4,
 } as const;
 
+/**
+ * LA SECONDE LIGNE DE `/chats` — un tête-à-tête, et le TÉMOIN de deux règles à
+ * la fois.
+ *
+ * § 12.10.2 : à DEUX, le compte de participants se tait. Et le Prisme : son
+ * dernier message est ESPAGNOL, avec une traduction française — un lecteur dont
+ * le prisme commence par le français lit « Merci, je t'envoie le fichier », la
+ * pastille annonçant `es`. C'est la ligne que `cible/chats.png` dessine.
+ */
+export const AUTRE_CONVERSATION = {
+  id: '68f2a81417a557e8ce4ddfbc',
+  titre: 'Marta Ruiz',
+  membres: 2,
+  nonLus: 0,
+  apercu: 'Gracias, te envío el archivo',
+  langueOriginale: 'es',
+  traductions: { fr: 'Merci, je t’envoie le fichier' },
+} as const;
+
 export const IDENTIFIANT_DU_LIEN_PARTAGE = 'lagos-q1';
 export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
 /** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */

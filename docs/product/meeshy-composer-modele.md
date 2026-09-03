@@ -140,6 +140,36 @@ Les deux peuvent coexister sur une même publication sans se contredire — l'un
 l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
 « posant un lieu » : il n'en pose aucun.
 
+### Deux bandes encadrent la carte, et elles ne qualifient PAS la même chose
+
+Depuis #5001 et #5002, la carte de scène est encadrée de deux bandes. Elles se
+ressemblent — même gouttière, même bord gauche aligné sur le dessin, même geste
+(toucher ⇒ la feuille correspondante). **Leur portée est pourtant opposée**, et
+rien à l'écran ne le dit :
+
+| | ce que la bande qualifie | où vit la donnée | change en changeant de slide |
+|---|---|---|---|
+| **au-dessus** — note · spectre · crédit · durée | le **son de fond de CETTE scène** (plan `background`, « UN visuel et UN son ») | `MeeshySlide` courante | **oui** |
+| **en dessous** — hashtags · mentions référencées | des métadonnées de la **PUBLICATION** entière | dérivées de `documentText`, partagées par toutes les slides | **non** |
+
+C'est le comportement JUSTE — le § ci-dessus et le contrat le disent tous les
+deux : la porte d'un hashtag « ouvre le sélecteur de la publication », et
+`CanvasV3Migration` tient qu'une mention est « une MÉTADONNÉE, pas un objet ».
+Mais la symétrie visuelle affirme une symétrie de sens qui n'existe pas : en
+faisant défiler ses scènes, l'utilisateur voit la bande haute changer et la
+basse rester, sans qu'aucun signe n'ait annoncé pourquoi.
+
+> **Deux surfaces qui se ressemblent affirment qu'elles parlent de la même
+> chose.** Le vocabulaire, ici, n'est pas dans les mots — il est dans la
+> RESSEMBLANCE. Une bande qui encadre la carte se lit comme parlant de la carte ;
+> celle du bas parle de tout ce qui l'entoure.
+
+Ce que le modèle tranche : les deux portées sont **justes** et ne bougent pas.
+Ce qu'il ne tranche PAS : s'il faut les distinguer à l'œil, et comment. C'est une
+décision de design, ouverte en `décision-produit` — pas un défaut à corriger
+d'initiative, parce qu'un correctif inventé ici figerait un choix qui appartient
+au porteur.
+
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 
@@ -280,6 +310,89 @@ Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733
 (« le meuble publie la story par un second chemin »), non arbitré à ce jour. Ce
 paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
 pas #4733, et ne doit pas être lu comme le faisant.
+
+## 1 bis-2. `storyEffects` est un NOM DE CHAMP, pas un format (mesure 2026-09-03)
+
+Question posée par le porteur : *« storyEffects est encore d'actualité dans cette
+nouvelle version ? On a plus migré vers les MeeshySceneObject avec tous les
+détails d'effet, start, end, transition d'entrée et de sortie ? »*
+
+La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
+champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
+L'INTÉRIEUR du champ.** `storyEffects` est le nom de la colonne et de la clé du
+fil ; son CONTENU est un document **canvas v3**, et la passerelle refuse tout le
+reste.
+
+| couche | ce qui porte la scène | mesure |
+|---|---|---|
+| le fil | clé `storyEffects`, contenu **canvas v3** | `routes/posts/core.ts:100` — `if (!isCanvasV3(storyEffects))` refuse, puis `CanvasV3Schema.safeParse` |
+| le contrat | `ObjectV3Schema` | `packages/shared/types/canvas-v3.ts` |
+| iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:962` |
+| iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1290`) |
+| iOS, le vocabulaire d'objet | `MeeshySceneObject`, **somme à cinq cas** — `text` · `media` · `sticker` · `place` · `audio` | `Models/MeeshySceneObject.swift:56` |
+
+Le pont est **bidirectionnel et sans mémoire** : l'encodage part TOUJOURS du
+runtime courant, jamais du `canvasV3` reçu — une composition neuve et une story
+éditée émettent donc l'une comme l'autre l'état réel du canvas.
+
+### Ce qu'un objet porte, exactement
+
+Neuf champs, et il faut les citer pour clore la question des « détails d'effet » :
+
+`id` · `kind` · `anchor` · `plane` (`bg`/`content`/`fg`) · `z` ·
+`transform { scale, rotation, opacity }` · `timing? { start, end, keyframes }` ·
+`locale?` · `payload`
+
+Donc : **`start` et `end` EXISTENT**, portés par `timing`, et l'entrée d'un objet
+dans la timeline n'est pas un ajout de contrat.
+
+### Les transitions : elles EXISTENT, une couche plus haut, et sans vocabulaire partagé
+
+> **Correction d'une mesure fausse écrite dans ce document le 2026-09-03.** J'y
+> avais affirmé « aucune transition d'entrée ni de sortie n'est modélisée », sur
+> la foi d'un `grep -n "transition"` rendant zéro dans `packages/shared/types/`.
+> Le motif était SENSIBLE À LA CASSE et ratait `clipTransitions`. La phrase est
+> restée committée moins d'une heure ; elle est fausse et voici l'état réel.
+
+**Un OBJET n'a pas de transition** — c'est le seul point que l'affirmation
+fausse avait juste. Ses neuf champs portent `timing { start, end, keyframes }` :
+des bornes, pas une manière d'apparaître.
+
+**Une SCÈNE en a trois**, et elles sont vivantes de bout en bout :
+
+| champ | ce qu'il porte | qui le produit | qui le rend |
+|---|---|---|---|
+| `opening` | l'entrée de la scène | `viewModel.openingEffect` (composer iOS) | iOS (`StoryViewerView+Canvas`, `+Content`), Android (`CanvasV3Projection`), web (`story-transforms`) |
+| `closing` | la sortie | `viewModel.closingEffect` | idem |
+| `clipTransitions` | les fondus entre clips adjacents, **30 au plus** | `TimelineViewModel`, `VideoCompositor` | iOS, Android (`StoryClipTransitionResolver`), web (crossfade) |
+
+Le vocabulaire côté client est `StoryTransitionEffect` — **quatre** cas :
+`fade` · `zoom` · `slide` · `reveal`.
+
+### Ce qui, en revanche, n'existe VRAIMENT pas : leur définition PARTAGÉE
+
+Le contrat les transporte **opaques** :
+
+```ts
+opening: z.record(z.string(), z.unknown()).optional(),
+closing: z.record(z.string(), z.unknown()).optional(),
+clipTransitions: z.array(z.record(z.string(), z.unknown())).max(30).optional(),
+```
+
+`z.unknown()` — le contrat garantit qu'un objet passe, jamais ce qu'il contient.
+Le vocabulaire des quatre effets est donc défini **trois fois côté client**
+(Swift `StoryTransitionEffect`, Kotlin `StoryClipTransition`, TypeScript dans
+`story-transforms`) et **nulle part** dans `packages/shared`.
+
+> C'est la forme exacte que ce dépôt a déjà payée trois fois sur le Prisme : une
+> règle réécrite par chaque client diverge sans qu'aucun témoin ne tombe, parce
+> que rien ne les compare. Ici le risque est plus discret encore — le contrat
+> ACCEPTE tout, donc un cinquième effet ajouté par un seul client voyage
+> intact jusqu'aux deux autres, qui l'ignorent en silence.
+
+Ce qui reste à décider n'est donc pas « faut-il des transitions » mais **« faut-il
+que le contrat les CONNAISSE »** — un lot de contrat, distinct du rognage
+temporel que `timing` couvre déjà.
 
 ## 1 ter. Ce que chaque nom devient SOUS le composer
 
@@ -549,6 +662,61 @@ Trois façons de fermer le trou, non exclusives, par coût croissant :
 Tant que (3) n'est pas tranchée, **la charge reste une convention, jamais un
 contrat** — et tout lot qui y ajoute une clé doit la porter à la main sur chaque
 couche qui recompose.
+
+## 6 ter. La frontière SDK ↔ app : un vocabulaire de VERBES (mesure 2026-09-03)
+
+Le § 6 bis mesure où la structure d'une publication est connue. Celui-ci mesure
+**comment on la modifie** — question distincte, et dont la réponse n'était écrite
+nulle part alors que le compilateur la fait respecter.
+
+### La règle, telle qu'elle est réellement appliquée
+
+| | ce qui est exposé | portée |
+|---|---|---|
+| l'ÉTAT (`StoryComposerViewModel.currentEffects`) | la LECTURE seule | `public internal(set)` |
+| le protocole `StoryComposerProviding` | rien, hors du SDK | `internal` |
+| les OPÉRATIONS | ~42 verbes | `public func` |
+
+**L'app ne peut pas écrire dans les effets. Elle appelle des verbes** —
+`addText`, `addSticker`, `addLocation`, `deleteElement`, `duplicateElement`,
+`bringForward`, `sendBackward`, `toggleBackground`, `updateTextContent`,
+`moveElement`… — chacun tenant les invariants que la mutation directe
+contournerait (un seul fond par slide, le nettoyage des champs legacy, la
+cohérence du `zIndex`).
+
+Ce n'est pas une convention documentée puis oubliée : `public internal(set)` la
+fait respecter à la compilation. C'est la meilleure sorte de règle — celle qu'on
+ne peut pas enfreindre par distraction.
+
+> Cette frontière est la forme concrète, pour le composer, de la règle de partage
+> du § « SDK Purity » : des briques aux paramètres opaques dans le SDK, la
+> décision produit chez l'app. Un verbe dit *comment* ; l'app décide *quand* et
+> *où*.
+
+### Le piège : une capacité absente derrière un vocabulaire qui la suggère
+
+Le lot #5018 a buté sur une absence que rien ne signalait : **aucun verbe ne
+disait « pose cet objet là ».** L'absence était masquée par un trio qui en a
+l'air — `beginDrag` / `updateDrag` / `endDrag`. Ces trois-là ne portent qu'un
+état ÉPHÉMÈRE (`activeDrag`), et `endDrag()` se contente de le remettre à `nil` :
+**il ne commite aucune position.** Un appelant qui cherche « comment déplacer »
+trouve trois fonctions de glissement et conclut que le sujet est couvert.
+
+> **Une capacité absente derrière un vocabulaire qui la suggère coûte plus cher
+> qu'une capacité absente tout court : on ne la cherche pas deux fois.** Le
+> premier jet du correctif a donc essayé d'écrire directement dans
+> `currentEffects` — refusé par le compilateur, et à juste titre.
+
+`moveElement(id:to:)` comble le trou
+(`StoryComposerViewModel+Placement.swift`). Il borne la position à [0, 1] : un
+objet posé hors cadre serait injoignable, ce qui est pire que mal placé.
+
+### Ce que cette mesure ne dit pas
+
+Elle ne dit pas si les ~42 verbes sont les BONS, ni s'il en manque d'autres. Elle
+dit qu'il en manquait au moins un, et que son absence était invisible depuis
+l'app. La question « quel geste de l'app n'a pas son verbe ? » se pose surface
+par surface, et n'a été posée qu'une fois.
 
 ## 7. Correspondance avec ce qui existe
 

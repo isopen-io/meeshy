@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
@@ -16,6 +16,7 @@ import { ciblesMesurees, ciblesTropPetites, LARGEURS } from './lib/cibles';
 // nomme dans son en-tête.
 import { COLONNES_DE_THEME, violationsBloquantes } from './lib/verdict-axe';
 import {
+  chargeMesureReseau,
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
   messagesRiches,
@@ -49,6 +50,8 @@ import {
 const COMMANDE = 'bunx playwright test e2e/visual/v3-fil-riche.spec.ts';
 
 const DOSSIER_DES_RENDUS = process.env.RENDUS_DIR ?? join(RACINE_V3, 'test-results', 'rendus');
+
+const budgets = JSON.parse(readFileSync(join(RACINE_V3, 'budgets.json'), 'utf8'));
 
 let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
@@ -113,9 +116,12 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
       })),
     );
     // Le DOM va du plus récent au plus ancien (`column-reverse`, feuille du fil).
+    // Depuis § 12.10.1, la VIDÉO est une AFFICHE comme l'image : son poster mène
+    // au PLEIN ÉCRAN, où elle se joue. Reste un lecteur DANS la ligne ce qui
+    // s'écoute sur place sans rien coûter — le vocal, et lui seul.
     expect(blocs).toEqual([
       { genre: 'audio', vus: ['details.lecteur'] },
-      { genre: 'video', vus: ['details.lecteur'] },
+      { genre: 'video', vus: ['a.media'] },
       { genre: 'image', vus: ['a.media'] },
     ]);
 
@@ -197,25 +203,96 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
   });
 
   /**
-   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PAS LA CONVERSATION. `download` est
-   * IGNORÉ hors origine — et la passerelle EST une autre origine que le
-   * document —, si bien que le clic NAVIGUAIT l'onglet vers le fichier brut :
-   * fil, position de lecture et socket perdus, et rien ne l'annonçait. Le
-   * témoin porte sur l'EFFET du geste, pas sur un attribut.
+   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PAS LA CONVERSATION — et depuis
+   * § 12.10.1, une image n'ouvre même plus d'onglet : elle ouvre le PLEIN
+   * ÉCRAN, un ÉTAT de l'adresse hôte. Le geste qui emporte encore un onglet est
+   * celui de la surimpression (« Télécharger »), et il le fait pour la raison
+   * qui l'a toujours fait : `download` est IGNORÉ hors origine — la passerelle
+   * EST une autre origine que le document —, si bien qu'un lien du même onglet
+   * NAVIGUERAIT vers le fichier brut, fil et position de lecture perdus. Le
+   * témoin porte sur l'EFFET des deux gestes, pas sur un attribut.
    */
-  test('ouvre une pièce jointe SANS quitter le fil, et nomme le geste', async ({ browser }) => {
+  test('ouvre une image SANS quitter le fil, et ne sort qu’au téléchargement', async ({ browser }) => {
     const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
     const page = await ouvreLeFil(contexte);
-    const avant = page.url();
 
     const affiche = page.locator('li[data-id="r1"] a.media');
-    await expect(affiche).toHaveAttribute('aria-label', /Télécharger tableau\.jpg · 420 Ko/);
+    await expect(affiche).toHaveAttribute('aria-label', /Ouvrir tableau\.jpg · 420 Ko/);
     expect(await affiche.getAttribute('download')).toBeNull();
+    expect(await affiche.getAttribute('target')).toBeNull();
 
-    const [ouvert] = await Promise.all([contexte.waitForEvent('page'), affiche.click()]);
+    await affiche.click();
+    // MÊME onglet, MÊME adresse : la conversation est toujours là, derrière.
+    expect(contexte.pages()).toHaveLength(1);
+    expect(new URL(page.url()).pathname).toBe(new URL(FIL()).pathname);
+
+    const telecharger = page.locator('dialog.plein a.action');
+    await expect(telecharger).toHaveText(/Télécharger tableau\.jpg/);
+    await expect(page.locator('dialog.plein .poids')).toHaveText('420 Ko');
+    expect(await telecharger.getAttribute('download')).toBeNull();
+    const [ouvert] = await Promise.all([contexte.waitForEvent('page'), telecharger.click()]);
     await ouvert.waitForLoadState('domcontentloaded').catch(() => undefined);
-    expect(page.url()).toBe(avant);
     expect(ouvert.url()).toContain('/api/v1/attachments/file/');
+    await contexte.close();
+  });
+
+  /**
+   * LE PLEIN ÉCRAN D'UNE VIDÉO L'AGRANDIT. Mesuré avant : `<video
+   * preload="none">` n'a AUCUNE métadonnée, donc aucun rapport intrinsèque, et
+   * sans `width`/`height` ni règle de feuille le navigateur retombait sur ses
+   * 300 × 150 par défaut — le geste « plein écran » RAPETISSAIT ce qu'on
+   * regarde (294 × 165 en affiche dans le fil, 300 × 150 en plein écran).
+   */
+  test('agrandit la vidéo au lieu de la rapetisser, sans lire une métadonnée', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    const affiche = page.locator('li[data-id="r2"] a.media');
+    const boiteDeLAffiche = await affiche.boundingBox();
+    await affiche.click();
+
+    const lecteur = page.locator('dialog.plein video.media-plein');
+    await expect(lecteur).toHaveCount(1);
+    // `readyState === 0` : rien n'a été chargé, donc la boîte ne vient PAS d'une métadonnée.
+    expect(await lecteur.evaluate((noeud) => (noeud as HTMLVideoElement).readyState)).toBe(0);
+    const boiteDuPlein = await lecteur.boundingBox();
+    expect(boiteDuPlein?.width ?? 0).toBeGreaterThanOrEqual(boiteDeLAffiche?.width ?? 0);
+    expect(boiteDuPlein?.height ?? 0).toBeGreaterThanOrEqual(boiteDeLAffiche?.height ?? 0);
+    await contexte.close();
+  });
+
+  /**
+   * SANS JAVASCRIPT, LA SURIMPRESSION RETIENT LE FOCUS. `showModal()` donne le
+   * voile, le piège à focus et Échap — mais il n'y a pas de JavaScript sur le
+   * chemin qui doit marcher partout. Mesuré avant : le `<dialog open>` était
+   * servi APRÈS un `<main>` que rien ne rendait inerte, et le clavier
+   * traversait vingt-et-un contrôles invisibles — retour, médias, composeur,
+   * sauts de citation — avant d'atteindre la croix ; il pouvait poster un
+   * message qu'il ne voyait pas.
+   */
+  test('sans JavaScript — le fil derrière la surimpression ne prend plus le focus', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+    await page.locator('li[data-id="r1"] a.media').click();
+    await expect(page.locator('dialog.plein')).toHaveCount(1);
+    await expect(page.locator('main#main-content')).toHaveAttribute('inert', '');
+    await expect(page.locator('dialog.plein')).toHaveAttribute('aria-modal', 'true');
+
+    const parcours: string[] = [];
+    for (let pression = 0; pression < 8; pression += 1) {
+      await page.keyboard.press('Tab');
+      parcours.push(
+        await page.evaluate(() => {
+          const actif = document.activeElement;
+          if (actif === null || actif === document.body) return 'hors page';
+          if (actif.closest('dialog.plein') !== null) return 'dialogue';
+          return actif.closest('main') !== null ? 'fil' : 'autre';
+        }),
+      );
+    }
+    // La PREMIÈRE tabulation atteint le dialogue, et AUCUNE n'atteint le fil.
+    expect(parcours[0]).toBe('dialogue');
+    expect(parcours).not.toContain('fil');
     await contexte.close();
   });
 
@@ -226,9 +303,12 @@ test.describe('six formes, deux tables — sans JavaScript', () => {
     await expect(page.locator('li[data-id="r4"] .citation .quoi')).toHaveText('Transféré depuis Diaspora FR-EN');
     await expect(page.locator('li[data-id="r5"] .citation .quoi')).toHaveText('En réponse à Ibrahim');
     await expect(page.locator('li[data-id="r6"] .citation .quoi')).toHaveText('A répondu à votre story');
-    // Une citation n'est PAS un contrôle : ses destinations (`/stories/:id`,
-    // `/chats/:id/medias`) ne sont pas servies par la v3 (charte règle 7).
-    expect(await page.locator('li.citation a, li.citation button').count()).toBe(0);
+    // UNE citation est un contrôle : celle dont la CIBLE EST DANS LA PAGE, et
+    // elle SAUTE vers elle (§ 12.10.1). Les deux autres citent ce que la v3 ne
+    // sert pas (`/stories/:id`, une conversation d'origine) : elles sont
+    // rendues sans `href`, donc sans rôle de lien (charte règle 7).
+    expect(await page.locator('li.citation a[href], li.citation button').count()).toBe(1);
+    await expect(page.locator('li[data-id="r5"] .citation a.saut')).toHaveAttribute('href', '#m-r1');
     await contexte.close();
   });
 });
@@ -363,5 +443,243 @@ test.describe('les rendus que le rapport regarde', () => {
       }
       await contexte.close();
     }
+  });
+});
+
+/**
+ * CE QU'UN CHAT OFFRE, ET QUE LE FIL N'OFFRAIT PAS (§ 12.10.1, 2026-09-03) —
+ * mesuré AU NAVIGATEUR, parce qu'aucune lecture de source ne peut dire qu'un
+ * clic déplace la page, qu'une surimpression s'ouvre ou qu'Échap la ferme.
+ *
+ * LES QUATRE PREMIERS TÉMOINS TOURNENT SANS JAVASCRIPT : le saut est un lien de
+ * fragment, le plein écran un ÉTAT de l'adresse hôte. C'est le chemin qui
+ * marche partout, et c'est celui qu'on garde. Le cinquième mesure la seule
+ * chose que le module AJOUTE : Échap.
+ */
+test.describe('les rendus du plein écran que le rapport regarde', () => {
+  /**
+   * LA FICHE D'UN VOCAL, en plein écran : ce que § 12.10.1 demande et ce
+   * qu'aucune capture ne montrait — le lecteur, la transcription ENTIÈRE, son
+   * Prisme (« Transcrit du yo · lire en fr »), l'original à un geste et le
+   * poids annoncé avant tout téléchargement.
+   */
+  test('captures 390×844 de la fiche d’un vocal — clair et sombre', async ({ browser }, info) => {
+    mkdirSync(DOSSIER_DES_RENDUS, { recursive: true });
+    for (const schema of ['light', 'dark'] as const) {
+      // AVEC JavaScript : sans lui, le moteur de thème ne pose pas `.light` et
+      // les deux colonnes rendraient la même image (le défaut par défaut est
+      // `dark`). C'est aussi l'état que le lecteur voit — modale élevée.
+      const contexte = await contexteDuMembre(browser, { colorScheme: schema, viewport: { width: 390, height: 844 } });
+      const page = await contexte.newPage();
+      await page.goto(`${FIL()}?media=ar3`, { waitUntil: 'load' });
+      await expect(page.locator('dialog.plein')).toBeVisible();
+      const chemin = join(DOSSIER_DES_RENDUS, `thread-fiche-${schema}.png`);
+      await page.screenshot({ path: chemin });
+      info.annotations.push({ type: `rendu fiche ${schema}`, description: chemin });
+      await contexte.close();
+    }
+  });
+});
+
+/**
+ * LE RÉGIME `?media=` EST MESURÉ, DONC GATÉ. La surimpression n'ajoute aucune
+ * requête au document — elle est servie DEDANS —, mais l'ÉTAT étant dans
+ * l'adresse, l'ouvrir est une navigation entière et la refermer une seconde :
+ * un coût que le tour précédent déclarait « aucun » sans jamais le mesurer, et
+ * qu'AUCUN témoin ne visitait (les vitals du fil ne connaissent que `/chats/:cle`
+ * nu). Les plafonds opposés sont ceux de `/chats/*` — 4 requêtes avant le
+ * premier pixel, LCP ≤ 2,2 s, CLS ≤ 0,05 —, pris tels quels : un état d'une
+ * adresse n'a pas de budget à lui.
+ */
+test.describe('le coût du plein écran, mesuré', () => {
+  test('le régime ?media= tient les plafonds de /chats/*, et son document est pesé', async ({ browser }, info) => {
+    const { mesurePage, franchissementsReseau } = await chargeMesureReseau();
+    const cookies = [
+      { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base },
+      { name: COOKIE_DE_SESSION, value: 'ouverte', url: v3.base },
+    ];
+    const mesure = await mesurePage({
+      url: `${FIL()}?autour=r1&media=ar1`,
+      commande: COMMANDE,
+      navigateur: browser,
+      cookies,
+      profil: budgets.reseau.profil,
+    });
+    info.annotations.push({
+      type: 'plein écran d’un média en Fast 3G',
+      description: `req. avant le premier pixel ${mesure.requetes_avant_premier_pixel ?? '?'} · FCP ${mesure.fcp_ms ?? '?'} ms · LCP ${mesure.lcp_ms ?? '?'} ms · CLS ${mesure.cls ?? '?'} · ${mesure.octets_transferes ?? '?'} o`,
+    });
+    console.log(
+      `[mesure] /chats/:cle?media= Fast 3G — requêtes avant le premier pixel ${mesure.requetes_avant_premier_pixel} · FCP ${mesure.fcp_ms} ms · LCP ${mesure.lcp_ms} ms · CLS ${mesure.cls} · ${mesure.octets_transferes} o`,
+    );
+    expect(mesure.http).toBe(200);
+    expect(franchissementsReseau(mesure, budgets.reseau).filter((f) => f.statut === 'GATE').map((f) => f.texte)).toEqual([]);
+  });
+
+  /**
+   * OUVRIR UN MÉDIA N'ACCUSE PLUS LA LECTURE. Le fil est RECOUVERT par une
+   * surimpression opaque et son `<main>` est inerte : il n'est pas affiché,
+   * donc il n'est pas lu (`accuseCeQuiEstServi`). Chaque ouverture et chaque
+   * fermeture re-postait la MÊME tranche — regarder trois photos coûtait six
+   * écritures pour rien, sur la 3G rurale que la directive vise.
+   */
+  test('n’écrit aucun accusé de lecture pendant qu’un média recouvre le fil', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    const recus = (): number =>
+      passerelle.journal.filter((appel) => appel.methode === 'POST' && appel.chemin.endsWith('/receipts')).length;
+
+    await page.goto(FIL(), { waitUntil: 'load' });
+    await expect.poll(recus).toBeGreaterThan(0);
+    const apresLeFil = recus();
+
+    await page.locator('li[data-id="r1"] a.media').click();
+    await expect(page.locator('dialog.plein')).toHaveCount(1);
+    await page.waitForTimeout(200);
+    expect(recus()).toBe(apresLeFil);
+
+    // Fermer DÉCOUVRE le fil : là, ce qui est affiché est lu.
+    await page.locator('dialog.plein a.fermer').click();
+    await expect(page.locator('dialog.plein')).toHaveCount(0);
+    await expect.poll(recus).toBeGreaterThan(apresLeFil);
+    await contexte.close();
+  });
+});
+
+test.describe('saut, plein écran et fiche — sans JavaScript', () => {
+  test('la citation SAUTE vers le message cité, et la ligne visée se distingue', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    const saut = page.locator('li[data-id="r5"] .citation a.saut');
+    await expect(saut).toHaveAttribute('href', '#m-r1');
+    await saut.click();
+
+    expect(new URL(page.url()).hash).toBe('#m-r1');
+    await expect(page.locator('li[data-id="r1"]')).toBeInViewport();
+    // `:target` est ce qui MET EN ÉVIDENCE la ligne visée — aucune atténuation
+    // des voisines (le mode « focal » retiré au tour 2 reste retiré).
+    expect(await page.evaluate(() => document.querySelector('li[data-id="r1"]')?.matches(':target') ?? false)).toBe(true);
+    expect(await page.evaluate(() => [...document.querySelectorAll('li.ligne')].filter((l) => Number(getComputedStyle(l).opacity) < 1).length)).toBe(0);
+    await contexte.close();
+  });
+
+  /**
+   * UNE CITATION DONT LA CIBLE N'EST PAS DANS LA PAGE N'EST PAS UN CONTRÔLE
+   * (charte règle 7) : ni `href`, ni focus, ni rôle de lien. Le transfert et la
+   * story de la cible citent des choses que la v3 ne sert pas.
+   */
+  test('ne rend cliquable AUCUNE citation dont la cible n’est pas servie', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    for (const id of ['r4', 'r6']) {
+      const citation = page.locator(`li[data-id="${id}"] .citation a.saut`);
+      await expect(citation).toHaveCount(1);
+      expect(await citation.getAttribute('href')).toBeNull();
+    }
+
+    // ET ELLE SE VOIT (charte règle 16 : « une carte informe, un contour
+    // déclare un contrôle ») : le filet de la citation qui SAUTE n'est pas
+    // celui des deux qui ne mènent nulle part.
+    const filets = await page.evaluate(() =>
+      ['r5', 'r4', 'r6'].map((id) => getComputedStyle(document.querySelector(`li[data-id="${id}"] .citation .saut`) as Element).borderLeftColor),
+    );
+    expect(filets[0]).not.toBe(filets[1]);
+    expect(filets[1]).toBe(filets[2]);
+    await contexte.close();
+  });
+
+  test('une image s’ouvre en PLEIN ÉCRAN au tap, et la croix rend le fil', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    // Rien n'est parti tant que personne n'a demandé.
+    expect(passerelle.journal.filter((appel) => appel.chemin.includes('/attachments/file/'))).toEqual([]);
+
+    await page.locator('li[data-id="r1"] a.media').click();
+    expect(new URL(page.url()).searchParams.get('media')).toBe('ar1');
+
+    const plein = page.locator('dialog.plein');
+    await expect(plein).toBeVisible();
+    await expect(plein.locator('h2')).toHaveText('tableau.jpg');
+    await expect(plein.locator('.poids')).toHaveText('420 Ko');
+    await expect(plein.locator('img.media-plein')).toHaveAttribute('alt', 'tableau.jpg');
+    // Les octets ne partent qu'ICI — c'est le geste qui les a demandés.
+    await expect
+      .poll(() => passerelle.journal.filter((appel) => appel.chemin.includes('/attachments/file/')).length)
+      .toBeGreaterThan(0);
+
+    await plein.locator('a.fermer').click();
+    expect(new URL(page.url()).searchParams.get('media')).toBeNull();
+    await expect(page.locator('dialog.plein')).toHaveCount(0);
+    await contexte.close();
+  });
+
+  test('une vidéo s’ouvre en plein écran, et n’y coûte toujours aucun octet', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    // LA PASTILLE DE DURÉE·POIDS EST POSÉE SUR LE POSTER, pas au bas de la
+    // pièce : elle est en `position:absolute`, et le seul ancêtre positionné à
+    // sa portée doit être l'affiche. Mesuré sans cette ancre : elle tombait au
+    // bas du `<li>`, PAR-DESSUS le « Voir l'original » du transcrit.
+    const boites = await page.evaluate(() => {
+      const item = document.querySelector('li[data-id="r2"] ul.pieces > li') as HTMLElement;
+      const affiche = item.querySelector('a.media') as HTMLElement;
+      const pastille = item.querySelector('.etiquette') as HTMLElement;
+      return { affiche: affiche.getBoundingClientRect().bottom, pastille: pastille.getBoundingClientRect().bottom };
+    });
+    expect(boites.pastille).toBeLessThanOrEqual(boites.affiche);
+
+    await page.locator('li[data-id="r2"] a.media').click();
+    const plein = page.locator('dialog.plein');
+    await expect(plein.locator('video.media-plein')).toHaveAttribute('preload', 'none');
+    await expect(plein.locator('.poids')).toHaveText('0:42 · 3,0 Mo');
+    await page.waitForTimeout(500);
+    expect(passerelle.journal.filter((appel) => appel.chemin.includes('/attachments/file/'))).toEqual([]);
+    await contexte.close();
+  });
+
+  /**
+   * LA FICHE D'UN VOCAL : la transcription ENTIÈRE (la ligne du fil la clampe à
+   * quatre lignes), son original à un geste, et la piste de la langue SERVIE —
+   * on entend ce qu'on lit (cycle 128).
+   */
+  test('un vocal ouvre sa FICHE : transcription entière, original, piste servie', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    await page.locator('li[data-id="r3"] a.fiche').click();
+    const plein = page.locator('dialog.plein');
+    await expect(plein).toBeVisible();
+    await expect(plein.locator('audio.media-plein')).toHaveAttribute('src', `${passerelle.base}${PISTE_TRADUITE}`);
+    await expect(plein.locator('.transcription')).toContainText('J’apporte les chiffres de mars');
+    await expect(plein.locator('.transcrit')).toHaveText('Transcrit du yo · lire en fr');
+    await expect(plein.locator('details.transcrit-original')).toBeVisible();
+    // La fiche ne CLAMPE pas ce que la ligne clampe : c'est son effet mesurable.
+    expect(
+      await page.evaluate(() => getComputedStyle(document.querySelector('dialog.plein .transcription') as Element).webkitLineClamp),
+    ).toBe('none');
+    await contexte.close();
+  });
+});
+
+test.describe('ce que le module AJOUTE à la surimpression — et rien de plus', () => {
+  test('Échap ferme le plein écran et rend le fil', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await contexte.newPage();
+    await page.goto(`${FIL()}?media=ar3`, { waitUntil: 'load' });
+
+    // Le module élève le `<dialog open>` servi en MODALE : c'est ce qui donne
+    // Échap, le voile et le piège à focus — jamais une seconde surimpression.
+    await expect
+      .poll(() => page.evaluate(() => document.querySelector('dialog.plein')?.matches(':modal') ?? false), { timeout: 15_000 })
+      .toBe(true);
+
+    await page.keyboard.press('Escape');
+    await page.waitForURL((url) => url.searchParams.get('media') === null, { timeout: 15_000 });
+    await expect(page.locator('li[data-id="r3"]')).toBeVisible();
+    await contexte.close();
   });
 });

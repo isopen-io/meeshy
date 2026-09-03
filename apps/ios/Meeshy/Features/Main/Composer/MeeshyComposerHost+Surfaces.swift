@@ -335,8 +335,7 @@ extension MeeshyComposerHost {
                 hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
                 mentions: composerReferences.count,
-                hasDocumentLocation: documentLocation != nil,
-                hasDocumentBackground: documentBackground != nil))
+                hasDocumentLocation: documentLocation != nil))
     }
 
     var sceneSurface: some View {
@@ -620,6 +619,7 @@ extension MeeshyComposerHost {
             backgroundSound: avatarBadgeSound,
             onEditBackgroundSound: editBackgroundSoundAction,
             onDeleteBackgroundSound: deleteBackgroundSoundAction,
+            onPromoteBackgroundSound: promoteBackgroundSoundAction,
             // **Le pied lit les MÊMES magasins que le reste du meuble** (#5002).
             //
             // `composerHashtags` — pas `ComposerHashtags.tags(in: documentText)`.

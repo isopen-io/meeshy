@@ -138,8 +138,16 @@ final class StickerPaletteTests: XCTestCase {
     /// ne sert plus le fournisseur.
     ///
     /// Garde de SOURCE parce que la règle vit dans un modificateur de vue :
-    /// le `.task` ne doit pas nommer le fournisseur, et le gestionnaire
-    /// d'onglet doit le nommer.
+    /// le `.task` ne doit pas nommer le fournisseur, et le déclencheur doit le
+    /// nommer.
+    ///
+    /// **Le DÉCLENCHEUR a changé au #5012, la règle non.** Le ruban d'onglets
+    /// est devenu une liste de sections : il n'y a plus d'« entrée dans
+    /// l'onglet » à observer, et c'est l'apparition de la SECTION qui dit
+    /// désormais l'intérêt — la `LazyVStack` ne la construit qu'en arrivant
+    /// dessus. Ce témoin RE-VISE ; il ne s'allège pas, et il garde la moitié
+    /// qui n'a pas bougé : le `.task` de la feuille ne doit toujours pas
+    /// nommer le fournisseur.
     func test_thePlaceProvider_isCalledOnTabEntry_notOnSheetOpen() throws {
         let code = Self.strippingComments(
             try String(contentsOf: Self.pickerSourceURL, encoding: .utf8))
@@ -150,13 +158,31 @@ final class StickerPaletteTests: XCTestCase {
                        "La palette demande la position dès son ouverture — l'alerte système "
                         + "surgit par-dessus la grille d'emoji, sans motif visible.")
 
-        let surOnglet = try XCTUnwrap(
-            Self.blockBody(after: ".adaptiveOnChange(of: selectedTab)", in: code),
-            "Le gestionnaire de changement d'onglet est introuvable.")
-        XCTAssertTrue(surOnglet.contains("nearbyPlaces.nearby()"),
-                      "Personne ne charge les lieux : l'onglet resterait vide à jamais.")
-        XCTAssertTrue(surOnglet.contains("places.isEmpty"),
-                      "Sans garde d'idempotence, revenir sur l'onglet relance une recherche.")
+        let sections = Self.strippingComments(
+            try String(contentsOf: Self.verticalSourceURL, encoding: .utf8))
+        let surApparition = try XCTUnwrap(
+            Self.blockBody(after: "placeTab.onAppear {", in: sections),
+            "Le déclencheur de la section Lieu est introuvable — personne ne chargerait les lieux.")
+        XCTAssertTrue(surApparition.contains("nearbyPlaces.nearby()"),
+                      "Personne ne charge les lieux : la section resterait vide à jamais.")
+        XCTAssertTrue(surApparition.contains("places.isEmpty"),
+                      "Sans garde d'idempotence, revenir sur la section relance une recherche.")
+
+        // **Et le déclencheur ne remonte pas d'un cran.** Le poser sur la liste
+        // entière, ou sur le switch de nature, ramènerait exactement le défaut
+        // que ce témoin existe pour interdire : la position demandée avant que
+        // l'auteur ait montré le moindre intérêt pour un lieu.
+        XCTAssertFalse(Self.blockBody(after: "var naturedContent: some View {", in: sections)?
+                        .contains("nearbyPlaces") ?? false,
+                       "Le chargement est remonté au conteneur : il se déclencherait "
+                        + "dès l'affichage de la nature « sticker ».")
+    }
+
+    private static var verticalSourceURL: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/StickerPickerView+Vertical.swift")
     }
 
     private static var pickerSourceURL: URL {

@@ -5,7 +5,7 @@
 import { CHATS, TABLEAU_DE_BORD } from '@/app/connecte/contenu';
 import { liensDuLecteur } from '@/lib/api/compte';
 import { serviteurDe } from '@/app/connecte/porte';
-import { documentDesChats, documentDuTableau, quand, teinteDeLAvatar } from '@/app/connecte/vue';
+import { documentDuTableau, quand, teinteDeLAvatar } from '@/app/connecte/vue';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/app/authentification/remise';
 import type { Conversation, LienDePartage } from '@/lib/api/compte';
 
@@ -27,6 +27,11 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   membres: 199,
   nonLus: 0,
   dernierMessageA: '2026-09-01T12:00:00.000Z',
+  apercu: null,
+  apercuTraductions: null,
+  apercuLangueOriginale: null,
+  sourdine: false,
+  archivee: false,
   ...attributs,
 });
 
@@ -172,6 +177,44 @@ describe('la porte de la zone connectée', () => {
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('prenom=aucun n=1');
+  });
+
+  /**
+   * UNE CONVERSATION ARCHIVÉE N'ATTEINT AUCUN DES DEUX ÉCRANS.
+   *
+   * `GET /conversations` NE LES FILTRE PAS : `whereClause`
+   * (`routes/conversations/core-list.ts:176-247`) ne mentionne pas
+   * `isArchived`, dont la seule occurrence de la route est le `select` qui le
+   * SERT (`core-selects.ts:65`, déclaré au wire par
+   * `conversationMinimalSchema.userPreferences`). C'est donc au client
+   * d'écarter la ligne — la webapp legacy le fait déjà
+   * (`useConversationFiltering.ts:56-59`). Tant qu'il ne le faisait pas,
+   * « Archiver » ÉCRIVAIT une préférence que rien ne relisait : sans
+   * JavaScript, le `POST` menait à un `GET` qui re-servait la ligne SOUS la
+   * bannière « Conversation archivée. ».
+   *
+   * Le témoin porte sur la CHARGE, pas sur un écran : le filtre est posé une
+   * fois, dans la porte que le tableau de bord et `/chats` partagent.
+   */
+  it('écarte de la charge les conversations archivées, que la passerelle sert', async () => {
+    const porte = serviteurDe({
+      chemin: '/chats',
+      ecran: (charge) => charge.conversations.map((conversation) => conversation.id).join(','),
+      recuperer: passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () =>
+          json({
+            success: true,
+            data: [
+              { id: 'vive', title: 'Vive', type: 'group', userPreferences: [{ isMuted: false, isArchived: false }] },
+              { id: 'rangee', title: 'Rangée', type: 'group', userPreferences: [{ isMuted: false, isArchived: true }] },
+            ],
+            pagination: { total: 2 },
+          }),
+      }),
+    });
+
+    expect(await (await porte(requete('/chats', AVEC_JETON))).text()).toBe('vive');
   });
 
   it('dessine la panne plutôt qu’une page blanche quand la passerelle se tait', async () => {
@@ -412,6 +455,127 @@ describe('le tableau de bord', () => {
   });
 
   /**
+   * La carte du tableau de bord tient le MÊME seuil que la ligne de `/chats` et
+   * que le fil (§ 12.10.2).
+   *
+   * Le témoin garde les DEUX moitiés du seuil, et la seconde n'est pas
+   * décorative : un témoin qui n'exigerait que le silence à deux resterait vert
+   * si la mention disparaissait pour tout le monde — c'est exactement ce
+   * qu'obtient une comparaison `>` là où la règle dit `>=`. C'est donc à TROIS,
+   * la première valeur qui parle, que le témoin sait rougir ; la carte à 199 de
+   * la fixture, elle, ne distingue aucun de ces deux défauts.
+   */
+  const tableauDUneCarte = (membres: number): string =>
+    documentDuTableau({
+      lecteur: { id: 'u1', prenom: 'Sonde', nomAffiche: 'Sonde Neuf', pseudonyme: 's1', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null },
+      conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres })],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+    });
+
+  it('tait le compte de participants sur une carte à deux', () => {
+    expect(tableauDUneCarte(2)).not.toContain(CHATS.participants);
+  });
+
+  it('rend le compte de participants dès trois', () => {
+    expect(tableauDUneCarte(3)).toContain(`3 ${CHATS.participants}`);
+  });
+
+  /**
+   * **CE QUE LA CIBLE MET SOUS LE NOM EST L'APERÇU DU DERNIER MESSAGE**
+   * (`cible/home.png` : la carte « Marta Ruiz » porte la pastille `ES` puis
+   * « Merci, je t'envoie le fichier ») — servi AU PRISME, depuis le site UNIQUE
+   * `apercuServi` (`lib/api/compte.ts`), comme la ligne de `/chats`.
+   *
+   * C'est le cycle 122 du `CLAUDE.md` posé sur la v3 : la donnée descendait
+   * (`Conversation.apercuTraductions` était projetée, le résolveur existait,
+   * `/chats` l'appelait) et la carte du tableau de bord ne l'AFFICHAIT pas. Une
+   * descente juste dont la valeur n'atteint aucun lecteur n'a corrigé personne.
+   */
+  const tableauDe = (attributs: Partial<Conversation>, langues?: readonly string[]): string =>
+    documentDuTableau({
+      lecteur: {
+        id: 'u1',
+        prenom: 'Sonde',
+        nomAffiche: 'Sonde Neuf',
+        pseudonyme: 's1',
+        systemLanguage: langues?.[0] ?? 'fr',
+        regionalLanguage: langues?.[1] ?? null,
+        customDestinationLanguage: null,
+      },
+      conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres: 2, ...attributs })],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+    });
+
+  const APERCU_ESPAGNOL = {
+    apercu: 'Gracias, te envío el archivo',
+    apercuLangueOriginale: 'es',
+    apercuTraductions: { fr: 'Merci, je t’envoie le fichier' },
+  } as const;
+
+  it('sert l’aperçu du dernier message TRADUIT, avec la pastille de sa langue d’origine', () => {
+    const doc = tableauDe(APERCU_ESPAGNOL);
+
+    expect(doc).toContain('Merci, je t’envoie le fichier');
+    expect(doc).not.toContain('Gracias');
+    expect(doc).toContain('<span class="code">es</span>');
+  });
+
+  /**
+   * LE TÉMOIN DE RANG S'ÉCRIT SUR UN RANG AUTRE QUE LE PREMIER (leçon 261) :
+   * prisme `['de','fr']`, message espagnol, traduction française disponible ⇒
+   * le français. Un résolveur qui ne consulterait que le rang 1 rendrait
+   * l'original — et au rang 1, la règle juste et le court-circuit interdit
+   * rendent le même verdict, donc le témoin ne saurait pas rougir.
+   */
+  it('descend le prisme ORDONNÉ, jamais le rang 1 seul', () => {
+    expect(tableauDe(APERCU_ESPAGNOL, ['de', 'fr'])).toContain('Merci, je t’envoie le fichier');
+  });
+
+  /**
+   * CE QUI PART À CÔTÉ DU TEXTE (cycle 123) : `lang=` sur tout nœud rendu dans
+   * une langue ≠ celle du document. Le témoin s'écrit donc sur une langue
+   * SERVIE qui n'est pas `DOCUMENT_LANGUAGE` — sur du français, l'attribut est
+   * justement absent, et un témoin qui l'exigerait garderait le contraire de la
+   * règle.
+   */
+  it('porte `lang=` quand le texte servi n’est pas dans la langue du document', () => {
+    const doc = tableauDe(
+      { apercu: 'The review lands tomorrow.', apercuLangueOriginale: 'en', apercuTraductions: { es: 'La revisión llega mañana.' } },
+      ['es'],
+    );
+
+    expect(doc).toContain('lang="es"');
+    expect(doc).toContain('<span class="code">en</span>');
+  });
+
+  /**
+   * UN APERÇU DÉJÀ ÉCRIT DANS LA LANGUE DU LECTEUR N'ANNONCE RIEN : la pastille
+   * dit « traduit depuis », elle n'apprendrait rien sur un texte natif (charte
+   * règle 22). C'est la seconde moitié du témoin de la pastille — sans elle,
+   * une pastille rendue TOUJOURS resterait verte.
+   */
+  it('n’annonce aucune traduction sur un aperçu déjà dans la langue du lecteur', () => {
+    const doc = tableauDe({ apercu: 'On se cale à 15 h ?', apercuLangueOriginale: 'fr', apercuTraductions: null });
+
+    expect(doc).toContain('On se cale à 15 h ?');
+    expect(doc).not.toContain('class="langue"');
+  });
+
+  /**
+   * L'ÉTAT « RIEN N'A ENCORE ÉTÉ DIT » RESTE DESSINÉ. Sans aperçu, la carte
+   * garde la méta que la cible remplace — le compte au seuil du § 12.10.2 et
+   * l'écart relatif. Une carte réduite à son seul nom n'est pas un état : c'est
+   * une ligne vide (charte règle 18).
+   */
+  it('garde la méta sur une conversation qui n’a encore rien dit', () => {
+    expect(tableauDe({ membres: 4, apercu: null })).toContain(`4 ${CHATS.participants}`);
+  });
+
+  /**
    * UNE TEINTE D'AVATAR DÉSAMBIGUÏSE, ELLE N'IDENTIFIE PAS — et le témoin doit
    * dire lequel des deux, sinon il exige l'impossible. La table n'en porte que
    * QUATRE : avec trois conversations à l'écran, deux partagent une couleur une
@@ -528,45 +692,6 @@ describe('le tableau de bord', () => {
     expect(nu).not.toContain(TABLEAU_DE_BORD.voirTout);
     expect(nu.split('href="/chats"').length - 1).toBe(1);
     expect(nu).toContain('class="carte-vide"');
-  });
-});
-
-describe('la liste des conversations', () => {
-  const doc = documentDesChats({
-    conversations: [CONVERSATION({ nonLus: 3 })],
-    maintenant: MAINTENANT,
-  });
-
-  it('rend le nom, les participants et l’écart de temps', () => {
-    expect(doc).toContain('Meeshy Global');
-    expect(doc).toContain(`199 ${CHATS.participants}`);
-    expect(doc).toContain('il y a 30 min');
-  });
-
-  /**
-   * La pastille de non-lus est un nombre NU : à l'œil le contexte le dit, à la
-   * voix « 3 » ne dit rien. Le mot voyage donc avec, hors écran.
-   */
-  it('annonce le compteur de non-lus, en plus de l’afficher', () => {
-    expect(doc).toContain('class="compte">3<span class="hors-ecran"> non lus</span>');
-  });
-
-  it('mène au fil servi par la v3, par l’identifiant de BASE', () => {
-    expect(doc).toContain('href="/chats/68f2a81417a557e8ce4ddfbb"');
-    // `identifier` est facultatif et peut changer ; une adresse partagée doit
-    // survivre au renommage.
-    expect(doc).not.toContain('href="/chats/meeshy"');
-  });
-
-  it('échappe le titre d’une conversation, qui vient du réseau', () => {
-    const injectee = documentDesChats({
-      conversations: [CONVERSATION({ titre: '</a><img src=x onerror=alert(1)>' })],
-      maintenant: MAINTENANT,
-    });
-    const corps = injectee.slice(injectee.indexOf('<body>'));
-
-    expect(corps).not.toContain('<img src=x');
-    expect(corps).toContain('&lt;img src=x');
   });
 });
 

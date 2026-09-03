@@ -63,3 +63,28 @@ export const libelleDuJour = (iso: string, maintenant: number, langue: string): 
   if (ecart === 1) return FIL.hier;
   return formatsDe(langue).jour.format(instant);
 };
+
+/**
+ * QUAND, EN RELATIF — et le relatif n'est pas un choix de style.
+ *
+ * Une heure absolue rendue par le serveur est rendue dans le FUSEAU DU SERVEUR
+ * (UTC en production) : « 18:06 » s'afficherait faux pour un lecteur à Paris, à
+ * Lagos ou à São Paulo, et personne ne le verrait puisque l'heure a l'air d'une
+ * heure. Un écart relatif ne dépend que de l'horloge, qui est la même partout.
+ */
+const MINUTE = 60_000;
+const HEURE = 60 * MINUTE;
+const JOUR = 24 * HEURE;
+
+export const quand = (iso: string | null, maintenant: number): string => {
+  if (iso === null) return '';
+  const instant = Date.parse(iso);
+  if (Number.isNaN(instant)) return '';
+
+  const ecart = Math.max(0, maintenant - instant);
+  if (ecart < MINUTE) return 'à l’instant';
+  if (ecart < HEURE) return `il y a ${Math.floor(ecart / MINUTE)} min`;
+  if (ecart < JOUR) return `il y a ${Math.floor(ecart / HEURE)} h`;
+  if (ecart < 7 * JOUR) return `il y a ${Math.floor(ecart / JOUR)} j`;
+  return `il y a ${Math.floor(ecart / (7 * JOUR))} sem.`;
+};

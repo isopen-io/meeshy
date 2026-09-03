@@ -9,13 +9,15 @@ import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
 import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
 import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
-import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
+import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
 import { FEUILLE_DES_LIENS } from '@/app/connecte/liens-feuille';
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
+import { FEUILLE_DE_LA_LISTE } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
@@ -58,6 +60,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/vitrine/feuille.ts', source: FEUILLE_DE_LA_VITRINE },
   { nom: 'app/connecte/feuille.ts', source: FEUILLE_CONNECTEE },
   { nom: 'app/connecte/fil-feuille.ts', source: FEUILLE_DU_FIL },
+  { nom: 'app/connecte/plein-feuille.ts', source: FEUILLE_DU_PLEIN },
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
   { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
   { nom: 'app/(public)/partage-feuille.ts', source: FEUILLE_DE_LA_STORY },
@@ -67,6 +70,8 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/liens-feuille.ts', source: FEUILLE_DES_LIENS },
   { nom: 'app/connecte/recherche-feuille.ts', source: FEUILLE_DE_LA_RECHERCHE },
   { nom: 'app/connecte/commentaires-feuille.ts', source: FEUILLE_DES_COMMENTAIRES },
+  { nom: 'app/connecte/liste-feuille.ts', source: FEUILLE_DE_LA_LISTE },
+  { nom: 'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU', source: FEUILLE_DU_TABLEAU },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -127,6 +132,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/vitrine/feuille.ts',
       'app/connecte/feuille.ts',
       'app/connecte/fil-feuille.ts',
+      'app/connecte/plein-feuille.ts',
       'app/(public)/chat/[lien]/choix-feuille.ts',
       'app/connecte/medias-feuille.ts',
       'app/(public)/partage-feuille.ts',
@@ -136,6 +142,8 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/liens-feuille.ts',
       'app/connecte/recherche-feuille.ts',
       'app/connecte/commentaires-feuille.ts',
+      'app/connecte/liste-feuille.ts',
+      'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -220,7 +228,17 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
   const COMPOSITIONS: readonly { readonly nom: string; readonly source: string }[] = [
     { nom: 'vitrine', source: CHROME + FEUILLE_DE_LA_VITRINE },
     { nom: 'connecté', source: CHROME + FEUILLE_CONNECTEE },
+    // Le TABLEAU DE BORD sert la feuille de zone PLUS la sienne — l'aperçu au
+    // Prisme de ses cartes (`cible/home.png`), que les cinq autres
+    // compositions ne rendent pas et ne paient donc pas (charte règle 7).
+    { nom: 'tableau de bord', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU },
+    // `/chats` MANQUAIT à ce relevé : sa feuille est la seule de la zone qu'aucune
+    // composition n'opposait au plafond.
+    { nom: 'liste', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE },
     { nom: 'fil', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL },
+    // L'état `?media=` du fil (§ 12.10.1) : la SEULE composition qui porte la
+    // feuille du plein écran — un fil ordinaire n'en paie pas un octet.
+    { nom: 'fil en plein écran', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_PLEIN },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
@@ -411,6 +429,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.pieces .media', // le cliquable — une pièce jointe, sur son affiche
     '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
     '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
+    '.pieces>li[data-genre=video] .media .lire', // le cliquable — le rond de lecture d'une vidéo, sur son poster
+    '.pieces .fiche', // le cliquable — la fiche d'un vocal, où sa transcription se lit entière
+    // Le plein écran (§ 12.10.1) : le cliquable — la croix qui ferme, l'original
+    // d'un transcrit. La scène, le nom du fichier et son poids restent sur l'encre.
+    'dialog.plein .fermer',
+    'dialog.plein .transcrit-original summary',
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
@@ -443,6 +467,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // commentaire et le compte de cœurs restent sur l'encre.
     '.source[aria-current]',
     '.prisme summary',
+    // La liste (`cible/chats.png`) : le cliquable — le résumé du menu d'une
+    // ligne, SURVOLÉ, comme « Réagir » l'est dans le fil. La ligne elle-même,
+    // son aperçu, son heure et son filet restent sur l'encre ; la pastille de
+    // non-lus (`.compte`) et celle de langue (`.langue`) sont déjà nommées plus
+    // haut, et c'est la même règle qui les gouverne des deux côtés.
+    '.actions>summary:hover',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

@@ -271,8 +271,13 @@ extension StoryViewModel {
                 "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
             )
 
+            // **CETTE slide, et pas le composer** (#4068). Une slide EST une
+            // publication en profil Story : elle n'emporte que les mentions qui
+            // lui sont attachées. La liste plate reste le repli — formats à
+            // publication unique, et rows de file écrites avant ce lot.
+            let declaredForSlide = upload.mentionsBySlide[slide.id] ?? upload.declaredMentions
             let canvasMentions = Self.declaredMentions(
-                declared: upload.declaredMentions, effects: updatedEffects
+                declared: declaredForSlide, effects: updatedEffects
             )
 
             // Le texte alternatif est collecté sous les ids d'élément du

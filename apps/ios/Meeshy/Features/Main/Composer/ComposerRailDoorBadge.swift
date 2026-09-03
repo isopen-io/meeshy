@@ -32,10 +32,28 @@ nonisolated struct ComposerRailMatter: Equatable, Sendable {
     /// à la slide et a sa propre porte.
     var texts: Int = 0
 
-    /// Les médias de PREMIER PLAN. Un fond n'en est pas un : il n'a ni
-    /// position ni puce, et `ComposerSceneObjectCount` l'exclut déjà pour la
-    /// même raison — le compter ferait promettre à la porte un objet dont
-    /// l'auteur ne trouverait jamais le dernier.
+    /// **Les images et vidéos de la scène — FOND COMPRIS** (#5014, directive
+    /// porteur 2026-09-03).
+    ///
+    /// > « l'image de fond ou la vidéo de fond d'une scène compte comme un
+    /// > élément dans outils image, pas seulement les éléments de foreground »
+    ///
+    /// Ce champ excluait le fond, et ce n'était pas une négligence : il suivait
+    /// `ComposerSceneObjectCount`, qui l'exclut parce qu'un fond n'est pas un
+    /// objet POSÉ — ni position, ni puce, ni sélection. Le raisonnement reste
+    /// juste **pour cette règle-là**, qui répond à « combien d'objets le plan 2D
+    /// permet-il de désigner ? ».
+    ///
+    /// La porte image ne pose pas cette question. Elle demande « combien
+    /// d'images cette scène porte-t-elle ? », et un fond en est une.
+    ///
+    /// > Deux règles voisines peuvent compter la même famille et devoir
+    /// > diverger : ce n'est pas la MATIÈRE qui décide du filtre, c'est la
+    /// > QUESTION. Emprunter le filtre du voisin parce qu'il porte sur le même
+    /// > tableau est la façon la plus discrète de répondre à côté.
+    ///
+    /// Un fond de COULEUR n'y entre pas : ce n'est pas une image, et la porte
+    /// image ne le sert pas.
     var media: Int = 0
 
     /// Les pistes, fond COMPRIS — la porte `sound` ouvre la feuille des deux,
@@ -81,10 +99,22 @@ nonisolated struct ComposerRailMatter: Equatable, Sendable {
     /// Les traits du calque de dessin.
     var strokes: Int = 0
 
-    /// Un fond POSÉ — couleur choisie ou média de fond. Un booléen et non un
-    /// compte : il n'y en a jamais deux, et « 1 » peint sur la palette dirait
-    /// une quantité là où il n'y a qu'un état.
-    var hasBackground: Bool = false
+    // **`hasBackground` a été RETIRÉ au #5014**, et son retrait est la moitié
+    // de la directive qu'on ne voit pas.
+    //
+    // Le fond comptant désormais sur la porte IMAGE, le garder ici aurait fait
+    // afficher `1` sur deux icônes voisines du même rail pour un seul objet —
+    // une scène qui n'a qu'un fond aurait dit « une image » ET « un fond », que
+    // l'auteur lit comme deux images.
+    //
+    // Le signal n'est pas perdu pour autant, et c'est ce qui rend le retrait
+    // sûr : **le fond est la seule matière qu'on ne peut pas manquer à
+    // l'écran** — il remplit la carte, sous les yeux. Une pastille qui le
+    // compte nomme ce que la scène montre déjà, et un signe qui n'apprend rien
+    // occupe la place de ce qui apprend.
+    //
+    // Le champ part ENTIER plutôt que de rester inutilisé : une donnée sans
+    // lecteur est exactement le défaut que ce fichier a déjà payé au #5007.
 
     /// La description de la slide, si elle est écrite.
     var hasDescription: Bool = false
@@ -95,26 +125,29 @@ nonisolated enum ComposerRailDoorBadge {
     /// **Le relevé, composé des DEUX magasins.**
     ///
     /// Il est PUR : la slide et les faits du meuble entrent, un relevé sort.
-    /// C'est ce qui permet d'éprouver « un fond ne compte pas comme média de
-    /// premier plan » sans monter le composer.
+    /// C'est ce qui permet d'éprouver « le fond compte sur la porte image, un
+    /// fond de couleur non » sans monter le composer.
+    ///
+    /// `hasDocumentBackground` a disparu de la signature au #5014 : il ne
+    /// servait qu'à la pastille du fond, qui n'existe plus. Le garder aurait
+    /// laissé un paramètre que personne ne lit.
     static func matter(slide: StorySlide,
                        hashtags: Int,
                        description: String,
                        mentions: Int,
-                       hasDocumentLocation: Bool,
-                       hasDocumentBackground: Bool) -> ComposerRailMatter {
+                       hasDocumentLocation: Bool) -> ComposerRailMatter {
         let effets = slide.effects
-        let mediasDeFond = (effets.mediaObjects ?? []).filter { $0.isBackground }
         return ComposerRailMatter(
             texts: effets.textObjects.count,
-            media: (effets.mediaObjects ?? []).filter { !$0.isBackground }.count,
+            // Fond COMPRIS (#5014) — aucun filtre : la porte image compte les
+            // images de la scène, et le fond en est une.
+            media: (effets.mediaObjects ?? []).count,
             sounds: (effets.audioPlayerObjects ?? []).count,
             stickers: (effets.stickerObjects ?? []).count,
             places: effets.locationObjects.count + (hasDocumentLocation ? 1 : 0),
             hashtags: hashtags,
             mentions: mentions,
             strokes: (effets.drawingStrokes ?? []).count,
-            hasBackground: hasDocumentBackground || !mediasDeFond.isEmpty,
             hasDescription: !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
     }
@@ -129,8 +162,8 @@ nonisolated enum ComposerRailDoorBadge {
     /// Le `switch` est exhaustif : une onzième porte ne compile pas tant
     /// qu'elle n'a pas dit ce qu'elle porte. C'est très exactement la question
     /// qu'on oublie de se poser en ajoutant un bouton — et la porte `background`
-    /// montre pourquoi elle mérite d'être posée : ce qu'elle porte n'est pas un
-    /// nombre.
+    /// montre pourquoi elle mérite d'être posée : elle ne porte RIEN, et ce
+    /// silence est une réponse (#5014), pas un oubli.
     static func count(_ door: ComposerRailDoor, in matter: ComposerRailMatter) -> Int? {
         let brut: Int
         switch door {
@@ -138,7 +171,10 @@ nonisolated enum ComposerRailDoorBadge {
         case .media:       brut = matter.media
         case .sound:       brut = matter.sounds
         case .text:        brut = matter.texts
-        case .background:  brut = matter.hasBackground ? 1 : 0
+        // **Aucune pastille sur le FOND** (#5014) : il est compté par la porte
+        // image, et il remplit la carte sous les yeux de l'auteur. Le compter
+        // ici l'annoncerait deux fois pour un seul objet.
+        case .background:  brut = 0
         case .drawing:     brut = matter.strokes
         case .sticker:     brut = matter.stickers
         case .mention:     brut = matter.mentions

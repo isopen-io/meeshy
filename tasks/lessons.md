@@ -11779,6 +11779,136 @@ documente une absence d'abonnement, lue comme un abonnement.
 > vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
 > l'autre moitié du piège en place.
 
+### Trois choses DÉCRIVENT le code, et on les lit comme si elles l'ÉTAIENT
+
+Trois formes du même piège, rencontrées dans la même journée (2026-09-03), dont
+deux que j'ai posées moi-même :
+
+| l'artefact | ce qu'on croit lire | ce que c'est |
+|---|---|---|
+| un **corps d'issue** | l'état du code | l'état du code **au jour où il a été écrit** |
+| un **doc-comment** | ce que le code fait | ce que le code faisait **quand le commentaire a été écrit** |
+| une **capture envoyée par le porteur** | l'écran d'aujourd'hui | l'écran **au moment du screenshot** |
+
+Les trois cas :
+
+1. **Le corps d'issue.** J'avais justifié une contrainte de #5018 par une règle du
+   dépôt citée exactement — vraie, mais gouvernant une autre surface (voir la
+   leçon ci-dessous sur la PORTÉE).
+2. **Le doc-comment.** `ComposerSceneSurface` documente l'ordre de sa zone basse
+   comme un escalier des niveaux du modèle. J'ai écrit dans #5036 que l'ordre
+   venait « de l'ordre d'écriture d'un `VStack` » — c'est-à-dire que j'ai décrit
+   une doctrine délibérée comme un accident. La différence n'est pas de style :
+   **un accident se corrige, un renversement se documente.**
+3. **La capture.** Le porteur a envoyé un écran montrant les hashtags visibles
+   pendant qu'une rangée d'outils occupe le bas. La session voisine a mesuré que
+   cette capture **précède le commit `c6d5577cdb`**, qui rend la situation
+   impossible. Mon diagnostic — « la rangée d'options s'intercale » — décrivait
+   un état révolu, et je l'avais lu comme l'état courant.
+
+> **Un écran envoyé par le porteur est DATÉ, comme un corps d'issue.** Devant un
+> défaut montré en image, la première question n'est pas « où est-il dans le
+> code ? » mais **« cette image est-elle encore vraie ? »** — `git log` sur les
+> fichiers concernés depuis l'heure de la capture répond en une commande.
+
+Et le corollaire qui vaut pour les trois : **avant de qualifier un état de
+défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règle
+énoncée, un choix justifié en commentaire ne sont pas des accidents ; les traiter
+comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
+explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
+
+### Un motif TROP ÉTROIT rend un faux négatif CONFIANT — trois fois en une session
+
+Le 2026-09-03, trois mesures fausses, toutes de la même forme : un motif de
+recherche plus étroit que la question, et un « zéro » lu comme une réponse.
+
+| ce que je cherchais | le motif employé | ce qu'il ratait | ce que j'ai conclu, à tort |
+|---|---|---|---|
+| une région de code à borner | un `// MARK:` | les commentaires sont DÉPOUILLÉS par la garde | « la fonction n'existe pas » |
+| le type `MeeshySceneObject` | `struct\|type\|interface\|class` | c'est un **`enum`** somme | « c'est un nom de doc, pas un type » |
+| les transitions au contrat | `grep "transition"` | **la casse** — `clipTransitions` | « aucune transition n'est modélisée » |
+
+La troisième est la plus coûteuse : elle est partie dans une réponse au porteur
+ET dans un document committé, où elle a vécu une heure. Les transitions existent,
+sont produites par le composer et rendues par les **trois** clients.
+
+> **Un `grep` qui rend zéro ne prouve rien tant qu'on n'a pas vérifié que son
+> motif pouvait trouver.** Le test tient en une commande : chercher un cas dont
+> on SAIT qu'il existe. Si le motif ne le trouve pas non plus, le zéro ne parlait
+> pas du monde — il parlait du motif.
+
+Et le réflexe qui les attrape toutes les trois : **quand un zéro contredit une
+attente raisonnable, suspecter l'instrument avant le monde.** Le porteur
+supposait les transitions acquises ; cette attente était le signal qu'il fallait
+élargir le motif, pas la corriger. Deux formes concrètes, gratuites :
+`grep -i` par défaut sur un nom de concept, et chercher la RACINE
+(`transit`, `Scene`) plutôt que le mot entier.
+
+Fil rouge avec les leçons voisines : celle sur la PORTÉE dit qu'un extrait
+vérifié ne l'est que sur son texte ; celle-ci dit qu'une ABSENCE mesurée ne l'est
+que sur son motif. Les deux se réduisent à la même prudence — **la mesure décrit
+l'instrument autant que l'objet.**
+
+### Une règle citée MOT POUR MOT peut être fausse par sa PORTÉE
+
+En écrivant #5018 j'ai justifié une contrainte par une règle du dépôt, citée
+exactement :
+
+> « un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir
+> une pièce jointe »
+
+La phrase existe, au caractère près (`ComposerSoundRoleCopy.borrowedForegroundRefusal`).
+**La portée que je lui ai donnée, elle, était inventée.** Elle gouverne le premier
+plan sur la surface POST AUDIO — où « premier plan » signifie *pièce jointe* — et
+elle n'est consommée qu'à deux lignes d'`AudioPostComposerView`. Sur la surface
+SCÈNE, `ComposerSoundDestination.forForeground(on:)` fait dire au même mot
+« puce de scène », qui ne ré-uploade rien et garde son `soundId`.
+
+Le doc-comment du refus donne sa propre raison — « une pièce jointe est un
+FICHIER de la publication […] supposerait de le ré-uploader » — et cette raison
+**ne survit pas au changement de destination**. Le code le dit même dans le sens
+inverse de ma prémisse : `addBorrowedSound` pose déjà une piste empruntée en
+PREMIER PLAN dès qu'un fond existe.
+
+Le plus instructif : le codebase avait écrit l'avertissement douze lignes plus
+haut — *« le mot "premier plan" désignait deux choses »* — et je suis tombé dans
+exactement la distinction qu'il documente, en lisant le fichier qui la porte.
+
+> **Un extrait vérifié n'est vérifié que sur son TEXTE.** « Cette règle existe »
+> et « cette règle gouverne mon cas » sont deux affirmations, et la seconde ne
+> s'établit pas en relisant la citation — elle s'établit en cherchant ses
+> CONSOMMATEURS. Un `grep` du nom de la règle répond en une commande à une
+> question qu'une lecture attentive du texte ne peut pas trancher.
+
+C'est la jumelle de la leçon 261 (« une énumération de sites porte deux
+affirmations ») appliquée à une règle unique : là-bas l'angle mort était
+*ce que la liste omet*, ici c'est *où la règle s'applique*.
+
+#### Le miroir de cette précaution : un témoin ne peut plus s'ANCRER sur un commentaire
+
+La leçon ci-dessus dit qu'une garde doit dépouiller. Sa conséquence se paie un
+cran plus loin, et je viens de la payer (#5017) : **parce que le dépouillement
+existe, un témoin qui BORNE une région par un `// MARK:` cherche un repère que
+le texte qu'il lit ne contient plus.**
+
+```swift
+guard let debut = surface.range(of: "private func ancreAuDessusDuDessin"),
+      let fin = surface.range(of: "// MARK: - Les sons POSÉS sur la scène", ...)
+else { return XCTFail("l'ancre haute doit exister et être délimitée") }
+```
+
+Le premier repère est du CODE et se trouve ; le second est un COMMENTAIRE et ne
+se trouve jamais. Le témoin tombe sur son propre message de délimitation — un
+échec qui ressemble à « la fonction n'existe pas » alors qu'elle existe et qu'elle
+est juste. J'ai perdu un aller-retour de build complet à lire ce message au pied
+de la lettre.
+
+> **Une région de code se borne par la DÉCLARATION suivante, jamais par le
+> commentaire qui la précède.** `"\n    private "`, `"\n    var "`, `"\n    func "`
+> — le premier des trois qui tombe. Et le fil rouge tient : les deux moitiés du
+> piège ont la même racine, mais elles se ressemblent si peu qu'armer l'une
+> n'apprend rien sur l'autre. Ici la précaution CRÉE le piège qu'elle ne dit pas.
+
 ### Et le frère oublié, TROISIÈME occurrence
 
 `reaction:sync` avait été retiré du contrat pour cause d'absence d'émetteur — le
@@ -26887,3 +27017,66 @@ peut pas reproduire.
 Corollaire de forme : le prédicat du worker est **exécuté**, jamais recopié
 dans le gate. Une seconde implémentation prétendrait garder la divergence
 qu'elle créerait.
+## Leçon 498 — Un job filtré par CHEMIN rend le workflow vert sans rien construire, et le premier lot qui touche ce chemin hérite d'une panne qu'il n'a pas causée
+
+`Docker #3546` rouge sur mon merge : « Build translator » meurt sur
+
+```
+AttributeError: module 'anyio' has no attribute 'abc'
+httpcore/_backends/anyio.py:20  def __init__(self, stream: anyio.abc.ByteStream)
+```
+
+Le lot venait de merger cinq montées de version Dependabot du translator. La
+conclusion évidente — « une de mes montées casse l'image » — était fausse, et
+deux mesures suffisent à la retourner.
+
+**Première mesure : la date de l'amont.** `anyio 4.15.0` a été publiée le
+2026-09-02 à 21:46 UTC, la veille au soir. Elle fait passer ses sous-modules en
+import PARESSEUX : `anyio.abc` cesse d'être atteignable depuis un `import anyio`
+seul. `httpcore 0.17.3` — épinglé vieux exprès, pour Prisma 0.15.0 via
+`httpx 0.24.1` — annote `AnyIOStream.__init__` à la CRÉATION de la classe, donc
+`import httpcore` lève. Et httpcore déclare `anyio>=3.0,<5.0` : **il accepte
+4.15.0 sans rien savoir de la rupture.** Aucune des cinq montées n'y participe.
+
+**Seconde mesure, celle qui décide l'attribution :**
+
+```sh
+for id in $(gh api ".../workflows/docker.yml/runs?branch=dev" --jq '.workflow_runs[].id'); do
+  gh run view $id --json jobs --jq '[.jobs[]|select(.name|test("translator"))|.name]'
+done
+# → [] [] [] [] []   pour les cinq runs VERTS précédents
+```
+
+Les six derniers « Docker » de `dev` sont verts et **aucun n'a construit le
+translator** : le job est filtré par `Detect Changes`, et rien ne touchait
+`services/translator/**` depuis la veille. La panne était donc déjà là, invisible,
+pendant que le workflow rendait « success » à chaque push.
+
+> **Un job filtré par chemin ne rend pas « pas exécuté » : il rend « vert ».**
+> Le workflow entier hérite de sa couleur, et le premier lot qui touche enfin ce
+> chemin RÉVÈLE la panne au lieu de la causer. La question à poser à un rouge
+> n'est pas seulement « qu'ai-je changé ? » mais **« ce job a-t-il seulement
+> TOURNÉ la dernière fois qu'il était vert ? »** — et elle se répond en listant
+> les jobs des runs verts, jamais leur conclusion.
+
+Deuxième variante de la même famille dans la même journée, sur un autre objet :
+un `project.pbxproj` périmé fait DISPARAÎTRE des suites du bundle iOS, qui
+passent alors vertes par omission. Même mécanique, autre filtre — cf.
+[[reference_a_path_gated_ci_job_hides_its_own_failure]] et la leçon 488.
+
+**Le correctif se pose là où la contrainte manque, pas là où elle casse.** Ni
+httpcore ni anyio ne peuvent l'écrire : c'est notre paire épinglée qui crée
+l'incompatibilité. `anyio==4.14.2` dans `requirements.txt`, `anyio>=4.0.0,<4.15.0`
+dans `pyproject.toml` — **les deux fichiers qui déclarent la dépendance**, jamais
+un seul — avec le commentaire qui dit QUAND le plafond tombe : le jour où Prisma
+permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en propre et la contrainte
+n'a plus d'objet. Un plafond sans sa condition de levée devient une superstition.
+
+Preuve exigée avant de committer, dans les DEUX sens — un plafond qui n'a pas été
+mesuré sur la version qu'il exclut ET sur celle qu'il retient n'est qu'une
+hypothèse :
+
+```
+httpcore==0.17.3 + anyio==4.15.0  ->  AttributeError: ... no attribute 'abc'
+httpcore==0.17.3 + anyio==4.14.2  ->  import OK
+```

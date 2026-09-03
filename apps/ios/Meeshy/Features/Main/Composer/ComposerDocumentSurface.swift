@@ -426,7 +426,7 @@ struct ComposerDocumentSurface: View {
                         avatarView
                         ComposerAvatarSoundBadge(sound: backgroundSound,
                                                  onTap: onEditBackgroundSound)
-                            .modifier(ComposerSoundDeletionMenu(
+                            .modifier(ComposerSoundActionsMenu(
                                 supprimer: onDeleteBackgroundSound))
                         Spacer(minLength: 0)
                     }
@@ -479,7 +479,7 @@ struct ComposerDocumentSurface: View {
             )
             .padding(.horizontal, 16)
             .padding(.top, 4)
-            .modifier(ComposerSoundDeletionMenu(
+            .modifier(ComposerSoundActionsMenu(
                 supprimer: onDeleteForegroundSound.map { rappel in { rappel(son) } }))
         }
     }

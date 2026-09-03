@@ -129,8 +129,11 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
     /// même loi, sur les grilles ajoutées au #4579. Une vignette de décoration
     /// qui vibre sans rien poser coûte plus qu'une vignette absente.
     func test_theTemplateThumbnails_areTappable() throws {
+        // `templateTab` est devenue `templateGrid` au #5012 : elle a perdu son
+        // `ScrollView` pour devenir une section d'une liste verticale. Le
+        // témoin suit le nom ; la règle qu'il garde est la même.
         let grilles = try ComposerSourceGuard.allStorySources()
-            .compactMap { ComposerSourceGuard.functionBody(named: "func templateTab(", in: $0.code) }
+            .compactMap { ComposerSourceGuard.functionBody(named: "func templateGrid(", in: $0.code) }
         let grille = try XCTUnwrap(grilles.first, "La grille de gabarits est introuvable.")
         XCTAssertTrue(grille.contains("pose(gabarit,"),
                       "Taper une décoration ne pose rien : la grille est inerte.")

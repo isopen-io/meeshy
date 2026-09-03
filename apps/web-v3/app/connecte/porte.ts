@@ -2,6 +2,7 @@ import {
   conversations,
   liensDuLecteur,
   moi,
+  sansArchivees,
   type Conversation,
   type Lecteur,
   type LiensDuLecteur,
@@ -10,7 +11,7 @@ import {
 
 import { jetonDuLecteur } from '@/app/session';
 
-import { documentDePanne, documentDesChats, documentDuTableau } from './vue';
+import { documentDePanne, documentDuTableau } from './vue';
 
 /**
  * LA PORTE DE LA ZONE CONNECTÉE — une seule, pour les deux écrans.
@@ -67,7 +68,13 @@ export type Charge = {
   readonly liens: LiensDuLecteur;
 };
 
-export type Ecran = (charge: Charge, maintenant: number) => string;
+/**
+ * `requete` est passée à l'écran parce que la liste LIT son adresse : le chemin
+ * sans JavaScript répond à un geste par une redirection (Post/Redirect/Get), et
+ * `?fait=` est la seule voix qu'il a pour dire ce qui vient d'avoir lieu. Le
+ * tableau de bord l'ignore — il ne répond à aucun geste.
+ */
+export type Ecran = (charge: Charge, maintenant: number, requete: Request) => string;
 
 /**
  * `recuperer` est la MÊME couture que celle de `connexion` / `conversations` :
@@ -107,11 +114,17 @@ export const serviteurDe =
       ecran(
         {
           lecteur: identite.genre === 'lecteur' ? identite.lecteur : null,
-          conversations: fil.conversations,
+          // LES ARCHIVÉES N'ATTEIGNENT AUCUN DES DEUX ÉCRANS. `GET
+          // /conversations` les SERT (aucun `isArchived` dans son `whereClause`,
+          // mesuré) : c'est ici, à l'UNIQUE endroit qui compose la charge des
+          // deux écrans, qu'elles sortent. Sans cela, « Archiver » écrivait une
+          // préférence que rien ne relisait.
+          conversations: sansArchivees(fil.conversations),
           total: fil.total,
           liens,
         },
         Date.now(),
+        requete,
       ),
     );
   };
@@ -122,8 +135,4 @@ export const TABLEAU = serviteurDe({
   ecran: (charge, maintenant) => documentDuTableau({ ...charge, maintenant }),
 });
 
-export const LISTE_DES_CHATS = serviteurDe({
-  chemin: '/chats',
-  ecran: (charge, maintenant) =>
-    documentDesChats({ conversations: charge.conversations, maintenant }),
-});
+export { CACHE_PRIVE, rendu, versLaConnexion };

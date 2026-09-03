@@ -1,7 +1,7 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
-import { formeDePiece, GENRES_DE_PIECE, type GenreDePiece } from '@/lib/api/formes';
+import { formeDePiece, GENRES_DE_PIECE, sEcouteSurPlace, type GenreDePiece } from '@/lib/api/formes';
 import type { PieceJointe } from '@/lib/api/fil';
 import { adresseDesMedias, type Galerie, type Media } from '@/lib/api/medias';
 import { FIL } from '@/lib/contenu/fil';
@@ -123,16 +123,6 @@ const lecteur = (piece: PieceJointe, meta: string): string =>
   `<audio controls preload="none" src="${echappe(piece.piste)}"></audio>` +
   '</details>';
 
-/**
- * CE QUI S'ÉCOUTE SUR PLACE, et ce qui s'ouvre. La règle DÉRIVE de la table des
- * formes (`lib/api/formes.ts`) : seul un genre dont le lecteur natif est
- * `audio` tient dans une ligne — une `<video>` demanderait une boîte que la
- * grille ne peut pas montrer sans octets, et un `<audio>` replié n'en coûte
- * aucun. Un vocal porte de plus du TEXTE (sa transcription), que la cible
- * dessine sous lui : une tuile carrée ne saurait pas le rendre.
- */
-const sEcouteSurPlace = (piece: PieceJointe): boolean => formeDePiece(piece.genre).lecteur === 'audio';
-
 const entree = (piece: PieceJointe, bloc: string): string =>
   `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}</li>`;
 
@@ -161,8 +151,8 @@ const rien = (galerie: Galerie): string =>
  */
 const corps = (etat: EtatDesMedias): string => {
   const { cle, galerie, plusAncien } = etat;
-  const tuiles = galerie.medias.filter((media) => !sEcouteSurPlace(media.piece));
-  const lecteurs = galerie.medias.filter((media) => sEcouteSurPlace(media.piece));
+  const tuiles = galerie.medias.filter((media) => !sEcouteSurPlace(media.piece.genre));
+  const lecteurs = galerie.medias.filter((media) => sEcouteSurPlace(media.piece.genre));
 
   return (
     '<main id="main-content" class="medias-ecran">' +

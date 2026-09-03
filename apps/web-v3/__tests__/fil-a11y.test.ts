@@ -36,6 +36,7 @@ const TEMPS_REEL = {
   passerelle: 'https://gate.test',
   actifs: {
     participate: { nom: 'participate.a.js', url: '/__v3/rt/participate.a.js', corps: '' },
+    liste: { nom: 'liste.a.js', url: '/__v3/rt/liste.a.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -49,6 +50,7 @@ const etat = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: TEMPS_REEL,
+  plein: null,
   ...attributs,
 });
 
@@ -117,6 +119,31 @@ describe('le fil face à axe', () => {
 
   it('ne porte aucune violation grave — composeur fermé, fil vide', async () => {
     ecris(etatFerme());
+    expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LE PLEIN ÉCRAN (§ 12.10.1) est un `<dialog open>` SERVI — donc dans le même
+   * document que le fil qu'il recouvre, et jugé avec lui : une image nommée par
+   * son `alt`, un titre qui étiquette la surimpression, une croix qui ferme.
+   * Les trois genres qui en ont un sont regardés, l'image (`<img alt>`), la
+   * vidéo et le vocal (`<video>` / `<audio controls>`).
+   */
+  it.each([
+    ['a1', 'image'],
+    ['a2', 'vidéo'],
+    ['a3', 'vocal'],
+  ])('ne porte aucune violation grave — plein écran ouvert sur %s (%s)', async (piece) => {
+    ecris(
+      documentDuFil(
+        etat({
+          fil: { id: 'c1', titre: 'Types de messages', membres: 4, presence: { participants: [], presents: [] }, messages: RICHES, plusAncien: null },
+          plein: piece,
+        }),
+      ),
+    );
+    // NON VACUEUX : sans surimpression rendue, le témoin jugerait le fil seul.
+    expect(document.querySelector('dialog.plein')).not.toBeNull();
     expect(await graves()).toEqual([]);
   });
 

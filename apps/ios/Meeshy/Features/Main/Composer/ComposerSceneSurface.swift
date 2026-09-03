@@ -245,6 +245,43 @@ struct ComposerSceneSurface: View {
         }
     }
 
+    /// **Ancre un contenu JUSTE AU-DESSUS du dessin** (#5017) — la jumelle
+    /// haute de `ancreAuDessin`, et pour la même raison.
+    ///
+    /// > Directive porteur 2026-09-03 : « il faut mettre **juste au dessus de la
+    /// > scene** ! »
+    ///
+    /// Posée en frère dans la pile, la trace du son se collait sous la barre
+    /// haute — deux cents points au-dessus de la carte. L'écart n'est pas une
+    /// marge à régler : la carte est ajustée à son ratio et se CENTRE dans la
+    /// hauteur qu'on lui donne, donc le vide du haut vaut celui du bas et varie
+    /// avec le ratio.
+    ///
+    /// > Une étiquette séparée de ce qu'elle étiquette cesse d'être une
+    /// > étiquette. Le vide la rattachait visuellement à la barre haute —
+    /// > c'est-à-dire à la PUBLICATION — alors qu'elle parle de la SCÈNE.
+    ///
+    /// `padding(.top, inset)` porte la ligne d'alignement sur le bord HAUT du
+    /// dessin ; `alignmentGuide(.top) { $0[.bottom] }` fait tomber le BAS du
+    /// contenu sur cette ligne. Aucune hauteur n'est mesurée ni écrite : le
+    /// contenu se soulève de la sienne, quelle que soit la taille de texte.
+    @ViewBuilder
+    private func ancreAuDessusDuDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            contenu
+                .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, ComposerRailGeometry.sceneBottomInset(
+                    overlay: geo.size,
+                    ratio: aspectRatio,
+                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+        // La bande ne prend AUCUN doigt : elle flotte au-dessus de la carte, et
+        // le canvas doit continuer de recevoir les gestes sur toute sa surface.
+        // Seule la capsule elle-même est touchable.
+        .allowsHitTesting(true)
+    }
+
     // MARK: - Les sons POSÉS sur la scène (#4722)
 
     /// **Les puces sonores de premier plan, peintes SUR la carte.**
@@ -349,6 +386,11 @@ struct ComposerSceneSurface: View {
     /// `backgroundAudioId`, qui n'a aucun objet à supprimer. Le meuble tranche ;
     /// la surface ne fait que peindre ce qu'elle reçoit.
     var onDeleteBackgroundSound: (() -> Void)?
+
+    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par l'appui
+    /// long de la trace. `nil` ⇒ l'entrée disparaît — un fond LEGACY n'a aucun
+    /// objet à basculer, et l'hôte le sait avant nous.
+    var onPromoteBackgroundSound: (() -> Void)?
 
     // MARK: - Ce que la publication EMPORTE (#5002)
 
@@ -493,19 +535,6 @@ struct ComposerSceneSurface: View {
             //
             // Dans le COULOIR, jamais sur la carte (`apps/ios/CLAUDE.md` § 1,
             // loi 6) : un son de fond ne produit aucun pixel au rendu.
-            // **Aucun `tint:` — et c'est mesuré, pas oublié.** `plateauTint` est
-            // le FOND du plateau (`PlateauTint.color` → `indigo950`) ; le passer
-            // en couleur de CONTENU peint la capsule dans la couleur de ce
-            // qu'elle recouvre. Vérifié au simulateur : l'arbre d'accessibilité
-            // portait la ligne, l'écran ne montrait rien. Les deux vues gardent
-            // le défaut de `ComposerAvatarSoundBadge`, `indigo400`, qui lit sur
-            // le plateau.
-            ComposerSceneSoundHeader(backgroundSound: backgroundSound,
-                                     toolIsOpen: toolIsOpen,
-                                     leadingInset: sceneCardLeading,
-                                     onEdit: onEditBackgroundSound,
-                                     onDelete: onDeleteBackgroundSound)
-
             VStack(spacing: 8) {
                 EmbeddedSceneCanvas(
                     slide: $slide,
@@ -602,6 +631,22 @@ struct ComposerSceneSurface: View {
                 // jumeau, à portée du pouce, et avec les MÊMES marges — deux
                 // rails qui encadrent la même scène à deux hauteurs différentes
                 // se voient avant de se comprendre.
+                // **La trace du son, JUSTE au-dessus de la carte** (#5017).
+                //
+                // Aucun `tint:` — et c'est mesuré, pas oublié : `plateauTint`
+                // est le FOND du plateau (`indigo950`), et le passer en couleur
+                // de CONTENU peint la capsule dans la couleur de ce qu'elle
+                // recouvre. Vérifié au simulateur au #5011 : l'arbre
+                // d'accessibilité portait la ligne, l'écran ne montrait rien.
+                .overlay(alignment: .topLeading) {
+                    ancreAuDessusDuDessin(
+                        ComposerSceneSoundHeader(backgroundSound: backgroundSound,
+                                                 toolIsOpen: toolIsOpen,
+                                                 leadingInset: sceneCardLeading,
+                                                 onEdit: onEditBackgroundSound,
+                                                 onDelete: onDeleteBackgroundSound,
+                                                 onPromote: onPromoteBackgroundSound))
+                }
                 .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
@@ -740,17 +785,42 @@ struct ComposerSceneSurface: View {
                 // les touches de la bande qu'ils couvriraient.
                 // Aucun `tint:` : voir la note de l'en-tête son, en tête de ce
                 // corps — `plateauTint` est le FOND, pas un accent de contenu.
-                ComposerSceneReferenceFooter(hashtags: sceneHashtags,
-                                             references: sceneReferences,
-                                             onOpenHashtags: onOpenHashtags,
-                                             onOpenMentions: onOpenMentions)
-                    .padding(.horizontal, 16)
-                // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
-                // ENTRER de la matière — une photo, un lieu, un tracé — quand le
-                // rail agit sur ce qui est déjà là. L'arbitrage la nomme
-                // explicitement comme conservée ; la surface n'en avait aucune,
-                // et choisir un fond faisait donc disparaître toutes les portes
-                // d'entrée d'un coup.
+                //
+                // **Il CÈDE la place aux options d'un outil** (#5010, directive
+                // porteur 2026-09-03 : « lorsqu'on affiche les options d'un
+                // outil il faut cacher les éléments permanents de la zone
+                // canonique »). C'était le SEUL élément du bas que personne ne
+                // gouvernait : une lecture permanente posée sous les réglages
+                // de l'outil qu'on venait d'ouvrir.
+                //
+                // La question passe par `ComposerCanonicalZone`, jamais par un
+                // `!toolIsOpen` écrit ici : la troisième copie d'une condition
+                // diverge, et ce fichier a déjà payé cette leçon — trois
+                // surfaces mortes d'un coup pour avoir lu la présence d'une VUE
+                // au lieu de la question qu'elles posaient.
+                if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
+                    ComposerSceneReferenceFooter(hashtags: sceneHashtags,
+                                                 references: sceneReferences,
+                                                 onOpenHashtags: onOpenHashtags,
+                                                 onOpenMentions: onOpenMentions)
+                        .padding(.horizontal, 16)
+                }
+                // **La rangée basse — une PLACE permanente, un contenu qui
+                // change** (#4072, précisé au #5010).
+                //
+                // « Permanente » qualifie la place, jamais ce qu'elle peint :
+                // `lowToolRow` ÉCHANGE son contenu selon `railMode` — outil
+                // ouvert, elle porte les contrôleurs de cet outil ; sinon, les
+                // portes qui font ENTRER de la matière.
+                //
+                // Cette ambiguïté a trompé l'inventaire du #5010, qui comptait
+                // la rangée parmi les éléments non gouvernés et prescrivait de
+                // la cacher. L'y soumettre aurait caché les contrôleurs de
+                // l'outil qu'on venait d'ouvrir — un « correctif » qui casse,
+                // appliqué à du code correct, sur la foi d'un mot plutôt que
+                // d'une lecture. Elle n'entre donc PAS dans
+                // `ComposerCanonicalZone.Element`, et ce commentaire dit
+                // pourquoi pour que personne ne l'y remette.
                 lowToolRow
 
             }

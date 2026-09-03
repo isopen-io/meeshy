@@ -1,6 +1,6 @@
 {
  "source": "MeeshyWebV3.dc.html",
- "count": 38,
+ "count": 39,
  "vues": [
   {
    "id": "vitrine",
@@ -100,6 +100,15 @@
    "title": "Types de messages",
    "subtitle": "Image, vidéo, audio, transfert, réponse, story",
    "png": "cible/rich.png"
+  },
+  {
+   "id": "profilMembre",
+   "label": "Profil du participant",
+   "route": "/chats/:cle?profil=:membre",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Équipe Lagos",
+   "subtitle": "4 en ligne",
+   "png": "cible/profilMembre.png"
   },
   {
    "id": "media",

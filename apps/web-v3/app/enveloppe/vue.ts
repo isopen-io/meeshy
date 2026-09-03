@@ -68,6 +68,20 @@ export type ParametresDuDocument = {
   readonly corps: string;
   readonly retour: boolean;
   /**
+   * CE QUE LE `<main>` PORTE EN PLUS DE SON IDENTIFIANT — les attributs de
+   * PARTICIPATION d'une surface temps réel (§ 12.4), et rien d'autre. Ils sont
+   * passés par le document plutôt qu'écrits dans le corps parce que le module
+   * les cherche sur `main[data-module]` : un second `<main>` imbriqué pour les
+   * porter ferait deux repères de page là où la règle 5 n'en veut qu'un.
+   */
+  readonly attributsDuMain?: string;
+  /**
+   * Le chargeur du module de participation, posé APRÈS le corps — le seul
+   * `<script>` d'un écran connecté hors moteur de thème, et il n'arrive qu'après
+   * le premier pixel (`app/connecte/chargeur.ts`).
+   */
+  readonly script?: string;
+  /**
    * `index, follow` par défaut — les pages du SITE s'indexent. Un écran qui vit
    * à l'adresse d'un CONTENU (l'invitation et l'indisponible de `/stories/:id`)
    * pose `noindex, nofollow` : le § 5.4 le demande pour toute la famille des
@@ -121,6 +135,8 @@ export const documentDuSite = ({
   corps,
   retour,
   robots,
+  attributsDuMain = '',
+  script = '',
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
@@ -128,9 +144,10 @@ export const documentDuSite = ({
   '<body>' +
   '<div class="enveloppe">' +
   enTete(retour) +
-  `<main id="main-content">${corps}</main>` +
+  `<main id="main-content"${attributsDuMain}>${corps}</main>` +
   pied() +
   '</div>' +
+  script +
   '</body>' +
   '</html>';
 
