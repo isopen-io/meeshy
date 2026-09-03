@@ -94,4 +94,43 @@ final class SceneObjectFamilyVocabularyTests: XCTestCase {
         XCTAssertFalse(MeeshySceneObject.Kind.allCases.map(\.rawValue).contains("location"),
                        "quatre couches disent « place » ; la cinquième ne doit plus dire autre chose")
     }
+
+    /// **La famille est déclarée DEUX fois, et les deux doivent dire le même
+    /// mot.**
+    ///
+    /// `MeeshySceneObject` porte l'union (`case place(StoryLocationObject)`) et
+    /// son ombre sans charge (`Kind.place`). Les témoins ci-dessus ne voient que
+    /// la SECONDE : ils lisent des `rawValue`, et un cas d'union n'en a pas.
+    ///
+    /// > Mesuré à mes dépens : le premier lot de #4960 a renommé `Kind` et laissé
+    /// > l'union dire `location`. Tout compilait, les quatre témoins passaient, et
+    /// > la moitié du renommage manquait. **Une garde qui contrôle une des deux
+    /// > déclarations jumelles ne garde pas la paire** — elle donne seulement
+    /// > l'impression de le faire.
+    ///
+    /// Ce témoin lit donc la SOURCE, faute d'un moyen d'énumérer les cas d'une
+    /// union à l'exécution. Il vaut pour toute famille : le mot du `Kind` doit
+    /// apparaître comme cas d'union, et aucun ancien nom ne doit subsister.
+    func test_lUnion_etSonKind_disentLeMemeMot() throws {
+        // Cinq remontées : Story / Models / MeeshySDKTests / Tests / MeeshySDK.
+        // Quatre suffisaient en apparence — le fichier était simplement
+        // introuvable, et le témoin échouait sur une erreur d'E/S plutôt que sur
+        // la règle. Un chemin faux ne se distingue pas d'une règle violée quand
+        // on ne lit que la couleur.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Models/MeeshySceneObject.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        for famille in MeeshySceneObject.Kind.allCases {
+            XCTAssertTrue(source.contains("case \(famille.rawValue)("),
+                          "La famille « \(famille.rawValue) » n'a pas de cas d'union du même "
+                          + "nom : l'union et le Kind doivent dire le même mot.")
+        }
+        XCTAssertFalse(source.contains("case location("),
+                       "l'union dit encore « location » — c'est la moitié du renommage "
+                       + "que le premier lot de #4960 avait laissée")
+    }
 }
