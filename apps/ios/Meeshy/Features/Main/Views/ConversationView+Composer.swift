@@ -11,22 +11,39 @@ extension ConversationView {
 
     // MARK: - Themed Composer (powered by UniversalComposerBar)
     //
-    // Garde anti-débordement de pile (2026-08-16) : cette propriété empilait
-    // ~13 modificateurs système (.sheet ×2, .fullScreenCover ×6, .photosPicker,
-    // .fileImporter, .animation ×3, .adaptiveOnChange) sur UN SEUL `some View`.
-    // Chaque modificateur ajoute un niveau de générique `ModifiedContent<…>`
-    // distinct ; à la profondeur atteinte, la résolution runtime du type opaque
-    // (swift_getTypeByMangledName, récursive) dépassait la pile du thread
-    // principal — crash reproductible EXC_BAD_ACCESS / « Could not determine
-    // thread index for stack guard region » à CHAQUE ouverture de conversation
-    // (7 crashs le 2026-08-16, même frame faulting : themedComposer.getter →
-    // __swift_instantiateConcreteTypeFromMangledNameV2). Fractionner en
-    // plusieurs propriétés `some View` distinctes donne à chacune son propre
-    // accesseur de type opaque au lieu d'un mangled name unique géant — la
-    // récursion runtime se répartit sur plusieurs appels bornés au lieu d'un
-    // seul appel non borné.
+    // Garde anti-débordement de pile (2026-08-16, CORRIGÉE le 2026-09-03) :
+    // cette propriété empilait ~13 modificateurs système (.sheet ×2,
+    // .fullScreenCover ×6, .photosPicker, .fileImporter, .animation ×3,
+    // .adaptiveOnChange) sur UN SEUL `some View`. Chaque modificateur ajoute un
+    // niveau de générique `ModifiedContent<…>` distinct ; à la profondeur
+    // atteinte, la résolution runtime du type opaque
+    // (swift_getTypeByMangledName, récursive à ~17 Ko de pile par niveau)
+    // dépassait les 1008 Ko du thread principal — EXC_BAD_ACCESS dans la page
+    // de garde de la pile.
+    //
+    // Le découpage de 2026-08-16 en quatre maillons N'A PAS SUFFI, et le
+    // pourquoi est la leçon : les trois maillons-fonctions étaient GÉNÉRIQUES
+    // (`<Content: View>(_ content: Content) -> some View`). Composés en une
+    // seule expression, leurs types opaques se re-nichaient intégralement — le
+    // mangled name unique et géant se reformait dans le getter de
+    // `themedComposer`, et le crash a survécu treize jours de plus (device
+    // iPhone 16 Pro Max, `F22F88B0-…`, 2026-09-03 17:29, build 1800, atteint
+    // depuis `ConversationFirstRenderWarmup.performWarmup()` → 40 trames de
+    // décodeur de métadonnées → Stack Guard).
+    //
+    // > DÉCOUPER DES PROPRIÉTÉS NE DÉCOUPE PAS LE TYPE. Seule une frontière
+    // > `AnyView` posée à la DÉCLARATION de chaque maillon le fait : un
+    // > `AnyView` chez l'appelant ne borne rien, car le getter matérialise
+    // > quand même le type concret de son argument à sa propre profondeur de
+    // > pile (leçon payée par six `AnyView` successifs sur la chaîne du header
+    // > entre le 2026-07-30 et le 2026-08-17, qui ont déplacé le crash de
+    // > maillon en maillon sans jamais le supprimer).
+    //
+    // Chaque maillon prend donc `AnyView` et rend `AnyView` : aucun getter ne
+    // matérialise plus que ses PROPRES modificateurs. Garde :
+    // `ConversationComposerChainErasureSourceGuardTests`.
     var themedComposer: AnyView {
-        AnyView(composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore))))
+        composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore)))
     }
 
     /// Accent RÉSOLU du composer : substitué (éphémère → rouge d'alerte, flou →
@@ -52,7 +69,9 @@ extension ConversationView {
             : DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
     }
 
-    private var composerCore: some View {
+    private var composerCore: AnyView { AnyView(composerCoreBody) }
+
+    @ViewBuilder private var composerCoreBody: some View {
         ComposerTextHost(model: composerText) { textBinding in
             UniversalComposerBar(
             style: .light,
@@ -174,8 +193,8 @@ extension ConversationView {
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
     /// pickers, sheets légers et l'unique fullScreenCover caméra.
-    private func composerPickersAndSheets<Content: View>(_ content: Content) -> some View {
-        content
+    private func composerPickersAndSheets(_ content: AnyView) -> AnyView {
+        AnyView(content
         .sheet(isPresented: $viewModel.showEffectsPicker) {
             EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
         }
@@ -213,7 +232,7 @@ extension ConversationView {
         }
         .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
-        }
+        })
     }
 
     /// Maillon dédié de la chaîne (voir garde anti-débordement sur
@@ -228,8 +247,8 @@ extension ConversationView {
     /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
     /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
     /// l'onglet « Lieu » est absent (loi 4, jamais grisé).
-    private func composerStickerSheet<Content: View>(_ content: Content) -> some View {
-        content
+    private func composerStickerSheet(_ content: AnyView) -> AnyView {
+        AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
             StickerPickerView(onStickerSelected: { emoji in
                 composerState.showStickerPicker = false
@@ -249,14 +268,14 @@ extension ConversationView {
             .stickerNearbyPlacesProvided()
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
+        })
     }
 
     /// 3e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
     /// les 5 fullScreenCover d'édition de pièces jointes en attente — le groupe
     /// le plus dense en types de closures distincts (un par éditeur média).
-    private func composerEditingCovers<Content: View>(_ content: Content) -> some View {
-        content
+    private func composerEditingCovers(_ content: AnyView) -> AnyView {
+        AnyView(content
         // C. Tap pending image → MeeshyImageEditorView
         //
         // Bug fix (2026-07-09): `isPresented` used to be driven solely by
@@ -376,7 +395,7 @@ extension ConversationView {
             }, onCancel: {
                 scrollState.audioToEdit = nil
             })
-        }
+        })
     }
 
     // MARK: - Recent Media Strip Selection
