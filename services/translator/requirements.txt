@@ -147,7 +147,7 @@ diffusers==0.39.0
 resemble-perth==1.0.1
 omegaconf==2.3.1
 conformer==0.3.2
-spacy==3.8.15
+spacy==3.8.16
 einops==0.8.2
 soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
