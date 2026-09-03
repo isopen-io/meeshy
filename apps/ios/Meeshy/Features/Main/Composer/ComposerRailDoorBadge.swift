@@ -51,11 +51,26 @@ nonisolated struct ComposerRailMatter: Equatable, Sendable {
     /// donc son compte les additionne.
     var places: Int = 0
 
-    /// Les balises DÉRIVÉES du texte de la publication. C'est `ComposerHashtags`
-    /// qui les relit — la source unique, celle-là même que la feuille montre :
-    /// tenir une liste à côté produirait deux vérités, celle qu'on lit et celle
-    /// qu'on envoie.
-    var hashtagsInText: Int = 0
+    /// Les balises de la publication — **REÇUES déjà comptées**, jamais
+    /// re-dérivées ici (#5007).
+    ///
+    /// Ce champ a d'abord pris le TEXTE et appelé `ComposerHashtags.tags`
+    /// lui-même. Le résultat était juste au chiffre près, et c'était quand
+    /// même une **seconde dérivation du même fait** : `composerHashtags` est le
+    /// site unique du meuble, et son doc-comment dit pourquoi — deux motifs
+    /// voisins finissent par diverger sur un cas limite (`page#section`,
+    /// `a#b`), et l'écran montrerait alors une balise que l'envoi n'emporte
+    /// pas.
+    ///
+    /// > La garde qui interdit ce doublon (`test_lesBalises_neSontDeriveesQuUneFois`)
+    /// > balaie l'unité du meuble. Ce fichier n'en faisait pas partie : la
+    /// > faute était invisible **parce qu'elle vivait dans un fichier neuf**,
+    /// > pas parce qu'elle était subtile. Il y est entré dans le même commit.
+    ///
+    /// Le champ est désormais SYMÉTRIQUE de `mentions`, qui recevait déjà son
+    /// compte de `composerReferences` — c'est l'asymétrie entre les deux qui
+    /// aurait dû se voir à la relecture.
+    var hashtags: Int = 0
 
     /// Les personnes nommées — `composerReferences`, jamais les `@` relus dans
     /// le texte : le second chemin dériverait du premier et les deux
@@ -83,7 +98,7 @@ nonisolated enum ComposerRailDoorBadge {
     /// C'est ce qui permet d'éprouver « un fond ne compte pas comme média de
     /// premier plan » sans monter le composer.
     static func matter(slide: StorySlide,
-                       publicationText: String,
+                       hashtags: Int,
                        description: String,
                        mentions: Int,
                        hasDocumentLocation: Bool,
@@ -96,7 +111,7 @@ nonisolated enum ComposerRailDoorBadge {
             sounds: (effets.audioPlayerObjects ?? []).count,
             stickers: (effets.stickerObjects ?? []).count,
             places: effets.locationObjects.count + (hasDocumentLocation ? 1 : 0),
-            hashtagsInText: ComposerHashtags.tags(in: publicationText).count,
+            hashtags: hashtags,
             mentions: mentions,
             strokes: (effets.drawingStrokes ?? []).count,
             hasBackground: hasDocumentBackground || !mediasDeFond.isEmpty,
@@ -127,7 +142,7 @@ nonisolated enum ComposerRailDoorBadge {
         case .drawing:     brut = matter.strokes
         case .sticker:     brut = matter.stickers
         case .mention:     brut = matter.mentions
-        case .hashtag:     brut = matter.hashtagsInText
+        case .hashtag:     brut = matter.hashtags
         case .place:       brut = matter.places
         }
         return brut > 0 ? brut : nil

@@ -328,7 +328,11 @@ extension MeeshyComposerHost {
             for: ComposerRailDoor.canonicalRail,
             in: ComposerRailDoorBadge.matter(
                 slide: viewModel.currentSlide,
-                publicationText: documentText,
+                // **Le site UNIQUE, jamais une seconde dérivation** (#5007) :
+                // `composerHashtags` est déjà `ComposerHashtags.tags(in:
+                // documentText)`, et la feuille comme le sélecteur le lisent
+                // sans le recalculer.
+                hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
                 mentions: composerReferences.count,
                 hasDocumentLocation: documentLocation != nil,

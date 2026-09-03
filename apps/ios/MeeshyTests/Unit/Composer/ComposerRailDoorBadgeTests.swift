@@ -34,14 +34,18 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
         return son
     }
 
+    /// **`hashtags` est un COMPTE, pas un texte** (#5007) : la dérivation vit
+    /// chez le meuble (`composerHashtags`), site unique que la feuille et le
+    /// sélecteur lisent déjà. Le relevé la REÇOIT, exactement comme il reçoit
+    /// `mentions` — c'est l'asymétrie entre les deux qui trahissait le doublon.
     private func matter(_ slide: StorySlide,
-                        text: String = "",
+                        hashtags: Int = 0,
                         description: String = "",
                         mentions: Int = 0,
                         location: Bool = false,
                         background: Bool = false) -> ComposerRailMatter {
         ComposerRailDoorBadge.matter(slide: slide,
-                                     publicationText: text,
+                                     hashtags: hashtags,
                                      description: description,
                                      mentions: mentions,
                                      hasDocumentLocation: location,
@@ -82,8 +86,12 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
                 StoryDrawingStroke(colorHex: "FFFFFF", width: 4)
             }
         }
+        // `#voyage`, `#Voyage` et `#été` ⇒ DEUX balises : la dé-duplication par
+        // casse appartient à `ComposerHashtags`, dont le meuble sert le
+        // résultat. Le relevé ne la refait pas — il ne peut plus se tromper
+        // dessus.
         let relevé = matter(s,
-                            text: "on part #voyage puis #Voyage et #été",
+                            hashtags: 2,
                             description: "un mot",
                             mentions: 2,
                             location: true,
@@ -100,8 +108,6 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
         // La pastille de scène ET le lieu de la publication : la porte sert les
         // deux niveaux selon le format, son compte les additionne.
         XCTAssertEqual(ComposerRailDoorBadge.count(.place, in: relevé), 2)
-        // `#voyage` et `#Voyage` sont le MÊME hashtag pour le serveur — les
-        // compter deux fois ferait croire à l'auteur qu'il en a posé deux.
         XCTAssertEqual(ComposerRailDoorBadge.count(.hashtag, in: relevé), 2)
     }
 
