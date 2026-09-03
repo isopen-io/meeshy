@@ -693,6 +693,42 @@ ne peut pas enfreindre par distraction.
 > décision produit chez l'app. Un verbe dit *comment* ; l'app décide *quand* et
 > *où*.
 
+### Les DEUX corps de `POST /posts` divergent par CONCEPTION (mesure 2026-09-03)
+
+`docs/product/api-simplification/social.md` compte **cinq sites** qui construisent
+le corps de `POST /posts`, « pour deux types de corps distincts
+(`CreatePostRequest`, `CreateStoryRequest`) », et prescrit de « réunir ces
+symboles » avant toute bascule de route. Le document ne dit pas CE QUI diverge ;
+mesuré ici, parce que le chiffre brut induit en erreur.
+
+| | champs |
+|---|---|
+| `CreatePostRequest` | **18** |
+| `CreateStoryRequest` | **12** |
+| en propre à la story | **aucun** — c'est un sous-ensemble STRICT |
+| en propre au post | `moodEmoji` · `location` · `audioUrl` · `audioDuration` · `mobileTranscription` · `discoverabilityPrecision` |
+
+Six champs manquants a l'air d'une perte. **Ce n'en est pas une** : pour une
+story, ces informations vivent DANS `storyEffects`, pas à côté.
+
+| champ absent du corps story | où il vit pour une story |
+|---|---|
+| `location` | un `StoryLocationObject` posé sur la scène (`addLocation` remplit `currentEffects.locationObjects`) — le § « Ce qui appartient à la PUBLICATION » dit exactement pourquoi les deux ne sont pas le même lieu |
+| `mobileTranscription` | `StoryEffects.voiceTranscriptions: [StoryVoiceTranscription]?` |
+| `audioUrl` · `audioDuration` | un `audioPlayerObject` de la scène, avec son plan et sa durée |
+| `moodEmoji` | une humeur n'est pas une scène — le champ n'a pas d'emploi ici |
+
+> **Une différence de cardinalité n'est pas une divergence.** Le corps d'une story
+> est plus court parce que la scène porte ce que le post met à plat, et unifier
+> les deux ajouterait au chemin story six champs structurellement redondants — un
+> second endroit où écrire le lieu, avec la question « lequel gagne ? » en prime.
+
+Ce que la réunion des cinq symboles doit viser est donc **un corps unique dont les
+champs de mise à plat sont optionnels**, pas la fusion des deux formes à
+l'identique. La distinction se perd facilement : elle ne se voit qu'en demandant,
+pour chaque champ absent, *où va cette information quand elle existe* — et pas en
+comparant deux listes.
+
 ### Le piège : une capacité absente derrière un vocabulaire qui la suggère
 
 Le lot #5018 a buté sur une absence que rien ne signalait : **aucun verbe ne
