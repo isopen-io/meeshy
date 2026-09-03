@@ -87,7 +87,7 @@ peft==0.20.0
 #
 # Ce qui reste à vérifier à chaque bump : que `import chatterbox` passe au build
 # (torch est épinglé à 2.6.0 dans le Dockerfile, installé AVANT ce fichier).
-transformers==5.15.1
+transformers==5.16.1
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données
