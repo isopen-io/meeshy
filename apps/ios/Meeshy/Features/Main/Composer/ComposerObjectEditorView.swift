@@ -84,8 +84,28 @@ struct ComposerObjectEditorView: View {
     /// La fenêtre de l'objet, LUE du modèle à chaque rendu — jamais recopiée
     /// dans un `@State`, qui divergerait de ce que le plan 2D dessine.
     private var timing: ComposerObjectTiming {
-        ComposerObjectTiming.timing(start: textObject?.startTime,
-                                    duration: textObject?.duration)
+        // **Générique depuis #4937** : `MeeshySceneObject` expose `startTime` et
+        // `duration` pour les cinq familles, en uniformisant le `Float?` de
+        // l'audio. Lire `textObject` ici aurait rendu la fenêtre d'un sticker
+        // « permanente » quelle que soit sa vraie valeur — un réglage qui ment
+        // plutôt qu'un réglage absent.
+        ComposerObjectTiming.timing(start: sceneObject?.startTime,
+                                    duration: sceneObject?.duration)
+    }
+
+    /// **L'objet courant, TOUTES familles** (#4937) — lu du modèle à chaque
+    /// rendu, jamais recopié : le plan 2D permet d'en désigner un autre sans
+    /// quitter l'écran, et une copie divergerait au premier tap.
+    private var sceneObject: MeeshySceneObject? {
+        viewModel.currentSlide.sceneObject(id: objectId)
+    }
+
+    /// La famille de l'objet ouvert. Le repli sur `.text` n'est pas un défaut
+    /// masqué : il ne survient que si l'objet vient d'être supprimé pendant que
+    /// l'écran le tenait — un état NOMINAL que `sceneObject(id:)` documente — et
+    /// l'écran se referme alors de lui-même.
+    private var family: MeeshySceneObject.Kind {
+        sceneObject?.kind ?? .text
     }
 
     private var textObject: StoryTextObject? {
@@ -115,6 +135,17 @@ struct ComposerObjectEditorView: View {
         }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        // **Changer d'objet peut changer de FAMILLE** (#4937), et l'outil
+        // courant peut ne plus exister pour elle : passer d'un texte réglé sur
+        // POLICE à un sticker laisserait le bas vide.
+        //
+        // Le type non optionnel garantit qu'une valeur EXISTE ; il ne garantit
+        // pas qu'elle soit SERVIE par la famille courante. Deux propriétés
+        // distinctes, et la seconde demande sa règle.
+        .adaptiveOnChange(of: family, initial: true) { _, nouvelle in
+            selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
+                                                              keeping: selectedTool)
+        }
     }
 
     // MARK: - L'en-tête
@@ -206,8 +237,12 @@ struct ComposerObjectEditorView: View {
             // l'objet sélectionné, un tap qui ne sélectionne rien est un
             // contrôle inerte. Les autres kinds n'ont pas d'éditeur ici (#4082),
             // donc ils ne répondent pas plutôt que de répondre à moitié.
-            onItemTapped: { id, kind in
-                guard kind == .text, id != objectId else { return }
+            onItemTapped: { id, _ in
+                // **Toutes les familles depuis #4937.** La garde `kind == .text`
+                // datait du temps où cet écran ne savait éditer qu'un texte :
+                // taper un sticker ne faisait alors RIEN, ce qui se lit comme
+                // une scène morte plutôt que comme une limite.
+                guard id != objectId else { return }
                 openEditor(id)
             },
             loadedImages: sceneImages,
@@ -247,7 +282,7 @@ struct ComposerObjectEditorView: View {
     private var toolRail: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 6) {
-                ForEach(ComposerObjectEditorRail.entries, id: \.self) { entree in
+                ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
                     Button { selectedTool = entree } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
                             .font(MeeshyFont.relative(15, weight: .semibold))

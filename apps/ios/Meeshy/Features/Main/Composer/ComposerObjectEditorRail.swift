@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import MeeshyUI
 
 /// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
@@ -99,7 +100,56 @@ nonisolated enum ComposerObjectEditorRail {
     /// Le TEMPS et le PLAN ferment le rail parce qu'ils ne dessinent pas
     /// l'objet, ils le QUALIFIENT — d'où à où il vit, et où il se pose.
     static var entries: [ComposerObjectEditorSection] {
-        TextEditTool.all.map { ComposerObjectEditorSection.tool($0) } + [.timing, .plan]
+        entries(for: .text)
+    }
+
+    /// **Les entrées d'une FAMILLE** (#4937).
+    ///
+    /// > Directive porteur 2026-09-03 : « Faire la même vue pour les audio de la
+    /// > scène, pour les images de la scène, et les vidéos de la scène et même
+    /// > les stickers de la scène ! »
+    ///
+    /// ## Ce qui varie, et ce qui ne varie pas
+    ///
+    /// `timing` et `plan` valent pour les CINQ familles, et ce n'est pas une
+    /// simplification : `timing` règle la fenêtre (`startTime` / `duration`,
+    /// que `MeeshySceneObject` expose génériquement), et `plan` est la TIMELINE
+    /// — `Plan2DLayout.tracks(from: currentEffects)` dessine toutes les pistes de
+    /// la slide et surligne celle de l'objet courant. Ni l'une ni l'autre ne
+    /// connaît le type de ce qu'elle règle.
+    ///
+    /// Ce qui varie est le jeu d'OUTILS. Seul le texte en a — les huit de
+    /// `TextEditTool`. Les quatre autres familles n'ont pas encore de panneau
+    /// d'options propre, et **cette absence se DÉCLARE plutôt qu'elle ne se
+    /// devine** : une entrée sans contenu serait un contrôle inerte (loi 4), et
+    /// l'issue autorise explicitement de différer ce qui n'existe pas encore.
+    ///
+    /// ## Le piège écarté, parce qu'il était tentant
+    ///
+    /// `ClipInspector.supportsTransform(kind:isBackground:)` semblait être la
+    /// règle à réemployer. Elle ne l'est pas : elle répond à « la TIMELINE
+    /// peut-elle régler ces propriétés ? » — son doc-comment le dit,
+    /// « `SetClipPropertyCommand` refuse ses propriétés, elles se règlent au
+    /// doigt sur le canvas » — et non à « cette famille a-t-elle telle entrée ».
+    /// Un sticker n'y « supporte pas transform » alors qu'il porte bien x, y,
+    /// échelle et rotation.
+    ///
+    /// > Une règle qui répond à une question VOISINE est plus dangereuse qu'une
+    /// > règle absente : elle rend un verdict plausible, et rien ne dit qu'il
+    /// > répond à autre chose.
+    static func entries(for family: MeeshySceneObject.Kind) -> [ComposerObjectEditorSection] {
+        let outils: [ComposerObjectEditorSection]
+        switch family {
+        case .text:
+            outils = TextEditTool.all.map { ComposerObjectEditorSection.tool($0) }
+        // **Différées, pas oubliées** : ces familles n'ont pas de panneau
+        // d'options propre dans le dépôt. Le `switch` est exhaustif à dessein —
+        // une sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
+        // qu'elle règle.
+        case .media, .sticker, .place, .audio:
+            outils = []
+        }
+        return outils + [.timing, .plan]
     }
 
     /// Ce que le bas montre à l'ouverture — le STYLE, premier geste sur un
@@ -123,6 +173,29 @@ nonisolated enum ComposerObjectEditorRail {
     /// > C'est la forme forte de la loi 4 : plutôt que de vérifier qu'un
     /// > contrôle a toujours un effet, on retire au modèle le moyen de dire
     /// > qu'il n'en a pas.
+
+    /// **L'outil qui reste sélectionné quand la FAMILLE change** (#4937).
+    ///
+    /// Cet écran laisse changer d'objet sans en sortir — le plan 2D désigne une
+    /// autre piste, et l'éditeur suit. Si le nouvel objet n'est pas de la même
+    /// famille, l'outil courant peut ne plus exister pour lui : passer d'un
+    /// texte réglé sur POLICE à un sticker laisserait le bas **vide**.
+    ///
+    /// > C'est très exactement le défaut que l'invariant de type devait
+    /// > interdire — et il revient par une porte que ce type ne garde pas. Un
+    /// > `ComposerObjectEditorSection` non optionnel garantit qu'une valeur
+    /// > existe ; il ne garantit pas qu'elle soit SERVIE par la famille
+    /// > courante. Deux propriétés distinctes, et la seconde demande sa règle.
+    ///
+    /// Ce qui est valide est CONSERVÉ : changer d'objet sans changer de famille
+    /// ne doit pas ramener l'auteur au premier outil, sans quoi régler la même
+    /// chose sur trois textes de suite deviendrait trois fois le même chemin.
+    static func selection(forFamily family: MeeshySceneObject.Kind,
+                          keeping current: ComposerObjectEditorSection) -> ComposerObjectEditorSection {
+        let servies = entries(for: family)
+        guard let premiere = servies.first else { return current }
+        return servies.contains(current) ? current : premiere
+    }
 
     static func isSelected(_ entry: ComposerObjectEditorSection,
                            selected: ComposerObjectEditorSection) -> Bool {

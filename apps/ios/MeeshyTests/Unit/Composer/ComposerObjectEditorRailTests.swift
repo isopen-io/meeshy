@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+@testable import MeeshySDK
 @testable import MeeshyUI
 
 /// **Le rail d'outils de l'éditeur d'objet** (#4936).
@@ -90,6 +91,79 @@ final class ComposerObjectEditorRailTests: XCTestCase {
         XCTAssertFalse(
             source.contains("@State private var selectedTool: ComposerObjectEditorSection?"),
             "un point d'interrogation ici rouvre exactement le défaut du dépliant")
+    }
+
+    // MARK: - #4937 — les cinq familles
+
+    /// **La fenêtre et la timeline valent pour les CINQ familles.**
+    ///
+    /// C'est ce qui rend « une seule vue » possible : ni `timing` ni `plan` ne
+    /// connaît le type de ce qu'il règle. Le premier lit `startTime` /
+    /// `duration`, que `MeeshySceneObject` expose génériquement ; le second
+    /// dessine toutes les pistes de la slide.
+    func test_chaqueFamille_aSaFenetreEtSaTimeline() {
+        for famille in MeeshySceneObject.Kind.allCases {
+            let entrees = ComposerObjectEditorRail.entries(for: famille)
+            XCTAssertTrue(entrees.contains(.timing), "\(famille) n'a pas sa fenêtre")
+            XCTAssertTrue(entrees.contains(.plan), "\(famille) n'a pas sa timeline")
+        }
+    }
+
+    /// **Le texte est la seule famille à porter des outils**, et c'est une
+    /// absence DÉCLARÉE, pas un oubli : les quatre autres n'ont pas encore de
+    /// panneau d'options propre, et une entrée sans contenu serait un contrôle
+    /// inerte.
+    ///
+    /// Ce témoin tombera le jour où une famille en gagnera — et c'est le but :
+    /// il faudra alors dire laquelle et pourquoi.
+    func test_seulLeTexte_porteDesOutils() {
+        for famille in MeeshySceneObject.Kind.allCases where famille != .text {
+            let outils = ComposerObjectEditorRail.entries(for: famille).filter {
+                if case .tool = $0 { return true }
+                return false
+            }
+            XCTAssertTrue(outils.isEmpty,
+                          "\(famille) porte un outil sans panneau d'options — un contrôle inerte")
+        }
+        XCTAssertEqual(ComposerObjectEditorRail.entries(for: .text).count,
+                       TextEditTool.all.count + 2)
+    }
+
+    /// **Aucune famille n'a un rail VIDE.** Un objet qu'on ouvre et qui ne
+    /// propose rien serait un écran qui ment sur son existence.
+    func test_aucuneFamille_nAUnRailVide() {
+        for famille in MeeshySceneObject.Kind.allCases {
+            XCTAssertGreaterThanOrEqual(ComposerObjectEditorRail.entries(for: famille).count, 2,
+                                        "\(famille)")
+        }
+    }
+
+    // MARK: - Changer d'objet sans quitter l'écran
+
+    /// **Passer d'un texte à un sticker ne vide pas le bas.**
+    ///
+    /// POLICE n'existe pas pour un sticker ; garder la sélection telle quelle
+    /// rejouerait le défaut que l'écran existe pour fermer. Le témoin s'écrit
+    /// sur ce croisement précis, parce que sur toute autre paire — même famille,
+    /// ou outil commun — « garder » et « replier sur le premier » rendent le
+    /// même verdict.
+    func test_changerDeFamille_neLaissePasLeBasVide() {
+        let apres = ComposerObjectEditorRail.selection(forFamily: .sticker,
+                                                       keeping: .tool(.style))
+        XCTAssertTrue(ComposerObjectEditorRail.entries(for: .sticker).contains(apres),
+                      "l'outil retenu doit être SERVI par la nouvelle famille")
+        XCTAssertEqual(apres, .timing, "à défaut, la première entrée de la famille")
+    }
+
+    /// **Et ce qui reste valide est CONSERVÉ.** Régler la fenêtre de trois
+    /// objets de suite ne doit pas ramener trois fois au premier outil.
+    func test_unOutilEncoreServi_estConserve() {
+        for famille in MeeshySceneObject.Kind.allCases {
+            XCTAssertEqual(ComposerObjectEditorRail.selection(forFamily: famille, keeping: .plan),
+                           .plan, "\(famille) sert la timeline — la sélection doit tenir")
+        }
+        XCTAssertEqual(ComposerObjectEditorRail.selection(forFamily: .text, keeping: .tool(.color)),
+                       .tool(.color))
     }
 
     /// À l'ouverture, le STYLE — le premier geste sur un texte, et la raison
