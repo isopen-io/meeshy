@@ -66,9 +66,18 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
 /// | zone | sur la scène | ici |
 /// |---|---|---|
 /// | haut | la scène 9:16 | le sujet touché, toujours visible |
-/// | gauche | les portes qui font ENTRER | les outils de l'objet |
+/// | gauche | les portes qui font ENTRER | *(rendu au sujet — #4997)* |
 /// | droite | contrôleurs + historique | undo / redo, au même endroit |
-/// | bas | les options de l'outil ouvert | les options de l'outil ouvert |
+/// | bas | les options de l'outil ouvert | les outils, PUIS leurs options |
+///
+/// **Le couloir gauche a été rendu au sujet au #4997** (directive porteur
+/// 2026-09-03 : « lister les outils entièrement en bas […] pour laisser la
+/// place au canvas d'occuper suffisamment l'espace »). La symétrie avec la
+/// surface de scène était un moyen, pas la fin : ici le couloir coûtait 52 pt
+/// de largeur de carte — donc ≈ 92 pt de hauteur, le ratio 9:16 les liant —
+/// pour ranger dix entrées qu'une rangée basse porte sans rien prendre au
+/// sujet. Ce type ne décrit plus qu'un ORDRE et une SÉLECTION ; la place, elle,
+/// appartient à la vue.
 ///
 /// ## Ce que le passage de la LISTE au RAIL change — une seule règle
 ///
@@ -157,6 +166,16 @@ nonisolated enum ComposerObjectEditorRail {
     /// reprise : l'écran ne naît jamais muet.
     static let initiallySelected: ComposerObjectEditorSection = .tool(.style)
 
+    /// **La hauteur MAXIMALE de la zone d'options** (#4997).
+    ///
+    /// Mesurée sur le plus grand panneau servi — la grille des dix-huit styles,
+    /// deux rangées de ~64 pt plus son titre et ses marges. Nommée ici plutôt
+    /// qu'écrite dans le `body` pour la même raison que le reste de ce type :
+    /// un nombre posé en ligne n'est interrogeable que par la source, et
+    /// celui-ci arbitre entre le sujet et ses réglages — l'arbitrage exact que
+    /// la directive du porteur tranche.
+    static let optionsMaxHeight: CGFloat = 260
+
     /// **Il n'y a pas de fonction de bascule, et c'est le cœur du lot.**
     ///
     /// La liste dépliante en avait une (`opened(after:from:)`, qui rend `nil`
@@ -232,5 +251,50 @@ nonisolated enum ComposerObjectEditorRail {
             case .effect:     return "sparkles"
             }
         }
+    }
+}
+
+/// **Le geste de retour au bord de tête** (#4997, directive porteur
+/// 2026-09-03 : « le swipe bordure gauche vers la droite doit retourner sur la
+/// scène principale »).
+///
+/// ## Pourquoi une règle pour deux comparaisons
+///
+/// Parce qu'elles décident d'une sortie DESTRUCTIVE en apparence : l'auteur
+/// règle un objet, et un glissement mal interprété referme l'écran sous ses
+/// doigts. Les deux seuils doivent donc être éprouvés sur ce qu'ils REFUSENT —
+/// un glissement parti du milieu, un glissement trop court, un glissement
+/// vertical — et un `if` écrit dans un `body` n'est éprouvable sur aucun des
+/// trois.
+///
+/// ## La dominance verticale n'est pas une précaution de plus
+///
+/// La rangée d'options défile, le plan 2D se panne, le canvas déplace des
+/// objets. Sans le terme vertical, un glissement en diagonale parti du bord —
+/// le geste naturel pour attraper une glissière de gauche — refermerait
+/// l'écran. C'est le cas que le seuil horizontal seul laisse passer, et le seul
+/// que l'utilisateur ne comprendrait pas.
+nonisolated enum ComposerEdgeBackGesture {
+
+    /// La largeur de la lisière qui reçoit le geste. Le système en donne ~20 pt
+    /// à sa propre pile de navigation ; s'en écarter ferait apprendre au doigt
+    /// deux bords différents dans la même app.
+    static let stripWidth: CGFloat = 20
+
+    /// La distance horizontale au-delà de laquelle le geste est une INTENTION,
+    /// pas un frôlement.
+    static let minimumTranslation: CGFloat = 60
+
+    /// Le geste ferme-t-il l'écran ?
+    ///
+    /// - Parameter startX: l'abscisse du DÉBUT du geste, dans l'espace global.
+    ///   Un glissement parti du milieu de l'écran n'est pas un retour, même
+    ///   s'il finit sur le bord.
+    /// - Parameter translation: le déplacement cumulé. Le terme vertical n'est
+    ///   pas décoratif : il distingue le retour d'un défilement en diagonale.
+    static func completes(startX: CGFloat, translation: CGSize) -> Bool {
+        guard startX <= stripWidth else { return false }
+        guard translation.width >= minimumTranslation else { return false }
+        return abs(translation.width) > abs(translation.height)
     }
 }

@@ -97,6 +97,11 @@ struct ComposerSceneSurface: View {
     /// `ComposerRailMode.resolve`. Cette vue ne re-filtre rien : une seconde
     /// loi 4 divergerait de la première.
     var railMode: ComposerRailMode = .doors([])
+
+    /// **Ce que chaque porte PORTE DÉJÀ** (#4994) — déjà compté par
+    /// `ComposerRailDoorBadge`. Cette vue ne compte rien : elle relaie, comme
+    /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
+    var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
@@ -370,7 +375,8 @@ struct ComposerSceneSurface: View {
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
-                                pushesToThumb: false)
+                                pushesToThumb: false,
+                                badges: railBadges)
                 // Les MÊMES deux marges que le rail *trailing* : elles le
                 // posent dans le couloir du plateau, jamais sur la scène.
                 .padding(.leading, ComposerRailGeometry.outerMargin)
@@ -409,11 +415,27 @@ struct ComposerSceneSurface: View {
                                 onDoor: onRailDoor,
                                 axis: .horizontal,
                                 systemEntry: railSystemEntry,
-                                systemEntryAfter: railSystemEntryAfter)
+                                systemEntryAfter: railSystemEntryAfter,
+                                badges: railBadges)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, ComposerRailGeometry.outerMargin)
                 .padding(.bottom, 4)
         )
+    }
+
+    /// **Le volet de description, borné à la CARTE** (#4993).
+    ///
+    /// Les marges reprennent les deux couloirs (`sceneInset`) plus l'air qui
+    /// l'écarte du bord : sans elles, le volet s'étalerait sur toute la largeur
+    /// paddée et croiserait les deux rails, qui vivent précisément dans ces
+    /// couloirs et à cette hauteur.
+    @ViewBuilder
+    private var descriptionOverlay: some View {
+        if let descriptionPanel {
+            descriptionPanel
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true) + 10)
+                .padding(.bottom, 10)
+        }
     }
 
     var body: some View {
@@ -538,6 +560,23 @@ struct ComposerSceneSurface: View {
                         alignment: .bottomTrailing
                     )
                 }
+                // **La description, ANCRÉE AU BAS DE LA CARTE** (#4993,
+                // directive porteur 2026-09-03).
+                //
+                // Troisième overlay posé APRÈS le padding, comme ses deux
+                // voisins — mais avec `alignment: .bottom` et une marge qui
+                // REPREND les couloirs, si bien qu'il tombe sur la carte et non
+                // dans le couloir. C'est l'exception que le doc-comment de la
+                // loi 6 nomme : la description est le seul contenu du composer
+                // que le lecteur peint DÉJÀ par-dessus le canvas.
+                //
+                // `ancreAuDessin` est réemployé tel quel : le volet suit la
+                // COMPOSITION, jamais la frame — sans lui il flotterait sous la
+                // carte de la moitié de la hauteur perdue dès que le ratio
+                // n'est pas plein (#4119).
+                .overlay(alignment: .bottom) {
+                    ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                }
                 .padding(.top, 8)
 
                 // **La bande contextuelle, entre la scène et la description**
@@ -632,7 +671,6 @@ struct ComposerSceneSurface: View {
                         .padding(.top, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if let descriptionPanel { descriptionPanel }
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
                                            activeChipId: activeObjectChipId,

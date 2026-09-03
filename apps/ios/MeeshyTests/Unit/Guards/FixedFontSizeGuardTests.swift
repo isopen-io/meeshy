@@ -162,7 +162,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
         // Le fichier principal n'en porte plus aucun : il sort de la liste et
         // n'y revient jamais.
-        "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        // **Le `⋯` a quitté `+Intake` le 2026-09-03** (#4996) : le fichier
+        // franchissait le plafond de 1 200 lignes, et la responsabilité du
+        // menu est partie dans `MeeshyComposerHost+Overflow.swift`. La seule
+        // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
+        // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
+        // aucune et sort de la liste, comme la règle 4 l'exige.
+        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",

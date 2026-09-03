@@ -26216,7 +26216,7 @@ quand le mot appartient aussi à d'autres types. Mon premier relevé montrait 11
 sites ; il y en avait 3. Les deux erreurs rendent un nombre *plausible*. Seul le
 compilateur connaît le TYPE.
 
-## Leçon 487 — Quand on tient la FRAME d'un élément, on peut REGARDER ce qu'elle contient
+## Leçon 474 bis — Quand on tient la FRAME d'un élément, on peut REGARDER ce qu'elle contient
 
 J'ai ouvert une issue affirmant qu'un bouton était **invisible** — « une zone
 tactile posée sur la rangée de stories, sans glyphe propre » — et j'ai bâti tout
@@ -26401,7 +26401,7 @@ et de la règle « une valeur DÉDUITE n'est pas une valeur LUE » : ici la vale
 avait été lue, mais dans un doc-comment — et un doc-comment est une valeur
 DÉDUITE par quelqu'un d'autre, à une date qu'il n'a pas écrite.
 
-## Leçon 486 — Un correcteur mort en vol laisse un arbre MIXTE, et six formes que la revue avait bien vues
+## Leçon 489 — Un correcteur mort en vol laisse un arbre MIXTE, et six formes que la revue avait bien vues
 
 **Contexte (2026-09-03, #4938 — revue finale du chantier « conversation sans
 latence »).** Le workflow de revue adverse a rendu cinquante constats ; l'agent
@@ -26474,3 +26474,131 @@ que dev en posait 23 dans trois hôtes qu'elle ne touche pas. Remesuré sur
 l'arbre fusionné, jamais soustrait — et le commentaire nomme les trois
 fichiers, pour qu'un plafond qui monte de deux se lise comme une dette de dev,
 pas de ce lot.
+
+## Leçon 486 — Une factorisation qui RENFORCE une règle fait rougir la garde qui la protégeait
+
+Le socle et l'en-tête du mood peignaient chacun leur flèche « Publier », avec
+leur libellé, leur plancher de 44 pt, leur `.disabled(!canPublishDocument)` et
+leurs trois attributs d'accessibilité. Deux écritures d'un même geste — et deux
+glyphes déjà divergents (`arrow.up.circle` d'un côté, `arrow.up` de l'autre).
+
+Les factoriser en `publishCapsuleLabel` + `publishCapsule(_:)` a fait tomber
+**cinq témoins d'un coup**. Aucun ne mesurait quelque chose de faux : ils
+lisaient le CORPS de `var publishButton` et y cherchaient ce qui venait d'en
+sortir.
+
+> **Une garde de source ancre sur une PLACE, pas sur une propriété.** Elle ne
+> peut pas distinguer « ce site a perdu sa protection » de « la protection a
+> déménagé chez un voisin » — les deux se lisent comme l'absence d'une chaîne.
+
+La réponse qui coûte le moins n'est ni de revenir en arrière, ni de supprimer
+le témoin : c'est de le **re-viser sur le nouveau site ET d'ajouter l'assertion
+qui manquait**. Ici, « chaque flèche MONTE le libellé partagé ». Sans elle, une
+troisième flèche écrite plus tard composerait le sien et passerait au vert : la
+garde couvrirait un site sur trois en affirmant les couvrir tous.
+
+Le compteur de lectures (`if socleShowsLabels` : 3 → 2) BAISSE, et c'est le
+signe qu'il faut lire à l'endroit — moins de lectures pour le même nombre de
+contrôles est exactement ce qu'un fusible « une seule règle » cherche à obtenir.
+Le réflexe inverse — remonter le nombre jusqu'à ce que ça passe — aurait laissé
+la garde verte sur une valeur qui ne veut plus rien dire.
+
+Voir [[reference_negative_source_guards_die_silently]] et
+[[reference_a_guard_can_punish_the_first_step_toward_its_own_rule]].
+
+## Leçon 487 — Un `ScrollView` est GREEDY : le borner ne rend la place à personne si le voisin ne la demande pas
+
+L'éditeur d'objet plein écran devait « laisser la place au canvas d'occuper
+suffisamment l'espace » (directive porteur, #4997). Deux corrections, et la
+première seule ne se voyait presque pas.
+
+1. Le rail d'outils descend du couloir gauche à une rangée basse : la carte
+   9:16 récupère 52 pt de largeur. Mesuré : 247 pt → 305 pt de haut.
+2. La zone d'options était un `ScrollView` en `.frame(maxHeight: .infinity)`.
+   Un `ScrollView` réclame TOUT ce qu'on lui offre, quel que soit son contenu :
+   il gardait ≈ 250 pt de bande vide sous la grille des polices.
+
+Le borner (`maxHeight: 260`) n'a pourtant rendu que la moitié du gain. **Le
+sujet ne demandait pas la place libérée** : la carte est figée à son ratio et se
+CENTRE dans ce qu'on lui donne, donc sans `maxHeight: .infinity` elle se
+contentait de sa taille idéale et laissait le reste en vide.
+
+> **Rendre de la place et la PRENDRE sont deux gestes.** Un plafond posé sur le
+> voisin glouton ne suffit pas ; il faut aussi que le bénéficiaire soit
+> flexible. C'est la forme SwiftUI de « un correctif dont la valeur n'atteint
+> aucun lecteur n'a corrigé personne ».
+
+Le contrôle qui l'attrape est une capture AVANT / APRÈS avec la hauteur de la
+carte mesurée en points sur l'arbre d'accessibilité — pas « ça a l'air plus
+grand ».
+
+## Leçon 488 — Un gate qui ne s'EXÉCUTE pas rend le même signal qu'un gate vert, et la fin d'un fichier n'est pas son maximum
+
+Deux mesures du 2026-09-03, prises à dix minutes d'écart, qui disent la même
+chose sur deux objets sans rapport.
+
+### 1. `CI` était rouge sur `dev` depuis des heures, et personne ne pouvait le voir
+
+Mesuré en vérifiant mon propre push :
+
+| commit | `CI` |
+|---|---|
+| `d6b33cb940` (04:42) | **failure** |
+| `4a4e76eebe` (07:00) | **failure** |
+| `5d5838d0f3` (07:35, à moi) | **failure** |
+
+Et le fait qui explique tout : **le run précédent de `CI` sur `dev` datait du
+2026-08-04.** Un mois. Ses filtres de chemins ne matchent pas un lot iOS pur, et
+`dev` n'avait reçu que cela ; le premier lot qui a touché `packages/` et
+`tasks/` l'a réveillé — sur deux jobs déjà rouges.
+
+> **Un gate qui ne s'exécute pas ne protège pas, et son silence ressemble
+> exactement à un vert.** Trois sessions ont poussé sur `dev` toute la nuit avec
+> l'idée raisonnable que « la CI dirait si c'était cassé ». Elle ne disait rien,
+> et ne rien dire est indistinguable de dire oui.
+
+C'est la jumelle de la leçon sur les jobs filtrés par chemin qui cachent leur
+propre échec — mais un cran plus haut : là c'était un JOB qui se cachait dans un
+workflow qui tournait ; ici c'est le WORKFLOW ENTIER qui ne tournait pas.
+
+**Le témoin qui l'attrape ne coûte qu'une commande**, et il faut la poser sur la
+DATE, jamais sur la couleur :
+
+```bash
+gh run list --workflow "CI" --limit 5 --json headBranch,headSha,conclusion,createdAt
+```
+
+Un `createdAt` vieux d'un mois est une information beaucoup plus alarmante qu'un
+`failure` récent. Et attention à l'instrument : `gh run list --branch dev
+--workflow CI` m'a rendu « dernier run : 2026-08-04 » pendant que la liste SANS
+`--branch` montrait quatre runs du jour sur `dev`. Deux requêtes sur le même
+fait, deux réponses ; c'est la requête PAR COMMIT (`--commit <sha complet>`) qui
+tranche — et elle exige le SHA complet, un préfixe rendant zéro ligne en silence.
+
+### 2. J'ai choisi mes numéros de leçon en regardant la FIN du fichier
+
+Pour numéroter 484 et 485, j'ai fait `grep "^## Leçon" | tail -5`. Ça répond à
+« quelles sont les cinq dernières lignes ? », pas à « quel numéro est libre ? ».
+Le fichier est écrit par trois sessions en parallèle et n'est PAS ordonné : un
+`## Leçon 474` traînait à la ligne 26219, **après** 480, 481, 482 et 483.
+
+J'ai eu de la chance — 484 et 485 étaient libres. Le doublon que le gate a
+attrapé était celui de `474`, plus ancien que mon lot. Mais la méthode qui m'a
+donné raison ce jour-là est la même qui donnera tort au prochain.
+
+> **Dans un fichier que plusieurs sessions APPENDENT, la dernière ligne n'est
+> pas le maximum.** La question « ce numéro est-il libre ? » se pose au fichier
+> ENTIER, et sa réponse tient en une commande :
+>
+> ```bash
+> grep "^## Leçon " tasks/lessons.md | sed -E 's/^## Leçon ([0-9]+).*/\1/' | sort -n | tail -3
+> ```
+
+### Ce que les deux ont en commun
+
+Un coup d'œil bon marché a répondu à une question VOISINE de celle que je
+posais — « le dernier run est-il rouge ? » au lieu de « y a-t-il eu un run ? »,
+« quelles sont les dernières lignes ? » au lieu de « quel est le maximum ? ».
+C'est la forme de la leçon 462, appliquée non plus à un instrument de mesure
+mais à un ORDRE : *ce qui vient en dernier* et *ce qui est le plus grand* sont
+deux choses différentes dès que quelqu'un d'autre écrit dans le même fichier.
