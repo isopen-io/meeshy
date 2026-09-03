@@ -1515,10 +1515,12 @@ EngagementGlyph(
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
             .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
-            .reactionPalette(isPresented: $showsReactionPalette,
-                             isDark: theme.mode.isDark,
-                             anchor: .topLeading,
-                             offsetY: -46) { sendDetailReaction($0) }
+            // Le GESTE vit sur le bouton, la PALETTE sur la barre entière : un
+            // overlay ancré à un bouton de 28 pt s'y trouve comprimé, et la
+            // rangée d'émojis n'a pas la place de se dessiner — mesuré au
+            // simulateur, elle s'ouvrait en pilule vide. La cible du geste et
+            // le cadre du contenu ne sont pas le même objet.
+            .reactionPaletteTrigger(isPresented: $showsReactionPalette)
 
             Spacer()
 
@@ -1669,6 +1671,13 @@ EngagementGlyph(
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+        // Le CADRE de la palette est ici, sur la barre ENTIÈRE : elle a la
+        // largeur qu'une rangée de six émojis demande. Le geste, lui, reste
+        // sur le bouton — cible petite et précise, cadre large et libre.
+        .reactionPaletteFrame(isPresented: $showsReactionPalette,
+                              isDark: theme.mode.isDark,
+                              anchor: .bottomLeading,
+                              offsetY: -46) { sendDetailReaction($0) }
     }
 
     // MARK: - Media Views

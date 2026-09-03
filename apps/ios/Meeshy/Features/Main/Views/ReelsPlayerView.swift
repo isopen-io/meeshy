@@ -1015,11 +1015,12 @@ private struct ReelActionRail: View {
                 action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
-            // Appui bref = ❤️ ; appui long = la palette. Le geste vit dans
-            // `reactionPalette`, partagé avec le détail d'un post — deux
-            // fichiers hors budget n'ont pas à porter deux fois le même code.
-            .reactionPalette(isPresented: $showsReactionPalette,
-                             isDark: true, offsetX: -52) { viewModel.react(reel, emoji: $0) }
+            // Appui bref = ❤️ ; appui long = la palette. Le GESTE est ici, le
+            // CADRE sur le rail entier : un overlay ancré à un bouton s'y
+            // trouve comprimé et la rangée d'émojis s'ouvre vide — mesuré au
+            // simulateur sur le détail d'un post, et le rail est plus étroit
+            // encore.
+            .reactionPaletteTrigger(isPresented: $showsReactionPalette)
 
             // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
             // sous le nom — plus de compteur de vues public ici.
@@ -1062,6 +1063,14 @@ private struct ReelActionRail: View {
 
             moreOptionsMenu
         }
+        // Le CADRE sur le rail ENTIER, pas sur le bouton : la rangée d'émojis
+        // s'ouvre vers la GAUCHE (le rail est collé au bord droit de l'écran),
+        // au niveau du cœur. Ancrée au bouton, elle s'ouvrait comprimée et
+        // hors cadre — mesuré au simulateur sur le détail d'un post.
+        .reactionPaletteFrame(isPresented: $showsReactionPalette,
+                              isDark: true,
+                              anchor: .topTrailing,
+                              offsetX: -56) { viewModel.react(reel, emoji: $0) }
     }
 
     /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard`/`ReelFeedCard`

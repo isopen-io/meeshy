@@ -590,6 +590,7 @@ extension MeeshyComposerHost {
             // « absente » y est presque toujours une feature non branchée.
             backgroundSound: avatarBadgeSound,
             onEditBackgroundSound: editBackgroundSoundAction,
+            onDeleteBackgroundSound: deleteBackgroundSoundAction,
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -663,6 +664,7 @@ extension MeeshyComposerHost {
             backgroundSound: avatarBadgeSound,
             // #4668 — et le toucher l'OUVRE, comme la carte du son de contenu.
             onEditBackgroundSound: editBackgroundSoundAction,
+            onDeleteBackgroundSound: deleteBackgroundSoundAction,
             // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
             onEditForegroundSound: { son in editForegroundSound(son) },
