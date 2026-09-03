@@ -37,7 +37,7 @@ const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
 // ordre vit dans le script, pas seulement dans l'appel.
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
-  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links']
+  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
