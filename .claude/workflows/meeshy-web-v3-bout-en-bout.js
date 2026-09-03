@@ -37,7 +37,7 @@ const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
 // ordre vit dans le script, pas seulement dans l'appel.
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
-  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links']
+  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
@@ -1135,8 +1135,12 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
    N'ecris aucun nom de modele ailleurs dans le message.
 3. \`git push -u origin ${BRANCHE}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
-   Sur rejet non-reseau (non fast-forward) : \`git pull --rebase origin ${BRANCHE}\` puis rejoue
-   type-check + test, puis push ; si le conflit demande un arbitrage, arrete-toi et dis-le.
+   Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${BRANCHE} && git merge origin/${BRANCHE}\`
+   — JAMAIS \`git pull --rebase\` ni \`git rebase\` (lecon 324 du depot : le rebase aplatit un commit
+   de fusion et pousse un etat partiel). Un conflit se resout en gardant les DEUX apports quand les
+   fichiers le permettent (design, lecons) ou en reconciliant le CODE par sa logique (jamais en
+   prenant un cote au hasard) ; rejoue type-check + lint + test, puis pousse a nouveau. Si le
+   conflit demande un arbitrage produit, arrete-toi et dis-le.
 3 bis. ${PR ? `LA PR, SANS INTERVENTION (directive du porteur) : la branche \`${BRANCHE}\` doit avoir une PR
    OUVERTE vers \`${BASE}\`. ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__create_pull_request,mcp__github__enable_pr_auto_merge,mcp__github__pull_request_read,mcp__github__update_pull_request", max_results: 5}).
    (a) Cherche une PR ouverte dont head = \`${BRANCHE}\` (list_pull_requests, state open). Si elle existe,

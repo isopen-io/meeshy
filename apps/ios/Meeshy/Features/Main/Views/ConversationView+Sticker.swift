@@ -3,105 +3,6 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Rendu d'un sticker en image
-
-/// **Ce qu'un lecteur VOIT d'un sticker de conversation** (#4823, moitié ENVOI).
-///
-/// Le fil transporte deux choses : un PNG — pièce jointe image ORDINAIRE, la
-/// seule que voit un lecteur qui ne sait pas dessiner un gabarit — et, à côté,
-/// `MessageSticker`, qui dit ce que l'image REPRÉSENTE pour qu'un lecteur
-/// capable la redessine en vectoriel. Ce type produit le PNG ; il est PUR
-/// (une entrée, une image) pour que les tests le mesurent sans simulateur.
-///
-/// Trois entrées, trois formes :
-/// - un EMOJI se rasterise seul, centré dans un carré transparent — pas
-///   `StoryStickerRasterizer`, dont l'image colle au glyphe et dont le cache
-///   NSCache n'a rien à faire d'un rendu qui ne sert qu'une fois ;
-/// - un GABARIT passe par `StickerTemplateRenderer`, le MÊME moteur que la
-///   scène et la vignette de palette (exigence #4110) — la mesure d'abord, pour
-///   ramener un cartouche long sous le côté maximal sans le tronquer ;
-/// - un LIEU décoré remplit ses emplacements comme `StoryLocationLayer`, repli
-///   « Ici » compris, puis suit le chemin du gabarit.
-enum ConversationStickerRendering {
-
-    /// Côté du carré emoji, en points — assez pour rester net dans une bulle
-    /// à 2× sans peser plus qu'une vignette.
-    static let emojiSide: CGFloat = 256
-    /// Corps du glyphe : il remplit le carré en laissant l'air qu'Apple laisse
-    /// autour de ses propres emojis dans Messages.
-    static let emojiFontSize: CGFloat = 200
-    /// Côté maximal d'un gabarit rendu, en points.
-    static let templateMaxSide: CGFloat = 512
-    /// Échelle de rasterisation FIXE : le PNG voyage vers d'autres appareils,
-    /// son échelle ne doit pas dépendre de l'écran de l'auteur.
-    static let renderScale: CGFloat = 2
-
-    /// Le PNG d'un sticker emoji — carré, transparent, `nil` pour une chaîne
-    /// vide (rien à peindre, donc rien à envoyer).
-    static func emojiImage(_ emoji: String) -> UIImage? {
-        let glyphe = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !glyphe.isEmpty else { return nil }
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false
-        format.scale = renderScale
-        let côté = emojiSide
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: côté, height: côté), format: format)
-        let attributed = NSAttributedString(string: glyphe,
-                                            attributes: [.font: UIFont.systemFont(ofSize: emojiFontSize)])
-        let mesure = attributed.size()
-        let origine = CGPoint(x: (côté - mesure.width) / 2, y: (côté - mesure.height) / 2)
-        return renderer.image { _ in attributed.draw(at: origine) }
-    }
-
-    /// Le PNG d'un gabarit, ou `nil` si ce binaire ne sait pas le dessiner —
-    /// l'appelant choisit alors son repli (l'emoji du gabarit), comme la scène.
-    static func templateImage(templateID: String, slots: [String: String]) -> UIImage? {
-        let base = StickerTemplateMetrics.preview(side: templateMaxSide)
-        guard let mesure = StickerTemplateRenderer.measuredSize(templateID: templateID, slots: slots, metrics: base),
-              mesure.width > 0, mesure.height > 0 else { return nil }
-        // Un cartouche mesure son contenu : un nom de lieu long dépasse le
-        // côté visé. Les mesures sont proportionnelles au corps, donc réduire
-        // le corps du même rapport ramène la boîte sous le plafond.
-        let plusLong = max(mesure.width, mesure.height)
-        let metrics = plusLong > templateMaxSide
-            ? StickerTemplateMetrics.preview(side: templateMaxSide * (templateMaxSide / plusLong))
-            : base
-        guard let rendu = StickerTemplateRenderer.image(templateID: templateID, slots: slots,
-                                                        metrics: metrics, screenScale: renderScale),
-              let image = rendu.0, rendu.1.width > 0, rendu.1.height > 0 else { return nil }
-        return fitted(image, size: rendu.1, maxSide: templateMaxSide)
-    }
-
-    /// La mesure d'un cartouche n'est pas strictement proportionnelle au corps
-    /// (marges fixes, pliage du texte) : réduire le corps du même rapport laisse
-    /// parfois quelques points au-dessus du plafond. Le plafond se GARANTIT
-    /// donc sur l'image rendue, par une réduction proportionnelle finale — un
-    /// PNG de sticker n'a aucune raison de dépasser le côté visé.
-    static func fitted(_ image: UIImage, size: CGSize, maxSide: CGFloat) -> UIImage {
-        let plusLong = max(size.width, size.height)
-        guard plusLong > maxSide else { return image }
-        let ratio = maxSide / plusLong
-        let cible = CGSize(width: (size.width * ratio).rounded(.down), height: (size.height * ratio).rounded(.down))
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = renderScale
-        format.opaque = false
-        return UIGraphicsImageRenderer(size: cible, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: cible))
-        }
-    }
-
-    /// Les emplacements d'un gabarit de LIEU — même dépouillement que la
-    /// scène (`StickerSlotFiller.placeSlots`), même repli localisé « Ici » que
-    /// `StoryLocationLayer` pour un lieu sans nom ni adresse.
-    static func locationSlots(for place: SharedPlace) -> [String: String] {
-        var emplacements = StickerSlotFiller.placeSlots(for: place)
-        if (emplacements[StickerSlotFiller.placeNameSlot] ?? "").isEmpty {
-            emplacements[StickerSlotFiller.placeNameSlot] = StoryLocationLayer.resolvedLabel(for: place)
-        }
-        return emplacements
-    }
-}
-
 // MARK: - Envoi depuis la palette
 
 extension ConversationView {
@@ -143,19 +44,20 @@ extension ConversationView {
     /// (bulle optimiste persistée AVANT l'upload, cache amorcé sous la clé que
     /// le rendu résout, hors-ligne et échec d'upload vers l'outbox durable),
     /// sans la préparation de tuiles ni la barre de progression : il n'y a
-    /// qu'un fichier, déjà prêt, déjà en mémoire.
+    /// qu'un fichier.
+    ///
+    /// **La bulle part AVANT les octets** (#4947). Ce chemin postulait « un
+    /// fichier déjà prêt, déjà en mémoire » : vrai pour un sticker de la
+    /// librairie, faux pour un emoji ou un gabarit, dont le PNG n'existe pas
+    /// encore au moment du tap. Encoder puis écrire sur le fil principal
+    /// séparait donc le tap du premier pixel. L'image, elle, EST déjà
+    /// rasterisée : elle amorce le cache d'aperçu sous l'URL locale — connue
+    /// avant que le fichier existe — et la bulle peint sans rien attendre.
     func sendStickerImage(_ image: UIImage, sticker: MessageSticker?) {
-        guard let data = image.pngData() else { return }
         let attachmentId = UUID().uuidString
-        let fileName = "sticker_\(attachmentId).png"
-        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        do {
-            try data.write(to: fileURL)
-        } catch {
-            Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
-            FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
-            return
-        }
+        let directory = FileManager.default.temporaryDirectory
+        let fileName = StickerSendPipeline.fileName(for: attachmentId)
+        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory)
 
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
@@ -163,7 +65,11 @@ extension ConversationView {
         let local = MeeshyMessageAttachment(
             id: attachmentId,
             fileName: fileName, originalName: fileName,
-            mimeType: "image/png", fileSize: data.count,
+            // Le poids n'est pas encore connu — il naîtra de l'encodage, et
+            // toutes les surfaces le taisent quand il vaut zéro. L'ESTIMER
+            // afficherait un chiffre faux sous une image que le serveur
+            // remplacera par sa propre pièce jointe deux secondes plus tard.
+            mimeType: "image/png", fileSize: 0,
             fileUrl: localKey,
             width: Int(image.size.width * image.scale),
             height: Int(image.size.height * image.scale),
@@ -171,10 +77,11 @@ extension ConversationView {
             uploadedBy: currentUserId,
             thumbnailColor: senderColor
         )
-        // La bulle optimiste lit `file://…` : amorcer les deux caches sous cette
-        // clé pour qu'elle peigne sans relire le disque ni le réseau.
+        // La bulle optimiste lit `file://…` : amorcer le cache MÉMOIRE sous
+        // cette clé AVANT de la poser pour qu'elle peigne l'image déjà rendue,
+        // sans relire le disque ni le réseau. Le cache DISQUE, lui, attend les
+        // octets — il est amorcé à la suite de l'encodage.
         DiskCacheStore.cacheImageForPreview(image, key: localKey)
-        Task { await CacheCoordinator.shared.images.save(data, for: localKey) }
 
         let pendingRef = composerState.pendingReplyReference
         let isStory = pendingRef?.isStoryReply == true
@@ -196,12 +103,45 @@ extension ConversationView {
         HapticFeedback.light()
 
         Task {
-            await uploadAndSendSticker(
-                fileURL: fileURL, data: data, image: image, tempId: tempId, sticker: sticker,
+            await encodeWriteAndSendSticker(
+                image: image, attachmentId: attachmentId, directory: directory, localKey: localKey,
+                tempId: tempId, sticker: sticker,
                 replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
                 originalLanguage: lang, currentUserId: currentUserId
             )
         }
+    }
+
+    /// Encodage PNG et écriture disque, HORS du fil principal, puis l'upload.
+    ///
+    /// La bulle est déjà là : ce qui suit ne se voit pas. Un échec — un encodage
+    /// qui ne rend rien, un disque plein — est un échec d'ENVOI : la bulle
+    /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
+    /// spinner fantôme pour un fichier qui n'existera jamais.
+    private func encodeWriteAndSendSticker(
+        image: UIImage, attachmentId: String, directory: URL, localKey: String,
+        tempId: String, sticker: MessageSticker?,
+        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        originalLanguage: String, currentUserId: String
+    ) async {
+        let écrit: StickerSendPipeline.WrittenSticker
+        do {
+            écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+        } catch {
+            Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
+            await viewModel.markOptimisticMediaFailed(tempId: tempId, reason: error.localizedDescription)
+            FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+            return
+        }
+        // Le cache DISQUE s'amorce EN PARALLÈLE de l'envoi : l'attendre
+        // retarderait l'upload d'une seconde écriture des mêmes octets, alors
+        // que la bulle peint déjà depuis le cache mémoire.
+        Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
+        await uploadAndSendSticker(
+            fileURL: écrit.url, data: écrit.data, image: image, tempId: tempId, sticker: sticker,
+            replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+            originalLanguage: originalLanguage, currentUserId: currentUserId
+        )
     }
 
     /// Upload TUS puis `sendMessage` avec le `tempId` de la bulle déjà posée.

@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import MeeshyUI
 
 /// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
@@ -65,9 +66,18 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
 /// | zone | sur la scène | ici |
 /// |---|---|---|
 /// | haut | la scène 9:16 | le sujet touché, toujours visible |
-/// | gauche | les portes qui font ENTRER | les outils de l'objet |
+/// | gauche | les portes qui font ENTRER | *(rendu au sujet — #4997)* |
 /// | droite | contrôleurs + historique | undo / redo, au même endroit |
-/// | bas | les options de l'outil ouvert | les options de l'outil ouvert |
+/// | bas | les options de l'outil ouvert | les outils, PUIS leurs options |
+///
+/// **Le couloir gauche a été rendu au sujet au #4997** (directive porteur
+/// 2026-09-03 : « lister les outils entièrement en bas […] pour laisser la
+/// place au canvas d'occuper suffisamment l'espace »). La symétrie avec la
+/// surface de scène était un moyen, pas la fin : ici le couloir coûtait 52 pt
+/// de largeur de carte — donc ≈ 92 pt de hauteur, le ratio 9:16 les liant —
+/// pour ranger dix entrées qu'une rangée basse porte sans rien prendre au
+/// sujet. Ce type ne décrit plus qu'un ORDRE et une SÉLECTION ; la place, elle,
+/// appartient à la vue.
 ///
 /// ## Ce que le passage de la LISTE au RAIL change — une seule règle
 ///
@@ -99,13 +109,72 @@ nonisolated enum ComposerObjectEditorRail {
     /// Le TEMPS et le PLAN ferment le rail parce qu'ils ne dessinent pas
     /// l'objet, ils le QUALIFIENT — d'où à où il vit, et où il se pose.
     static var entries: [ComposerObjectEditorSection] {
-        TextEditTool.all.map { ComposerObjectEditorSection.tool($0) } + [.timing, .plan]
+        entries(for: .text)
+    }
+
+    /// **Les entrées d'une FAMILLE** (#4937).
+    ///
+    /// > Directive porteur 2026-09-03 : « Faire la même vue pour les audio de la
+    /// > scène, pour les images de la scène, et les vidéos de la scène et même
+    /// > les stickers de la scène ! »
+    ///
+    /// ## Ce qui varie, et ce qui ne varie pas
+    ///
+    /// `timing` et `plan` valent pour les CINQ familles, et ce n'est pas une
+    /// simplification : `timing` règle la fenêtre (`startTime` / `duration`,
+    /// que `MeeshySceneObject` expose génériquement), et `plan` est la TIMELINE
+    /// — `Plan2DLayout.tracks(from: currentEffects)` dessine toutes les pistes de
+    /// la slide et surligne celle de l'objet courant. Ni l'une ni l'autre ne
+    /// connaît le type de ce qu'elle règle.
+    ///
+    /// Ce qui varie est le jeu d'OUTILS. Seul le texte en a — les huit de
+    /// `TextEditTool`. Les quatre autres familles n'ont pas encore de panneau
+    /// d'options propre, et **cette absence se DÉCLARE plutôt qu'elle ne se
+    /// devine** : une entrée sans contenu serait un contrôle inerte (loi 4), et
+    /// l'issue autorise explicitement de différer ce qui n'existe pas encore.
+    ///
+    /// ## Le piège écarté, parce qu'il était tentant
+    ///
+    /// `ClipInspector.supportsTransform(kind:isBackground:)` semblait être la
+    /// règle à réemployer. Elle ne l'est pas : elle répond à « la TIMELINE
+    /// peut-elle régler ces propriétés ? » — son doc-comment le dit,
+    /// « `SetClipPropertyCommand` refuse ses propriétés, elles se règlent au
+    /// doigt sur le canvas » — et non à « cette famille a-t-elle telle entrée ».
+    /// Un sticker n'y « supporte pas transform » alors qu'il porte bien x, y,
+    /// échelle et rotation.
+    ///
+    /// > Une règle qui répond à une question VOISINE est plus dangereuse qu'une
+    /// > règle absente : elle rend un verdict plausible, et rien ne dit qu'il
+    /// > répond à autre chose.
+    static func entries(for family: MeeshySceneObject.Kind) -> [ComposerObjectEditorSection] {
+        let outils: [ComposerObjectEditorSection]
+        switch family {
+        case .text:
+            outils = TextEditTool.all.map { ComposerObjectEditorSection.tool($0) }
+        // **Différées, pas oubliées** : ces familles n'ont pas de panneau
+        // d'options propre dans le dépôt. Le `switch` est exhaustif à dessein —
+        // une sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
+        // qu'elle règle.
+        case .media, .sticker, .place, .audio:
+            outils = []
+        }
+        return outils + [.timing, .plan]
     }
 
     /// Ce que le bas montre à l'ouverture — le STYLE, premier geste sur un
     /// texte. Même raison que le modèle dépliant, dont cette valeur est la
     /// reprise : l'écran ne naît jamais muet.
     static let initiallySelected: ComposerObjectEditorSection = .tool(.style)
+
+    /// **La hauteur MAXIMALE de la zone d'options** (#4997).
+    ///
+    /// Mesurée sur le plus grand panneau servi — la grille des dix-huit styles,
+    /// deux rangées de ~64 pt plus son titre et ses marges. Nommée ici plutôt
+    /// qu'écrite dans le `body` pour la même raison que le reste de ce type :
+    /// un nombre posé en ligne n'est interrogeable que par la source, et
+    /// celui-ci arbitre entre le sujet et ses réglages — l'arbitrage exact que
+    /// la directive du porteur tranche.
+    static let optionsMaxHeight: CGFloat = 260
 
     /// **Il n'y a pas de fonction de bascule, et c'est le cœur du lot.**
     ///
@@ -123,6 +192,29 @@ nonisolated enum ComposerObjectEditorRail {
     /// > C'est la forme forte de la loi 4 : plutôt que de vérifier qu'un
     /// > contrôle a toujours un effet, on retire au modèle le moyen de dire
     /// > qu'il n'en a pas.
+
+    /// **L'outil qui reste sélectionné quand la FAMILLE change** (#4937).
+    ///
+    /// Cet écran laisse changer d'objet sans en sortir — le plan 2D désigne une
+    /// autre piste, et l'éditeur suit. Si le nouvel objet n'est pas de la même
+    /// famille, l'outil courant peut ne plus exister pour lui : passer d'un
+    /// texte réglé sur POLICE à un sticker laisserait le bas **vide**.
+    ///
+    /// > C'est très exactement le défaut que l'invariant de type devait
+    /// > interdire — et il revient par une porte que ce type ne garde pas. Un
+    /// > `ComposerObjectEditorSection` non optionnel garantit qu'une valeur
+    /// > existe ; il ne garantit pas qu'elle soit SERVIE par la famille
+    /// > courante. Deux propriétés distinctes, et la seconde demande sa règle.
+    ///
+    /// Ce qui est valide est CONSERVÉ : changer d'objet sans changer de famille
+    /// ne doit pas ramener l'auteur au premier outil, sans quoi régler la même
+    /// chose sur trois textes de suite deviendrait trois fois le même chemin.
+    static func selection(forFamily family: MeeshySceneObject.Kind,
+                          keeping current: ComposerObjectEditorSection) -> ComposerObjectEditorSection {
+        let servies = entries(for: family)
+        guard let premiere = servies.first else { return current }
+        return servies.contains(current) ? current : premiere
+    }
 
     static func isSelected(_ entry: ComposerObjectEditorSection,
                            selected: ComposerObjectEditorSection) -> Bool {
@@ -159,5 +251,50 @@ nonisolated enum ComposerObjectEditorRail {
             case .effect:     return "sparkles"
             }
         }
+    }
+}
+
+/// **Le geste de retour au bord de tête** (#4997, directive porteur
+/// 2026-09-03 : « le swipe bordure gauche vers la droite doit retourner sur la
+/// scène principale »).
+///
+/// ## Pourquoi une règle pour deux comparaisons
+///
+/// Parce qu'elles décident d'une sortie DESTRUCTIVE en apparence : l'auteur
+/// règle un objet, et un glissement mal interprété referme l'écran sous ses
+/// doigts. Les deux seuils doivent donc être éprouvés sur ce qu'ils REFUSENT —
+/// un glissement parti du milieu, un glissement trop court, un glissement
+/// vertical — et un `if` écrit dans un `body` n'est éprouvable sur aucun des
+/// trois.
+///
+/// ## La dominance verticale n'est pas une précaution de plus
+///
+/// La rangée d'options défile, le plan 2D se panne, le canvas déplace des
+/// objets. Sans le terme vertical, un glissement en diagonale parti du bord —
+/// le geste naturel pour attraper une glissière de gauche — refermerait
+/// l'écran. C'est le cas que le seuil horizontal seul laisse passer, et le seul
+/// que l'utilisateur ne comprendrait pas.
+nonisolated enum ComposerEdgeBackGesture {
+
+    /// La largeur de la lisière qui reçoit le geste. Le système en donne ~20 pt
+    /// à sa propre pile de navigation ; s'en écarter ferait apprendre au doigt
+    /// deux bords différents dans la même app.
+    static let stripWidth: CGFloat = 20
+
+    /// La distance horizontale au-delà de laquelle le geste est une INTENTION,
+    /// pas un frôlement.
+    static let minimumTranslation: CGFloat = 60
+
+    /// Le geste ferme-t-il l'écran ?
+    ///
+    /// - Parameter startX: l'abscisse du DÉBUT du geste, dans l'espace global.
+    ///   Un glissement parti du milieu de l'écran n'est pas un retour, même
+    ///   s'il finit sur le bord.
+    /// - Parameter translation: le déplacement cumulé. Le terme vertical n'est
+    ///   pas décoratif : il distingue le retour d'un défilement en diagonale.
+    static func completes(startX: CGFloat, translation: CGSize) -> Bool {
+        guard startX <= stripWidth else { return false }
+        guard translation.width >= minimumTranslation else { return false }
+        return abs(translation.width) > abs(translation.height)
     }
 }

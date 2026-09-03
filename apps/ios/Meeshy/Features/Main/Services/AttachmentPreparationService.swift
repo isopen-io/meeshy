@@ -250,16 +250,27 @@ final class AttachmentPreparationService {
                                sourceImage: UIImage) async {
         let fileName = "image_\(prep.id).\(result.fileExtension)"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        prep.stage = .hashing
+        // Écriture JPEG + ThumbHash (~5-15 ms) hors MainActor : une sélection
+        // multi-photos empile plusieurs `populateImage` en vol, et ces deux
+        // étapes n'ont besoin d'aucune isolation — seul le retour à
+        // `prep.finish`/`prep.fail` doit se faire sur MainActor. `imageBox`
+        // suit la discipline de `StickerSendPipeline.SendableStickerImage` :
+        // l'image n'est que LUE (encodage du hash), jamais mutée.
+        let data = result.data
+        let imageBox = SendableAttachmentImage(image: sourceImage)
+        let thumbHash: String?
         do {
-            try result.data.write(to: tempURL)
+            thumbHash = try await Task.detached(priority: .userInitiated) {
+                try data.write(to: tempURL)
+                return imageBox.image.toThumbHash()
+            }.value
         } catch {
             log.error("image write failed: \(error.localizedDescription)")
             prep.fail("Échec d'écriture de l'image")
             return
         }
-
-        prep.stage = .hashing
-        let thumbHash = sourceImage.toThumbHash()
 
         let attachment = MessageAttachment(
             id: prep.id,
@@ -438,4 +449,15 @@ final class AttachmentPreparationService {
         }
         return UIImage(cgImage: cgImage)
     }
+}
+
+// MARK: - Sendable image box (Task.detached crossing)
+
+/// Traversée d'une `UIImage` vers une tâche détachée — même discipline que
+/// `StickerSendPipeline.SendableStickerImage` : l'image n'est que LUE
+/// (encodage ThumbHash des pixels), jamais mutée, donc la faire voyager est
+/// sûr. Redite plutôt qu'exportée : une boîte partagée inviterait à faire
+/// voyager n'importe quelle image, y compris une image qu'on mute.
+private nonisolated struct SendableAttachmentImage: @unchecked Sendable {
+    let image: UIImage
 }

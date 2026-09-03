@@ -102,23 +102,21 @@ final class ComposerCameraOpensTheMeubleTests: XCTestCase {
         }
     }
 
-    /// **La caméra reste PROMISE.** Router vers le meuble sans armer le viseur
-    /// aurait tenu la lettre de la directive en perdant ce que la porte
-    /// annonce : `.cameraReady` n'est pas « une entrée neutre », c'est un
-    /// viseur ouvert.
-    func test_laCamera_resteArmee_etLeClavierNeSeLevePas() {
-        XCTAssertTrue(ComposerSurfaceRouting.armsCameraOnAppear(opening: .cameraReady))
+    /// **La caméra reste PROMISE — mais par un GESTE** (#4036, 2026-09-03).
+    ///
+    /// Ce témoin affirmait l'inverse : « `.cameraReady` n'est pas une entrée
+    /// neutre, c'est un viseur ouvert ». Le porteur l'a révoqué — l'auteur qui
+    /// venait composer traversait un plein écran noir. La promesse survit dans
+    /// le MODE que l'appui long ouvrira ; c'est `ComposerSceneCaptureGesture`
+    /// qui la porte, et `ComposerSceneCaptureGestureTests` qui la garde.
+    ///
+    /// > Une bascule de doctrine se lit dans l'historique d'un témoin
+    /// > RÉÉCRIT, jamais dans son absence : supprimé, il n'aurait rien dit à la
+    /// > session qui rebranchera le viseur au montage en croyant réparer.
+    func test_laPorteChoisitEncoreLeMode_maisNOuvreAucunViseur() {
+        XCTAssertEqual(ComposerCameraMode.mode(for: .cameraReady), .photo)
+        XCTAssertEqual(ComposerCameraMode.mode(for: .videoCameraReady), .video)
         XCTAssertFalse(ComposerSurfaceRouting.focusesContentOnAppear(opening: .cameraReady),
-                       "un viseur et un clavier ne s'ouvrent pas ensemble")
-    }
-
-    /// Et aucune AUTRE ouverture ne l'arme — un viseur qui s'ouvrirait sur une
-    /// reprise de brouillon recouvrirait ce qu'on vient de rouvrir pour le
-    /// relire.
-    func test_aucuneAutreOuverture_nArmeLaCamera() {
-        for opening in ComposerOpening.allCases where opening != .cameraReady && opening != .videoCameraReady {
-            XCTAssertFalse(ComposerSurfaceRouting.armsCameraOnAppear(opening: opening),
-                           "\(opening) n'a promis aucun viseur")
-        }
+                       "la porte caméra ne lève pas le clavier")
     }
 }

@@ -84,8 +84,28 @@ struct ComposerObjectEditorView: View {
     /// La fenêtre de l'objet, LUE du modèle à chaque rendu — jamais recopiée
     /// dans un `@State`, qui divergerait de ce que le plan 2D dessine.
     private var timing: ComposerObjectTiming {
-        ComposerObjectTiming.timing(start: textObject?.startTime,
-                                    duration: textObject?.duration)
+        // **Générique depuis #4937** : `MeeshySceneObject` expose `startTime` et
+        // `duration` pour les cinq familles, en uniformisant le `Float?` de
+        // l'audio. Lire `textObject` ici aurait rendu la fenêtre d'un sticker
+        // « permanente » quelle que soit sa vraie valeur — un réglage qui ment
+        // plutôt qu'un réglage absent.
+        ComposerObjectTiming.timing(start: sceneObject?.startTime,
+                                    duration: sceneObject?.duration)
+    }
+
+    /// **L'objet courant, TOUTES familles** (#4937) — lu du modèle à chaque
+    /// rendu, jamais recopié : le plan 2D permet d'en désigner un autre sans
+    /// quitter l'écran, et une copie divergerait au premier tap.
+    private var sceneObject: MeeshySceneObject? {
+        viewModel.currentSlide.sceneObject(id: objectId)
+    }
+
+    /// La famille de l'objet ouvert. Le repli sur `.text` n'est pas un défaut
+    /// masqué : il ne survient que si l'objet vient d'être supprimé pendant que
+    /// l'écran le tenait — un état NOMINAL que `sceneObject(id:)` documente — et
+    /// l'écran se referme alors de lui-même.
+    private var family: MeeshySceneObject.Kind {
+        sceneObject?.kind ?? .text
     }
 
     private var textObject: StoryTextObject? {
@@ -96,25 +116,59 @@ struct ComposerObjectEditorView: View {
         max(1, viewModel.currentSlide.duration)
     }
 
-    /// **L'anatomie du PLATEAU, ici aussi** (#4936, directive porteur
-    /// 2026-09-03). Quatre zones, les mêmes que la surface de scène : le sujet
-    /// en haut, les outils à gauche, l'historique à droite, les options en bas.
+    /// **L'anatomie du PLATEAU, ici aussi** (#4936) — et les outils EN BAS
+    /// (#4997, directive porteur 2026-09-03).
     ///
-    /// Le sujet ne défile plus hors de l'écran quand on ouvre un réglage —
-    /// c'était le coût de la liste dépliante, payé au moment précis où l'on
-    /// regarde ce qu'on règle.
+    /// > « des icônes d'outils aplaties, lister les outils entièrement en bas
+    /// > (en bas de l'écran pour laisser la place au canvas d'occuper
+    /// > suffisamment l'espace) »
+    ///
+    /// Le #4936 avait posé les outils dans le couloir GAUCHE, par symétrie avec
+    /// la surface de scène. Mesuré à l'écran : la carte 9:16 y perdait 52 pt de
+    /// LARGEUR, donc ≈ 92 pt de hauteur (le ratio les lie), pendant qu'une
+    /// bande vide restait sous les options. Sur cet écran-ci le couloir gauche
+    /// coûte plus qu'il ne rend — la symétrie est un moyen, pas la fin.
+    ///
+    /// > Une place juste dans une disposition peut être fausse dans une autre.
+    /// > Ce n'est pas le rail qui change de valeur, c'est ce que la place
+    /// > LIBÉRÉE rend — ici, la seule dimension que le sujet ne peut pas
+    /// > gagner autrement.
+    ///
+    /// Ce qui NE change pas : le sujet reste en haut et ne défile jamais hors
+    /// de l'écran, l'historique garde son couloir droit — « au même endroit »
+    /// était la moitié explicite de la directive du #4936 —, et le bas montre
+    /// toujours les options de l'outil ouvert. Seule la place du RAIL bouge.
     var body: some View {
         VStack(spacing: 0) {
             header
             HStack(alignment: .center, spacing: 0) {
-                toolRail
                 scene
                 historyRail
             }
             options
+            toolRow
         }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        // **Le glissement du bord de tête RAMÈNE à la scène** (#4997).
+        //
+        // `fullScreenCover` ne donne pas le geste que le système offre à une
+        // pile de navigation : l'écran n'avait qu'une sortie, le chrome haut.
+        // La zone est une lisière ÉTROITE posée sur le bord, jamais le geste
+        // posé sur toute la vue — le canvas y déplace des objets, et un
+        // glissement horizontal capté partout lui volerait chaque translation.
+        .overlay(alignment: .leading) { edgeBackStrip }
+        // **Changer d'objet peut changer de FAMILLE** (#4937), et l'outil
+        // courant peut ne plus exister pour elle : passer d'un texte réglé sur
+        // POLICE à un sticker laisserait le bas vide.
+        //
+        // Le type non optionnel garantit qu'une valeur EXISTE ; il ne garantit
+        // pas qu'elle soit SERVIE par la famille courante. Deux propriétés
+        // distinctes, et la seconde demande sa règle.
+        .adaptiveOnChange(of: family, initial: true) { _, nouvelle in
+            selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
+                                                              keeping: selectedTool)
+        }
     }
 
     // MARK: - L'en-tête
@@ -138,13 +192,25 @@ struct ComposerObjectEditorView: View {
             // qu'un « 4 » annoncé seul ne dit pas ce qu'il compte.
             Button(action: onClose) {
                 HStack(spacing: 3) {
-                    Image(systemName: "chevron.left")
+                    // `chevron.backward`, jamais `chevron.left` : le second nomme
+                    // un côté PHYSIQUE et ne se retourne pas en arabe, où le
+                    // retour est à droite. `RightToLeftLayoutGuardTests` l'a
+                    // attrapé — la flèche pointait vers l'avant du fil pour la
+                    // moitié RTL de nos sept langues.
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(15, weight: .semibold))
                     Text(LocalizedNumber.exact(objectCount))
                         .font(MeeshyFont.relative(16, weight: .semibold).monospacedDigit())
                 }
                 .foregroundStyle(.white)
-                .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 44, minHeight: 40)
+                // **Verre ADAPTATIF, jamais `glassEffect` en direct** (#4997) :
+                // l'enrobage du SDK rend le vrai Liquid Glass sur iOS 26 et un
+                // matériau translucide en dessous — le plancher du projet est
+                // iOS 16, et un appel direct ne compilerait pas sans une garde
+                // de version que ce site n'a pas à porter.
+                .adaptiveGlass(in: Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
@@ -154,8 +220,13 @@ struct ComposerObjectEditorView: View {
             Button(action: onClose) {
                 Text(ComposerObjectEditorCopy.done)
                     .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                    // Blanc sur la capsule PROÉMINENTE, comme « Publier » : les
+                    // deux sont l'action terminale de leur écran, et le même
+                    // geste doit avoir partout le même relief.
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 40)
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
             }
             .buttonStyle(.plain)
         }
@@ -201,8 +272,12 @@ struct ComposerObjectEditorView: View {
             // l'objet sélectionné, un tap qui ne sélectionne rien est un
             // contrôle inerte. Les autres kinds n'ont pas d'éditeur ici (#4082),
             // donc ils ne répondent pas plutôt que de répondre à moitié.
-            onItemTapped: { id, kind in
-                guard kind == .text, id != objectId else { return }
+            onItemTapped: { id, _ in
+                // **Toutes les familles depuis #4937.** La garde `kind == .text`
+                // datait du temps où cet écran ne savait éditer qu'un texte :
+                // taper un sticker ne faisait alors RIEN, ce qui se lit comme
+                // une scène morte plutôt que comme une limite.
+                guard id != objectId else { return }
                 openEditor(id)
             },
             loadedImages: sceneImages,
@@ -220,33 +295,57 @@ struct ComposerObjectEditorView: View {
             // `nil` — voir le doc-comment : pas de cadre en plein écran (#4850).
             selectedItemId: nil
         )
-        .frame(maxWidth: .infinity)
+        // **Le sujet RÉCLAME la hauteur libre** (#4997) : la carte est figée à
+        // son ratio et se centre dans ce qu'on lui donne, donc sans
+        // `maxHeight` elle se contente de sa taille idéale et laisse le reste
+        // en bande vide. C'est la moitié du correctif qui ne se voit pas — le
+        // plafond posé sur les options ne rend la place à personne si le sujet
+        // ne la demande pas.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
-        .padding(.horizontal, 16)
+        // **16 pt des DEUX côtés depuis que le rail est descendu** (#4997) :
+        // le couloir gauche n'existe plus, et la carte reprend sa largeur. Le
+        // couloir DROIT reste, lui — l'historique y vit, et la carte s'arrête
+        // donc avant lui, comme sur la surface de scène.
+        .padding(.leading, 16)
         .padding(.bottom, 10)
     }
 
     // MARK: - Les deux rails, dans les couloirs
 
-    /// **Le rail d'OUTILS, à gauche** (#4936) — la place que le plateau donne à
-    /// ce qui agit. Il défile : dix entrées ne tiennent pas dans la hauteur que
-    /// la scène laisse, et les tronquer en cacherait une sans le dire.
-    private var toolRail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 6) {
-                ForEach(ComposerObjectEditorRail.entries, id: \.self) { entree in
+    /// **La rangée d'OUTILS, tout en bas** (#4997) — et des glyphes NUS.
+    ///
+    /// > « des icônes d'outils aplaties, lister les outils entièrement en bas »
+    ///
+    /// Deux changements, et le second est le moins visible. La PLACE d'abord :
+    /// dix entrées à l'horizontale font `10 × 44 + 9 × 8 = 512 pt` là où un
+    /// écran de 393 pt en offre 361 une fois les marges retirées — la rangée
+    /// DÉFILE donc, exactement comme celle de `ComposerLeadingRail` en mode
+    /// outil, et pour la même raison arithmétique. Une `HStack` trop large
+    /// n'est pas clippée par SwiftUI : elle dessine par-dessus les deux bords.
+    ///
+    /// Le STYLE ensuite : le glyphe seul, teinté quand il est choisi. Les
+    /// pastilles à fond arrondi du #4936 étaient un troisième vocabulaire de
+    /// bouton d'outil dans le même composer — la surface de scène n'en peint
+    /// aucun, le SDK peint des bulles qui reflètent une VALEUR. Le rail dit ce
+    /// que l'outil FAIT ; c'est la couleur qui dit lequel est ouvert, le même
+    /// signal que `ComposerLeadingRail.toolButton` donne déjà.
+    private var toolRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
                     Button { selectedTool = entree } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
-                            .font(MeeshyFont.relative(15, weight: .semibold))
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                             ? Color.white : Color.white.opacity(0.55))
-                            .frame(width: 44, height: 40)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                          ? MeeshyColors.brandPrimary.opacity(0.30)
-                                          : Color.white.opacity(0.06))
-                            )
+                                             ? MeeshyColors.brandPrimary
+                                             : Color.white.opacity(0.55))
+                            // 44 pt de CIBLE quel que soit le glyphe (dimension
+                            // 5) : dessiné à sa taille naturelle, un `clock`
+                            // donnerait 17 pt que personne n'atteint du pouce.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
@@ -254,9 +353,40 @@ struct ComposerObjectEditorView: View {
                                             ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 16)
         }
-        .frame(width: 52)
+        .frame(height: 44)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
+    }
+
+    /// **La lisière du bord de tête** (#4997) — la zone où le geste de retour
+    /// se prend, et rien d'autre.
+    ///
+    /// `leading` et non « gauche » : en arabe le retour est à droite, et une
+    /// lisière codée sur un côté PHYSIQUE y refuserait le geste que
+    /// l'utilisateur vient d'apprendre.
+    ///
+    /// Elle est TRANSPARENTE mais pas vide : `Color.clear` seule ne reçoit
+    /// aucun toucher — `contentShape` est ce qui lui en donne, et c'est
+    /// l'oubli classique qui rendrait ce geste silencieusement inerte.
+    private var edgeBackStrip: some View {
+        Color.clear
+            .frame(width: ComposerEdgeBackGesture.stripWidth)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 12, coordinateSpace: .global)
+                    .onEnded { valeur in
+                        guard ComposerEdgeBackGesture.completes(
+                            startX: valeur.startLocation.x,
+                            translation: valeur.translation
+                        ) else { return }
+                        HapticFeedback.light()
+                        onClose()
+                    }
+            )
+            .accessibilityHidden(true)
     }
 
     /// **L'historique, à DROITE** — et c'est `ComposerTrailingRail`, le composant
@@ -302,7 +432,19 @@ struct ComposerObjectEditorView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
             }
-            .frame(maxHeight: .infinity)
+            // **Le bas prend ce qu'il LUI faut, jamais tout ce qui reste**
+            // (#4997). Un `ScrollView` est greedy : posé en `maxHeight:
+            // .infinity`, il réclamait toute la hauteur libre et laissait une
+            // bande VIDE de ≈ 250 pt sous la grille des polices — mesurée au
+            // simulateur —, pendant que la carte 9:16 restait à 247 pt là où sa
+            // largeur lui en permet 594.
+            //
+            // Le plafond est celui du plus grand panneau servi (la grille des
+            // dix-huit styles, deux rangées) : au-delà, le contenu défile,
+            // et en deçà la place revient au sujet. C'est le sens même de la
+            // directive — « laisser la place au canvas d'occuper suffisamment
+            // l'espace ».
+            .frame(maxHeight: ComposerObjectEditorRail.optionsMaxHeight)
             .scrollDisabled(planHoldsGesture)
         }
     }
@@ -527,6 +669,15 @@ nonisolated enum ComposerObjectEditorCopy {
 
     static var timing: String {
         String(localized: "composer.object.editor.timing", defaultValue: "APPARITION", bundle: .main)
+    }
+
+    /// Le nom du GROUPE que VoiceOver annonce en entrant dans la rangée basse.
+    /// Sans lui, le lecteur d'écran énumère dix boutons sans dire de quoi ils
+    /// règlent — le même service que `ComposerRailCopy.railLabel` rend au rail
+    /// de la scène.
+    static var toolRow: String {
+        String(localized: "composer.object.editor.toolRow",
+               defaultValue: "Outils de l'objet", bundle: .main)
     }
 
     /// **« TIMELINE », pas « PLAN 2D »** (directive porteur 2026-09-02).

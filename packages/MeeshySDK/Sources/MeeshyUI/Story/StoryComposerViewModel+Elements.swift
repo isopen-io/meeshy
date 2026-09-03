@@ -246,9 +246,25 @@ extension StoryComposerViewModel {
     /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
     /// coquille restée vide est supprimée à la sortie de l'éditeur
     /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
+    /// **Où poser un objet NEUF** (#4939) — jamais sur le précédent.
+    ///
+    /// Les trois sites qui posent écrivaient chacun `CGPoint(x: 0.5, y: 0.5)`,
+    /// le centre exact et sans condition. Deux textes se superposaient au pixel
+    /// près et se lisaient comme un seul texte cassé, pendant que la flèche de
+    /// l'éditeur annonçait « 2 objets ».
+    ///
+    /// Les FONDS sont écartés : ils occupent toute la scène et n'ont pas de
+    /// position — les compter ferait cascader le premier objet posé sur une
+    /// slide qui a un fond, sans raison.
+    func nextObjectPosition(in effects: StoryEffects) -> CGPoint {
+        StoryObjectPlacement.next(avoiding: effects.sceneObjects
+            .filter { !$0.isBackground }
+            .map { CGPoint(x: $0.x, y: $0.y) })
+    }
+
     public func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
-        let center = CGPoint(x: 0.5, y: 0.5)
+        let center = nextObjectPosition(in: currentEffects)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
         // lisible. La valeur précédente de 24 produisait du 9 pt rendu
@@ -291,14 +307,25 @@ extension StoryComposerViewModel {
     func addReference(_ reference: ComposerReference) {
         let key = reference.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return }
-        let previous = references.first { $0.username.lowercased() == key }
-        references = ComposerReferences.upsert(reference, into: references)
 
-        if previous?.display == .pinned, reference.display != .pinned {
-            removeBadge(of: previous ?? reference)
+        // **La mention naît attachée à la publication COURANTE** (#4068).
+        // En profil Story, une slide EST une publication : c'est son id qui
+        // fait la portée. L'appelant n'a pas à la fournir — il ne sait pas
+        // toujours dans quel profil il est, et une clé qu'on peut oublier de
+        // passer est une portée qui se perd en silence.
+        var attachée = reference
+        if attachée.publicationKey == nil { attachée.publicationKey = currentSlide.id }
+
+        let previous = references.first {
+            $0.username.lowercased() == key && $0.publicationKey == attachée.publicationKey
         }
-        if reference.display == .pinned, previous?.display != .pinned {
-            poseBadge(for: reference)
+        references = ComposerReferences.upsert(attachée, into: references)
+
+        if previous?.display == .pinned, attachée.display != .pinned {
+            removeBadge(of: previous ?? attachée)
+        }
+        if attachée.display == .pinned, previous?.display != .pinned {
+            poseBadge(for: attachée)
         }
     }
 
@@ -552,7 +579,10 @@ extension StoryComposerViewModel {
         }()
         guard slides.indices.contains(targetSlideIndex) else { return nil }
 
-        let center = CGPoint(x: 0.5, y: 0.5)
+        // La slide CIBLE, pas la courante : ce site peut poser sur une autre
+        // slide, et cascader d'après les objets de la mauvaise donnerait un
+        // décalage sans rapport avec ce que l'auteur voit.
+        let center = nextObjectPosition(in: slides[targetSlideIndex].effects)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
@@ -744,7 +774,11 @@ extension StoryComposerViewModel {
     /// d'appel existant ne change de comportement (#4483).
     func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
-        let center = CGPoint(x: 0.5, y: 0.5)
+        // La cascade est SANS EFFET sur un son qui bascule en fond juste après
+        // — un fond n'a pas de position. La calculer quand même coûte un
+        // parcours et évite une branche qui devrait deviner, avant la bascule,
+        // ce que la règle d'auto-fond décidera après.
+        let center = nextObjectPosition(in: currentEffects)
         // Auto-bascule en background si aucun audio n'est déjà en background
         // (ni via isBackground=true, ni via le champ legacy backgroundAudioId).
         let obj = StoryAudioPlayerObject(

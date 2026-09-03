@@ -70,6 +70,19 @@ struct AudioBubbleRouter: View {
     /// `AudioPlaybackManager`.
     @State private var externalEngine: AudioPlaybackManager?
 
+    /// D-AUDIO-03 (#4950) — réserve la hauteur du bloc de transcription de
+    /// `AudioPlayerView` tant que le serveur n'a pas répondu, pour que
+    /// l'arrivée de la transcription ne fasse plus sauter la hauteur de la
+    /// bulle. Calculée UNE FOIS ici, à la construction du router (jamais
+    /// dans `body` — Zero Unnecessary Re-render, aucune lecture de `Date()`
+    /// répétée), à partir de ce que le router a déjà : la date de la pièce
+    /// jointe et la présence d'une transcription. `let`, pas `@State` : elle
+    /// se recalcule naturellement à chaque reconstruction du router (le
+    /// parent redessine régulièrement pour d'autres raisons), ce qui la
+    /// fait expirer d'elle-même passé `AudioTranscriptionPending.nominalTimeout`
+    /// sans qu'aucun minuteur ne tourne pour elle.
+    let reserveTranscriptionHeight: Bool
+
     private let coordinator: ConversationAudioCoordinator
     /// Pre-computed publisher kept as a stored property so SwiftUI's diff of
     /// `.onReceive(coordinator.$activeContext...)` doesn't create a new
@@ -115,6 +128,16 @@ struct AudioBubbleRouter: View {
         self.topContent = topContent
         self.bottomContent = bottomContent
         self.onPlayRequest = onPlayRequest
+        // D-AUDIO-03 (#4950) — voir le doc-comment de la propriété. L'attente
+        // ACTIVE (le tap "Transcrire" local, `isTranscribing`) reste portée par
+        // `AudioPlayerView` lui-même, qui l'additionne à ce booléen : le router
+        // n'a que le signal PASSIF, et la règle pure n'en connaît pas d'autre.
+        self.reserveTranscriptionHeight = AudioTranscriptionPending.shouldReserveHeight(
+            hasTranscription: transcription != nil,
+            receivedAt: attachment.createdAt,
+            now: Date(),
+            isLocalDraft: attachment.fileUrl.hasPrefix("file://")
+        )
         let coord = coordinatorForTesting ?? .shared
         self.coordinator = coord
         // `removeDuplicates` is the keystone: it strips every tick that
@@ -146,6 +169,7 @@ struct AudioBubbleRouter: View {
             transcription: transcription,
             translatedAudios: translatedAudios,
             initialTranscriptionLanguage: initialTranscriptionLanguage,
+            reserveTranscriptionHeight: reserveTranscriptionHeight,
             onFullscreen: onFullscreen,
             onRequestTranscription: onRequestTranscription,
             onRetranscribe: onRetranscribe,
@@ -182,6 +206,7 @@ private struct AudioBubbleContent: View {
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
     let initialTranscriptionLanguage: String?
+    let reserveTranscriptionHeight: Bool
     let onFullscreen: (() -> Void)?
     let onRequestTranscription: (() -> Void)?
     let onRetranscribe: (() -> Void)?
@@ -210,6 +235,7 @@ private struct AudioBubbleContent: View {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
+                reserveTranscriptionHeight: reserveTranscriptionHeight,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -231,6 +257,7 @@ private struct AudioBubbleContent: View {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
+                reserveTranscriptionHeight: reserveTranscriptionHeight,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -251,6 +278,7 @@ private struct AudioBubbleContent: View {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
+                reserveTranscriptionHeight: reserveTranscriptionHeight,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -271,6 +299,7 @@ private struct AudioBubbleContent: View {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
+                reserveTranscriptionHeight: reserveTranscriptionHeight,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,

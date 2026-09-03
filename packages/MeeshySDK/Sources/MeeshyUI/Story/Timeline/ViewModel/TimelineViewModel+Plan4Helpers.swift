@@ -136,7 +136,7 @@ extension TimelineViewModel {
         case .media, .text:
             return ClipTransform(x: objet.x, y: objet.y, scale: objet.scale,
                                  rotation: objet.rotation, zIndex: objet.zIndex)
-        case .sticker, .location, .audio:
+        case .sticker, .place, .audio:
             return nil
         }
     }

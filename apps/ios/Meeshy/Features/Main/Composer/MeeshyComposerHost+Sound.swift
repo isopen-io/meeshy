@@ -37,6 +37,46 @@ extension MeeshyComposerHost {
         )
     }
 
+    /// **Retirer le son de FOND depuis sa trace** (#4930).
+    ///
+    /// `nil` ⇒ aucun menu, et les deux cas qui rendent `nil` ne sont pas le
+    /// même :
+    ///
+    /// - **aucun fond** — il n'y a rien à retirer ;
+    /// - un fond **LEGACY**, que `resolvedBackgroundAudio` synthétise depuis
+    ///   `backgroundAudioId` : il n'existe dans aucun tableau, et `deleteElement`
+    ///   sur son identifiant fabriqué passerait pour un retrait qui n'a pas eu
+    ///   lieu. `ComposerBackgroundSoundReplacement.supersededId` porte déjà
+    ///   cette distinction — la relire ici en ferait un second site.
+    ///
+    /// ## Pourquoi un appui long, et non un bouton sur la trace
+    ///
+    /// #4696 a établi l'appui long comme « la seconde porte de la suppression »
+    /// pour le son de CONTENU, et le même menu la sert. Ce n'est donc pas une
+    /// quatrième loi : c'est le geste que l'auteur connaît déjà, appliqué au
+    /// plan qui en manquait.
+    ///
+    /// Le défaut que ça ferme : `opensEditor` refuse d'ouvrir la feuille pour un
+    /// son EMPRUNTÉ — à juste titre, pour protéger le crédit (#4668) — et le
+    /// retrait vivait DANS cette feuille. Fermer la porte avait donc emporté le
+    /// retrait avec elle, sans que personne le décide.
+    var deleteBackgroundSoundAction: (() -> Void)? {
+        guard let son = avatarBadgeSound,
+              ComposerBackgroundSoundReplacement.supersededId(
+                background: son,
+                audioObjects: viewModel.currentEffects.audioPlayerObjects ?? []) != nil
+        else { return nil }
+        return { deleteBackgroundSound(son) }
+    }
+
+    func deleteBackgroundSound(_ sound: StoryAudioPlayerObject) {
+        guard let id = ComposerBackgroundSoundReplacement.supersededId(
+            background: sound,
+            audioObjects: viewModel.currentEffects.audioPlayerObjects ?? []) else { return }
+        viewModel.deleteElement(id: id)
+        HapticFeedback.medium()
+    }
+
     /// **Ce que le doigt fait de la pastille** — `nil` quand la loi refuse
     /// d'ouvrir (#4668), et la pastille redevient alors une lecture pure.
     var editBackgroundSoundAction: (() -> Void)? {

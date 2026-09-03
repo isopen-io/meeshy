@@ -76,9 +76,19 @@ const ouvreLeFil = async (contexte: BrowserContext): Promise<Page> => {
   return page;
 };
 
-/** Le module de participation est là, authentifié, dans la room : le point d'état le dit. */
+/**
+ * Le module de participation est là, authentifié, dans la room : le point
+ * d'état le dit — par son attribut ET par son NOM.
+ *
+ * Le nom est vérifié ICI, dans le harnais que toutes les épreuves du fil
+ * traversent, parce que c'est le seul endroit où sa DIVERGENCE se voit : le
+ * document naît en « pas encore actif », et sans cette assertion un module qui
+ * poserait l'attribut sans toucher au libellé laisserait la page annoncer,
+ * pour toujours, l'exact contraire de ce qu'elle montre.
+ */
 const attendLeTempsReel = async (page: Page): Promise<void> => {
   await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 15_000 });
+  await expect(page.locator('.etat .hors-ecran')).toHaveText('Temps réel : actif');
 };
 
 const messageDIbrahim = (
@@ -664,6 +674,12 @@ test.describe('la room', () => {
     const coupe = async (): Promise<void> => {
       await contexte.setOffline(true);
       await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'hors-ligne');
+      // L'attribut ET son NOM. Le libellé hors-écran est ce qu'un lecteur
+      // d'écran entend et la seule chose qu'un `aria-live` puisse annoncer :
+      // servi rempli par le serveur, il restait figé sur « pas encore actif »
+      // pour toute la vie de la page, y compris ici — hors ligne, sur un fil
+      // qui venait d'être vivant.
+      await expect(page.locator('.etat .hors-ecran')).toHaveText('Temps réel : hors ligne');
       await avance(contexte, 5 * 60_000);
       await contexte.setOffline(false);
       await attendLeTempsReel(page);

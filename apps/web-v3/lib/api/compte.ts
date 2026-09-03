@@ -96,6 +96,20 @@ const CHEMIN_MOI = '/api/v1/auth/me';
  */
 const CHEMIN_LIENS = '/api/v1/links?limit=3&expand=conversation';
 
+/**
+ * L'inventaire de `/links` : la page ENTIÈRE du lecteur, ses agrégats avec.
+ *
+ * `?include=summary` ÉVITE un second aller-retour — il absorbe
+ * `GET /links/stats`, que la passerelle déclare déprécié en le nommant
+ * (`user.ts:649`). Sur une 3G rurale, un appel économisé vaut mieux qu'un
+ * chiffre calculé deux fois.
+ *
+ * `?expand=conversation` pour la même raison que le tableau de bord : SANS lui
+ * la charge ne porte ni `conversationId` ni `conversation` (`user.ts:571-581`),
+ * et une carte de lien ne mènerait nulle part.
+ */
+const CHEMIN_CARNET_DE_LIENS = '/api/v1/links?expand=conversation&include=summary&limit=';
+
 const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
   typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur)
     ? (valeur as Readonly<Record<string, unknown>>)
@@ -129,7 +143,17 @@ const nomAffiche = (brut: Readonly<Record<string, unknown>>): string => {
   return noms.length === 0 ? SANS_TITRE : noms.slice(0, 3).join(', ');
 };
 
-const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
+/**
+ * EXPORTÉE pour la RECHERCHE, qui lit la même forme.
+ *
+ * `GET /conversations/search` sert `conversationMinimalSchema`, exactement ce
+ * que `GET /conversations` sert — mêmes clés, `participants` compris, dont
+ * `nomAffiche` a besoin pour nommer un fil direct sans titre. Écrire une
+ * seconde projection dans le module de recherche en ferait une jumelle, qui
+ * divergerait au premier champ ajouté : c'est le motif que le dépôt paie
+ * cycle après cycle (§ « Cette entité a-t-elle une JUMELLE ? »).
+ */
+export const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
   const id = chaine(brut.id);
   if (id === null) return null;
 
@@ -153,15 +177,62 @@ const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | n
 export type LienDePartage = {
   readonly identifiant: string;
   readonly nom: string;
-  /** `currentUses` — l'emploi RÉEL du lien. Aucun agrégat n'est fabriqué. */
+  /**
+   * `currentUses` — et il compte des ADMISSIONS, jamais des VUES.
+   *
+   * Son unique producteur est `claimLinkUse`
+   * (`services/gateway/src/routes/conversations/link-admission.ts:192`), appelé
+   * sur le chemin d'admission et borné par `maxUses` : il s'incrémente quand
+   * quelqu'un ENTRE, pas quand quelqu'un regarde. Aucun compteur de vues
+   * n'existe sur un lien de partage — `clickCount` vit sur `AffiliateToken`,
+   * un autre modèle.
+   *
+   * D'où le libellé de l'écran : « N ont rejoint », jamais « N vues ». Écrire
+   * « vues » au-dessus de ce nombre serait plus faux que de ne rien écrire :
+   * un chiffre plausible sous le mauvais nom ne se signale jamais.
+   */
   readonly utilisations: number;
   /** L'identifiant de la conversation qu'il ouvre, `null` si la passerelle ne l'a pas étendu. */
   readonly conversation: string | null;
+  /** `isActive` — un lien fermé n'ouvre plus rien, et l'écran le DIT au lieu de le cacher. */
+  readonly actif: boolean;
+  /** `maxUses` — la capacité, quand le lien en déclare une. */
+  readonly capacite: number | null;
+  /** `expiresAt` — l'échéance, quand le lien en porte une. */
+  readonly expireA: string | null;
 };
 
 export type LiensDuLecteur =
   | { readonly genre: 'liste'; readonly liens: readonly LienDePartage[] }
   | { readonly genre: 'indisponible' };
+
+/**
+ * LE CARNET DE LIENS DE L'ÉCRAN `/links` — la MÊME route que le tableau de
+ * bord, une autre question.
+ *
+ * Le tableau de bord RÉCAPITULE : trois liens actifs, et rien d'autre. Cet
+ * écran INVENTORIE : tous les liens, actifs ET fermés, avec le compte que la
+ * passerelle mesure elle-même. Deux projections d'un seul appel — écrire un
+ * second module ferait une jumelle de `lienDePartage`, qui divergerait sur le
+ * premier champ ajouté.
+ *
+ * `activeLinks` VIENT DU SERVEUR, jamais d'un `filter().length` sur la page.
+ * `?include=summary` rend des agrégats RÉELS (`user.ts:430`, « aucun champ non
+ * mesurable ») portant sur TOUT le carnet ; les compter sur la page servie
+ * donnerait un total plafonné par `limit`, qui se contredirait dès la page
+ * suivante. C'est la faute exacte du compteur de non-lues (leçon 476), et elle
+ * se paie ici en « 2 liens actifs » sous une liste qui en montre trente.
+ */
+export type Carnet =
+  | {
+      readonly genre: 'liste';
+      readonly liens: readonly LienDePartage[];
+      /** `meta.summary.activeLinks` — SERVI, jamais recompté sur la page. */
+      readonly actifs: number;
+      readonly total: number;
+    }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
 
 export type Lecteur = {
   readonly id: string | null;
@@ -188,6 +259,15 @@ const lienDePartage = (brut: Readonly<Record<string, unknown>>): LienDePartage |
     nom: chaine(brut.name) ?? chaine(brut.conversationTitle) ?? identifiant,
     utilisations: entier(brut.currentUses),
     conversation: chaine(objet(brut.conversation)?.id),
+    // ABSENT ⇒ ACTIF, et c'est la lecture juste : `isActive` est déclaré
+    // `type: 'boolean'` non nullable par le schéma de la route
+    // (`routes/links/user.ts:349`), donc toujours servi. Traiter une absence
+    // comme « fermé » ferait disparaître des liens vivants au premier champ
+    // que le serveur cesserait d'envoyer ; la traiter comme « ouvert » les
+    // laisse visibles, et l'écran dit la vérité qu'il a.
+    actif: brut.isActive !== false,
+    capacite: typeof brut.maxUses === 'number' && Number.isFinite(brut.maxUses) ? brut.maxUses : null,
+    expireA: chaine(brut.expiresAt),
   };
 };
 
@@ -322,5 +402,62 @@ export const liensDuLecteur = async ({
       .filter((brut) => brut.isActive !== false)
       .map(lienDePartage)
       .filter((lien): lien is LienDePartage => lien !== null),
+  };
+};
+
+
+/**
+ * TOUS LES LIENS DU LECTEUR, fermés compris.
+ *
+ * TROIS ISSUES, et pas les deux de `liensDuLecteur`. La différence n'est pas
+ * une hésitation : sur le tableau de bord, les liens sont une SECTION parmi
+ * d'autres, et un refus de leur route ne doit pas éjecter un lecteur dont
+ * `/auth/me` et `/conversations` viennent d'être acceptés. Ici les liens SONT
+ * l'écran : un 401 n'a plus rien à dégrader, il renvoie se connecter.
+ *
+ * ET LES LIENS FERMÉS RESTENT. `liensDuLecteur` les écarte, parce qu'un lien
+ * mort peint sur le tableau de bord dirait au lecteur qu'il peut encore le
+ * partager. Cet écran-ci est l'endroit où il apprend qu'il ne le peut plus —
+ * les cacher ferait disparaître un lien qu'il vient de révoquer, ce qui se lit
+ * comme une perte, pas comme une fermeture.
+ */
+export const carnetDeLiens = async ({
+  jeton,
+  limite = 50,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Carnet> => {
+  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_CARNET_DE_LIENS}${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  const liens = enveloppe.data
+    .map((brut) => objet(brut))
+    .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+    .map(lienDePartage)
+    .filter((lien): lien is LienDePartage => lien !== null);
+
+  // Le résumé vit sous `meta.summary` (`user.ts:613` — `meta.summary = summary`),
+  // pas à la racine : les non-lues des notifications sont à la racine, ces
+  // agrégats-ci ne le sont pas, et supposer une règle commune aux deux routes
+  // rendrait `undefined`, donc ZÉRO — « 0 lien actif » sous une liste qui en
+  // montre deux.
+  const resume = objet(objet(enveloppe.meta)?.summary);
+
+  return {
+    genre: 'liste',
+    liens,
+    actifs: entier(resume?.activeLinks),
+    total: entier(resume?.totalLinks),
   };
 };

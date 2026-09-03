@@ -68,7 +68,9 @@ type Demande = {
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
-  /** L'horloge de la décision — injectée par les témoins, `Date.now()` en production. */
+  /** L'horloge de la décision — injectée par les témoins, `Date.now()` en production.
+   *  Une story EXPIRE : un témoin qui lit l'heure réelle devient rouge à la date de
+   *  sa fixture sans qu'aucune ligne n'ait changé (#5021). */
   readonly maintenant?: number;
 };
 

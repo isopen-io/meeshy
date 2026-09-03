@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Créer ou mettre à jour le milestone, puis rattacher les issues
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TITRE: ${{ inputs.titre }}
           DESCRIPTION: ${{ inputs.description }}

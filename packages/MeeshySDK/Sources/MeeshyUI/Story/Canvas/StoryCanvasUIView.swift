@@ -171,6 +171,34 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Troisième jumeau de `playsVideoInEditMode` et `playsAudioInEditMode`,
+    /// pour les DÉCORATIONS (#4999, directive porteur 2026-09-03 : « sur la
+    /// scène les stickers doivent être vivants tout comme les vidéos et
+    /// audios »). Posé à `true` par le seul canvas composer ; le prefetcher
+    /// hors-écran, lui aussi en `.edit`, ne le lève jamais. Sans effet en
+    /// `.play`, où `StoryRenderer` applique déjà la pose à chaque tick.
+    ///
+    /// Éteint en cours de route, il rend aux décorations la pose de l'auteur
+    /// plutôt que de les abandonner à leur dernière image.
+    public var playsStickerMotionInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsStickerMotionInEditMode else { return }
+            guard !playsStickerMotionInEditMode else { return }
+            // Rendre la pose plutôt que reconstruire : `rebuildLayers()`
+            // recyclerait des couches du cache, qui porteraient encore la
+            // dernière pose. On DÉFAIT ce qu'on a posé, c'est la seule forme
+            // qui ne dépende pas de ce que le cache a gardé.
+            restStickerMotion(animatedStickers)
+            stickerMotionClock = StoryStickerMotionClock()
+        }
+    }
+
+    /// L'horloge du mouvement en composition — un temps ÉCOULÉ, jamais un
+    /// playhead. Elle vit ici parce qu'elle survit aux reconstructions de
+    /// couches : la phase d'une décoration ne doit pas repartir de zéro parce
+    /// qu'on a déplacé sa voisine.
+    var stickerMotionClock = StoryStickerMotionClock()
+
     // MARK: - Reader context (Task 5)
 
     var readerContext: StoryReaderContext = .empty
@@ -182,7 +210,7 @@ public final class StoryCanvasUIView: UIView {
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
     public enum CanvasItemKind: Sendable, Equatable, Hashable, CaseIterable {
-        case text, media, sticker, location, audio
+        case text, media, sticker, place, audio
     }
 
     /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur** (#4074).
@@ -461,6 +489,10 @@ public final class StoryCanvasUIView: UIView {
     var rotationRecognizer: UIRotationGestureRecognizer!
     var singleTapRecognizer: UITapGestureRecognizer!
     var doubleTapRecognizer: UITapGestureRecognizer!
+    /// **L'appui long sur le FOND** — jamais sur un objet, où
+    /// `UIContextMenuInteraction` règne déjà (`hitTestItem` y rend un id, et
+    /// le menu se configure ; sur le fond il rend `nil`, laissant la place).
+    var backgroundLongPressRecognizer: UILongPressGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
     /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
@@ -704,6 +736,19 @@ public final class StoryCanvasUIView: UIView {
 
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
+
+    /// **Appui long sur une zone VIDE du canvas.**
+    ///
+    /// Le SDK dit ce qui a été touché ; l'hôte décide de ce que cela
+    /// déclenche. C'est la même répartition que `onBackgroundTapped`, et
+    /// c'est ce qui permet au composer d'y ouvrir la caméra (#4036) sans
+    /// que l'atelier plein écran, qui ne branche rien, change de
+    /// comportement.
+    ///
+    /// > Un geste ajouté à un composant PARTAGÉ doit être inerte chez qui
+    /// > ne le branche pas. Une closure optionnelle le garantit par
+    /// > construction — un booléen de configuration ne l'aurait pas fait.
+    public var onBackgroundLongPressed: (() -> Void)?
 
     /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
     /// un double-tap sur le fond demande un reset du viewport — prioritaire

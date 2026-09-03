@@ -11,7 +11,7 @@ import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
-import { BANDEAUX, FIL, INTROUVABLE } from '@/lib/contenu/fil';
+import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE } from '@/lib/contenu/fil';
 import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
@@ -192,7 +192,13 @@ const enTete = (etat: EtatDuFil): string =>
   versLesMedias(etat.porte) +
   // Le point d'ÉTAT du § 7 : plein quand le socket est là, creux sinon. Sans
   // JavaScript il n'y a pas de socket, et le point reste creux — ce qui est vrai.
-  '<span class="etat" data-etat="inconnu" aria-live="polite"><span class="point"></span><span class="hors-ecran"></span></span>' +
+  //
+  // IL NAÎT NOMMÉ. Le libellé partait VIDE et le module ne l'écrivait jamais :
+  // un `aria-live` sans texte n'annonce rien, et `inconnu` partageait le rendu
+  // de `creux`, donc « le temps réel n'est jamais arrivé » ressemblait trait
+  // pour trait à « il respire ». Servir le nom de l'état de DÉPART est la
+  // seule façon de le dire quand le module, précisément, n'arrive pas.
+  `<span class="etat" data-etat="inconnu" aria-live="polite"><span class="point"></span><span class="hors-ecran">${echappe(ETATS_DU_TEMPS_REEL.inconnu)}</span></span>` +
   '</header>';
 
 /**

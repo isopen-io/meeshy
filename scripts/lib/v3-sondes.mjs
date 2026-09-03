@@ -16,13 +16,39 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
       'balaie ses fichiers comme si ils étaient ceux de la v3',
     ],
     [
-      // La sonde attendait `/login` tant que le legacy le servait seul. Depuis
-      // que la zone le sert, l'invariant ne le compte PLUS comme volé — et il a
-      // raison. `/links`, lui, reste au legacy : c'est la victime qui subsiste,
-      // et la sonde suit la réalité plutôt que sa formulation d'origine.
+      // LA VICTIME EST SYNTHÉTIQUE, ET C'EST LE CORRECTIF — pas un raccourci.
+      //
+      // Cette sonde a changé de victime DEUX FOIS pour la même raison : elle
+      // nommait une route que le legacy servait SEUL, et la zone a fini par la
+      // servir. `/login` d'abord, `/links` ensuite (l'écran des liens, #4933) —
+      // et le commentaire qui accompagnait le second changement décrivait déjà
+      // le mécanisme sans en tirer la conséquence : « c'est la victime qui
+      // SUBSISTE ». Une victime qui subsiste est une victime en sursis.
+      //
+      // Aujourd'hui il n'en reste AUCUNE sous `/l` : `/l`, `/links` et `/login`
+      // sont les trois routes du legacy qui commencent par `/l`, et la zone
+      // sert les trois. La sonde ne peut donc plus tirer sa victime du dépôt —
+      // et il ne faut pas lui en chercher une quatrième, qui mourrait à son
+      // tour.
+      //
+      // Elle FABRIQUE donc la sienne. Ce que la sonde éprouve est la LOI du
+      // garde — « un PathPrefix sans barre finale emporte ses voisins de
+      // chaîne » — et cette loi ne dépend pas de quelles routes existent
+      // aujourd'hui. Un monde muté est fait pour ça : lui donner un voisin que
+      // la zone ne sert pas est aussi légitime que lui donner un compose
+      // altéré. La sonde reste vraie quel que soit le nombre d'écrans que la
+      // v3 finira par servir.
+      //
+      // > **Une sonde dont le matériau vient de la PRODUCTION s'éteint quand la
+      // > production grandit.** Le fait qu'elle rougisse encore aujourd'hui ne
+      // > dit rien de demain : c'est la troisième fois que ce fusible se
+      // > déclenche par CROISSANCE et non par régression.
       'la barre finale retirée du PathPrefix de /l/ sur staging',
-      (world) => replaceIn(world, 'staging', 'PathPrefix(`/l/`)', 'PathPrefix(`/l`)'),
-      'il emporte donc /links',
+      (world) => {
+        replaceIn(world, 'staging', 'PathPrefix(`/l/`)', 'PathPrefix(`/l`)');
+        world.legacyRoutes = [...world.legacyRoutes, '/l-voisine-du-legacy'];
+      },
+      'il emporte donc /l-voisine-du-legacy',
     ],
     [
       'un préfixe retiré de V3_ZONE_PREFIXES sans être retiré du routeur',

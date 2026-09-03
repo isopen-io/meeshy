@@ -78,6 +78,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
     public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
     public var onBackgroundTapped: (() -> Void)?
+    /// Appui long sur une zone VIDE — inerte chez qui ne le branche pas.
+    public var onBackgroundLongPressed: (() -> Void)?
     /// Notifié quand le drag du background se termine (.ended). Le composer
     /// l'utilise pour resynchroniser son cache `viewModel.backgroundTransform`
     /// avec la nouvelle valeur typée. Le `slide` lui-même est déjà mis à jour
@@ -139,6 +141,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onEditClockThrottleChanged: ((Bool) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
+                onBackgroundLongPressed: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
                 isViewportZoomed: Bool = false,
                 onViewportZoomResetRequested: (() -> Void)? = nil,
@@ -165,6 +168,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onEditClockThrottleChanged = onEditClockThrottleChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
+        self.onBackgroundLongPressed = onBackgroundLongPressed
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
         self.isViewportZoomed = isViewportZoomed
         self.onViewportZoomResetRequested = onViewportZoomResetRequested
@@ -204,6 +208,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
+        // Troisième famille vivante sur le canvas d'édition (#4999) : une
+        // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
+        // comme la vidéo et le son juste au-dessus et juste en dessous.
+        view.playsStickerMotionInEditMode = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
@@ -220,6 +228,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onEditClockThrottleChanged = onEditClockThrottleChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
+        view.onBackgroundLongPressed = onBackgroundLongPressed
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
         view.isViewportZoomed = isViewportZoomed
         view.onViewportZoomResetRequested = onViewportZoomResetRequested
