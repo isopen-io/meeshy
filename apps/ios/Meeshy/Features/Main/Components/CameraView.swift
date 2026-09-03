@@ -10,12 +10,44 @@ enum CameraResult {
     case video(URL)
 }
 
+/// **Le mode dans lequel le viseur s'OUVRE** (#4998, directive porteur
+/// 2026-09-03 : « assure-toi que la caméra se déclenche bien en mode photo et
+/// vidéo sans problème ! »).
+///
+/// L'écran a toujours su faire les deux — deux onglets, deux déclencheurs, deux
+/// sorties — et naissait TOUJOURS en photo. Une porte qui promet un viseur
+/// vidéo (`ComposerOpening.videoCameraReady`) ouvrait donc un viseur photo, et
+/// rien ne rougissait : les deux modes existent, les deux marchent, c'est
+/// l'appariement qui manquait.
+///
+/// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle PROMET.
+/// > Ici la promesse n'avait même jamais eu de porteur.
+enum CameraCaptureMode: Equatable, Sendable {
+    case photo
+    case video
+}
+
 struct CameraView: View {
+    /// Le mode d'ouverture. `.photo` par défaut — les trois appelants
+    /// historiques (conversation, feed, pièces jointes) n'en demandent pas
+    /// d'autre, et leur comportement ne bouge pas d'un pixel.
+    let initialMode: CameraCaptureMode
     let onCapture: (CameraResult) -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraModel()
-    @State private var isVideoMode = false
+    @State private var isVideoMode: Bool
     @State private var flashMode: AVCaptureDevice.FlashMode = .off
+
+    /// **L'état de mode est SEMÉ à la construction, jamais posé dans un
+    /// `.onAppear`.** Posé après coup, le premier rendu montrerait l'onglet
+    /// Photo puis basculerait sous l'œil — et le déclencheur photo resterait
+    /// tappable pendant cette frame.
+    init(initialMode: CameraCaptureMode = .photo,
+         onCapture: @escaping (CameraResult) -> Void) {
+        self.initialMode = initialMode
+        self.onCapture = onCapture
+        _isVideoMode = State(initialValue: initialMode == .video)
+    }
 
     var body: some View {
         ZStack {
@@ -42,7 +74,19 @@ struct CameraView: View {
                     .animation(.easeOut(duration: 0.15), value: camera.isTakingPhoto)
             }
         }
-        .onAppear { camera.configure() }
+        .onAppear {
+            camera.configure()
+            // **Le micro est armé À L'OUVERTURE quand la porte a promis la
+            // vidéo**, et pas au premier appui sur le déclencheur : sans ça,
+            // l'auteur presse « enregistrer » et attend un prompt d'autorisation
+            // pendant que le viseur, lui, montre déjà la scène qu'il voulait
+            // filmer. Hors de ce cas, le prompt reste attaché à l'onglet Vidéo —
+            // le demander à qui ne prend qu'une photo est ce que le lot
+            // précédent a corrigé.
+            if initialMode == .video {
+                Task { await camera.enableAudioCaptureIfNeeded() }
+            }
+        }
         .onDisappear { camera.stop() }
         .onReceive(camera.$capturedPhotoId) { id in
             guard id != nil, let image = camera.capturedPhoto else { return }

@@ -195,6 +195,47 @@ nonisolated enum ComposerSurfaceRouting {
     }
 }
 
+/// **Dans QUEL mode le viseur promis s'ouvre** (#4998, directive porteur
+/// 2026-09-03).
+///
+/// Jumelle de `armsCameraOnAppear`, et écrite à côté d'elle pour la même
+/// raison : la première dit SI un viseur se lève, celle-ci LEQUEL. Les séparer
+/// de deux fichiers aurait laissé la seconde question sans endroit — et c'est
+/// exactement ce qui s'est passé : `ComposerOpening` distingue `.cameraReady`
+/// de `.videoCameraReady` depuis toujours, et rien n'a jamais lu la différence.
+///
+/// > Un type SOMME qui nomme deux promesses sans qu'aucun consommateur les
+/// > distingue n'est pas une abstraction : c'est une promesse écrite deux fois
+/// > et tenue une seule.
+///
+/// ## Ce que cette règle NE fait PAS aujourd'hui, et il faut le dire
+///
+/// **`.videoCameraReady` n'a AUCUN producteur dans le dépôt** — mesuré : le cas
+/// est déclaré par `ComposerOpening` et aucune fabrique de `ComposerProfile` ne
+/// le pose. Aucune porte n'ouvre donc encore le viseur en vidéo, et cette règle
+/// ne change rien à l'écran tant que ce sera vrai.
+///
+/// Elle est écrite quand même, et ce n'est pas de l'UI morte : elle ferme un
+/// écart LATENT entre ce qu'un type SOMME promet et ce que ses consommateurs
+/// lisent. Le jour où une porte posera `.videoCameraReady`, elle sera honorée
+/// sans qu'on ait à s'en souvenir — au lieu d'ouvrir un viseur photo en silence,
+/// comme elle l'aurait fait aujourd'hui.
+///
+/// > Le contraire de cette décision serait de retirer le cas. C'est la seule
+/// > autre réponse honnête, et elle appartient au produit, pas à ce fichier.
+/// > Suivi : #4998.
+///
+/// Le `switch` est exhaustif : un sixième mode d'ouverture ne compilera pas
+/// tant qu'il n'aura pas dit quel viseur il promet.
+nonisolated enum ComposerCameraMode {
+    static func mode(for opening: ComposerOpening) -> CameraCaptureMode {
+        switch opening {
+        case .videoCameraReady: return .video
+        case .cameraReady, .keyboardOnContent, .moodGrid, .resume, .mediaSeeded: return .photo
+        }
+    }
+}
+
 /// **QUI peint le chrome de publication — audience, aperçu, flèche — sous la
 /// surface que le meuble a montée.**
 ///
@@ -491,6 +532,14 @@ nonisolated enum ComposerSoundCredit {
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
     case pickBackground
     case removeBackground
+    /// **Bake la scène et l'écrit dans Photos** (#4996). Ne touche JAMAIS le
+    /// backend : c'est la doctrine « RAW publish + author-only export », de
+    /// l'autre côté de la frontière que `runStoryUpload` a l'interdiction de
+    /// franchir.
+    case saveToPhotos
+    /// Même bake, remis à `UIActivityViewController` — Messages, WhatsApp,
+    /// AirDrop, Fichiers.
+    case share
     case clearAll
 }
 
@@ -509,17 +558,39 @@ nonisolated enum ComposerOverflowPolicy {
     /// montée, seulement si la palette a DÉJÀ un chemin. Son défaut est `true` —
     /// le défaut SÛR : un appelant qui l'ignore n'obtient jamais un DOUBLON de
     /// contrôle, au pire une entrée manquante que l'écran offre ailleurs.
+    /// **`hasScene` gouverne les deux entrées d'EXPORT, et rien d'autre**
+    /// (#4996).
+    ///
+    /// Elle est distincte de « il y a de la matière » : un post fait d'un texte
+    /// et d'un lieu a bien de quoi être EFFACÉ, et rien à baker — le pipeline
+    /// d'export part d'une `StorySlide`, et une composition sans scène n'en a
+    /// aucune à lui donner. Servir les deux entrées sur cette base ouvrirait un
+    /// bake qui rendrait un MP4 vide, ce que la loi 4 interdit sous sa forme la
+    /// plus coûteuse : un contrôle qui FAIT quelque chose d'inutile.
+    ///
+    /// Son défaut est `false` — le défaut SÛR : un appelant qui l'ignore
+    /// n'obtient jamais une entrée qui promet un export impossible.
     static func entries(
         hasBackground: Bool,
         hasMedia: Bool,
         hasText: Bool,
         hasLocation: Bool,
+        hasScene: Bool = false,
         backgroundPickerIsReachable: Bool = true
     ) -> [ComposerOverflowEntry] {
         var served: [ComposerOverflowEntry] = []
         if !backgroundPickerIsReachable { served.append(.pickBackground) }
         if hasBackground { served.append(.removeBackground) }
-        if hasBackground || hasMedia || hasText || hasLocation { served.append(.clearAll) }
+        if hasScene {
+            served.append(.saveToPhotos)
+            served.append(.share)
+        }
+        // **`clearAll` FERME la liste, toujours.** C'est la seule entrée
+        // destructrice ; la ranger au milieu la mettrait sous le pouce qui vise
+        // « Transférer », et un menu se lit du haut vers le bas.
+        if hasBackground || hasMedia || hasText || hasLocation || hasScene {
+            served.append(.clearAll)
+        }
         return served
     }
 }
@@ -537,6 +608,12 @@ nonisolated enum ComposerOverflowCopy {
         case .removeBackground:
             return String(localized: "composer.overflow.removeBackground",
                           defaultValue: "Retirer le fond", bundle: .main)
+        case .saveToPhotos:
+            return String(localized: "composer.overflow.saveToPhotos",
+                          defaultValue: "Enregistrer", bundle: .main)
+        case .share:
+            return String(localized: "composer.overflow.share",
+                          defaultValue: "Transférer", bundle: .main)
         case .clearAll:
             return String(localized: "composer.overflow.clearAll",
                           defaultValue: "Tout effacer", bundle: .main)
@@ -547,6 +624,11 @@ nonisolated enum ComposerOverflowCopy {
         switch entry {
         case .pickBackground: return "paintpalette.fill"
         case .removeBackground: return "paintpalette"
+        // `arrow.down.to.line` et non `square.and.arrow.down` : le second est
+        // le glyphe de TÉLÉCHARGEMENT, et ce qu'on fait ici est une écriture
+        // locale. `square.and.arrow.up` reste le partage, comme partout.
+        case .saveToPhotos: return "arrow.down.to.line"
+        case .share: return "square.and.arrow.up"
         case .clearAll: return "trash"
         }
     }

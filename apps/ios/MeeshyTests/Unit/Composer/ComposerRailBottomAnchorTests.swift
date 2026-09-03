@@ -99,10 +99,19 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
         }
     }
 
-    /// **Et les DEUX rails passent par là.** Un correctif appliqué à un seul
-    /// laisserait les deux rails à deux hauteurs différentes autour de la même
-    /// scène — ce qui se voit avant de se comprendre.
-    func test_lesDeuxRails_sontAncresParLaMemeFonction() throws {
+    /// **Et TOUT ce qui se pose autour de la carte passe par là.** Un correctif
+    /// appliqué à un seul laisserait deux éléments à deux hauteurs différentes
+    /// autour de la même scène — ce qui se voit avant de se comprendre.
+    ///
+    /// **TROIS ancrages depuis le 2026-09-03** (#4993) : les deux rails, plus le
+    /// volet de description, qui se colle au bas de la CARTE et non au bas de
+    /// la frame. Le compte MONTE, et c'est le signe qu'il faut lire à
+    /// l'endroit — un troisième élément qui rejoint la fonction commune est
+    /// exactement ce que ce témoin cherche à obtenir. Ce qui le ferait tomber
+    /// pour de bon est un élément posé en `.overlay(alignment: .bottom)` NU,
+    /// donc calé sur la frame : il flotterait sous la carte de la moitié de la
+    /// hauteur perdue dès que le ratio n'est pas plein.
+    func test_lesTroisAncrages_passentParLaMemeFonction() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -110,9 +119,11 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(source.contains("func ancreAuDessin<Contenu: View>("),
                       "une seule fonction d'ancrage, générique sur le contenu")
-        XCTAssertEqual(source.components(separatedBy: "ancreAuDessin(").count - 1, 2,
-                       "les deux montages — leading et trailing — l'appellent")
+        XCTAssertEqual(source.components(separatedBy: "ancreAuDessin(").count - 1, 3,
+                       "les trois montages — leading, trailing et la description — l'appellent")
         XCTAssertTrue(source.contains("alignment: .bottomLeading)"))
         XCTAssertTrue(source.contains("alignment: .bottomTrailing"))
+        XCTAssertTrue(source.contains("ancreAuDessin(descriptionOverlay, alignment: .bottom)"),
+                      "le volet de description se colle au bas de la CARTE (#4993), jamais de la frame")
     }
 }

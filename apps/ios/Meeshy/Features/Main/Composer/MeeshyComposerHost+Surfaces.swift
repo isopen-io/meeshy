@@ -316,6 +316,25 @@ extension MeeshyComposerHost {
         return nil
     }
 
+    /// **Ce que chaque porte du rail PORTE DÉJÀ** (#4994).
+    ///
+    /// Le relevé est composé ICI parce que les deux magasins vivent ici : la
+    /// `StorySlide` pour ce qui se VOIT sur la scène, l'état du meuble pour ce
+    /// qui QUALIFIE la publication (le lieu, le fond, les personnes nommées).
+    /// La règle, elle, ne connaît ni l'un ni l'autre — c'est ce qui la rend
+    /// éprouvable sans monter une vue.
+    var railDoorBadges: [ComposerRailDoor: Int] {
+        ComposerRailDoorBadge.badges(
+            for: ComposerRailDoor.canonicalRail,
+            in: ComposerRailDoorBadge.matter(
+                slide: viewModel.currentSlide,
+                publicationText: documentText,
+                description: sceneDescriptionBinding.wrappedValue,
+                mentions: composerReferences.count,
+                hasDocumentLocation: documentLocation != nil,
+                hasDocumentBackground: documentBackground != nil))
+    }
+
     var sceneSurface: some View {
         ComposerSceneSurface(
             localMedia: headerTileMedia,
@@ -424,6 +443,11 @@ extension MeeshyComposerHost {
                     allowsCapture: profile.allowsCapture
                 )
             ),
+            // **Ce que chaque porte PORTE DÉJÀ** (#4994). Le relevé est composé
+            // ICI parce que les deux magasins vivent ici — la slide pour ce qui
+            // se voit, l'état du meuble pour ce qui qualifie la publication.
+            // La surface, elle, ne compte rien : elle relaie.
+            railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
@@ -748,7 +772,7 @@ extension MeeshyComposerHost {
     /// telle quelle, le même composant que la scène emprunte par
     /// environnement.
     var documentCameraSheet: some View {
-        CameraView { result in
+        CameraView(initialMode: pendingCameraMode) { result in
             Task { await ingestCameraCapture(result) }
         }
     }

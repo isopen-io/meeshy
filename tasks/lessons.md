@@ -26401,6 +26401,63 @@ et de la règle « une valeur DÉDUITE n'est pas une valeur LUE » : ici la vale
 avait été lue, mais dans un doc-comment — et un doc-comment est une valeur
 DÉDUITE par quelqu'un d'autre, à une date qu'il n'a pas écrite.
 
+## Leçon 486 — Une factorisation qui RENFORCE une règle fait rougir la garde qui la protégeait
+
+Le socle et l'en-tête du mood peignaient chacun leur flèche « Publier », avec
+leur libellé, leur plancher de 44 pt, leur `.disabled(!canPublishDocument)` et
+leurs trois attributs d'accessibilité. Deux écritures d'un même geste — et deux
+glyphes déjà divergents (`arrow.up.circle` d'un côté, `arrow.up` de l'autre).
+
+Les factoriser en `publishCapsuleLabel` + `publishCapsule(_:)` a fait tomber
+**cinq témoins d'un coup**. Aucun ne mesurait quelque chose de faux : ils
+lisaient le CORPS de `var publishButton` et y cherchaient ce qui venait d'en
+sortir.
+
+> **Une garde de source ancre sur une PLACE, pas sur une propriété.** Elle ne
+> peut pas distinguer « ce site a perdu sa protection » de « la protection a
+> déménagé chez un voisin » — les deux se lisent comme l'absence d'une chaîne.
+
+La réponse qui coûte le moins n'est ni de revenir en arrière, ni de supprimer
+le témoin : c'est de le **re-viser sur le nouveau site ET d'ajouter l'assertion
+qui manquait**. Ici, « chaque flèche MONTE le libellé partagé ». Sans elle, une
+troisième flèche écrite plus tard composerait le sien et passerait au vert : la
+garde couvrirait un site sur trois en affirmant les couvrir tous.
+
+Le compteur de lectures (`if socleShowsLabels` : 3 → 2) BAISSE, et c'est le
+signe qu'il faut lire à l'endroit — moins de lectures pour le même nombre de
+contrôles est exactement ce qu'un fusible « une seule règle » cherche à obtenir.
+Le réflexe inverse — remonter le nombre jusqu'à ce que ça passe — aurait laissé
+la garde verte sur une valeur qui ne veut plus rien dire.
+
+Voir [[reference_negative_source_guards_die_silently]] et
+[[reference_a_guard_can_punish_the_first_step_toward_its_own_rule]].
+
+## Leçon 487 — Un `ScrollView` est GREEDY : le borner ne rend la place à personne si le voisin ne la demande pas
+
+L'éditeur d'objet plein écran devait « laisser la place au canvas d'occuper
+suffisamment l'espace » (directive porteur, #4997). Deux corrections, et la
+première seule ne se voyait presque pas.
+
+1. Le rail d'outils descend du couloir gauche à une rangée basse : la carte
+   9:16 récupère 52 pt de largeur. Mesuré : 247 pt → 305 pt de haut.
+2. La zone d'options était un `ScrollView` en `.frame(maxHeight: .infinity)`.
+   Un `ScrollView` réclame TOUT ce qu'on lui offre, quel que soit son contenu :
+   il gardait ≈ 250 pt de bande vide sous la grille des polices.
+
+Le borner (`maxHeight: 260`) n'a pourtant rendu que la moitié du gain. **Le
+sujet ne demandait pas la place libérée** : la carte est figée à son ratio et se
+CENTRE dans ce qu'on lui donne, donc sans `maxHeight: .infinity` elle se
+contentait de sa taille idéale et laissait le reste en vide.
+
+> **Rendre de la place et la PRENDRE sont deux gestes.** Un plafond posé sur le
+> voisin glouton ne suffit pas ; il faut aussi que le bénéficiaire soit
+> flexible. C'est la forme SwiftUI de « un correctif dont la valeur n'atteint
+> aucun lecteur n'a corrigé personne ».
+
+Le contrôle qui l'attrape est une capture AVANT / APRÈS avec la hauteur de la
+carte mesurée en points sur l'arbre d'accessibilité — pas « ça a l'air plus
+grand ».
+
 ## Leçon 488 — Un gate qui ne s'EXÉCUTE pas rend le même signal qu'un gate vert, et la fin d'un fichier n'est pas son maximum
 
 Deux mesures du 2026-09-03, prises à dix minutes d'écart, qui disent la même

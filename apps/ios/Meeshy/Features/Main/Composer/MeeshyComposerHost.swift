@@ -294,6 +294,19 @@ struct MeeshyComposerHost: View {
     /// d'unicité.
     @State var hasArmedOpeningCamera = false
 
+    /// **Le mode du viseur que la prochaine ouverture montrera** (#4998).
+    /// Écrit par `presentCamera(mode:)`, l'unique porte ; lu par
+    /// `documentCameraSheet`, l'unique lecteur.
+    @State var pendingCameraMode: CameraCaptureMode = .photo
+
+    /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
+    ///
+    /// `@StateObject` et non `.shared` : un bake appartient à CETTE
+    /// composition. Un singleton ferait survivre un export à la fermeture du
+    /// composer, et le fichier temporaire d'une scène qu'on vient d'abandonner
+    /// atterrirait dans la photothèque sans que personne l'ait demandé.
+    @StateObject var sceneExport = ComposerSceneExportController()
+
     /// **Le son que la feuille rouvre pour l'ÉDITER** (directive porteur
     /// 2026-09-01). `nil` ⇒ la feuille s'ouvre vierge, sur l'enregistreur ;
     /// posé ⇒ elle s'ouvre sur ce son, prêt à être rogné, re-transcrit ou
@@ -756,6 +769,26 @@ struct MeeshyComposerHost: View {
             if editsSceneDescription { sceneDescriptionEditor }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
+        // **La feuille de partage est portée par la RACINE, pas par
+        // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
+        // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore
+        // qu'UNE présentation par vue : une troisième posée là aurait été
+        // silencieusement avalée par les deux premières — le mode de panne
+        // exact que le doc-comment de l'éditeur d'objet décrit.
+        .sheet(item: $sceneExport.sharedFile, onDismiss: { sceneExport.finishSharing() }) { fichier in
+            ShareSheet(activityItems: [fichier.url])
+        }
+        // **La progression du bake, par-dessus tout.** Un export dure des
+        // secondes : sans témoin, l'auteur retape « Enregistrer » et croit que
+        // rien ne se passe. Le contrôleur ignore le second appel (un seul bake
+        // à la fois) — donc sans ce voile, le geste serait sans effet ET sans
+        // explication.
+        .overlay { composerExportProgress }
+        // Le meuble se ferme pendant un bake : le RÉSULTAT tardif est jeté et
+        // son fichier temporaire avec. `AVAssetWriter` n'observe pas
+        // l'annulation, c'est tout ce qu'on peut faire — et c'est assez pour
+        // qu'aucun MP4 orphelin ne reste derrière.
+        .onDisappear { sceneExport.cancel() }
         // `initial: true` couvre la graine SYNCHRONE (la republication, connue
         // dès la construction) ; le changement couvre la graine ASYNCHRONE (la
         // reprise hors-ligne, qui arrive quand la file a répondu). Un seul
@@ -807,6 +840,35 @@ struct MeeshyComposerHost: View {
         .task { armOpeningCameraIfPromised() }
     }
 
+    /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
+    /// `body`, comme `ComposerSceneDescriptionEditor` : monté en fermeture
+    /// d'`.overlay`, il ajoute un niveau à la profondeur de type SwiftUI de ce
+    /// corps, qui a déjà coûté un débordement de pile à cet écran.
+    @ViewBuilder
+    var composerExportProgress: some View {
+        if let fraction = sceneExport.progress {
+            ZStack {
+                Color.black.opacity(0.55).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(MeeshyColors.brandPrimary)
+                        .frame(width: 180)
+                    Text(ComposerExportCopy.inProgress)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .padding(24)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(ComposerExportCopy.inProgress))
+            .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
+            .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
     /// Ouvre le viseur que la porte a promis, une fois.
     ///
     /// **Idempotent par un état du meuble, pas par la règle** : la règle est
@@ -817,7 +879,27 @@ struct MeeshyComposerHost: View {
               ComposerSurfaceRouting.armsCameraOnAppear(opening: profile.opensWith)
         else { return }
         hasArmedOpeningCamera = true
-        presentMediaIntake(.camera)
+        // **La porte dit AUSSI quel viseur** (#4998) : `.videoCameraReady`
+        // promettait la vidéo et ouvrait la photo, personne ne lisant la
+        // différence. La règle décide, le meuble exécute.
+        presentCamera(mode: ComposerCameraMode.mode(for: profile.opensWith))
+    }
+
+    /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.
+    ///
+    /// Le mode voyage par un état du meuble plutôt que par le portail :
+    /// `ComposerPortal` est la clé d'un `.sheet(item:)`, et lui donner une
+    /// valeur associée changerait son identité — deux ouvertures de la caméra
+    /// dans deux modes deviendraient deux feuilles distinctes aux yeux de
+    /// SwiftUI, qui n'en honore qu'une.
+    ///
+    /// Il est REPOSÉ à chaque ouverture, jamais seulement à la fermeture : une
+    /// mémoire de mode qui survit rendrait tout appui suivant sur la porte
+    /// média dépendant de la façon dont le composer a été ouvert — un
+    /// comportement que rien à l'écran n'annoncerait.
+    func presentCamera(mode: CameraCaptureMode) {
+        pendingCameraMode = mode
+        presentedPortal = .camera
     }
 
     /// La graine entre par la RÈGLE, jamais par quatre affectations écrites

@@ -2,30 +2,47 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La description se LIT sous la scène, et se replie** (#4742, directive
-/// porteur 2026-09-01).
+/// **La description se lit SUR la scène, et se replie** (#4742 puis #4993,
+/// directives porteur des 2026-09-01 et 2026-09-03).
 ///
 /// > « Le texte de description doit se mettre dans la scène pliable avec un
 /// > bouton V tout en bas de la scène tout de suite en dessous, et qui devient
-/// > ^ après le repli pour afficher de nouveau. »
+/// > ^ après le repli pour afficher de nouveau. » — 2026-09-01
 ///
-/// ## Ce que ça change
+/// > « il faut à présent mettre le V et ^ juste en dessus de la scène,
+/// > disponible tout le temps, et lorsqu'on déplie ça met le texte si présent
+/// > par dessus la scène, sinon l'invitation à insérer un texte. » — 2026-09-03
 ///
-/// La description était un MODE : la porte du rail basculait
-/// `editsSceneDescription`, une zone montait en bas de l'écran, et hors de ce
-/// mode le texte n'était **visible nulle part**. L'auteur ne pouvait pas relire
-/// ce qu'il avait écrit sans rouvrir la porte — un contenu qui part avec la
-/// publication et qu'on ne voit pas est un contenu qu'on oublie.
+/// ## Ce que les deux lots ont changé, dans l'ordre
 ///
-/// Elle devient un volet PERSISTANT, collé sous la scène, que le chevron replie.
+/// **#4742** a fait de la description un volet PERSISTANT plutôt qu'un MODE :
+/// avant lui, le texte n'était visible nulle part hors saisie, et un contenu
+/// qui part avec la publication sans jamais s'afficher est un contenu qu'on
+/// oublie.
 ///
-/// ## L'ordre, qui n'est pas un rangement
+/// **#4993** le déplace de sous la carte à SUR la carte. Le volet occupait une
+/// marche du plateau — celle que la doctrine de `ComposerSceneSurface` lui
+/// donne — et payait deux fois :
+/// - le chevron flottait à ≈ 165 pt sous la carte, au milieu du plateau, et
+///   rien ne disait à quoi il s'appliquait ;
+/// - déplié, il poussait la scène vers le haut et lui reprenait la hauteur que
+///   #4124 venait de lui rendre.
 ///
-/// De haut en bas, le bas de l'écran descend les niveaux du modèle — l'objet
-/// (les rails, sur la scène), la SCÈNE (la bande contextuelle), la SLIDE (cette
-/// description), la PUBLICATION (le socle). `ComposerSceneSurface` porte déjà
-/// cette doctrine dans ses commentaires ; ce volet la rend enfin vraie pour la
-/// description, qui flottait en overlay.
+/// ## Pourquoi ce n'est PAS une entorse à la loi 6
+///
+/// La loi 6 (« aucun contrôle sur le canvas — le player EST l'aperçu ») bannit
+/// de la scène ce qui ferait MENTIR l'aperçu sur le rendu final. La description
+/// est le seul contenu du composer dont le lecteur peint DÉJÀ le texte
+/// par-dessus le canvas : la légende `content` des viewers. Posée là, elle ne
+/// ment pas sur le rendu — elle le rejoint. Le chevron, lui, est une poignée de
+/// 44 pt collée au bord bas, hors de la zone où l'on manipule les objets.
+///
+/// ## L'ORDRE des deux moitiés porte le sens du glyphe
+///
+/// Le texte se peint AU-DESSUS du chevron, jamais en dessous : c'est ce qui
+/// rend « ^ » (remonte-le) et « V » (range-le) littéralement vrais. Inversé, le
+/// même glyphe désignerait la direction opposée à celle où le contenu apparaît
+/// — le genre de justesse accidentelle qui survit à une relecture.
 struct ComposerSceneDescriptionPanel: View {
 
     let text: String
@@ -36,12 +53,10 @@ struct ComposerSceneDescriptionPanel: View {
     /// texte auraient divergé au premier réglage.
     let onEdit: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
-        VStack(spacing: 0) {
-            chevron
+        VStack(spacing: 6) {
             if !isCollapsed { lecture }
+            chevron
         }
         .frame(maxWidth: .infinity)
     }
@@ -51,6 +66,13 @@ struct ComposerSceneDescriptionPanel: View {
     /// **44 pt de haut, quel que soit le glyphe** (dimension 5) : un chevron
     /// dessiné à sa taille naturelle donnerait une cible de 12 pt que personne
     /// n'atteint du pouce.
+    ///
+    /// **La CIBLE fait 44 pt, la PASTILLE beaucoup moins** (#4993). Posée sur
+    /// le canvas, une cible pleine largeur couvrirait la bande basse de la
+    /// scène et volerait au doigt tout objet qu'on y traîne. La forme de
+    /// contact suit donc la pastille — c'est le même arbitrage que les deux
+    /// rails, qui bornent leur contact à leurs entrées et laissent passer le
+    /// reste.
     private var chevron: some View {
         Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
@@ -60,9 +82,13 @@ struct ComposerSceneDescriptionPanel: View {
         } label: {
             Image(systemName: Self.chevronSymbol(isCollapsed: isCollapsed))
                 .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
+                // Blanc, jamais `.secondary` : la pastille flotte sur une scène
+                // dont la couleur est celle de l'auteur, pas celle du thème —
+                // une teinte sémantique y disparaîtrait sur un fond clair.
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 30)
+                .adaptiveGlass(in: Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         // **Le libellé dit l'ACTION, jamais l'état.** « Description repliée »
@@ -101,22 +127,28 @@ struct ComposerSceneDescriptionPanel: View {
 
     /// Le texte, ou son invite. Un tap ouvre la saisie — le volet est une
     /// AFFORDANCE, pas un décor : le toucher doit mener quelque part (loi 4).
+    ///
+    /// **Sur du verre, jamais à nu** (#4993) : le texte se peint désormais sur
+    /// la scène, dont l'auteur choisit la couleur. Une chaîne blanche posée
+    /// directement sur un fond clair serait illisible, et un fond OPAQUE
+    /// cacherait la moitié basse de ce qu'on décrit.
     private var lecture: some View {
         Button(action: onEdit) {
             Text(text.isEmpty ? placeholder : text)
                 .font(MeeshyFont.relative(14, design: .rounded))
-                .foregroundStyle(text.isEmpty ? .secondary : .primary)
+                .foregroundStyle(text.isEmpty ? Color.white.opacity(0.75) : Color.white)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityHint(String(localized: "composer.description.editHint",
                                   defaultValue: "Touchez pour modifier la description",
                                   bundle: .main))
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 }
