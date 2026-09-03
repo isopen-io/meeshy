@@ -34,6 +34,7 @@ const sers = (droits: Droits, tempsReel: EtatDuFil['tempsReel'] = TEMPS_REEL): H
     composeur: { genre: 'ouvert' },
     tempsReel,
     plein: null,
+    profil: null,
   } satisfies EtatDuFil);
   document.body.innerHTML = html.slice(html.indexOf('<body>') + '<body>'.length, html.lastIndexOf('</body>'));
   const main = document.querySelector<HTMLElement>('main');

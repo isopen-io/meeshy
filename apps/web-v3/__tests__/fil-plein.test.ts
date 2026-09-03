@@ -91,6 +91,7 @@ const ETAT = (messages: readonly Message[], attributs: Partial<EtatDuFil> = {}):
   composeur: { genre: 'ouvert' },
   tempsReel: null,
   plein: null,
+  profil: null,
   ...attributs,
 });
 

@@ -51,6 +51,7 @@ const etat = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   composeur: { genre: 'ouvert' },
   tempsReel: TEMPS_REEL,
   plein: null,
+  profil: null,
   ...attributs,
 });
 

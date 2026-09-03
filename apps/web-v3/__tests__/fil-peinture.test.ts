@@ -44,6 +44,7 @@ const etatServi = (): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   plein: null,
+  profil: null,
   tempsReel: {
     passerelle: 'https://gate.test',
     actifs: {

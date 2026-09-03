@@ -18,6 +18,7 @@ import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
+import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -70,6 +71,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/commentaires-feuille.ts', source: FEUILLE_DES_COMMENTAIRES },
   { nom: 'app/connecte/liste-feuille.ts', source: FEUILLE_DE_LA_LISTE },
   { nom: 'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU', source: FEUILLE_DU_TABLEAU },
+  { nom: 'app/connecte/profil-feuille.ts', source: FEUILLE_DU_PROFIL },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -141,6 +143,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/commentaires-feuille.ts',
       'app/connecte/liste-feuille.ts',
       'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU',
+      'app/connecte/profil-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -377,17 +380,22 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
   });
 
   /**
-   * Règle 9 — « `--color-surface-raised` = la feuille modale et le rond
-   * flottant secondaire, rien d'autre » ; témoin : ≤ 2 sélecteurs, et la
-   * feuille modale est le seul à le peindre tant que le rond n'existe pas.
+   * Règle 9 — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
+   * rien d'autre ». La feuille modale de jonction a été le seul emploi tant
+   * que rien d'autre ne flottait ; le panneau de profil (§ 12.10.3) est le
+   * SECOND, sur le MÊME plan et pour la MÊME raison — un second emploi assumé
+   * de la règle, pas un écart d'elle.
    */
-  it('ne réserve --color-surface-raised qu’à ce qui flotte — la feuille modale seule aujourd’hui', () => {
+  it('ne réserve --color-surface-raised qu’à ce qui flotte', () => {
     const peints = FEUILLES.flatMap(({ nom, source }) =>
       regles(source)
         .filter(({ corps }) => corps.includes('var(--color-surface-raised)'))
         .map(({ selecteur }) => `${nom} › ${selecteur}`),
     );
-    expect(peints).toEqual(['app/(public)/chat/[lien]/choix-feuille.ts › dialog.feuille']);
+    expect(peints).toEqual([
+      'app/(public)/chat/[lien]/choix-feuille.ts › dialog.feuille',
+      'app/connecte/profil-feuille.ts › dialog.profil',
+    ]);
   });
 });
 

@@ -89,6 +89,15 @@ export type ParametresDuDocument = {
    * seule tête de document.
    */
   readonly robots?: string;
+  /**
+   * UNE SURIMPRESSION — le profil d'un participant (`?profil=`, § 12.10.3),
+   * rendue HORS de `<div class="enveloppe">` : une surimpression n'est pas un
+   * morceau du contenu qu'elle recouvre, exactement comme pour le fil
+   * (`app/connecte/fil-vue.ts` › `documentDuFil`). L'enveloppe entière devient
+   * `inert` derrière elle — c'est TOUT ce que ce document porte à recouvrir,
+   * là où le fil n'a que son `<main>`.
+   */
+  readonly surimpression?: string;
 };
 
 export type ParametresDeTete = {
@@ -137,12 +146,18 @@ export const documentDuSite = ({
   robots,
   attributsDuMain = '',
   script = '',
+  surimpression = '',
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots }) +
   '<body>' +
-  '<div class="enveloppe">' +
+  // LA SURIMPRESSION AVANT L'ENVELOPPE, INERTE DERRIÈRE ELLE — l'ordre et
+  // l'accès que `documentDuFil` applique à son `<main>` (même raison : CLS,
+  // Échap sans JavaScript, un lecteur d'écran qui n'annonce plus ce qu'il ne
+  // montre pas).
+  surimpression +
+  `<div class="enveloppe"${surimpression === '' ? '' : ' inert'}>` +
   enTete(retour) +
   `<main id="main-content"${attributsDuMain}>${corps}</main>` +
   pied() +

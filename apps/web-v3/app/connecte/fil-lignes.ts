@@ -8,6 +8,7 @@ import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil'
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, libelleDuJour } from '@/lib/temps';
 
+import { adresseDuProfil } from './profil-vue';
 import { blocDeTranscription, langAttribut } from './transcrit';
 import { quand } from './vue';
 
@@ -54,10 +55,47 @@ export const CHAMP_DU_MESSAGE_CIBLE = 'message';
 
 const FENETRE_DE_SUITE_MS = 5 * 60_000;
 
-const avatar = (message: Message): string =>
+const avatarNu = (message: Message): string =>
   message.anonyme
     ? `<span class="avatar fantome" aria-hidden="true">${svgDuSprite('ph-ghost')}</span>`
     : `<span class="avatar ${teinteDeLAvatar(message.auteur)}" aria-hidden="true">${echappe(initiales(message.auteur))}</span>`;
+
+/**
+ * L'AUTEUR D'UN MESSAGE OUVRE SON PROFIL (§ 12.10.3) — depuis l'avatar OU le
+ * nom, deux `<a href="?profil=…">` distincts vers la MÊME surimpression. Trois
+ * cas n'ont personne à ouvrir, et ne sont donc PAS des liens (charte règle 7,
+ * « un contrôle sans effet ne se rend pas ») :
+ *
+ *   • `message.systeme` — une ligne système ne cite personne ;
+ *   • `message.anonyme` — un invité de lien n'a pas de compte, donc pas de
+ *     handle que `GET /directory/people/:handle` puisse résoudre ;
+ *   • `message.deMoi` — ouvrir SON PROPRE profil mènerait à `sheet:member`,
+ *     qui n'existe pas encore dans le dépôt (matrice, lot L5 — #4958, ouvert
+ *     et non livré) : le panneau sait bien afficher `relation:'self'`
+ *     (§ 12.10.3 point 5), mais rien ne route encore vers « son compte » —
+ *     fabriquer ce lien serait un contrôle qui ment sur sa destination. Le
+ *     critère de fin « relation=self ⇒ mène à SON compte » de #5030 N'EST
+ *     DONC PAS ENCORE ATTEINT — documenté dans #5030 (commentaire), pas
+ *     silencieusement contourné : dès que #4958 livre `sheet:member`, cette
+ *     branche route vers elle plutôt que de rendre `avatarNu`.
+ *
+ * `message.auteurId` EST le handle : un `User.id`, que `lib/api/profil.ts`
+ * accepte tel quel (« MongoDB ObjectId or username »).
+ */
+const handleDeLAuteur = (message: Message): string | null =>
+  message.systeme || message.anonyme || message.deMoi ? null : message.auteurId;
+
+const avatar = (message: Message, adresse: string): string => {
+  const handle = handleDeLAuteur(message);
+  if (handle === null) return avatarNu(message);
+  return `<a class="avatar-lien" href="${echappe(adresseDuProfil(adresse, handle))}" aria-label="${echappe(FIL.voirLeProfil(message.auteur))}">${avatarNu(message)}</a>`;
+};
+
+const nomDeLAuteur = (message: Message, adresse: string): string => {
+  const texte = `<span class="nom">${echappe(message.deMoi ? FIL.vous : message.auteur)}</span>`;
+  const handle = handleDeLAuteur(message);
+  return handle === null ? texte : `<a class="nom-lien" href="${echappe(adresseDuProfil(adresse, handle))}">${texte}</a>`;
+};
 
 /**
  * LES SIX FORMES D'UNE BULLE, DEUX AXES, DEUX TABLES (issue #4835).
@@ -435,10 +473,10 @@ export const ligne = ({
 
   return (
     `<li class="${classes(message, estUneSuite(message, precedent))}" ${attributs(message)}>` +
-    avatar(message) +
+    avatar(message, adresse) +
     '<div class="corps">' +
     '<p class="qui">' +
-    `<span class="nom">${echappe(message.deMoi ? FIL.vous : message.auteur)}</span>` +
+    nomDeLAuteur(message, adresse) +
     (message.anonyme ? `<span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span>` : '') +
     '</p>' +
     // L'ORDRE de la cible : ce que le message CITE, puis ce qu'il PORTE, puis

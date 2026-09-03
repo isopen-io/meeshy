@@ -14,6 +14,7 @@ import { jetonDuLecteur } from '@/app/session';
 import { tempsReelDuDocument } from './fil-porte';
 import { ADRESSE_DE_LA_LISTE, documentDesChats } from './liste-vue';
 import { CACHE_PRIVE, serviteurDe, versLaConnexion } from './porte';
+import { chargeLeProfilSiDemande, traiteLActionDeProfil } from './profil-porte';
 
 /**
  * LA PORTE DE `/chats` — deux méthodes, et la seconde est ce qui rend les trois
@@ -52,7 +53,7 @@ const echecDemande = (requete: Request): boolean => new URL(requete.url).searchP
 
 export const LISTE_DES_CHATS = serviteurDe({
   chemin: CHEMIN,
-  ecran: (charge, maintenant, requete) =>
+  ecran: async (charge, maintenant, requete) =>
     documentDesChats({
       conversations: charge.conversations,
       maintenant,
@@ -61,6 +62,11 @@ export const LISTE_DES_CHATS = serviteurDe({
       tempsReel: tempsReelDuDocument(),
       fait: confirmationDemandee(requete),
       echoue: echecDemande(requete),
+      // `?profil=` (§ 12.10.3) — le jeton du membre est REDÉRIVÉ du cookie,
+      // jamais recopié : `jetonDuLecteur` est le site unique de sa lecture, et
+      // `serviteurDe` (`app/connecte/porte.ts`) l'a déjà vérifié pour rendre
+      // cette page du tout.
+      profil: await chargeLeProfilSiDemande({ requete, jeton: jetonDuLecteur(requete) }),
     }),
 });
 
@@ -115,7 +121,15 @@ export const GESTE_SUR_UNE_LIGNE = async (requete: Request): Promise<Response> =
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return versLaConnexion(CHEMIN);
 
-  const soumission = soumissionDuGeste(await requete.formData().catch(() => new FormData()));
+  const formulaire = await requete.formData().catch(() => new FormData());
+  // LES TROIS ACTIONS DU PROFIL (§ 12.10.3 point 5), vérifiées AVANT le geste
+  // d'une ligne : un formulaire posté depuis le panneau de profil ne porte
+  // aucun `geste` connu, et `soumissionDuGeste` le laisserait tomber en
+  // silence — ce que fait ICI la porte du profil, avec son propre effet.
+  const actionDeProfil = await traiteLActionDeProfil({ formulaire, jeton, adresseHote: CHEMIN });
+  if (actionDeProfil !== null) return actionDeProfil;
+
+  const soumission = soumissionDuGeste(formulaire);
   if (soumission === null) return versLaListe('');
 
   const issue = await appliqueLeGeste({ soumission, jeton });

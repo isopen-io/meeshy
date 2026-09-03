@@ -110,6 +110,21 @@ export type Conversation = {
    * connectée.
    */
   readonly archivee: boolean;
+  /**
+   * LES PARTICIPANTS INSCRITS D'UN TÊTE-À-TÊTE — un `User.id` chacun, jamais un
+   * pseudonyme composé ici (`lib/api/profil.ts` accepte les deux
+   * indifféremment). VIDE pour un GROUPE : la question « qui, dans cette
+   * conversation, a un profil à ouvrir ? » n'a de réponse à un TAP QUE dans un
+   * tête-à-tête (§ 12.10.3, l'avatar d'une ligne de `/chats`).
+   *
+   * `GET /conversations` sert TOUS les participants actifs — le lecteur
+   * compris (`core-list.ts:353-358`, `take:5`) — et ce module ne connaît PAS
+   * son identité au moment où il MAPPE la charge : `/auth/me` et
+   * `/conversations` partent EN PARALLÈLE (`app/connecte/porte.ts`), et les
+   * enchaîner coûterait un aller-retour de plus sur la 3G rurale. `homologueDe`
+   * fait l'EXCLUSION une fois `moiId` connu, au moment du RENDU.
+   */
+  readonly participantsInscrits: readonly { readonly id: string; readonly nom: string }[];
 };
 
 /**
@@ -267,6 +282,33 @@ const preferences = (valeur: unknown): Readonly<Record<string, unknown>> | null 
  * divergerait au premier champ ajouté : c'est le motif que le dépôt paie
  * cycle après cycle (§ « Cette entité a-t-elle une JUMELLE ? »).
  */
+/** Les participants INSCRITS d'un tête-à-tête — vide pour un groupe, ou sans participant qui en ait un. */
+const participantsInscrits = (brut: Readonly<Record<string, unknown>>): Conversation['participantsInscrits'] => {
+  if ((chaine(brut.type) ?? 'direct') !== 'direct') return [];
+  const participants = Array.isArray(brut.participants) ? brut.participants : [];
+  return participants
+    .map((brutParticipant) => objet(brutParticipant))
+    .filter((p): p is Readonly<Record<string, unknown>> => p !== null)
+    .map((p) => {
+      const id = chaine(p.userId);
+      if (id === null) return null;
+      return { id, nom: chaine(p.displayName) ?? chaine(objet(p.user)?.displayName) ?? SANS_TITRE };
+    })
+    .filter((p): p is { readonly id: string; readonly nom: string } => p !== null);
+};
+
+/**
+ * L'AUTRE PERSONNE D'UN TÊTE-À-TÊTE — celle dont l'identifiant N'EST PAS
+ * `moiId`, parmi les participants INSCRITS que la conversation porte. `null`
+ * sans `moiId` connu (aucune exclusion honnête), pour un GROUPE (le champ est
+ * vide par construction) ou pour un tête-à-tête dont le pair est un invité de
+ * lien, sans compte.
+ */
+export const homologueDe = (conversation: Conversation, moiId: string | null): { readonly id: string; readonly nom: string } | null => {
+  if (moiId === null) return null;
+  return conversation.participantsInscrits.find((p) => p.id !== moiId) ?? null;
+};
+
 export const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
   const id = chaine(brut.id);
   if (id === null) return null;
@@ -284,6 +326,7 @@ export const conversation = (brut: Readonly<Record<string, unknown>>): Conversat
     apercuLangueOriginale: chaine(brut.lastMessageOriginalLanguage),
     sourdine: preferences(brut.userPreferences)?.isMuted === true,
     archivee: preferences(brut.userPreferences)?.isArchived === true,
+    participantsInscrits: participantsInscrits(brut),
   };
 };
 

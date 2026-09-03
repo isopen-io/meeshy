@@ -1,19 +1,23 @@
 /**
- * LE PLEIN ÉCRAN, ÉLEVÉ EN MODALE — la SEULE chose que le JavaScript ajoute à
- * la surimpression (§ 12.10.1, § 12.10.6).
+ * TOUTE SURIMPRESSION SERVIE, ÉLEVÉE EN MODALE — la SEULE chose que le
+ * JavaScript y ajoute (§ 12.10.1, § 12.10.6). Généralisé depuis le plein écran
+ * d'un média (issue #4835) au profil d'un participant (§ 12.10.3) : les DEUX
+ * sont un `<dialog open data-retour>` RENDU PAR LE SERVEUR — `class="plein"`
+ * ou `class="profil"`, peu importe — qui s'ouvre et se ferme par un `<a href>`,
+ * donc marche ENTIER sans un octet de script. Une TROISIÈME surimpression
+ * future n'a donc besoin d'AUCUNE ligne de plus ici : elle sert son propre
+ * `<dialog open data-retour>`, et ce module l'élève déjà.
  *
- * Le `<dialog class="plein" open>` est RENDU PAR LE SERVEUR (`app/connecte/
- * plein-vue.ts`) : il s'ouvre et se ferme par un `<a href>`, donc il marche
- * entier sans un octet de script. Ce module ne compose AUCUNE balise et
- * n'ouvre AUCUNE surimpression — il en reprend une déjà servie et la passe en
- * `showModal()`, ce qui donne gratuitement les trois choses qu'un `open` seul
- * n'a pas : le voile (`::backdrop`), le piège à focus, et **Échap**.
+ * Ce module ne compose AUCUNE balise et n'ouvre AUCUNE surimpression — il en
+ * reprend une déjà servie et la passe en `showModal()`, ce qui donne
+ * gratuitement les trois choses qu'un `open` seul n'a pas : le voile
+ * (`::backdrop`), le piège à focus, et **Échap**.
  *
  * FERMER RESTE UN SEUL EFFET. Échap déclenche l'événement `close` du dialogue,
  * qui ne fait ici qu'une chose : suivre le MÊME lien que la croix
  * (`data-retour`, posé par le serveur). Sans quoi le lecteur resterait sur une
- * adresse `?media=` dont plus rien ne serait affiché — un état muet, la forme
- * même du contrôle sans effet.
+ * adresse `?media=`/`?profil=` dont plus rien ne serait affiché — un état
+ * muet, la forme même du contrôle sans effet.
  *
  * IL EST APPELÉ AVANT toute lecture de configuration du module de
  * participation (`participate.ts`), parce qu'il ne dépend NI d'une créance, NI
@@ -21,7 +25,7 @@
  * sur un fil dont l'authentification a échoué.
  */
 export const prendsLePleinEcran = (racine: ParentNode = document): void => {
-  const dialogue = racine.querySelector<HTMLDialogElement>('dialog.plein[open]');
+  const dialogue = racine.querySelector<HTMLDialogElement>('dialog[open][data-retour]');
   if (dialogue === null || typeof dialogue.showModal !== 'function') return;
 
   const retour = dialogue.dataset.retour ?? '';

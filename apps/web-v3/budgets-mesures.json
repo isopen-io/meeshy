@@ -123,24 +123,24 @@
  },
  "participate": {
   "quoi": "Le poids des DEUX modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil.",
-  "participate_brut_octets": 88649,
-  "participate_gzip_9_octets": 26264,
-  "liste_brut_octets": 47866,
-  "liste_gzip_9_octets": 13245,
+  "participate_brut_octets": 89433,
+  "participate_gzip_9_octets": 26549,
+  "liste_brut_octets": 49334,
+  "liste_gzip_9_octets": 13757,
   "socket_io_client_brut_octets": 40435,
   "socket_io_client_gzip_9_octets": 12849,
   "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",
   "date": "2026-09-03"
  },
  "documents_du_fil": {
-  "quoi": "Ce que le fil REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline —, et ce que l'ÉTAT `?media=` (§ 12.10.1) y ajoute. Le tour qui a livré le plein écran déclarait qu'il « n'ajoute aucun motif de budget » : vrai des REQUÊTES (la surimpression est servie DANS le même document, mesuré par v3-fil-riche.spec.ts § « le coût du plein écran, mesuré »), faux du POIDS, que rien ne pesait. Mesuré sur une tranche FIXE — image, vidéo, vocal transcrit, fichier, temps réel armé — pour que le chiffre suive le CODE et non les données. Relevé le 2026-09-03 après l'extraction de la pastille de langue en ATOME partagé avec /chats (app/connecte/atomes-feuille.ts) : +2 o gzip sur le fil, +3 o sur l'état ?media=, parce que l'atome dimensionne désormais SON glyphe (`.langue svg`) au lieu de dépendre d'une règle voisine du fil — sans quoi la même pastille était invisible dans la liste. Relevé une seconde fois le même jour après la fusion de `dev` (§ 12.10.2, le compte de participants qui se tait à deux) : +33 o gzip sur les deux variantes — `compteDeParticipants`/`presenceServie` entrent dans `lib/contenu/fil.ts`, lu par `fil-vue.ts` aux côtés de `ETATS_DU_TEMPS_REEL` déjà présent ; le surcoût du plein écran ne bouge pas (578 o), la hausse est sur le SOCLE du document, pas sur la surimpression.",
-  "fil_o": 11679,
-  "fil_media_o": 12257,
-  "surcout_du_plein_ecran_o": 578,
+  "quoi": "Ce que le fil REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline —, et ce que l'ÉTAT `?media=` (§ 12.10.1) y ajoute. Le tour qui a livré le plein écran déclarait qu'il « n'ajoute aucun motif de budget » : vrai des REQUÊTES (la surimpression est servie DANS le même document, mesuré par v3-fil-riche.spec.ts § « le coût du plein écran, mesuré »), faux du POIDS, que rien ne pesait. Mesuré sur une tranche FIXE — image, vidéo, vocal transcrit, fichier, temps réel armé — pour que le chiffre suive le CODE et non les données. Relevé le 2026-09-03 après l'extraction de la pastille de langue en ATOME partagé avec /chats (app/connecte/atomes-feuille.ts) : +2 o gzip sur le fil, +3 o sur l'état ?media=, parce que l'atome dimensionne désormais SON glyphe (`.langue svg`) au lieu de dépendre d'une règle voisine du fil — sans quoi la même pastille était invisible dans la liste. Relevé une seconde fois le même jour après la fusion de `dev` (§ 12.10.2, le compte de participants qui se tait à deux) : +33 o gzip sur les deux variantes — `compteDeParticipants`/`presenceServie` entrent dans `lib/contenu/fil.ts`, lu par `fil-vue.ts` aux côtés de `ETATS_DU_TEMPS_REEL` déjà présent ; le surcoût du plein écran ne bouge pas (578 o), la hausse est sur le SOCLE du document, pas sur la surimpression. Relevé une troisième fois le 2026-09-03 après profilMembre (§ 12.10.3) : +342 o gzip sur le fil, +315 o sur l'état ?media=, parce que chaque message d'un auteur autre que soi porte désormais deux cliquables de plus vers son profil (avatar-lien, nom-lien, app/connecte/fil-lignes.ts) et que la feuille du fil déclare leur géométrie (app/connecte/fil-feuille.ts). Le panneau de profil lui-même (dialog.profil, FEUILLE_DU_PROFIL) reste hors de ce document tant que ?profil= n'est pas posé — comme le plein écran d'un média, un état de l'adresse n'est payé que par qui le sert.",
+  "fil_o": 12021,
+  "fil_media_o": 12572,
+  "surcout_du_plein_ecran_o": 551,
   "unite": "octets gzip (niveau 9) du document HTML servi",
   "commande": "cd apps/web-v3 && bunx jest __tests__/fil-plein.test.ts -t 'grossir en silence' (la ligne « [mesure] document du fil … » porte les trois valeurs)",
   "date": "2026-09-03",
   "temoin": "apps/web-v3/__tests__/fil-plein.test.ts § « le poids du document du fil, et le surcoût de l'état `?media=` » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu.",
-  "consequence": "11 679 o > 9 216 o : le document du fil FRANCHIT le plafond `documents.document_o` de la charte (§ 12.5 règle 4), et le franchissait AVANT ce tour — la surimpression n'en est pas la cause (elle pèse 578 o, soit 5 %). Le plafond n'a pas de témoin (budgets.json le dit : « À CÂBLER ») ; le ratchet ci-dessus empêche la croissance silencieuse en attendant qu'un lot le règle. À porter en issue : le fil est le seul écran mesuré au-dessus."
+  "consequence": "12 021 o > 9 216 o : le document du fil FRANCHIT le plafond `documents.document_o` de la charte (§ 12.5 règle 4), et le franchissait AVANT ce tour — la surimpression n'en est pas la cause (elle pèse 578 o, soit 5 %). Le plafond n'a pas de témoin (budgets.json le dit : « À CÂBLER ») ; le ratchet ci-dessus empêche la croissance silencieuse en attendant qu'un lot le règle. À porter en issue : le fil est le seul écran mesuré au-dessus."
  }
 }

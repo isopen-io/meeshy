@@ -29,6 +29,7 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   apercuLangueOriginale: 'fr',
   sourdine: false,
   archivee: false,
+  participantsInscrits: [],
   ...attributs,
 });
 

@@ -280,6 +280,7 @@ const FIL_RICHE = (messages: readonly Message[]): EtatDuFil => ({
   composeur: { genre: 'ouvert' },
   tempsReel: null,
   plein: null,
+  profil: null,
 });
 
 describe('le document servi — six formes, un balisage', () => {
