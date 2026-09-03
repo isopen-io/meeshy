@@ -229,7 +229,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/MyStoryCard.swift",
         "Features/Main/Views/OnboardingView.swift",
         "Features/Main/Views/ParticipantProfileSheet.swift",
-        "Features/Main/Views/PostDetailView.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
@@ -331,7 +330,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
     /// > cliquet et devient un plafond : il ne rougirait plus que sur une
     /// > régression plus grosse que l'écart accumulé.
-    private static let totalCeiling = 247
+    /// 246 et non 247 : `PostDetailView` a quitté la liste. Ses deux tailles
+    /// figées sont parties dans `PostDetailView+AbsenceStates` à l'extraction,
+    /// puis ont été converties en `MeeshyFont.relative(40)` — une icône d'état
+    /// vide n'a pas de cadre fixe, donc rien ne justifiait qu'elle ignore
+    /// Dynamic Type. Le cliquet DESCEND avec la dette : c'est ce qu'il exige,
+    /// et c'est ce qui l'empêche de devenir un plancher.
+    private static let totalCeiling = 246
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
