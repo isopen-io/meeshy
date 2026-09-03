@@ -78,7 +78,7 @@ describe('la porte de /links', () => {
     const html = await (await CARNET_DE_LIENS(requete('https://meeshy.test/links'), recuperer)).text();
 
     // Le TEXTE est ce que le lecteur colle ailleurs — la porte de l'invité.
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
     // La LIGNE mène à sa propre conversation : l'y renvoyer par `/chat/:lien`
     // lui ferait refaire une jonction déjà faite.
     expect(html).toContain('href="/chats/c1"');
@@ -114,7 +114,7 @@ describe('la porte de /links', () => {
     // Le mot, pas seulement une teinte : cet écran est celui où le lecteur
     // apprend qu'un lien ne sert plus, et le cacher se lirait comme une perte.
     expect(html).toContain('Fermé');
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
   });
 
   it('n’invente ni capacité ni échéance quand le lien n’en déclare pas', async () => {
@@ -148,7 +148,7 @@ describe('la porte de /links', () => {
 
     // La ligne reste une ligne d'INFORMATION — l'adresse s'y lit et s'y copie —
     // plutôt qu'un lien qui ne mène nulle part (charte règle 7).
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
     expect(html).not.toContain('href="/chats/');
   });
 

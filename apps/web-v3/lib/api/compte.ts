@@ -423,7 +423,16 @@ export type Lecteur = {
 };
 
 const lienDePartage = (brut: Readonly<Record<string, unknown>>): LienDePartage | null => {
-  const identifiant = chaine(brut.identifier);
+  /**
+   * `linkId` EST L'IDENTIFIANT PUBLIC — celui qui compose l'adresse
+   * partageable, comme `creeUnLien` le documente plus bas. `identifier` est un
+   * SLUG dérivé du nom (`mshy_beta-staging`) : la route d'aperçu anonyme prend
+   * tout `mshy_*` pour un `linkId` (#5077), donc une adresse composée du slug
+   * rendait « Ce lien ne mène nulle part » — mesuré sur staging, 2026-09-04.
+   * Le slug reste le REPLI quand la passerelle ne sert pas `linkId` : une
+   * adresse qui s'ouvre parfois vaut mieux qu'une ligne disparue.
+   */
+  const identifiant = chaine(brut.linkId) ?? chaine(brut.identifier);
   if (identifiant === null) return null;
 
   return {
