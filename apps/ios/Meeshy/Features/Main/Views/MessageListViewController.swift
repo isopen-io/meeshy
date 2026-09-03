@@ -49,7 +49,9 @@ final class MessageListViewController: UIViewController {
     private let storyViewModel: StoryViewModel
     private let statusViewModel: StatusViewModel
     private let conversationListViewModel: ConversationListViewModel
-    private var cancellables = Set<AnyCancellable>()
+    /// `internal` depuis la sortie du cluster snapshot (#4944) : en Swift,
+    /// `private` porte sur le FICHIER.
+    var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false
     /// Tracks the item count from the last snapshot so we can detect that the
     /// snapshot grew at all.
@@ -65,10 +67,10 @@ final class MessageListViewController: UIViewController {
     private var pendingUnreadCount: Int = 0
     /// Cached near-bottom state so applySnapshot can decide whether to bump
     /// the unread badge without querying contentOffset mid-layout.
-    private var isCurrentlyNearBottom: Bool = true
+    var isCurrentlyNearBottom: Bool = true
     /// Whether the previous snapshot included the typing-indicator cell — lets
     /// the list scroll the indicator into view the moment it first appears.
-    private var previouslyShowedTyping: Bool = false
+    var previouslyShowedTyping: Bool = false
 
     // MARK: - Slow scroll for quoted message search
 
@@ -82,14 +84,33 @@ final class MessageListViewController: UIViewController {
     /// upward (toward older messages).
     private let slowScrollSpeed: CGFloat = 80
 
+    /// La dernière préparation de snapshot construite — le MÉMO du #4944.
+    ///
+    /// Réutilisée telle quelle tant que l'empreinte de la fenêtre ne bouge
+    /// pas : un accusé de lecture, une réaction ou une transcription changent
+    /// la VERSION d'une ligne, jamais la composition, et ne doivent donc rien
+    /// faire reconstruire. Voir `MessageListSnapshotPrep` pour ce qui entre
+    /// dans l'empreinte — et ce qui n'y entre volontairement pas.
+    private var lastSnapshotPrep: MessageListSnapshotPrep?
+
+    /// Point d'accès de test (#4944) — `internal`, lu par `@testable import
+    /// Meeshy`, jamais par une autre cible app. Compte les préparations
+    /// RÉELLEMENT construites : c'est le seul témoin qui distingue « la liste
+    /// s'est reposée » de « la liste a tout recalculé ».
+    private(set) var snapshotPrepBuildsForTesting: Int = 0
+
     /// Maps each message's gateway-side `serverId` (MongoDB ObjectId) to
     /// the client-side `localId` (UUID) that the diffable datasource uses
-    /// as its item identifier. Rebuilt from `store.messages` on every
-    /// `applySnapshot`. Consulted by `resolveLocalId(_:)` so the reply-tap
-    /// path can find a cited message even when the caller hands us a
-    /// server id (which is what `ReplyReference.messageId` carries —
+    /// as its item identifier. Consulted by `resolveLocalId(_:)` so the
+    /// reply-tap path can find a cited message even when the caller hands us
+    /// a server id (which is what `ReplyReference.messageId` carries —
     /// gateway sends `replyTo.id`, not the local UUID).
-    private var serverIdToLocalId: [String: String] = [:]
+    ///
+    /// SERVIE par la préparation mémoïsée, jamais recopiée à côté d'elle : une
+    /// seconde carte tenue en parallèle divergerait le jour où l'une des deux
+    /// se reconstruit sans l'autre — et c'est un `nil` silencieux, une
+    /// citation qui ne saute plus.
+    private var serverIdToLocalId: [String: String] { lastSnapshotPrep?.serverIdToLocalId ?? [:] }
 
     // MARK: Suivi de lecture exact
     /// Traduit les apparitions/disparitions de cellules en messages réellement
@@ -510,19 +531,6 @@ final class MessageListViewController: UIViewController {
         }
     }
 
-    /// Reserves vertical clearance at the visual bottom of the list. Because
-    /// the collection view is transformed with `scaleY: -1`, what looks like
-    /// the bottom on screen is `contentInset.top` in the underlying scroll
-    /// view's coordinate space. Same flip applies to the scroll indicator
-    /// inset so the bar isn't hidden under the composer.
-    func applyBottomInset(_ inset: CGFloat) {
-        guard collectionView != nil else { return }
-        if collectionView.contentInset.top != inset {
-            collectionView.contentInset.top = inset
-            collectionView.verticalScrollIndicatorInsets.top = inset
-        }
-    }
-
     /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre
     /// depuis que le parent SwiftUI l'étend sous la safe area haute
     /// (`ignoresSafeArea(.container, edges: .top)`, retour user 2026-08-12 :
@@ -606,7 +614,7 @@ final class MessageListViewController: UIViewController {
     /// §4.7ter — un `reconfigureItems` global est arrivé PENDANT le geste et
     /// a été retenu (re-mesurer des cellules visibles en plein défilement
     /// décale tout ce qui est au-dessus d'elles). Rejoué à la pose.
-    private var hasDeferredGlobalReconfigure = false
+    var hasDeferredGlobalReconfigure = false
 
     /// §4.7ter, volet CIBLÉ — les reconfigures par message (traduction
     /// tardive, transcription Whisper, audio traduit, sélection de langue)
@@ -1808,37 +1816,18 @@ final class MessageListViewController: UIViewController {
 
     // MARK: - Snapshot
 
-    /// Portée du `reconfigureItems` d'un `applySnapshot`.
-    ///
-    /// `.changedRecords` (défaut, chemin CHAUD `messagesDidChange`) : seuls
-    /// les messages dont le `changeVersion` a bougé depuis la dernière pose
-    /// re-passent par la registration — l'égalité O(1) de `MessageRecord`
-    /// (invariant grdb-04 : toute écriture visible bumpe la version) est le
-    /// pivot. AVANT (audit film user 2026-08-18) : TOUTES les cellules
-    /// visibles re-hébergeaient leur SwiftUI à CHAQUE mutation du store — la
-    /// file hors-ligne en boucle de retry faisait donc tressauter la scène
-    /// ENTIÈRE au repos (re-mesures ± sous-point, pulsation 0,7↔1,0 des
-    /// rangées en vol), l'élu compris.
-    ///
-    /// `.allItems` : bascules GLOBALES qui changent le rendu de toutes les
-    /// rangées sans toucher aux records — thème, terme de recherche,
-    /// révision de langue préférée, consentement voix.
-    enum SnapshotReconfigureScope: Equatable {
-        case changedRecords
-        case allItems
-        /// Reconfigure UNIQUEMENT ces `localId` — retour porteur 2026-08-27
-        /// (#515) : la sélection multiple (#4005) posait `.allItems` sur
-        /// CHAQUE coche, reconfigurant toute rangée visible pour un état qui
-        /// ne change QUE sur UN message. Contraire au gate `.equatable()`
-        /// (#515) que ce coût existe précisément pour éviter.
-        case items(Set<String>)
-    }
+    // `SnapshotReconfigureScope` vit dans `MessageListViewController+Snapshot.swift`
+    // avec le reste du cluster (#4944) — le budget de 1000-1200 lignes interdit
+    // d'ajouter à cet hôte sans en avoir d'abord extrait.
 
     /// Versions posées à la DERNIÈRE pose non différée — la base du diff
     /// `.changedRecords`. PAS mise à jour quand le reconfigure est différé
     /// (§4.7ter) : le flush à la pose retrouve ainsi l'intégralité du delta.
     private var lastReconfigureBaseline: [String: Int64] = [:]
-    private var lastTypingRosterFingerprint = ""
+    /// `internal` (et non `private`) depuis la sortie du cluster snapshot vers
+    /// `MessageListViewController+Snapshot.swift` (#4944) : le chemin court de
+    /// la frappe le tient à jour, et en Swift `private` porte sur le FICHIER.
+    var lastTypingRosterFingerprint = ""
     private var lastConversationStartFingerprint = ""
     /// Portée à rejouer au flush §4.7ter — `.allItems` domine si une bascule
     /// globale est arrivée pendant le geste.
@@ -1861,40 +1850,31 @@ final class MessageListViewController: UIViewController {
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
 
-        // Liste inversée : index 0 = visuel bas (message le plus récent).
-        let reversedMessages = Array(store.messages.reversed())
-        let messageItems = reversedMessages.map { MessageListItem.message(localId: $0.localId) }
-
-        // Rebuild the serverId → localId map every time we apply a new
-        // snapshot. The reply chip in a bubble carries the cited message's
-        // SERVER id (gateway sends `replyTo.id` = MongoDB ObjectId), but the
-        // diffable datasource items are keyed on the LOCAL id (UUID minted
-        // client-side, kept stable across send → ack). Without this map,
-        // `scrollToMessage(localId:)` would never find a reply target that
-        // wasn't sent during this session — typical for any reply.
-        serverIdToLocalId.removeAll(keepingCapacity: true)
-        for record in reversedMessages {
-            if let serverId = record.serverId, !serverId.isEmpty {
-                serverIdToLocalId[serverId] = record.localId
-            }
+        // MÉMOÏSATION PAR EMPREINTE (#4944) — la préparation (liste inversée,
+        // items, regroupement par jour, carte `serverId → localId`) ne dépend
+        // QUE de la composition de la fenêtre. L'empreinte répond à « faut-il
+        // tout refaire ? » en O(n) sans allouer ; un événement de CONTENU
+        // (accusé de lecture, réaction, traduction, transcription) rend la
+        // même empreinte et réutilise la préparation, là où la reconstruction
+        // coûtait les ~75 ms mesurées sur device À CHAQUE écriture GRDB.
+        let fingerprint = MessageListSnapshotPrep.Fingerprint(records: store.messages)
+        let prep: MessageListSnapshotPrep
+        if let memo = lastSnapshotPrep, memo.fingerprint == fingerprint {
+            prep = memo
+        } else {
+            // Liste inversée : index 0 = visuel bas (message le plus récent).
+            prep = MessageListSnapshotPrep(
+                reversedRecords: Array(store.messages.reversed()),
+                fingerprint: fingerprint,
+                calendar: .current
+            )
+            lastSnapshotPrep = prep
+            snapshotPrepBuildsForTesting += 1
         }
-
-        // Pour chaque groupe de jour on aligne d'abord les messages dans
-        // l'ordre du flux puis on pousse le séparateur juste après — qui se
-        // retrouve visuellement AU-DESSUS de ses messages, à la WhatsApp.
-        // On part de `messageItems` (sans typing) pour pouvoir conserver le
-        // count "messages stricts" plus bas, intact des dayHeader insérés.
-        let groups = MessageDayGrouping.groupByDay(
-            dates: reversedMessages.map(\.createdAt),
-            calendar: .current
-        )
-        var bodyItems: [MessageListItem] = []
-        for group in groups {
-            for idx in group.indices {
-                bodyItems.append(messageItems[idx])
-            }
-            bodyItems.append(.dayHeader(dayStart: group.dayStart))
-        }
+        // `messageItems` reste SANS les séparateurs ni la cellule typing :
+        // c'est sur lui que se compte le delta du badge non-lus plus bas.
+        let messageItems = prep.messageItems
+        let bodyItems = prep.bodyItems
 
         // The typing indicator is a real cell at index 0 — the visual bottom of
         // the inverted layout, just below the newest message. A live message
@@ -1924,14 +1904,11 @@ final class MessageListViewController: UIViewController {
         // apply). Inserted items are configured fresh anyway, so excluding them
         // here is both correct and sufficient.
         let previousItems = Set(dataSource.snapshot().itemIdentifiers)
-        // L'empreinte inclut l'AVATAR : la rangée doit se reconfigurer quand le
-        // visage d'un frappeur devient connu (il vient d'écrire son premier
-        // message du fil), pas seulement quand le roster change de composition.
-        let typingRosterFingerprint = (conversationViewModel?.typingParticipants ?? [])
-            .map { "\($0.id):\($0.displayName):\($0.avatarURL ?? "")" }
-            .joined(separator: "|")
+        // Empreinte du roster — site UNIQUE, partagé avec le chemin court de
+        // la frappe (`MessageListViewController+Snapshot.swift`).
+        let rosterFingerprint = typingRosterFingerprint()
         let startFingerprint = (conversationViewModel?.currentConversationName ?? "")
-            + "|" + (reversedMessages.last?.localId ?? "")
+            + "|" + (prep.oldestLocalId ?? "")
         var itemsToReconfigure: [MessageListItem]
         switch reconfigure {
         case .allItems:
@@ -1948,16 +1925,18 @@ final class MessageListViewController: UIViewController {
             // les poses `.allItems`), la cellule typing suit son roster, la
             // rangée « Début de la conversation » son empreinte nom + plus
             // ancien message.
-            var changed: [MessageListItem] = []
-            for record in reversedMessages {
-                let item = MessageListItem.message(localId: record.localId)
-                guard previousItems.contains(item) else { continue }
-                if lastReconfigureBaseline[record.localId] != record.changeVersion {
-                    changed.append(item)
-                }
-            }
+            //
+            // La version se lit sur les records VIVANTS du store, jamais sur
+            // une préparation mémoïsée (#4944) : celle-ci ne décrit que la
+            // COMPOSITION, et ses records seraient périmés par construction —
+            // le diff manquerait exactement les lignes qui viennent de bouger.
+            var changed = MessageListSnapshotPrep.changedItems(
+                records: store.messages,
+                baseline: lastReconfigureBaseline,
+                presentIn: previousItems
+            )
             if showTyping, previousItems.contains(.typingIndicator),
-               typingRosterFingerprint != lastTypingRosterFingerprint {
+               rosterFingerprint != lastTypingRosterFingerprint {
                 changed.append(.typingIndicator)
             }
             if items.last == .conversationStart, previousItems.contains(.conversationStart),
@@ -2010,10 +1989,8 @@ final class MessageListViewController: UIViewController {
             }
             itemsToReconfigure = []
         } else {
-            lastReconfigureBaseline = Dictionary(
-                uniqueKeysWithValues: reversedMessages.map { ($0.localId, $0.changeVersion) }
-            )
-            lastTypingRosterFingerprint = typingRosterFingerprint
+            lastReconfigureBaseline = MessageListSnapshotPrep.baseline(of: store.messages)
+            lastTypingRosterFingerprint = rosterFingerprint
             lastConversationStartFingerprint = startFingerprint
         }
         if !itemsToReconfigure.isEmpty {
@@ -2105,18 +2082,10 @@ final class MessageListViewController: UIViewController {
         // Stabilité du champ visuel — les hauteurs des items SUPPRIMÉS sous
         // la fenêtre (typing indicator qui s'éteint, message effacé déjà
         // défilé) ne seront plus lisibles pendant le batch update : mesurées
-        // ICI sur le layout encore courant, déposées au layout qui les
-        // absorbera dans `contentOffset` (cf. `MessageListLayout`). Posé à
-        // CHAQUE apply — un dépôt non consommé ne doit jamais survivre à
-        // l'update suivant.
-        let deletedBelowWindowHeight: CGFloat = previousItems
-            .subtracting(Set(items))
-            .compactMap { dataSource.indexPath(for: $0) }
-            .compactMap { collectionView.layoutAttributesForItem(at: $0) }
-            .filter { $0.frame.minY < collectionView.contentOffset.y }
-            .reduce(0) { $0 + $1.frame.height }
-        (collectionView.collectionViewLayout as? MessageListLayout)?
-            .noteUpcomingDeletionCompensation(height: deletedBelowWindowHeight)
+        // sur le layout encore courant, déposées au layout qui les absorbera
+        // dans `contentOffset`. Site unique, partagé avec le chemin court de
+        // la frappe (`MessageListViewController+Snapshot.swift`).
+        noteDeletionCompensation(removing: previousItems.subtracting(Set(items)))
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
         applyToDataSource(snapshot) { [weak self] in
             PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
@@ -2351,14 +2320,25 @@ final class MessageListViewController: UIViewController {
             }
             .store(in: &cancellables)
 
-        // Typing roster — re-snapshot : la cellule typing entre/sort du flux
-        // comme toute rangée du rouleau, sans animation. Low-frequency signal, no debounce.
-        // Uses stateStore publisher so typing doesn't trigger full ConversationViewModel re-render.
+        // Typing roster — la cellule typing entre/sort du flux comme toute
+        // rangée du rouleau, sans animation. Uses stateStore publisher so
+        // typing doesn't trigger full ConversationViewModel re-render.
+        //
+        // CHEMIN COURT (#4944) : `typing:start` est réémis toutes les trois
+        // secondes par chaque frappeur, et repasser par la pose complète payait
+        // la préparation de TOUTE la fenêtre pour un item qui entre ou sort du
+        // bas du flux. `applyTypingIndicatorFastPath` insère ou retire ce seul
+        // item dans le snapshot courant ; il rend `false` quand il ne peut pas
+        // trancher, et la voie complète reste alors le repli — jamais un
+        // silence.
         vm.typingParticipantsPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot()
+                guard let self else { return }
+                if !self.applyTypingIndicatorFastPath() {
+                    self.applySnapshot()
+                }
             }
             .store(in: &cancellables)
 
@@ -2425,37 +2405,11 @@ final class MessageListViewController: UIViewController {
         }
     }
 
-    /// Diffe un dictionnaire `[messageId: Value]` publié par le ViewModel et
-    /// queue un reconfigure ciblé pour chaque clé dont la valeur a changé ou
-    /// disparu. Mutualise les cinq flux de métadonnées par message
-    /// (traductions, transcriptions, audios traduits, overrides, sélection
-    /// drapeaux) — avant, chaque flux dupliquait ce diff sur 18 lignes avec
-    /// sa propre propriété `lastX`. Le snapshot précédent vit dans la closure
-    /// (capture `var`), le sink s'exécute sur le main via `receive(on:)`.
-    private func observePerMessageDictionary<Value: Equatable>(
-        _ publisher: Published<[String: Value]>.Publisher,
-        initial: [String: Value]
-    ) {
-        var last = initial
-        publisher
-            .receive(on: DispatchQueue.main)
-            .dropFirst()
-            .sink { [weak self] new in
-                guard let self else { return }
-                var changed: Set<String> = []
-                for (msgId, val) in new where last[msgId] != val {
-                    changed.insert(msgId)
-                }
-                for msgId in last.keys where new[msgId] == nil {
-                    changed.insert(msgId)
-                }
-                last = new
-                self.queueReconfigure(for: changed)
-            }
-            .store(in: &cancellables)
-    }
+    // `observePerMessageDictionary` vit dans
+    // `MessageListViewController+Snapshot.swift` (#4944) — même cluster, et le
+    // budget interdit d'ajouter à cet hôte sans en avoir d'abord extrait.
 
-    private func queueReconfigure(for messageIds: Set<String>) {
+    func queueReconfigure(for messageIds: Set<String>) {
         guard !messageIds.isEmpty else { return }
         pendingReconfigureMessageIds.formUnion(messageIds)
 
