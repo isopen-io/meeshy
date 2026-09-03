@@ -137,6 +137,31 @@ final class ComposerSoundPromotionTests: XCTestCase {
         }
     }
 
+    /// **La chaîne complète, de l'hôte au doigt** (#5018).
+    ///
+    /// La règle et l'action ont été livrées avant ce témoin, et pendant un
+    /// commit l'entrée de menu n'existait sur AUCUN écran : l'action était
+    /// juste, testée, et personne ne l'appelait. C'est le motif « une vue sans
+    /// consommateur ne rougit nulle part », et il ne se voit par aucun test de
+    /// comportement — chaque maillon est correct isolément.
+    ///
+    /// Le témoin épingle donc les TROIS maillons ensemble. Retirer n'importe
+    /// lequel rend la promotion inatteignable sans casser quoi que ce soit
+    /// d'autre.
+    func test_thePromotionReachesTheFinger_hostToSurfaceToMenu() throws {
+        let hote = try source("MeeshyComposerHost+Surfaces.swift")
+        XCTAssertTrue(hote.contains("onPromoteBackgroundSound: promoteBackgroundSoundAction"),
+                      "l'hôte fournit l'action à la surface")
+
+        let surface = try source("ComposerSceneSurface.swift")
+        XCTAssertTrue(surface.contains("onPromote: onPromoteBackgroundSound"),
+                      "la surface la passe à l'en-tête")
+
+        let entete = try source("ComposerSceneSoundHeader.swift")
+        XCTAssertTrue(entete.contains("promouvoir: onPromote"),
+                      "l'en-tête la remet au menu d'appui long")
+    }
+
     private func source(_ nom: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
