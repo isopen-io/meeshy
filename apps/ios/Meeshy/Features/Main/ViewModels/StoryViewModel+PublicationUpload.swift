@@ -32,22 +32,46 @@ extension StoryViewModel {
     /// Téléverse l'image d'un sticker par le chemin commun (TUS → `PostMedia`),
     /// pour le publish comme pour l'édition.
     ///
-    /// PNG et non JPEG : un sticker est une image détourée et le JPEG n'a pas
-    /// de canal alpha — le réencoder ainsi publierait un rectangle opaque à la
-    /// place du découpage. La bibliothèque borne déjà la taille à l'écriture
-    /// (`PasteDestination.maxSide`), il n'y a rien à sous-échantillonner ici.
+    /// **Les octets ANIMÉS priment, quand il y en a** (#3956). Ré-encoder un GIF
+    /// en PNG ici publierait un sticker figé après l'avoir composé animé : le
+    /// composer aurait dit vrai, la publication non, et rien nulle part
+    /// n'aurait rougi — la perte se voit seulement chez le LECTEUR, une fois
+    /// l'original détruit.
+    ///
+    /// PNG et non JPEG sur le chemin fixe : un sticker est une image détourée et
+    /// le JPEG n'a pas de canal alpha — le réencoder ainsi publierait un
+    /// rectangle opaque à la place du découpage. La bibliothèque borne déjà la
+    /// taille à l'écriture (`PasteDestination.maxSide`), il n'y a rien à
+    /// sous-échantillonner ici.
+    ///
+    /// Le `thumbHash` vient de l'image FIXE dans les deux cas : c'est un aperçu
+    /// de chargement, et l'aperçu d'un GIF est sa première image.
     private func uploadStickerImage(
         _ image: UIImage,
+        animatedData: Data? = nil,
         uploader: TusUploadManager,
         token: String
     ) async throws -> TusUploadResult {
-        guard let data = image.pngData() else { throw StoryStickerImageNotEncodable() }
+        // Le CONTENEUR décide du mime et de l'extension : téléverser un GIF sous
+        // `image/png` le ferait arriver mal étiqueté chez les trois clients —
+        // l'animation survivrait au disque et mourrait à l'en-tête.
+        let animated = animatedData.flatMap { bytes in
+            AnimatedImageEligibility.container(bytes).map { (bytes: bytes, container: $0) }
+        }
+        let payload: (data: Data, mimeType: String, fileExtension: String)
+        if let animated {
+            payload = (animated.bytes, animated.container.mimeType, animated.container.filenameExtension)
+        } else if let png = image.pngData() {
+            payload = (png, "image/png", "png")
+        } else {
+            throw StoryStickerImageNotEncodable()
+        }
         let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sticker_\(UUID().uuidString).png")
-        try data.write(to: tempURL)
+            .appendingPathComponent("sticker_\(UUID().uuidString).\(payload.fileExtension)")
+        try payload.data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
         let result = try await uploader.uploadFile(
-            fileURL: tempURL, mimeType: "image/png",
+            fileURL: tempURL, mimeType: payload.mimeType,
             credential: .bearer(token), uploadContext: "story", thumbHash: image.toThumbHash()
         )
         // Même réconciliation que les autres images : le lecteur — l'auteur en
@@ -198,7 +222,10 @@ extension StoryViewModel {
                     guard !Task.isCancelled else { return newPostIds }
                     guard let image = upload.loadedImages[stickerId] else { continue }
                     do {
-                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        let result = try await uploadStickerImage(
+                            image,
+                            animatedData: upload.loadedStickerAnimations[stickerId],
+                            uploader: uploader, token: token)
                         uploadedStickers[stickerId] = result.id
                         foregroundMediaIds.append(result.id)
                     } catch {
@@ -374,6 +401,9 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
+        /// Les octets animés des stickers collés (#3956) — sans eux, éditer une
+        /// story remplacerait un GIF déjà publié par sa première image.
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
@@ -406,7 +436,9 @@ extension StoryViewModel {
             await self?.runStoryUpdate(
                 edit: edit, slide: slide, slideImages: slideImages,
                 loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
-                loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
+                loadedAudioURLs: loadedAudioURLs,
+                loadedStickerAnimations: loadedStickerAnimations,
+                originalLanguage: originalLanguage,
                 visibility: visibility, visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 references: references,
@@ -429,6 +461,7 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String?,
         visibility: String,
         visibilityUserIds: [String],
@@ -556,7 +589,10 @@ extension StoryViewModel {
                 for stickerId in pendingStickerIds {
                     guard let image = loadedImages[stickerId] else { continue }
                     do {
-                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        let result = try await uploadStickerImage(
+                            image,
+                            animatedData: loadedStickerAnimations[stickerId],
+                            uploader: uploader, token: token)
                         uploadedStickers[stickerId] = result.id
                         newMediaIds.append(result.id)
                     } catch {

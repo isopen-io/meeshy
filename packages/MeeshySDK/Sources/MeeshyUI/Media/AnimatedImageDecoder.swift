@@ -129,6 +129,25 @@ nonisolated public enum AnimatedImageDecoder {
                    loopCount: kCGImagePropertyHEICSLoopCount as String)
     ]
 
+    /// **Ces octets animent-ils VRAIMENT ?** (#3956)
+    ///
+    /// `AnimatedImageEligibility` répond « peut-être » — et pour le HEIC, elle
+    /// le répond à TOUTE photo d'iPhone, puisque la structure d'une séquence
+    /// vit hors de l'en-tête. Un site qui doit DÉCIDER quoi GARDER (le collage
+    /// d'un sticker : les octets d'origine, ou un PNG réduit ?) ne peut pas se
+    /// contenter d'un peut-être : il rangerait une photo de douze mégapixels
+    /// entière dans une bibliothèque bornée à 64 Mo.
+    ///
+    /// La réponse EXACTE coûte une construction de source et une lecture de
+    /// compte — **aucune image décodée**. C'est la moitié bon marché de
+    /// `decode`, isolée pour les appelants qui n'ont pas besoin des images.
+    public static func animates(_ data: Data) -> Bool {
+        guard AnimatedImageEligibility.mayBeAnimated(data),
+              let source = CGImageSourceCreateWithData(data as CFData, nil)
+        else { return false }
+        return CGImageSourceGetCount(source) > 1
+    }
+
     /// `nil` ⇒ l'image est FIXE (ou illisible) : l'appelant garde son chemin
     /// habituel.
     ///

@@ -47,6 +47,8 @@ struct ComposerObjectEditorView: View {
     let aspectRatio: CGFloat
     let plateauTint: Color
     let sceneImages: [String: UIImage]
+    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    var sceneStickerAnimations: [String: Data] = [:]
     let sceneImagesVersion: UInt64
     let onClose: () -> Void
     /// Remonte au meuble l'objet que le plan 2D vient de désigner — c'est lui
@@ -316,6 +318,7 @@ struct ComposerObjectEditorView: View {
                 openEditor(id)
             },
             loadedImages: sceneImages,
+            loadedStickerAnimations: sceneStickerAnimations,
             loadedImagesVersion: sceneImagesVersion,
             editingTextId: viewModel.textEditingMode.activeTextId,
             onInlineTextChanged: { id, texte in

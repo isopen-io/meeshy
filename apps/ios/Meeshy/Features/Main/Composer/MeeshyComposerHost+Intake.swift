@@ -1016,10 +1016,13 @@ extension MeeshyComposerHost {
         }, onLibraryStickerSelected: { item in
             // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
             // `loadedImages` jusqu'à ce que la publication le téléverse et
-            // remplisse `postMediaId`.
+            // remplisse `postMediaId`. Les octets animés le suivent (#3956) —
+            // un GIF posé sans eux perdrait son mouvement entre la grille et
+            // la scène, sans qu'aucun site rougisse.
             viewModel.addSticker(image: item.thumbnail,
                                  provider: StoryStickerLibraryItem.provider,
-                                 scale: StorySticker.posedScale)
+                                 scale: StorySticker.posedScale,
+                                 animatedData: item.animatedData)
             presentedPortal = nil
             HapticFeedback.light()
         }, onTemplateSelected: { gabarit, emplacements in

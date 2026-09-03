@@ -47,7 +47,7 @@ struct MeeshyComposerHost: View {
     /// lui-même dans l'appel — il ne fait aucun appel : il le POSE sur l'atelier
     /// (`publishTargetType`), qui le transmet au hand-off. C'est ce qui fait de
     /// l'éventail un choix réel plutôt qu'un décor.
-    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
+    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
 
     /// **Le canal de publication du DOCUMENT** — le jumeau, pour les surfaces
     /// sans atelier, de ce que `onPublishAllInBackground` est pour la scène.
@@ -633,7 +633,7 @@ struct MeeshyComposerHost: View {
         /// les séparer aurait permis d'en passer une sans l'autre, c'est-à-dire
         /// de republier sans plafond, silencieusement.
         hydration: ComposerHydration? = nil,
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPublishDocument: @escaping @MainActor (ComposerDocumentDraft) async -> Bool,
         moodSeed: ComposerMoodSeed?,
         mediaSeed: StoryComposerSeed?,

@@ -141,7 +141,7 @@ struct DocumentComposerDoor: View {
             // et volontairement : c'est le publieur de CRÉATION de story du
             // dépôt (`publishStoryInBackground`), et deux assemblages de ses
             // quatorze arguments auraient divergé au premier champ ajouté.
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                 storyViewModel.publishStoryInBackground(
                     targetType: targetType,
                     slides: slides,
@@ -149,6 +149,7 @@ struct DocumentComposerDoor: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,

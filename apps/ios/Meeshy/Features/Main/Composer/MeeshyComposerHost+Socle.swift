@@ -396,7 +396,7 @@ extension MeeshyComposerHost {
     /// **Publier les unités d'histoire** — le canal que l'atelier utilisait,
     /// pressé par le meuble puisque l'atelier n'est plus monté.
     ///
-    /// Les douze arguments sont ceux que `StoryComposerView+Publication`
+    /// Les treize arguments sont ceux que `StoryComposerView+Publication`
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
     /// il relaie. `ComposerMediaAccessibility.empty` est le seul écart, et il
     /// est honnête — la surface de scène du meuble n'offre pas encore d'éditeur
@@ -412,6 +412,7 @@ extension MeeshyComposerHost {
             viewModel.loadedImages,
             viewModel.loadedVideoURLs,
             viewModel.loadedAudioURLs,
+            viewModel.loadedStickerAnimations,
             documentLanguage,
             composerVisibility.rawValue,
             composerVisibilityUserIds,

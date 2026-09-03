@@ -342,6 +342,7 @@ extension StoryComposerView {
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
+            viewModel.loadedStickerAnimations,
             storyLanguage, servedVisibility, ids, viewModel.draftId, viewModel.references,
             Self.accessibilityHandoff(from: accessibilityStore),
             Self.publishedType(requested: publishTrigger?.requestedTargetType,

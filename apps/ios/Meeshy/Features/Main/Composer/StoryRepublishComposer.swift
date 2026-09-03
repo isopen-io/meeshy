@@ -98,7 +98,7 @@ struct StoryRepublishComposer: View {
             // y écrire autre chose serait une seconde vérité.
             initialVisibility: source.story.visibility ?? PostVisibility.private.rawValue,
             hydration: .repostingStory(source.story, authorHandle: source.authorHandle),
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                 // `repostOfId` descend jusqu'à `createStory` par la file de
                 // publication : sans lui la republication naîtrait sans lien
                 // vers son original, donc sans attribution ni crédit de vues.
@@ -110,6 +110,7 @@ struct StoryRepublishComposer: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,

@@ -1400,6 +1400,10 @@ extension StoryComposerView {
             // La version sert de cookie au Coordinator pour ne déclencher
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
+            // #3956 — un GIF collé anime DANS le composer : sans ce fil,
+            // l'aperçu montrerait une image fixe de ce que la publication
+            // envoie animé.
+            loadedStickerAnimations: viewModel.loadedStickerAnimations,
             loadedImagesVersion: viewModel.loadedImagesVersion,
             loadedAudioURLs: viewModel.loadedAudioURLs,
             canvasCornerRadius: cornerRadius,

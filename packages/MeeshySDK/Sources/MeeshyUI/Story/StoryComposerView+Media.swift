@@ -108,10 +108,14 @@ extension StoryComposerView {
             }, onLibraryStickerSelected: { item in
                 // S2 — le bitmap suffit à la pose : il vit en local sous l'id
                 // de l'élément jusqu'à ce que la publication le téléverse et
-                // remplisse `postMediaId`.
+                // remplisse `postMediaId`. Les octets animés voyagent AVEC lui
+                // (#3956) : le bitmap n'est que la première image d'un GIF, et
+                // poser sans eux figerait sur place ce que la bibliothèque
+                // affichait en mouvement.
                 viewModel.addSticker(image: item.thumbnail,
                                      provider: StoryStickerLibraryItem.provider,
-                                     scale: StorySticker.posedScale)
+                                     scale: StorySticker.posedScale,
+                                     animatedData: item.animatedData)
                 HapticFeedback.light()
             }, onTemplateSelected: { gabarit, emplacements in
                 // L'échelle vient du GABARIT — `addSticker(template:slots:)` la

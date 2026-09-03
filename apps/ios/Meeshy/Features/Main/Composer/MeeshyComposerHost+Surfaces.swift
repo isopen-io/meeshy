@@ -382,6 +382,7 @@ extension MeeshyComposerHost {
             aspectRatio: viewModel.currentCanvasRatio,
             plateauTint: tint.color,
             sceneImages: viewModel.loadedImages,
+            sceneStickerAnimations: viewModel.loadedStickerAnimations,
             sceneImagesVersion: viewModel.loadedImagesVersion,
             onItemTapped: { id, kind in
                 selectedSceneItemId = id
@@ -773,6 +774,7 @@ extension MeeshyComposerHost {
                 : EmbeddedSceneInspector(viewModel: viewModel, kind: selectedSceneItemKind)
                     .map { AnyView($0) },
             sceneImages: viewModel.loadedImages,
+            sceneStickerAnimations: viewModel.loadedStickerAnimations,
             sceneImagesVersion: viewModel.loadedImagesVersion,
             // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
             // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —

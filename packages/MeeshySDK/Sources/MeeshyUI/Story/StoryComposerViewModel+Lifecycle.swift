@@ -99,6 +99,7 @@ extension StoryComposerViewModel {
         closingEffect = nil
         retiredImages = [:]
         retiredVideoURLs = [:]
+        retiredStickerAnimations = [:]
         retiredAudioURLs = [:]
         retiredSlideImages = [:]
         loadedImages = [:]

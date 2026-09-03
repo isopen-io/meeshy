@@ -70,6 +70,23 @@ public final class StoryStickerLayer: CALayer {
         return keys
     }
 
+    /// **Les octets ANIMÉS qui servent ce sticker, s'il y en a** (#3956) —
+    /// jumelle exacte de `bitmapCacheKeys`, et pour la même raison : le
+    /// composer range sous l'id de l'ÉLÉMENT, un lecteur sous le `postMediaId`.
+    ///
+    /// Elle est PURE et publique parce que la décision — « ces octets-ci
+    /// animent ce sticker-là » — se prouve sans monter une couche ; le reste
+    /// (décoder, poser une `CAKeyframeAnimation`) est du Core Animation qu'un
+    /// témoin ne peut qu'observer indirectement.
+    public nonisolated static func animatedBytes(for sticker: StorySticker,
+                                                 in animations: [String: Data]) -> Data? {
+        guard !animations.isEmpty else { return nil }
+        return bitmapCacheKeys(for: sticker)
+            .lazy
+            .compactMap { animations[$0] }
+            .first
+    }
+
     /// - Parameters:
     ///   - imageCache: bitmaps que le lecteur a déjà en main. Un
     ///     `ComposerImageCacheReader` (composer, cover, export) est lu de façon
@@ -112,6 +129,16 @@ public final class StoryStickerLayer: CALayer {
            taille.width > 0, taille.height > 0 {
             contents = image?.cgImage
             bounds = CGRect(origin: .zero, size: taille)
+        } else if let decoded = Self.synchronousAnimation(
+                    for: sticker, imageCache: imageCache,
+                    maxPixelSize: Self.decodeBudget(side: renderedSide, scale: renderScale)) {
+            // **Un sticker COLLÉ anime dès le composer** (#3956). Les octets
+            // priment sur le bitmap parce qu'ils le CONTIENNENT : `loadedImages`
+            // n'en porte que la première image. L'ordre inverse aurait peint
+            // cette image-là et l'aurait laissée là, sans qu'aucun site rougisse
+            // — la panne muette du #4925, rejouée sur le chemin synchrone.
+            bounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+            stampAnimated(decoded)
         } else if let bitmap = Self.synchronousBitmap(for: sticker, imageCache: imageCache) {
             // **Un sticker IMAGE se PEINT** (#4852). Le bitmap collé s'ajuste
             // dans le carré du sticker sans déformation — la règle de
@@ -147,7 +174,12 @@ public final class StoryStickerLayer: CALayer {
         // additionally flag the layer for the GPU rasterization fast path.
         // Une décoration ANIMÉE reste rasterisable : la pose (#4821) est une
         // transformation de la couche, pas un redessin de son contenu.
-        shouldRasterize = mode == .play && sticker.isStatic
+        // `playsAnimatedContents` est la TROISIÈME condition, et elle n'est pas
+        // décorative : `stampAnimated` retire la rasterisation, et cette ligne —
+        // exécutée APRÈS lui sur le chemin synchrone — la remettrait, figeant le
+        // GIF sur son cache de première image. L'optimisation juste annulerait
+        // la feature, sans erreur nulle part.
+        shouldRasterize = mode == .play && sticker.isStatic && !playsAnimatedContents
         if shouldRasterize { rasterizationScale = renderScale }
     }
 
@@ -166,6 +198,39 @@ public final class StoryStickerLayer: CALayer {
             .lazy
             .compactMap { synchronousReader.images[$0]?.cgImage }
             .first
+    }
+
+    /// Les octets animés qu'un lecteur SYNCHRONE a déjà en main, décodés au
+    /// budget de la couche — `nil` sinon, et `nil` n'est pas un échec : c'est
+    /// le cas nominal d'un sticker fixe, qui garde son chemin.
+    ///
+    /// Le plafond est passé en paramètre plutôt que lu sur `bounds` : à cet
+    /// instant, `configure` n'a pas encore posé la boîte, et décoder N images en
+    /// pleine résolution pour les peindre dans 120 pt coûterait N bitmaps pour
+    /// rien.
+    @MainActor
+    private static func synchronousAnimation(for sticker: StorySticker,
+                                             imageCache: ImageCacheReader?,
+                                             maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
+        guard let synchronousReader = imageCache as? ComposerImageCacheReader,
+              let bytes = animatedBytes(for: sticker, in: synchronousReader.animations),
+              let key = bitmapCacheKeys(for: sticker).first
+        else { return nil }
+        // **Mémorisé** : `configure` est rappelée à chaque mutation de
+        // l'élément — donc à chaque image d'un déplacement. Décoder là ferait
+        // sauter le geste qu'on est en train de faire.
+        return AnimatedImageMemo.decoded(key: key, bytes: bytes, maxPixelSize: maxPixelSize)
+    }
+
+    /// Le plafond de décodage en PIXELS pour une couche qui n'a pas encore de
+    /// boîte. Le plancher à 64 px protège du cas dégénéré — un côté nul rendrait
+    /// un plafond de 0, ImageIO refuserait toute vignette, et le sticker
+    /// n'apparaîtrait jamais **sans erreur nulle part** ; le test de finitude
+    /// protège d'une géométrie dégénérée, `Int(_:)` piégeant sur un NaN.
+    private nonisolated static func decodeBudget(side: CGFloat, scale: CGFloat) -> Int {
+        let pixels = side * scale
+        guard pixels.isFinite, pixels > 0 else { return 64 }
+        return max(64, Int(pixels.rounded()))
     }
 
     /// Chemin ASYNCHRONE — la discipline de `StoryMediaLayer.configureImage` :
@@ -235,6 +300,7 @@ public final class StoryStickerLayer: CALayer {
     @MainActor
     private func stampBitmap(_ bitmap: CGImage) {
         removeAnimation(forKey: Self.animatedContentsKey)
+        playsAnimatedContents = false
         contents = bitmap
         contentsGravity = .resizeAspect
     }
@@ -259,6 +325,10 @@ public final class StoryStickerLayer: CALayer {
     /// superposeraient sur la même couche recyclée par `StoryRendererCache`.
     private static let animatedContentsKey = "meeshy.sticker.animatedContents"
 
+    /// Cette couche joue-t-elle un CONTENU animé ? Lu par la queue de
+    /// `configure` pour ne pas ré-armer la rasterisation par-dessus.
+    private nonisolated(unsafe) var playsAnimatedContents = false
+
     /// **Jouer une image animée sur une COUCHE** (#4925).
     ///
     /// `UIImageView` anime tout seul une `UIImage.animatedImage` ; un `CALayer`,
@@ -278,10 +348,12 @@ public final class StoryStickerLayer: CALayer {
     @MainActor
     private func stampAnimated(_ decoded: AnimatedImageDecoder.Decoded) {
         removeAnimation(forKey: Self.animatedContentsKey)
+        playsAnimatedContents = false
         contents = decoded.frames.first
         contentsGravity = .resizeAspect
 
         guard !UIAccessibility.isReduceMotionEnabled, decoded.frames.count > 1 else { return }
+        playsAnimatedContents = true
 
         // **La rasterisation doit tomber.** `configure` pose
         // `shouldRasterize = mode == .play && sticker.isStatic` : une couche
