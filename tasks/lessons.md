@@ -26836,3 +26836,54 @@ Le discriminant tient en une question, à poser au TEXTE du porteur et non au
 code : *est-ce un indicatif ou un impératif ?* « compte comme un élément » est
 un impératif ; « aucune scène ne se crée » est un indicatif. Le code ne peut pas
 répondre — il est toujours cohérent avec la règle qu'il applique.
+
+## Leçon 496 — Un invariant a deux sens, et c'est presque toujours le second qui manque
+
+`check-v3-pipeline.mjs` gardait « la règle du routeur ne réclame que des
+chemins que la zone SERT ». Impeccable, testé, prouvé rouge sous mutation — et
+aveugle à l'exact contraire : **la zone pouvait servir un écran que la règle ne
+réclame pas**, et rien ne rougissait.
+
+Mesuré le 2026-09-03 : `/stories/:id`, `/post/:id`, `/search`, `/links`,
+`/contacts` et `/notifications` étaient tous servis par `apps/web-v3/app` et
+sur AUCUN chemin de bascule. Six écrans livrés, testés, mesurés — et
+injoignables depuis un navigateur. Le porteur en a conclu que le travail
+n'était pas fait, ce qui était la seule conclusion que la preuve à sa
+disposition autorisait.
+
+**Une garde qui vérifie « tout ce que A déclare existe dans B » ne dit RIEN de
+« tout ce que B contient est déclaré dans A ».** Les deux sens ont l'air d'une
+seule idée quand on l'écrit en français — « A et B sont d'accord » — et ce
+sont deux contrôles. Le premier attrape la déclaration de trop, le second
+l'oubli ; et l'oubli est le défaut nominal, parce qu'il est ce qu'on produit
+en ajoutant quelque chose sans penser à tout ce qui devrait suivre.
+
+La question à poser à tout invariant de correspondance est donc : **« et si
+j'ajoute une ligne DE L'AUTRE CÔTÉ, qui rougit ? »**
+
+## Leçon 497 — Le maillon qui manque n'est pas toujours celui qu'on garde ; parfois il est un cran avant
+
+Ayant trouvé les six écrans injoignables, le réflexe a été d'ajouter leurs
+préfixes à la règle Traefik de staging. **Un invariant existant l'a refusé** —
+`leWorkerLegacySEfface` : le service worker du legacy est enregistré sur
+`scope:'/'` et intercepte la navigation de tout visiteur REVENANT. Réclamer un
+chemin au routeur avant que le worker DÉPLOYÉ sache s'en effacer sert la v3
+aux navigateurs neufs seulement, et le retour arrière prévu y est inerte.
+
+La bascule a donc DEUX marches, dans un seul ordre : déclarer le préfixe dans
+`V3_ZONE_PREFIXES`, **déployer**, puis seulement réclamer au routeur. Le dépôt
+ne peut tenir seul que la première. Le nouvel invariant s'y pose — « le worker
+legacy connaît TOUT ce que la zone sert » — et laisse la seconde à la décision
+de déploiement, gardée par l'invariant existant qui la prend dans l'autre sens.
+Les deux tracent la route complète : servi ⇒ connu du worker ⇒ réclamé.
+
+**Un gate qui refuse un correctif n'est pas un obstacle : c'est le seul
+endroit où une connaissance de déploiement survit à la session qui l'a
+acquise.** Le réflexe — passer outre, « je sais ce que je fais » — aurait
+produit un défaut PIRE que celui qu'on corrige : des écrans qui marchent en
+navigation privée et pas autrement, c'est-à-dire un bogue que le rapporteur ne
+peut pas reproduire.
+
+Corollaire de forme : le prédicat du worker est **exécuté**, jamais recopié
+dans le gate. Une seconde implémentation prétendrait garder la divergence
+qu'elle créerait.
