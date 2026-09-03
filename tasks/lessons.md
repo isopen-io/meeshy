@@ -11779,6 +11779,44 @@ documente une absence d'abonnement, lue comme un abonnement.
 > vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
 > l'autre moitié du piège en place.
 
+### Trois choses DÉCRIVENT le code, et on les lit comme si elles l'ÉTAIENT
+
+Trois formes du même piège, rencontrées dans la même journée (2026-09-03), dont
+deux que j'ai posées moi-même :
+
+| l'artefact | ce qu'on croit lire | ce que c'est |
+|---|---|---|
+| un **corps d'issue** | l'état du code | l'état du code **au jour où il a été écrit** |
+| un **doc-comment** | ce que le code fait | ce que le code faisait **quand le commentaire a été écrit** |
+| une **capture envoyée par le porteur** | l'écran d'aujourd'hui | l'écran **au moment du screenshot** |
+
+Les trois cas :
+
+1. **Le corps d'issue.** J'avais justifié une contrainte de #5018 par une règle du
+   dépôt citée exactement — vraie, mais gouvernant une autre surface (voir la
+   leçon ci-dessous sur la PORTÉE).
+2. **Le doc-comment.** `ComposerSceneSurface` documente l'ordre de sa zone basse
+   comme un escalier des niveaux du modèle. J'ai écrit dans #5036 que l'ordre
+   venait « de l'ordre d'écriture d'un `VStack` » — c'est-à-dire que j'ai décrit
+   une doctrine délibérée comme un accident. La différence n'est pas de style :
+   **un accident se corrige, un renversement se documente.**
+3. **La capture.** Le porteur a envoyé un écran montrant les hashtags visibles
+   pendant qu'une rangée d'outils occupe le bas. La session voisine a mesuré que
+   cette capture **précède le commit `c6d5577cdb`**, qui rend la situation
+   impossible. Mon diagnostic — « la rangée d'options s'intercale » — décrivait
+   un état révolu, et je l'avais lu comme l'état courant.
+
+> **Un écran envoyé par le porteur est DATÉ, comme un corps d'issue.** Devant un
+> défaut montré en image, la première question n'est pas « où est-il dans le
+> code ? » mais **« cette image est-elle encore vraie ? »** — `git log` sur les
+> fichiers concernés depuis l'heure de la capture répond en une commande.
+
+Et le corollaire qui vaut pour les trois : **avant de qualifier un état de
+défaut, chercher s'il est ÉCRIT quelque part.** Un ordre documenté, une règle
+énoncée, un choix justifié en commentaire ne sont pas des accidents ; les traiter
+comme tels fait perdre la raison qu'ils portaient, et laisse derrière soi une
+explication qui dément le code — le piège suivant, pour quelqu'un d'autre.
+
 ### Une règle citée MOT POUR MOT peut être fausse par sa PORTÉE
 
 En écrivant #5018 j'ai justifié une contrainte par une règle du dépôt, citée
