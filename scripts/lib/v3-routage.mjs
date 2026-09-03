@@ -65,6 +65,67 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
   };
 
   // SENS (b) — la règle ne réclame au legacy que des chemins que la zone SERT.
+  // LA RÉCIPROQUE, ET C'EST ELLE QUI MANQUAIT — mais elle se pose sur le
+  // SERVICE WORKER, pas sur le routeur, et la nuance est tout le sujet.
+  //
+  // `theRouterClaimsNothingTheZoneDoesNotServe` garde un sens : la règle ne
+  // réclame rien que la zone ne serve. L'autre sens n'était gardé par personne
+  // — la zone pouvait servir un écran que la règle NE RÉCLAME PAS, et cet
+  // écran restait rendu par le legacy, invisible, sans qu'aucun gate ne
+  // rougisse.
+  //
+  // Mesuré le 2026-09-03 : `/stories/:id`, `/post/:id`, `/search`, `/links`,
+  // `/contacts` et `/notifications` étaient tous servis par `app/` et ABSENTS
+  // de la règle de staging. Six écrans livrés, testés, mesurés — et
+  // injoignables. Le porteur en a conclu que le travail n'était pas fait, ce
+  // qui était la seule conclusion que la preuve à sa disposition autorisait.
+  //
+  // POURQUOI PAS LE ROUTEUR : la bascule d'un écran se fait en DEUX temps, et
+  // `leWorkerLegacySEfface` garde déjà le second. Le worker legacy est
+  // enregistré sur `scope:'/'` et intercepte la navigation de tout visiteur
+  // REVENANT ; réclamer un chemin au routeur avant que le worker déployé sache
+  // s'en effacer sert la v3 aux navigateurs neufs seulement. L'ordre est donc :
+  // déclarer le préfixe dans `V3_ZONE_PREFIXES`, DÉPLOYER, puis réclamer.
+  //
+  // Cet invariant garde la PREMIÈRE marche — la seule que le dépôt puisse
+  // tenir seul. Un écran servi par `app/` et inconnu du worker n'est pas
+  // « pas encore basculé » : il est hors du chemin de bascule, et personne ne
+  // le remarquera. Les deux invariants ensemble tracent la route complète :
+  // servi ⇒ connu du worker (ici) ⇒ réclamé par le routeur
+  // (`leWorkerLegacySEfface`, dans l'autre sens).
+  const leWorkerConnaitToutCeQueLaZoneSert = (world) => {
+    const zone = zoneDuWorker(world.worker);
+    if (zone === null) return [];
+
+    // DEUX ROUTES NE SONT PAS DES ÉCRANS, et les déclarer serait une faute.
+    //
+    //   • `/healthz` est interrogée par le conteneur SUR LUI-MÊME
+    //     (`wget http://0.0.0.0:3300/healthz` dans le healthcheck) : elle ne
+    //     passe jamais par Traefik ni par un navigateur ;
+    //   • la CIBLE d'une réécriture (`/rt/:nom`) se sert par sa SOURCE
+    //     (`/__v3/rt/:nom`), déjà couverte par le préfixe de zone.
+    const ciblesDeReecriture = new Set(REECRITURES_DE_ZONE.map(({ destination }) => routeDeReecriture(destination)));
+    const horsSurface = (url) => url === '/healthz' || ciblesDeReecriture.has(url);
+
+    // Un segment dynamique se teste sur un REPRÉSENTANT : le worker compare des
+    // chemins concrets, comme le navigateur les lui donne.
+    const concret = (url) => url.replace(/\[\.{3}[^\]]+\]/g, 'x/y').replace(/\[[^\]]+\]/g, 'x');
+
+    return world.zone.routeUrls
+      .filter((url) => !url.startsWith(V3_PATH_PREFIX))
+      .filter((url) => !horsSurface(url))
+      // Le prédicat du worker est EXÉCUTÉ, jamais réécrit : une seconde
+      // implémentation prétendrait garder la divergence qu'elle créerait.
+      .filter((url) => !zone.couvre(concret(url)))
+      .map(
+        (url) =>
+          `${V3_DIRECTORY}/app sert ${url}, que V3_ZONE_PREFIXES du worker legacy ne couvre pas : ` +
+          `l'écran existe et il est testé, mais il n'est sur AUCUN chemin de bascule — ` +
+          `le worker legacy continuera de l'intercepter chez tout visiteur revenant, ` +
+          `et le routeur ne pourra pas le réclamer sans le servir aux seuls navigateurs neufs`,
+      );
+  };
+
   const theRouterClaimsNothingTheZoneDoesNotServe = (dep) => (world) => {
     const rule = v3RuleOf(world, dep);
     if (rule === null) return [];
@@ -359,6 +420,7 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
   return {
     noRootServedAssetEscapesTheZone,
     theRouterClaimsNothingTheZoneDoesNotServe,
+    leWorkerConnaitToutCeQueLaZoneSert,
     everyZoneRewriteLandsOnAServedRoute,
     leWorkerLegacySEfface,
     aucunPrefixeNeVoleUneRouteVoisine,

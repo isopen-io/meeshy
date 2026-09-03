@@ -5,8 +5,9 @@ import {
   documentDeLaStory,
   documentIndisponible,
   type EtatDeLaStory,
-} from '@/app/(public)/stories/[id]/story-vue';
-import { storyLue, voisinage, type Story, type Voisine } from '@/lib/api/publication';
+} from '@/app/(public)/partage-vue';
+import { GENRE_STORY } from '@/lib/contenu/partage';
+import { partageLu, voisinage, type Story, type Voisine } from '@/lib/api/publication';
 
 /**
  * Gate B (§ 9.5) sur la STORY : « 0 violation `axe` `serious`/`critical` ».
@@ -39,7 +40,7 @@ const ecris = (html: string): void => {
 };
 
 const story = (attributs: Record<string, unknown> = {}, langues: readonly string[] = ['fr']): Story => {
-  const lue = storyLue({
+  const lue = partageLu({ genre: 'STORY',
     brut: {
       id: 's1',
       type: 'STORY',
@@ -68,6 +69,7 @@ const VOISINES: readonly Voisine[] = [
 ];
 
 const etat = (lue: Story, visibles: readonly Voisine[] = []): EtatDeLaStory => ({
+  genre: GENRE_STORY,
   story: lue,
   voisinage: voisinage({ story: lue, visibles }),
   maintenant: MAINTENANT,
@@ -105,12 +107,12 @@ describe('la story — gate B', () => {
   });
 
   it('ne porte aucune violation grave, invitation du visiteur sans session', async () => {
-    ecris(documentDeLInvitation({ id: 's1' }));
+    ecris(documentDeLInvitation({ genre: GENRE_STORY, id: 's1' }));
     expect(await graves()).toEqual([]);
   });
 
   it('ne porte aucune violation grave, story indisponible', async () => {
-    ecris(documentIndisponible());
+    ecris(documentIndisponible(GENRE_STORY));
     expect(await graves()).toEqual([]);
   });
 });

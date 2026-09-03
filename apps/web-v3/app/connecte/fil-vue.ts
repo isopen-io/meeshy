@@ -1,4 +1,3 @@
-import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
@@ -19,6 +18,7 @@ import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
 import { BANDEAUX, compteDeParticipants, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE, presenceServie } from '@/lib/contenu/fil';
+import { nomDeLangue } from '@/lib/contenu/langues';
 import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
@@ -157,11 +157,6 @@ export const droitsDePiece = (porte: Porte): DroitsDePiece =>
   porte.genre === 'membre'
     ? { fichiers: true, images: true }
     : { fichiers: porte.droits?.canSendFiles ?? false, images: porte.droits?.canSendImages ?? false };
-
-const nomDeLangue = (code: string): string => {
-  const info = getLanguageInfo(code);
-  return info.nativeName ?? info.name;
-};
 
 const retour = (porte: Porte): string =>
   porte.genre === 'membre'
