@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { feuilleQuiMonte } from './atomes-feuille';
+
 import { apercuDeLigne, PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
 
 /**
@@ -97,4 +99,39 @@ ${apercuDeLigne('.liste')}
 @media (min-width:600px){
 .defaite .action{flex:none}
 }
+`);
+
+/**
+ * LA FEUILLE « NOUVELLE CONVERSATION » (`sheet:conv`, #5072) — servie
+ * SEULEMENT dans l'état `/chats?nouvelle`.
+ *
+ * Elle n'est pas dans `FEUILLE_DE_LA_LISTE` : ce qu'un écran n'affiche pas, il
+ * ne le paie pas (charte règle 7). Sa géométrie vient de l'atome
+ * (`feuilleQuiMonte`), partagé avec le panneau de profil et la feuille des
+ * liens — trois surimpressions, une seule géométrie.
+ *
+ * LA LISTE DES CONTACTS DÉFILE DANS LA FEUILLE, pas la feuille entière : un
+ * carnet de quarante personnes pousserait sinon le bouton « Créer » hors de
+ * vue, et le lecteur ne saurait pas qu'il existe. Le pied reste COLLANT pour la
+ * même raison.
+ *
+ * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1).
+ */
+export const FEUILLE_DE_LA_NOUVELLE_CONV = feuilleQuiMonte('nouvelle-conv') + compacte(`
+dialog.nouvelle-conv h2{margin:0 0 var(--space-1);font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
+dialog.nouvelle-conv .tete{display:flex;align-items:flex-start;gap:var(--space-3)}
+dialog.nouvelle-conv .tete .dit{flex:1;min-width:0}
+dialog.nouvelle-conv .fermer{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);border:var(--stroke-hair) solid var(--color-border-strong);color:var(--color-text)}
+dialog.nouvelle-conv .fermer svg{width:var(--glyph);height:var(--glyph)}
+dialog.nouvelle-conv form{display:flex;flex-direction:column;gap:var(--space-4);margin:var(--space-4) 0 0}
+dialog.nouvelle-conv .champ{display:flex;flex-direction:column;gap:var(--space-2)}
+dialog.nouvelle-conv .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
+dialog.nouvelle-conv .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text);font:inherit}
+dialog.nouvelle-conv .aide{font-size:var(--text-sm);color:var(--color-text-muted)}
+dialog.nouvelle-conv .groupe{display:flex;flex-direction:column;gap:var(--space-2);margin:0;padding:0;border:0}
+dialog.nouvelle-conv legend{padding:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)}
+dialog.nouvelle-conv .carnet{display:flex;flex-direction:column;gap:var(--space-2);max-height:40dvh;overflow-y:auto;margin:0;padding:0;list-style:none}
+dialog.nouvelle-conv .coche{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg)}
+dialog.nouvelle-conv .pied{position:sticky;bottom:0;padding:var(--space-3) 0 0;background:var(--color-surface-raised)}
+dialog.nouvelle-conv .pied .action{width:100%}
 `);

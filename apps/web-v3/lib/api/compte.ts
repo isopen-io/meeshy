@@ -738,3 +738,78 @@ export const creeUnLien = async ({
 
   return { genre: 'fait', identifiant };
 };
+
+/**
+ * CRÉER UNE CONVERSATION — `POST /conversations`
+ * (`services/gateway/src/routes/conversations/core-lifecycle.ts:73`).
+ *
+ * `type` EST TOUJOURS `group`, et c'est la feuille qui le décide, pas
+ * l'appelant : les cinq types du schéma ne sont pas cinq choix offerts au
+ * lecteur (`global` demande ADMIN, `broadcast` un droit de diffusion, `direct`
+ * part d'une personne et non d'un formulaire). Un seul type sert ici, donc un
+ * seul est écrit.
+ *
+ * LE LECTEUR NE FIGURE JAMAIS DANS `participantIds`. La passerelle refuse
+ * explicitement qu'on s'y inclue (« Vous ne devez pas vous inclure dans la
+ * liste des participants ») — elle vous ajoute elle-même. C'est mesuré sur le
+ * handler, pas déduit.
+ */
+export type ConversationACreer = {
+  readonly title: string;
+  readonly description?: string;
+  readonly participantIds?: readonly string[];
+};
+
+export type ConversationCreee =
+  | { readonly genre: 'faite'; readonly id: string }
+  | { readonly genre: 'refus'; readonly message: string }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const creeUneConversation = async ({
+  jeton,
+  champs,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly champs: ConversationACreer;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<ConversationCreee> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}${CHEMIN_CONVERSATIONS}`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'group', ...champs }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (!reponse.ok) {
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '' };
+  }
+
+  // La charge sert la conversation à la racine de `data` ou sous
+  // `data.conversation` selon la forme du schéma de réponse : les deux sont
+  // acceptées, et l'ABSENCE d'identifiant est une panne — sans lui, il n'y a
+  // nulle part où mener le lecteur.
+  const donnees = objet(enveloppe?.data);
+  const id = chaine(donnees?.id) ?? chaine(objet(donnees?.conversation)?.id);
+  if (id === null) return { genre: 'panne' };
+
+  return { genre: 'faite', id };
+};

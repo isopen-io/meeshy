@@ -10,14 +10,16 @@ import {
   CHATS,
   CONFIRMATIONS,
   GESTES,
+  NOUVELLE_CONVERSATION,
   libelleDuGeste,
   type ConfirmationDeGeste,
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
+import type { Contact } from '@/lib/api/contacts';
 
 import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
-import { FEUILLE_DE_LA_LISTE } from './liste-feuille';
+import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from './liste-feuille';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { adresseDuProfil, surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { apercuAuPrisme, avatar, carteVide, quand, versLeFil } from './vue';
@@ -236,7 +238,46 @@ export type EtatDesChats = {
    * rien : aucune requête de plus sur une lecture ordinaire.
    */
   readonly profil?: ProfilDeLaSurimpression | null;
+  /**
+   * LA FEUILLE « NOUVELLE CONVERSATION » (`?nouvelle`, `sheet:conv` #5072) —
+   * un ÉTAT de cette adresse, comme `?profil=`. `undefined` — le cas nominal —
+   * ne rend rien et ne coûte aucune requête : le carnet de contacts n'est
+   * demandé que dans cet état.
+   */
+  readonly nouvelle?: EtatDeLaNouvelleConv;
 };
+
+/** Ce que la feuille de création connaît — son carnet, sa saisie, son refus. */
+export type EtatDeLaNouvelleConv = {
+  readonly contacts: readonly Contact[];
+  readonly nom: string;
+  readonly description: string;
+  readonly invites: ReadonlySet<string>;
+  readonly motif: string | null;
+};
+
+export const CHAMPS_DE_LA_NOUVELLE_CONV = {
+  /**
+   * LE MARQUEUR EXPLICITE. `/chats` reçoit DEUX familles de POST — les gestes
+   * d'une ligne et les actions du panneau de profil — et la porte les
+   * distingue aujourd'hui par ce qu'elles PORTENT. Une troisième famille
+   * reconnue « parce qu'elle a un champ `nom` » se ferait voler par la
+   * première qui en gagnerait un. Le marqueur dit ce que le formulaire EST.
+   */
+  quoi: 'quoi',
+  marque: 'nouvelle-conversation',
+  nom: 'nom',
+  description: 'description',
+  invite: 'invite',
+} as const;
+
+export const NOUVELLE_CONV_NEUVE = (contacts: readonly Contact[]): EtatDeLaNouvelleConv => ({
+  contacts,
+  nom: '',
+  description: '',
+  invites: new Set<string>(),
+  motif: null,
+});
 
 export const ADRESSE_DE_LA_LISTE = '/chats';
 
@@ -280,6 +321,7 @@ const corps = (etat: EtatDesChats): string =>
   '<div class="bonjour">' +
   `<h1>${echappe(CHATS.titre)}</h1>` +
   `<p>${echappe(CHATS.accroche)}</p>` +
+  `<a class="action primaire" href="${ADRESSE_DE_LA_LISTE}?nouvelle">${echappe(NOUVELLE_CONVERSATION.ouvrir)}</a>` +
   '</div>' +
   journal(etat) +
   `<section class="liste" aria-label="${echappe(CHATS.titre)}">` +
@@ -291,6 +333,71 @@ const corps = (etat: EtatDesChats): string =>
         )
         .join('')}</ul>`) +
   '</section>';
+
+
+/**
+ * LA FEUILLE « NOUVELLE CONVERSATION » — servie par le SERVEUR dans l'état
+ * `/chats?nouvelle`, en `<dialog open data-retour>`.
+ *
+ * DEUX GESTES, ET C'EST LE CRITÈRE DE FIN : ouvrir, soumettre. Le nom suffit ;
+ * cocher des contacts est facultatif, et une conversation qui naît vide se
+ * remplit ensuite par un lien de partage.
+ *
+ * ÉCHAP LA FERME ICI, contrairement à la feuille des liens — et la différence
+ * n'est pas un choix de plus, c'est un FAIT : `/chats` sert déjà son module de
+ * participation (le temps réel de la liste), donc `plein-ecran.ts` y court, et
+ * l'élévation est GRATUITE. `/links` n'expédie aucun script, et n'en charge pas
+ * un pour une touche. La même surimpression, deux écrans, deux niveaux
+ * d'amélioration — le socle, lui, est le même : trois liens de fermeture.
+ *
+ * LE CARNET DÉFILE DANS LA FEUILLE. Quarante contacts pousseraient sinon le
+ * bouton « Créer » hors de vue, et le lecteur ne saurait pas qu'il existe.
+ */
+const nouvelleConversation = (etat: EtatDeLaNouvelleConv): string => {
+  const carnet =
+    etat.contacts.length === 0
+      ? `<p class="aide">${echappe(NOUVELLE_CONVERSATION.sansContact)}</p>`
+      : `<ul class="carnet">${etat.contacts
+          .map(
+            (contact) =>
+              `<li><label class="coche"><input type="checkbox" name="${CHAMPS_DE_LA_NOUVELLE_CONV.invite}" value="${echappe(contact.personne.id)}"${etat.invites.has(contact.personne.id) ? ' checked' : ''}>${echappe(contact.nom)}</label></li>`,
+          )
+          .join('')}</ul>`;
+
+  return (
+    `<a class="voile" href="${ADRESSE_DE_LA_LISTE}" aria-label="${echappe(NOUVELLE_CONVERSATION.fermer)}"></a>` +
+    '<dialog class="nouvelle-conv" open aria-modal="true" aria-labelledby="titre-de-la-conv" ' +
+    `data-retour="${ADRESSE_DE_LA_LISTE}">` +
+    `<a class="poignee" href="${ADRESSE_DE_LA_LISTE}" aria-label="${echappe(NOUVELLE_CONVERSATION.fermer)}"></a>` +
+    '<div class="tete">' +
+    `<div class="dit"><h2 id="titre-de-la-conv">${echappe(NOUVELLE_CONVERSATION.titre)}</h2></div>` +
+    `<a class="fermer" href="${ADRESSE_DE_LA_LISTE}" aria-label="${echappe(NOUVELLE_CONVERSATION.fermer)}">${svgDuSprite('ph-x')}</a>` +
+    '</div>' +
+    (etat.motif === null
+      ? ''
+      : `<p class="alerte" role="alert">${echappe(etat.motif === '' ? NOUVELLE_CONVERSATION.refuse : `${NOUVELLE_CONVERSATION.refuse} ${etat.motif}`)}</p>`) +
+    '<form method="post">' +
+    `<input type="hidden" name="${CHAMPS_DE_LA_NOUVELLE_CONV.quoi}" value="${CHAMPS_DE_LA_NOUVELLE_CONV.marque}">` +
+    '<p class="champ">' +
+    `<label for="c-nom">${echappe(NOUVELLE_CONVERSATION.nom)}</label>` +
+    `<input id="c-nom" name="${CHAMPS_DE_LA_NOUVELLE_CONV.nom}" type="text" required value="${echappe(etat.nom)}" autocomplete="off">` +
+    `<span class="aide">${echappe(NOUVELLE_CONVERSATION.nomAide)}</span>` +
+    '</p>' +
+    '<p class="champ">' +
+    `<label for="c-description">${echappe(NOUVELLE_CONVERSATION.description)}</label>` +
+    `<input id="c-description" name="${CHAMPS_DE_LA_NOUVELLE_CONV.description}" type="text" value="${echappe(etat.description)}" autocomplete="off">` +
+    `<span class="aide">${echappe(NOUVELLE_CONVERSATION.descriptionAide)}</span>` +
+    '</p>' +
+    '<fieldset class="groupe">' +
+    `<legend>${echappe(NOUVELLE_CONVERSATION.contacts)}</legend>` +
+    `<span class="aide">${echappe(NOUVELLE_CONVERSATION.contactsAide)}</span>` +
+    carnet +
+    '</fieldset>' +
+    `<p class="pied"><button type="submit" class="action primaire">${echappe(NOUVELLE_CONVERSATION.creer)}</button></p>` +
+    '</form>' +
+    '</dialog>'
+  );
+};
 
 /**
  * LA SURIMPRESSION — le profil d'un participant, ouvert depuis une ligne de
@@ -323,13 +430,23 @@ const surimpression = (etat: EtatDesChats): string => {
 
 export const documentDesChats = (etat: EtatDesChats): string => {
   const dessus = surimpression(etat);
+  // DEUX SURIMPRESSIONS, JAMAIS EN MÊME TEMPS : `?profil=` et `?nouvelle` sont
+  // deux états de la même adresse. La feuille de création l'emporte quand les
+  // deux sont demandés — c'est celle que le lecteur vient d'ouvrir.
+  const creation = etat.nouvelle === undefined ? '' : nouvelleConversation(etat.nouvelle);
+  const surimpose = creation === '' ? dessus : creation;
+
   return documentDuSite({
     titre: `${CHATS.titre} — Meeshy`,
     description: CHATS.accroche,
-    feuille: FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + (dessus === '' ? '' : FEUILLE_DU_PROFIL),
+    feuille:
+      FEUILLE_CONNECTEE +
+      FEUILLE_DE_LA_LISTE +
+      (dessus === '' || creation !== '' ? '' : FEUILLE_DU_PROFIL) +
+      (creation === '' ? '' : FEUILLE_DE_LA_NOUVELLE_CONV),
     corps: corps(etat),
     retour: true,
-    surimpression: dessus,
+    surimpression: surimpose,
     attributsDuMain: attributsDeParticipation(etat),
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
