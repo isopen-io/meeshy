@@ -20,6 +20,22 @@ struct ComposerSceneCardLeadingKey: PreferenceKey {
     }
 }
 
+/// **Le letterbox BAS du dessin, remonté aux frères** (#5036) — la jumelle
+/// verticale de `ComposerSceneCardLeadingKey`, et pour la même raison.
+///
+/// La carte se centre dans la hauteur qu'on lui donne : le vide sous elle
+/// n'est pas une marge, c'est une CONSÉQUENCE du ratio et de la place. Un
+/// frère de la pile ne peut pas le calculer — seulement le recevoir.
+///
+/// `max` en réduction, comme sa jumelle : une seule vue le publie, et un zéro
+/// venu d'un frère muet ne doit pas écraser la mesure.
+struct ComposerSceneCardBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - Le son de fond, EN TÊTE de la scène (#5001, dépouillé au #5011)
 
 /// **La note, le spectre, le crédit et la durée — sans capsule.**

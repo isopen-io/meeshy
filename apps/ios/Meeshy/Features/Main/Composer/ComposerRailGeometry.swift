@@ -104,6 +104,49 @@ nonisolated enum ComposerRailGeometry {
         return max(0, (overlay.height - dessin.height) / 2)
     }
 
+    /// **De combien le pied des références doit REMONTER** (#5036).
+    ///
+    /// > Directive porteur 2026-09-03 : « les hashtag et mention doivent être
+    /// > **directement en bas de la scene**, aligné comme le son de fond ».
+    ///
+    /// Le pied flottait à 77 pt sous le bord bas du dessin (mesuré au
+    /// simulateur, iPhone 16 Pro, 9:16). **Ce n'était ni une marge ni un
+    /// espacement de pile** : le canvas est `maxHeight: .infinity` et la carte,
+    /// ajustée à son ratio, s'y CENTRE — les 77 points sont la moitié basse du
+    /// letterbox, et rien ne les occupe. Un pied posé au bas de la FRAME cesse
+    /// donc de dire à quoi il se rapporte, exactement comme le rail de #4119 et
+    /// la trace du son de #5017.
+    ///
+    /// **La gouttière est SOUSTRAITE, jamais ajoutée après coup** : le pied doit
+    /// respirer sous la carte comme la trace du son respire au-dessus (6 pt), et
+    /// remonter de la totalité du letterbox le collerait au dessin.
+    ///
+    /// **Le plancher à zéro n'est pas une précaution, c'est le cas iPad.** Dès
+    /// que la carte est contrainte par la HAUTEUR — écran large, format non
+    /// 9:16 — le letterbox vaut zéro : il n'y a rien à remonter, et une remontée
+    /// négative ferait chevaucher le pied avec la rangée qui le suit. La même
+    /// borne rend l'appel sûr quand la gouttière dépasse le letterbox disponible.
+    static func referencesLift(cardBottomInset: CGFloat, gutter: CGFloat) -> CGFloat {
+        max(0, cardBottomInset - gutter)
+    }
+
+    /// Ce que la REMONTÉE laisse entre le dessin et le pied — six points, le
+    /// même nombre que celui dont la trace du son se sépare du bord haut
+    /// (`ComposerSceneSoundHeader`, `.padding(.bottom, 6)`) : le porteur
+    /// demande explicitement l'alignement sur elle.
+    ///
+    /// **Ce n'est PAS l'écart final, et le confondre le doublerait.** Le pied
+    /// est un frère de la pile, dont l'espacement vaut 8 pt ; la trace du son
+    /// est un OVERLAY, qui n'en paie aucun. L'écart mesuré au simulateur
+    /// (iPhone 16 Pro, 9:16, un hashtag posé) est donc :
+    ///
+    ///     bas du dessin 690  →  pied 704  =  14 pt   (6 ici + 8 de pile)
+    ///
+    /// contre **77 pt** avant ce lot. Qui voudrait porter l'écart final à une
+    /// autre valeur doit retirer les 8 points de la pile du nombre visé, pas
+    /// les ajouter ici.
+    static let referencesGutter: CGFloat = 6
+
     /// **Ce qui sépare le bord GAUCHE de la frame du bord gauche du DESSIN**
     /// (#5011) — le jumeau horizontal de `sceneBottomInset`, et pour la même
     /// raison.
