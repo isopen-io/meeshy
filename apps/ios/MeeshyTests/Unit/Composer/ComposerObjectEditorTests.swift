@@ -233,8 +233,12 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertFalse(code.contains("expandedTool"),
                        "L'écran ne doit dépendre d'AUCUN outil déplié du ViewModel : c'est "
                        + "cette condition qui rendait la zone basse vide pendant l'édition.")
-        XCTAssertTrue(code.contains("ComposerObjectEditorDisclosure"),
-                      "Le dépliage LOCAL passe par sa règle — voir #4842.")
+        // **#4936 — la règle a changé de nature, pas d'intention.** Le dépliage
+        // local est devenu une SÉLECTION de rail : la loi doit toujours vivre
+        // dans une règle nommée, jamais dans un `if` du corps de vue, et c'est
+        // exactement ce que ce témoin garde depuis #4842. Seul son sujet bouge.
+        XCTAssertTrue(code.contains("ComposerObjectEditorRail"),
+                      "La sélection de l'outil passe par sa règle — #4842, puis #4936.")
     }
 
     /// **#4850 — l'aperçu plein écran n'ENCADRE plus l'objet.**

@@ -1058,6 +1058,7 @@ struct PostDetailView: View {
                     allAttachments: attachments,
                     startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                     accentColor: accentColor,
+                    captionServings: Self.captionServings(for: post),
                     captionMap: SocialMediaCaption.map(
                         for: post.media, carrierText: post.displayContent
                     ),
@@ -1711,6 +1712,18 @@ EngagementGlyph(
     /// métadonnées Now Playing (nom/avatar/date/id) au post EXTÉRIEUR — même
     /// famille de bug que le snapshot d'auteur figé côté citation (commit
     /// `656d0b7e4`, "fix(gateway): fige l'auteur dans le snapshot d'un post cité").
+    /// **#4934 — même bascule qu'en carte** : un même contenu ne peut pas offrir
+    /// une langue dans le fil et la perdre au détail.
+    ///
+    /// EXTRAIT du corps de vue, et pas par goût : posée en ligne dans le
+    /// `fullScreenCover`, l'expression faisait dépasser le vérificateur de types
+    /// (« unable to type-check this expression in reasonable time »). `body` est
+    /// déjà l'une des plus grosses expressions du fichier ; tout ce qu'on peut
+    /// en sortir doit en sortir.
+    static func captionServings(for post: FeedPost) -> [String: SocialMediaCaptionServing] {
+        SocialMediaCaption.serving(for: post.media, carrier: .from(post: post))
+    }
+
     struct DetailMediaAuthor {
         let id: String
         let author: String

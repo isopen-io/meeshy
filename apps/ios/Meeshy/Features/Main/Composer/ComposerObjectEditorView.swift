@@ -61,8 +61,16 @@ struct ComposerObjectEditorView: View {
     /// ramène pas. (Son identifiant n'est pas cité ici : une garde de source
     /// l'interdit dans ce fichier, et un doc-comment qui le nomme la fait
     /// rougir aussi sûrement qu'un appel — mesuré.)
-    @State private var openedSection: ComposerObjectEditorSection? =
-        ComposerObjectEditorDisclosure.initiallyOpened
+    /// **L'outil dont le bas montre les options — NON optionnel** (#4936).
+    ///
+    /// Le point d'interrogation d'hier n'était pas un détail : il disait
+    /// « tout replié », un état que la liste dépliante rendait UTILE (la
+    /// hauteur revenait à la scène). Dans un rail, refermer ne rend rien — le
+    /// rail occupe le couloir, pas le bas — et un `nil` y viderait la zone
+    /// basse, c'est-à-dire rejouerait le défaut que cet écran existe pour
+    /// fermer. Le type porte donc l'invariant : le vide est irreprésentable.
+    @State private var selectedTool: ComposerObjectEditorSection =
+        ComposerObjectEditorRail.initiallySelected
 
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
@@ -88,10 +96,21 @@ struct ComposerObjectEditorView: View {
         max(1, viewModel.currentSlide.duration)
     }
 
+    /// **L'anatomie du PLATEAU, ici aussi** (#4936, directive porteur
+    /// 2026-09-03). Quatre zones, les mêmes que la surface de scène : le sujet
+    /// en haut, les outils à gauche, l'historique à droite, les options en bas.
+    ///
+    /// Le sujet ne défile plus hors de l'écran quand on ouvre un réglage —
+    /// c'était le coût de la liste dépliante, payé au moment précis où l'on
+    /// regarde ce qu'on règle.
     var body: some View {
         VStack(spacing: 0) {
             header
-            scene
+            HStack(alignment: .center, spacing: 0) {
+                toolRail
+                scene
+                historyRail
+            }
             options
         }
         .background(plateauTint.ignoresSafeArea())
@@ -205,6 +224,60 @@ struct ComposerObjectEditorView: View {
         .layoutPriority(1)
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
+    }
+
+    // MARK: - Les deux rails, dans les couloirs
+
+    /// **Le rail d'OUTILS, à gauche** (#4936) — la place que le plateau donne à
+    /// ce qui agit. Il défile : dix entrées ne tiennent pas dans la hauteur que
+    /// la scène laisse, et les tronquer en cacherait une sans le dire.
+    private var toolRail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 6) {
+                ForEach(ComposerObjectEditorRail.entries, id: \.self) { entree in
+                    Button { selectedTool = entree } label: {
+                        Image(systemName: ComposerObjectEditorRail.symbolName(entree))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
+                            .foregroundStyle(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                             ? Color.white : Color.white.opacity(0.55))
+                            .frame(width: 44, height: 40)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                          ? MeeshyColors.brandPrimary.opacity(0.30)
+                                          : Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))
+                    .accessibilityAddTraits(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
+                                            ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(width: 52)
+    }
+
+    /// **L'historique, à DROITE** — et c'est `ComposerTrailingRail`, le composant
+    /// même que la surface de scène monte.
+    ///
+    /// Le réemployer n'est pas une économie : c'est ce qui rend la promesse
+    /// « au même endroit » VÉRIFIABLE. Deux rails écrits séparément auraient
+    /// dérivé sur le glyphe, la taille ou l'ordre, et personne n'aurait rougi —
+    /// ce sont des jetons, pas des signatures.
+    ///
+    /// `actions: []` et pas de `onAddSlide` : cet écran règle UN objet, il ne
+    /// crée pas de slide et n'empile rien. Le rail se réduit donc à ce que
+    /// l'auteur peut vraiment défaire ici, et disparaît si rien ne l'est.
+    private var historyRail: some View {
+        ComposerTrailingRail(
+            actions: [],
+            plateauTint: plateauTint,
+            onUndo: viewModel.canUndoGlobal ? { viewModel.undoGlobal() } : nil,
+            onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil
+        )
+        .frame(width: 52)
     }
 
     // MARK: - Toutes les options, empilées
@@ -384,59 +457,31 @@ struct ComposerObjectEditorView: View {
 
     // MARK: - Le gabarit d'une section
 
-    /// **Une section, son titre, et l'état de son dépliage** (#4842).
+    /// **Ce que le BAS montre — l'outil sélectionné, et lui seul** (#4936).
     ///
-    /// `DisclosureGroup` plutôt qu'un chevron maison, pour une raison qui n'est
-    /// pas la commodité : il ANNONCE « développé »/« replié » à VoiceOver, dans
-    /// les sept langues, sans qu'aucune clé de catalogue soit écrite. Un
-    /// chevron dessiné à la main ne dit rien à personne.
+    /// Hier un `DisclosureGroup` : la rangée portait le titre ET la bascule, et
+    /// ouvrir la dernière section poussait la scène hors de l'écran. Le rail a
+    /// pris la bascule ; il ne reste ici que le titre et le contenu.
     ///
-    /// Le `set` du binding IGNORE la valeur que SwiftUI lui passe et demande à
-    /// la règle. Ce n'est pas une négligence : `opened(after:from:)` rend le
-    /// même verdict (taper l'ouverte ferme, taper une autre bascule) ET tient
-    /// la promesse qui compte — jamais deux ouvertes. Laisser la vue écrire
-    /// `openedSection = tapped` aurait remis la loi hors de portée des témoins.
+    /// La forme du corps n'a pas changé — chaque appelant passe le même
+    /// `content()` qu'avant. Ce qui change est QUI décide de l'afficher.
+    @ViewBuilder
     private func section<Content: View>(_ titre: String,
                                         _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
-        // Le corps est ÉVALUÉ ici : `DisclosureGroup` garde son contenu en
-        // fermeture échappante, et un `content()` non échappant ne peut pas y
-        // entrer. La valeur, elle, voyage.
-        let corps = content()
-        return DisclosureGroup(isExpanded: Binding(
-            get: { ComposerObjectEditorDisclosure.isOpen(id, opened: openedSection) },
-            set: { _ in
-                openedSection = ComposerObjectEditorDisclosure.opened(after: id,
-                                                                      from: openedSection)
+        if ComposerObjectEditorRail.isSelected(id, selected: selectedTool) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(titre)
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .tracking(0.8)
+                content()
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-        )) {
-            corps
-                .padding(.top, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            // **44 pt sur toute la RANGÉE, et une forme qui les remplit.**
-            // Mesuré au doigt : un label réduit à son `Text` rapportait bien
-            // une frame de 370 × 21 à l'arbre d'accessibilité — donc « une
-            // cible pleine largeur » à qui la LIT — mais ne répondait qu'aux
-            // GLYPHES. Un tap au milieu de la rangée, entre le mot et le
-            // chevron, ne déclenchait rien. Deux défauts d'un coup : 21 pt sous
-            // le plancher HIG, et une cible dont l'arbre ment sur l'étendue.
-            //
-            // `contentShape` est ce qui fait de la frame la cible ; sans lui,
-            // l'agrandir ne fait qu'agrandir le vide.
-            Text(titre)
-                .font(MeeshyFont.relative(9.5, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.5))
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .tint(.white.opacity(0.55))
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Changer d'objet SANS refermer l'écran. Le mode d'édition suit, sinon le
-    /// canvas continuerait d'éditer en ligne le texte précédent.
     private func openEditor(_ id: String) {
         viewModel.exitTextEditingMode()
         viewModel.enterTextEditingMode(textId: id)
@@ -529,6 +574,20 @@ nonisolated enum ComposerObjectEditorCopy {
 
     /// Le nom d'un outil, en section. Les glyphes du rail suffisent à une bulle
     /// de 44 pt ; un titre de section a besoin d'un mot.
+    /// Le libellé d'une entrée du rail — ce que VoiceOver entend.
+    ///
+    /// Il RÉEMPLOIE `tool(_:)`, `timing` et `plan` : la même entrée porte le
+    /// même mot au rail et au titre du bas. Un second jeu de libellés aurait
+    /// donné deux noms à un seul outil, et l'auteur aurait cherché « POLICE »
+    /// dans un rail qui dit « Style ».
+    static func entry(_ entry: ComposerObjectEditorSection) -> String {
+        switch entry {
+        case .tool(let outil): return tool(outil)
+        case .timing:          return timing
+        case .plan:            return plan
+        }
+    }
+
     static func tool(_ tool: TextEditTool) -> String {
         switch tool {
         // **POLICE, pas STYLE** (#4850). La mesure a tranché contre les deux
