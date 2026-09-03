@@ -277,31 +277,10 @@ private struct AudioFullscreenPage: View {
             wrappedValue: ConversationAudioCoordinator.sharedForTesting.engineForBubble
                 ?? AudioPlaybackManager(registerWithCoordinator: false)
         )
-        // **Prisme AUDIO — l'élection à l'OUVERTURE** (#4926).
-        //
-        // `selectedLanguage` naissait sur le littéral `"orig"` et rien ne le
-        // recalculait : les seules écritures étaient le tap de l'utilisateur sur
-        // une puce de langue. Le plein écran d'un vocal s'ouvrait donc TOUJOURS
-        // sur l'original, avec les pistes traduites affichées juste en dessous —
-        // présentes, listées, et jamais servies.
-        //
-        // L'élection se fait ICI plutôt qu'en `.onAppear` pour qu'aucune image
-        // ne soit rendue dans la mauvaise langue : un `onAppear` ferait démarrer
-        // la lecture sur l'original avant de basculer.
-        //
-        // `item.translatedAudios` et non la propriété calculée `translatedAudios`
-        // (qui fusionne `extraTranslatedAudios`) : à l'`init`, les pistes
-        // arrivées par socket n'existent pas encore. Celles-là arrivent APRÈS un
-        // geste explicite de l'utilisateur dans la feuille de traduction, donc
-        // le choix lui appartient déjà.
-        self._selectedLanguage = State(initialValue: SocialAudioTrack.fullscreenSelection(
-            originalLanguage: SocialAudioTrack.originalLanguage(
-                transcription: item.transcription,
-                carrier: item.originalLanguage
-            ),
-            preferredLanguages: SocialAudioTrack.readerLanguages(),
-            translatedAudios: item.translatedAudios
-        ))
+        // Prisme AUDIO (#4926) — la raison de chaque terme est portée par
+        // `SocialAudioTrack.fullscreenSelection`, qui est la règle ; ici, le
+        // site d'appel n'en garde que l'appel.
+        self._selectedLanguage = State(initialValue: SocialAudioTrack.openingSelection(for: item))
     }
 
     @State private var isSeeking = false

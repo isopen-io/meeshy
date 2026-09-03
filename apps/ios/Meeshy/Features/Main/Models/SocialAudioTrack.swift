@@ -205,6 +205,39 @@ extension SocialAudioTrack {
         ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
     }
 
+    /// **L'élection à l'OUVERTURE du plein écran audio** (#4926).
+    ///
+    /// `AudioFullscreenView.selectedLanguage` naissait sur le littéral `"orig"`
+    /// et rien ne le recalculait : les seules écritures étaient le tap de
+    /// l'utilisateur sur une puce de langue. Le plein écran d'un vocal s'ouvrait
+    /// donc TOUJOURS sur l'original, avec les pistes traduites affichées juste
+    /// en dessous — présentes, listées, jamais servies.
+    ///
+    /// L'élection appartient à l'`init` et non à un `.onAppear` : ce dernier
+    /// ferait démarrer la lecture sur l'original avant de basculer, donc rendrait
+    /// une image dans la mauvaise langue.
+    ///
+    /// Elle lit `item.translatedAudios` et non la propriété calculée qui fusionne
+    /// les pistes arrivées par socket : à l'`init`, celles-là n'existent pas
+    /// encore, et quand elles arrivent c'est APRÈS un geste explicite de
+    /// l'utilisateur dans la feuille de traduction — le choix lui appartient
+    /// déjà.
+    ///
+    /// Nommée ICI plutôt qu'écrite au site d'appel : `AudioFullscreenView` est
+    /// hors budget de taille, et le POURQUOI d'une règle appartient de toute
+    /// façon à la règle, jamais à ce qui l'invoque.
+    @MainActor
+    static func openingSelection(for item: AudioFullscreenSource) -> String {
+        fullscreenSelection(
+            originalLanguage: originalLanguage(
+                transcription: item.transcription,
+                carrier: item.originalLanguage
+            ),
+            preferredLanguages: readerLanguages(),
+            translatedAudios: item.translatedAudios
+        )
+    }
+
     /// L'élection prête à poser sur `AudioPlayerView.initialTranscriptionLanguage`,
     /// pour une surface sociale qui n'a pas d'autre source que l'utilisateur
     /// courant.
