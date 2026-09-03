@@ -44,7 +44,7 @@ const REEL: PostDuFil = {
   auteurId: 'u-marta',
   publieA: '2026-09-02T09:00:00.000Z',
   textes: [{ langue: null, texte: 'Nuevo glosario compartido para el equipo.', origine: true }],
-  medias: [{ url: 'https://cdn.test/reel.jpg', genre: 'image', alt: null, largeur: 800, hauteur: 600 }],
+  medias: [{ url: 'https://cdn.test/reel.jpg', genre: 'image', alt: null, largeur: 800, hauteur: 600, affiche: null }],
   aimeParMoi: true,
   aimes: 9,
   commentaires: 0,

@@ -129,6 +129,7 @@ const V3_ZONE_PREFIXES = [
   '/moods',
   '/settings',
   '/feed',
+  '/composer',
 ];
 
 function belongsToV3Zone(pathname) {
