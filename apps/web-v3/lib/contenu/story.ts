@@ -1,3 +1,5 @@
+import { deLaLangue } from './langues';
+
 /**
  * LA COPIE DE LA STORY — ce que l'écran DIT, hors de ce qu'il compose.
  *
@@ -6,13 +8,12 @@
  * sous `lib/` parce que la vue ET la porte la lisent — la porte compose le
  * refus, la vue le peint.
  *
- * `traduitDe` prend le nom NATIF de la langue (`getLanguageInfo(code)
- * .nativeName`), pas sa traduction française : la table des langues de
- * `@meeshy/shared` porte un nom anglais et un nom natif, et rien d'autre.
- * Écrire « traduit de l'anglais » comme la planche le dessine demanderait une
- * table de noms de langues EN FRANÇAIS, c'est-à-dire une seconde table
- * (§ 3.2 corollaire 2). L'écart de formulation avec `cible/story.png` est
- * ASSUMÉ ; la conformité porte sur la disposition, pas sur la déclinaison.
+ * `traduitDe` prend le nom de la langue tel que `lib/contenu/langues.ts` le
+ * rend — en FRANÇAIS, décliné par `deLaLangue`. Cette phrase disait
+ * « Traduit de Español » : le nom natif, faute d'une table française, écart
+ * alors ASSUMÉ. Il ne l'est plus — `Intl.DisplayNames` est cette table, la
+ * plateforme la fournit, et « Traduit de Español » n'est pas une langue mais
+ * une faute. La cible (`cible/story.png`) dessinait déjà la forme française.
  */
 
 export const STORY = {
@@ -25,7 +26,7 @@ export const STORY = {
   suivante: 'Story suivante',
   langues: 'Changer la langue',
   langue: (nom: string): string => `Lire en ${nom}`,
-  traduitDe: (langue: string): string => `Traduit de ${langue}`,
+  traduitDe: (langue: string): string => `Traduit ${deLaLangue(langue)}`,
   original: 'Voir l’original',
   scene: 'Contenu de la story',
   /** Une story sans texte NI média : la passerelle en sert, la vue ne fabrique rien. */

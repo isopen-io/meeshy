@@ -1,4 +1,3 @@
-import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
@@ -12,6 +11,7 @@ import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import type { MediaDeStory, Story, Voisinage } from '@/lib/api/publication';
 import { formeDePiece } from '@/lib/api/formes';
 import { LONGUEUR_MAX_DE_LA_REPONSE, STORY } from '@/lib/contenu/story';
+import { nomDeLangue } from '@/lib/contenu/langues';
 
 import { FEUILLE_DE_LA_STORY } from './story-feuille';
 
@@ -62,11 +62,6 @@ const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY;
 
 export const adresseDeLaStory = (id: string, langue?: string): string =>
   `/stories/${encodeURIComponent(id)}${langue === undefined ? '' : `?lang=${encodeURIComponent(langue)}`}`;
-
-const nomDeLangue = (code: string): string => {
-  const info = getLanguageInfo(code);
-  return info.nativeName ?? info.name;
-};
 
 /** La langue effectivement LUE — celle que le Prisme a élue, ou celle d'origine. */
 const langueLue = (story: Story): string | null => story.langueServie ?? story.langueOriginale;

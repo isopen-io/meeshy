@@ -8,6 +8,7 @@ import {
   GLYPHE_PAR_GENRE,
   GLYPHE_TRADUCTION,
 } from '@/lib/contenu/commentaires';
+import { nomDeLangue } from '@/lib/contenu/langues';
 
 import { FEUILLE_DES_COMMENTAIRES } from './commentaires-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
@@ -53,20 +54,6 @@ export type EtatDesCommentaires = {
   readonly commentaires: readonly Commentaire[];
   readonly encore: boolean;
   readonly maintenant: number;
-};
-
-/**
- * LE NOM D'UNE LANGUE, DANS LA LANGUE DU DOCUMENT. `Intl.DisplayNames` les
- * connaît toutes ; un code ISO rendu tel quel demanderait au lecteur de savoir
- * ce que « nl » veut dire. Un code que l'environnement ne reconnaît pas se rend
- * lui-même plutôt que de faire tomber le rendu.
- */
-const nomDeLangue = (code: string): string => {
-  try {
-    return new Intl.DisplayNames(['fr'], { type: 'language' }).of(code) ?? code;
-  } catch {
-    return code;
-  }
 };
 
 /**

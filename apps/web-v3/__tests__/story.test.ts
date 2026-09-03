@@ -274,7 +274,13 @@ describe('le document d’une story', () => {
    */
   it('annonce la traduction ET donne le retour à l’original', () => {
     const html = documentDeLaStory(etat(lue()));
-    expect(html).toContain(STORY.traduitDe('English'));
+
+    // EN TOUTES LETTRES, ET EN FRANÇAIS. Ce témoin composait sa phrase depuis
+    // `STORY.traduitDe('English')` — il suivait donc la source au lieu de la
+    // juger, et serait resté vert sur « Traduit de English », qui n'est pas du
+    // français. La langue se nomme dans la langue du document
+    // (`lib/contenu/langues.ts`), et la phrase se décline.
+    expect(html).toContain('Traduit de l’anglais');
     expect(html).toContain('href="/stories/s1?lang=en"');
   });
 
