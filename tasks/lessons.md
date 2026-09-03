@@ -11779,6 +11779,31 @@ documente une absence d'abonnement, lue comme un abonnement.
 > vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
 > l'autre moitié du piège en place.
 
+#### Le miroir de cette précaution : un témoin ne peut plus s'ANCRER sur un commentaire
+
+La leçon ci-dessus dit qu'une garde doit dépouiller. Sa conséquence se paie un
+cran plus loin, et je viens de la payer (#5017) : **parce que le dépouillement
+existe, un témoin qui BORNE une région par un `// MARK:` cherche un repère que
+le texte qu'il lit ne contient plus.**
+
+```swift
+guard let debut = surface.range(of: "private func ancreAuDessusDuDessin"),
+      let fin = surface.range(of: "// MARK: - Les sons POSÉS sur la scène", ...)
+else { return XCTFail("l'ancre haute doit exister et être délimitée") }
+```
+
+Le premier repère est du CODE et se trouve ; le second est un COMMENTAIRE et ne
+se trouve jamais. Le témoin tombe sur son propre message de délimitation — un
+échec qui ressemble à « la fonction n'existe pas » alors qu'elle existe et qu'elle
+est juste. J'ai perdu un aller-retour de build complet à lire ce message au pied
+de la lettre.
+
+> **Une région de code se borne par la DÉCLARATION suivante, jamais par le
+> commentaire qui la précède.** `"\n    private "`, `"\n    var "`, `"\n    func "`
+> — le premier des trois qui tombe. Et le fil rouge tient : les deux moitiés du
+> piège ont la même racine, mais elles se ressemblent si peu qu'armer l'une
+> n'apprend rien sur l'autre. Ici la précaution CRÉE le piège qu'elle ne dit pas.
+
 ### Et le frère oublié, TROISIÈME occurrence
 
 `reaction:sync` avait été retiré du contrat pour cause d'absence d'émetteur — le

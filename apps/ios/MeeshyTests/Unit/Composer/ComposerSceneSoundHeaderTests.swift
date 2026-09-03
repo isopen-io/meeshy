@@ -134,4 +134,64 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
         XCTAssertNil(ComposerSceneSoundTrace.served(background: fond(), toolIsOpen: true))
         XCTAssertNotNil(ComposerSceneSoundTrace.served(background: fond(), toolIsOpen: false))
     }
+    /// **La trace se pose JUSTE au-dessus de la carte** (#5017).
+    ///
+    /// > Directive porteur 2026-09-03 : « bord gauche aligné sur la scène il
+    /// > faut mettre **juste au dessus de la scene** ! »
+    ///
+    /// Mesuré avant correctif au simulateur : ligne à `y ≈ 300`, carte à
+    /// `y ≈ 513` — deux cent treize points de vide entre l'étiquette et ce
+    /// qu'elle étiquette. Posée en FRÈRE dans la pile, la trace se collait sous
+    /// la barre haute ; le vide n'était pas une marge à régler mais la moitié
+    /// haute du CENTRAGE de la carte dans la hauteur qu'on lui donne.
+    ///
+    /// Le témoin épingle donc le MÉCANISME, pas une distance : le montage passe
+    /// par l'ancre, et l'ancre lit `ComposerRailGeometry`. Un correctif qui
+    /// rapprocherait la trace par un `padding(.top, 200)` resterait rouge — et
+    /// c'est le but, puisqu'un littéral se démentirait au premier autre ratio.
+    func test_soundHeader_isAnchoredAboveTheCard_notMountedAsASibling() throws {
+        let surface = try source("ComposerSceneSurface.swift")
+        let ancre = "ancreAuDessusDuDessin("
+        XCTAssertTrue(surface.contains(ancre + "\n" ) || surface.contains(ancre),
+                      "l'ancre haute doit exister")
+        guard let posee = surface.range(of: ancre + "\n"),
+              let montee = surface.range(of: "ComposerSceneSoundHeader(") else {
+            return XCTFail("l'en-tête doit être monté DANS l'ancre haute")
+        }
+        XCTAssertTrue(posee.upperBound <= montee.lowerBound,
+                      "l'en-tête est monté DANS `ancreAuDessusDuDessin`, jamais en frère de la pile")
+    }
+
+    /// **L'écart vient de la RÈGLE, jamais d'un littéral** (#5017).
+    ///
+    /// La carte est ajustée à son ratio puis CENTRÉE : le vide du haut vaut
+    /// celui du bas et change avec le ratio comme avec la taille de l'écran.
+    /// `sceneBottomInset` le calcule déjà pour le rail bas — l'ancre haute est
+    /// sa jumelle et lit la MÊME fonction. Deux calculs parallèles dériveraient
+    /// au premier ratio ajouté, l'un des deux rougissant sans que l'autre bouge.
+    func test_upperAnchor_readsTheGeometryRule_neverALiteralInset() throws {
+        let surface = try source("ComposerSceneSurface.swift")
+        // Le corps se borne par la DÉCLARATION suivante, jamais par un `// MARK:` :
+        // `AppSourceGuard.stripComments` dépouille la source avant de la rendre,
+        // donc un témoin ancré sur un commentaire cherche un repère que le texte
+        // qu'il lit ne contient plus. Écrit ici après l'avoir fait tomber.
+        guard let debut = surface.range(of: "private func ancreAuDessusDuDessin") else {
+            return XCTFail("l'ancre haute doit exister")
+        }
+        let apres = debut.upperBound ..< surface.endIndex
+        let suivante = ["\n    private ", "\n    var ", "\n    func "]
+            .compactMap { surface.range(of: $0, range: apres)?.lowerBound }
+            .min() ?? surface.endIndex
+        let fin = suivante ..< suivante
+        let corps = String(surface[debut.upperBound ..< fin.lowerBound])
+        XCTAssertTrue(corps.contains("ComposerRailGeometry.sceneBottomInset("),
+                      "l'ancre haute lit la règle, comme sa jumelle basse")
+        XCTAssertTrue(corps.contains("dimensions[.bottom]"),
+                      "le contenu se soulève de SA hauteur — aucune hauteur n'est écrite ni mesurée")
+        for littéral in ["padding(.top, 2", "padding(.top, 1", "offset(y: -2", "offset(y: -1"] {
+            XCTAssertFalse(corps.contains(littéral),
+                           "aucune distance en dur dans l'ancre : `\(littéral)` se démentirait au premier autre ratio")
+        }
+    }
+
 }

@@ -140,6 +140,36 @@ Les deux peuvent coexister sur une même publication sans se contredire — l'un
 l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
 « posant un lieu » : il n'en pose aucun.
 
+### Deux bandes encadrent la carte, et elles ne qualifient PAS la même chose
+
+Depuis #5001 et #5002, la carte de scène est encadrée de deux bandes. Elles se
+ressemblent — même gouttière, même bord gauche aligné sur le dessin, même geste
+(toucher ⇒ la feuille correspondante). **Leur portée est pourtant opposée**, et
+rien à l'écran ne le dit :
+
+| | ce que la bande qualifie | où vit la donnée | change en changeant de slide |
+|---|---|---|---|
+| **au-dessus** — note · spectre · crédit · durée | le **son de fond de CETTE scène** (plan `background`, « UN visuel et UN son ») | `MeeshySlide` courante | **oui** |
+| **en dessous** — hashtags · mentions référencées | des métadonnées de la **PUBLICATION** entière | dérivées de `documentText`, partagées par toutes les slides | **non** |
+
+C'est le comportement JUSTE — le § ci-dessus et le contrat le disent tous les
+deux : la porte d'un hashtag « ouvre le sélecteur de la publication », et
+`CanvasV3Migration` tient qu'une mention est « une MÉTADONNÉE, pas un objet ».
+Mais la symétrie visuelle affirme une symétrie de sens qui n'existe pas : en
+faisant défiler ses scènes, l'utilisateur voit la bande haute changer et la
+basse rester, sans qu'aucun signe n'ait annoncé pourquoi.
+
+> **Deux surfaces qui se ressemblent affirment qu'elles parlent de la même
+> chose.** Le vocabulaire, ici, n'est pas dans les mots — il est dans la
+> RESSEMBLANCE. Une bande qui encadre la carte se lit comme parlant de la carte ;
+> celle du bas parle de tout ce qui l'entoure.
+
+Ce que le modèle tranche : les deux portées sont **justes** et ne bougent pas.
+Ce qu'il ne tranche PAS : s'il faut les distinguer à l'œil, et comment. C'est une
+décision de design, ouverte en `décision-produit` — pas un défaut à corriger
+d'initiative, parce qu'un correctif inventé ici figerait un choix qui appartient
+au porteur.
+
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 

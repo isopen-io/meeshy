@@ -245,6 +245,43 @@ struct ComposerSceneSurface: View {
         }
     }
 
+    /// **Ancre un contenu JUSTE AU-DESSUS du dessin** (#5017) — la jumelle
+    /// haute de `ancreAuDessin`, et pour la même raison.
+    ///
+    /// > Directive porteur 2026-09-03 : « il faut mettre **juste au dessus de la
+    /// > scene** ! »
+    ///
+    /// Posée en frère dans la pile, la trace du son se collait sous la barre
+    /// haute — deux cents points au-dessus de la carte. L'écart n'est pas une
+    /// marge à régler : la carte est ajustée à son ratio et se CENTRE dans la
+    /// hauteur qu'on lui donne, donc le vide du haut vaut celui du bas et varie
+    /// avec le ratio.
+    ///
+    /// > Une étiquette séparée de ce qu'elle étiquette cesse d'être une
+    /// > étiquette. Le vide la rattachait visuellement à la barre haute —
+    /// > c'est-à-dire à la PUBLICATION — alors qu'elle parle de la SCÈNE.
+    ///
+    /// `padding(.top, inset)` porte la ligne d'alignement sur le bord HAUT du
+    /// dessin ; `alignmentGuide(.top) { $0[.bottom] }` fait tomber le BAS du
+    /// contenu sur cette ligne. Aucune hauteur n'est mesurée ni écrite : le
+    /// contenu se soulève de la sienne, quelle que soit la taille de texte.
+    @ViewBuilder
+    private func ancreAuDessusDuDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            contenu
+                .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, ComposerRailGeometry.sceneBottomInset(
+                    overlay: geo.size,
+                    ratio: aspectRatio,
+                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+        // La bande ne prend AUCUN doigt : elle flotte au-dessus de la carte, et
+        // le canvas doit continuer de recevoir les gestes sur toute sa surface.
+        // Seule la capsule elle-même est touchable.
+        .allowsHitTesting(true)
+    }
+
     // MARK: - Les sons POSÉS sur la scène (#4722)
 
     /// **Les puces sonores de premier plan, peintes SUR la carte.**
@@ -493,19 +530,6 @@ struct ComposerSceneSurface: View {
             //
             // Dans le COULOIR, jamais sur la carte (`apps/ios/CLAUDE.md` § 1,
             // loi 6) : un son de fond ne produit aucun pixel au rendu.
-            // **Aucun `tint:` — et c'est mesuré, pas oublié.** `plateauTint` est
-            // le FOND du plateau (`PlateauTint.color` → `indigo950`) ; le passer
-            // en couleur de CONTENU peint la capsule dans la couleur de ce
-            // qu'elle recouvre. Vérifié au simulateur : l'arbre d'accessibilité
-            // portait la ligne, l'écran ne montrait rien. Les deux vues gardent
-            // le défaut de `ComposerAvatarSoundBadge`, `indigo400`, qui lit sur
-            // le plateau.
-            ComposerSceneSoundHeader(backgroundSound: backgroundSound,
-                                     toolIsOpen: toolIsOpen,
-                                     leadingInset: sceneCardLeading,
-                                     onEdit: onEditBackgroundSound,
-                                     onDelete: onDeleteBackgroundSound)
-
             VStack(spacing: 8) {
                 EmbeddedSceneCanvas(
                     slide: $slide,
@@ -602,6 +626,21 @@ struct ComposerSceneSurface: View {
                 // jumeau, à portée du pouce, et avec les MÊMES marges — deux
                 // rails qui encadrent la même scène à deux hauteurs différentes
                 // se voient avant de se comprendre.
+                // **La trace du son, JUSTE au-dessus de la carte** (#5017).
+                //
+                // Aucun `tint:` — et c'est mesuré, pas oublié : `plateauTint`
+                // est le FOND du plateau (`indigo950`), et le passer en couleur
+                // de CONTENU peint la capsule dans la couleur de ce qu'elle
+                // recouvre. Vérifié au simulateur au #5011 : l'arbre
+                // d'accessibilité portait la ligne, l'écran ne montrait rien.
+                .overlay(alignment: .topLeading) {
+                    ancreAuDessusDuDessin(
+                        ComposerSceneSoundHeader(backgroundSound: backgroundSound,
+                                                 toolIsOpen: toolIsOpen,
+                                                 leadingInset: sceneCardLeading,
+                                                 onEdit: onEditBackgroundSound,
+                                                 onDelete: onDeleteBackgroundSound))
+                }
                 .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
