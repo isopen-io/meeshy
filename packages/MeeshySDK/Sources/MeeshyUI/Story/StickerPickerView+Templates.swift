@@ -37,7 +37,13 @@ extension StickerPickerView {
                     .buttonStyle(.plain)
                     .disabled(!enabled)
                     .opacity(enabled ? 1 : 0.55)
-                    .accessibilityLabel(Self.accessibilityLabel(for: gabarit, slots: emplacements))
+                    // **Le mouvement se DIT aussi ici** (#5000) : la scène
+                    // l'annonçait depuis #4825, la palette non — un utilisateur
+                    // de VoiceOver ne savait ce qu'il avait posé qu'APRÈS
+                    // l'avoir posé.
+                    .accessibilityLabel(StoryStickerAccessibility.describing(
+                        Self.accessibilityLabel(for: gabarit, slots: emplacements),
+                        motion: gabarit.animation))
                 }
             }
             .padding(.horizontal, 12)
@@ -243,18 +249,32 @@ struct StickerTemplatePreview: View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.primary.opacity(0.05))
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(8)
-            } else {
-                // Avant le premier rendu — et si le gabarit n'est pas
-                // dessinable — on montre son repli plutôt qu'un vide.
-                Text(template.fallbackEmoji).font(.system(size: side * 0.34))
+            // **Le dessin BOUGE, le cadre ne bouge pas** (#5000) : la pose
+            // porte sur ce que la décoration EST, pas sur la case qui la range.
+            // Animer le cadre ferait respirer la grille entière.
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(8)
+                } else {
+                    // Avant le premier rendu — et si le gabarit n'est pas
+                    // dessinable — on montre son repli plutôt qu'un vide.
+                    Text(template.fallbackEmoji).font(.system(size: side * 0.34))
+                }
             }
+            .modifier(StickerMotionPreview(animation: template.animation, side: side))
         }
         .frame(width: side, height: side)
+        // La marque durable — celle qui survit à une capture d'écran, à un
+        // défilement rapide et à « Réduire les animations », les trois cas où
+        // le mouvement ne dit plus rien.
+        .overlay(alignment: .bottomTrailing) {
+            if template.animation != nil {
+                StickerMotionBadge(side: side * 0.11).padding(5)
+            }
+        }
         // `id:` sur le CONTENU, pas sur le gabarit seul : changer de lieu doit
         // redessiner les trois vignettes de l'onglet.
         .task(id: cacheKey) { image = render() }
