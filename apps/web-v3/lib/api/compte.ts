@@ -637,3 +637,104 @@ export const carnetDeLiens = async ({
     total: entier(resume?.totalLinks),
   };
 };
+
+/**
+ * CRÉER UN LIEN DE PARTAGE — `POST /links`
+ * (`services/gateway/src/routes/links/creation.ts:29`, `requireAuth: true,
+ * allowAnonymous: false` : un porteur, jamais une session invitée).
+ *
+ * IL VIT ICI, À CÔTÉ DE `carnetDeLiens`, et non dans `lib/api/links.ts` : ce
+ * dernier est la porte de l'INVITÉ (`/l/:token`), qui ne connaît pas de
+ * lecteur. Les liens QU'ON POSSÈDE se lisent et s'écrivent au même endroit —
+ * les séparer ferait deux modules « liens » dont l'un des deux hériterait du
+ * prochain changement de schéma.
+ *
+ * CHAQUE CHAMP EST COPIÉ DU SCHÉMA QUI LE DÉCLARE (`createLinkSchema`,
+ * `routes/links/types.ts:39`). Un champ inventé ici se ferait refuser EN BLOC
+ * par Zod, et le lecteur perdrait sa saisie pour une faute qu'il n'a pas
+ * commise.
+ *
+ * `allowedCountries` N'EST PAS SERVI, ET C'EST DÉLIBÉRÉ. Le schéma le déclare
+ * `CHAMP_PAYS_INERTE` : la passerelle l'ACCEPTE et ne l'APPLIQUE pas. L'offrir
+ * ferait cocher une restriction qui ne restreint rien — le champ décoratif que
+ * le critère de fin de `sheet:link` interdit nommément.
+ *
+ * LA CONVERSATION NAÎT AVEC LE LIEN. Depuis `/links` il n'y a aucune
+ * conversation à désigner ; `newConversation.title` en crée une, et c'est la
+ * branche que la passerelle prévoit pour ce cas (« If conversationId is not
+ * provided, a new public conversation will be created »).
+ */
+
+/** Les champs de `createLinkSchema` que la feuille sert — aucun autre ne part. */
+export type LienACreer = {
+  readonly newConversation: { readonly title: string };
+  readonly name?: string;
+  readonly description?: string;
+  readonly expiresAt?: string;
+  readonly maxUses?: number;
+  readonly allowAnonymousMessages?: boolean;
+  readonly allowAnonymousFiles?: boolean;
+  readonly allowAnonymousImages?: boolean;
+  readonly allowViewHistory?: boolean;
+  readonly requireNickname?: boolean;
+};
+
+export type LienCree =
+  | { readonly genre: 'fait'; readonly identifiant: string }
+  | { readonly genre: 'refus'; readonly message: string }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LE REFUS DE LA PASSERELLE EST RENDU TEL QUEL quand elle en donne un — la
+ * même règle que les réglages (`lib/api/reglages.ts`). Son message porte la
+ * raison (« Conversation is closed », « Utilisateur enregistré requis ») ; la
+ * recomposer ici ferait une seconde vérité, qui divergerait au premier
+ * changement de politique.
+ */
+export const creeUnLien = async ({
+  jeton,
+  champs,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly champs: LienACreer;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LienCree> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/links`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(champs),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (!reponse.ok) {
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '' };
+  }
+
+  // `linkId` EST L'IDENTIFIANT PUBLIC (`mshy_…`), celui qui compose l'adresse
+  // partageable. `shareLink.id` est la clé de base de données : les confondre
+  // servirait une adresse que personne ne peut ouvrir.
+  const donnees = objet(enveloppe?.data);
+  const identifiant = chaine(donnees?.linkId) ?? chaine(objet(donnees?.shareLink)?.linkId);
+  if (identifiant === null) return { genre: 'panne' };
+
+  return { genre: 'fait', identifiant };
+};
