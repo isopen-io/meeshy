@@ -1015,26 +1015,11 @@ private struct ReelActionRail: View {
                 action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
-            // **La palette, en SECOND geste** (décision porteur 2026-09-02).
-            // L'appui bref reste ❤️ — le chemin nominal ne gagne pas un geste ;
-            // l'appui long ouvre les six émojis que la story sert déjà, depuis
-            // la même liste (`MeeshyQuickReactions.standard`).
-            .onLongPressGesture {
-                HapticFeedback.medium()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showsReactionPalette = true
-                }
-            }
-            .accessibilityAction(named: Text(String(localized: "reactions.more",
-                                                    defaultValue: "Plus de réactions", bundle: .main))) {
-                showsReactionPalette = true
-            }
-            .overlay(alignment: .trailing) {
-                PostReactionPalette(isPresented: $showsReactionPalette) { emoji in
-                    viewModel.react(reel, emoji: emoji)
-                }
-                .offset(x: -52)
-            }
+            // Appui bref = ❤️ ; appui long = la palette. Le geste vit dans
+            // `reactionPalette`, partagé avec le détail d'un post — deux
+            // fichiers hors budget n'ont pas à porter deux fois le même code.
+            .reactionPalette(isPresented: $showsReactionPalette,
+                             isDark: true, offsetX: -52) { viewModel.react(reel, emoji: $0) }
 
             // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
             // sous le nom — plus de compteur de vues public ici.
