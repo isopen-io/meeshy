@@ -53,3 +53,57 @@ export const LIENS = {
 } as const;
 
 export const GLYPHE_LIEN = 'ph-link-simple';
+
+/**
+ * LA COPIE DE LA FEUILLE « NOUVEAU LIEN » (`sheet:link`, #5071).
+ *
+ * CHAQUE LIBELLÉ RECOUVRE UN CHAMP DE `createLinkSchema`, et rien d'autre : ce
+ * que la feuille NOMME, la passerelle l'applique. Le critère de fin interdit
+ * nommément le champ décoratif, et le seul candidat du schéma — les pays
+ * autorisés, déclarés `CHAMP_PAYS_INERTE` — n'a donc pas de libellé ici.
+ *
+ * L'EXPIRATION EST UN CHOIX, PAS UNE DATE À SAISIR. « 24 heures / 7 jours /
+ * jamais » se décide d'un geste ; un champ de date demande de connaître le
+ * format, de calculer, et se trompe d'un fuseau. La date envoyée est calculée
+ * au moment de la soumission, par le serveur — la seule horloge que les deux
+ * bouts partagent.
+ */
+export const NOUVEAU_LIEN = {
+  ouvrir: 'Nouveau lien',
+  titre: 'Nouveau lien de partage',
+  fermer: 'Fermer',
+
+  conversation: 'Nom de la conversation',
+  conversationAide: 'Le lien ouvre une conversation neuve, publique, que vous nommez ici.',
+  nom: 'Nom du lien',
+  nomAide: 'Pour vous y retrouver dans la liste. Les invités ne le voient pas.',
+
+  expiration: 'Le lien expire',
+  jour: 'Dans 24 heures',
+  semaine: 'Dans 7 jours',
+  jamais: 'Jamais',
+
+  capacite: 'Nombre de personnes maximum',
+  capaciteAide: 'Laissez vide pour ne pas limiter.',
+
+  anonymes: 'Ce que les invités peuvent faire',
+  ecrire: 'Écrire des messages',
+  fichiers: 'Joindre des fichiers',
+  images: 'Envoyer des images',
+  historique: 'Lire les messages d’avant leur arrivée',
+  pseudonyme: 'Demander un pseudonyme à l’entrée',
+
+  creer: 'Créer le lien',
+  cree: 'Votre lien est créé.',
+  refuse: 'Le lien n’a pas été créé.',
+  sansTitre: 'Donnez un nom à la conversation.',
+} as const;
+
+/** Les trois échéances offertes, et ce qu'elles valent en millisecondes. */
+export const ECHEANCES = {
+  jour: 24 * 60 * 60 * 1000,
+  semaine: 7 * 24 * 60 * 60 * 1000,
+  jamais: null,
+} as const;
+
+export type Echeance = keyof typeof ECHEANCES;
