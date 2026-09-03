@@ -4,7 +4,7 @@ import type { Identite } from './bouchon-socket';
 import { CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAGE, LIEN_DU_FIL, MEMBRE, PRENOM_DU_LECTEUR } from './bouchon-monde';
 
 /**
- * LES SEPT ROUTES DE LA ZONE CONNECTÉE, copiées sur la passerelle RÉELLE :
+ * LES NEUF ROUTES DE LA ZONE CONNECTÉE, copiées sur la passerelle RÉELLE :
  *
  *   • `GET /api/v1/auth/me` — `services/gateway/src/routes/auth/magic-link.ts:79`,
  *     `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous: true })` ;
@@ -23,7 +23,19 @@ import { CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAGE, LIEN_DU_FIL, MEMB
  *   • `GET /api/v1/directory/people` — `routes/directory/people.ts:105`, qui
  *     pagine par CURSEUR (`hasMore`, `nextCursor`, `limit`) et déclare
  *     `isOnline` NULLABLE — l'autre forme du masquage, à côté du `false` de
- *     `/directory/contacts`.
+ *     `/directory/contacts` ;
+ *   • `GET /api/v1/posts/:postId` — `routes/posts/core.ts:460`,
+ *     `preValidation: [requiredAuth]` ;
+ *   • `GET /api/v1/posts/:postId/comments` — `routes/posts/comments.ts:61`,
+ *     même garde, servant `{ success, data, pagination }` SANS schéma de
+ *     réponse déclaré — donc sans rien retirer.
+ *
+ * LES DEUX DERNIÈRES SERVENT DES TRADUCTIONS EN CARTE D'OBJETS
+ * (`{ langue: { text } }`, `schema.prisma:3523`), et c'est ce qui donne sa
+ * valeur à l'audit : un client qui passerait cette carte telle quelle au
+ * résolveur du Prisme rendrait l'ORIGINAL partout, sans qu'aucune erreur ne le
+ * dise. Le bouchon sert donc la forme RÉELLE, jamais une carte de chaînes
+ * arrangeante.
  *
  * LES DEUX DERNIÈRES SERVENT LA PRÉSENCE COMME LA LOI L'IMPOSE, et c'est ce que
  * l'écran des contacts doit rendre : une demande EN ATTENTE est masquée — son
@@ -116,6 +128,74 @@ const CARNET = [
   },
 ];
 
+/** Une carte de traductions à la forme de Prisma — des OBJETS, jamais des chaînes. */
+const traduit = (paires: Readonly<Record<string, string>>) =>
+  Object.fromEntries(
+    Object.entries(paires).map(([code, text]) => [
+      code,
+      { text, translationModel: 'nllb-200', confidenceScore: 0.94 },
+    ]),
+  );
+
+/**
+ * LA PUBLICATION COMMENTÉE. Écrite en ANGLAIS et traduite en français : le
+ * lecteur du bouchon préfère le français, donc l'écran doit servir la
+ * traduction ET annoncer « traduit de l'anglais ».
+ */
+const PUBLICATION_DU_BOUCHON = {
+  id: 'p-revue',
+  type: 'POST',
+  title: 'Revue de mars',
+  content: 'The March review is ready. Three charts, two surprises.',
+  originalLanguage: 'en',
+  translations: traduit({ fr: 'La revue de mars est prête. Trois graphiques, deux surprises.' }),
+  createdAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
+  author: { id: 'u-ibrahim', username: 'ibrahim', displayName: 'Ibrahim' },
+};
+
+/**
+ * TROIS COMMENTAIRES, ET CHACUN COUVRE UN CAS QUE L'AUDIT DOIT VOIR :
+ *
+ *   1. traduit à un rang INFÉRIEUR (rang 1 absent) — la ligne du Prisme ;
+ *   2. écrit dans la langue du lecteur — AUCUNE ligne de Prisme, aucun `lang=` ;
+ *   3. le MIEN — « Modifier · Supprimer », que les deux autres n'ont pas.
+ *
+ * Sans les trois, `color-contrast` ne verrait ni la ligne du Prisme ni les
+ * gestes d'auteur, et l'audit serait vert par vacuité sur la moitié de l'écran.
+ */
+const COMMENTAIRES_DU_BOUCHON = [
+  {
+    id: 'k-marta',
+    content: 'Are the Q1 numbers up to date?',
+    originalLanguage: 'en',
+    translations: traduit({ es: '¿Están actualizadas las cifras del Q1?' }),
+    likeCount: 4,
+    replyCount: 0,
+    createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    author: { id: 'u-marta', username: 'marta', displayName: 'Marta Ruiz' },
+  },
+  {
+    id: 'k-ibrahim',
+    content: 'Oui, poussés ce matin.',
+    originalLanguage: 'fr',
+    translations: {},
+    likeCount: 2,
+    replyCount: 0,
+    createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+    author: { id: 'u-ibrahim', username: 'ibrahim', displayName: 'Ibrahim' },
+  },
+  {
+    id: 'k-moi',
+    content: 'Je relis avant ce soir.',
+    originalLanguage: 'fr',
+    translations: {},
+    likeCount: 1,
+    replyCount: 0,
+    createdAt: new Date(Date.now() - 12 * 60_000).toISOString(),
+    author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
+  },
+];
+
 /**
  * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
  * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
@@ -156,7 +236,8 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/auth/me') ||
         chemin.startsWith('/api/v1/conversations') ||
         chemin.startsWith('/api/v1/links') ||
-        chemin.startsWith('/api/v1/directory/')
+        chemin.startsWith('/api/v1/directory/') ||
+        chemin.startsWith('/api/v1/posts/')
       )
     ) {
       return false;
@@ -174,7 +255,20 @@ export const routesDuCompte =
     if (chemin.startsWith('/api/v1/auth/me')) {
       json({
         success: true,
-        data: { id: MEMBRE.id, username: 'amina', firstName: PRENOM_DU_LECTEUR, displayName: MEMBRE.nom, systemLanguage: 'fr' },
+        data: {
+          id: MEMBRE.id,
+          username: 'amina',
+          firstName: PRENOM_DU_LECTEUR,
+          displayName: MEMBRE.nom,
+          // DEUX LANGUES, ET C'EST LE SECOND RANG QUI COMPTE. Avec un prisme
+          // d'une seule langue, le court-circuit interdit (« la langue
+          // d'origine appartient au prisme ⇒ afficher l'original ») et la
+          // règle juste rendent le MÊME verdict : aucun témoin ne peut tomber
+          // au rang 1 (leçon 261). Le rang 2 est le seul qui les sépare, donc
+          // le lecteur du bouchon en a un.
+          systemLanguage: 'fr',
+          regionalLanguage: 'es',
+        },
       });
       return true;
     }
@@ -184,6 +278,24 @@ export const routesDuCompte =
     // doit ordonner du plus PRÉCIS au plus général — sinon `/conversations`
     // avale `/conversations/search` et l'écran de recherche reçoit la liste du
     // tableau de bord.
+    // Le FIL d'une publication, avant la publication elle-même : Fastify
+    // distingue ces deux routes par leur chemin complet, et un bouchon qui
+    // teste des préfixes ordonne du plus PRÉCIS au plus général.
+    if (/^\/api\/v1\/posts\/[^/]+\/comments/.test(chemin)) {
+      json({
+        success: true,
+        data: COMMENTAIRES_DU_BOUCHON,
+        pagination: { limit: 30, hasMore: false, nextCursor: null },
+        meta: { mentionedUsers: [] },
+      });
+      return true;
+    }
+
+    if (/^\/api\/v1\/posts\/[^/]+$/.test(chemin)) {
+      json({ success: true, data: PUBLICATION_DU_BOUCHON });
+      return true;
+    }
+
     if (chemin.startsWith('/api/v1/conversations/search')) {
       json({ success: true, data: url.searchParams.get('q') ? RECHERCHE_FILS : [] });
       return true;

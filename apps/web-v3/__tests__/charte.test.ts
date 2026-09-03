@@ -13,6 +13,7 @@ import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
 import { FEUILLE_DES_LIENS } from '@/app/connecte/liens-feuille';
+import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
@@ -63,6 +64,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/contacts-feuille.ts', source: FEUILLE_DES_CONTACTS },
   { nom: 'app/connecte/liens-feuille.ts', source: FEUILLE_DES_LIENS },
   { nom: 'app/connecte/recherche-feuille.ts', source: FEUILLE_DE_LA_RECHERCHE },
+  { nom: 'app/connecte/commentaires-feuille.ts', source: FEUILLE_DES_COMMENTAIRES },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -130,6 +132,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/contacts-feuille.ts',
       'app/connecte/liens-feuille.ts',
       'app/connecte/recherche-feuille.ts',
+      'app/connecte/commentaires-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -429,6 +432,14 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.langues summary',
     '.story-repondre .envoyer',
     '.story-repondre .aimer[aria-pressed=true]',
+    // Les commentaires (`cible/comments.png`) : la puce de la source COURANTE
+    // est un contrôle SÉLECTIONNÉ — même emploi que `.puces.filtres
+    // .puce[aria-current]` de la galerie, l'accent en FOND —, et `.prisme
+    // summary` est un cliquable : il déplie l'original, exactement comme
+    // `.original summary` du fil. Le nom d'un auteur, l'heure, le texte d'un
+    // commentaire et le compte de cœurs restent sur l'encre.
+    '.source[aria-current]',
+    '.prisme summary',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {
