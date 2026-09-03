@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import MeeshySDK
 
@@ -70,5 +71,50 @@ nonisolated enum ComposerSceneObjectCount {
     /// formes de pluriel.
     static func spokenLabel(count: Int) -> String {
         String(format: String(localized: "composer.object.editor.back.a11y", bundle: .main), count)
+    }
+}
+
+/// **Où sont les objets POSÉS d'une scène** (#5018).
+///
+/// La JUMELLE de `ComposerSceneObjectCount.posed`, et il faut dire pourquoi
+/// elles ne fusionnent pas : elles énumèrent les mêmes cinq familles pour
+/// répondre à deux questions différentes — *combien* et *où*. Un compte ne se
+/// dérive pas de positions (deux objets au même point restent deux objets), et
+/// des positions ne se dérivent pas d'un compte.
+///
+/// > **Ce qui les lie n'est pas leur résultat mais leur INVENTAIRE.** Une
+/// > sixième famille de `MeeshySceneObject` doit entrer dans les deux, et rien
+/// > dans le type ne l'impose — d'où la garde de source qui les compare, et
+/// > d'où le fait qu'elles vivent dans le même fichier plutôt que chacune chez
+/// > soi : deux énumérations qu'on lit ensemble divergent moins.
+///
+/// Les fonds sont exclus, comme dans le compte et pour la même raison : un fond
+/// occupe toute la scène, il n'a pas de place à éviter. `StoryObjectPlacement`
+/// le demande d'ailleurs explicitement à ses appelants.
+nonisolated enum ComposerScenePosedObjects {
+
+    /// Les positions des objets posés, en unités de scène (0…1).
+    ///
+    /// - Parameter excluding: l'objet qu'on est en train de placer. S'éviter
+    ///   soi-même ferait sauter la première place libre — la cascade décalerait
+    ///   un objet pour ne pas recouvrir l'endroit qu'il quitte.
+    static func positions(on slide: StorySlide, excluding id: String? = nil) -> [CGPoint] {
+        let effets = slide.effects
+        let textes: [CGPoint] = effets.textObjects
+            .filter { $0.id != id }
+            .map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        let medias: [CGPoint] = (effets.mediaObjects ?? [])
+            .filter { $0.isBackground != true && $0.id != id }
+            .map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        let stickers: [CGPoint] = (effets.stickerObjects ?? [])
+            .filter { $0.id != id }
+            .map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        let lieux: [CGPoint] = effets.locationObjects
+            .filter { $0.id != id }
+            .map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        let sons: [CGPoint] = (effets.audioPlayerObjects ?? [])
+            .filter { $0.isBackground != true && $0.id != id }
+            .map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        return textes + medias + stickers + lieux + sons
     }
 }

@@ -73,14 +73,20 @@ struct ComposerSceneSoundHeader: View {
     /// EMPRUNTÉ, dont `ComposerSoundColumn.opensEditor` protège le crédit.
     var onEdit: (() -> Void)?
 
-    /// Le RETRAIT, par appui long (#4930). `nil` ⇒ aucun menu.
+    /// Le RETRAIT, par appui long (#4930). `nil` ⇒ l'entrée disparaît.
     var onDelete: (() -> Void)?
+
+    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par le même
+    /// appui long. `nil` ⇒ l'entrée disparaît — c'est le cas de la surface
+    /// DOCUMENT, qui n'a aucune scène où poser une puce, et celui d'un fond
+    /// LEGACY, qu'aucun objet ne porte.
+    var onPromote: (() -> Void)?
 
     var body: some View {
         if let trace = ComposerSceneSoundTrace.served(background: backgroundSound,
                                                       toolIsOpen: toolIsOpen) {
             ligne(trace)
-                .modifier(ComposerSoundDeletionMenu(supprimer: onDelete))
+                .modifier(ComposerSoundActionsMenu(supprimer: onDelete, promouvoir: onPromote))
                 .padding(.leading, leadingInset)
                 .padding(.trailing, leadingInset)
                 .padding(.bottom, 6)

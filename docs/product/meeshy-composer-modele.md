@@ -580,6 +580,61 @@ Tant que (3) n'est pas tranchée, **la charge reste une convention, jamais un
 contrat** — et tout lot qui y ajoute une clé doit la porter à la main sur chaque
 couche qui recompose.
 
+## 6 ter. La frontière SDK ↔ app : un vocabulaire de VERBES (mesure 2026-09-03)
+
+Le § 6 bis mesure où la structure d'une publication est connue. Celui-ci mesure
+**comment on la modifie** — question distincte, et dont la réponse n'était écrite
+nulle part alors que le compilateur la fait respecter.
+
+### La règle, telle qu'elle est réellement appliquée
+
+| | ce qui est exposé | portée |
+|---|---|---|
+| l'ÉTAT (`StoryComposerViewModel.currentEffects`) | la LECTURE seule | `public internal(set)` |
+| le protocole `StoryComposerProviding` | rien, hors du SDK | `internal` |
+| les OPÉRATIONS | ~42 verbes | `public func` |
+
+**L'app ne peut pas écrire dans les effets. Elle appelle des verbes** —
+`addText`, `addSticker`, `addLocation`, `deleteElement`, `duplicateElement`,
+`bringForward`, `sendBackward`, `toggleBackground`, `updateTextContent`,
+`moveElement`… — chacun tenant les invariants que la mutation directe
+contournerait (un seul fond par slide, le nettoyage des champs legacy, la
+cohérence du `zIndex`).
+
+Ce n'est pas une convention documentée puis oubliée : `public internal(set)` la
+fait respecter à la compilation. C'est la meilleure sorte de règle — celle qu'on
+ne peut pas enfreindre par distraction.
+
+> Cette frontière est la forme concrète, pour le composer, de la règle de partage
+> du § « SDK Purity » : des briques aux paramètres opaques dans le SDK, la
+> décision produit chez l'app. Un verbe dit *comment* ; l'app décide *quand* et
+> *où*.
+
+### Le piège : une capacité absente derrière un vocabulaire qui la suggère
+
+Le lot #5018 a buté sur une absence que rien ne signalait : **aucun verbe ne
+disait « pose cet objet là ».** L'absence était masquée par un trio qui en a
+l'air — `beginDrag` / `updateDrag` / `endDrag`. Ces trois-là ne portent qu'un
+état ÉPHÉMÈRE (`activeDrag`), et `endDrag()` se contente de le remettre à `nil` :
+**il ne commite aucune position.** Un appelant qui cherche « comment déplacer »
+trouve trois fonctions de glissement et conclut que le sujet est couvert.
+
+> **Une capacité absente derrière un vocabulaire qui la suggère coûte plus cher
+> qu'une capacité absente tout court : on ne la cherche pas deux fois.** Le
+> premier jet du correctif a donc essayé d'écrire directement dans
+> `currentEffects` — refusé par le compilateur, et à juste titre.
+
+`moveElement(id:to:)` comble le trou
+(`StoryComposerViewModel+Placement.swift`). Il borne la position à [0, 1] : un
+objet posé hors cadre serait injoignable, ce qui est pire que mal placé.
+
+### Ce que cette mesure ne dit pas
+
+Elle ne dit pas si les ~42 verbes sont les BONS, ni s'il en manque d'autres. Elle
+dit qu'il en manquait au moins un, et que son absence était invisible depuis
+l'app. La question « quel geste de l'app n'a pas son verbe ? » se pose surface
+par surface, et n'a été posée qu'une fois.
+
 ## 7. Correspondance avec ce qui existe
 
 Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au fil.
