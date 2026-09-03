@@ -801,9 +801,9 @@ struct ComposerSceneSurface: View {
                 if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
                     ComposerSceneReferenceFooter(hashtags: sceneHashtags,
                                                  references: sceneReferences,
+                                                 leadingInset: sceneCardLeading,
                                                  onOpenHashtags: onOpenHashtags,
                                                  onOpenMentions: onOpenMentions)
-                        .padding(.horizontal, 16)
                 }
                 // **La rangée basse — une PLACE permanente, un contenu qui
                 // change** (#4072, précisé au #5010).
