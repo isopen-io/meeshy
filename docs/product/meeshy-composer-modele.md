@@ -391,29 +391,53 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 
 ### Ce que cette opacité coûte, en chiffres
 
-> **Ces nombres sont DATÉS du 2026-09-02, et le premier n'est pas reproductible
-> en l'état** (constat du 2026-09-03). Recompté par trois méthodes — `grep` sur
-> `public var|let`, bornage par la déclaration suivante, équilibrage d'accolades
-> — il rend **112**, **131** et **119**. L'écart ne vient pas des modèles : il
-> vient de ce que « un champ » n'est pas défini. Faut-il compter les propriétés
-> CALCULÉES ? les `internal` ? celles d'une extension ?
+> **Le premier nombre disait 123, et il n'était pas reproductible** (constat du
+> 2026-09-03). Recompté par trois heuristiques — `grep` sur `public var|let`,
+> bornage par la déclaration suivante, équilibrage d'accolades — il rendait
+> **112**, **131** et **119**. L'écart ne venait pas des modèles : il venait de
+> ce que « un champ » n'était pas défini. Propriétés calculées ? `internal` ?
+> déclarées en extension ?
 >
 > **Un nombre que personne ne sait recompter n'est pas une mesure, c'est une
-> décoration** — et il décore d'autant mieux qu'il est précis. Ce qu'il faut
-> n'est pas de le corriger : c'est de dire par quelle RÈGLE il s'obtient, et de
-> laisser une garde le tenir. Suivi : #4986.
+> décoration** — et il décore d'autant mieux qu'il est précis.
 >
-> Le RATIO, lui, reste vrai à ce qu'il sert à dire : environ la moitié des champs
-> ne sont exercés par aucun golden, et les huit pertes silencieuses sont toutes
-> tombées de ce côté-là.
+> **La règle est désormais `Mirror`**, sur une instance : la définition de Swift
+> lui-même pour « propriété stockée ». Elle exclut d'office les calculées, les
+> statiques et les méthodes sans qu'on ait à en décider, et n'importe qui la
+> rejoue en trois lignes. C'est aussi celle qu'emploie déjà
+> `CanvasV3ExhaustivityTests` sur les mêmes modèles — une seconde convention en
+> aurait fait deux.
+>
+> Elle rend **120**, un QUATRIÈME nombre : aucune des trois heuristiques n'était
+> juste, et chacune paraissait l'être.
+>
+> **`SceneObjectFieldCensusTests` (SDK) tient ce chiffre** et rougit dès qu'un
+> champ est ajouté à l'un des cinq modèles. Son message ne dit pas « corrige le
+> nombre » : il demande si le champ neuf est EXERCÉ par le blob v1 partagé — car
+> s'il ne l'est pas, il vient d'agrandir les 47 % que rien ne compare, ce que ce
+> paragraphe existe pour rendre visible.
 
-| mesure | valeur (2026-09-02) |
-|---|---|
-| champs des cinq modèles d'objet | **≈ 120** — voir l'avertissement ci-dessus |
-| champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **65** (53 %) |
-| champs jamais exercés — donc jamais comparés | **58** (47 %) |
-| clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 |
-| pertes silencieuses corrigées en deux jours | **8** |
+| mesure | valeur | tenue par |
+|---|---|---|
+| champs des cinq modèles d'objet | **120** (`Mirror`, 2026-09-03) | `SceneObjectFieldCensusTests` |
+| champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **≈ la moitié** † | — |
+| champs jamais exercés — donc jamais comparés | **≈ la moitié** † | — |
+| clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 | commit |
+| pertes silencieuses corrigées en deux jours | **8** | commits |
+
+† **Ces deux-là étaient chiffrés 65 / 58, et leur somme faisait l'ancien 123.**
+Les recopier tels quels sous un recensement de 120 aurait produit une
+arithmétique fausse — et une somme qui ne tombe pas juste est le premier endroit
+où un lecteur cesse de croire un tableau. Ils sont donc rendus à ce qu'ils
+mesurent VRAIMENT : une proportion, qui porte l'argument entière.
+
+**Recompter la répartition demande d'inventorier ce que le blob v1 partagé
+exerce**, ce qu'aucune garde ne fait aujourd'hui. C'est le second volet de
+#4986 : le recensement TOTAL est tenu, sa RÉPARTITION ne l'est pas encore.
+
+> Les deux dernières lignes sont d'une autre nature, et c'est pourquoi elles
+> gardent leur chiffre exact : ce sont des **événements datés**, traçables à
+> leurs commits, pas des populations à recompter.
 
 **Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
 coïncidence : c'est le mécanisme. Un champ que le golden n'exerce pas n'est
