@@ -393,3 +393,227 @@ export const aime = async ({
       method: pose ? 'POST' : 'DELETE',
     }),
   );
+
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LES COMMENTAIRES (#4896) — au même endroit et par les mêmes primitives, comme
+ * l'en-tête de ce module l'annonce depuis le lot `story`.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * UN SEUL LECTEUR POUR LES TROIS SOURCES. La cible dessine trois puces — Post,
+ * Réel, Story — et le critère de fin exige qu'un MÊME lecteur les rende. C'est
+ * `publicationLue` : `storyLue` refuse tout ce qui n'est pas `type === 'STORY'`
+ * parce que l'écran d'une story a ses propres règles d'expiration ; celui-ci
+ * accepte les trois, et porte le `genre` pour que la vue le DISE.
+ *
+ * `STATUS` n'en fait pas partie : c'est une humeur d'une heure, sans fil de
+ * commentaires dans la cible. L'admettre ferait un écran qui s'ouvre sur un
+ * contenu déjà mort la plupart du temps.
+ *
+ * LA TROISIÈME PORTE, ET SA GARDE :
+ *
+ *   • `GET /api/v1/posts/:postId/comments` — `preValidation: [requiredAuth]`
+ *     (`services/gateway/src/routes/posts/comments.ts:61-62`). Même régime que
+ *     le post lui-même : la v3 s'y CONFORME, décision du porteur du
+ *     2026-09-02, et le visiteur sans session reçoit une invitation.
+ *
+ * ET CE QUE CETTE PORTE JUGE DÉJÀ, que le web n'a pas à rejouer : « le fil
+ * hérite de l'audience du post — lire les commentaires d'un post qu'on n'a pas
+ * le droit de voir, c'est en lire le contenu ». Son refus est un `404` et non
+ * un `403`, « distinguer révélerait l'existence du post ». Un repost simple
+ * renvoie le fil de sa RACINE ; une citation garde le sien.
+ *
+ * LA CARTE DES TRADUCTIONS D'UN COMMENTAIRE A LA MÊME FORME QUE CELLE D'UN
+ * POST — `Record<code, { text }>` (`schema.prisma:3523`, « même format et
+ * pipeline que Post.translations et Message.translations ») — et c'est ce qui
+ * rend `traductions()` réemployable tel quel. Le piège qu'il ferme mérite d'être
+ * dit : `resolvePrismTranslation` teste `typeof text !== 'string'` et IGNORE
+ * l'entrée. Lui passer la carte brute ne lève donc pas — elle rendrait `null`
+ * pour toutes les langues, et l'ORIGINAL partirait à tout le monde sans qu'une
+ * seule erreur le signale. Un Prisme mort qui ressemble à « aucune traduction
+ * disponible ».
+ */
+
+/** Les trois sources que l'écran des commentaires sait ouvrir. */
+export type GenreDePublication = 'POST' | 'REEL' | 'STORY';
+
+const GENRES: readonly GenreDePublication[] = ['POST', 'REEL', 'STORY'];
+
+const genreDePublication = (brut: unknown): GenreDePublication | null => {
+  const valeur = chaine(brut);
+  return GENRES.find((genre) => genre === valeur) ?? null;
+};
+
+export type Publication = {
+  readonly id: string;
+  readonly genre: GenreDePublication;
+  readonly titre: string | null;
+  readonly auteur: string;
+  readonly texte: string;
+  readonly texteOriginal: string;
+  readonly langueServie: string | null;
+  readonly langueOriginale: string | null;
+  readonly publieeA: string | null;
+};
+
+/**
+ * UNE PUBLICATION, LUE — et sa langue élue par la MÊME descente que la story.
+ *
+ * `texte` porte ce qui doit être AFFICHÉ, `texteOriginal` ce qui a été écrit,
+ * et `langueServie` dit dans quelle langue le premier est — c'est elle qui
+ * pose le `lang=` sur le nœud, sans quoi un lecteur d'écran prononcerait un
+ * texte français avec une voix anglaise.
+ */
+export const publicationLue = ({
+  brut,
+  langues,
+  langueDemandee,
+}: {
+  readonly brut: Readonly<Record<string, unknown>>;
+  readonly langues: readonly string[];
+  readonly langueDemandee: string | null;
+}): Publication | null => {
+  const id = chaine(brut.id);
+  const genre = genreDePublication(brut.type);
+  if (id === null || genre === null) return null;
+  if (instant(brut.deletedAt) !== null) return null;
+
+  const carte = traductions(brut.translations);
+  const langueOriginale = chaine(brut.originalLanguage);
+  const texteOriginal = chaine(brut.content) ?? '';
+  const elue = servie({ carte, langueOriginale, langues, langueDemandee });
+  const auteur = objet(brut.author);
+
+  return {
+    id,
+    genre,
+    titre: chaine(brut.title),
+    auteur: chaine(auteur?.displayName) ?? chaine(auteur?.username) ?? 'Quelqu’un',
+    texte: elue?.text ?? texteOriginal,
+    texteOriginal,
+    langueServie: elue?.language ?? null,
+    langueOriginale,
+    publieeA: instant(brut.createdAt),
+  };
+};
+
+export type Commentaire = {
+  readonly id: string;
+  readonly auteur: string;
+  readonly auteurId: string | null;
+  readonly texte: string;
+  readonly texteOriginal: string;
+  readonly langueServie: string | null;
+  readonly langueOriginale: string | null;
+  readonly publieA: string | null;
+  readonly aimes: number;
+  readonly reponses: number;
+  /** Vrai quand le lecteur en est l'auteur — la cible y ajoute « Modifier · Supprimer ». */
+  readonly aMoi: boolean;
+};
+
+/**
+ * UN COMMENTAIRE. La descente est celle du post, sans une ligne réécrite : même
+ * carte, même `servie()`, même ordre.
+ *
+ * `?lang=` NE S'APPLIQUE PAS aux commentaires, et c'est délibéré. La demande de
+ * langue est le geste d'un lecteur sur UN contenu — la puce de traduction du
+ * post —, pas un réglage global ; l'étendre au fil imposerait à trente
+ * commentaires la langue choisie pour un seul, et masquerait ceux qu'elle ne
+ * traduit pas. Chaque commentaire descend donc le Prisme du lecteur, seul.
+ */
+const commentaire = (
+  brut: Readonly<Record<string, unknown>>,
+  langues: readonly string[],
+  moiId: string | null,
+): Commentaire | null => {
+  const id = chaine(brut.id);
+  if (id === null) return null;
+
+  const carte = traductions(brut.translations);
+  const langueOriginale = chaine(brut.originalLanguage);
+  const texteOriginal = chaine(brut.content) ?? '';
+  const elue = servie({ carte, langueOriginale, langues, langueDemandee: null });
+  const auteur = objet(brut.author);
+  const auteurId = chaine(auteur?.id) ?? chaine(brut.authorId);
+
+  return {
+    id,
+    auteur: chaine(auteur?.displayName) ?? chaine(auteur?.username) ?? 'Quelqu’un',
+    auteurId,
+    texte: elue?.text ?? texteOriginal,
+    texteOriginal,
+    langueServie: elue?.language ?? null,
+    langueOriginale,
+    publieA: instant(brut.createdAt),
+    aimes: nombre(brut.likeCount) ?? 0,
+    reponses: nombre(brut.replyCount) ?? 0,
+    // `moiId` ABSENT ⇒ jamais « à moi ». Un écran qui offrirait « Supprimer »
+    // sur le commentaire d'un autre serait un contrôle que la passerelle
+    // refuserait — et qui aurait d'abord fait croire au lecteur qu'il le peut.
+    aMoi: moiId !== null && auteurId !== null && auteurId === moiId,
+  };
+};
+
+export type Fil =
+  | {
+      readonly genre: 'fil';
+      readonly commentaires: readonly Commentaire[];
+      /** `hasMore` — servi, jamais déduit d'un décompte de page. */
+      readonly encore: boolean;
+    }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'introuvable' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LE FIL D'UNE PUBLICATION.
+ *
+ * `limit` est passé explicitement : la route valide sa querystring par Zod et
+ * REFUSE une requête malformée plutôt que de la remplacer par des défauts
+ * (#4339) — ne rien passer laisserait son schéma décider seul de la page. La
+ * valeur est une décision de coût, comme partout ailleurs dans la v3.
+ *
+ * UN `404` N'EST PAS UNE PANNE. C'est le refus que la passerelle sert quand le
+ * lecteur n'a pas le droit de voir le post — délibérément indiscernable d'un
+ * post absent. L'écran le rend comme tel : introuvable, sans jamais laisser
+ * entendre qu'il existe ailleurs.
+ */
+export const filDeLaPublication = async ({
+  id,
+  jeton,
+  langues,
+  moiId,
+  limite = 30,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly jeton: string;
+  readonly langues: readonly string[];
+  readonly moiId: string | null;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Fil> => {
+  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}/${encodeURIComponent(id)}/comments?limit=${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status === 403 || reponse.status === 404) return { genre: 'introuvable' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  return {
+    genre: 'fil',
+    commentaires: enveloppe.data
+      .map((ligne) => objet(ligne))
+      .filter((ligne): ligne is Readonly<Record<string, unknown>> => ligne !== null)
+      .map((ligne) => commentaire(ligne, langues, moiId))
+      .filter((c): c is Commentaire => c !== null),
+    encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
