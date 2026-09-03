@@ -48,6 +48,61 @@ extension ConversationView {
         return "\(error.localizedDescription) Réduisez le nombre de pièces jointes (\(attachmentCount) en cours) et réessayez."
     }
 
+    /// Type de la bulle OPTIMISTE d'un groupe média, lu sur TOUTES ses pièces.
+    /// Un document partait typé `.image` (la liste disait « Photo » jusqu'à
+    /// l'écho serveur) parce que seule la première pièce était regardée, et
+    /// seulement pour distinguer vidéo de « tout le reste ».
+    ///
+    /// Miroir EXACT de `messageTypeForClientAttachments`
+    /// (`packages/shared/utils/attachment-message-type.ts`), la source unique
+    /// de cette règle : une seule catégorie présente ⇒ cette catégorie,
+    /// plusieurs catégories mélangées ⇒ `.file`. Le groupe `.visual` du
+    /// planificateur mêle images, vidéos ET documents, donc le cas hétérogène
+    /// est le cas NOMINAL — et ce que le client DÉCLARE, le serveur ne le
+    /// corrige pas (`deriveMessageTypeForAttachments` est additive). Une règle
+    /// manuscrite qui divergerait ici ferait sauter l'aperçu de liste de
+    /// « Vidéo » à « Document » à la réconciliation, sans que rien ne le dise.
+    nonisolated static func optimisticMessageType(isAudioGroup: Bool, mimeTypes: [String]) -> Message.MessageType {
+        if isAudioGroup { return .audio }
+        let buckets = mimeTypes.map { Self.attachmentBucket(forMime: $0) }
+        guard let first = buckets.first, buckets.allSatisfy({ $0 == first }) else { return .file }
+        return first
+    }
+
+    /// La catégorie d'un MIME — jamais `.text` : un `.txt` joint est une PIÈCE
+    /// JOINTE, pas un message texte (même repli que `bucketForMime` côté
+    /// partagé, y compris pour un MIME vide ou inconnu).
+    nonisolated private static func attachmentBucket(forMime mimeType: String) -> Message.MessageType {
+        let mime = mimeType.lowercased()
+        if mime.hasPrefix("image/") { return .image }
+        if mime.hasPrefix("audio/") { return .audio }
+        if mime.hasPrefix("video/") { return .video }
+        return .file
+    }
+
+    /// Transcription locale des vocaux (#4948) — singleton app, comme
+    /// `presenceManager` : l'extension ne peut pas déclarer de stockage.
+    var voiceNoteTranscriber: any VoiceNoteLocalTranscribing { VoiceNoteLocalTranscriber.shared }
+
+    /// Pose les transcriptions locales sur la bulle `tempId` — par pièce ET
+    /// par message (le chemin mono-audio lit `messageTranscriptions[msg.id]`).
+    /// Idempotent : appelé dans le slice de l'insert optimiste pour ce qui est
+    /// déjà connu, puis à l'envoi pour ce qui est arrivé entre-temps.
+    func attachLocalTranscriptions(_ transcriptions: [MessageTranscription], tempId: String) {
+        guard let first = transcriptions.first else { return }
+        for transcription in transcriptions {
+            viewModel.messageTranscriptionsByAttachment[transcription.attachmentId] = transcription
+        }
+        viewModel.messageTranscriptions[tempId] = first
+    }
+
+    /// Rollback de la tuile de lieu (`SendPlaceTileLaw`) : retirée AU TAP
+    /// avec le texte, elle ne revient que si l'envoi qui la porte a échoué.
+    func restorePlaceTile(_ snapshot: SharedPlace?, sent: Bool) {
+        guard let restored = SendPlaceTileLaw.restoration(of: snapshot, sent: sent, current: composerState.pendingPlace) else { return }
+        withAnimation { composerState.pendingPlace = restored }
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -69,6 +124,15 @@ extension ConversationView {
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         composerState.pendingMediaFiles[audioAttachment.id] = url
         composerState.pendingAttachments.append(audioAttachment)
+        // Transcription SUR L'APPAREIL dès l'arrêt (#4948, D-AUDIO-01) : elle
+        // tourne pendant que l'utilisateur relit ou tape, pour que la bulle
+        // parte avec son texte et que le serveur n'ait plus qu'à confirmer.
+        if let url {
+            voiceNoteTranscriber.beginTranscription(
+                attachmentId: audioAttachment.id, audioURL: url,
+                durationMs: durationMs, languageCode: composerState.selectedLanguage
+            )
+        }
         return true
     }
 
@@ -86,9 +150,10 @@ extension ConversationView {
             return
         }
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Lieu capturé AVANT toute remise à zéro d'état : il n'est remis à nil
-        // QU'AU SUCCÈS de l'envoi qui le porte — un échec laisse la tuile en
-        // place pour réessayer sans re-choisir son lieu (lot 2, spec 2026-07-30).
+        // Snapshot du lieu AVANT toute remise à zéro : la tuile disparaît AU
+        // TAP, avec le texte (`SendPlaceTileLaw`), et n'est restaurée que si
+        // l'envoi qui la porte échoue — sans re-choisir son lieu (lot 2, spec
+        // 2026-07-30 pour la restauration ; #4948 pour le retrait immédiat).
         let place = composerState.pendingPlace
         // Garde partagé avec `ConversationViewModel.sendMessage` : un message
         // « lieu seul » est un envoi valide.
@@ -136,6 +201,7 @@ extension ConversationView {
             composerState.pendingThumbnails.removeAll()
             purgeDraftAttachmentMedia()
             composerText.text = ""
+            withAnimation { composerState.pendingPlace = nil }
             ReplyContextCleaner(conversationId: viewModel.conversationId)
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
             viewModel.stopTypingEmission()
@@ -143,17 +209,14 @@ extension ConversationView {
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
                 let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang, location: place)
-                // Succès (ACK ou mise en file durable) : le lieu est parti, la
-                // tuile disparaît. Échec : la tuile reste pour un nouvel essai.
-                if ok, place != nil {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
+                restorePlaceTile(place, sent: ok)
             }
             return
         }
 
         // File upload flow: keep attachments visible, show progress
         composerText.text = ""
+        withAnimation { composerState.pendingPlace = nil }
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)
         viewModel.stopTypingEmission()
@@ -226,9 +289,10 @@ extension ConversationView {
         // `viewModel.messages.append` would only live in memory and be wiped
         // the moment any other GRDB write fires `messagesDidChange`.
         for send in mediaGroupSends {
-            let msgType: Message.MessageType = send.group.kind == .audio
-                ? .audio
-                : (send.locals.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
+            let msgType = Self.optimisticMessageType(
+                isAudioGroup: send.group.kind == .audio,
+                mimeTypes: send.locals.map(\.mimeType)
+            )
             viewModel.insertOptimisticMediaMessage(
                 tempId: send.tempId,
                 content: "",
@@ -239,6 +303,14 @@ extension ConversationView {
                 replyReference: send.group.carriesReply ? storyRef : nil,
                 originalLanguage: lang
             )
+            // Atomicity : la transcription locale déjà connue est posée dans le
+            // MÊME slice que la bulle — aucun `await` entre les deux.
+            if send.group.kind == .audio {
+                attachLocalTranscriptions(
+                    voiceNoteTranscriber.knownTranscriptions(for: send.locals.map(\.id)),
+                    tempId: send.tempId
+                )
+            }
         }
 
         // --- Optimistic TEXT insert: upfront, like every media group ---
@@ -302,6 +374,11 @@ extension ConversationView {
                 await MainActor.run {
                     composerState.isUploading = false
                     FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+                    // Aucun envoi n'a eu lieu : la tuile de lieu retirée au tap
+                    // revient, comme sur tout échec (`SendPlaceTileLaw`). Sans
+                    // cette ligne, le retrait immédiat FERAIT PERDRE le lieu sur
+                    // le seul chemin qui ne rejoint jamais `restorePlaceTile`.
+                    restorePlaceTile(place, sent: false)
                 }
                 return
             }
@@ -394,6 +471,16 @@ extension ConversationView {
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
+                    // Transcription locale arrivée APRÈS l'insert optimiste
+                    // (`stopAndSendRecording` envoie dans la foulée) : attente
+                    // bornée par le délai du transcripteur, pose idempotente,
+                    // puis le texte VOYAGE avec l'upload (`Upload-Metadata`).
+                    var localTranscriptions: [String: MessageTranscription] = [:]
+                    if send.group.kind == .audio {
+                        let awaited = await voiceNoteTranscriber.awaitTranscriptions(for: send.group.attachments.map(\.id))
+                        attachLocalTranscriptions(awaited, tempId: send.tempId)
+                        localTranscriptions = Dictionary(awaited.map { ($0.attachmentId, $0) }, uniquingKeysWith: { first, _ in first })
+                    }
                     // Upload PARALLÈLE borné.
                     //
                     // `TusUploadManager` porte déjà un pool (`maxConcurrent = 3`)
@@ -414,14 +501,15 @@ extension ConversationView {
                     // l'ordre des pièces et ne tient qu'un fichier en mémoire à
                     // la fois (199 photos lues d'un bloc feraient exploser
                     // l'empreinte mémoire).
-                    let pendingUploads: [(attachment: MeeshyMessageAttachment, fileURL: URL, mimeType: String, thumbHash: String?)] =
+                    let pendingUploads: [(attachment: MeeshyMessageAttachment, fileURL: URL, mimeType: String, thumbHash: String?, transcription: TusUploadTranscriptionMetadata?)] =
                         send.group.attachments.compactMap { att in
                             guard let fileURL = mediaFiles[att.id] else { return nil }
                             return (
                                 att,
                                 fileURL,
                                 send.group.kind == .audio ? "audio/mp4" : att.mimeType,
-                                thumbnails[att.id]?.toThumbHash()
+                                thumbnails[att.id]?.toThumbHash(),
+                                localTranscriptions[att.id]?.tusUploadMetadata
                             )
                         }
 
@@ -449,9 +537,11 @@ extension ConversationView {
                             let fileURL = item.fileURL
                             let mime = item.mimeType
                             let thumbHash = item.thumbHash
+                            let transcription = item.transcription
                             group.addTask {
                                 let result = try await uploader.uploadFile(
-                                    fileURL: fileURL, mimeType: mime, credential: credential, thumbHash: thumbHash
+                                    fileURL: fileURL, mimeType: mime, credential: credential,
+                                    thumbHash: thumbHash, transcription: transcription
                                 )
                                 return (index, result)
                             }
@@ -505,6 +595,13 @@ extension ConversationView {
                             }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
+                        // La bulle réconciliée porte l'id SERVEUR de la pièce :
+                        // la transcription locale la suit sous cet id, le temps
+                        // que `transcription:completed` la confirme.
+                        if let transcription = localTranscriptions[att.id] {
+                            viewModel.messageTranscriptionsByAttachment[result.id] = transcription.rekeyed(attachmentId: result.id)
+                            voiceNoteTranscriber.discard(attachmentId: att.id)
+                        }
                     }
                     let ok = await viewModel.sendMessage(
                         content: "",
@@ -585,9 +682,9 @@ extension ConversationView {
             // Send text group last (preserves original planner ordering intent).
             // Le lieu voyage avec le message texte (envoyé en dernier, comme la
             // tuile l'annonce dans le composer) ; sans texte, il part comme
-            // message « lieu seul » après les médias. Dans les deux cas
-            // `pendingPlace` n'est remis à nil QU'AU SUCCÈS de l'envoi qui le
-            // porte — un échec laisse la tuile pour réessayer.
+            // message « lieu seul » après les médias. Dans les deux cas la
+            // tuile a disparu AU TAP (`SendPlaceTileLaw`) et n'est restaurée
+            // que si l'envoi qui la porte échoue.
             // `existingTempId` réutilise la ligne optimiste déjà posée en amont
             // (voir « Optimistic TEXT insert ») : `sendMessage` la fait avancer
             // au lieu d'en créer une nouvelle, donc la bulle ne bouge pas et
@@ -602,9 +699,7 @@ extension ConversationView {
                     existingTempId: textTempId,
                     location: place
                 )
-                if ok, place != nil {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
+                restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok
             } else if place != nil {
                 let ok = await viewModel.sendMessage(
@@ -613,9 +708,7 @@ extension ConversationView {
                     existingTempId: textTempId,
                     location: place
                 )
-                if ok {
-                    withAnimation { composerState.pendingPlace = nil }
-                }
+                restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok
             }
 
