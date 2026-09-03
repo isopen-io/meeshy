@@ -35,6 +35,9 @@ const LIEN = (attributs: Partial<LienDePartage> = {}): LienDePartage => ({
   nom: 'Ops Lagos',
   utilisations: 12,
   conversation: '68f2a81417a557e8ce4ddfbb',
+  actif: true,
+  capacite: null,
+  expireA: null,
   ...attributs,
 });
 
@@ -291,7 +294,20 @@ describe('les liens de partage du lecteur', () => {
 
     expect(liens).toEqual({
       genre: 'liste',
-      liens: [{ identifiant: 'lagos-q1', nom: 'Ops Lagos', utilisations: 12, conversation: 'c1' }],
+      liens: [
+        {
+          identifiant: 'lagos-q1',
+          nom: 'Ops Lagos',
+          utilisations: 12,
+          conversation: 'c1',
+          actif: true,
+          // La charge de ce témoin ne porte ni `maxUses` ni `expiresAt` — ce
+          // qu'un lien sans capacité ni échéance sert. Les deux sortent `null`,
+          // jamais `0` ni une date fabriquée.
+          capacite: null,
+          expireA: null,
+        },
+      ],
     });
   });
 
