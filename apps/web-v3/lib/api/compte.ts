@@ -143,7 +143,17 @@ const nomAffiche = (brut: Readonly<Record<string, unknown>>): string => {
   return noms.length === 0 ? SANS_TITRE : noms.slice(0, 3).join(', ');
 };
 
-const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
+/**
+ * EXPORTÉE pour la RECHERCHE, qui lit la même forme.
+ *
+ * `GET /conversations/search` sert `conversationMinimalSchema`, exactement ce
+ * que `GET /conversations` sert — mêmes clés, `participants` compris, dont
+ * `nomAffiche` a besoin pour nommer un fil direct sans titre. Écrire une
+ * seconde projection dans le module de recherche en ferait une jumelle, qui
+ * divergerait au premier champ ajouté : c'est le motif que le dépôt paie
+ * cycle après cycle (§ « Cette entité a-t-elle une JUMELLE ? »).
+ */
+export const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
   const id = chaine(brut.id);
   if (id === null) return null;
 
