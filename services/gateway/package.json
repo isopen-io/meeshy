@@ -94,7 +94,7 @@
     "glob": "^13.0.6",
     "grpc-tools": "^1.13.1",
     "jest": "^30.4.2",
-    "mongodb": "^7.5.0",
+    "mongodb": "^7.6.0",
     "prisma": "^6.19.3",
     "reflect-metadata": "^0.2.2",
     "socket.io-client": "^4.8.3",
