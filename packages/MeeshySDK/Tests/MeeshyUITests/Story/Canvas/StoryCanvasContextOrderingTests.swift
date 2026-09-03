@@ -98,7 +98,7 @@ final class StoryCanvasContextOrderingTests: XCTestCase {
                                         zIndex: 0)
         let view = makeCanvas(effects: textAbove(StoryEffects(locationObjects: [badge])))
 
-        view.performContextAction(.bringForward, on: "badge", kind: .location)
+        view.performContextAction(.bringForward, on: "badge", kind: .place)
 
         XCTAssertGreaterThan(try XCTUnwrap(zIndex(view, "badge")), try XCTUnwrap(zIndex(view, "text")))
     }

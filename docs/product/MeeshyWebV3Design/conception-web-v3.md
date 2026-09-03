@@ -1373,6 +1373,31 @@ docs/product/MeeshyWebV3Design/
 | Les sous-lignes du bandeau des droits (`cible/rights.png`, ~310 px à 390 × 844) | une ligne par droit AVEC sa sous-ligne, comme dans l'accordéon de la modale | une ligne par droit, sans sous-ligne (les sous-lignes restent dans la MODALE, où elles se lisent avant d'entrer) | charte règle 29 et `--bandeau-max: 34dvh` (287 px) : un bandeau qui dépasse mange la conversation qu'on vient lire. Mesuré après changement : le bandeau tient dans son jeton |
 | Le poids d'un écran | `budgets.json` ne gatait que des FEUILLES (chrome 4 Ko, CSS servi 6 Ko, table 1,5 Ko) | un plafond de **9 Ko gzip par DOCUMENT** entre (`budgets.json` → `documents`) | charte règle 4 : le lecteur ne télécharge pas une feuille mais un document, et une fois PAR ÉCRAN puisque tout y est inliné (règle 5). Le chiffre vient du pire document mesuré sur la direction retenue (8 362 o) ; **les documents du dépôt ne sont pas mesurés**, et ce plafond n'est câblé par aucun témoin — dit ici plutôt que découvert au premier dépassement |
 
+### 12.10 Directive du porteur (2026-09-03) — le fil est un CHAT, pas un formulaire ; feeds, liens, légèreté
+
+> **Statut** : ce paragraphe a la même valeur que le § 12 — il s'AJOUTE à la directive du 2026-09-01, il ne la remplace pas. L'effort reste dû EN PRIORITÉ à la vitrine, au tableau de bord, à `/chats` et `/chat` (thread, rich, media) ; ce paragraphe PRÉCISE ce que « chat complet » veut dire sur ces écrans et ÉTEND le focus aux feeds et aux liens de partage. Vérifié le 2026-09-03, avant d'écrire : `app/connecte/fil-lignes.ts:56-59` sert déjà l'avatar (initiales + teinte, `lib/avatar.ts`) sur chaque ligne du fil et de la liste — acquis, pas à refaire. Aucun geste tactile de balayage (`swipe`/`touchstart`/`pointerdown`) dans `apps/web-v3/app` (grep, 2026-09-03) : à construire en entier.
+
+12.10.1 — Le fil (`thread`, `rich`) affiche tout ce qu'un chat affiche
+Les six variantes déjà visées par le critère de fin de `rich` (image, vidéo, audio, transfert, réponse, story) doivent, chacune, offrir : la citation/réponse (reply-to, avec saut vers le message cité), l'aperçu image/vidéo AVEC plein écran au tap, et pour l'audio la transcription au Prisme (§ 5.4) ET le plein écran de sa fiche. Rien ici ne réintroduit le mode « focal » retiré au tour 2 (§ 12.9, ligne « Le mode « focal » du fil ») : un fondu `opacity:.45` permanent sur les messages voisins était un contrôle jamais rendu, contraire aux règles 18 et 34 de la charte. La lecture « lentille » que demande le porteur se fait par des mécanismes qui ont un TÉMOIN — auto-défilement au message reçu (déjà décrit § 12.4, `lib/realtime/defilement.ts`), mise en évidence du message cité par un reply au clic, zoom plein écran d'un média — jamais par une atténuation du contenu qui n'a pas le focus.
+
+12.10.2 — Le nombre de participants ne s'affiche pas dans une conversation à deux
+Mesuré : `app/connecte/fil-vue.ts:168` (`sousTitre`) et `:183` (`sousTitreHtml`), `app/connecte/vue.ts:63` (liste `/chats`) et `:114` (carte `home`) composent tous inconditionnellement `${membres} participants`, y compris pour une conversation à 2. Un compte de deux personnes ne s'affiche pas — ces quatre sites masquent la mention dès que `conversation.membres <= 2` (le fil) ; seule la présence/frappe garde sa place. À partir de 3, la mention reste.
+
+12.10.3 — Le profil d'un participant s'ouvre en MODALE
+Nouvel écran, hors matrice actuelle : `sheet:profil-membre` (surimpression, `<dialog>` natif comme `sheet:member` et `sheet:link`), atteignable depuis l'avatar ou le nom d'un participant dans `thread`/`rich`/`chats`. Ce n'est PAS `sheet:member` (§ ligne 844 de ce document : l'espace membre remplace la barre d'onglets absente et navigue vers SON PROPRE compte) — deux besoins distincts, deux surimpressions. À faire entrer dans `MeeshyWebV3.dc.html`, `matrice.json` et `cible/` par la phase Concevoir avant tout code (§ 10.4).
+
+12.10.4 — `/chats` se manipule au doigt, jamais au prix de l'accessibilité
+`/chats` (déjà focus) reçoit le balayage gauche/droite par ligne : un sens archive ou met en sourdine (mute), l'autre supprime — optimiste, réversible tant que le serveur n'a pas confirmé (Optimistic Updates, CLAUDE.md § Instant App Principles). Le geste n'est JAMAIS le seul chemin : les trois actions restent atteignables au clavier et au lecteur d'écran par un menu porté par chaque ligne (dimension 5, Facilité d'accès).
+
+12.10.5 — Les feeds, leur création, et les liens de partage rejoignent le focus explicite
+Après le fil et la liste : `feed`, `reels`, `comments` (déjà dans la matrice, L3/L5) et leur CRÉATION — `composer` (post/réel/humeur) et `storyCreate` — puis `links` et `sheet:link` (créer un lien de partage depuis une conversation existante, pas seulement depuis `/links`). Ces vue_id existent déjà dans `matrice.json` ; ce paragraphe ne change ni leur route ni leur critère de fin, il les fait entrer dans l'ORDRE du focus du porteur.
+
+12.10.6 — La légèreté n'est pas négociable
+Rien au 12.10.1-12.10.5 ne justifie un octet de JavaScript hors ce que § 12.4 autorise déjà. Citation, plein écran, balayage et modale de profil se rendent par les mêmes mécanismes existants (`<dialog>` natif, CSS, le module ES de temps réel) — jamais par un framework hydraté de plus, jamais par un actif externe.
+
+12.10.7 — Le budget d'agents : le bon modèle, jamais le plus cher par défaut
+Mesuré dans l'historique du script (commits `38c15163`, `8524d3f0`) : `Implementer`, `Corriger`, `Concevoir`, `Documenter`, `Livrer` et `Completude` étaient fixés sur `opus` (`fable` avant le 2026-09-02) pour CHAQUE écran et CHAQUE tour, et la compétition de charte se relançait à CHAQUE invocation malgré une charte déjà arrêtée au § 12.5 — quatre appels dont un juge à effort `max`, systématiquement. `.claude/workflows/meeshy-web-v3-bout-en-bout.js` est corrigé en conséquence (2026-09-03) : `sonnet` par défaut sur ces phases ; `opus` réservé à la revue croisée de CONCEPTION (la valeur du contradicteur, § 10.5), à la recette au navigateur des écrans PHARES et au jugement de charte ; la charte ne se relance plus qu'à la demande explicite (`refaire_charte:true`).
+
 ---
 
 ## Annexe — les mesures, et la commande qui les rend

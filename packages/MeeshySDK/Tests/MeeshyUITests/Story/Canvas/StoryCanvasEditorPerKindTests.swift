@@ -8,7 +8,7 @@ import MeeshySDK
 /// `hasEditor` se lisait `onItemDoubleTapped != nil` : une question de CANVAS
 /// (« l'hôte a-t-il câblé un éditeur ? ») posée à la place d'une question par
 /// objet (« CET objet a-t-il un éditeur ? »). L'atelier câble le rappel puis
-/// fait `case .sticker, .location: break` — le menu offrait donc « Modifier »
+/// fait `case .sticker, .place: break` — le menu offrait donc « Modifier »
 /// sur un sticker, et le toucher ne produisait rien.
 ///
 /// > Le menu avait la `kind` sous la main — `contextMenu(for:kind:)` la reçoit.
@@ -58,7 +58,7 @@ final class StoryCanvasEditorPerKindTests: XCTestCase {
         XCTAssertTrue(vue.hasEditor(for: .media))
         XCTAssertFalse(vue.hasEditor(for: .sticker),
                        "L'atelier fait `case .sticker: break` — offrir « Modifier » y était inerte.")
-        XCTAssertFalse(vue.hasEditor(for: .location))
+        XCTAssertFalse(vue.hasEditor(for: .place))
     }
 
     /// La scène incrustée du composer n'édite que le TEXTE tant qu'aucun
@@ -104,7 +104,7 @@ final class StoryCanvasEditorPerKindTests: XCTestCase {
         case .text: return "t1"
         case .media: return "m1"
         case .sticker: return "st1"
-        case .location: return "loc1"
+        case .place: return "loc1"
         case .audio: return "au1"
         }
     }

@@ -51,7 +51,7 @@ public nonisolated enum StorySceneObjectPredicates {
         switch slide.sceneObject(id: id) {
         case .media(let objet): return objet.kind == .video
         case .audio:            return true
-        case .text, .sticker, .location, nil: return false
+        case .text, .sticker, .place, nil: return false
         }
     }
 
