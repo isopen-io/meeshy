@@ -52,6 +52,14 @@ export type MediaDeStory = {
   readonly alt: string | null;
   readonly largeur: number | null;
   readonly hauteur: number | null;
+  /**
+   * `thumbnailUrl` (`postIncludes.ts:107`, `mediaSelect`) — l'affiche qu'un
+   * `<video preload="none">` peint AVANT la pression (§ media-html.ts). `null`
+   * pour un genre sans vignette (image, son) ou quand la passerelle n'en sert
+   * aucune : une affiche inventée serait pire qu'aucune (§ INTERDITS, aucune
+   * mesure/valeur ne s'invente).
+   */
+  readonly affiche: string | null;
 };
 
 export type Story = {
@@ -144,12 +152,14 @@ export const media = (brut: unknown, origine: string): MediaDeStory | null => {
   const piece = objet(brut);
   const servie = chaine(piece?.fileUrl);
   if (piece === null || servie === null) return null;
+  const affiche = chaine(piece.thumbnailUrl);
   return {
     url: urlDePiece(servie, origine),
     genre: genreDeMime(chaine(piece.mimeType)),
     alt: chaine(piece.alt) ?? chaine(piece.caption),
     largeur: nombre(piece.width),
     hauteur: nombre(piece.height),
+    affiche: affiche === null ? null : urlDePiece(affiche, origine),
   };
 };
 
@@ -701,5 +711,103 @@ export const filDeLaPublication = async ({
       .map((ligne) => commentaire(ligne, langues, moiId))
       .filter((c): c is Commentaire => c !== null),
     encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PUBLIER (#4966, `/composer` ; #5033, `/stories/new`) — au même endroit et
+ * par les mêmes primitives que la lecture ci-dessus.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `POST /api/v1/posts` (`services/gateway/src/routes/posts/core.ts:365`,
+ * `preValidation: [requiredAuth]`) est la SEULE porte de création que la v3
+ * appelle : le corps est celui de `CreatePostSchema`
+ * (`routes/posts/types.ts:233-237`), qui refuse un contenu de plus de 5000
+ * caractères et exige qu'au moins un porteur de contenu soit présent
+ * (`hasAnyContentCarrier`).
+ *
+ * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — depuis #5033
+ * (`/stories/new`), qui en fait un contrôle RÉEL (trois valeurs, mutant la
+ * charge envoyée : c'est le critère de fin de cet écran). Composer
+ * (`/composer`, post/réel/humeur, #4966) ne le fournit toujours pas : le
+ * défaut `'PUBLIC'` préserve son comportement à l'octet près — sa ligne
+ * « Audience » reste INFORMATIVE (comme « Traduction »), la ligne ne DEVIENT
+ * un contrôle que pour l'écran qui la câble.
+ *
+ * `originalLanguage` — `CreatePostSchema.originalLanguage`
+ * (`routes/posts/types.ts:249-251`) — EST LA REVENDICATION DU CLIENT (§ Prisme,
+ * « canonicalize the client claim at the write boundary »). Sans elle, la
+ * passerelle retombe sur `detectLanguage(content)` : une étiquette DEVINÉE, et
+ * le pivot de toute la descente du Prisme chez les LECTEURS — l'erreur ne se
+ * voit jamais chez l'auteur (revue croisée #4966, défaut 8). `langue` est
+ * `null` quand `/auth/me` n'a servi aucune `systemLanguage` : ne RIEN
+ * revendiquer est correct, la passerelle devine alors comme elle l'a toujours
+ * fait — une chaîne vide ne l'est pas, elle poserait un `originalLanguage`
+ * vide dans le corps.
+ */
+
+export type PublicationEnvoyee =
+  | { readonly genre: 'publie'; readonly id: string }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_PUBLICATION = 'La publication n’a pas pu être envoyée. Réessayez.';
+
+export const publie = async ({
+  jeton,
+  type,
+  texte,
+  visibility = 'PUBLIC',
+  langue = null,
+  cmid = null,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly type: 'POST' | 'REEL' | 'STATUS' | 'STORY';
+  readonly texte: string;
+  /** `CreatePostSchema.visibility` — `'PUBLIC'` pour composer, la valeur RÉELLEMENT choisie pour une story (#5033). */
+  readonly visibility?: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
+  readonly langue?: string | null;
+  /**
+   * `X-Client-Mutation-Id` — `cmid_<uuid v4 minuscule>`
+   * (`services/gateway/src/middleware/clientMutationId.ts:29`). Un rejeu
+   * PORTANT LE MÊME `cmid` (retour en ligne, un second onglet) retombe sur
+   * `MutationLogService` et rend le résultat déjà produit plutôt que d'en
+   * fabriquer un second (`POST /posts` est enveloppé par `withMutationLog`,
+   * `replayCost: 'diverges'` — routes/posts/core.ts:389-410). `null` : aucun
+   * en-tête posé, l'appel n'est pas idempotent (chemin SANS JavaScript).
+   */
+  readonly cmid?: string | null;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<PublicationEnvoyee> => {
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}`, jeton, recuperer, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(cmid === null ? {} : { 'x-client-mutation-id': cmid }),
+    },
+    body: JSON.stringify({
+      type,
+      content: texte,
+      visibility,
+      ...(langue === null ? {} : { originalLanguage: langue }),
+    }),
+  });
+
+  if (reponse === null) return { genre: 'refus', message: REFUS_PUBLICATION, statut: null };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success === true) {
+    const id = chaine(objet(enveloppe.data)?.id);
+    if (id !== null) return { genre: 'publie', id };
+  }
+
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_PUBLICATION,
+    statut: reponse.status,
   };
 };

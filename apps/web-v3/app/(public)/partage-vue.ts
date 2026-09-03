@@ -123,6 +123,14 @@ const enTete = (etat: EtatDeLaStory): string => {
   );
 };
 
+/**
+ * LE MÉDIA D'UNE PUBLICATION — le site UNIQUE `@/app/media-html` (partagé
+ * avec `app/connecte/social-vue.ts`, #5031) : une définition locale a déjà
+ * fait planter `next start` en production quand un AUTRE segment d'App
+ * Router l'importait (voir le doc-comment de ce module). Ne pas la redupliquer
+ * ici — c'est exactement la jumelle que ce module existe pour éviter.
+ */
+
 const scene = (etat: EtatDeLaStory): string => {
   const { copie } = etat.genre;
   const { story, voisinage } = etat;

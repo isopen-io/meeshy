@@ -211,7 +211,7 @@ describe('le média d’une story', () => {
       media: [{ id: 'p1', fileUrl: '/api/v1/attachments/file/2026/scene.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920, alt: 'Trois graphiques' }],
     });
     expect(story.medias).toEqual([
-      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920 },
+      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920, affiche: null },
     ]);
   });
 });
