@@ -222,7 +222,11 @@ struct PostDetailView: View {
     // MARK: - Post Heart Toggle (socket-driven, post detail)
 
     @MainActor
-    private func toggleDetailPostHeart() {
+    // `internal` : `sendDetailReaction` vit dans `PostDetailView+Reactions`
+    // et retombe sur le cœur quand l'émoji choisi EST le cœur. Un `private`
+    // de portée fichier le lui interdirait — même piège que `viewModel`,
+    // documenté dans `apps/ios/CLAUDE.md`.
+    func toggleDetailPostHeart() {
         Task {
             guard !postHeartInFlightIds.contains(postId) else { return }
             postHeartInFlightIds.insert(postId)
@@ -1462,23 +1466,6 @@ struct PostDetailView: View {
     // MARK: - Actions Bar
 
     @ViewBuilder
-    /// **Poser un émoji AUTRE que le cœur.** Le cœur garde
-    /// `toggleDetailPostHeart` : lui seul porte `detailIsLiked`, le compteur
-    /// affiché et sa réconciliation. Un émoji quelconque n'a pas d'état à
-    /// peindre dans cette barre — le geste est donc ADDITIF, jamais un
-    /// basculement, pour ne pas promettre un état que la vue ne sait pas
-    /// afficher.
-    private func sendDetailReaction(_ emoji: String) {
-        guard emoji != MeeshyQuickReactions.heart else {
-            toggleDetailPostHeart()
-            return
-        }
-        Task {
-            _ = try? await SocialSocketManager.shared.addPostReaction(
-                postId: postId, emoji: emoji)
-        }
-    }
-
     private func actionsBar(_ post: FeedPost,
                             renderedItem: StoryItem,
                             scrollProxy: ScrollViewProxy) -> some View {
@@ -1528,27 +1515,10 @@ EngagementGlyph(
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
             .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
-            // **La palette, en SECOND geste** (décision porteur 2026-09-02).
-            // L'appui bref garde ❤️ et toute sa réconciliation optimiste ;
-            // l'appui long ouvre les six émojis de `MeeshyQuickReactions`, ceux
-            // que la story et la conversation servent déjà. Le serveur les
-            // acceptait depuis toujours — seule la vue les refusait (#4916).
-            .onLongPressGesture {
-                HapticFeedback.medium()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showsReactionPalette = true
-                }
-            }
-            .accessibilityAction(named: Text(String(localized: "reactions.more",
-                                                    defaultValue: "Plus de réactions", bundle: .main))) {
-                showsReactionPalette = true
-            }
-            .overlay(alignment: .topLeading) {
-                PostReactionPalette(isPresented: $showsReactionPalette,
-                                    onPick: { emoji in sendDetailReaction(emoji) },
-                                    style: theme.mode.isDark ? .dark : .light)
-                    .offset(y: -46)
-            }
+            .reactionPalette(isPresented: $showsReactionPalette,
+                             isDark: theme.mode.isDark,
+                             anchor: .topLeading,
+                             offsetY: -46) { sendDetailReaction($0) }
 
             Spacer()
 

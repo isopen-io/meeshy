@@ -457,7 +457,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             copy.zIndex = nextTopZ()
             slide.locationObjects.append(copy)
             duplicatedNewId = newId
-            duplicatedKind = .location
+            duplicatedKind = .place
         }
         onItemModified?(slide)
         if let newId = duplicatedNewId, let kind = duplicatedKind {

@@ -379,7 +379,7 @@ extension MeeshyComposerHost {
                     // une seconde vue d'édition aurait divergé au premier
                     // réglage.
                     editSceneSound(id)
-                case .media, .sticker, .location:
+                case .media, .sticker, .place:
                     break
                 }
             },

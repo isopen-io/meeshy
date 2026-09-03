@@ -26006,3 +26006,212 @@ inventaire d'émetteurs ne dit rien des héritiers — c'est la leçon 261 (« u
 Voisines : la 477 (une sonde dont le matériau vient de la production s'éteint
 quand la production grandit) — même soirée, même famille : ce qui décide n'est
 pas ce que le code DIT, c'est ce que l'environnement lui APPORTE.
+
+## Leçon 479 — Une garde qui contrôle UNE des deux déclarations jumelles ne garde pas la paire
+
+`MeeshySceneObject` déclare ses familles DEUX fois : l'union qui porte la charge
+(`case place(StoryLocationObject)`) et son ombre sans charge (`Kind.place`, pour
+les sites qui trient et comptent). Le renommage de #4960 n'en a touché qu'une.
+
+Tout compilait. La suite SDK passait à 4 226 témoins. Et **mes quatre témoins de
+garde, écrits dans le même lot pour empêcher exactement cette divergence,
+étaient verts** — pour une raison structurelle : ils lisent des `rawValue`, et un
+cas d'union n'en a pas.
+
+> J'ai fermé l'issue *sur la foi de ma propre garde*. C'est la forme la plus
+> coûteuse de fausse sécurité : une garde neuve inspire plus de confiance qu'une
+> ancienne, alors qu'elle a exactement le même angle mort — celui de son
+> instrument.
+
+**Ce qui l'a révélé n'est ni une relecture ni un témoin** : le compilateur, trois
+heures plus tard, dans un travail sans rapport (écrire un accesseur générique
+pour une autre issue). Le défaut est sorti par accident.
+
+La parade, quand un concept est déclaré deux fois dans deux formes que le
+langage traite différemment :
+
+| forme | ce qu'un test voit à l'exécution |
+|---|---|
+| `enum Kind: String, CaseIterable` | tout — `allCases`, `rawValue` |
+| `enum Union { case x(Payload) }` | **rien** — ni énumération, ni nom |
+
+Donc : **la seconde se garde par la SOURCE**, faute de mieux. `pour chaque
+famille du Kind, un cas d'union du même nom doit exister ; et aucun ancien nom ne
+doit subsister.`
+
+Le motif se généralise à toute paire « type riche + son étiquette » — un
+`enum` et son `rawValue`, un modèle et son DTO, une colonne et sa constante.
+**Avant d'écrire une garde, demander de quelle forme elle est aveugle**, et
+garder l'autre autrement.
+
+Corollaire de méthode, retrouvé une fois de plus : le renommage lui-même s'est
+fait en renommant la déclaration et en laissant le COMPILATEUR énumérer les
+sites — trois au premier lot, sept au second, tous justes, là où un `grep`
+en montrait cent quatorze dont la plupart appartenaient à d'autres énumérés.
+**Un renommage de `case` ne se mesure pas au mot, il se mesure au type.**
+
+## Leçon 480 — Une absence dans l'INSTRUMENT n'est pas une absence dans le PRODUIT
+
+**Deux faux positifs évités en une seule session de vérification (2026-09-03),
+tous deux à un geste de devenir des issues contre du code JUSTE.**
+
+### Cas 1 — « les cinq outils du composer ne sont pas accessibles »
+
+`idb ui describe-all` sur le composer rend **8 éléments** : `Close`,
+`Publication format`, la zone de texte, un **`Group "Document tools"`**,
+`Audience`, `Publish`. Photos, Camera, Emoji, Background et File n'y figurent
+pas. Conclusion tentante : le lecteur d'écran ne les atteint pas — défaut de
+dimension 5.
+
+**Faux.** `ComposerDocumentSurface.swift:626` pose
+`.accessibilityElement(children: .contain)`, et chaque outil porte son propre
+`accessibilityLabel` (ligne 678). `.contain` est *précisément* le modificateur
+qui PRÉSERVE les enfants : VoiceOver entre dans le conteneur. Ce que la mesure
+établit, c'est qu'`idb` **n'énumère pas** les enfants d'un conteneur `.contain`.
+
+> **Discriminant** : avant de conclure d'un arbre d'accessibilité, vérifier que
+> l'outil DESCEND. Ici il descendait ailleurs — sur le fil, les `Like` / `Repost`
+> / `Save` imbriqués dans chaque carte étaient bien listés. C'est ce contraste
+> qui rendait l'absence crédible, et c'est lui qu'il fallait interroger.
+
+### Cas 2 — « redo est manquant dans l'éditeur d'objet »
+
+L'écran ne montrait **qu'une** flèche d'historique, là où la directive porteur
+demande « undo redo au même endroit ». Capture à l'appui.
+
+**Faux.** Redo est ABSENT quand il n'y a rien à rétablir — la **loi 4**
+correctement appliquée (*un contrôle sans effet est absent, jamais grisé*).
+Après une action puis une annulation, **les deux flèches sont là**.
+
+> **Discriminant** : un contrôle conditionnel ne se vérifie pas en REGARDANT,
+> mais en **créant sa condition**. Agir, annuler, puis regarder. Sans ce geste,
+> on fait corriger un comportement juste — et le « correctif » casserait la loi.
+
+### Ce que les deux ont en commun
+
+Dans les deux cas **l'outil a répondu correctement à une question VOISINE** de
+celle que je posais :
+
+| je demandais | l'instrument répondait |
+|---|---|
+| « ces contrôles sont-ils atteignables ? » | « ces contrôles sont-ils ÉNUMÉRÉS par `describe-all` ? » |
+| « redo existe-t-il ? » | « redo est-il visible DANS CET ÉTAT ? » |
+
+C'est la même racine que la 468 (les rouges qui ne mesurent rien) et la 475 (le
+filtre qui ne trouve pas sa cible), vue depuis la vérification manuelle plutôt
+que depuis le gate : **un instrument ne dit jamais « je ne sais pas » — il rend
+une réponse parfaitement formée à la question qu'il a comprise.**
+
+La parade n'est pas la prudence en général. C'est de poser, à côté de la valeur
+cherchée, **une seconde grandeur que la bonne réponse contraint** : un contraste
+qui prouve que l'outil sait descendre, une condition fabriquée qui prouve que le
+contrôle sait paraître.
+
+Voisine côté production, même semaine : une garde fermée sur des `rawValue`
+alors que la moitié jumelle était un cas d'union, qui n'en a pas (#4960). *Une
+garde qui contrôle une des deux déclarations jumelles ne garde pas la paire.*
+
+## Leçon 481 — Un TÉMOIN qui ne compile pas ne dit rien, et il ne dit même pas qu'il est cassé
+
+**Le fait (2026-09-03).** Un renommage d'énuméré (`CanvasItemKind.location` →
+`.place`) laisse six consommateurs derrière lui. L'un d'eux est un fichier de
+GARDES : `ComposerSceneBackgroundTapPolicyTests.swift:58`.
+
+Conséquence, et c'est elle qui compte : **le bundle de tests entier ne se
+construit plus.** On lit alors « build rouge » là où il faut lire **« aucune
+garde n'a pu s'exprimer »**.
+
+> Les autres membres de notre catalogue produisent un VERT trompeur. Celui-ci
+> produit un ROUGE qui **masque l'absence de mesure** — et c'est pire, parce
+> qu'un rouge attire le regard vers sa cause apparente (la compilation) et
+> l'éloigne de ce qu'on a perdu (tout le reste).
+
+**Le cas particulier qui le rend vicieux** : ici, la garde cassée est
+*précisément* celle qui aurait dû attraper le renommage incomplet. Le défaut
+détruit son propre détecteur. Aucune quantité de relecture du journal ne
+révélera qu'une garde MANQUE à l'appel : elle n'apparaît ni en succès, ni en
+échec, ni en « skipped ».
+
+**Parade** — la même que la 475, poussée d'un cran : après un build de tests
+ROUGE, ne pas se contenter de corriger l'erreur affichée. Compter ensuite ce qui
+a TOURNÉ :
+
+```bash
+grep -cE "Test Case '-\[" "$LOG"      # 0 ⇒ aucune garde n'a parlé
+```
+
+Un `RC != 0` sur un build de tests est une **absence de verdict**, pas un
+verdict. Le seul état où le dépôt sait quelque chose est : bundle construit ET
+cas comptés.
+
+### Le catalogue complet, à sept entrées
+
+| ce qu'on lit | ce que ça vaut | discriminant |
+|---|---|---|
+| verrou `build.db` | RC=65, **zéro test** | `database is locked` dans le journal de CETTE tentative |
+| bundle périmé rejoué | vert du PASSÉ | le build qui précède a échoué |
+| WIP voisin non committé | rouge d'un autre | `git show HEAD:<f>` compile, l'arbre non |
+| compteur de retry accumulé | mauvais NOMBRE | le refus est daté d'une tentative antérieure |
+| cache de modules Clang (CI) | rouge d'environnement | `has been modified since the module file` ; aucun fichier du dépôt cité |
+| suite absente du bundle | **vert par omission** | `-only-testing` ignoré en silence ; compter les cas nommés |
+| **témoin qui ne compile pas** | **rouge qui MASQUE l'absence de mesure** | après correction, compter `Test Case '-\[` |
+
+Fil rouge des sept : **ce qui ne s'exécute pas ne se signale pas.** La seule
+défense est de compter ce qu'on a nommé, jamais de lire l'agrégat.
+
+## Leçon 482 (amendement à la 479) — j'avais écrit la leçon trop PETITE, exactement comme la garde
+
+La 479 dit : « une garde qui contrôle UNE des DEUX déclarations jumelles ne garde
+pas la paire ». Elle est juste, et elle était **sous-dimensionnée** — comme la
+garde qu'elle décrivait.
+
+Il n'y avait pas deux déclarations de cette famille. Il y en avait **cinq** :
+
+| déclaration | couche |
+|---|---|
+| `ACTIVE_KINDS` | contrat du fil (TS) |
+| `ObjectKind` | miroir Swift du fil |
+| `TimelineClipKind` | projet timeline |
+| `ClipSnapshot.Kind` | inspecteur |
+| `MeeshySceneObject` — l'union **et** son `Kind` | objet de scène (deux formes) |
+| `StoryCanvasUIView.CanvasItemKind` | canvas UIKit |
+
+Trois lots pour une seule règle, chacun clos en croyant avoir fini. Le deuxième
+a été fermé **en citant ma propre garde comme preuve**, alors qu'elle ne
+regardait que la paire que j'avais en tête au moment de l'écrire.
+
+> **Une garde par PAIRE ne garde pas une famille.** Elle rend un verdict vrai sur
+> ce qu'elle regarde et MUET sur tout le reste — et le silence se lit comme un
+> verdict sur l'ensemble. C'est ce qui rend une garde neuve plus dangereuse
+> qu'une garde absente : elle inspire une confiance qu'elle n'a pas gagnée.
+
+**La forme qui tient : BALAYER par la FORME, jamais énumérer par le NOM.** Le
+témoin final ne connaît le nom d'aucun type. Il lit toutes les sources et
+déclare fautive toute ligne dont le jeu de cas est celui des familles. Une
+sixième déclaration naîtrait sous sa surveillance sans qu'on ait à l'inscrire —
+c'est la différence entre une garde qui liste et une garde qui reconnaît.
+
+Deux garde-fous obligatoires autour d'un balayage, et ils ne sont pas
+décoratifs :
+1. **il doit voir quelque chose** — assert sur le nombre de fichiers ouverts. Un
+   balayage au chemin faux est vert pour toujours ;
+2. **il doit reconnaître un contre-exemple POSITIF** — la forme exacte que le lot
+   vient de corriger. Sans lui, un motif qui ne matche plus rien passe pour une
+   règle respectée ([[reference_negative_source_guards_die_silently]]).
+
+**Et le point que je n'avais pas vu, dû à la session 71** : six des douze sites
+du dernier tiers étaient dans des fichiers de TÉMOINS. La garde du renommage ne
+pouvait donc pas rougir — *elle ne compilait pas elle-même*.
+
+> **Un témoin cassé ne dit rien, et il ne dit même pas qu'il est cassé.** On lit
+> « build rouge » là où il faudrait lire « aucune garde n'a pu s'exprimer ». À
+> ajouter au catalogue de la 468 : c'est une cinquième façon de lire un rouge de
+> travers, et la plus silencieuse — les quatre autres laissent au moins la suite
+> s'exécuter.
+
+Corollaire de méthode, confirmé trois fois dans le même lot : pour compter les
+consommateurs d'un membre renommé, **le `grep` se trompe dans les DEUX sens** —
+trop peu quand le motif exige une qualification (`case .x:` n'en a pas), trop
+quand le mot appartient aussi à d'autres types. Mon premier relevé montrait 114
+sites ; il y en avait 3. Les deux erreurs rendent un nombre *plausible*. Seul le
+compilateur connaît le TYPE.

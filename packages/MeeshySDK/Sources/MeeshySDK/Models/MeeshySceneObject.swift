@@ -57,7 +57,7 @@ public enum MeeshySceneObject: Sendable {
     case text(StoryTextObject)
     case media(StoryMediaObject)
     case sticker(StorySticker)
-    case location(StoryLocationObject)
+    case place(StoryLocationObject)
     case audio(StoryAudioPlayerObject)
 
     /// Le kind SANS la charge — pour les sites qui trient, comptent ou nomment
@@ -92,7 +92,7 @@ public enum MeeshySceneObject: Sendable {
         case .text:     return .text
         case .media:    return .media
         case .sticker:  return .sticker
-        case .location: return .place
+        case .place: return .place
         case .audio:    return .audio
         }
     }
@@ -102,7 +102,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.id
         case .media(let o):    return o.id
         case .sticker(let o):  return o.id
-        case .location(let o): return o.id
+        case .place(let o): return o.id
         case .audio(let o):    return o.id
         }
     }
@@ -120,7 +120,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.x
         case .media(let o):    return o.x
         case .sticker(let o):  return o.x
-        case .location(let o): return o.x
+        case .place(let o): return o.x
         case .audio(let o):    return Double(o.x)
         }
     }
@@ -130,7 +130,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.y
         case .media(let o):    return o.y
         case .sticker(let o):  return o.y
-        case .location(let o): return o.y
+        case .place(let o): return o.y
         case .audio(let o):    return Double(o.y)
         }
     }
@@ -159,7 +159,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.scale
         case .media(let o):    return o.scale
         case .sticker(let o):  return o.scale
-        case .location(let o): return o.scale
+        case .place(let o): return o.scale
         case .audio(let o):    return o.scale ?? 1
         }
     }
@@ -169,7 +169,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.rotation
         case .media(let o):    return o.rotation
         case .sticker(let o):  return o.rotation
-        case .location(let o): return o.rotation
+        case .place(let o): return o.rotation
         case .audio(let o):    return o.rotation ?? 0
         }
     }
@@ -183,7 +183,7 @@ public enum MeeshySceneObject: Sendable {
         case .text(let o):     return o.zIndex
         case .media(let o):    return o.zIndex
         case .sticker(let o):  return o.zIndex
-        case .location(let o): return o.zIndex
+        case .place(let o): return o.zIndex
         case .audio(let o):    return o.zIndex ?? 0
         }
     }
@@ -213,7 +213,25 @@ public enum MeeshySceneObject: Sendable {
         case .media(let o):    return o.duration
         case .sticker(let o):  return o.duration
         case .audio(let o):    return o.duration.map(Double.init)
-        case .location(let o): return o.duration
+        case .place(let o): return o.duration
+        }
+    }
+
+    /// **D'où l'objet part**, uniformisé en `Double?` comme `duration` juste
+    /// au-dessus, et pour la même raison : l'audio le porte en `Float?`, les
+    /// quatre autres en `Double?`, et la conversion doit vivre à UN endroit.
+    ///
+    /// `nil` ⇒ pas de fenêtre posée : l'objet est là dès le début de la slide.
+    /// C'est un état NOMINAL, pas une valeur manquante — le distinguer de `0`
+    /// est ce qui permet à `ComposerObjectTiming` de rendre « permanent » plutôt
+    /// que « de 0 s à la fin ».
+    public var startTime: Double? {
+        switch self {
+        case .text(let o):     return o.startTime
+        case .media(let o):    return o.startTime
+        case .sticker(let o):  return o.startTime
+        case .audio(let o):    return o.startTime.map(Double.init)
+        case .place(let o):    return o.startTime
         }
     }
 
@@ -224,7 +242,7 @@ public enum MeeshySceneObject: Sendable {
         switch self {
         case .media(let o):    return o.isBackground
         case .audio(let o):    return o.isBackground == true
-        case .text, .sticker, .location: return false
+        case .text, .sticker, .place: return false
         }
     }
 }
@@ -243,7 +261,7 @@ public extension StoryEffects {
         var tous: [MeeshySceneObject] = textObjects.map(MeeshySceneObject.text)
         tous += (mediaObjects ?? []).map(MeeshySceneObject.media)
         tous += (stickerObjects ?? []).map(MeeshySceneObject.sticker)
-        tous += locationObjects.map(MeeshySceneObject.location)
+        tous += locationObjects.map(MeeshySceneObject.place)
         tous += (audioPlayerObjects ?? []).map(MeeshySceneObject.audio)
         return tous.enumerated()
             .sorted { ($0.element.zIndex, $0.offset) < ($1.element.zIndex, $1.offset) }
@@ -258,7 +276,7 @@ public extension StoryEffects {
         if let o = textObjects.first(where: { $0.id == id }) { return .text(o) }
         if let o = mediaObjects?.first(where: { $0.id == id }) { return .media(o) }
         if let o = stickerObjects?.first(where: { $0.id == id }) { return .sticker(o) }
-        if let o = locationObjects.first(where: { $0.id == id }) { return .location(o) }
+        if let o = locationObjects.first(where: { $0.id == id }) { return .place(o) }
         if let o = audioPlayerObjects?.first(where: { $0.id == id }) { return .audio(o) }
         return nil
     }
@@ -285,7 +303,7 @@ public extension TimelineProject {
         var tous: [MeeshySceneObject] = textObjects.map(MeeshySceneObject.text)
         tous += mediaObjects.map(MeeshySceneObject.media)
         tous += stickerObjects.map(MeeshySceneObject.sticker)
-        tous += locationObjects.map(MeeshySceneObject.location)
+        tous += locationObjects.map(MeeshySceneObject.place)
         tous += audioPlayerObjects.map(MeeshySceneObject.audio)
         return tous.enumerated()
             .sorted { ($0.element.zIndex, $0.offset) < ($1.element.zIndex, $1.offset) }
@@ -296,7 +314,7 @@ public extension TimelineProject {
         if let o = textObjects.first(where: { $0.id == id }) { return .text(o) }
         if let o = mediaObjects.first(where: { $0.id == id }) { return .media(o) }
         if let o = stickerObjects.first(where: { $0.id == id }) { return .sticker(o) }
-        if let o = locationObjects.first(where: { $0.id == id }) { return .location(o) }
+        if let o = locationObjects.first(where: { $0.id == id }) { return .place(o) }
         if let o = audioPlayerObjects.first(where: { $0.id == id }) { return .audio(o) }
         return nil
     }

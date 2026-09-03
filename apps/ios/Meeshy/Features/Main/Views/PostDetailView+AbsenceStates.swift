@@ -30,7 +30,15 @@ extension PostDetailView {
     var loadFailedState: some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 40))
+                // `MeeshyFont.relative` et non `.system(size:)` : une icône
+                // d'état vide n'a pas de cadre fixe, donc rien ne justifie
+                // qu'elle ignore Dynamic Type. La taille figée venait de
+                // l'ancien site, où elle bénéficiait d'une amnistie de dette —
+                // **l'extraction la lui a fait perdre**, et c'est juste : le
+                // code arrive dans un fichier NEUF, où la règle s'applique
+                // pleine. Extraire fait franchir au code deux frontières
+                // invisibles : les gardes qui nomment un fichier, et l'amnistie.
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(String(localized: "feed.post.detail.loadFailed.title",
@@ -72,7 +80,7 @@ extension PostDetailView {
     var unavailableState: some View {
         VStack(spacing: 12) {
             Image(systemName: "clock.badge.xmark")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(String(localized: "feed.post.detail.unavailable.title",
