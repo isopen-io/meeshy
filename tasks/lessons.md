@@ -26216,7 +26216,7 @@ quand le mot appartient aussi à d'autres types. Mon premier relevé montrait 11
 sites ; il y en avait 3. Les deux erreurs rendent un nombre *plausible*. Seul le
 compilateur connaît le TYPE.
 
-## Leçon 474 — Quand on tient la FRAME d'un élément, on peut REGARDER ce qu'elle contient
+## Leçon 487 — Quand on tient la FRAME d'un élément, on peut REGARDER ce qu'elle contient
 
 J'ai ouvert une issue affirmant qu'un bouton était **invisible** — « une zone
 tactile posée sur la rangée de stories, sans glyphe propre » — et j'ai bâti tout
