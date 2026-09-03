@@ -335,8 +335,7 @@ extension MeeshyComposerHost {
                 hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
                 mentions: composerReferences.count,
-                hasDocumentLocation: documentLocation != nil,
-                hasDocumentBackground: documentBackground != nil))
+                hasDocumentLocation: documentLocation != nil))
     }
 
     var sceneSurface: some View {
