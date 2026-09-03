@@ -38,14 +38,26 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
     // MARK: - Fabriques
 
     /// `systemLanguage`/`regionalLanguage` composent le prisme du lecteur
-    /// (`ConversationLanguagePreferences.resolved`, rangs 1 et 2) ; la locale
-    /// appareil des tests entre au rang 3 ou 4 et ne peut supplanter aucun des
-    /// deux.
-    private func makeSUT(systemLanguage: String? = "fr", regionalLanguage: String? = nil) -> ConversationViewModel {
+    /// (`ConversationLanguagePreferences.resolved`, rangs 1 et 2).
+    ///
+    /// **`deviceLocale` est FIXÉE, jamais laissée à `Locale.current`.** Sans
+    /// elle, l'init `ConversationLanguagePreferences(user:)` retombe sur la
+    /// locale du RUNNER au rang 4 : sur un simulateur espagnol, le prisme
+    /// `["fr"]` devient `["fr","es"]` et le témoin « aucune traduction dans le
+    /// prisme ⇒ l'original » sert « Hola » — rouge sans qu'aucun défaut
+    /// n'existe. Elle duplique le rang 1 pour ne jamais introduire de langue
+    /// tierce ; `deviceLocale:` explicite quand un témoin VEUT exercer le
+    /// rang 4.
+    private func makeSUT(
+        systemLanguage: String? = "fr",
+        regionalLanguage: String? = nil,
+        deviceLocale: String? = nil
+    ) -> ConversationViewModel {
         let authManager = MockAuthManager()
         let currentUser = MeeshyUser(
             id: myUserId, username: "me", displayName: "Me",
-            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            deviceLocale: deviceLocale ?? systemLanguage ?? "fr"
         )
         authManager.simulateLoggedIn(user: currentUser)
 
@@ -229,6 +241,23 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         let reference = sut.optimisticReplyReference(quoting: quoted)
 
         XCTAssertEqual(reference.previewText, "Hello", "nil ⇒ l'original, jamais `translations.first`")
+    }
+
+    /// Le rang 4 EXERCÉ, et non seulement neutralisé : la locale appareil sert
+    /// quand aucun rang applicatif ne matche. Un témoin qui se contente de la
+    /// fixer prouve seulement qu'elle ne nuit pas.
+    func test_optimisticReplyReference_deviceLocaleRank_servesItsTranslation() {
+        let sut = makeSUT(systemLanguage: "fr", deviceLocale: "es")
+        let quoted = makeQuoted(content: "Hello", originalLanguage: "en")
+        sut.messages = [quoted]
+        sut.messageTranslations[quoted.id] = [
+            makeTranslation(of: quoted.id, to: "es", text: "Hola"),
+        ]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertEqual(reference.previewText, "Hola",
+                       "la locale appareil concourt au rang 4 — servie quand aucun rang applicatif ne matche")
     }
 
     func test_optimisticReplyReference_servesWhatTheBubbleDisplays() {

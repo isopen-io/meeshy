@@ -1,36 +1,47 @@
 import Foundation
 
-// Extrait de `MessagePersistenceActor.swift` (2 328 lignes, hors budget
+// Extrait de `MessagePersistenceActor.swift` (2 329 lignes, hors budget
 // 1000-1200 — un fichier hors budget est interdit d'ajout). Le lot #4945
 // fait descendre le Prisme du lecteur jusqu'à la citation gravée par le
 // chemin SOCKET : on extrait d'abord, on ajoute ensuite. Responsabilité tenue
-// ici : dire QUEL prisme le puits d'ingestion bufferisée remet à
-// `upsertFromAPIMessages(_:preferredLanguages:)` — et rien d'autre.
+// ici : dire QUEL prisme un appelant remet à `bufferIncomingAPIMessages` — et
+// rien d'autre.
 
 extension MessagePersistenceActor {
-    /// Le prisme ORDONNÉ du lecteur, lu au moment où le puits d'ingestion
-    /// bufferisée (`.upsertAPIMessages`, alimenté par
-    /// `bufferIncomingAPIMessages`) écrit la ligne — donc au moment où la
-    /// citation `replyToJson` est composée par `APIMessageReplyTo
-    /// .toReplyReference(preferredLanguages:)`.
+    /// Le prisme ORDONNÉ du lecteur, à résoudre AU MOMENT DE LA MISE EN FILE,
+    /// jamais dans la boucle d'écriture.
     ///
     /// C'est LE site qui manquait : `ConversationSyncEngine.apiMessagePersistor`
     /// (relais global de `message:new`, `ensureMessages` poussé par une
     /// notification, pagination) et le gestionnaire de socket de la
-    /// conversation ouverte convergent tous deux ici sans transporter de
-    /// prisme, et le défaut `[]` servait alors l'ORIGINAL — une citation en
-    /// anglais sur le fil temps réel, en français au rechargement REST.
-    /// Résoudre le prisme ICI, plutôt qu'à chaque producteur, ferme les deux
-    /// chemins d'un coup et n'oblige aucun relais à recopier un champ de plus.
+    /// conversation ouverte convergent tous deux sur le puits bufferisé sans
+    /// transporter de prisme, et le défaut `[]` servait alors l'ORIGINAL — une
+    /// citation en anglais sur le fil temps réel, en français au rechargement
+    /// REST.
     ///
-    /// Même autorité que `ConversationSyncEngine.currentPreferredLanguages`
-    /// (aperçu de liste) : `MeeshyUser.preferredContentLanguages`, lue sur le
-    /// MainActor où vit `AuthManager`. Vide sans session — un participant
-    /// anonyme lit l'original, comme sur le chemin REST.
+    /// **Elle ne doit PAS être appelée depuis le processeur du `writeStream`.**
+    /// Elle lit `AuthManager` sur le MainActor ; posée dans la boucle SÉRIELLE
+    /// d'écriture, elle faisait attendre CHAQUE lot ingéré que le fil de RENDU
+    /// soit libre — c'est-à-dire précisément pendant un défilement ou une
+    /// animation de clavier — et les `reconcileBatch` / `batchDeliveryUpdate`
+    /// en file derrière lui attendaient avec. La persistance dépendait alors du
+    /// fil qu'elle est censée décharger. Le prisme voyage donc DANS
+    /// l'opération (`case upsertAPIMessages(_, preferredLanguages:)`), résolu
+    /// par un producteur qui, lui, est déjà sur le MainActor ou hors du chemin
+    /// chaud.
     ///
-    /// `nonisolated` : elle ne lit rien de l'actor et s'appelle depuis la
-    /// boucle d'écriture, où l'isolation de l'actor n'est pas acquise.
-    nonisolated static func readerPrism() async -> [String] {
-        await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
+    /// **UNE descente, la même que la bulle.** `ReaderPrism.resolve(for:)` est
+    /// ce que `ConversationLanguagePreferences.resolved` sert à l'affichage et
+    /// ce que le chemin REST grave. Ce site lisait `preferredContentLanguages`,
+    /// qui diverge exactement là où rien ne le teste — locale appareil absente
+    /// du serveur, aucune langue configurée — et le MÊME message cité se
+    /// gravait sous deux textes selon le chemin qui l'avait ingéré : un
+    /// changement de ligne, et un reconfigure, rejoués à chaque ouverture pour
+    /// un contenu identique. Lue sur le MainActor où vit `AuthManager` ; sans
+    /// session, la locale de l'appareil seule (rang 4).
+    ///
+    /// `nonisolated` : elle ne lit rien de l'actor.
+    nonisolated public static func readerPrism() async -> [String] {
+        await MainActor.run { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
     }
 }

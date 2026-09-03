@@ -149,8 +149,25 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
         let persistence = try Self.source("Persistence/MessagePersistenceActor.swift")
         let sinks = Self.callSites(of: "self.upsertFromAPIMessages(", in: persistence)
         XCTAssertEqual(sinks.count, 1, "ancrage : le puits d'ingestion bufferisée est unique")
-        XCTAssertTrue(sinks.allSatisfy { $0.contains("preferredLanguages: Self.readerPrism()") },
-                      "le puits `.upsertAPIMessages` doit remettre `Self.readerPrism()` — c'est là que convergent le relais global et le socket de la conversation")
+        // Le prisme voyage DANS l'opération, résolu par le producteur. Il était
+        // lu ici par `Self.readerPrism()`, c'est-à-dire par un saut vers le
+        // MainActor DEPUIS la boucle d'écriture sérielle : chaque lot ingéré
+        // attendait le fil de RENDU, et les réconciliations en file derrière
+        // lui attendaient avec.
+        XCTAssertTrue(sinks.allSatisfy { $0.contains("preferredLanguages: preferredLanguages") },
+                      "le puits `.upsertAPIMessages` doit remettre le prisme PORTÉ par l'opération")
+        XCTAssertFalse(persistence.contains("Self.readerPrism()"),
+                       "aucune lecture du MainActor dans la boucle d'écriture — le prisme se résout à la mise en file")
+
+        // Et le prisme mis en file est LA descente de la bulle (`ReaderPrism`),
+        // jamais la liste à repli « fr » : deux producteurs qui divergent
+        // gravent deux citations pour un même message, et chaque ouverture
+        // rejoue un changement de ligne pour un contenu identique.
+        let readerPrism = try Self.source("Persistence/MessagePersistenceActor+ReaderPrism.swift")
+        XCTAssertTrue(readerPrism.contains("ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),
+                      "`readerPrism()` doit servir la descente stricte du lecteur — celle que la bulle affiche")
+        XCTAssertFalse(readerPrism.contains("preferredContentLanguages"),
+                       "`preferredContentLanguages` replie sur « fr » et ignore la locale de l'appareil : deux prismes graveraient deux citations")
     }
 
     // MARK: - Lecture de source

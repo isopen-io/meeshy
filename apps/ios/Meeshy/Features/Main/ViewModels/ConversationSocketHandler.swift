@@ -543,7 +543,7 @@ final class ConversationSocketHandler {
                     // them — a media-only or encrypted message received via
                     // socket rendered as an empty bubble.
                     if let persistence = self.persistence {
-                        await persistence.bufferIncomingAPIMessages([apiMsg])
+                        await persistence.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
                     }
 
                     // Own message from another device — persisted above;

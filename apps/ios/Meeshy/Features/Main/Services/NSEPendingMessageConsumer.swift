@@ -25,45 +25,66 @@ final class NSEPendingMessageConsumer {
 
     private init() {}
 
+    /// Un blob pré-récupéré, LU ET DÉCODÉ hors du fil principal.
+    ///
+    /// `nonisolated` EXPLICITE : la classe hôte est isolée au MainActor, et un
+    /// type imbriqué en hérite (SE-0466) — or cette valeur naît dans une tâche
+    /// DÉTACHÉE. Rien de son calcul n'a besoin du MainActor.
+    nonisolated struct DecodedPending: Sendable {
+        let conversationId: String
+        let url: URL
+        let message: APIMessage
+    }
+
     func consumeAll() async {
-        let pending = readPending()
-        guard !pending.isEmpty else { return }
+        // Lecture du conteneur App Group + décodage JSON HORS du MainActor.
+        //
+        // Le corps de cette méthode est isolé MainActor, et sous SE-0461
+        // (`nonisolated(nonsending)` par défaut, activé au projet) une méthode
+        // `async` appelée depuis le MainActor y exécute son corps — `async let`
+        // ou non. La lecture disque et le `JSONDecoder.decode` de CHAQUE fichier
+        // restaient donc sur la boucle principale, juste avant la première
+        // lecture GRDB de l'ouverture : après une rafale de notifications,
+        // l'ouverture bloquait le rendu pendant tout le drain. Seul un
+        // `Task.detached` quitte réellement l'acteur.
+        let (decoded, corrupt) = await Self.readAndDecodePending()
+        guard !decoded.isEmpty || !corrupt.isEmpty else { return }
 
-        logger.info("Consuming \(pending.count) NSE-prefetched messages")
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            // Modern Date.ISO8601FormatStyle supports fractional seconds and
-            // is more efficient than legacy ISO8601DateFormatter.
-            if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                return date
-            }
-            if let date = try? Date(dateStr, strategy: .iso8601) {
-                return date
-            }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-
-        let userId = AuthManager.shared.currentUser?.id ?? ""
-        let username = AuthManager.shared.currentUser?.username
-
+        // Charges illisibles : on les retire pour ne pas les relire à chaque
+        // lancement. Le retrait reste ici — il journalise, et le journal porte
+        // l'identité de l'instance.
         let fm = FileManager.default
+        for url in corrupt {
+            logger.error("NSE prefetch decode failed — dropping \(url.lastPathComponent, privacy: .public)")
+            do { try fm.removeItem(at: url) } catch {
+                logger.error("NSE prefetch file removal failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        guard !decoded.isEmpty else { return }
+
+        logger.info("Consuming \(decoded.count) NSE-prefetched messages")
+
+        let user = AuthManager.shared.currentUser
+        let userId = user?.id ?? ""
+        let username = user?.username
+        // Une seule construction pour tout le lot : `preferredContentLanguages`
+        // est CALCULÉE et alloue un tableau à chaque lecture. Dans la boucle,
+        // elle se payait une fois par message pré-récupéré — sur le fil
+        // principal, avant la première bulle.
+        let prism = user?.preferredContentLanguages ?? []
+        // Ce que GRDB GRAVE dans `replyToJson` descend le prisme STRICT du
+        // lecteur (`ReaderPrism`) — la descente de la bulle et des deux autres
+        // chemins d'ingestion, REST et socket — jamais la liste à repli « fr » :
+        // deux prismes graveraient deux citations pour un même message.
+        let engravingPrism = ReaderPrism.resolve(for: user)
+
         var decodedAPIMessages: [APIMessage] = []
         var consumedFiles: [URL] = []
-        for item in pending {
-            guard let apiMsg = try? decoder.decode(APIMessage.self, from: item.data) else {
-                // Corrupt payload — log and drop so it isn't re-read every launch.
-                logger.error("NSE prefetch decode failed for \(item.conversationId, privacy: .public) — dropping \(item.url.lastPathComponent, privacy: .public)")
-                do { try fm.removeItem(at: item.url) } catch {
-                    logger.error("NSE prefetch file removal failed: \(error.localizedDescription, privacy: .public)")
-                }
-                continue
-            }
+        for item in decoded {
+            let apiMsg = item.message
             decodedAPIMessages.append(apiMsg)
             consumedFiles.append(item.url)
-            let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            let message = apiMsg.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
 
             await CacheCoordinator.shared.messages.upsert(
                 item: message,
@@ -88,7 +109,7 @@ final class NSEPendingMessageConsumer {
         guard !decodedAPIMessages.isEmpty else { return }
         do {
             try await DependencyContainer.shared.messagePersistence
-                .upsertFromAPIMessages(decodedAPIMessages, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                .upsertFromAPIMessages(decodedAPIMessages, preferredLanguages: engravingPrism)
             // Only drop the prefetch files once the messages are committed to GRDB,
             // so a persist failure leaves them on disk to retry next launch instead
             // of silently dropping the push-prefetched message.
@@ -101,10 +122,53 @@ final class NSEPendingMessageConsumer {
         }
     }
 
+    /// La lecture disque ET le décodage, dans une tâche DÉTACHÉE.
+    ///
+    /// `Task.detached` et non `nonisolated async` : sous SE-0461 une fonction
+    /// `async` non isolée appelée depuis le MainActor s'y exécute quand même.
+    /// Ce qui traverse la frontière est `Sendable` de part en part
+    /// (`DecodedPending`, `[URL]`), donc rien du modèle ne voyage.
+    ///
+    /// Les charges illisibles ne sont pas SUPPRIMÉES ici : leur retrait
+    /// journalise, et le journal appartient à l'instance. Elles remontent par
+    /// leur URL et l'appelant les retire.
+    private nonisolated static func readAndDecodePending() async -> (decoded: [DecodedPending], corrupt: [URL]) {
+        await Task.detached(priority: .userInitiated) { () -> (decoded: [DecodedPending], corrupt: [URL]) in
+            let pending = Self.readPending()
+            guard !pending.isEmpty else { return ([], []) }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateStr = try container.decode(String.self)
+                // Modern Date.ISO8601FormatStyle supports fractional seconds and
+                // is more efficient than legacy ISO8601DateFormatter.
+                if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
+                    return date
+                }
+                if let date = try? Date(dateStr, strategy: .iso8601) {
+                    return date
+                }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+            }
+
+            var decoded: [DecodedPending] = []
+            var corrupt: [URL] = []
+            for item in pending {
+                guard let apiMsg = try? decoder.decode(APIMessage.self, from: item.data) else {
+                    corrupt.append(item.url)
+                    continue
+                }
+                decoded.append(DecodedPending(conversationId: item.conversationId, url: item.url, message: apiMsg))
+            }
+            return (decoded, corrupt)
+        }.value
+    }
+
     /// Reads (without deleting) every prefetched message blob. Deletion is deferred
     /// to ``consumeAll`` and happens only after the GRDB commit succeeds, so a
     /// transient failure never drops a push-prefetched message off disk.
-    private func readPending() -> [(conversationId: String, url: URL, data: Data)] {
+    private nonisolated static func readPending() -> [(conversationId: String, url: URL, data: Data)] {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Self.appGroupId
         ) else { return [] }

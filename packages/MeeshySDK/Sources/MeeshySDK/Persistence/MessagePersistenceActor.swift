@@ -62,7 +62,7 @@ public actor MessagePersistenceActor {
         /// mentions are all persisted. The 6-field `IncomingMessageData` path
         /// below drops every one of them (a media-only or encrypted message
         /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
-        case upsertAPIMessages([APIMessage])
+        case upsertAPIMessages([APIMessage], preferredLanguages: [String])
         case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
     }
 
@@ -228,13 +228,13 @@ public actor MessagePersistenceActor {
                     if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
-                case .upsertAPIMessages(let messages):
+                case .upsertAPIMessages(let messages, let preferredLanguages):
                     guard !messages.isEmpty else { continue }
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
                     do {
-                        try await self.upsertFromAPIMessages(messages, preferredLanguages: Self.readerPrism())
+                        try await self.upsertFromAPIMessages(messages, preferredLanguages: preferredLanguages)
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
@@ -525,8 +525,8 @@ public actor MessagePersistenceActor {
     /// upsert reconciles an optimistic row by `clientMessageId`, server id or
     /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
     /// The refresh notification is posted by `upsertFromAPIMessages` itself.
-    public func bufferIncomingAPIMessages(_ messages: [APIMessage]) {
-        writeContinuation.yield(.upsertAPIMessages(messages))
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage], preferredLanguages: [String]) {
+        writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
