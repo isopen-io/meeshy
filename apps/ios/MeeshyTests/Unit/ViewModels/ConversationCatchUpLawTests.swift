@@ -146,8 +146,22 @@ final class ConversationCatchUpLawTests: XCTestCase {
         ].map { try MyStoriesSourceCorpus.text(of: $0) }.joined(separator: "\n")
         let view = try MyStoriesSourceCorpus.text(
             of: "Meeshy/Features/Main/Views/ConversationView.swift")
-        let model = try MyStoriesSourceCorpus.text(
-            of: "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift")
+        // Depuis #4942 le ViewModel est une FAMILLE (hôte + extensions par
+        // responsabilité) : l'ancre vit dans l'hôte, mais une garde qui ne lit
+        // qu'un fichier de la famille passerait à vide à la prochaine extraction.
+        let model = try [
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Lifecycle.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+InitialLoad.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Send.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+ReplyReference.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+MessageActions.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Translations.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Projections.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+Search.swift",
+            "Meeshy/Features/Main/ViewModels/ConversationViewModel+SocketDelegate.swift",
+        ].map { try MyStoriesSourceCorpus.text(of: $0) }.joined(separator: "\n")
         XCTAssertGreaterThan(controller.count, 40_000)
         XCTAssertGreaterThan(view.count, 40_000)
         XCTAssertGreaterThan(model.count, 40_000)

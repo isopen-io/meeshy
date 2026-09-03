@@ -3,9 +3,12 @@ import UIKit
 @testable import MeeshySDK
 @testable import MeeshyUI
 
-/// Des mesures d'espion, hors de la suite : une constante de fichier reste
-/// `nonisolated`, donc lisible depuis un argument par défaut.
-private let mesuresEspion = StickerTemplateMetrics(fontSize: 40, horizontalPadding: 20,
+/// Des mesures d'espion, hors de la suite. `StickerTemplateMetrics` vit dans
+/// MeeshyUI, isolé au MainActor par défaut : son init l'est aussi, donc la
+/// constante de fichier doit l'être (mesuré en CI : « main actor-isolated
+/// default value in a nonisolated context ») — la suite est `@MainActor`, elle
+/// la lit sans saut.
+@MainActor private let mesuresEspion = StickerTemplateMetrics(fontSize: 40, horizontalPadding: 20,
                                                    verticalPadding: 12, gap: 9)
 
 /// #4947 — **le même gabarit ne se redessine pas** (D-MEM-01).
