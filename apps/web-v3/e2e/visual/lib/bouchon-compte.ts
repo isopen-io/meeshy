@@ -4,7 +4,7 @@ import type { Identite } from './bouchon-socket';
 import { CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAGE, LIEN_DU_FIL, MEMBRE, PRENOM_DU_LECTEUR } from './bouchon-monde';
 
 /**
- * LES CINQ ROUTES DE LA ZONE CONNECTÉE, copiées sur la passerelle RÉELLE :
+ * LES SEPT ROUTES DE LA ZONE CONNECTÉE, copiées sur la passerelle RÉELLE :
  *
  *   • `GET /api/v1/auth/me` — `services/gateway/src/routes/auth/magic-link.ts:79`,
  *     `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous: true })` ;
@@ -16,7 +16,14 @@ import { CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAGE, LIEN_DU_FIL, MEMB
  *     dont les lignes sortent par `demandeAvecPresenceSchema` (`:78`) ;
  *   • `GET /api/v1/directory/contacts` — `routes/directory/contacts.ts:128`,
  *     dont les lignes sortent par `directoryEntrySchema`
- *     (`routes/users/contacts-schemas.ts:24`).
+ *     (`routes/users/contacts-schemas.ts:24`) ;
+ *   • `GET /api/v1/conversations/search` — `routes/conversations/search.ts:67`,
+ *     qui rend un tableau NU de `conversationMinimalSchema` : ni `pagination`,
+ *     ni total. Le bouchon ne lui en invente pas ;
+ *   • `GET /api/v1/directory/people` — `routes/directory/people.ts:105`, qui
+ *     pagine par CURSEUR (`hasMore`, `nextCursor`, `limit`) et déclare
+ *     `isOnline` NULLABLE — l'autre forme du masquage, à côté du `false` de
+ *     `/directory/contacts`.
  *
  * LES DEUX DERNIÈRES SERVENT LA PRÉSENCE COMME LA LOI L'IMPOSE, et c'est ce que
  * l'écran des contacts doit rendre : une demande EN ATTENTE est masquée — son
@@ -109,6 +116,37 @@ const CARNET = [
   },
 ];
 
+/**
+ * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
+ * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
+ * part, ce que l'audit vérifie.
+ */
+const RECHERCHE_FILS = [
+  {
+    id: CONVERSATION_DU_LECTEUR.id,
+    identifier: 'lagos',
+    title: CONVERSATION_DU_LECTEUR.titre,
+    type: 'group',
+    isActive: true,
+    memberCount: CONVERSATION_DU_LECTEUR.membres,
+    lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    createdAt: new Date(Date.now() - 30 * 24 * 3_600_000).toISOString(),
+    participants: [],
+  },
+];
+
+/** `isOnline` y est NULLABLE — c'est la forme que `/directory/people` déclare. */
+const RECHERCHE_GENS = [
+  {
+    id: 'u-sara',
+    username: 'sarakim',
+    displayName: 'Sara Kim',
+    avatar: null,
+    isOnline: null,
+    lastActiveAt: null,
+  },
+];
+
 export const routesDuCompte =
   (etat: EtatDuCompteDeBouchon) =>
   ({ requete, url, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly json: Reponse }): boolean => {
@@ -137,6 +175,25 @@ export const routesDuCompte =
       json({
         success: true,
         data: { id: MEMBRE.id, username: 'amina', firstName: PRENOM_DU_LECTEUR, displayName: MEMBRE.nom, systemLanguage: 'fr' },
+      });
+      return true;
+    }
+
+    // La RECHERCHE, avant `/api/v1/conversations` nue : Fastify distingue ces
+    // deux routes par leur chemin complet, et un bouchon qui teste des préfixes
+    // doit ordonner du plus PRÉCIS au plus général — sinon `/conversations`
+    // avale `/conversations/search` et l'écran de recherche reçoit la liste du
+    // tableau de bord.
+    if (chemin.startsWith('/api/v1/conversations/search')) {
+      json({ success: true, data: url.searchParams.get('q') ? RECHERCHE_FILS : [] });
+      return true;
+    }
+
+    if (chemin.startsWith('/api/v1/directory/people')) {
+      json({
+        success: true,
+        data: url.searchParams.get('q') ? RECHERCHE_GENS : [],
+        pagination: { hasMore: false, nextCursor: null, limit: 20 },
       });
       return true;
     }
