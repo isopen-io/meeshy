@@ -1,5 +1,71 @@
 # @meeshy/gateway
 
+## 1.35.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la scène naît VISIBLE — l'appui long ouvre la caméra, le viseur ne s'impose plus
+  - la porte de la story tient son HORLOGE — le fixture echouait le jour de son echeance
+  - le son de fond se lit en tête de scène sans capsule, aligné sur le bord du DESSIN
+  - « Tout effacer » laissait partir trois champs avec la publication suivante
+  - le compteur de hashtags LIT le site unique au lieu de le refaire
+  - la scène dit ce qu'elle emporte d'invisible — le son de fond en tête, les références au pied
+  - la scène DIT ce qu'elle porte, et le geste terminal se voit
+  - la porte de story reçoit son horloge — la fixture échue à 05:00Z ne fait plus rougir « Test web-v3 » pour tout le monde
+  - une décoration animée bouge PENDANT qu'on compose, et la palette dit lesquelles bougent
+  - les médias d'un réel cessent d'être injoignables — une porte vers la galerie, et un site unique pour l'ouvrir
+  - la courbe du clavier ne vit que le temps du mouvement, Speech se demande au premier vocal, l'envoi n'attend jamais plus de 700 ms, l'ouverture réarme le fil
+  - UNE descente du Prisme grave la citation — ReaderPrism, résolu à la mise en file, jamais dans la boucle d'écriture
+  - l'entrée de cache du rendu de sticker déclare sa deinit non isolée — la garde MeeshyUI l'exigeait
+  - un GIF de commentaire arrive en GIF — le format se perdait dans un NOM DE FICHIER
+  - un sticker de message et un GIF de commentaire ANIMENT — la vue existait, personne ne la montait
+  - le prisme du lecteur se lit sur le MainActor avant la fermeture qui convertit les aperçus de liste
+  - un son de fond emprunté peut enfin être retiré
+  - l'inset du fil suit la durée et la courbe du clavier système au lieu d'un pas sec
+  - une citation se lit « Auteur : » puis 2-3 lignes, ou sa miniature ThumbHash avec dimensions · durée · taille — une règle, trois peaux
+  - la citation optimiste porte les mêmes faits que la citation servie, et le prisme du lecteur atteint chaque site qui grave une citation
+  - la conversation s'ouvre en UNE lecture GRDB et UNE publication — réconciliations en parallèle, fenêtre ancrée bornée, transcription locale suivie à l'écho
+  - la palette d'emoji s'OUVRE vraiment — trois defauts que seul l'ecran pouvait dire
+  - deux objets posés ne se superposent plus au pixel près
+  - trois gardes rouges après la vague 1 — le rendu du sticker sort du chemin d'envoi, la loi de rattrapage lit la famille du ViewModel, la constante d'espion SDK rejoint le MainActor
+  - les cinq familles d'objets ouvrent le même éditeur
+  - le plein ecran audio allege son site d'appel, et sa garde nomme la LOI plutot qu'un nom de fonction
+  - /post/:id est servie — la publication, son fil, et le lang= sur ce qui est traduit
+  - la comète des réactions respecte « Réduire les animations » ; ThumbHash et écriture JPEG quittent le fil principal
+  - une bulle audio reçue réserve la hauteur de sa transcription — plus de saut quand Whisper répond
+  - un vocal envoyé est transcrit sur l'appareil dès l'arrêt de l'enregistrement et part avec sa transcription ; la tuile de lieu disparaît au tap
+  - un sticker apparaît dans le fil à l'instant du tap — encodage et écriture hors du fil principal, rendu mémoïsé
+  - la citation transporte miniature ThumbHash, dimensions, durée, taille, langue et protection
+  - la liste ne reconstruit plus son snapshot à chaque événement — préparation mémoïsée par empreinte, chemin court pour la frappe, insets animés
+  - ConversationViewModel repasse sous 1 200 lignes — dix extensions par responsabilité, comportement inchangé
+  - #4960, troisième et dernier tiers — CanvasItemKind disait encore « location »
+  - la lecture des commentaires — et le Prisme descendu, pas seulement consulté au rang 1
+  - la palette sort des deux fichiers hors budget — j'avais ajoute sans extraire, la regle l'interdit
+  - /search est servie — un GET de formulaire, et zéro appel tant qu'on n'a rien demandé
+  - l'icone d'un etat vide suit Dynamic Type — l'extraction lui avait fait perdre son amnistie, la garde avait raison
+  - #4960 était à MOITIÉ fait — l'union disait encore « location »
+  - la lecture de la recherche — deux groupes, parce que deux seulement existent
+  - une famille d'objets porte UN nom — « place », comme le fil le dit
+  - mes deux suites d'audit tombaient dans le mauvais projet, et sept témoins étrangers rougissaient
+  - la flèche de retour de l'éditeur d'objet se retourne en arabe
+  - le bon modèle au bon moment — sonnet par défaut, opus réservé
+  - le rail d'outils DIT qu'il continue — deux entrées sur dix étaient hors du champ
+  - /links est servie — et une sonde qui mourait de la croissance est réparée
+  - la lecture du carnet de liens — et le compteur qui ne dit pas « vues »
+  - l'éditeur d'objet prend l'anatomie du plateau — outils à gauche, historique à droite
+  - le plein ecran d'un media garde la bascule de langue que la carte offrait (#4934)
+  - /contacts est servie — une liste, trois sortes de lignes, deux gestes qui font quelque chose
+  - la lecture du carnet, contre ce que la passerelle sert vraiment
+  - /notifications est servie — et elle ne paie pas l'appel des autres écrans
+  - le plein ecran d'un media saura dans quelles LANGUES sa legende se lit — la regle qui decide (#4934)
+  - la vue de la boîte — « Tout lire » a un effet SANS JavaScript
+  - la copie de la boîte, et un glyphe qui ne peut pas être vide
+  - la boîte de notifications se lit — et LIRE la passerelle a évité deux compteurs morts
+  - une citation protégée ne transporte que son placeholder — texte, traductions ET média, sur les trois producteurs de replyTo
+  - l'image se construit de nouveau — anyio 4.15.0 a rendu `anyio.abc` inatteignable
+
 ## 1.34.0
 
 ### Minor Changes
