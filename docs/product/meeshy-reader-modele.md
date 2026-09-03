@@ -80,6 +80,37 @@ coquille — licite pour une scène purement textuelle, jamais pour un viewer.
 > être transportée. Tout site qui croit pouvoir rendre un `CanvasV3` seul rendra
 > une scène sans médias, sans durée et au mauvais ratio.
 
+### Ce qui BOUGE dans une scène, et qui le fait bouger
+
+Une scène n'est pas figée entre deux ticks : trois choses y vivent dans le
+temps, et une seule est propre au player.
+
+| ce qui vit | qui le fait vivre |
+|---|---|
+| les médias (vidéo de fond, clips de premier plan, son) | leurs `AVPlayer` et le mixer, calés sur le playhead |
+| les images-clés (opacité, échelle, position authorées) | `StoryRenderer`, à chaque tick |
+| **le MOUVEMENT d'une décoration** (`StorySticker.animation`) | `StoryRenderer`, par une post-passe qui repose la pose sur la couche |
+
+Le mouvement d'une décoration est une **propriété de la charge, jamais un kind**
+(le modèle du composer en donne la règle et la raison). Trois conséquences pour
+la lecture, et ce sont celles qui décident de ce qu'un viewer doit faire :
+
+- **c'est une fonction PURE du temps.** `pose(at:)` est reposée à chaque tick, en
+  ABSOLU, jamais multipliée en place — une couche recyclée par le cache ne
+  cumule donc pas les poses. C'est aussi ce qui rend l'export identique au
+  lecteur : `layer.render(in:)` ignore le moteur d'animation de Core Animation,
+  et une `CAAnimation` aurait bougé à l'écran pour rester figée dans le MP4 ;
+- **`pose(at: 0)` est l'IDENTITÉ**, par contrat. Une vignette, une image de
+  couverture ou un composite — tous rendus à `t = 0` — montrent la décoration
+  telle que l'auteur l'a posée, sans avoir à connaître le mouvement ;
+- **`reduceMotion` retire le mouvement, jamais la décoration.** Le lecteur perd
+  la pose ; l'export le reçoit toujours à `false` — un fichier ne dépend pas du
+  réglage d'accessibilité de l'appareil qui l'a fabriqué.
+
+Un client qui ne sait pas rendre le mouvement peint la décoration FIXE et ne se
+déclare pas amputé : c'est web et Android aujourd'hui (#4911), et c'est la
+conséquence directe du choix « propriété, pas kind ».
+
 ## 3. Les trois chromes, et l'état MESURÉ de chacun
 
 `ScenePlayerConfig(mode:)` est « la seule chose que le player décide de
