@@ -171,6 +171,34 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Troisième jumeau de `playsVideoInEditMode` et `playsAudioInEditMode`,
+    /// pour les DÉCORATIONS (#4999, directive porteur 2026-09-03 : « sur la
+    /// scène les stickers doivent être vivants tout comme les vidéos et
+    /// audios »). Posé à `true` par le seul canvas composer ; le prefetcher
+    /// hors-écran, lui aussi en `.edit`, ne le lève jamais. Sans effet en
+    /// `.play`, où `StoryRenderer` applique déjà la pose à chaque tick.
+    ///
+    /// Éteint en cours de route, il rend aux décorations la pose de l'auteur
+    /// plutôt que de les abandonner à leur dernière image.
+    public var playsStickerMotionInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsStickerMotionInEditMode else { return }
+            guard !playsStickerMotionInEditMode else { return }
+            // Rendre la pose plutôt que reconstruire : `rebuildLayers()`
+            // recyclerait des couches du cache, qui porteraient encore la
+            // dernière pose. On DÉFAIT ce qu'on a posé, c'est la seule forme
+            // qui ne dépende pas de ce que le cache a gardé.
+            restStickerMotion(animatedStickers)
+            stickerMotionClock = StoryStickerMotionClock()
+        }
+    }
+
+    /// L'horloge du mouvement en composition — un temps ÉCOULÉ, jamais un
+    /// playhead. Elle vit ici parce qu'elle survit aux reconstructions de
+    /// couches : la phase d'une décoration ne doit pas repartir de zéro parce
+    /// qu'on a déplacé sa voisine.
+    var stickerMotionClock = StoryStickerMotionClock()
+
     // MARK: - Reader context (Task 5)
 
     var readerContext: StoryReaderContext = .empty

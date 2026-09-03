@@ -26326,3 +26326,77 @@ une vue animée. Le témoin utile MONTE la vue dans une `UIWindow` et lit
 l'`UIImageView` produite (`AnimatedImageViewMountingTests`). Hors fenêtre, SwiftUI
 n'instancie pas un `UIViewRepresentable` : le premier jet échouait sur « aucune
 UIImageView montée », un rouge qui décrivait l'instrument et non le produit.
+
+## Leçon 484 — Une capacité peut être servie à VoiceOver et à PERSONNE D'AUTRE, et c'est l'inverse du défaut qu'on cherche
+
+Le dépôt a une leçon bien rodée : *« une chaîne pour l'œil ET pour VoiceOver
+sert un seul des deux »*. Elle a toujours été instruite dans le même sens — le
+chemin accessible est le parent pauvre, on l'oublie, on le rattrape.
+
+Mesuré le 2026-09-03, en cherchant pourquoi rien ne distinguait un sticker animé
+d'un sticker immobile dans la palette du composer :
+
+| ce qui déclare le mouvement | ce qui le RESTITUE |
+|---|---|
+| `StickerTemplateCatalog+*.swift` — `animation: .tada`, `.pulse`, `.wobble`… ou `nil` | — |
+| `StoryStickerAccessibility.withMotion` — onze libellés localisés, « qui palpite », « qui bat » | **VoiceOver** |
+| `StickerPickerView+Templates.swift` — `grep -n animation` ⇒ **zéro ligne** | *personne* |
+| `StoryRenderer.swift:305` — la pose, gardée par `mode == .play` | le **lecteur**, jamais le composer |
+
+**Le lecteur d'écran était le SEUL servi.** Un utilisateur non voyant savait
+lesquelles bougent ; un utilisateur voyant, non. Et il ne pouvait pas
+l'apprendre en posant la décoration, puisque la scène d'édition ne joue pas le
+mouvement.
+
+> La question à poser n'est donc pas « le chemin accessible est-il servi ? »
+> mais, pour tout fait que l'app DÉCLARE à une modalité : **quelles autres
+> modalités le reçoivent ?** Les onze libellés étaient la PREUVE que la donnée
+> existait, était localisée, et avait déjà été jugée utile à dire. Rien n'était
+> à décider — seulement à montrer.
+
+Corollaire de méthode : la table ci-dessus se remplit en quatre `grep`, un par
+site de restitution, et c'est elle qui a rendu la conclusion évidente. Chercher
+« où est la donnée » aurait rendu trois sites et fait croire à une couverture ;
+chercher « qui la RESTITUE » en rend un.
+
+Et le remède qui coûte le moins à l'utilisateur n'est pas une légende mais la
+chose même : la vignette BOUGE (la même `pose(at:)` qui dessinera sur la scène),
+plus un glyphe qui survit à ce que le mouvement ne dit pas — une capture
+d'écran, un défilement rapide, « Réduire les animations ». Deux marques, un seul
+prédicat (`animation != nil`), donc aucune règle à tenir d'accord.
+
+## Leçon 485 — Une note qui dit « il n'y a pas d'horloge » peut parler d'une AUTRE horloge
+
+`StoryCanvasUIView+Rendering.swift:242` porte, depuis longtemps :
+
+> « le reconfigure est gaté sur la composition et l'`.edit` n'a pas de
+> display-link »
+
+Je l'ai citée comme PREUVE dans le corps d'une issue, avant de mesurer :
+« même dégatée, la pose ne serait recalculée par personne ». La phrase existe
+bien. Elle est vraie du lien de **lecture**, celui qui avance `currentTime`.
+Elle est fausse de `editDisplayLink`, qui existe (`+Playback.swift:467`), tourne
+à 60–120 Hz, entretient la régulation d'horloge (#3906) et le fond de verre des
+textes — et que `didMoveToWindow` arme à chaque apparition.
+
+Ce que la mesure a changé, et c'est pour ça qu'elle valait le détour :
+
+| avant mesure | après mesure |
+|---|---|
+| « il faut CRÉER une horloge en édition » | « il faut ACCROCHER une passe à celle qui existe » |
+| — | « et surtout ne PAS faire avancer `currentTime` » : un objet dont la fenêtre temporelle serait passée disparaîtrait de la scène qu'on compose |
+
+Le second point est le vrai gain. Le remède naïf — faire avancer le playhead en
+édition pour que la pose se recalcule — aurait *marché* pour les décorations et
+fait disparaître les autres objets, un défaut qu'on n'aurait relié à rien.
+
+> **Une phrase qui NIE l'existence de quelque chose désigne toujours un
+> exemplaire précis, jamais la catégorie.** « Il n'y a pas de display-link »,
+> « aucune route n'écrit ce champ », « ce n'est appelé nulle part » : chacune est
+> vraie d'un référent que son auteur avait en tête et qu'il n'a pas nommé. La
+> vérifier coûte un `grep` sur le NOM du mécanisme, pas sur la phrase.
+
+C'est la jumelle de [[reference_no_route_writes_it_does_not_mean_nothing_wrote_it]]
+et de la règle « une valeur DÉDUITE n'est pas une valeur LUE » : ici la valeur
+avait été lue, mais dans un doc-comment — et un doc-comment est une valeur
+DÉDUITE par quelqu'un d'autre, à une date qu'il n'a pas écrite.

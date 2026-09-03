@@ -204,6 +204,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
+        // Troisième famille vivante sur le canvas d'édition (#4999) : une
+        // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
+        // comme la vidéo et le son juste au-dessus et juste en dessous.
+        view.playsStickerMotionInEditMode = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
