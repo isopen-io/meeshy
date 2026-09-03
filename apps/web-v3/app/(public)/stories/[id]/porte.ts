@@ -51,12 +51,25 @@ import {
  * `recuperer` est la MÊME couture que celle du tableau de bord : elle laisse un
  * témoin opposer un serveur à la porte sans lancer de serveur. Elle n'est
  * jamais fournie en production.
+ *
+ * **`maintenant` EST LA SECONDE COUTURE, ET POUR LA MÊME RAISON.** Une story a
+ * une ÉCHÉANCE (`expiresAt`) : la porte décide donc de ce qu'elle sert en
+ * lisant une horloge, et une horloge lue par `Date.now()` au fond du module est
+ * une entrée que le témoin ne peut pas fixer. Ses fixtures dataient — la suite
+ * a viré au rouge le 2026-09-03 à 05:00 UTC, sur un code que personne n'avait
+ * touché. Un témoin qui dépend du JOUR où on le rejoue ne garde rien : il
+ * annonce vert jusqu'à l'heure où il annonce rouge.
+ *
+ * Le défaut de ce genre ne se voit pas dans un diff, seulement dans le
+ * CALENDRIER — la couture est ce qui le rend impossible.
  */
 
 type Demande = {
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
+  /** L'horloge de la décision — injectée par les témoins, `Date.now()` en production. */
+  readonly maintenant?: number;
 };
 
 const invitation = (id: string): Response => rendu(documentDeLInvitation({ id }));
@@ -80,7 +93,7 @@ type Charge =
  * rend telle quelle ; le POST la rend avec le refus PEINT et le texte saisi,
  * jamais perdu.
  */
-const charge = async ({ requete, id, recuperer }: Demande): Promise<Charge> => {
+const charge = async ({ requete, id, recuperer, maintenant = Date.now() }: Demande): Promise<Charge> => {
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return { genre: 'reponse', reponse: invitation(id) };
 
@@ -97,7 +110,6 @@ const charge = async ({ requete, id, recuperer }: Demande): Promise<Charge> => {
   if (chargee.genre === 'panne') return { genre: 'reponse', reponse: rendu(documentDePanne(), 503) };
 
   const lecteur: Lecteur | null = identite.genre === 'lecteur' ? identite.lecteur : null;
-  const maintenant = Date.now();
   const story = storyLue({
     brut: chargee.brut,
     langues: languesDuLecteur(lecteur ?? {}),
