@@ -256,8 +256,14 @@ public final class MessageStore: ObservableObject {
     /// `windowReadsForTesting` — nombre de lectures de fenêtre effectuées :
     /// le seul témoin qui distingue « la conversation s'ouvre en UNE lecture »
     /// de « deux chemins lisent la même fenêtre ».
+    ///
+    /// Compilés en DEBUG seulement — la règle que le diagnostic BUG1 plus bas
+    /// applique déjà : un témoin que personne ne consomme en production ne s'y
+    /// paie pas, fût-ce deux entiers sur le chemin chaud.
+    #if DEBUG
     private(set) var lastWindowRowsReadForTesting: Int = 0
     private(set) var windowReadsForTesting: Int = 0
+    #endif
 
     struct MessageSection: Sendable {
         let date: DateComponents
@@ -385,8 +391,10 @@ public final class MessageStore: ObservableObject {
             Logger.messages.error("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
             return
         }
+        #if DEBUG
         lastWindowRowsReadForTesting = newRecords.count
         windowReadsForTesting += 1
+        #endif
 
         guard generation == refreshGeneration else { return }
         guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
@@ -576,7 +584,14 @@ public final class MessageStore: ObservableObject {
         if records == messages { return true }
         guard mergeInMemory, windowMode == .latest, records.count < messages.count
         else { return false }
-        return records == Array(messages.suffix(records.count))
+        // `elementsEqual` sur la TRANCHE, jamais `Array(...)` : matérialiser la
+        // queue allouait — et détruisait — un tableau de jusqu'à 500 structs à
+        // chaque appel, sur le MainActor, au moment précis du défilement. La
+        // forme 2 étant le chemin NOMINAL d'une fenêtre ancrée profonde, ce
+        // coût se payait à chaque accusé de lecture, chaque réaction, chaque
+        // tick d'outbox. La comparaison est paresseuse et s'arrête au premier
+        // écart.
+        return records.elementsEqual(messages.suffix(records.count))
     }
 
     /// Collapses physical rows that share a server id down to a single survivor.
@@ -685,8 +700,10 @@ public final class MessageStore: ObservableObject {
             Logger.messages.error("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
             return []
         }
+        #if DEBUG
         lastWindowRowsReadForTesting = records.count
         windowReadsForTesting += 1
+        #endif
 
         // Yield off the current SwiftUI view update cycle so the caller's
         // subsequent `apply` (which mutates @Published) lands on a fresh

@@ -11,6 +11,16 @@ import MeeshySDK
 @MainActor
 final class MockVoiceNoteTranscriptionEngine: VoiceNoteTranscriptionEngineProviding {
     var isAuthorized = true
+    /// Ce que la boîte système RENDRAIT : `true` accorde — et `isAuthorized`
+    /// bascule, comme le statut qu'iOS mémorise ensuite.
+    var authorizationGrant = false
+    private(set) var requestAuthorizationCallCount = 0
+
+    func requestAuthorization() async -> Bool {
+        requestAuthorizationCallCount += 1
+        if authorizationGrant { isAuthorized = true }
+        return isAuthorized
+    }
     var transcribeResult: Result<OnDeviceTranscription, Error> = .success(
         OnDeviceTranscription(text: "Bonjour à tous", language: "fr-FR", confidence: 0.92)
     )
@@ -69,10 +79,11 @@ final class MockVoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
 // MARK: - Tests
 
 /// `VoiceNoteLocalTranscriber` transcrit un vocal SUR L'APPAREIL dès l'arrêt
-/// de l'enregistrement (#4948, D-AUDIO-01), en meilleur effort : jamais de
-/// demande d'autorisation intrusive, un délai plafonné, `nil` sur tout échec
-/// — la bulle optimiste part telle quelle et le serveur (Whisper) reste le
-/// repli. Le résultat voyage ensuite avec l'upload TUS (`transcription`).
+/// de l'enregistrement (#4948, D-AUDIO-01), en meilleur effort : UNE demande
+/// d'autorisation au premier vocal (jamais pendant le geste, jamais en
+/// retenant l'envoi), un délai plafonné, `nil` sur tout échec — la bulle
+/// optimiste part telle quelle et le serveur (Whisper) reste le repli. Le
+/// résultat voyage ensuite avec l'upload TUS (`transcription`).
 @MainActor
 final class VoiceNoteLocalTranscriberTests: XCTestCase {
 
@@ -152,9 +163,32 @@ final class VoiceNoteLocalTranscriberTests: XCTestCase {
         XCTAssertEqual(engine.transcribeCallCount, 1)
     }
 
-    // MARK: - Non autorisé ⇒ nil, sans prompt
+    // MARK: - L'autorisation se DEMANDE — une fois, au premier vocal
 
-    func test_beginTranscription_notAuthorized_returnsNilWithoutPrompting() async {
+    /// « Jamais de demande » rendait la transcription automatique inerte pour
+    /// quiconque n'avait jamais accordé Speech ailleurs : le vocal attendait
+    /// Whisper. Accordée, la reconnaissance part dans la foulée.
+    func test_beginTranscription_notAuthorized_asksOnce_thenTranscribesWhenGranted() async {
+        let (sut, engine) = makeSUT()
+        engine.isAuthorized = false
+        engine.authorizationGrant = true
+
+        sut.beginTranscription(attachmentId: "att-1", audioURL: makeAudioURL(), durationMs: 900, languageCode: "fr")
+        let transcription = await sut.awaitTranscription(for: "att-1")
+
+        XCTAssertEqual(transcription?.text, "Bonjour à tous")
+        XCTAssertEqual(engine.requestAuthorizationCallCount, 1)
+        XCTAssertEqual(engine.transcribeCallCount, 1)
+
+        // Accordée une fois, iOS la mémorise : le vocal suivant ne redemande rien.
+        sut.beginTranscription(attachmentId: "att-2", audioURL: makeAudioURL(), durationMs: 900, languageCode: "fr")
+        _ = await sut.awaitTranscription(for: "att-2")
+        XCTAssertEqual(engine.requestAuthorizationCallCount, 1, "Une seule boîte système, jamais deux")
+    }
+
+    /// Refusée, la demande rend `nil` sans reconnaissance : la bulle part sans
+    /// texte et le serveur (Whisper) reste le repli.
+    func test_beginTranscription_notAuthorized_denied_returnsNilWithoutRecognizing() async {
         let (sut, engine) = makeSUT()
         engine.isAuthorized = false
 
@@ -162,7 +196,17 @@ final class VoiceNoteLocalTranscriberTests: XCTestCase {
         let transcription = await sut.awaitTranscription(for: "att-1")
 
         XCTAssertNil(transcription)
-        XCTAssertEqual(engine.transcribeCallCount, 0, "Aucune demande d'autorisation ni de reconnaissance sans consentement déjà accordé")
+        XCTAssertEqual(engine.requestAuthorizationCallCount, 1, "La demande a été faite")
+        XCTAssertEqual(engine.transcribeCallCount, 0, "Aucune reconnaissance sans consentement")
+    }
+
+    func test_beginTranscription_alreadyAuthorized_neverAsksAgain() async {
+        let (sut, engine) = makeSUT()
+
+        sut.beginTranscription(attachmentId: "att-1", audioURL: makeAudioURL(), durationMs: 900, languageCode: "fr")
+        _ = await sut.awaitTranscription(for: "att-1")
+
+        XCTAssertEqual(engine.requestAuthorizationCallCount, 0, "Speech déjà accordé : aucune boîte système")
     }
 
     // MARK: - Délai / échec ⇒ nil, bulle intacte
@@ -260,6 +304,38 @@ final class VoiceNoteLocalTranscriberTests: XCTestCase {
 
         XCTAssertEqual(awaited.map(\.attachmentId), ["a"])
         XCTAssertEqual(mock.awaitCallCount, 2)
+    }
+
+    // MARK: - L'ENVOI a son propre budget, distinct du plafond du MOTEUR
+
+    /// Le plafond du transcripteur (8 s) dit quand la reconnaissance est
+    /// perdue ; il ne dit pas ce qu'un ENVOI a le droit d'attendre. Les faire
+    /// coïncider retenait le fichier — bulle bloquée en « envoi », destinataire
+    /// sans rien — pendant toute la fenêtre Apple Speech.
+    func test_awaitTranscriptionsWithinBudget_slowEngine_rendLaMainAvantLePlafondDuMoteur() async {
+        let (sut, engine) = makeSUT(timeout: 8)
+        engine.latency = .seconds(5)
+        sut.beginTranscription(attachmentId: "att-1", audioURL: makeAudioURL(), durationMs: 1_000, languageCode: "fr")
+
+        let debut = ContinuousClock.now
+        let awaited = await sut.awaitTranscriptions(for: ["att-1"], within: .milliseconds(120))
+        let ecoule = debut.duration(to: ContinuousClock.now)
+
+        XCTAssertTrue(awaited.isEmpty, "Passé le budget d'envoi, l'upload part sans texte — Whisper reste le repli")
+        XCTAssertLessThan(ecoule, .seconds(2), "L'envoi ne doit jamais attendre le plafond du moteur")
+        sut.discard(attachmentId: "att-1")
+    }
+
+    /// Le cas nominal d'un vocal court : la reconnaissance a déjà rendu, le
+    /// budget ne coûte rien et le texte part avec l'upload.
+    func test_awaitTranscriptionsWithinBudget_dejaConnue_rendImmediatement() async {
+        let (sut, _) = makeSUT()
+        sut.beginTranscription(attachmentId: "att-1", audioURL: makeAudioURL(), durationMs: 900, languageCode: "fr")
+        _ = await sut.awaitTranscription(for: "att-1")
+
+        let awaited = await sut.awaitTranscriptions(for: ["att-1"], within: .milliseconds(700))
+
+        XCTAssertEqual(awaited.map(\.attachmentId), ["att-1"])
     }
 
     // MARK: - Le texte voyage avec l'upload TUS

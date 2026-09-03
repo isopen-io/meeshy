@@ -139,6 +139,49 @@ final class KeyboardTransitionTests: XCTestCase {
             ListInsetTransition(duration: 0.35, curve: UIView.AnimationOptions(rawValue: 7 << 16))
         )
     }
+
+    // MARK: - Une transition ne vit que le temps du mouvement annoncé
+
+    /// Servie sans fin, la dernière annonce du clavier animait sur sa courbe
+    /// des pas qui ne lui appartenaient pas : la croissance du composeur
+    /// clavier BAISSÉ (tiroir, bandeau de réponse, tuile de lieu) traînait de
+    /// 0,25 s derrière SwiftUI, qui l'anime déjà image par image.
+    func test_isLive_duringTheAnnouncedMovement_isTrue() throws {
+        let transition = try XCTUnwrap(
+            KeyboardTransition(userInfo: userInfo(frame: keyboardFrame, duration: 0.25, curve: 7), isPresenting: true)
+        )
+        XCTAssertTrue(transition.isLive(at: transition.announcedAt.addingTimeInterval(0.2)))
+    }
+
+    /// Le pas de `safeAreaBottom` atterrit dans une passe ULTÉRIEURE à la
+    /// notification : la marge (`liveSlack`) est là pour lui.
+    func test_isLive_withinTheSlackAfterTheMovement_isTrue() throws {
+        let transition = try XCTUnwrap(
+            KeyboardTransition(userInfo: userInfo(frame: keyboardFrame, duration: 0.25, curve: 7), isPresenting: true)
+        )
+        XCTAssertTrue(
+            transition.isLive(at: transition.announcedAt.addingTimeInterval(0.25 + KeyboardTransition.liveSlack / 2))
+        )
+    }
+
+    func test_isLive_afterTheMovementAndItsSlack_isFalse() throws {
+        let transition = try XCTUnwrap(
+            KeyboardTransition(userInfo: userInfo(frame: keyboardFrame, duration: 0.25, curve: 7), isPresenting: true)
+        )
+        XCTAssertFalse(
+            transition.isLive(at: transition.announcedAt.addingTimeInterval(0.25 + KeyboardTransition.liveSlack + 0.05))
+        )
+    }
+
+    /// La hauteur, elle, reste vraie tant que le clavier est là : seul le
+    /// TEMPO expire.
+    func test_height_outlivesTheTransition() throws {
+        let transition = try XCTUnwrap(
+            KeyboardTransition(userInfo: userInfo(frame: keyboardFrame, duration: 0.25, curve: 7), isPresenting: true)
+        )
+        XCTAssertFalse(transition.isLive(at: transition.announcedAt.addingTimeInterval(5)))
+        XCTAssertEqual(transition.height, 336)
+    }
 }
 
 /// **Garde source — la réserve basse du fil rejoint sa valeur SUR une courbe.**
@@ -167,8 +210,18 @@ final class KeyboardTransitionWiringGuardTests: XCTestCase {
         )
     }
 
+    /// L'UNITÉ `ConversationView`, jamais son seul fichier-tête : le décodage
+    /// clavier a désormais un fichier VOISIN naturel (`+Keyboard.swift`, où
+    /// vivent l'observateur et les deux `onReceive`), et une garde négative qui
+    /// ne lit que la tête passerait au vert dès que l'interdit y revient —
+    /// c'est-à-dire à l'endroit le plus probable. `AppSourceGuard.unit` balaie
+    /// par GLOB, donc aucune extension future ne peut lui échapper.
+    private func conversationViewUnit() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+    }
+
     func test_conversationView_observesTheKeyboardThroughTheTransitionModifier() throws {
-        let conversationView = try source("ConversationView.swift")
+        let conversationView = try conversationViewUnit()
 
         XCTAssertTrue(
             conversationView.contains("observingKeyboardTransition($keyboardTransition)"),
@@ -182,8 +235,21 @@ final class KeyboardTransitionWiringGuardTests: XCTestCase {
 
     func test_conversationView_handsTheCurveToTheMessageList() throws {
         XCTAssertTrue(
-            try source("ConversationView.swift").contains("bottomInsetTransition: listInsetTransition"),
+            try conversationViewUnit().contains("bottomInsetTransition: listInsetTransition"),
             "Le fil ne reçoit plus la courbe du clavier : sa réserve basse redeviendrait un pas sec."
+        )
+    }
+
+    /// La courbe n'est servie que PENDANT le mouvement du clavier : servie
+    /// sans fin, elle faisait traîner de 0,25 s chaque croissance du composeur
+    /// clavier baissé.
+    func test_conversationView_servesTheCurveOnlyWhileTheKeyboardMoves() throws {
+        let unit = try conversationViewUnit()
+        let declaration = try XCTUnwrap(unit.range(of: "var listInsetTransition: ListInsetTransition?"))
+        let body = String(unit[declaration.lowerBound...].prefix(400))
+        XCTAssertTrue(
+            body.contains(".isLive()"),
+            "`listInsetTransition` doit consulter `isLive()` : une transition expirée anime des pas qui ne sont pas les siens."
         )
     }
 

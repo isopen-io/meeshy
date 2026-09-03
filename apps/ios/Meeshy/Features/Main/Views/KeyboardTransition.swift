@@ -23,15 +23,32 @@ struct KeyboardTransition: Equatable {
     /// matériel, `userInfo` amputé) : la cote historique d'UIKit.
     static let fallbackDuration: TimeInterval = 0.25
 
+    /// Une passe de layout de marge après la fin annoncée. Le pas de
+    /// `safeAreaBottom` (~34 pt, la fenêtre les perd clavier levé et les
+    /// reprend au masquage) n'est pas lu réactivement : il atterrit dans une
+    /// passe ULTÉRIEURE à la notification — pendant le mouvement, jamais
+    /// longtemps après — et c'est précisément lui que #4949 empêche de se
+    /// téléporter.
+    static let liveSlack: TimeInterval = 0.1
+
     /// Hauteur occupée par le clavier à la FIN du mouvement — 0 au masquage.
     let height: CGFloat
     let duration: TimeInterval
     let curve: UIView.AnimationOptions
+    /// L'instant de l'annonce. La transition n'a de sens que PENDANT le
+    /// mouvement qu'elle décrit : servie après, elle animerait sur la courbe
+    /// du clavier des pas qui ne lui appartiennent pas — la croissance du
+    /// composeur clavier BAISSÉ (tiroir de pièces jointes, bandeau de réponse,
+    /// tuile de lieu), que SwiftUI anime déjà image par image et que l'inset
+    /// doit SUIVRE, pas doubler d'une animation UIKit de 0,25 s qui le fait
+    /// traîner.
+    let announcedAt: Date
 
-    init(height: CGFloat, duration: TimeInterval, curve: UIView.AnimationOptions) {
+    init(height: CGFloat, duration: TimeInterval, curve: UIView.AnimationOptions, announcedAt: Date = Date()) {
         self.height = height
         self.duration = duration
         self.curve = curve
+        self.announcedAt = announcedAt
     }
 
     /// Ce que le clavier vient d'annoncer.
@@ -61,6 +78,14 @@ struct KeyboardTransition: Equatable {
         self.curve = Self.animationOptions(
             rawCurve: userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
         )
+        self.announcedAt = Date()
+    }
+
+    /// La transition est VIVANTE tant que le mouvement annoncé dure — plus la
+    /// passe de marge. Après, elle ne décrit plus rien : la hauteur reste
+    /// vraie (le clavier est là), le TEMPO ne l'est plus.
+    func isLive(at now: Date = Date()) -> Bool {
+        now.timeIntervalSince(announcedAt) <= duration + Self.liveSlack
     }
 
     /// La courbe annoncée n'est PAS une `UIView.AnimationOptions` : c'est un

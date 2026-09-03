@@ -32,17 +32,33 @@ extension ConversationViewModel {
 
     // MARK: - Load Messages (initial)
 
-    /// L'OUVERTURE — le seul point d'entrée du `.task` de la vue.
-    func loadMessages() async {
-        await loadMessages(force: false)
+    /// Ce qu'un `.task` REJOUÉ doit faire quand la fenêtre est déjà peinte :
+    /// réarmer le fil temps réel, et rien d'autre.
+    ///
+    /// La garde d'idempotence (#4943) économise ce qui COÛTE — réconciliations,
+    /// drain NSE, deux lectures GRDB, tour REST d'ouverture — mais elle sortait
+    /// AVANT l'armement, qui ne coûte rien et porte tout : sans abonnements
+    /// armés, une conversation ré-affichée sur un ViewModel conservé
+    /// (re-présentation d'une destination, restauration de scène, onglet qui
+    /// revient) n'aurait plus de fil vivant du tout, et plus AUCUN filet — ni
+    /// socket, ni revalidation. L'appel est idempotent côté handler.
+    ///
+    /// La revalidation RÉSEAU reste hors de ce chemin PAR DÉCISION : le rejeu
+    /// du tour REST d'ouverture était précisément la re-disposition que #4943
+    /// supprime, et le rattrapage des deltas passe par le puits global
+    /// `message:new` et par `syncMissedMessages()` à la reconnexion.
+    private func armOnReopen() {
+        socketHandler?.armSocketSubscriptions()
     }
 
-    /// - Parameter force: rejoue le chargement d'ouverture même si une fenêtre
-    ///   a déjà été peinte. Réservé à un rafraîchissement EXPLICITE de
-    ///   l'utilisateur ; la revalidation ordinaire passe par
-    ///   `refreshMessagesFromAPI()` / `syncMissedMessages()`, qui ne relisent
-    ///   ni l'outbox ni le cache d'ouverture.
-    func loadMessages(force: Bool) async {
+    /// L'OUVERTURE — le seul point d'entrée du `.task` de la vue.
+    ///
+    /// Sans paramètre : le `force` qui vivait ici n'avait AUCUN appelant, et
+    /// son doc-comment annonçait « la porte du rafraîchissement explicite »
+    /// que le dépôt n'ouvrait nulle part. Une porte que personne ne peut
+    /// pousser ne garde rien ; la faire exister se décide avec le geste qui la
+    /// pousserait (tirer-pour-rafraîchir), pas avant.
+    func loadMessages() async {
         guard !isLoadingInitial else { return }
         // IDEMPOTENCE de l'ouverture (#4943). Le `.task` d'une vue SwiftUI est
         // rejoué à chaque ré-apparition de l'écran (retour d'arrière-plan,
@@ -54,8 +70,15 @@ extension ConversationViewModel {
         // La garde ne verrouille que le SUCCÈS : une ouverture qui n'a RIEN
         // donné (GRDB froid + réseau KO) reste rejouable au réveil suivant,
         // sans quoi une conversation ouverte hors ligne resterait vide jusqu'à
-        // sa destruction. `force` reste la porte du rafraîchissement explicite.
-        guard force || !hasLoadedInitialMessages else { return }
+        // sa destruction.
+        //
+        // Le chemin court n'est pas un `return` NU : il RÉARME le fil
+        // (`armOnReopen`). La garde vaut pour ce qui COÛTE, jamais pour ce qui
+        // fait vivre le temps réel.
+        guard !hasLoadedInitialMessages else {
+            armOnReopen()
+            return
+        }
         isLoadingInitial = true
         error = nil
 
@@ -69,10 +92,17 @@ extension ConversationViewModel {
         // orphelines devrait voir ; et les deux réconciliations filtrent des
         // ensembles disjoints (outbox `.exhausted` d'un côté, absence d'outbox
         // vivant de l'autre) vers le MÊME état terminal `.failed`, donc leur
-        // ordre relatif est sans effet. Ce qui se recouvre : les deux écritures
-        // de l'acteur de persistance et les allers-retours du drain NSE (upsert
-        // de cache, commit GRDB attendu), là où la version sérielle payait
-        // trois attentes bout à bout avant la moindre ligne à l'écran.
+        // ordre relatif est sans effet.
+        //
+        // Ce qui se recouvre RÉELLEMENT, dit sans l'embellir : les deux
+        // premières branches sont deux méthodes du MÊME acteur, donc elles se
+        // sérialisent sur son exécuteur — ce qui se recouvre est leur ATTENTE,
+        // pas leur corps. La troisième, elle, quitte vraiment le fil principal
+        // pour sa partie coûteuse (`readAndDecodePending`, en tâche détachée),
+        // et ne revient sur le MainActor que pour l'upsert de cache et le
+        // commit GRDB attendu. Le gain est celui des allers-retours, pas d'un
+        // parallélisme de calcul — un commentaire qui sur-annonce empêche le
+        // prochain de mesurer.
         //
         // 1. Les messages bloqués en .sending/.queued dont le record outbox est
         //    épuisé → .failed. Couvre le cas « conversation rouverte après

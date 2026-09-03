@@ -6,7 +6,15 @@ import Foundation
 
 // MARK: - Reply Reference
 
-public struct ReplyReference: Codable, Sendable {
+/// `Equatable` SYNTHÉTISÉ, et c'est structurel : chaque hôte qui monte une
+/// citation sous `.equatable()` doit décider si elle a changé, et trois d'entre
+/// eux en recopiaient une PROJECTION champ par champ. La projection d'un hôte
+/// se périme au premier champ ajouté — les sept faits du média (#4945) et la
+/// protection sont arrivés sans que l'hôte audio les reçoive, et sa citation
+/// restait figée sur sa première résolution, vignette d'un média protégé
+/// comprise. Comparer la citation ENTIÈRE ferme la classe : un champ neuf ne
+/// peut plus être oublié par un hôte.
+public struct ReplyReference: Codable, Equatable, Sendable {
     public let messageId: String
     public let authorName: String
     public let authorColor: String

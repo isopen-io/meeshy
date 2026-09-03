@@ -11,6 +11,9 @@ import os
 @MainActor
 protocol VoiceNoteTranscriptionEngineProviding: AnyObject {
     var isAuthorized: Bool { get }
+    /// La boîte SYSTÈME de Speech — qu'iOS ne montre qu'une fois, puis rend
+    /// le statut mémorisé sans rien afficher.
+    func requestAuthorization() async -> Bool
     func transcribe(audioURL: URL, locale: Locale, timeout: TimeInterval) async throws -> OnDeviceTranscription
 }
 
@@ -22,11 +25,15 @@ extension EdgeTranscriptionService: VoiceNoteTranscriptionEngineProviding {}
 /// l'enregistrement (#4948, D-AUDIO-01).
 ///
 /// Meilleur effort, par construction :
-/// - **jamais de demande d'autorisation** : si `Speech` n'est pas déjà
-///   accordé, on rend `nil` sans prompt — le consentement vocal à l'envoi
-///   (`ConversationView.shouldPromptVoiceConsent`) gouverne déjà ce que
-///   l'utilisateur accepte, et une seconde boîte système au milieu d'un envoi
-///   serait une friction que le produit n'a pas décidée ;
+/// - **l'autorisation se DEMANDE — une fois, au premier vocal.** « Jamais de
+///   demande » rendait la transcription automatique INERTE pour quiconque
+///   n'était jamais passé par « Transcrire » en plein écran : le vocal
+///   attendait Whisper, la bulle partait sans texte — le contraire de ce que
+///   la feature promet. La boîte système s'ouvre juste après que le doigt a
+///   quitté le micro, jamais pendant le geste ; l'envoi, lui, ne l'attend pas
+///   (`sendWaitBudget`) : ce premier vocal part sans texte et le serveur le
+///   transcrit. Refusée, iOS mémorise le refus et chaque demande suivante rend
+///   `false` sans rien afficher — aucune boîte ne revient hanter l'envoi ;
 /// - **délai plafonné** (`timeout`) : le moteur borne lui-même la
 ///   reconnaissance, l'attente à l'envoi ne dure jamais plus ;
 /// - **`nil` sur tout échec** : la bulle optimiste part telle quelle et le
@@ -56,6 +63,34 @@ extension VoiceNoteLocalTranscribing {
         attachmentIds.compactMap { transcription(for: $0) }
     }
 
+    /// Même chose, BORNÉE par un budget d'ENVOI.
+    ///
+    /// Le plafond du transcripteur (`defaultTimeout`, 8 s) est celui du
+    /// MOTEUR : il dit à partir de quand la reconnaissance est perdue, pas
+    /// combien de temps un ENVOI a le droit d'attendre. Les faire coïncider
+    /// retenait le fichier — la bulle restait « en cours d'envoi » et le
+    /// destinataire ne recevait rien — pendant toute la fenêtre Apple Speech,
+    /// et davantage encore avec plusieurs vocaux, puisque l'attente est
+    /// séquentielle. C'est l'axe même que la demande nomme (« enregistrement
+    /// audio … aucune latence »), et l'envoi était devenu PLUS lent qu'avant.
+    ///
+    /// Passé le budget, l'upload part sans texte : le serveur transcrit
+    /// (Whisper), exactement comme quand Speech n'est pas autorisé. On PERD un
+    /// aller-retour, jamais la transcription.
+    ///
+    /// Sondage plutôt que course de tâches : cette extension est isolée
+    /// MainActor (défaut de la cible), `self` est un `any` non `Sendable`, et
+    /// une course l'aurait fait franchir une frontière de tâche.
+    func awaitTranscriptions(for attachmentIds: [String], within budget: Duration) async -> [MessageTranscription] {
+        let deadline = ContinuousClock.now.advanced(by: budget)
+        while true {
+            let known = knownTranscriptions(for: attachmentIds)
+            if known.count == attachmentIds.count { return known }
+            guard ContinuousClock.now < deadline else { return known }
+            try? await Task.sleep(for: .milliseconds(40))
+        }
+    }
+
     /// Même chose en attendant celles encore en cours.
     func awaitTranscriptions(for attachmentIds: [String]) async -> [MessageTranscription] {
         var collected: [MessageTranscription] = []
@@ -81,6 +116,11 @@ final class VoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
     /// sans transcription locale plutôt que d'attendre.
     static let defaultTimeout: TimeInterval = 8
 
+    /// Ce qu'un ENVOI a le droit d'attendre — sans rapport avec le plafond du
+    /// moteur ci-dessus. Assez pour qu'un vocal court déjà reconnu parte avec
+    /// son texte, jamais assez pour qu'un tap se sente.
+    static let sendWaitBudget: Duration = .milliseconds(700)
+
     /// Résultats retenus au plus — un vocal enregistré puis retiré du tiroir
     /// n'a pas de site qui l'oublie ; la borne garantit qu'il ne reste pas en
     /// mémoire pour toujours.
@@ -102,14 +142,14 @@ final class VoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
 
     func beginTranscription(attachmentId: String, audioURL: URL, durationMs: Int, languageCode: String) {
         guard inFlight[attachmentId] == nil, results[attachmentId] == nil else { return }
-        guard engine.isAuthorized else {
-            Logger.voiceNoteTranscriber.info("Speech non autorisé — vocal \(attachmentId, privacy: .public) envoyé sans transcription locale")
-            return
-        }
         let locale = EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: languageCode))
         let engine = self.engine
         let timeout = self.timeout
         inFlight[attachmentId] = Task { [weak self] in
+            guard await Self.ensureAuthorized(engine, attachmentId: attachmentId) else {
+                self?.complete(attachmentId: attachmentId, with: nil)
+                return nil
+            }
             let outcome = await Self.recognize(
                 engine: engine, attachmentId: attachmentId, audioURL: audioURL,
                 locale: locale, timeout: timeout, durationMs: durationMs, languageCode: languageCode
@@ -137,6 +177,20 @@ final class VoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
     }
 
     // MARK: - Privé
+
+    /// Speech déjà accordé ⇒ vrai, sans rien demander. Sinon la boîte système
+    /// — dans la tâche de fond, donc APRÈS que le geste a rendu la main, et
+    /// sans retenir l'envoi. Refusée, elle rend `false` immédiatement à chaque
+    /// appel suivant (statut mémorisé par iOS) : le vocal part sans texte et
+    /// Whisper reste le repli.
+    private static func ensureAuthorized(
+        _ engine: any VoiceNoteTranscriptionEngineProviding, attachmentId: String
+    ) async -> Bool {
+        if engine.isAuthorized { return true }
+        if await engine.requestAuthorization() { return true }
+        Logger.voiceNoteTranscriber.info("Speech non autorisé — vocal \(attachmentId, privacy: .public) envoyé sans transcription locale")
+        return false
+    }
 
     private static func recognize(
         engine: any VoiceNoteTranscriptionEngineProviding,

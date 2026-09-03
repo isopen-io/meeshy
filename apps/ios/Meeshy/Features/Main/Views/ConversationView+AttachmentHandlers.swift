@@ -265,7 +265,17 @@ extension ConversationView {
                 let optimisticThumbHash = isImage ? nil : thumbnails[att.id]?.toThumbHash()
                 return MeeshyMessageAttachment(
                     id: att.id,
+                    // Le NOM et le POIDS voyagent avec la bulle optimiste. Sans
+                    // eux, `DocumentViewerView` retombe sur le libellé du type
+                    // (« PDF ») et n'affiche AUCUNE taille : le document envoyé
+                    // s'affichait « Document », puis sautait à son vrai nom à
+                    // l'écho serveur — un saut de contenu, là où la demande
+                    // veut « comme si tout était instantané ». La pièce en
+                    // attente les porte déjà (`appendPendingFileAttachment`).
+                    fileName: att.fileName,
+                    originalName: att.originalName,
                     mimeType: att.mimeType.isEmpty ? "application/octet-stream" : att.mimeType,
+                    fileSize: att.fileSize,
                     fileUrl: fileURL.absoluteString,
                     width: att.width,
                     height: att.height,
@@ -473,11 +483,16 @@ extension ConversationView {
                     var localAttachments: [MeeshyMessageAttachment] = []
                     // Transcription locale arrivée APRÈS l'insert optimiste
                     // (`stopAndSendRecording` envoie dans la foulée) : attente
-                    // bornée par le délai du transcripteur, pose idempotente,
-                    // puis le texte VOYAGE avec l'upload (`Upload-Metadata`).
+                    // bornée par le budget d'ENVOI — jamais par le plafond du
+                    // MOTEUR, qui aurait retenu le fichier jusqu'à 8 s par
+                    // vocal — pose idempotente, puis le texte VOYAGE avec
+                    // l'upload (`Upload-Metadata`). Au-delà, Whisper reprend.
                     var localTranscriptions: [String: MessageTranscription] = [:]
                     if send.group.kind == .audio {
-                        let awaited = await voiceNoteTranscriber.awaitTranscriptions(for: send.group.attachments.map(\.id))
+                        let awaited = await voiceNoteTranscriber.awaitTranscriptions(
+                            for: send.group.attachments.map(\.id),
+                            within: VoiceNoteLocalTranscriber.sendWaitBudget
+                        )
                         attachLocalTranscriptions(awaited, tempId: send.tempId)
                         localTranscriptions = Dictionary(awaited.map { ($0.attachmentId, $0) }, uniquingKeysWith: { first, _ in first })
                     }

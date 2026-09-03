@@ -21,29 +21,27 @@ extension ConversationView {
     /// première mesure du composeur sont des causes SÈCHES, et les animer
     /// ferait glisser le fil à chaque ouverture de conversation.
     ///
-    /// Ensuite, c'est la DERNIÈRE annonce du clavier qui donne le tempo, et
-    /// elle reste servie jusqu'à la suivante — ce n'est pas un raccourci, c'est
-    /// la seule façon d'attraper le pas qu'on vise. Le pas de `safeAreaBottom`
-    /// (~34 pt, la fenêtre les perd clavier levé et les reprend au masquage)
-    /// n'est PAS lu réactivement : `bottomInset` le relit sur
-    /// `DeviceLayout.safeAreaBottom` à chaque passe de `body`, donc il atterrit
-    /// dans une passe ULTÉRIEURE à la notification, pas dans celle qu'elle
-    /// déclenche. Une transition qui expirerait avec l'animation annoncée le
-    /// manquerait — et c'est précisément ce pas-là que #4949 empêche de se
-    /// téléporter.
+    /// Ensuite, c'est la DERNIÈRE annonce du clavier qui donne le tempo — mais
+    /// SEULEMENT le temps du mouvement qu'elle annonce (`isLive`). Le pas de
+    /// `safeAreaBottom` (~34 pt, la fenêtre les perd clavier levé et les
+    /// reprend au masquage) n'est PAS lu réactivement : `bottomInset` le relit
+    /// sur `DeviceLayout.safeAreaBottom` à chaque passe de `body`, donc il
+    /// atterrit dans une passe ULTÉRIEURE à la notification — pendant le
+    /// mouvement, et c'est précisément ce pas-là que #4949 empêche de se
+    /// téléporter. La marge de `KeyboardTransition.liveSlack` le couvre.
     ///
-    /// Ce que cela COÛTE, à dire à voix haute : une croissance du composeur qui
-    /// survient plus tard, clavier BAISSÉ (tiroir de pièces jointes, bandeau de
-    /// réponse, options), rejoue elle aussi cette courbe. Son `GeometryReader`
+    /// Passé ce mouvement, la transition n'est plus servie. Servie sans fin,
+    /// elle animait sur la courbe du clavier des pas qui ne lui appartenaient
+    /// pas : une croissance du composeur clavier BAISSÉ (tiroir de pièces
+    /// jointes, bandeau de réponse, options, tuile de lieu) rejouait sa courbe
+    /// à chaque fois qu'un clavier avait parlé une fois. Son `GeometryReader`
     /// republie déjà la hauteur à CHAQUE frame de l'animation SwiftUI — l'inset
-    /// la suivait donc image par image, et la doubler d'une animation UIKit la
-    /// fait TRAÎNER de la durée annoncée au lieu de coller. Le jour où l'on
-    /// veut les deux, ce n'est pas une expiration qu'il faut mais une réserve
-    /// basse DÉRIVÉE d'une valeur réactive (les `safeAreaInsets` d'un
-    /// `GeometryReader`, ou la hauteur portée par `keyboardTransition`) : le
-    /// pas tomberait alors dans la passe de la notification, et la transition
-    /// pourrait enfin ne durer que le mouvement du clavier.
-    var listInsetTransition: ListInsetTransition? { keyboardTransition?.listInset }
+    /// la suit donc image par image, et la doubler d'une animation UIKit de la
+    /// durée annoncée la faisait TRAÎNER de 0,25 s au lieu de coller.
+    var listInsetTransition: ListInsetTransition? {
+        guard let keyboardTransition, keyboardTransition.isLive() else { return nil }
+        return keyboardTransition.listInset
+    }
 }
 
 // MARK: - Observation des notifications clavier
