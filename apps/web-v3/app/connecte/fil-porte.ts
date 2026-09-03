@@ -1,4 +1,5 @@
 import { actifsTempsReel } from '@/lib/actifs-rt';
+import { adresseDuMessage, PARAM_DE_L_ANCRE, PARAM_DU_PLEIN } from '@/lib/api/adresses-du-fil';
 import type { Lecteur } from '@/lib/api/compte';
 import { accuseLecture, aAccuser, envoie, reagis, televerse, type Creance, type Fil } from '@/lib/api/fil';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
@@ -6,6 +7,7 @@ import { FIL } from '@/lib/contenu/fil';
 
 import { CHAMP_DE_LA_REACTION, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
 import { CHAMP_DE_LA_PIECE, CHAMP_DU_MESSAGE, type TempsReel } from './fil-vue';
+import { pieceEnPlein } from './plein-vue';
 
 /**
  * CE QUE LES DEUX PORTES DU FIL PARTAGENT — la réponse, sa politique de cache,
@@ -45,6 +47,30 @@ export const nomDuLecteur = (lecteur: Lecteur | null): string =>
 /** `?avant=<id>` — la page plus ancienne, sans JavaScript. */
 export const curseurDemande = (requete: Request): string | null => {
   const valeur = new URL(requete.url).searchParams.get('avant');
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
+ * `?media=<pièce>` — le PLEIN ÉCRAN, un ÉTAT de l'adresse hôte (§ 12.10.1). Il
+ * est lu ICI, pour les DEUX portes : c'est ce qui garantit que `/chats/:cle` et
+ * `/chat/:lien` ouvrent la même surimpression sur le même geste. Ce que la
+ * chaîne désigne n'est pas cherché ici : la vue la résout contre ce qui est
+ * SERVI (`app/connecte/plein-vue.ts`), donc sans une requête de plus.
+ */
+export const pleinDemande = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DU_PLEIN);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
+ * `?autour=<message>` — LA TRANCHE, nommée par le message qu'elle doit
+ * contenir (`around=` de la passerelle). C'est ce que porte le lien d'un média
+ * et le retour de sa surimpression : la pièce d'un message vieux de mille
+ * lignes s'ouvre alors comme celle d'hier, et fermer rend la même tranche.
+ * Lue ICI pour les DEUX portes, comme `?avant=` et `?media=`.
+ */
+export const ancreDemandee = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DE_L_ANCRE);
   return valeur === null || valeur.trim() === '' ? null : valeur;
 };
 
@@ -120,7 +146,7 @@ const envoieLeMessage = async ({
   const envoi = await envoie({ cle: conversation, creance, texte, pieces: pieces?.identifiants });
   if (envoi.genre === 'refus') return { genre: 'erreur', message: envoi.message, brouillon: texte, statut: envoi.statut ?? 400 };
 
-  return { genre: 'redirection', vers: envoi.id === null ? adresse : `${adresse}#m-${encodeURIComponent(envoi.id)}` };
+  return { genre: 'redirection', vers: envoi.id === null ? adresse : adresseDuMessage(adresse, envoi.id) };
 };
 
 /**
@@ -147,7 +173,7 @@ const basculeLaReaction = async ({
     const retiree = await reagis({ creance, messageId, emoji, retirer: true });
     if (retiree.genre === 'refus') return { genre: 'erreur', message: retiree.message, brouillon: '', statut: retiree.statut ?? 400 };
   }
-  return { genre: 'redirection', vers: `${adresse}#m-${encodeURIComponent(messageId)}` };
+  return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
 };
 
 export const traiteLaSoumission = ({
@@ -171,7 +197,26 @@ export const traiteLaSoumission = ({
  * retomber le compteur de non-lus comme l'autre, et le module de participation
  * n'accuse que ce qui ARRIVE ensuite (jamais deux accusés pour une même
  * ouverture). Une passerelle muette n'est pas une panne de l'écran.
+ *
+ * ET UN FIL RECOUVERT N'EST PAS AFFICHÉ. Le plein écran d'un média est un ÉTAT
+ * de cette adresse : ouvrir une photo est une navigation entière, la refermer
+ * une seconde, et chacune re-postait l'accusé de lecture de la MÊME tranche —
+ * regarder trois photos coûtait six écritures pour rien. Or la surimpression
+ * est OPAQUE et pleine page (`plein-feuille.ts`) et le `<main>` qu'elle
+ * recouvre est `inert` : le lecteur regarde le média, pas le fil. La règle ne
+ * s'affaiblit pas, elle s'APPLIQUE — c'est la FERMETURE qui découvre le fil, et
+ * c'est elle qui accuse.
  */
-export const accuseCeQuiEstServi = ({ fil, creance }: { readonly fil: Fil; readonly creance: Creance }): void => {
+export const accuseCeQuiEstServi = ({
+  fil,
+  creance,
+  plein = null,
+}: {
+  readonly fil: Fil;
+  readonly creance: Creance;
+  /** `?media=` — la pièce que l'adresse ouvre. Résolue ICI, comme la vue la résout : une seule règle. */
+  readonly plein?: string | null;
+}): void => {
+  if (pieceEnPlein(fil, plein) !== null) return;
   void accuseLecture({ cle: fil.id, creance, messageIds: aAccuser(fil.messages) });
 };

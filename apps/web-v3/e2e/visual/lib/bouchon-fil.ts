@@ -236,7 +236,16 @@ export type EtatDuFilDeBouchon = {
     currentUses: number;
   };
   /** Le curseur GLOBAL du compte du membre — ce que `sequenceService.currentSeq` rend. */
-  readonly sync: { curseur: number };
+  readonly sync: {
+    curseur: number;
+    /**
+     * Ce que la collection `conversations` de `/sync` sert au prochain appel —
+     * réglé par un spec qui simule ce qui a bougé PENDANT une absence. Vide, la
+     * fenêtre est inchangée et le validateur ne bouge pas : le retour de focus
+     * rend 304.
+     */
+    conversations: Readonly<Record<string, unknown>>[];
+  };
   readonly reactions: MagasinDeReactions;
   readonly pieces: Map<string, PieceDeBouchon>;
   readonly identifiants: { suivant: () => string };
@@ -407,13 +416,48 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
       const seq = seqBrut === null ? undefined : Number(seqBrut);
       const checkpointSeq = identite.genre === 'invite' ? 0 : etat.sync.curseur;
       const hasGap = seq !== undefined && Number.isFinite(seq) && seq < checkpointSeq - SEUIL_DE_TROU;
-      const added = hasGap ? [] : etat.messages().filter((m) => Date.parse(m.createdAt) > since);
+      const demandees = (url.searchParams.get('collections') ?? 'messages').split(',');
+      const added = hasGap || !demandees.includes('messages') ? [] : etat.messages().filter((m) => Date.parse(m.createdAt) > since);
+      /**
+       * La collection `conversations` (`routes/sync/conversations.ts`), celle
+       * que `/chats` demande : le CADRE d'une ligne, jamais son contenu. Le
+       * bouchon la rend VIDE tant qu'aucun spec n'a fait bouger une
+       * conversation — c'est ce qui rend le 304 possible.
+       */
+      const conversations = demandees.includes('conversations') ? etat.sync.conversations : [];
+      /**
+       * L'ETAG ET LE 304 (`routes/sync/index.ts:422-449`) : le validateur est
+       * calculé sur les COLLECTIONS et la projection, JAMAIS sur `checkpoint`
+       * (une horloge murale rendrait tout 304 impossible). Un client qui
+       * renvoie `If-None-Match` sur une fenêtre inchangée reçoit 304 SANS corps
+       * — c'est ce que le retour de focus de `/chats` doit mesurer.
+       */
+      const validateur = `W/"${Buffer.from(JSON.stringify({ added, conversations, hasGap, demandees })).length}-${added.length}-${conversations.length}-${hasGap ? 1 : 0}"`;
+      reponse.setHeader('etag', validateur);
+      // `Cache-Control: no-store` (`routes/sync/index.ts:446`) — et AUCUN
+      // `Access-Control-Expose-Headers`, comme `server.ts:404-410` : le bouchon
+      // reproduit la passerelle TELLE QU'ELLE EST, donc un client d'une autre
+      // origine ne peut ni lire cet ETag ni laisser le cache revalider. Le
+      // rendre lisible ici aurait fait passer un 304 que la production ne sert
+      // jamais.
+      reponse.setHeader('cache-control', 'no-store');
+      if (String(requete.headers['if-none-match'] ?? '') === validateur) {
+        reponse.writeHead(304);
+        reponse.end();
+        return true;
+      }
+
       json({
         success: true,
         data: {
           checkpoint: new Date().toISOString(),
           checkpointSeq,
-          collections: { messages: { added, modified: [], deleted: [], truncated: false, nextCursor: null } },
+          collections: {
+            messages: { added, modified: [], deleted: [], truncated: false, nextCursor: null },
+            ...(demandees.includes('conversations')
+              ? { conversations: { added: conversations, modified: [], deleted: [], truncated: false, nextCursor: null } }
+              : {}),
+          },
           hasMore: false,
           nextCursor: null,
           hasGap,
@@ -680,11 +724,26 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
     const around = url.searchParams.get('around');
     const tri = [...messages].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     const borne = before === null ? undefined : messages.find((m) => m.id === before);
-    const page = (around !== null
-      ? tri.filter((m) => m.id === around)
-      : tri.filter((m) => borne === undefined || Date.parse(m.createdAt) < Date.parse(borne.createdAt))
+    /**
+     * LA FENÊTRE `around`, comme la passerelle la construit
+     * (`routes/conversations/messages-list.ts:400-450`) : la MOITIÉ des places
+     * en messages plus anciens, la cible, la moitié en plus récents — et non la
+     * seule cible, ce que ce bouchon rendait. Un bouchon qui sert moins que la
+     * passerelle fait passer pour vert un écran qui, en production, n'aurait pas
+     * ses voisins.
+     */
+    const moitie = Math.floor(limite / 2);
+    const rang = around === null ? -1 : tri.findIndex((m) => m.id === around);
+    const page = (
+      rang >= 0
+        ? tri.slice(Math.max(0, rang - moitie), rang + moitie + 1)
+        : tri.filter((m) => borne === undefined || Date.parse(m.createdAt) < Date.parse(borne.createdAt)).slice(0, limite)
     ).slice(0, limite);
     const dernier = page[page.length - 1];
+    // « des messages PLUS ANCIENS existent » — ce que le schéma de la passerelle
+    // déclare pour `hasMore` dans les deux modes reculants (`before` et
+    // `around`), et non « la page est pleine ».
+    const plusVieux = dernier !== undefined && tri.some((m) => Date.parse(m.createdAt) < Date.parse(dernier.createdAt));
     json({
       success: true,
       // `reactionSummary` — `emoji → compte`, calculé à la lecture (`ReactionService.getEmojiAggregation`).
@@ -692,7 +751,7 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
       pagination: { total: messages.length, offset: 0, limit: limite, hasMore: false },
       cursorPagination: {
         limit: limite,
-        hasMore: around === null && page.length === limite && tri.length > limite,
+        hasMore: rang >= 0 ? plusVieux : page.length === limite && tri.length > limite,
         nextCursor: dernier === undefined ? null : dernier.id,
       },
     });

@@ -1,7 +1,8 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
+import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
-import { FORME_PAR_GENRE, formeDePiece } from '@/lib/api/formes';
+import { FORME_PAR_GENRE, formeDePiece, sEcouteSurPlace } from '@/lib/api/formes';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
@@ -102,20 +103,33 @@ const GLYPHE_PAR_GENRE: Readonly<Record<string, string>> = Object.fromEntries(
  *
  * Le genre décide du bloc, et lui seul (`lib/api/formes.ts`) :
  *
- *   • `lecteur === null` (image, fichier) ⇒ une AFFICHE : un `<a>` au glyphe de
- *     son genre. Rien ne se télécharge avant le geste — pas d'`<img>`, donc
- *     aucune photo du fil ne part sur une 3G rurale sans qu'on l'ait demandée.
- *     Le lien OUVRE UN ONGLET (`target="_blank" rel="noopener"`) : `download`
- *     est IGNORÉ hors origine — et la passerelle est une autre origine que le
- *     document (`gate.meeshy.me` face à `meeshy.me`) —, si bien que toucher une
- *     pièce jointe NAVIGUAIT l'onglet vers le fichier brut : le fil, la position
- *     de lecture et le socket étaient perdus, et rien ne l'annonçait. Le geste
- *     est désormais NOMMÉ dans le nom accessible de la cible.
- *   • `lecteur !== null` (audio, vidéo) ⇒ un LECTEUR : un `<details>` dont le
- *     `<summary>` EST l'affiche de lecture (rond `ph-fill-play`, durée et poids
- *     posés dessus), et dont le contenu est le média natif en `preload="none"`.
- *     Un `<details>` s'ouvre SANS JavaScript : zéro octet avant la pression,
- *     et la commande accessible que le navigateur donne gratuitement.
+ *   • `sEcouteSurPlace` (le vocal, et lui seul) ⇒ un LECTEUR : un `<details>`
+ *     dont le `<summary>` EST l'affiche de lecture (rond `ph-fill-play`, durée
+ *     et poids posés dessus), et dont le contenu est l'`<audio>` natif en
+ *     `preload="none"`. Un `<details>` s'ouvre SANS JavaScript : zéro octet
+ *     avant la pression, et la commande accessible que le navigateur donne
+ *     gratuitement. Il porte de plus sa FICHE (§ 12.10.1) — un lien vers le
+ *     plein écran, où la transcription se lit ENTIÈRE ;
+ *   • sinon ⇒ une AFFICHE : un `<a>` au glyphe de son genre. Rien ne se
+ *     télécharge avant le geste — pas d'`<img>`, donc aucune photo du fil ne
+ *     part sur une 3G rurale sans qu'on l'ait demandée.
+ *
+ * ET CE QUE L'AFFICHE OUVRE VIENT DE LA MÊME TABLE (`ouvre`, § 12.10.1) :
+ *
+ *   • `plein` (image, vidéo) ⇒ l'état PLEIN ÉCRAN de l'adresse hôte
+ *     (`?autour=<message>&media=<pièce>`), servi par le même document. On reste
+ *     dans la conversation : ni onglet, ni fil perdu, ni socket coupé. L'adresse
+ *     nomme le MESSAGE autant que la pièce (`lib/api/adresses-du-fil.ts`) :
+ *     c'est ce qui la rend atteignable à n'importe quelle profondeur
+ *     d'historique, et ce qui fait revenir la croix sur la même tranche ;
+ *   • `fichier` (le reste) ⇒ le fichier, DANS UN ONGLET (`target="_blank"
+ *     rel="noopener"`) : `download` est IGNORÉ hors origine — et la passerelle
+ *     est une autre origine que le document (`gate.meeshy.me` face à
+ *     `meeshy.me`) —, si bien que toucher une pièce jointe NAVIGUAIT l'onglet
+ *     vers le fichier brut : le fil, la position de lecture et le socket
+ *     étaient perdus, et rien ne l'annonçait. Le geste est NOMMÉ dans le nom
+ *     accessible de la cible, et les deux gestes ont deux noms parce qu'ils
+ *     font deux choses (`FIL.pleinEcran` / `FIL.telecharger`).
  *
  * L'adresse est ABSOLUE, sur l'origine publique de la passerelle
  * (`lib/api/fil.ts`, `urlDePiece`) : un chemin relatif se résoudrait contre le
@@ -129,13 +143,21 @@ const etiquetteDePiece = (nom: string, meta: string): string =>
   `<span class="poids"${meta === '' ? ' hidden' : ''}>${echappe(meta)}</span>` +
   '</span>';
 
-const afficheDePiece = (url: string, nom: string, meta: string): string =>
-  `<a class="media" href="${echappe(url)}" target="_blank" rel="noopener" aria-label="${echappe(FIL.telecharger(nom, meta))}">` +
-  `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}</span>` +
+/** CE QUE LE TAP FAIT — l'adresse, le nom du geste, et s'il quitte le document. */
+type GesteDePiece = { readonly href: string; readonly libelle: string; readonly onglet: boolean };
+
+const gesteDePiece = (piece: PieceJointe, meta: string, adresse: string, messageId: string): GesteDePiece =>
+  formeDePiece(piece.genre).ouvre === 'plein'
+    ? { href: adresseDuPlein(adresse, messageId, piece.id), libelle: FIL.pleinEcran(piece.nom, meta), onglet: false }
+    : { href: piece.url, libelle: FIL.telecharger(piece.nom, meta), onglet: true };
+
+const afficheDePiece = (geste: GesteDePiece, nom: string, meta: string): string =>
+  `<a class="media" href="${echappe(geste.href)}"${geste.onglet ? ' target="_blank" rel="noopener"' : ''} aria-label="${echappe(geste.libelle)}">` +
+  `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span></span>` +
   etiquetteDePiece(nom, meta) +
   '</a>';
 
-const lecteurDePiece = ({ balise, source, nom, meta }: { readonly balise: 'audio' | 'video'; readonly source: string; readonly nom: string; readonly meta: string }): string =>
+const lecteurDePiece = ({ source, nom, meta }: { readonly source: string; readonly nom: string; readonly meta: string }): string =>
   '<details class="lecteur">' +
   '<summary>' +
   `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
@@ -143,29 +165,50 @@ const lecteurDePiece = ({ balise, source, nom, meta }: { readonly balise: 'audio
   '<span class="rail" aria-hidden="true"></span>' +
   etiquetteDePiece(nom, meta) +
   '</summary>' +
-  `<${balise} controls preload="none" src="${echappe(source)}"></${balise}>` +
+  `<audio controls preload="none" src="${echappe(source)}"></audio>` +
   '</details>';
 
-const piece = (piece: PieceJointe, langueDuDocument: string): string => {
-  const forme = formeDePiece(piece.genre);
-  const meta = metaDePiece(piece);
-  const bloc =
-    forme.lecteur === null
-      ? afficheDePiece(piece.url, piece.nom, meta)
-      : lecteurDePiece({ balise: forme.lecteur, source: piece.piste, nom: piece.nom, meta });
+/**
+ * LA FICHE D'UN VOCAL (§ 12.10.1) — le plein écran où sa transcription se lit
+ * entière, sous le lecteur. Elle a un EFFET mesurable : la ligne du fil clampe
+ * la transcription (feuille du fil), la fiche la donne en entier avec son
+ * original. Son nom accessible NOMME la pièce ; son texte visible en est le
+ * premier mot (WCAG 2.5.3).
+ *
+ * ELLE N'EXISTE QUE S'IL Y A UNE FICHE À LIRE (`aFiche`). La transcription
+ * arrive APRÈS le vocal — Whisper, puis NLLB, puis le TTS (§ Audio Pipeline) —,
+ * si bien que le cas NOMINAL des secondes qui suivent un envoi était une puce
+ * nommée « Fiche » ouvrant une fiche VIDE : `blocDeTranscription` ne rend rien
+ * sans transcription, et `.fiche-texte:empty` masque le bloc. Une puce qui ne
+ * livre pas ce que son nom promet est un contrôle sans effet (charte règle 7).
+ * Quand la transcription arrive, le module repeint la pièce
+ * (`audio:transcription-ready` → `fil-peinture.ts`) et la puce apparaît : c'est
+ * l'effet juste, au moment juste.
+ */
+const aFiche = (piece: PieceJointe): boolean => sEcouteSurPlace(piece.genre) && piece.transcription !== null;
 
-  return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${blocDeTranscription(piece, langueDuDocument)}</li>`;
+const ficheDePiece = (href: string, nom: string): string =>
+  `<a class="fiche" href="${echappe(href)}" aria-label="${echappe(FIL.fiche(nom))}">${svgDuSprite('ph-file-text')}${echappe(FIL.ficheCourt)}</a>`;
+
+const piece = (piece: PieceJointe, langueDuDocument: string, adresse: string, messageId: string): string => {
+  const meta = metaDePiece(piece);
+  const bloc = sEcouteSurPlace(piece.genre)
+    ? lecteurDePiece({ source: piece.piste, nom: piece.nom, meta })
+    : afficheDePiece(gesteDePiece(piece, meta, adresse, messageId), piece.nom, meta);
+  const fiche = aFiche(piece) ? ficheDePiece(adresseDuPlein(adresse, messageId, piece.id), piece.nom) : '';
+
+  return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${blocDeTranscription(piece, langueDuDocument)}${fiche}</li>`;
 };
 
 /**
- * Le gabarit d'une pièce porte les DEUX blocs — l'affiche et le lecteur — et
- * les DEUX médias natifs. Le module en RETIRE ceux que le genre ne demande pas
+ * Le gabarit d'une pièce porte les DEUX blocs — l'affiche et le lecteur — et la
+ * fiche. Le module en RETIRE ceux que le genre ne demande pas
  * (`fil-peinture.ts`), il n'en compose aucun : une pièce peinte et une pièce
  * servie sont alors le même balisage, au nœud près.
  */
 const gabaritDePiece = (): string =>
   '<li data-piece="" data-genre="fichier">' +
-  afficheDePiece('', '', '') +
+  afficheDePiece({ href: '', libelle: '', onglet: false }, '', '') +
   '<details class="lecteur"><summary>' +
   `<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span>` +
   '<span class="hors-ecran"></span>' +
@@ -173,12 +216,12 @@ const gabaritDePiece = (): string =>
   etiquetteDePiece('', '') +
   '</summary>' +
   '<audio controls preload="none"></audio>' +
-  '<video controls preload="none"></video>' +
   '</details>' +
   `<p class="transcription" hidden><span class="hors-ecran">${echappe(FIL.transcription)} </span><span class="texte-transcrit"></span></p>` +
   '<p class="transcrit" hidden></p>' +
   '<details class="transcrit-original" hidden>' +
   `<summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary><p></p></details>` +
+  ficheDePiece('', '') +
   '</li>';
 
 /**
@@ -187,13 +230,20 @@ const gabaritDePiece = (): string =>
  * (site unique, partagé avec le module), et l'aperçu de ce qui est cité, avec
  * sa langue quand la passerelle la sert.
  *
- * AUCUNE n'est un CONTRÔLE. La planche fait mener la vignette d'une story à
- * `/stories/:id`, une route que la v3 ne sert pas : la charte règle 7 tranche
- * (« un `<a href>` vers une route SERVIE — tant que sa destination n'existe
- * pas, il n'est pas rendu »), et rien d'inerte n'est offert au doigt. Les trois
- * genres de citation — transfert, réponse, story — n'en désignent d'ailleurs
- * aucune autre : la galerie des médias (`/chats/:cle/medias`, désormais servie)
- * s'atteint depuis l'EN-TÊTE du fil, pas depuis une citation.
+ * UNE SEULE D'ENTRE ELLES EST UN CONTRÔLE : celle dont la CIBLE EST DANS LA
+ * PAGE (§ 12.10.1). Le saut est alors un lien de FRAGMENT vers la ligne citée
+ * (`#m-<id>`, `lib/api/adresses-du-fil.ts`) : le navigateur l'amène à l'écran
+ * seul, `:target` la met en évidence, et le geste marche sans un octet de
+ * JavaScript. Hors page — une publication, une conversation d'origine, un
+ * message plus ancien que la tranche —, l'`<a>` est rendu SANS `href` : ce
+ * n'est alors pas un contrôle (ni focus, ni rôle de lien), et rien d'inerte
+ * n'est offert au doigt (charte règle 7). La planche fait mener la vignette
+ * d'une story à `/stories/:id`, une route que la v3 ne sert pas : la même règle
+ * tranche.
+ *
+ * QUI DÉCIDE ? `citationsDeLaPage` (`lib/api/citations.ts`), le seul site qui
+ * connaisse la tranche entière — jamais ce fichier, jamais le peintre : deux
+ * calculs feraient une citation cliquable d'un côté et morte de l'autre.
  */
 const GLYPHE_PAR_CITATION: Readonly<Record<GenreDeCitation, string>> = {
   transfert: 'ph-arrow-bend-up-right',
@@ -201,34 +251,42 @@ const GLYPHE_PAR_CITATION: Readonly<Record<GenreDeCitation, string>> = {
   story: 'ph-sparkle',
 };
 
-const citation = (citation: Citation, langueDuDocument: string): string =>
-  `<li class="citation" data-genre="${citation.genre}" data-cite="${echappe(citation.cible)}">` +
+const corpsDeLaCitation = (citation: Citation, langueDuDocument: string): string =>
   `<span class="vignette">${glyphes(GLYPHE_PAR_CITATION)}</span>` +
   '<span class="dit">' +
   `<span class="quoi">${echappe(libelleDeCitation(citation))}</span>` +
   (citation.apercu === ''
     ? '<span class="apercu" hidden></span>'
     : `<span class="apercu"${langAttribut(citation.langue, langueDuDocument)}>${echappe(citation.apercu)}</span>`) +
-  '</span></li>';
+  '</span>';
+
+const citation = (citation: Citation, langueDuDocument: string): string =>
+  `<li class="citation" data-genre="${citation.genre}" data-cite="${echappe(citation.cible)}">` +
+  `<a class="saut"${citation.surLaPage ? ` href="${echappe(ancreDuMessage(citation.cible))}"` : ''}>` +
+  `<span class="hors-ecran"${citation.surLaPage ? '' : ' hidden'}>${echappe(FIL.allerAuMessage)} </span>` +
+  corpsDeLaCitation(citation, langueDuDocument) +
+  '</a></li>';
 
 const citationsHtml = (message: Message, langueDuDocument: string): string =>
   message.citations.length === 0
     ? ''
     : `<ul class="citations" aria-label="${echappe(FIL.citations)}">${message.citations.map((c) => citation(c, langueDuDocument)).join('')}</ul>`;
 
-/** Le gabarit d'une citation : les TROIS glyphes, dont `data-genre` élit un. */
+/** Le gabarit d'une citation : les TROIS glyphes, dont `data-genre` élit un ; le saut, dont le module pose l'`href`. */
 const gabaritDeCitation = (): string =>
   '<ul class="citations" aria-label="' +
   echappe(FIL.citations) +
   '" hidden><li class="citation" data-genre="reponse" data-cite="">' +
+  '<a class="saut">' +
+  `<span class="hors-ecran" hidden>${echappe(FIL.allerAuMessage)} </span>` +
   `<span class="vignette">${glyphes(GLYPHE_PAR_CITATION)}</span>` +
   '<span class="dit"><span class="quoi"></span><span class="apercu"></span></span>' +
-  '</li></ul>';
+  '</a></li></ul>';
 
-const pieces = (message: Message, langueDuDocument: string): string =>
+const pieces = (message: Message, langueDuDocument: string, adresse: string): string =>
   message.pieces.length === 0
     ? ''
-    : `<ul class="pieces">${message.pieces.map((p) => piece(p, langueDuDocument)).join('')}</ul>`;
+    : `<ul class="pieces">${message.pieces.map((p) => piece(p, langueDuDocument, adresse, message.id)).join('')}</ul>`;
 
 /**
  * UNE PASTILLE DE RÉACTION EST UN FORMULAIRE : le même geste bascule l'emoji
@@ -321,7 +379,7 @@ const classes = (message: Message, suite: boolean): string =>
     .join(' ');
 
 const attributs = (message: Message): string =>
-  `id="m-${echappe(message.id)}" data-id="${echappe(message.id)}"` +
+  `id="${echappe(identifiantDuMessage(message.id))}" data-id="${echappe(message.id)}"` +
   (message.clientMessageId === null ? '' : ` data-cid="${echappe(message.clientMessageId)}"`) +
   (message.auteurId === null ? '' : ` data-auteur="${echappe(message.auteurId)}"`) +
   (message.ecritA === null ? '' : ` data-ecrit="${echappe(message.ecritA)}"`) +
@@ -387,7 +445,7 @@ export const ligne = ({
     // ce qu'il DIT. Une photo suivie de sa légende, jamais une légende suivie
     // de sa photo — et une citation au-dessus de la réponse qu'elle motive.
     citationsHtml(message, langueDuDocument) +
-    pieces(message, langueDuDocument) +
+    pieces(message, langueDuDocument, adresse) +
     texte(message, langueDuDocument) +
     original(message, langueDuDocument) +
     '<p class="meta">' +

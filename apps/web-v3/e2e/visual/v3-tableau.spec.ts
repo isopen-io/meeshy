@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import {
+  AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   IDENTIFIANT_DU_LIEN_PARTAGE,
   PRENOM_DU_LECTEUR,
@@ -16,6 +17,7 @@ import {
   type ServeurV3,
 } from './lib/serveurs';
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
+import { CHATS } from '../../lib/contenu/liste';
 
 /**
  * LE TABLEAU DE BORD — `/` pour un lecteur CONNECTÉ (conception § 12.2, cible
@@ -134,6 +136,43 @@ test.describe('le tableau de bord garni', () => {
 
     const carte = page.locator(`a.carte[href="/chats/${CONVERSATION_DU_LECTEUR.id}"]`).last();
     await expect(carte).toContainText(`/chat/${IDENTIFIANT_DU_LIEN_PARTAGE}`);
+    await contexte.close();
+  });
+
+  /**
+   * **L'APERÇU AU PRISME, AU PIXEL** (`cible/home.png` : la carte « Marta Ruiz »
+   * porte la pastille `ES` puis « Merci, je t'envoie le fichier »). Le bouchon
+   * sert sur cette conversation un dernier message ESPAGNOL avec sa carte de
+   * traductions (`bouchon-compte.ts`, copié sur `lastMessage` /
+   * `lastMessageOriginalLanguage` / `lastMessageTranslations` de `GET
+   * /api/v1/conversations`) : la lectrice francophone doit lire le FRANÇAIS.
+   *
+   * LES DEUX MOITIÉS SONT EXIGÉES, et la seconde n'est pas décorative : la
+   * carte du groupe porte un aperçu déjà français, donc AUCUNE pastille — sans
+   * elle, une pastille rendue TOUJOURS resterait verte (charte règle 22).
+   *
+   * § 12.10.2 — le compte de participants a QUITTÉ cette carte : la cible met
+   * l'aperçu à sa place, et la méta ne revient que sur une conversation qui n'a
+   * encore rien dit (état gardé en unitaire, `__tests__/connecte.test.ts`). Le
+   * témoin de la règle AU PIXEL vit là où l'écran l'affiche encore :
+   * `v3-chats.spec.ts` (la ligne de `/chats`) et `v3-fil.spec.ts` (l'en-tête du
+   * fil).
+   */
+  test('la carte sert l’aperçu du dernier message au Prisme, et n’annonce une langue que s’il est traduit', async ({ browser }) => {
+    const contexte = await browser.newContext();
+    await contexte.addCookies(cookiesDuLecteur(v3.base));
+    const page = await contexte.newPage();
+    await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
+
+    const carte = (id: string) => page.locator(`a.carte[href="/chats/${id}"]`).first();
+
+    await expect(carte(AUTRE_CONVERSATION.id).locator('.apercu .texte')).toHaveText(AUTRE_CONVERSATION.traductions.fr);
+    await expect(carte(AUTRE_CONVERSATION.id).locator('.apercu .langue .code')).toHaveText(AUTRE_CONVERSATION.langueOriginale);
+    await expect(carte(AUTRE_CONVERSATION.id)).not.toContainText(AUTRE_CONVERSATION.apercu);
+    await expect(carte(AUTRE_CONVERSATION.id)).not.toContainText(CHATS.participants);
+
+    await expect(carte(CONVERSATION_DU_LECTEUR.id).locator('.apercu .texte')).toHaveText('On se cale à 15 h pour la revue ?');
+    await expect(carte(CONVERSATION_DU_LECTEUR.id).locator('.apercu .langue')).toHaveCount(0);
     await contexte.close();
   });
 

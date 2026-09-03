@@ -17,8 +17,10 @@ import { FIL, raisonDeFermeture } from '@/lib/contenu/fil';
 
 import {
   accuseCeQuiEstServi,
+  ancreDemandee,
   CACHE_PRIVE,
   curseurDemande,
+  pleinDemande,
   lisLeFormulaire,
   redirection,
   rendu,
@@ -320,12 +322,17 @@ const invite = async ({
   const titre = (battement.genre === 'valide' ? battement.conversation.titre : null) ?? place.nom ?? FIL.conversation;
   const langues = languesDuLecteur({ systemLanguage: participant?.langue ?? null });
 
+  const plein = pleinDemande(requete);
   const issue = await fil({
     cle: conversation,
     creance: { genre: 'invite', jeton },
     moi: participant?.id ?? null,
     langues,
     avant: curseurDemande(requete),
+    // La tranche que le lien d'un média nomme (§ 12.10.1) : sans elle, la pièce
+    // d'un message ancien n'était dans aucune tranche servie, et le tap
+    // n'ouvrait rien.
+    autour: ancreDemandee(requete),
   });
 
   if (issue.genre === 'panne') return rendu(documentDePanne(), 503);
@@ -335,7 +342,7 @@ const invite = async ({
   const bienvenue = new URL(requete.url).searchParams.has(PARAMETRE_DE_JONCTION_FRAICHE);
   const fermeture = issue.genre === 'lien-clos' ? issue.code : issue.genre === 'introuvable' ? 'INTROUVABLE' : clos;
 
-  if (issue.genre === 'fil' && erreur === null) accuseCeQuiEstServi({ fil: lu, creance: { genre: 'invite', jeton } });
+  if (issue.genre === 'fil' && erreur === null) accuseCeQuiEstServi({ fil: lu, creance: { genre: 'invite', jeton }, plein });
 
   return rendu(
     documentDuFil({
@@ -354,6 +361,7 @@ const invite = async ({
       maintenant: Date.now(),
       composeur: composeurDe(droits, fermeture),
       tempsReel: tempsReelDuDocument(),
+      plein,
     }),
     erreur === null ? 200 : statut,
   );
