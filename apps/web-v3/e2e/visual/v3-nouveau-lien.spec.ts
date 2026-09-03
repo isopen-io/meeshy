@@ -122,13 +122,20 @@ test('la feuille marche ENTIÈRE sans JavaScript', async ({ browser }) => {
  * TROIS CHEMINS DE FERMETURE, et sans JavaScript ce sont trois liens. Une
  * feuille qu'on ne peut pas fermer est un cul-de-sac — le lecteur n'a plus que
  * le bouton « précédent » du navigateur, et il ne le sait pas.
+ *
+ * LA CROIX EST VISÉE PAR SA CLASSE, PAS PAR SON RÔLE. Les trois chemins
+ * portent le même nom accessible (« Fermer ») — c'est voulu, ils font la même
+ * chose — donc `getByRole('link', { name: 'Fermer' })` en rend trois, et le
+ * premier dans le document est le VOILE, dont le centre est couvert par la
+ * feuille. Un témoin qui cliquerait « le premier » mesurerait la géométrie,
+ * pas la fermeture.
  */
 test('la croix ferme la feuille sans JavaScript, et le carnet revient', async ({ browser }) => {
   const ctx = await contexte(browser, { javaScriptEnabled: false });
   const page = await ctx.newPage();
 
   await page.goto(`${v3.base}/links?nouveau`);
-  await page.getByRole('link', { name: 'Fermer' }).first().click();
+  await page.locator('a.fermer').click();
 
   await expect(page).toHaveURL(`${v3.base}/links`);
   await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0);
@@ -136,17 +143,44 @@ test('la croix ferme la feuille sans JavaScript, et le carnet revient', async ({
   await ctx.close();
 });
 
-/** Avec le module, `plein-ecran.ts` l'élève en modale — donc Échap la ferme. */
-test('Échap ferme la feuille quand le module est là', async ({ browser }) => {
+/** Le voile ferme aussi — cliqué là où il est EXPOSÉ, au-dessus de la feuille. */
+test('le voile ferme la feuille sans JavaScript', async ({ browser }) => {
+  const ctx = await contexte(browser, { javaScriptEnabled: false });
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/links?nouveau`);
+  await page.locator('a.voile').click({ position: { x: 8, y: 8 } });
+
+  await expect(page).toHaveURL(`${v3.base}/links`);
+
+  await ctx.close();
+});
+
+/**
+ * ÉCHAP NE FERME PAS, ET C'EST MESURÉ PLUTÔT QU'ESPÉRÉ.
+ *
+ * `lib/realtime/plein-ecran.ts` élèverait ce `dialog[open][data-retour]` en
+ * modale — mais `/links` ne sert AUCUN module, et en charger un pour Échap
+ * seul coûterait un aller-retour à un écran qui n'en paie aucun. Ce témoin
+ * fixe l'état RÉEL : la feuille reste ouverte, et les trois liens de fermeture
+ * restent le chemin. Il rougira le jour où `/links` servira un module — et ce
+ * jour-là, la bonne correction sera de l'INVERSER, pas de le supprimer.
+ *
+ * Ce qu'Échap aurait donné en plus du piège à focus, `inert` le donne déjà :
+ * le témoin le vérifie ici même, sur le carnet derrière la feuille.
+ */
+test('Échap ne ferme pas — aucun module n’est servi sur /links, et `inert` tient le focus', async ({ browser }) => {
   const ctx = await contexte(browser);
   const page = await ctx.newPage();
 
   await page.goto(`${v3.base}/links?nouveau`);
   await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+  await expect(page.locator('main.liens-ecran')).toHaveAttribute('inert', '');
 
   await page.keyboard.press('Escape');
 
-  await expect(page).toHaveURL(`${v3.base}/links`);
+  await expect(page).toHaveURL(`${v3.base}/links?nouveau`);
+  await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
 
   await ctx.close();
 });

@@ -154,11 +154,19 @@ const ligne = (lien: LienDePartage): string => {
  * LA FEUILLE « NOUVEAU LIEN » — servie par le SERVEUR dans l'état
  * `/links?nouveau`, en `<dialog open data-retour>`.
  *
- * ELLE MARCHE ENTIÈRE SANS JAVASCRIPT. Trois chemins la ferment, chacun un
- * `<a href="/links">` : la croix, le voile et la poignée. Avec le module,
- * `lib/realtime/plein-ecran.ts` l'élève en modale — voile natif, piège à focus,
- * Échap — sans qu'une ligne lui soit ajoutée : il prend n'importe quel
- * `dialog[open][data-retour]`, et c'est la troisième surimpression qu'il sert.
+ * ELLE MARCHE ENTIÈRE SANS JAVASCRIPT, et sur cet écran il n'y en a AUCUN.
+ * `/links` expédie 0 Ko de JS ; la feuille ne fait donc pas exception, elle est
+ * la règle. Trois chemins la ferment, chacun un `<a href="/links">` : la croix,
+ * le voile et la poignée. Le piège à focus vient d'`inert` sur le carnet — le
+ * navigateur le donne gratuitement.
+ *
+ * ÉCHAP EST LA SEULE CHOSE QUI MANQUE, ET ELLE NE VAUT PAS UNE REQUÊTE.
+ * `lib/realtime/plein-ecran.ts` élèverait ce `dialog[open][data-retour]` sans
+ * qu'une ligne lui soit ajoutée — mais aucun module n'est servi ici, et en
+ * charger un pour Échap seul coûterait un aller-retour sur une 3G rurale à un
+ * écran qui n'en paie aucun. `data-retour` reste posé : le jour où `/links`
+ * sert un module pour une AUTRE raison, l'élévation est gratuite. Ce n'est pas
+ * une promesse non tenue — c'est une prise que rien n'occupe encore.
  *
  * LE CRITÈRE DE FIN INTERDIT LE CHAMP DÉCORATIF, et c'est ce qui décide de ce
  * qui est rendu ici : chaque case et chaque champ recouvre un champ de

@@ -59,6 +59,12 @@ export const FEUILLE_DES_LIENS = compacte(`
  * profil : une feuille qui monte est la même partout, et la recopier ici en
  * aurait fait une troisième copie — celle qui diverge.
  *
+ * LE VOILE EST DESSINÉ, ET IL LE FAUT ICI. Sur le panneau de profil, un module
+ * élève le dialogue en modale et `::backdrop` peint le voile ; `/links` n'a
+ * aucun module, donc aucun `::backdrop` — sans le `<a class="voile">` servi, la
+ * feuille flotterait sur un carnet nu, et le troisième chemin de fermeture
+ * n'existerait pas.
+ *
  * CE QUI LUI EST PROPRE :
  *
  * 1. **Les groupes de cases sont des `<fieldset>`**, pas des `<div>` : « ce que
