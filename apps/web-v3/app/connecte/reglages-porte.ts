@@ -213,16 +213,28 @@ const themeDuCookie = (requete: Request): ChoixDeTheme => {
   return 'systeme';
 };
 
+/** Les trois valeurs du cookie, telles que le script de tête les lit. */
+const VALEUR_DU_COOKIE: Readonly<Record<ChoixDeTheme, string>> = {
+  clair: 'light',
+  sombre: 'dark',
+  systeme: 'system',
+};
+
 /**
- * « SYSTÈME » EFFACE LE COOKIE plutôt que d'y écrire une troisième valeur : ne
- * rien garder est la seule façon de suivre un système qui change, et c'est
- * aussi la seule qui ne laisse rien derrière quand le lecteur reprend son
- * choix. `max-age=0` est ce qu'un navigateur comprend comme « oublie ».
+ * « SYSTÈME » S'ÉCRIT, il ne s'efface pas — et c'est une leçon de ce lot.
+ *
+ * La première version posait `max-age=0`, en croyant que ne rien garder
+ * suffisait à ne rien imposer. Le script de tête RECOPIE le cookie dans
+ * `localStorage` (pour que la webapp legacy suive) : le repli y relisait le
+ * « light » de la veille, et « comme mon système » ne rendait RIEN. Le témoin
+ * navigateur l'a attrapé ; aucun témoin jsdom ne l'aurait pu, puisqu'il faut
+ * DEUX documents successifs pour le voir.
+ *
+ * ABSENT et « system » disent donc deux choses différentes : le premier « rien
+ * n'a été choisi ici », le second « je choisis de suivre mon système ».
  */
 const cookieDuTheme = (choix: ChoixDeTheme): string =>
-  choix === 'systeme'
-    ? `${COOKIE_DE_THEME}=;path=/;max-age=0;samesite=lax`
-    : `${COOKIE_DE_THEME}=${choix === 'clair' ? 'light' : 'dark'};path=/;max-age=${AN_EN_SECONDES};samesite=lax`;
+  `${COOKIE_DE_THEME}=${VALEUR_DU_COOKIE[choix]};path=/;max-age=${AN_EN_SECONDES};samesite=lax`;
 
 export const APPLICATION = (requete: Request): Promise<Response> =>
   avecJeton(requete, CHEMIN_DE_L_APPLICATION, async () =>

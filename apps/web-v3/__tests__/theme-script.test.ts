@@ -152,6 +152,23 @@ describe('le script de thème inline', () => {
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
   });
 
+  /**
+   * LE DÉFAUT QUE LE TÉMOIN NAVIGATEUR A TROUVÉ, fixé ici en jsdom une fois
+   * qu'on sait où regarder : un lecteur qui avait choisi « Clair », puis
+   * « comme mon système », restait clair — le miroir de `localStorage` gardait
+   * l'aliment du repli.
+   */
+  it('« system » l’emporte sur ce que le miroir a laissé dans localStorage', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    poseLeCookie('system');
+    withColorScheme(true);
+
+    runThemeScript();
+
+    expect(rootClasses()).toContain('dark');
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('system');
+  });
+
   it('ignore un cookie qui ne vaut ni light ni dark, et n’écrit rien', () => {
     poseLeCookie('fuchsia');
     withColorScheme(true);

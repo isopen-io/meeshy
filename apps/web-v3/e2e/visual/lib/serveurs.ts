@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
-import { routesDuCompte } from './bouchon-compte';
+import { APPAREILS_DU_BOUCHON, routesDuCompte } from './bouchon-compte';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -294,7 +294,16 @@ export const passerelleDeBouchon = async (options?: {
   });
   const preferences = new Map<string, { isMuted?: boolean; isArchived?: boolean }>();
   const masquees = new Set<string>();
-  const duCompte = routesDuCompte({ creanceDe, lecteurSansRien: options?.lecteurSansRien ?? false, preferences, masquees });
+  const profil: Record<string, string> = {};
+  const appareils = APPAREILS_DU_BOUCHON.map((appareil) => ({ ...appareil }));
+  const duCompte = routesDuCompte({
+    creanceDe,
+    lecteurSansRien: options?.lecteurSansRien ?? false,
+    preferences,
+    masquees,
+    profil,
+    appareils,
+  });
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';

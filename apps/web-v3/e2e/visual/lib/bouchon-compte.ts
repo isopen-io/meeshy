@@ -91,6 +91,15 @@ export type EtatDuCompteDeBouchon = {
   readonly preferences: Map<string, { isMuted?: boolean; isArchived?: boolean }>;
   /** Les conversations que le lecteur a masquées pour lui — `delete-for-me`, une porte à SENS UNIQUE. */
   readonly masquees: Set<string>;
+  /**
+   * LE PROFIL DU LECTEUR, MUTABLE — écrit par `PATCH /users/me` et RELU par
+   * `/auth/me`. Sans cet état partagé, « Enregistrer » rendrait 200 et l'écran
+   * suivant afficherait la valeur d'avant : le témoin serait vert sur une
+   * écriture qui n'écrit rien.
+   */
+  readonly profil: Record<string, string>;
+  /** Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de bon. */
+  readonly appareils: { id: string; deviceName: string; platform: string; lastUsedAt: string | null }[];
 };
 
 /** Une partie de demande — `demandeAvecPresenceSchema`, présence MASQUÉE par la loi. */
@@ -343,6 +352,25 @@ const RECHERCHE_GENS = [
   },
 ];
 
+/** Les HUIT champs de `updateUserProfileSchema` — recopiés du schéma, pas devinés. */
+const CHAMPS_ACCEPTES: readonly string[] = [
+  'firstName',
+  'lastName',
+  'displayName',
+  'bio',
+  'systemLanguage',
+  'regionalLanguage',
+  'customDestinationLanguage',
+  'autoTranslateEnabled',
+];
+
+export const MOT_DE_PASSE_DU_BOUCHON = 'mot-de-passe-actuel';
+
+export const APPAREILS_DU_BOUCHON = [
+  { id: 'd1', deviceName: 'iPhone d’Amina', platform: 'ios', lastUsedAt: null },
+  { id: 'd2', deviceName: 'Chrome — Dakar', platform: 'web', lastUsedAt: null },
+];
+
 export const routesDuCompte =
   (etat: EtatDuCompteDeBouchon) =>
   ({ requete, url, corps, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly corps: Buffer; readonly json: Reponse }): boolean => {
@@ -356,6 +384,7 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/directory/') ||
         chemin.startsWith('/api/v1/posts/') ||
         chemin.startsWith('/api/v1/social/') ||
+        chemin.startsWith('/api/v1/users/me') ||
         estUnePreference
       )
     ) {
@@ -391,6 +420,54 @@ export const routesDuCompte =
       json({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }, 401);
       return true;
     }
+    /**
+     * `PATCH /api/v1/users/me` (`routes/users/profile-updates.ts:41`) — les
+     * HUIT champs acceptés, et pas un de plus. Le bouchon REFUSE tout autre
+     * champ plutôt que de l'ignorer : c'est la seule façon qu'un témoin rougisse
+     * le jour où la v3 enverrait `email`, que la passerelle exclut (#4184).
+     */
+    if (chemin === '/api/v1/users/me' && requete.method === 'PATCH') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      const inconnus = Object.keys(soumis).filter((champ) => !CHAMPS_ACCEPTES.includes(champ));
+      if (inconnus.length > 0) {
+        json({ success: false, error: { message: `Unsupported field: ${inconnus.join(', ')}` } }, 400);
+        return true;
+      }
+      Object.entries(soumis).forEach(([champ, valeur]) => {
+        etat.profil[champ] = typeof valeur === 'string' ? valeur : String(valeur);
+      });
+      json({ success: true, data: { user: { id: MEMBRE.id, ...etat.profil } } });
+      return true;
+    }
+
+    /** `PATCH /api/v1/users/me/password` (`routes/users/profile-credentials.ts:32`). */
+    if (chemin === '/api/v1/users/me/password' && requete.method === 'PATCH') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      if (soumis.currentPassword !== MOT_DE_PASSE_DU_BOUCHON) {
+        json({ success: false, error: { message: 'Current password is incorrect' } }, 400);
+        return true;
+      }
+      json({ success: true });
+      return true;
+    }
+
+    /** `GET`/`DELETE /api/v1/users/me/devices` (`routes/push-tokens.ts:355` et `:427`). */
+    const appareilRetire = /^\/api\/v1\/users\/me\/devices\/([^/]+)$/.exec(chemin)?.[1];
+    if (appareilRetire !== undefined && requete.method === 'DELETE') {
+      const rang = etat.appareils.findIndex(({ id }) => id === decodeURIComponent(appareilRetire));
+      if (rang === -1) {
+        json({ success: false, error: { message: 'Device not found' } }, 404);
+        return true;
+      }
+      etat.appareils.splice(rang, 1);
+      json({ success: true });
+      return true;
+    }
+    if (chemin === '/api/v1/users/me/devices') {
+      json({ success: true, data: etat.appareils });
+      return true;
+    }
+
     if (chemin.startsWith('/api/v1/auth/me')) {
       json({
         success: true,
@@ -407,6 +484,13 @@ export const routesDuCompte =
           // le lecteur du bouchon en a un.
           systemLanguage: 'fr',
           regionalLanguage: 'es',
+          lastName: 'Diallo',
+          bio: 'Je lis en français, j’écris en wolof.',
+          email: 'amina@meeshy.me',
+          phoneNumber: null,
+          // CE QUE `PATCH /users/me` A ÉCRIT L'EMPORTE : `/auth/me` relit l'état
+          // du bouchon, sans quoi une écriture réussie resterait invisible.
+          ...etat.profil,
         },
       });
       return true;

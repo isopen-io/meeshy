@@ -37,9 +37,12 @@ export const COOKIE_DE_JETON = 'meeshy_auth';
  * les deux divergent est un réglage fait dans le legacy APRÈS un réglage fait
  * ici — le cookie l'emporte — et il disparaît avec le legacy.
  *
- * ABSENT ⇒ « comme mon système ». Il n'y a donc pas de troisième valeur à
- * écrire : le choix « système » EFFACE le cookie, ce qui est aussi la seule
- * façon de ne rien garder de ce que le lecteur n'a pas demandé de garder.
+ * IL PORTE TROIS VALEURS — `light`, `dark`, `system` — et son ABSENCE en est
+ * une quatrième, qui ne veut pas dire la même chose que `system` : absent, rien
+ * n'a été choisi ICI (on suit alors le legacy, puis l'OS) ; `system`, le
+ * lecteur a CHOISI de suivre son système. Effacer le cookie pour dire le second
+ * ne marchait pas — le script recopie le cookie dans `localStorage`, et le
+ * repli y relisait le choix précédent (voir `app/theme-script.tsx`).
  */
 export const COOKIE_DE_THEME = 'meeshy_theme';
 

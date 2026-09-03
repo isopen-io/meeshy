@@ -229,15 +229,17 @@ describe('l’apparence', () => {
   });
 
   /**
-   * « SYSTÈME » EFFACE. Écrire une troisième valeur figerait l'apparence le jour
-   * où le système du lecteur change — c'est-à-dire exactement ce qu'il demande
-   * en choisissant « comme mon système ».
+   * « SYSTÈME » S'ÉCRIT, IL NE S'EFFACE PAS. La première version effaçait le
+   * cookie ; le script de tête, qui le recopie dans `localStorage`, relisait
+   * alors le choix précédent et « comme mon système » ne rendait rien. Le
+   * témoin navigateur l'a attrapé — celui-ci fixe la moitié que la porte doit
+   * tenir.
    */
-  it('efface le cookie pour « système » plutôt que d’y écrire une troisième valeur', async () => {
+  it('écrit « system » pour « comme mon système », et n’efface pas', async () => {
     const reponse = await CHANGE_LE_THEME(poste('https://meeshy.test/settings/application', { theme: 'systeme' }));
 
-    expect(reponse.headers.get('set-cookie')).toContain('max-age=0');
-    expect(reponse.headers.get('set-cookie')).not.toContain('meeshy_theme=dark');
+    expect(reponse.headers.get('set-cookie')).toContain('meeshy_theme=system');
+    expect(reponse.headers.get('set-cookie')).not.toContain('max-age=0');
   });
 
   it('n’écrit rien pour un thème qu’il ne reconnaît pas', async () => {

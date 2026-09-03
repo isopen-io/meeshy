@@ -31,7 +31,7 @@ export const THEME_PAR_DEFAUT = 'dark';
  * classe, jamais un jeton : il n'entre en jeu qu'en l'absence de préférence
  * stockée.
  *
- * LE COOKIE PASSE AVANT `localStorage`, ET IL EST REMIS DEDANS.
+ * LE COOKIE PASSE AVANT `localStorage`, ET IL EST RECOPIÉ DEDANS.
  *
  * L'ordre n'est pas une préférence de goût : le cookie est le SEUL magasin que
  * `/settings/application` peut écrire, puisque cet écran n'a pas une ligne de
@@ -40,21 +40,31 @@ export const THEME_PAR_DEFAUT = 'dark';
  * ferait perdre le choix au rechargement suivant : le lecteur aurait cliqué
  * « Clair » et serait revenu sombre.
  *
- * La dernière ligne est un MIROIR, pas une seconde vérité : elle recopie le
- * cookie dans `localStorage` pour que la webapp legacy — qui ne lit que lui —
- * suive un choix fait dans la v3. Sans cookie, rien n'est écrit : un lecteur
- * qui n'a jamais réglé son thème ici ne se voit pas imposer une valeur.
+ * LE COOKIE PORTE TROIS VALEURS, ET « system » EN EST UNE. C'est une leçon de
+ * ce lot, trouvée par le témoin navigateur : la première version EFFAÇAIT le
+ * cookie pour « comme mon système », en croyant que ne rien garder suffisait à
+ * ne rien imposer. Le miroir de la ligne suivante avait déjà écrit « light »
+ * dans `localStorage` — le repli le relisait, et « comme mon système » ne
+ * rendait RIEN. Un magasin qu'on alimente ne se vide pas en effaçant SON
+ * ALIMENT. ABSENT et « system » disent donc deux choses différentes : le
+ * premier « rien n'a été choisi ICI » (on suit alors le legacy, puis l'OS), le
+ * second « je choisis de suivre mon système » (`localStorage` reçoit la même
+ * valeur, que la webapp legacy comprend déjà — c'est le troisième cas de son
+ * propre témoin).
  *
- * La lecture du cookie tolère un `light`/`dark` et RIEN d'autre. Une valeur
+ * La recopie n'est pas une seconde vérité : elle porte le choix jusqu'à la
+ * webapp legacy, qui ne lit que `localStorage`. Sans cookie, rien n'est écrit —
+ * un lecteur qui n'a jamais réglé son thème ici ne se voit rien imposer.
+ *
+ * La lecture tolère `light`, `dark`, `system` et RIEN d'autre. Une valeur
  * inconnue — un cookie forgé, un reste d'une version future — retombe sur
  * `localStorage` puis sur le système, jamais sur une classe que la table de
  * jetons ne connaît pas.
  */
 export const themeScriptSource =
-  `!function(){try{` +
-  `var c=(document.cookie.match(/(^|;) *${COOKIE_DE_THEME}=(light|dark)/)||[])[2],s=c;` +
-  `try{s=c||localStorage.getItem('${THEME_STORAGE_KEY}');` +
-  `if(c)localStorage.setItem('${THEME_STORAGE_KEY}',c)}catch(_){}` +
+  `!function(){try{var k='${THEME_STORAGE_KEY}',` +
+  `c=(document.cookie.match(/(^|;) *${COOKIE_DE_THEME}=(light|dark|system)/)||[])[2],s=c;` +
+  `try{if(c)localStorage.setItem(k,c);else s=localStorage.getItem(k)}catch(_){}` +
   `var d=s==='dark'||s!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches,` +
   `e=document.documentElement;e.classList.add(d?'dark':'light');` +
   `e.classList.remove(d?'light':'dark')}catch(_){}}()`;
