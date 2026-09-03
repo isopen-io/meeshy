@@ -13,6 +13,7 @@ import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
 import { FEUILLE_DES_LIENS } from '@/app/connecte/liens-feuille';
+import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
@@ -61,6 +62,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/notifs-feuille.ts', source: FEUILLE_DES_NOTIFS },
   { nom: 'app/connecte/contacts-feuille.ts', source: FEUILLE_DES_CONTACTS },
   { nom: 'app/connecte/liens-feuille.ts', source: FEUILLE_DES_LIENS },
+  { nom: 'app/connecte/recherche-feuille.ts', source: FEUILLE_DE_LA_RECHERCHE },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -127,6 +129,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/notifs-feuille.ts',
       'app/connecte/contacts-feuille.ts',
       'app/connecte/liens-feuille.ts',
+      'app/connecte/recherche-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });

@@ -71,7 +71,23 @@ struct ComposerSceneSurface: View {
     /// média n'y est monté (#4082) — pour que « Modifier » ne paraisse jamais
     /// sur un objet que personne n'éditera.
     var onItemEdit: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
-    var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text]
+    /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
+    ///
+    /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
+    /// texte. Depuis que les cinq familles y ont leur fenêtre et leur timeline,
+    /// les quatre autres s'y ouvrent aussi.
+    ///
+    /// **Ce jeu et le `switch` d'`onItemEdit` se tiennent la main** : servir
+    /// l'un sans l'autre rend « Modifier » offert et INERTE — le doc-comment de
+    /// l'hôte le dit depuis #4082, et `ComposerSceneEditableKindsTests` le garde
+    /// désormais plutôt que de le rappeler.
+    var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = defaultEditableSceneKinds
+
+    /// Le défaut, NOMMÉ pour que la garde puisse le lire — un littéral posé dans
+    /// une valeur par défaut n'est interrogeable que par la source.
+    static let defaultEditableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = [
+        .text, .media, .sticker, .place, .audio
+    ]
 
     var onBackgroundTapped: (() -> Void)?
 

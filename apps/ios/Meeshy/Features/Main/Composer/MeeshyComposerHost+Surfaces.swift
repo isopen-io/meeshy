@@ -380,7 +380,13 @@ extension MeeshyComposerHost {
                     // réglage.
                     editSceneSound(id)
                 case .media, .sticker, .place:
-                    break
+                    // **#4937 — l'éditeur d'objet sert les cinq familles.** Ces
+                    // trois-là n'y ont pas encore de panneau d'options propre,
+                    // mais elles y ont leur FENÊTRE et leur TIMELINE, ce qu'aucun
+                    // autre écran n'offrait : leur `break` ne protégeait plus
+                    // rien, il rendait le geste muet.
+                    openObjectEditor(id)
+                    HapticFeedback.medium()
                 }
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },

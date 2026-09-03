@@ -795,12 +795,39 @@ extension MeeshyComposerHost {
     /// le portail d'abord : `fullScreenCover` et `.sheet` se disputent le même
     /// présentateur, et fermer l'état invalide chez l'ÉCRIVAIN vaut mieux que le
     /// garder chez le lecteur.
+    /// **Ouvre l'éditeur sur N'IMPORTE QUELLE famille** (#4937).
+    ///
+    /// Il posait `.text` en dur et entrait toujours en mode saisie — l'écran ne
+    /// savait éditer qu'un texte. Taper un sticker ou un média ne faisait alors
+    /// RIEN, ce qui se lit comme une scène morte plutôt que comme une limite.
+    ///
+    /// Le mode SAISIE reste réservé au texte, et c'est une distinction, pas une
+    /// précaution : `enterTextEditingMode` ouvre le curseur en ligne sur le
+    /// canvas. L'appeler sur un sticker mettrait l'écran dans un état qu'aucune
+    /// vue ne rend.
     func openObjectEditor(_ id: String) {
         presentedPortal = nil
         selectedSceneItemId = id
-        selectedSceneItemKind = .text
-        viewModel.enterTextEditingMode(textId: id)
+        let famille = viewModel.currentSlide.sceneObject(id: id)?.kind
+        selectedSceneItemKind = famille.map(Self.canvasKind) ?? .text
+        if famille == .text || famille == nil {
+            viewModel.enterTextEditingMode(textId: id)
+        }
         editedObject = ComposerEditedObject(id: id)
+    }
+
+    /// La traduction entre la famille du MODÈLE et le kind du CANVAS — deux
+    /// énumérés qui portent les mêmes cinq familles depuis #4960, mais que Swift
+    /// ne confond pas. Le `switch` est exhaustif : une sixième famille ne
+    /// compilera pas tant qu'elle n'aura pas dit ce qu'elle est sur la toile.
+    static func canvasKind(_ famille: MeeshySceneObject.Kind) -> StoryCanvasUIView.CanvasItemKind {
+        switch famille {
+        case .text:    return .text
+        case .media:   return .media
+        case .sticker: return .sticker
+        case .place:   return .place
+        case .audio:   return .audio
+        }
     }
 
     /// Fermer rend la scène au doigt ET sort du mode d'édition — les deux, sans

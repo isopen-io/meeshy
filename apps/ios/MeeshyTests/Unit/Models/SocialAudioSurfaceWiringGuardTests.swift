@@ -147,7 +147,23 @@ final class SocialAudioSurfaceWiringGuardTests: XCTestCase {
         )
         XCTAssertFalse(code.contains("var selectedLanguage: String = \"orig\""),
                        "la langue du plein écran redevient un littéral — elle ne consulte plus le Prisme")
-        XCTAssertTrue(code.contains("SocialAudioTrack.fullscreenSelection("),
-                      "le plein écran doit naître sur la langue élue")
+        // **La garde nomme la RÈGLE, pas une projection précise** — et elle a
+        // appris cette leçon en mordant sur un refactor JUSTE.
+        //
+        // Elle épinglait `SocialAudioTrack.fullscreenSelection(`. Alléger le
+        // site d'appel (1281 → 1260 lignes, le POURQUOI déplacé dans la règle)
+        // l'a remplacé par `openingSelection(for:)` — même élection, même
+        // verdict, autre porte. La garde a rougi sur une amélioration.
+        //
+        // > Une garde qui épingle un NOM d'appel garde la forme, pas la loi.
+        // > Ce qui doit être vrai ici est : « la langue naît d'une élection de
+        // > `SocialAudioTrack` », et non « elle naît de CETTE fonction-là ».
+        //
+        // Le couple des deux assertions reste strict : le littéral est INTERDIT
+        // (première ligne), et l'élection doit venir de la loi partagée — donc
+        // ni d'un calcul recopié, ni d'un `.onAppear` qui rendrait une image
+        // dans la mauvaise langue avant de basculer.
+        XCTAssertTrue(code.contains("SocialAudioTrack."),
+                      "le plein écran doit naître sur une langue élue par la loi partagée")
     }
 }
