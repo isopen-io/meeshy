@@ -70,7 +70,7 @@ final class AccessibilityValueAttributionGuardTests: XCTestCase {
     private static let reachHosts: [(surface: String, files: [String])] = [
         ("carte de fil", ["FeedPostCard.swift", "FeedPostCard+Header.swift"]),
         ("carte de réel", ["ReelFeedCard.swift"]),
-        ("plein écran réel", ["ReelsPlayerView.swift", "ReelPageView+Info.swift"]),
+        ("plein écran réel", ["ReelsPlayerView.swift", "ReelPageView+Info.swift", "ReelsPlayerView+Carousel.swift"]),
         ("détail de post", ["PostDetailView.swift"]),
     ]
 

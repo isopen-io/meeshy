@@ -556,6 +556,13 @@ struct ReelPageView: View {
 
     @State var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Le plein écran qui FEUILLETTE les médias du réel (#4927) — la même
+    /// galerie que la carte du fil, le détail d'un post et un commentaire.
+    @State private var showMediaGallery = false
+    /// Le média que le carrousel montre EN CE MOMENT. `nil` avant qu'il ne se
+    /// prononce — la pastille retombe alors sur le média primaire, jamais sur
+    /// un rang inventé.
+    @State private var visibleCarouselMediaId: String?
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State var reelFullscreenPlace: BubbleFullscreenPlace?
     /// Prisme: the language the viewer explicitly picked via a flag / the
@@ -663,6 +670,33 @@ struct ReelPageView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
+            // **Le seul chemin vers les AUTRES médias d'un réel** (#4927).
+            // `mediaLayer` aiguille sur le média primaire — la vidéo gagne — donc
+            // un réel « une vidéo + deux photos » ne servait jamais les photos.
+            // La pastille n'apparaît que lorsqu'il y a vraiment plusieurs médias
+            // (loi 4 : un contrôle sans effet est ABSENT, jamais grisé) et fade
+            // avec le reste du chrome, en mode immersif comme les autres.
+            if galleryMediaCount > 1 {
+                VStack {
+                    HStack {
+                        Spacer()
+                        ReelMediaCountBadge(
+                            total: galleryMediaCount,
+                            currentIndex: galleryStartIndex
+                        ) {
+                            HapticFeedback.light()
+                            showMediaGallery = true
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .padding(.trailing, 8)
+                .opacity(chromeHidden ? 0 : 1)
+                .allowsHitTesting(!chromeHidden)
+                .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+            }
+
             VStack {
                 Spacer()
 
@@ -769,6 +803,42 @@ struct ReelPageView: View {
             )
         }
         .mediaSaveFlow(mediaSaveCoordinator)
+        // Site UNIQUE de la composition (`socialMediaGallery`) : la sélection des
+        // médias, l'auteur servi à chaque page et la LÉGENDE sont les mêmes que
+        // sur les trois autres surfaces sociales, parce qu'elles viennent du même
+        // endroit.
+        .socialMediaGallery(
+            post: reel,
+            isPresented: $showMediaGallery,
+            startMediaId: galleryStartMediaId,
+            accentColor: reel.authorColor
+        )
+    }
+
+    // MARK: Galerie plein écran
+
+    /// Les médias VISUELS du réel — ceux que la galerie sait feuilleter. Un
+    /// audio en est exclu : il a son propre plein écran, avec sa transcription.
+    private var galleryMedia: [FeedMedia] {
+        reel.reelDisplayMedia.filter { $0.type == .image || $0.type == .video }
+    }
+
+    private var galleryMediaCount: Int { galleryMedia.count }
+
+    /// Le rang du média AFFICHÉ, pour que la pastille dise « 2 / 3 » quand c'est
+    /// la deuxième pièce qui est à l'écran plutôt que toujours « 1 / 3 ».
+    private var galleryStartIndex: Int {
+        guard let id = galleryStartMediaId,
+              let index = galleryMedia.firstIndex(where: { $0.id == id }) else { return 0 }
+        return index
+    }
+
+    /// Le média par lequel la galerie s'OUVRE : celui qu'on regarde, sinon le
+    /// primaire. Une pastille qui annonce « 1 / 3 » pendant qu'on lit la
+    /// deuxième image serait un contrôle qui ment — plus coûteux qu'un contrôle
+    /// absent, parce qu'on le croit.
+    private var galleryStartMediaId: String? {
+        visibleCarouselMediaId ?? reel.primaryReelDisplayMedia?.id
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -912,7 +982,7 @@ struct ReelPageView: View {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
             case .image:
-                ReelImageView(reel: reel)
+                ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }
             case .audio:
                 ReelAudioView(media: media, accentColor: accentColor, selectedLanguage: $selectedLanguage, player: audioPlayer)
             default:
@@ -1390,185 +1460,6 @@ enum ReelMediaLayout: Equatable {
         default:
             return false
         }
-    }
-}
-
-// MARK: - Reel Image Carousel
-
-/// Image reel: a single image, or a horizontal page-snapping carousel of images
-/// (orthogonal to the vertical reel paging) with dots.
-///
-/// Mirrors the proven `ConversationMediaGalleryView` composition to fix three
-/// carousel defects: ONE `.ignoresSafeArea()` at the pager level (never per
-/// cell), each page pinned to the EXACT viewport so the paging stride equals the
-/// page width (no half-shown image), and the visible index seeded SYNCHRONOUSLY
-/// at init (the first image is present from the first frame — not set in
-/// `.onAppear`, which raced `scrollPosition(id:)` and could open scrolled past
-/// the first image).
-private struct ReelImageView: View {
-    let reel: FeedPost
-    private let images: [FeedMedia]
-    @State private var currentImageId: String?
-
-    init(reel: FeedPost) {
-        self.reel = reel
-        // Repost-aware: a republished reel's images live on the reposted reel.
-        let imgs = reel.reelDisplayMedia.filter { $0.type == .image }
-        self.images = imgs
-        _currentImageId = State(initialValue: imgs.first?.id)
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            if images.count <= 1 {
-                if let media = images.first {
-                    ReelImageCell(media: media)
-                } else {
-                    Color.black
-                }
-            } else {
-                AdaptiveHorizontalPager(items: images, currentPageID: $currentImageId, fillVertical: true) { _, media in
-                    ReelImageCell(media: media)
-                }
-                dots
-                    .padding(.bottom, 150)
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    private var dots: some View {
-        HStack(spacing: 6) {
-            ForEach(images) { media in
-                Circle()
-                    .fill(Color.white.opacity(media.id == currentImageId ? 0.95 : 0.4))
-                    .frame(width: 6, height: 6)
-            }
-        }
-        // Decorative dots → expose the position to VoiceOver ("2 / 5") instead of
-        // announcing each anonymous circle.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
-        // comme une seule position), et 239i l'a explicitement distingué de la
-        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
-        .accessibilityValue(
-            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
-            + " / " + LocalizedNumber.exact(images.count)
-        )
-    }
-}
-
-/// One carousel page: the whole image, centred (`.fit`), over a blurred ambient
-/// backdrop of itself. A ~9:16 image fills the screen (its `.fit` foreground
-/// covers the backdrop); any other ratio shows the WHOLE image centred over the
-/// blurred backdrop — never black bars, never a cropped/off-centre image.
-///
-/// The page is already sized to the viewport by the pager (one
-/// `.ignoresSafeArea()` + `fillVertical`), so the image is fit/filled with a
-/// plain `.frame(maxWidth/maxHeight: .infinity)` — no per-cell `GeometryReader`
-/// (which under the iOS 16 `TabView` fallback can report `.zero` on the first
-/// pass). Mirrors `ConversationMediaGalleryView` / `ReelPoster`.
-private struct ReelImageCell: View {
-    let media: FeedMedia
-
-    /// Explicit ratio from the media dimensions so `.fit` actually constrains the
-    /// frame (ProgressiveCachedImage has no intrinsic ratio at first render — its
-    /// placeholder is `Color.clear` — so a `.aspectRatio(contentMode:)` alone
-    /// established a full-screen frame and the loaded image then stretched/filled
-    /// it). With an explicit ratio the whole image shows, letterboxed over the
-    /// blurred backdrop. Falls back to 9:16 when dimensions are missing.
-    private var mediaAspect: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
-        return CGFloat(w) / CGFloat(h)
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            // Exact fitted size from the media ratio — bulletproof: the image is
-            // framed to its computed fit box (≤ viewport in both axes), so it can
-            // NEVER overflow the viewport. The blurred backdrop fills behind.
-            let fit = fittedSize(in: geo.size)
-            ZStack {
-                ReelImageBackdrop(media: media).equatable()
-
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl ?? media.url,
-                    fullUrl: media.url ?? media.thumbnailUrl,
-                    autoLoad: true
-                ) {
-                    Color.clear
-                }
-                .frame(width: fit.width, height: fit.height)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-        }
-    }
-
-    /// Largest box with `mediaAspect` that fits inside `container` (letterbox).
-    /// Guards a zero container (first layout pass) by returning it unchanged.
-    private func fittedSize(in container: CGSize) -> CGSize {
-        guard container.width > 0, container.height > 0 else { return container }
-        let containerAspect = container.width / container.height
-        if mediaAspect > containerAspect {
-            return CGSize(width: container.width, height: container.width / mediaAspect)
-        } else {
-            return CGSize(width: container.height * mediaAspect, height: container.height)
-        }
-    }
-}
-
-/// Ambient blurred fill behind a `.fit` carousel image/video — the media's
-/// **thumbHash** decoded locally, scaled to fill, blurred and slightly dimmed.
-/// Falls back to the media's tint colour when no thumbHash exists.
-///
-/// Deliberately renders ONLY the thumbHash (via `UIImage.fromThumbHash`) — it
-/// NEVER loads the thumbnail URL. A sharp thumbnail popping into the blurred
-/// letterbox fill reads as a rendering glitch (user report 2026-07-08 : « le
-/// thumbnail donne l'impression d'un bogue »). This mirrors the story letterbox
-/// backdrop (`storyBlurredBackdrop`), which is thumbHash-only too. The full
-/// image is already fetched by the `.fit` foreground; a 60pt blur over the
-/// upscaled thumbHash hides its low resolution at zero extra network cost.
-/// `internal` (et non `private`) depuis la découpe du cluster vidéo (#4628) :
-/// `ReelVideoView` la monte pour ses barres latérales, et vit désormais dans
-/// `ReelsPlayerView+Video.swift`. `private` porte sur le FICHIER.
-struct ReelImageBackdrop: View, Equatable {
-    let media: FeedMedia
-
-    /// Decoded lazily inside `body` (≈16×16 → upscaled, < 0.5 ms). Because the
-    /// view is `.equatable()`, `body` — and thus this decode — only runs when the
-    /// media identity / thumbHash actually changes, not on the parent's 10 Hz
-    /// playback-time re-renders (the real GPU/CPU heat win).
-    private var backdropImage: UIImage? {
-        guard let hash = media.thumbHash, !hash.isEmpty else { return nil }
-        return UIImage.fromThumbHash(hash)
-    }
-
-    static func == (lhs: ReelImageBackdrop, rhs: ReelImageBackdrop) -> Bool {
-        lhs.media.id == rhs.media.id
-            && lhs.media.thumbHash == rhs.media.thumbHash
-            && lhs.media.thumbnailColor == rhs.media.thumbnailColor
-    }
-
-    var body: some View {
-        ZStack {
-            Color(hex: media.thumbnailColor)
-            if let img = backdropImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .interpolation(.low)
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scaleEffect(1.18)
-                    .blur(radius: 60)
-                    .opacity(0.85)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .overlay(Color.black.opacity(0.22))
     }
 }
 

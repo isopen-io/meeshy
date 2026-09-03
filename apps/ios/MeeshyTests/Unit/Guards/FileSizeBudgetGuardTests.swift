@@ -213,7 +213,33 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
     /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
     /// les 31 noms de l'arbre fusionné, jamais soustrait.
-    private static let legacyLineCeiling = 67_091
+    /// **67 083 — le cumul RÉEL du 2026-09-03, mesuré sur les 31 noms avec
+    /// `lineCount(of:)`, jamais soustrait.** Le cliquet DESCEND (67 091 → 67 083) :
+    /// la découpe #4927 rend plus que ce que la période a coûté.
+    ///
+    /// Ce nombre a d'abord été posé à **67 046**, et la garde a rougi — le
+    /// détail vaut d'être écrit, parce que l'erreur est exactement celle que ce
+    /// doc-comment répète d'éviter :
+    ///
+    /// | | lignes |
+    /// |---|---|
+    /// | base ANNONCÉE à `9818dcaa03` | 67 155 |
+    /// | base RÉELLE à `9818dcaa03` (remesurée) | **67 181** |
+    /// | `FeedCommentsSheet` grossi sur dev entre `9818dcaa03` et `d6b33cb9` | +5 |
+    /// | le commentaire de #3947 posé dans `MessageListViewController` | +6 |
+    /// | la découpe #4927 (`ReelsPlayerView` 1 738 → 1 629) | −109 |
+    /// | **cumul du jour** | **67 083** |
+    ///
+    /// Les 26 lignes d'écart sur la base venaient d'un cumul SOUSTRAIT plutôt
+    /// que remesuré — la méthode que ce fichier prescrit depuis le 232i, et qui
+    /// se venge dans le sens confortable dès qu'on l'abandonne une fois.
+    ///
+    /// Les 11 lignes ajoutées à deux fichiers EN DETTE (+5, +6) ne sont pas
+    /// absoutes par ce chiffre : elles sont couvertes par ce que la découpe rend,
+    /// et le cliquet reste sous sa valeur d'avant. C'est la seule forme
+    /// acceptable — un plafond qui se lève pour couvrir une croissance qu'il
+    /// vient de refuser cesse d'être un cliquet.
+    private static let legacyLineCeiling = 67_083
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
