@@ -42,8 +42,9 @@ public struct StickerPickerView: View {
     /// la plateforme LIT, jamais un sticker jumeau.
     public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    @State var selectedCategory: StickerCategory = .smileys
-    @State private var selectedTab: StickerPaletteTab = .emoji
+    /// **La NATURE choisie** (#5012) — elle remplace l'onglet courant : la
+    /// famille n'est plus un état, c'est une section de la liste.
+    @State var selectedNature: StickerPaletteNature = .sticker
     @Environment(\.colorScheme) var colorScheme
 
     /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
@@ -87,9 +88,10 @@ public struct StickerPickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
-            paletteTabs
+            StickerNatureSwitch(selection: $selectedNature)
+                .padding(.bottom, 8)
             Divider().opacity(0.15)
-            tabContent
+            naturedContent
         }
         .padding(16)
         .background(.ultraThinMaterial)
@@ -101,22 +103,6 @@ public struct StickerPickerView: View {
             if let stickerLibrary, libraryItems.isEmpty {
                 libraryItems = await stickerLibrary.recents()
             }
-        }
-        // **La position se demande quand on ENTRE dans l'onglet, pas à
-        // l'ouverture de la palette.**
-        //
-        // Mesuré au simulateur : charger les lieux dans le `.task` faisait
-        // surgir l'alerte système « Autoriser Meeshy à utiliser votre
-        // position ? » PAR-DESSUS la grille d'emoji, avant que l'auteur ait
-        // manifesté le moindre intérêt pour un lieu. Une permission demandée
-        // sans motif visible est une permission refusée — et un refus ferme
-        // l'onglet pour de bon (l'injecteur ne sert plus le fournisseur).
-        //
-        // Le chargement reste UNE fois : `places.isEmpty` garde l'idempotence
-        // quand on revient sur l'onglet.
-        .adaptiveOnChange(of: selectedTab) { _, onglet in
-            guard onglet == .place, let nearbyPlaces, places.isEmpty else { return }
-            Task { places = await nearbyPlaces.nearby() }
         }
     }
 
@@ -145,75 +131,6 @@ public struct StickerPickerView: View {
     }
 
     // MARK: - Les onglets
-
-    private var paletteTabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(offeredTabs) { onglet in
-                    Button {
-                        withAnimation(.spring(response: 0.25)) { selectedTab = onglet }
-                        HapticFeedback.light()
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: onglet.symbolName)
-                                .font(.system(size: 15, weight: .semibold))
-                            Text(Self.tabTitle(onglet))
-                                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                        }
-                        .foregroundStyle(selectedTab == onglet
-                                         ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                         : AnyShapeStyle(Color.secondary))
-                        .frame(minWidth: 56, minHeight: 44)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(selectedTab == onglet
-                                      ? Color.primary.opacity(0.08) : Color.clear)
-                        )
-                    }
-                    // `.plain` obligatoire : le style par défaut rend les
-                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72).
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Self.tabTitle(onglet))
-                    .accessibilityAddTraits(selectedTab == onglet ? [.isSelected] : [])
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-        }
-        // Un onglet retiré sous le doigt (le magasin se démonte) laisserait la
-        // feuille sur un contenu qui n'existe plus.
-        .adaptiveOnChange(of: offeredTabs) { _, servis in
-            if !servis.contains(selectedTab) { selectedTab = servis.first ?? .emoji }
-        }
-    }
-
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
-        case .emoji:   emojiTab
-        case .text:    textTab
-        case .love:    templateTab(family: .love)
-        case .joy:          templateTab(family: .joy)
-        case .surprise:     templateTab(family: .surprise)
-        case .mood:         templateTab(family: .mood)
-        case .greeting:     templateTab(family: .greeting)
-        case .reaction:     templateTab(family: .reaction)
-        case .party:        templateTab(family: .party)
-        case .availability: templateTab(family: .availability)
-        case .nature: templateTab(family: .nature)
-        case .cheer: templateTab(family: .cheer)
-        case .answer: templateTab(family: .answer)
-        case .food: templateTab(family: .food)
-        case .sport: templateTab(family: .sport)
-        case .travel: templateTab(family: .travel)
-        case .work: templateTab(family: .work)
-        case .music: templateTab(family: .music)
-        case .time:    templateTab(family: .time)
-        case .weather: templateTab(family: .weather)
-        case .place:   placeTab
-        case .library: libraryTab
-        }
-    }
 
     static func tabTitle(_ onglet: StickerPaletteTab) -> String {
         switch onglet {
