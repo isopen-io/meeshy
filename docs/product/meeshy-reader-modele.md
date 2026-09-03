@@ -284,6 +284,33 @@ lieu ne se peint pas du tout sur Android — absence MUETTE), et elles ne sont p
 de même nature : un repli dit la même chose en moins bien, une absence ne dit
 rien.
 
+## 4 bis-2. Ils sont QUATRE, pas trois (mesure 2026-09-03)
+
+Le § 4 bis parle des « TROIS lecteurs ». **`apps/web-v3` en est un quatrième**,
+et il sert déjà `/stories/:id`, `/reels/:id`, `/moods/:id` — le rôle de lecture
+PUBLIQUE, celui d'un lien partagé. Milestone #74, 47 issues ouvertes ; 284
+fichiers ; aucune mention dans la documentation produit jusqu'à cette ligne.
+
+Ce qu'il rend d'une story, mesuré : **son média de fond, et rien d'autre.** Son
+modèle `Story` porte `medias: MediaDeStory[]` (`url` · `genre` · `alt` ·
+`largeur` · `hauteur`) ; il ne lit **pas** `storyEffects` — zéro occurrence dans
+tout le paquet. Ni objets, ni plans, ni `timing`, ni transitions, ni `thumbHash`.
+
+Et **rien ne le dit** : c'est une absence muette au sens du § 4 bis, la nature
+que ce document nomme comme la plus coûteuse.
+
+> Le choix a de bonnes raisons possibles — la v3 est zéro-JS et sous budget de
+> REQUÊTES : `/stories/:id` est un gestionnaire de route et non une page
+> précisément parce qu'une page émet six requêtes avant le premier pixel là où
+> le budget en autorise trois. Composer une scène côté serveur est une vraie
+> question d'ingénierie. **Mais une raison non écrite ne se distingue pas d'un
+> oubli**, et c'est le seul point que ce document tranche : #5049.
+
+**Corollaire immédiat pour les deux dettes de la section suivante** : #5043 et
+#5047 décrivent des lacunes d'`apps/web`. Si la v3 reprend le rôle de lecture
+publique, elles doivent être décidées POUR la v3 — sinon on les corrige dans un
+client qu'on remplace, ou on les hérite en silence dans celui qui le remplace.
+
 ## 4 ter. La même divergence existe un cran PLUS HAUT — au niveau de la SCÈNE (2026-09-03)
 
 Le § 4 bis compte les clés de **charge**, donc le niveau de l'OBJET, et sur deux
