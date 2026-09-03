@@ -202,6 +202,7 @@ const ETAT = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   composeur: { genre: 'ouvert' },
   tempsReel: null,
   plein: null,
+  profil: null,
   ...attributs,
 });
 
@@ -211,6 +212,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
   actifs: {
     participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
     liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -268,6 +270,7 @@ describe('le fil rendu', () => {
           actifs: {
             participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
             liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+            feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
             socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
           },
         },

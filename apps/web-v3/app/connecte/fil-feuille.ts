@@ -138,12 +138,19 @@ export const FEUILLE_DU_FIL = compacte(`
 .ligne.neuve,.ligne:target{background:var(--color-tint-primary)}
 .ligne:target{outline:var(--stroke-strong) solid var(--color-border-interactive);outline-offset:var(--space-1)}
 .ligne.suite{margin-top:calc(var(--space-3) * -1)}
-.ligne.suite .avatar{visibility:hidden}
+.ligne.suite .avatar,.ligne.suite .avatar-lien{visibility:hidden}
 .ligne .avatar{flex:none}
 .ligne .avatar.fantome{background:var(--color-surface);border:var(--stroke-hair) solid var(--color-border-strong);color:var(--color-text-muted)}
 .ligne .avatar svg{width:var(--glyph);height:var(--glyph)}
+/* L'avatar ouvre le profil d'un auteur (§ 12.10.3) : un cliquable de plus, pas
+   une couleur de plus — le nom d'un auteur et son avatar restent sur l'encre. */
+.ligne .avatar-lien{flex:none;display:block}
 .ligne .corps{flex:1;min-width:0}
 .ligne .qui{margin:0;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:baseline;font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
+/* La cible du NOM atteint 44 px SANS agrandir le TEXTE — le même idiome que
+   .original summary (charte règle 4) : min-height centré, jamais un
+   padding qui pousserait la ligne suivante. */
+.ligne .nom-lien{display:inline-flex;align-items:center;min-height:var(--target-min);color:inherit;text-decoration:none}
 .ligne.suite .qui{display:none}
 .ligne .anonyme{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--text-sm);font-weight:var(--font-weight-regular);color:var(--color-text-muted)}
 .ligne .anonyme svg{width:var(--glyph-inline);height:var(--glyph-inline)}

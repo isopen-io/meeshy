@@ -16,6 +16,7 @@ import {
   traiteLaSoumission,
 } from '@/app/connecte/fil-porte';
 import { adresseDeLaPorte, documentDuFil, documentIntrouvable } from '@/app/connecte/fil-vue';
+import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
@@ -60,6 +61,7 @@ const parametre = async (contexte: { params: Promise<{ cle: string }> }): Promis
   (await contexte.params).cle;
 
 const charge = async ({
+  requete,
   jeton,
   cle,
   avant,
@@ -69,6 +71,7 @@ const charge = async ({
   brouillon,
   statut = 200,
 }: {
+  readonly requete: Request;
   readonly jeton: string;
   readonly cle: string;
   readonly avant: string | null;
@@ -97,6 +100,10 @@ const charge = async ({
 
   if (erreur === null) accuseCeQuiEstServi({ fil: issue.fil, creance, plein });
 
+  // `?profil=` — lu ICI, une SEULE fois pour les trois hôtes (§ 12.10.3) : le
+  // profil d'un participant, une requête de plus SEULEMENT quand il est demandé.
+  const profil = await chargeLeProfilSiDemande({ requete, jeton });
+
   return rendu(
     documentDuFil({
       porte: { genre: 'membre', cle },
@@ -108,6 +115,7 @@ const charge = async ({
       composeur: { genre: 'ouvert' },
       tempsReel: tempsReelDuDocument(),
       plein,
+      profil,
     }),
     erreur === null ? 200 : statut,
   );
@@ -124,6 +132,7 @@ export const GET = async (
   if (jeton === null) return versLaConnexion(cle);
 
   return charge({
+    requete,
     jeton,
     cle,
     avant: curseurDemande(requete),
@@ -143,13 +152,22 @@ export const POST = async (
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return versLaConnexion(cle);
 
+  const formulaire = await lisLeFormulaire(requete);
+  // LES TROIS ACTIONS DU PROFIL (§ 12.10.3 point 5) sont vérifiées AVANT le
+  // formulaire du fil : un `<form>` posté depuis le panneau de profil ne porte
+  // ni `texte` ni `reaction`, et `soumissionDuFil` le lirait comme un message
+  // vide.
+  const adresseHote = adresseDeLaPorte({ genre: 'membre', cle });
+  const actionDeProfil = await traiteLActionDeProfil({ formulaire, jeton, adresseHote });
+  if (actionDeProfil !== null) return actionDeProfil;
+
   const issue = await traiteLaSoumission({
-    soumission: soumissionDuFil(await lisLeFormulaire(requete)),
+    soumission: soumissionDuFil(formulaire),
     creance: { genre: 'membre', jeton },
     conversation: cle,
-    adresse: adresseDeLaPorte({ genre: 'membre', cle }),
+    adresse: adresseHote,
   });
   if (issue.genre === 'redirection') return redirection(issue.vers);
   if (issue.statut === 401) return versLaConnexion(cle);
-  return charge({ jeton, cle, avant: null, erreur: issue.message, brouillon: issue.brouillon, statut: issue.statut });
+  return charge({ requete, jeton, cle, avant: null, erreur: issue.message, brouillon: issue.brouillon, statut: issue.statut });
 };

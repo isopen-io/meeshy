@@ -65,6 +65,8 @@ export const FIL = {
   vide: 'Aucun message dans cette conversation',
   videPrecision: 'Démarrez la conversation en envoyant un message !',
   vous: 'Vous',
+  /** Le nom accessible de l'avatar d'un auteur, quand il ouvre son profil (§ 12.10.3). */
+  voirLeProfil: (nom: string): string => `Voir le profil de ${nom}`,
   systeme: 'Message système',
   original: 'Voir l’original',
   traduitDepuis: 'Traduit depuis cette langue',

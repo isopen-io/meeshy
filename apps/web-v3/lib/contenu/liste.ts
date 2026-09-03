@@ -27,6 +27,8 @@ export const CHATS = {
   /** Le trou de synchronisation (§ 7) : des messages ont manqué pendant l'absence. */
   trou: 'Des messages manquent',
   trouAction: 'Recharger la liste',
+  /** Le nom accessible de l'avatar d'une ligne, quand il ouvre le profil de l'AUTRE personne d'un tête-à-tête (§ 12.10.3). */
+  voirLeProfil: (nom: string): string => `Voir le profil de ${nom}`,
 } as const;
 
 /**

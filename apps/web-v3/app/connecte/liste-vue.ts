@@ -1,8 +1,9 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { documentDuSite } from '@/app/enveloppe/vue';
 import { echappe } from '@/app/socle';
 
-import { apercuServi, type Conversation } from '@/lib/api/compte';
+import { apercuServi, homologueDe, type Conversation } from '@/lib/api/compte';
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import {
   ACTIONS,
@@ -17,6 +18,8 @@ import {
 import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_LISTE } from './liste-feuille';
+import { FEUILLE_DU_PROFIL } from './profil-feuille';
+import { adresseDuProfil, surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { apercuAuPrisme, avatar, carteVide, quand, versLeFil } from './vue';
 
 /**
@@ -137,45 +140,77 @@ const meta = (conversation: Conversation): string => {
   );
 };
 
+/**
+ * L'AVATAR D'UNE LIGNE — un cliquable VERS LE PROFIL de l'autre personne d'un
+ * tête-à-tête (§ 12.10.3), séparé du `<a class="ligne">` qui mène au fil :
+ * deux destinations, deux `<a>`, jamais un lien dans un lien. Un GROUPE, ou un
+ * tête-à-tête dont le pair est un invité sans compte, n'a personne à montrer —
+ * l'avatar reste alors DANS la ligne, comme avant (`homologueDe` rend `null`).
+ */
+const avatarDeLaLigne = ({
+  conversation,
+  moi,
+  adresse,
+}: {
+  readonly conversation: Conversation;
+  readonly moi: string | null;
+  readonly adresse: string;
+}): { readonly horsDeLaLigne: string; readonly dansLaLigne: string } => {
+  const cible = homologueDe(conversation, moi);
+  if (cible === null) return { horsDeLaLigne: '', dansLaLigne: avatar(conversation.titre) };
+  return {
+    horsDeLaLigne: `<a class="avatar-lien" href="${echappe(adresseDuProfil(adresse, cible.id))}" aria-label="${echappe(CHATS.voirLeProfil(cible.nom))}">${avatar(conversation.titre)}</a>`,
+    dansLaLigne: '',
+  };
+};
+
 export const ligne = ({
   conversation,
   langues,
   maintenant,
   adresse,
+  moi,
 }: {
   readonly conversation: Conversation;
   readonly langues: readonly string[];
   readonly maintenant: number;
   readonly adresse: string;
-}): string =>
-  `<li data-conversation="${echappe(conversation.id)}"` +
-  ` data-titre="${echappe(conversation.titre)}"` +
-  ` data-quand="${echappe(conversation.dernierMessageA ?? '')}"` +
-  ` data-nonlus="${conversation.nonLus}"` +
-  ` data-sourdine="${conversation.sourdine ? '1' : '0'}">` +
-  pistes() +
-  '<div class="glissiere">' +
-  // `draggable="false"` : un `<a href>` est GLISSABLE par défaut, et Chromium
-  // ouvre un glisser-déposer natif dès que le pointeur bouge — ce qui ANNULE le
-  // balayage (`pointercancel`) sous la souris et le stylet. Une ligne de
-  // conversation n'est pas un lien qu'on dépose ailleurs : le dire ici est ce
-  // qui rend le geste du § 12.10.4 possible hors du doigt.
-  `<a class="ligne" draggable="false" href="${echappe(versLeFil(conversation))}">` +
-  avatar(conversation.titre) +
-  '<span class="corps">' +
-  '<span class="tete">' +
-  `<span class="nom">${echappe(conversation.titre)}</span>` +
-  `<span class="quand">${echappe(quand(conversation.dernierMessageA, maintenant))}</span>` +
-  '</span>' +
-  meta(conversation) +
-  apercu(conversation, langues) +
-  `<span class="frappe" hidden></span>` +
-  '</span>' +
-  compte(conversation.nonLus) +
-  '</a>' +
-  menu(conversation, adresse) +
-  '</div>' +
-  '</li>';
+  /** Pour élire l'AUTRE personne d'un tête-à-tête (`homologueDe`) — `null` sans identité connue. */
+  readonly moi: string | null;
+}): string => {
+  const { horsDeLaLigne, dansLaLigne } = avatarDeLaLigne({ conversation, moi, adresse });
+  return (
+    `<li data-conversation="${echappe(conversation.id)}"` +
+    ` data-titre="${echappe(conversation.titre)}"` +
+    ` data-quand="${echappe(conversation.dernierMessageA ?? '')}"` +
+    ` data-nonlus="${conversation.nonLus}"` +
+    ` data-sourdine="${conversation.sourdine ? '1' : '0'}">` +
+    pistes() +
+    '<div class="glissiere">' +
+    horsDeLaLigne +
+    // `draggable="false"` : un `<a href>` est GLISSABLE par défaut, et Chromium
+    // ouvre un glisser-déposer natif dès que le pointeur bouge — ce qui ANNULE le
+    // balayage (`pointercancel`) sous la souris et le stylet. Une ligne de
+    // conversation n'est pas un lien qu'on dépose ailleurs : le dire ici est ce
+    // qui rend le geste du § 12.10.4 possible hors du doigt.
+    `<a class="ligne" draggable="false" href="${echappe(versLeFil(conversation))}">` +
+    dansLaLigne +
+    '<span class="corps">' +
+    '<span class="tete">' +
+    `<span class="nom">${echappe(conversation.titre)}</span>` +
+    `<span class="quand">${echappe(quand(conversation.dernierMessageA, maintenant))}</span>` +
+    '</span>' +
+    meta(conversation) +
+    apercu(conversation, langues) +
+    `<span class="frappe" hidden></span>` +
+    '</span>' +
+    compte(conversation.nonLus) +
+    '</a>' +
+    menu(conversation, adresse) +
+    '</div>' +
+    '</li>'
+  );
+};
 
 export type EtatDesChats = {
   readonly conversations: readonly Conversation[];
@@ -194,6 +229,13 @@ export type EtatDesChats = {
   readonly fait?: ConfirmationDeGeste | null;
   /** Le geste a été refusé par la passerelle — une phrase, la même pour les trois. */
   readonly echoue?: boolean;
+  /**
+   * LE PROFIL D'UN PARTICIPANT OUVERT DEPUIS CETTE LISTE (`?profil=`,
+   * § 12.10.3) — un ÉTAT de cette adresse, comme sur le fil, et pour les MÊMES
+   * raisons (`app/connecte/profil-vue.ts`). `null` — le cas nominal — ne rend
+   * rien : aucune requête de plus sur une lecture ordinaire.
+   */
+  readonly profil?: ProfilDeLaSurimpression | null;
 };
 
 export const ADRESSE_DE_LA_LISTE = '/chats';
@@ -245,18 +287,50 @@ const corps = (etat: EtatDesChats): string =>
     ? carteVide({ glyphe: 'ph-chats-circle', titre: CHATS.vide, phrase: CHATS.videPrecision })
     : `<ul>${etat.conversations
         .map((conversation) =>
-          ligne({ conversation, langues: etat.langues, maintenant: etat.maintenant, adresse: ADRESSE_DE_LA_LISTE }),
+          ligne({ conversation, langues: etat.langues, maintenant: etat.maintenant, adresse: ADRESSE_DE_LA_LISTE, moi: etat.moi }),
         )
         .join('')}</ul>`) +
   '</section>';
 
-export const documentDesChats = (etat: EtatDesChats): string =>
-  documentDuSite({
+/**
+ * LA SURIMPRESSION — le profil d'un participant, ouvert depuis une ligne de
+ * cette liste (§ 12.10.3). Le titre de la conversation EN COMMUN est connu
+ * LOCALEMENT : la ligne dont l'avatar a été touché est celle dont
+ * `homologueDe` désigne CE handle — jamais une donnée que la route du profil
+ * ne sert pas.
+ */
+const surimpression = (etat: EtatDesChats): string => {
+  const { profil } = etat;
+  if (profil === null || profil === undefined) return '';
+  const conversationEnCommun =
+    etat.conversations.find((conversation) => homologueDe(conversation, etat.moi)?.id === profil.handle)?.titre ?? null;
+  return surimpressionDuProfil({
+    servi: profil.servi,
+    handle: profil.handle,
+    adresseHote: ADRESSE_DE_LA_LISTE,
+    // Aucun message n'est chargé sur cette liste : le fil, lui, connaît la
+    // langue d'un auteur (`langueDeLAuteurDansLeFil`) — cette adresse-ci n'en
+    // sait rien, et ne fabrique rien.
+    langue: null,
+    conversationEnCommun,
+    confirmerBlocage: profil.confirmerBlocage,
+    // Une liste est un écran du MEMBRE : `peutAgir` vaut toujours vrai ici
+    // (la porte l'a déjà exigé pour servir `/chats` du tout).
+    peutAgir: true,
+    langueDuDocument: DOCUMENT_LANGUAGE,
+  });
+};
+
+export const documentDesChats = (etat: EtatDesChats): string => {
+  const dessus = surimpression(etat);
+  return documentDuSite({
     titre: `${CHATS.titre} — Meeshy`,
     description: CHATS.accroche,
-    feuille: FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE,
+    feuille: FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + (dessus === '' ? '' : FEUILLE_DU_PROFIL),
     corps: corps(etat),
     retour: true,
+    surimpression: dessus,
     attributsDuMain: attributsDeParticipation(etat),
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
+};

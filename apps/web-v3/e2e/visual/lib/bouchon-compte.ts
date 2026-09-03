@@ -1,10 +1,23 @@
 import type { IncomingMessage } from 'node:http';
 
 import type { Identite } from './bouchon-socket';
-import { AUTRE_CONVERSATION, CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAGE, LIEN_DU_FIL, MEMBRE, PRENOM_DU_LECTEUR } from './bouchon-monde';
+import {
+  AUTRE_CONVERSATION,
+  CONVERSATION_DU_LECTEUR,
+  IDENTIFIANT_DU_LIEN_PARTAGE,
+  LIEN_DU_FIL,
+  MEMBRE,
+  PAIR_ANGLOPHONE,
+  PAIR_HISPANOPHONE,
+  PRENOM_DU_LECTEUR,
+} from './bouchon-monde';
 
 /**
- * LES NEUF ROUTES DE LA ZONE CONNECTÉE, copiées sur la passerelle RÉELLE :
+ * LES NEUF ROUTES DE LA ZONE CONNECTÉE (et quatre de plus depuis § 12.10.3,
+ * le panneau de profil : `GET /directory/people/:handle?expand=relation`,
+ * `POST /conversations`, `POST /directory/friend-requests`,
+ * `PUT /directory/blocks/:userId` — chacune ci-dessous, à son tour), copiées
+ * sur la passerelle RÉELLE :
  *
  *   • `GET /api/v1/auth/me` — `services/gateway/src/routes/auth/magic-link.ts:79`,
  *     `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous: true })` ;
@@ -29,6 +42,16 @@ import { AUTRE_CONVERSATION, CONVERSATION_DU_LECTEUR, IDENTIFIANT_DU_LIEN_PARTAG
  *   • `GET /api/v1/posts/:postId/comments` — `routes/posts/comments.ts:61`,
  *     même garde, servant `{ success, data, pagination }` SANS schéma de
  *     réponse déclaré — donc sans rien retirer.
+ *
+ * TROIS DE PLUS DEPUIS #5031 (le fil social, `/feed`) :
+ *
+ *   • `GET /api/v1/social/posts?scope=home|stories` — `routes/posts/feed.ts:740`,
+ *     `scope=home` exige `registeredUserId` (`:789`) ;
+ *   • `POST`/`DELETE /api/v1/posts/:postId/like` — `routes/posts/
+ *     interactions.ts:79` et `:237` ;
+ *   • `POST /api/v1/posts/:postId/repost` — `routes/posts/interactions.ts:790`,
+ *     UNE seule forme (repost simple, `isQuote:false`) — aucune route pour le
+ *     défaire.
  *
  * LES DEUX DERNIÈRES SERVENT DES TRADUCTIONS EN CARTE D'OBJETS
  * (`{ langue: { text } }`, `schema.prisma:3523`), et c'est ce qui donne sa
@@ -137,6 +160,32 @@ const CARNET = [
   },
 ];
 
+/**
+ * LE PROFIL PUBLIC DE MARTA RUIZ (§ 12.10.3) — `publicProfileSchema`
+ * (`routes/users/public-profile.ts:88-110`), servi par `GET /directory/people/
+ * :handle?expand=relation` (`routes/directory/person.ts:175`). AUCUNE langue
+ * (retirée depuis #4161 — la ligne de langue du panneau vient du FIL) et
+ * AUCUNE présence (sans `expand=presence`, jamais demandé par ce module).
+ */
+const PROFIL_DE_MARTA = {
+  id: PAIR_HISPANOPHONE.id,
+  username: 'marta',
+  firstName: 'Marta',
+  lastName: 'Ruiz',
+  displayName: PAIR_HISPANOPHONE.nom,
+  avatar: null,
+  banner: null,
+  bio: 'Traductrice · Madrid. Je relis les revues trimestrielles.',
+  role: 'USER',
+  createdAt: '2024-03-01T00:00:00.000Z',
+  voicePublic: false,
+  voiceSampleUrl: null,
+  voiceSampleDurationMs: null,
+  voiceQuality: null,
+  isAnonymous: false,
+  isMeeshyer: true,
+};
+
 /** Une carte de traductions à la forme de Prisma — des OBJETS, jamais des chaînes. */
 const traduit = (paires: Readonly<Record<string, string>>) =>
   Object.fromEntries(
@@ -206,6 +255,64 @@ const COMMENTAIRES_DU_BOUCHON = [
 ];
 
 /**
+ * LE FIL SOCIAL (`/feed`, #5031) — `GET /api/v1/social/posts?scope=home`
+ * (`routes/posts/feed.ts:740`, `optionalAuth` puis `registeredUserId` requis
+ * sur `scope=home`). LE PREMIER POST EST LA MÊME PUBLICATION que
+ * `PUBLICATION_DU_BOUCHON` (« Revue de mars », Ibrahim) — l'écran des
+ * commentaires ET le fil montrent la MÊME publication dans la cible
+ * (`cible/comments.png`, `cible/feed.png`), et lui donner deux textes
+ * différents ferait deux vérités sur un seul post. Seuls les compteurs
+ * sociaux (`likeCount`, `commentCount`, `repostCount`) et le média
+ * s'ajoutent — `PostFeedService.getFeed` les sert, la route commentée ne les
+ * déclare pas.
+ */
+const FIL_SOCIAL_DU_BOUCHON = [
+  {
+    ...PUBLICATION_DU_BOUCHON,
+    likeCount: 128,
+    commentCount: 12,
+    repostCount: 4,
+    isLikedByMe: false,
+    isRepostedByMe: false,
+    media: [],
+  },
+  {
+    id: 'p-glossaire',
+    type: 'REEL',
+    content: 'Nuevo glosario compartido para el equipo.',
+    originalLanguage: 'es',
+    translations: {},
+    createdAt: new Date(Date.now() - 20 * 3_600_000).toISOString(),
+    author: { id: PAIR_HISPANOPHONE.id, username: 'marta', displayName: PAIR_HISPANOPHONE.nom },
+    likeCount: 9,
+    commentCount: 0,
+    repostCount: 0,
+    isLikedByMe: true,
+    isRepostedByMe: false,
+    media: [{ fileUrl: 'https://cdn.meeshy.test/reel-glossaire.jpg', mimeType: 'image/jpeg', width: 800, height: 600 }],
+  },
+];
+
+/**
+ * LE RAIL DE STORIES — `scope=stories&projection=tray`, projeté à un nom, un
+ * auteur, et l'état vu/non-vu (`isViewedByMe`, servi dans les DEUX
+ * projections — `PostFeedService.fetchAndEnrichStories`). Les QUATRE de la
+ * cible (`cible/feed.png` : IB, MR, SK, LM) — les trois premiers réemploient
+ * des identités déjà nommées ailleurs dans ce bouchon (`PAIR_ANGLOPHONE`,
+ * `PAIR_HISPANOPHONE`, la Sara Kim des demandes d'ami) ; seule « Luc Martin »
+ * n'a aucun autre lecteur dans le dépôt. `isViewedByMe` REPREND exactement la
+ * cible : Ibrahim et Marta portent l'anneau ACCENTUÉ (non vues), Sara et Luc
+ * l'anneau NEUTRE (déjà vues) — sans les DEUX familles, un rail où tout se
+ * ressemble repasserait inaperçu.
+ */
+const RAIL_DU_BOUCHON = [
+  { id: 'story-ibrahim', authorId: PAIR_ANGLOPHONE.id, author: { id: PAIR_ANGLOPHONE.id, displayName: PAIR_ANGLOPHONE.nom }, isViewedByMe: false },
+  { id: 'story-marta', authorId: PAIR_HISPANOPHONE.id, author: { id: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom }, isViewedByMe: false },
+  { id: 'story-sara', authorId: 'u-sara', author: { id: 'u-sara', displayName: 'Sara Kim' }, isViewedByMe: true },
+  { id: 'story-luc', authorId: 'u-luc', author: { id: 'u-luc', displayName: 'Luc Martin' }, isViewedByMe: true },
+];
+
+/**
  * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
  * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
  * part, ce que l'audit vérifie.
@@ -248,10 +355,31 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/links') ||
         chemin.startsWith('/api/v1/directory/') ||
         chemin.startsWith('/api/v1/posts/') ||
+        chemin.startsWith('/api/v1/social/') ||
         estUnePreference
       )
     ) {
       return false;
+    }
+
+    /**
+     * `GET /api/v1/directory/people/:handle?expand=relation`
+     * (`routes/directory/person.ts:175`, `onRequest: [getOptionalAuth]`) —
+     * AVANT la garde d'authentification ci-dessous : un invité SANS jeton y a
+     * droit (relation `'none'`), exactement comme un lecteur anonyme
+     * (§ 12.10.3 point 4). C'est ce que le PLUS PRÉCIS avant le PLUS GÉNÉRAL
+     * demande : `/directory/people/<handle>` avant `/directory/people` (la
+     * recherche, query-only), qui elle reste gardée plus bas.
+     */
+    const handleDuProfil = /^\/api\/v1\/directory\/people\/([^/]+)$/.exec(chemin)?.[1];
+    if (handleDuProfil !== undefined) {
+      const cible = decodeURIComponent(handleDuProfil);
+      if (cible !== PROFIL_DE_MARTA.id && cible !== PROFIL_DE_MARTA.username) {
+        json({ success: false, error: 'NOT_FOUND', message: 'Profil introuvable' }, 404);
+        return true;
+      }
+      json({ success: true, data: { ...PROFIL_DE_MARTA, relation: 'none', isSelf: false } });
+      return true;
     }
 
     const porteur = requete.headers.authorization ?? '';
@@ -281,6 +409,40 @@ export const routesDuCompte =
           regionalLanguage: 'es',
         },
       });
+      return true;
+    }
+
+    /**
+     * `GET /api/v1/social/posts?scope=home|stories` (`routes/posts/feed.ts:740`)
+     * — le fil social et son rail (#5031). `scope=home` exige un compte, comme
+     * les neuf autres scopes hors `author`/`community` : la garde est déjà
+     * passée plus haut (`creanceDe`), donc ce bouchon ne la rejoue pas.
+     */
+    if (chemin.startsWith('/api/v1/social/posts')) {
+      const scope = url.searchParams.get('scope');
+      if (scope === 'stories') {
+        json({ success: true, data: RAIL_DU_BOUCHON, pagination: { limit: 50, hasMore: false, nextCursor: null } });
+        return true;
+      }
+      json({ success: true, data: FIL_SOCIAL_DU_BOUCHON, pagination: { limit: 20, hasMore: false, nextCursor: null } });
+      return true;
+    }
+
+    /**
+     * AIMER — `POST` pose, `DELETE` retire (`routes/posts/interactions.ts:79`
+     * et `:237`). Le bouchon n'a pas d'état de like à tenir : le module de
+     * participation peint OPTIMISTEMENT avant d'appeler cette route, et un
+     * rechargement (chemin SANS JavaScript) relit `isLikedByMe` depuis
+     * `FIL_SOCIAL_DU_BOUCHON`, fixe pour la durée d'un spec.
+     */
+    if (/^\/api\/v1\/posts\/[^/]+\/like$/.test(chemin) && (requete.method === 'POST' || requete.method === 'DELETE')) {
+      json({ success: true, data: { liked: requete.method === 'POST' } });
+      return true;
+    }
+
+    /** REPOSTER — `POST /posts/:postId/repost`, une SEULE forme (repost simple). */
+    if (/^\/api\/v1\/posts\/[^/]+\/repost$/.test(chemin) && requete.method === 'POST') {
+      json({ success: true, data: { id: `repost-${Date.now()}`, isQuote: false } });
       return true;
     }
 
@@ -331,6 +493,44 @@ export const routesDuCompte =
       return true;
     }
 
+    /**
+     * `POST /api/v1/directory/friend-requests` (`friend-requests.ts:289`) —
+     * l'action « Ajouter en ami » du panneau de profil (§ 12.10.3 point 5).
+     * AVANT le `GET` générique ci-dessous : même chemin, méthode distincte.
+     */
+    if (chemin === '/api/v1/directory/friend-requests' && requete.method === 'POST') {
+      const corpsPoste = ((): Record<string, unknown> => {
+        try {
+          return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })();
+      json(
+        {
+          success: true,
+          data: {
+            id: 'fr-neuve',
+            senderId: MEMBRE.id,
+            receiverId: corpsPoste.receiverId ?? null,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+          },
+        },
+        201,
+      );
+      return true;
+    }
+
+    /**
+     * `PUT /api/v1/directory/blocks/:userId` (`blocks.ts:301`) — l'action
+     * « Bloquer » du panneau de profil, idempotente.
+     */
+    if (chemin.startsWith('/api/v1/directory/blocks/') && requete.method === 'PUT') {
+      json({ success: true, data: { message: 'User blocked', blocked: true } });
+      return true;
+    }
+
     if (chemin.startsWith('/api/v1/directory/friend-requests')) {
       json({
         success: true,
@@ -377,6 +577,17 @@ export const routesDuCompte =
       };
       etat.preferences.set(conversationId, apres);
       json({ success: true, data: { conversationId, ...apres } });
+      return true;
+    }
+
+    /**
+     * `POST /api/v1/conversations` (`type:'direct'`,
+     * `routes/conversations/core-lifecycle.ts:73`) — l'action « Écrire » du
+     * panneau de profil (§ 12.10.3 point 5). AVANT le `GET` générique
+     * ci-dessous : même préfixe, méthode distincte.
+     */
+    if (chemin === '/api/v1/conversations' && requete.method === 'POST') {
+      json({ success: true, data: { id: 'c-neuve-marta', type: 'direct' } });
       return true;
     }
 
@@ -435,6 +646,13 @@ export const routesDuCompte =
           lastMessageOriginalLanguage: AUTRE_CONVERSATION.langueOriginale,
           lastMessageTranslations: AUTRE_CONVERSATION.traductions,
           userPreferences: prefs(AUTRE_CONVERSATION.id),
+          // L'AUTRE personne du tête-à-tête (§ 12.10.3) : son avatar, dans
+          // `/chats`, ouvre son profil — `homologueDe` l'élit en excluant
+          // `MEMBRE.id` de cette liste.
+          participants: [
+            { userId: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom },
+            { userId: MEMBRE.id, displayName: MEMBRE.nom },
+          ],
         },
         /**
          * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN

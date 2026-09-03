@@ -35,6 +35,7 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   apercuLangueOriginale: 'fr',
   sourdine: false,
   archivee: false,
+  participantsInscrits: [],
   ...attributs,
 });
 
@@ -290,6 +291,7 @@ describe('la greffe du temps réel', () => {
     actifs: {
       participate: { nom: 'participate.a.js', url: '/__v3/rt/participate.a.js', corps: '' },
       liste: { nom: 'liste.b.js', url: '/__v3/rt/liste.b.js', corps: '' },
+      feed: { nom: 'feed.b.js', url: '/__v3/rt/feed.b.js', corps: '' },
       socket: { nom: 'socket.io.c.js', url: '/__v3/rt/socket.io.c.js', corps: '' },
     },
   };

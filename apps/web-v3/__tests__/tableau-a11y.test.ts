@@ -46,6 +46,7 @@ const ETAT = {
       apercuLangueOriginale: 'fr',
       sourdine: false,
       archivee: false,
+      participantsInscrits: [],
     },
   ],
   total: 4,

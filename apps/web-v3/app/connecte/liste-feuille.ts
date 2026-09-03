@@ -58,6 +58,10 @@ ${TRACE_DE_FRAPPE}
 .piste.apres{justify-content:flex-end;background:var(--color-tint-danger);color:var(--color-text)}
 
 .glissiere{position:relative;display:flex;align-items:center;gap:var(--space-1);background:var(--color-bg);touch-action:pan-y;-webkit-user-select:none;user-select:none}
+/* L'avatar ouvre le profil de l'autre personne d'un tête-à-tête (§ 12.10.3),
+   séparé du a.ligne qui mène au fil — deux cliquables, jamais un lien dans
+   un lien. */
+.glissiere .avatar-lien{flex:none;display:block;padding-left:var(--space-1)}
 .liste a.ligne{flex:1;display:flex;align-items:center;gap:var(--space-3);min-width:0;min-height:var(--row-height);padding:var(--space-2) 0;color:inherit;text-decoration:none}
 .liste .corps{flex:1;min-width:0}
 .liste .tete{display:flex;align-items:baseline;gap:var(--space-2)}
