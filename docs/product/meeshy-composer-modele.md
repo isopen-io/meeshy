@@ -431,9 +431,22 @@ arithmétique fausse — et une somme qui ne tombe pas juste est le premier endr
 où un lecteur cesse de croire un tableau. Ils sont donc rendus à ce qu'ils
 mesurent VRAIMENT : une proportion, qui porte l'argument entière.
 
-**Recompter la répartition demande d'inventorier ce que le blob v1 partagé
-exerce**, ce qu'aucune garde ne fait aujourd'hui. C'est le second volet de
-#4986 : le recensement TOTAL est tenu, sa RÉPARTITION ne l'est pas encore.
+**La répartition n'est PAS gardée, et ce n'est plus elle qu'il faut garder**
+(#4986, second volet, 2026-09-03). En cherchant à l'inventorier, la prémisse a
+bougé : depuis #4905 les cinq branches d'objet RÉPANDENT, donc un champ ajouté à
+un modèle voyage désormais **sans que le golden ait à l'exercer**. La couverture
+du golden ne porte plus le risque qu'elle portait quand ce paragraphe a été
+écrit.
+
+Ce qui immunise n'est pas le COMPTE, c'est la FORME — et c'est elle qui est
+gardée : `storyEffectsV3.spread.test.ts` exige que chacune des cinq branches
+d'objet contienne `...rest`. Une branche qu'on ramènerait à un inventaire clé par
+clé rougit désormais.
+
+> La garde EXEMPTE la branche `blob.stickers` (legacy), qui écrit
+> `o.payload = { emoji }` sans répandre — et c'est correct : sa source est un
+> tableau de CHAÎNES, pas d'objets. Il n'y a rien à répandre. Une garde qui
+> l'exigerait quand même demanderait de réparer ce qui n'est pas cassé.
 
 > Les deux dernières lignes sont d'une autre nature, et c'est pourquoi elles
 > gardent leur chiffre exact : ce sont des **événements datés**, traçables à
