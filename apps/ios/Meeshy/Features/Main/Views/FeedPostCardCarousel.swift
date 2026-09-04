@@ -97,7 +97,7 @@ struct FeedPostCardCarousel: View {
     @ViewBuilder
     private func slide(_ item: FeedMedia, at offset: Int) -> some View {
         ZStack(alignment: .bottomLeading) {
-            FeedMediaTile(media: item)
+            FeedMediaTile(media: item, animates: offset == index)
 
             // La légende de CE média, et d'aucun autre. Le dégradé n'existe que
             // sous elle : sans légende, rien ne s'assombrit — un voile permanent
@@ -269,19 +269,35 @@ nonisolated enum FeedCarouselLayout {
 /// changent pas.
 struct FeedMediaTile: View {
     let media: FeedMedia
+    /// **Figée par défaut** (#4984). Cette tuile sert le carrousel — où une
+    /// seule page est visible — ET la grille d'une carte, où elles le sont
+    /// toutes. Le défaut penche du côté qui ne coûte rien : un appelant qui
+    /// sait qu'il est seul à l'écran l'ouvre explicitement.
+    var animates: Bool = false
+
+    /// Plafond de décodage d'une tuile animée : la tuile occupe au plus la
+    /// largeur de la carte.
+    private static let animatedPointSize: CGFloat = 420
 
     var body: some View {
         ZStack {
             let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
             if !thumbUrl.isEmpty || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
+                AnimatedCachedImage(
+                    urlString: media.url,
+                    animates: animates,
+                    pointSize: Self.animatedPointSize,
+                    contentMode: .scaleAspectFill
                 ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
+                    ProgressiveCachedImage(
+                        thumbHash: media.thumbHash,
+                        thumbnailUrl: media.thumbnailUrl,
+                        fullUrl: media.url,
+                        autoLoad: true
+                    ) {
+                        Color(hex: media.thumbnailColor)
+                            .shimmer()
+                    }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)

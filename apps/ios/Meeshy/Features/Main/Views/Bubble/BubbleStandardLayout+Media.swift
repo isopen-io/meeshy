@@ -497,7 +497,7 @@ fileprivate struct BubbleGridCell: View {
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
+            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth, solo: solo)
         case .video:
             BubbleGridVideoThumbnailView(attachment: attachment, contactColor: contactColor, solo: solo)
         default:
@@ -609,6 +609,15 @@ fileprivate struct BubbleGridImageView: View {
     /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
+    /// **Seul un média SEUL anime** (#4984). Cette vue sert la cellule d'une
+    /// grille ET le média unique d'une bulle ; la distinction existait au
+    /// niveau de la cellule (`makeGridCell(_:cellPointWidth:overflowCount:solo:)`)
+    /// sans jamais descendre jusqu'ici, donc la règle n'était pas exprimable.
+    /// Douze vignettes qui décodent trente images chacune pendant un
+    /// défilement coûtent la dimension 4 ; et une grille figée montre la
+    /// PREMIÈRE image de chaque GIF, c'est-à-dire la vignette choisie par son
+    /// auteur — une planche-contact, pas un état dégradé.
+    let solo: Bool
 
     @Environment(\.displayScale) private var displayScale: CGFloat
 
@@ -635,13 +644,24 @@ fileprivate struct BubbleGridImageView: View {
         let urlStr = selectedFull ?? thumbUrl ?? ""
 
         if !urlStr.isEmpty {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: effectiveThumb,
-                fullUrl: selectedFull,
-                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
+            // **L'original, jamais la variante** (#4984). `selectedFull` est la
+            // variante serveur la plus légère suffisante — pour un GIF, une
+            // image FIXE : la lire ici rendrait le chemin animé silencieusement
+            // inopérant. Le repli, lui, garde sa variante et son coût.
+            AnimatedCachedImage(
+                urlString: originalFull,
+                animates: solo,
+                pointSize: cellPointWidth,
+                contentMode: .scaleAspectFill
             ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: effectiveThumb,
+                    fullUrl: selectedFull,
+                    targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
             }
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
@@ -968,12 +988,20 @@ struct BubbleCarouselView: View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl
+            // Une seule page du carrousel est visible : elle seule anime (#4984).
+            AnimatedCachedImage(
+                urlString: fullUrl,
+                animates: attachment.id == currentPageID,
+                pointSize: containerWidth,
+                contentMode: .scaleAspectFit
             ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl ?? thumbUrl
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
             }
             .aspectRatio(contentMode: .fit)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)

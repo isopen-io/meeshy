@@ -59,6 +59,10 @@ struct GalleryImagePage: View, Equatable {
     /// modeste. Une page à ±2 n'est pas atteignable sans être traversée — elle
     /// n'a donc aucun pixel à fournir au zoom.
     private static let previewSize = CGSize(width: 320, height: 320)
+    /// Plafond de décodage d'un média ANIMÉ en plein écran (#4984) : plus large
+    /// que l'aperçu, borné pour que trente images ne coûtent pas trente pleines
+    /// résolutions.
+    private static let animatedPointSize: CGFloat = 720
 
     private var isZoomed: Bool { committedScale > 1 }
 
@@ -147,13 +151,22 @@ struct GalleryImagePage: View, Equatable {
                 isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
             )
             if let mount {
-                ProgressiveCachedImage(
-                    thumbHash: mount.backdropThumbHash,
-                    thumbnailUrl: mount.isResident ? nil : thumbnailURL,
-                    fullUrl: mount.fullURL,
-                    autoLoad: true
+                // Le plein écran anime (#4984) — et seulement lui : la branche
+                // `else` est la fenêtre HORS rendu (±2 pages), celle qui borne
+                // le nombre d'images vivantes. Y animer annulerait la borne.
+                AnimatedCachedImage(
+                    urlString: mount.fullURL,
+                    pointSize: Self.animatedPointSize,
+                    contentMode: .scaleAspectFit
                 ) {
-                    ProgressView().tint(.white)
+                    ProgressiveCachedImage(
+                        thumbHash: mount.backdropThumbHash,
+                        thumbnailUrl: mount.isResident ? nil : thumbnailURL,
+                        fullUrl: mount.fullURL,
+                        autoLoad: true
+                    ) {
+                        ProgressView().tint(.white)
+                    }
                 }
             } else {
                 emptyStateGlyph

@@ -236,14 +236,22 @@ struct ReelFeedCard: View, Equatable {
             // dégradé animé n'est le repli que lorsqu'il n'y a aucun visuel.
             if let cover = backgroundMedia,
                cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: cover.thumbHash,
-                    thumbnailUrl: cover.thumbnailUrl,
-                    fullUrl: cover.url,
-                    autoLoad: true
+                // Seul le réel ACTIF anime (#4984) : le fil en garde trois montés.
+                AnimatedCachedImage(
+                    urlString: cover.url,
+                    animates: isActive,
+                    pointSize: width,
+                    contentMode: .scaleAspectFill
                 ) {
-                    Color(hex: cover.thumbnailColor)
-                        .shimmer()
+                    ProgressiveCachedImage(
+                        thumbHash: cover.thumbHash,
+                        thumbnailUrl: cover.thumbnailUrl,
+                        fullUrl: cover.url,
+                        autoLoad: true
+                    ) {
+                        Color(hex: cover.thumbnailColor)
+                            .shimmer()
+                    }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)
@@ -253,14 +261,21 @@ struct ReelFeedCard: View, Equatable {
             }
         case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
+                AnimatedCachedImage(
+                    urlString: media.url,
+                    animates: isActive,
+                    pointSize: width,
+                    contentMode: .scaleAspectFill
                 ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
+                    ProgressiveCachedImage(
+                        thumbHash: media.thumbHash,
+                        thumbnailUrl: media.thumbnailUrl,
+                        fullUrl: media.url,
+                        autoLoad: true
+                    ) {
+                        Color(hex: media.thumbnailColor)
+                            .shimmer()
+                    }
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)

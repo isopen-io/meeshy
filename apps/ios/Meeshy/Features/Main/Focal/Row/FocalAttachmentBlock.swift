@@ -236,13 +236,20 @@ struct FocalGridCell: View {
         case .image:
             let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
             let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl,
-                targetSize: CGSize(width: slot.width, height: slot.height)
+            // Une rangée porte UN média : il anime (#4984).
+            AnimatedCachedImage(
+                urlString: fullUrl,
+                pointSize: slot.width,
+                contentMode: .scaleAspectFill
             ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl,
+                    targetSize: CGSize(width: slot.width, height: slot.height)
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
             }
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)

@@ -5,6 +5,11 @@ import MeeshyUI
 // MARK: - Extracted from FeedView.swift
 
 // MARK: - FeedPostCard Media Preview
+/// Plafond de décodage d'un média ANIMÉ de carte de fil (#4984). La carte
+/// occupe la largeur de l'écran ; décoder trente images au-delà de cette borne
+/// ne se verrait pas et se paierait en mémoire (dimension 3).
+private let feedCardAnimatedPointSize: CGFloat = 420
+
 extension FeedPostCard {
     /// **Vue `3f` — un lot de médias se PARCOURT, il ne se contemple pas.**
     ///
@@ -112,14 +117,23 @@ extension FeedPostCard {
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        ProgressiveCachedImage(
-            thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url,
-            autoLoad: true
+        // `singleMediaView` est son SEUL appelant : ce média est seul dans sa
+        // carte, donc il anime (#4984). La grille de la même carte passe par
+        // `FeedMediaTile`, qui reste figée.
+        AnimatedCachedImage(
+            urlString: media.url,
+            pointSize: feedCardAnimatedPointSize,
+            contentMode: .scaleAspectFill
         ) {
-            Color(hex: media.thumbnailColor)
-                .shimmer()
+            ProgressiveCachedImage(
+                thumbHash: media.thumbHash,
+                thumbnailUrl: media.thumbnailUrl,
+                fullUrl: media.url,
+                autoLoad: true
+            ) {
+                Color(hex: media.thumbnailColor)
+                    .shimmer()
+            }
         }
         // Pas de ratio explicite : l'image remplit le cadre que
         // `fittedMediaHeight` lui donne, et le débord est rogné.
