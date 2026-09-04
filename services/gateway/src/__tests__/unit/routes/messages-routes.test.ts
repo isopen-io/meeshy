@@ -1508,11 +1508,11 @@ describe('POST /conversations/:id/mark-unread', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
-  it('returns 403 when no participant', async () => {
+  it('returns 404 when no participant (#4856)', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalled();
   });
 
   it('no other-user messages → { unreadCount: 0 }', async () => {
@@ -1991,11 +1991,11 @@ describe('GET /conversations/:id/messages/search', () => {
   const makeSearchReq = (q = 'hello', extra: any = {}) =>
     makeRequest({ query: { q, ...extra } });
 
-  it('403 when conversationId not found', async () => {
+  it('404 when conversationId not found (#4856)', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('403 when no access', async () => {
@@ -2757,7 +2757,7 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation'); // #4856
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });

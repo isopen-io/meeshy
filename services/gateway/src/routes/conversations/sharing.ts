@@ -205,7 +205,13 @@ export function registerSharingRoutes(
       });
 
       if (!user) {
-        return sendForbidden(reply, 'User not found');
+        // #4856 — cette lecture porte sur la ligne `User` de l'APPELANT
+        // lui-même (son propre JWT, devenu orphelin si le compte a été
+        // supprimé entretemps) : aucun tiers n'est énuméré, donc aucune
+        // raison anti-énumération ne justifie de déguiser l'absence en
+        // refus. Aligné sur `sendNotFound(reply, 'User not found')` que ce
+        // même fichier sert déjà pour l'utilisateur CIBLE d'une invitation.
+        return sendNotFound(reply, 'User not found');
       }
 
       // #4169 — tout le reste (résolution de l'identifiant de conversation,
