@@ -28082,3 +28082,105 @@ posée sans son consommateur. Chacune fait quelque chose de juste sur une partie
 et laisse l'ensemble dans un état que personne n'a voulu — **plus difficile à
 diagnostiquer que l'absence complète du geste**, parce que la partie faite
 détourne l'attention de la partie manquante.
+
+## Leçon 512 — Un module compilé en ACTIF ne peut pas importer un module de VUE : mesuré, +54 % sur ce que le lecteur télécharge
+
+Revue de #5030 (v3 web). Le fil peint ses bulles en direct (`lib/realtime/fil-peinture.ts`, compilé
+en `participate.js` par `scripts/build-participate.mjs`) et le serveur les rend (`app/connecte/`).
+Les deux doivent composer LA MÊME adresse de profil — c'est exactement ce qu'un site unique existe
+pour garantir. J'ai donc importé, depuis le peintre, la fonction qui la compose :
+
+```ts
+import { adresseDuProfil } from '@/app/connecte/profil-vue';
+```
+
+Trente caractères de composition de chaîne. Mesuré, `participate.js` est passé de **26 719 à
+41 107 o gzip (+14 388, +54 %)** — le graphe entier de `profil-vue.ts` descendait chez le lecteur,
+`getLanguageInfo` de `@meeshy/shared` compris, sur l'actif que la 3G rurale télécharge.
+
+**La règle n'est pas « ne pas partager » — c'est l'inverse du site unique.** C'est : *ce que les
+deux rendus partagent vit sous `lib/`, jamais sous `app/`.* La règle a rejoint
+`lib/api/adresses-du-fil.ts`, où vivent déjà les autres adresses du fil ; `profil-vue.ts` la
+RÉ-EXPORTE, donc aucun appelant ne change, le site reste unique, et le module retombe à 26 722 o
+(+3 o, le prix réel).
+
+### Le témoin qui l'attrape n'est pas un ratchet d'octets
+
+Un ratchet dirait QU'un module a grossi, jamais POURQUOI — et il n'en existait aucun pour ces neuf
+actifs. Le témoin est sur l'IMPORT : aucun fichier de `lib/realtime/` ne contient `from '@/app/`
+(`__tests__/fil-source-unique.test.ts`). Il rougit AVANT la mesure, il nomme la cause, et il ne
+demande à personne de relire un chiffre.
+
+### Deux corollaires du même lot, de la même famille
+
+- **Un commentaire dans une feuille INLINE est expédié.** `compacte()` retire les retours à la
+  ligne, pas les commentaires : sept lignes de prose CSS coûtaient **303 o gzip par document**,
+  dix-sept fois les deux règles qu'elles expliquaient. La raison d'une règle va dans le
+  doc-comment du MODULE (qui ne part pas), la règle seule dans la feuille.
+- **Le nom le plus COURT devient la cible la plus PETITE le jour où il devient un lien.**
+  « Vous » — quatre lettres — mesure 40 × 44 px : sous la règle des 44 px, quand « Marta Ruiz » ne
+  l'a jamais été. Un `min-height` ne suffit pas à faire une cible ; c'est la LARGEUR qui tombe, et
+  seule une mesure au navigateur le dit.
+
+### La forme générale
+
+Les trois défauts sont **le coût invisible d'un geste juste**. Partager une règle, expliquer une
+règle, rendre un nom cliquable : rien à redire sur l'intention, et chacun se paie ailleurs que là
+où on l'écrit — dans un bundle, dans chaque document, dans un pixel de largeur. La question à se
+poser n'est pas « est-ce correct ? » mais **« qu'est-ce que ce geste fait DESCENDRE, et où ? »** —
+et elle ne se répond qu'en mesurant.
+
+## Leçon 513 — Un état OPTIMISTE qui n'est pas l'état CONFIRMÉ n'est pas de l'optimisme : c'est un aperçu qui ment
+
+Trouvé à la revue de #4933 (`/links`, fermer un lien), en trois défauts qui ont la même racine — **le
+module COMPOSAIT du balisage que le serveur compose déjà**.
+
+- **La pastille « Fermé », créée en JavaScript, n'atterrissait pas où le serveur la pose.**
+  `marqueFerme` faisait `document.createElement('span')` et l'appendait dans `.dit` ; `dedans()` la
+  sert en FRÈRE de `.dit`. Or `.lien .dit` est un `flex-direction:column` : la même pastille y
+  tombait sur une TROISIÈME ligne, pleine largeur, au lieu du bout de rangée. La ligne SAUTAIT donc
+  au retour de la passerelle — l'optimisme se VOYAIT, ce qui est exactement ce qu'il existe pour
+  éviter. Aucun témoin ne pouvait l'attraper : les deux balisages étaient chacun corrects, seule
+  leur DIFFÉRENCE était le défaut.
+- **La région `role="alert"` était insérée avec son texte.** Une région d'alerte doit exister dans le
+  document AVANT qu'on n'y écrive ; celle qu'un script crée et insère d'un bloc n'est annoncée par
+  aucun lecteur d'écran de façon fiable. Le patron existait à dix lignes de là, dans le MÊME module
+  (`.avis-feuille`, servie muette, que `disLaFeuille` remplit) — il n'a pas été suivi pour le carnet.
+- **Le focus tombait sur `<body>` à chaque geste.** Le `<details>` retiré à l'optimiste PORTAIT le
+  bouton qu'on venait d'actionner ; la ligne rétablie par `replaceWith(clone)` détruisait le nœud
+  focalisé. Sur le chemin NOMINAL, pas seulement au refus.
+
+> **La règle : un module de participation DÉVOILE des fentes servies, il ne compose pas de
+> balisage.** Le serveur sert la pastille `hidden`, la région d'alerte `hidden` ; le module pose
+> `.hidden = false` et écrit du TEXTE. Un seul site de balisage, donc aucune divergence possible —
+> et la question à poser à tout correctif optimiste est **« l'état que je peins est-il, au pixel,
+> celui que le rechargement remettra ? »**, qui ne se répond qu'en REGARDANT la capture.
+
+Corollaire mesuré : la fente est aussi plus LÉGÈRE — le module est passé de 1 989 à 1 782 o gzip en
+perdant `createElement`, `poseLAlerteServie` et `poseUneAlerteLocale`.
+
+## Leçon 514 — Le gate qu'on n'a pas pu jouer était rouge, et c'est le harnais qui l'avait rendu injouable
+
+Même revue. Le développeur a rendu son lot en disant : « Playwright `--project=pages` lancée mais
+non complétée — le sandbox est devenu saturé, chaque commande prenant plus de deux minutes ». Deux
+faits, tous deux mesurés :
+
+1. **La suite non jouée était ROUGE.** Quatre témoins de `v3-nouveau-lien.spec.ts` tombaient en
+   violation de mode strict : `page.locator('button[type="submit"]')` désigne désormais DEUX boutons
+   — celui de la feuille, et le « Fermer ce lien » que ce lot venait d'ajouter à chaque ligne du
+   carnet derrière elle. Le développeur avait corrigé exactement ce sélecteur dans le spec voisin
+   (`v3-liens-direct.spec.ts`) : il savait, et le second fichier est resté parce que le gate ne
+   tournait plus. **Un gate qu'on ne peut pas jouer ne se rapporte pas « à rejouer » : il se
+   rapporte ROUGE jusqu'à preuve du contraire** — et « forte confiance » n'est pas une preuve.
+2. **La saturation était un DÉFAUT DU DÉPÔT, pas une fatalité de la machine.** `serveurDeLaV3`
+   (`e2e/visual/lib/serveurs.ts`) faisait `spawn('npx', ['next','start'])` puis, à `ferme()`,
+   `enfant.kill('SIGTERM')` : cela tue `npx` et laisse `next-server` — son petit-fils — orphelin.
+   Un orphelin par fichier de spec, ~120 Mo chacun. Relevé : **122 orphelins, 14,5 Go sur 16**, le
+   noyau abattant `eslint` (exit 137) et les ouvriers de jest au milieu des gates. Correctif :
+   `detached: true` (le fils devient chef de GROUPE) et `process.kill(-pid)` avec un filet SIGKILL —
+   mesuré, une suite entière n'ajoute plus un seul orphelin.
+
+> **Quand l'outillage devient lent, chercher ce que l'outillage a LAISSÉ DERRIÈRE avant de conclure
+> à l'environnement.** `ps -eo pid,etimes,comm` répond en une seconde à une question qu'on avait
+> classée « sandbox ». Et tout `spawn` d'un serveur de test est un ARBRE : le tuer par son groupe,
+> jamais par son premier processus.
