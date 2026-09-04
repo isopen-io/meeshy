@@ -122,9 +122,17 @@ final class AnimatedImageContainerTests: XCTestCase {
 
     // MARK: - La mémoire
 
+    // **`@MainActor` par MÉTHODE, jamais sur la classe.** `MeeshyUITests` garde
+    // l'isolation `nonisolated` (cf. `Package.swift` : `uiSwiftSettings`
+    // « breaks every XCTestCase subclass »), et les témoins du décodeur DOIVENT
+    // rester nonisolated — c'est ce qui prouve qu'il est appelable hors du
+    // thread principal, la propriété que le #4925 a payée. Seule la mémoire est
+    // `@MainActor`, parce que ses deux appelants le sont.
+
     /// Décoder deux fois les mêmes octets sous la même clé et le même budget
     /// doit rendre le même CYCLE — sinon la mémoire ne mémorise rien, et
     /// `configure` re-décode un GIF à chaque image d'un déplacement.
+    @MainActor
     func test_laMemoire_rendLeMemeCycle_pourLaMemeCle() throws {
         AnimatedImageMemo.removeAll()
         let data = try makeGIF(frames: 4)
@@ -141,6 +149,7 @@ final class AnimatedImageContainerTests: XCTestCase {
     /// **Le budget fait partie de la clé.** La même image servie à une vignette
     /// de 52 pt et à une scène de 1080 px n'est pas le même objet ; les
     /// confondre peindrait l'une des deux à la mauvaise résolution.
+    @MainActor
     func test_laMemoire_separeLesBudgets() throws {
         AnimatedImageMemo.removeAll()
         let data = try makeGIF(frames: 3)
@@ -151,6 +160,7 @@ final class AnimatedImageContainerTests: XCTestCase {
 
     /// Une image FIXE rend `nil` par la mémoire comme par le décodeur : la
     /// mémoire ne doit pas inventer une animation pour ce qui n'en a pas.
+    @MainActor
     func test_laMemoire_rendNilPourUneImageFixe() throws {
         AnimatedImageMemo.removeAll()
         let png = try XCTUnwrap(pixel(0.5).pngData())
